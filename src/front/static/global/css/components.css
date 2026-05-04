@@ -660,3 +660,143 @@
     font-size: 0.8rem;
 }
 
+/* ==========================================================================
+   ob-tabs — flat underline tab style.
+   Modeled after the entity / relationship details tabs in the Ontology
+   Designer right pane (see .form-tabs-nav in
+   `static/ontology/css/ontology-shared-panels.css`) and unified with
+   the Ontology > Cohorts tab strip (`px-3 pt-2` on a white card).
+
+   Apply as:  <ul class="nav nav-tabs ob-tabs">
+   Drop-in replacement for Bootstrap nav-tabs. Preserves Bootstrap's
+   data-bs-toggle="tab" behaviour; only the visual treatment changes.
+   The `!important` declarations are necessary to override the default
+   `.nav-tabs` rules in `main.css`.
+
+   The strip looks like a card-header: white background, rounded top
+   corners, 1px grey outline on top/left/right, and a 2px grey baseline
+   at the bottom (the "underline" — primary-coloured under the active
+   tab via .nav-link.active). The next sibling (.card / .ob-tab-content)
+   gets its border-top stripped and top corners squared by the adjacent
+   rules below, so tabs + content form one continuous bordered shape
+   exactly like the Ontology > Information card.
+
+   White background and horizontal/top padding (= px-3 pt-2) are baked
+   in so the strip looks identical whether or not it sits inside a
+   .card. **Do not** re-apply `px-3 pt-2` (or `px-3 pt-3`) on the tab
+   `<ul>` — the padding is part of the contract.
+
+   Font-size is now also baked in (`0.9rem` on the .nav-link) so every
+   tab head reads at the same size across the app. **Do not** add
+   Bootstrap's `.small` modifier on the `<ul>` (was used on dq /
+   business-rules / axioms / dt pages) — it's redundant.
+   ========================================================================== */
+.nav-tabs.ob-tabs {
+    background: #fff;
+    border: 1px solid var(--db-border, #dee2e6);
+    border-bottom-width: 2px;
+    border-top-left-radius: var(--bs-card-border-radius, 0.375rem);
+    border-top-right-radius: var(--bs-card-border-radius, 0.375rem);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    margin-right: 0;
+    gap: 0;
+    padding: 0.5rem 1rem 0;
+}
+
+/* When ob-tabs sits inside a Bootstrap card (.card-body / .card-header /
+   directly under .card), the parent card already provides the outer
+   border, so drop the strip's own top / left / right borders to avoid
+   double-bordering. **Keep** the rounded top corners — the strip is
+   meant to read as a card-header everywhere, including inside another
+   card (cohorts / dq / business-rules / axioms). The grey baseline
+   (border-bottom) is preserved — it's the seam the underline draws
+   on. */
+.card-body > .nav-tabs.ob-tabs,
+.card-header > .nav-tabs.ob-tabs,
+.card > .nav-tabs.ob-tabs {
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+.nav-tabs.ob-tabs .nav-item {
+    margin-bottom: -2px;
+}
+
+.nav-tabs.ob-tabs .nav-link {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    color: var(--db-text-secondary, #6c757d) !important;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 0.4rem 0.85rem;
+    margin: 0;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+}
+
+.nav-tabs.ob-tabs .nav-link:hover:not(.active):not(.disabled) {
+    color: var(--db-text, #1e293b) !important;
+    background: transparent !important;
+    border-bottom-color: transparent !important;
+}
+
+.nav-tabs.ob-tabs .nav-link.active,
+.nav-tabs.ob-tabs .nav-item.show .nav-link {
+    color: var(--bs-primary, #0d6efd) !important;
+    background: transparent !important;
+    border-bottom-color: var(--bs-primary, #0d6efd) !important;
+    font-weight: 600;
+}
+
+.nav-tabs.ob-tabs .nav-link:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* Adjacent-sibling rules: when ob-tabs is followed by a card or an
+   ob-tab-content, neutralise their top border / radius so the strip
+   and the content body merge into one continuous bordered shape (like
+   the Ontology > Information card, but split into a tab head and
+   body). */
+.nav-tabs.ob-tabs + .card,
+.nav-tabs.ob-tabs + .ob-tab-content,
+.nav-tabs.ob-tabs + .tab-content {
+    border-top: none !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+}
+
+/* Standalone full-height pattern: a single .ob-tabs-wrap container
+   holding the strip + the content. Apply to give the whole tabs unit
+   the Ontology > Information feel — fills the remaining height of
+   .content-section, scrolls internally on overflow. The strip stays
+   pinned at the top; only the body scrolls. */
+.ob-tabs-wrap {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.sidebar-section > .content-section > .ob-tabs-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.ob-tabs-wrap > .nav-tabs.ob-tabs {
+    flex-shrink: 0;
+}
+
+.ob-tabs-wrap > .tab-content,
+.ob-tabs-wrap > .ob-tab-content,
+.ob-tabs-wrap > .card {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+

@@ -4,13 +4,15 @@
  */
 
 const Breadcrumb = {
+    // Icons mirror the top-level entries in src/front/config/menu_config.json
+    // so the breadcrumb visually matches the navbar/sidebar menus.
     _ROUTE_MAP: {
-        '/registry/': { label: 'Registry', icon: 'bi-folder2-open' },
-        '/domain/':   { label: 'Domain',   icon: 'bi-box' },
-        '/ontology/': { label: 'Ontology', icon: 'bi-diagram-3' },
-        '/mapping/':  { label: 'Mapping',  icon: 'bi-link-45deg' },
-        '/dtwin/':    { label: 'Digital Twin', icon: 'bi-share' },
-        '/settings':  { label: 'Settings', icon: 'bi-gear' },
+        '/registry/': { label: 'Registry',     icon: 'bi-archive' },
+        '/domain/':   { label: 'Domain',       icon: 'bi-folder2' },
+        '/ontology/': { label: 'Ontology',     icon: 'bi-bezier2' },
+        '/mapping/':  { label: 'Mapping',      icon: 'bi-shuffle' },
+        '/dtwin/':    { label: 'Digital Twin', icon: 'bi-box-fill' },
+        '/settings':  { label: 'Settings',     icon: 'bi-gear-fill' },
     },
 
     _HIERARCHY: ['/registry/', '/domain/', '/ontology/', '/mapping/', '/dtwin/'],
@@ -60,7 +62,7 @@ const Breadcrumb = {
             const domainName = this._getDomainName();
             crumbs.push({
                 label: domainName || 'Domain',
-                icon: 'bi-box',
+                icon: 'bi-folder2',
                 href: '/domain/'
             });
         }
@@ -104,14 +106,34 @@ const Breadcrumb = {
         const labelEl = activeLink.querySelector('.nav-label');
         const label = labelEl ? labelEl.textContent.trim() : activeLink.textContent.trim();
 
+        // Pick up the sidebar item's bi-* icon so the section crumb mirrors
+        // the menu (driven by menu_config.json).
+        const iconEl = activeLink.querySelector('i.bi');
+        let iconClass = '';
+        if (iconEl) {
+            iconClass = Array.from(iconEl.classList)
+                .find(c => c.startsWith('bi-')) || '';
+        }
+
         const last = list.querySelector('.breadcrumb-item.active');
         if (last) last.classList.remove('active');
 
         const li = document.createElement('li');
         li.className = 'breadcrumb-item active breadcrumb-section';
         li.setAttribute('aria-current', 'page');
-        li.textContent = label;
+        if (iconClass) {
+            const iconHtml = '<i class="bi ' + iconClass + ' me-1"></i>';
+            li.innerHTML = iconHtml + this._escapeHtml(label);
+        } else {
+            li.textContent = label;
+        }
         list.appendChild(li);
+    },
+
+    _escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (ch) => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+        ));
     }
 };
 

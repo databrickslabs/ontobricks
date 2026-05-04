@@ -413,11 +413,207 @@ hide inside a Bootstrap `.card-header`.
 - ❌ Buttons without an icon, or icon-only buttons without `title=`.
 - ❌ Reordering so the primary CTA is on the left.
 
+### Tabs (`.ob-tabs`) — flat-underline style
+
+There is **one** allowed visual treatment for tab navigations
+across the app: the flat-underline `ob-tabs` style. It lives in
+`global/css/components.css` and was extracted from the Ontology
+Designer right-pane tabs (`form-tabs-nav` /
+`form-tab-link` in `static/ontology/css/ontology-shared-panels.css`)
+and unified with the **Ontology > Cohorts** tab strip — the
+canonical reference page for the look.
+**Every new tab navigation must use it.** Do not introduce a
+boxed/Bootstrap-default look, a pill style, or a per-page custom
+tab CSS file.
+
+The class bakes in the full visual contract: white background,
+`padding: 0.5rem 1rem 0` (= `px-3 pt-2`), rounded top corners
+(`var(--bs-card-border-radius)`), a 1px grey outline on the top /
+left / right edges, and a 2px grey baseline at the bottom — the
+"underline" — that turns primary-coloured under the active tab.
+The strip therefore looks like a card-header (à la Ontology >
+Information) out of the box, regardless of whether it sits in a
+`.card`, in a `.card-body p-0`, or directly in a section.
+
+When the strip is **inside** a `.card` / `.card-body` / `.card-header`,
+the parent card already provides the outer outline. The CSS detects
+this via descendant selectors (`.card-body > .nav-tabs.ob-tabs`, …)
+and **drops** the strip's own top / left / right border so you never
+get a double border. The rounded top corners are **kept** — the
+strip is meant to read as a card-header everywhere, including
+nested inside another card (cohorts / dq / business-rules /
+axioms). When the parent card has `overflow: hidden` (Bootstrap
+default), the rounded corners coincide visually with the card's
+own outer radius.
+
+When the strip is **followed** by a sibling `.card`,
+`.ob-tab-content`, or `.tab-content`, an adjacent-sibling rule
+(`.nav-tabs.ob-tabs + .card { border-top: none !important; … }`)
+strips the next element's `border-top` and squares its top corners
+so the whole tabs + body unit reads as one continuous bordered
+shape. **Don't** add `border-top-0 rounded-top-0` on the next
+`.card` yourself — it's now redundant (and was the legacy
+work-around for the old boxed tabs).
+
+You should never have to re-apply spacing, background or border
+utilities on the tab `<ul>` — the strip already looks like the
+Ontology > Cohorts header out of the box.
+
+**Canonical skeleton**
+
+```html
+<ul class="nav nav-tabs ob-tabs" id="<unique>Tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active"
+                id="<id>-tab-foo"
+                data-bs-toggle="tab"
+                data-bs-target="#<id>-pane-foo"
+                type="button" role="tab"
+                aria-controls="<id>-pane-foo"
+                aria-selected="true">
+            <i class="bi bi-<icon> me-1"></i>Foo
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link"
+                id="<id>-tab-bar"
+                data-bs-toggle="tab"
+                data-bs-target="#<id>-pane-bar"
+                type="button" role="tab"
+                aria-controls="<id>-pane-bar"
+                aria-selected="false">
+            <i class="bi bi-<icon> me-1"></i>Bar
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="<id>TabContent">
+    <div class="tab-pane fade show active" id="<id>-pane-foo"
+         role="tabpanel" aria-labelledby="<id>-tab-foo">
+        ...
+    </div>
+    <div class="tab-pane fade" id="<id>-pane-bar"
+         role="tabpanel" aria-labelledby="<id>-tab-bar">
+        ...
+    </div>
+</div>
+```
+
+**Rules**
+
+- The tab `<ul>` **must** carry both `nav nav-tabs` (for Bootstrap
+  behaviour) **and** `ob-tabs` (for the visual treatment). The
+  `ob-tabs` class is a drop-in addition; Bootstrap's
+  `data-bs-toggle="tab"` keeps working unchanged.
+- Every tab button starts with a Bootstrap icon
+  (`<i class="bi bi-<icon> me-1"></i>`) followed by the label.
+  Never an icon-less tab.
+- The active state is rendered as a 2px primary-coloured
+  underline. Active colour and weight are owned by `ob-tabs`
+  in `components.css` — **don't override** `.nav-link.active`
+  in a per-area file.
+- **Font-size is intentionally inherited.** This is so each page
+  keeps its existing sizing — don't set `font-size` on the
+  `ob-tabs` selector itself. If a section needs smaller tabs
+  (e.g. Data Quality, Business Rules, Inference, Axioms), apply
+  Bootstrap's `.small` to the `<ul>`. If a section needs a
+  one-off size (e.g. Cohort uses `0.9rem`), put **only** that
+  font-size override in the area's CSS file, scoped to the
+  area-specific class — never re-declare colour, padding,
+  border-bottom, or hover/active styles.
+- The only Bootstrap utilities that should sit alongside
+  `ob-tabs` are layout / sizing helpers (`nav-fill`,
+  `flex-shrink-0`, `mb-0`) and the size hint `.small`. The
+  catalogued combinations in the codebase are:
+  - `nav nav-tabs ob-tabs mb-0` — Domain / Settings.
+  - `nav nav-tabs ob-tabs` — Import / Wizard / Ontology Cohorts.
+  - `nav nav-tabs ob-tabs nav-fill` — Ontology DQ / Business
+    Rules / Axioms.
+  - `nav nav-tabs ob-tabs nav-fill flex-shrink-0` —
+    DT-DataQuality / DT-Inference (the `flex-shrink-0` keeps the
+    tab strip a fixed-size header inside their flex card body).
+  - The `.nav-link` font-size is now baked into `ob-tabs`
+    (`0.9rem`), so the legacy `.small` modifier is no longer
+    needed and has been removed from the dq / business-rules /
+    axioms / dt pages. Don't add it back.
+- Do **not** re-apply spacing utilities on the tab `<ul>`. The
+  padding (`px-3 pt-2` equivalent) and white background are
+  already baked in. Adding `px-3 pt-3` / `pt-2` / `pt-3` /
+  `bg-white` on top double-pads the strip and breaks alignment
+  between sibling pages.
+- Do **not** add `style="gap: 2px;"` (or any inline `style`)
+  on the tab `<ul>` — the gap of 0 is set by `ob-tabs` and is
+  what makes the underline read as one continuous baseline.
+- The tab content can sit inside a Bootstrap `.card` or stand
+  alone. The adjacent-sibling rule
+  (`.nav-tabs.ob-tabs + .card { border-top: none !important; … }`)
+  fuses the strip and the next `.card` / `.ob-tab-content` /
+  `.tab-content` into one bordered shape — **don't** add
+  `border-top-0 rounded-top-0` yourself.
+- **Full-height pattern (preferred for tabbed pages).** Tabs +
+  body should fill the page from below the section header to the
+  bottom of the viewport, exactly like the single card on
+  Ontology > Information. Two ways to achieve this:
+  1. Place the `<ul ob-tabs>` and the body card as **direct
+     children of `.content-section`**. The existing
+     `sidebar-layout.css` rule
+     `.sidebar-section > .content-section > .card { flex: 1 }`
+     stretches the body card to fill (Domain / Settings /
+     Ontology Import / DT Inference work this way).
+  2. Wrap the strip and the body in a `<div class="ob-tabs-wrap">`
+     when you need the same fill behaviour deeper in the markup
+     (e.g. inside another flex column). `ob-tabs-wrap` is a
+     flex-column container that pins the strip via
+     `flex-shrink: 0` and gives `flex: 1 + overflow-y: auto` to
+     its child `.tab-content` / `.ob-tab-content` / `.card`.
+     When `ob-tabs-wrap` is itself a direct child of
+     `.content-section`, it grows to fill the section.
+- The legacy boxed pane `.ob-tab-content` is preserved for
+  pages that still need a bordered content area, but new tabs
+  should default to plain `.tab-content` (no boxed wrapper).
+  Reach for `.ob-tab-content` only when the tab content
+  genuinely needs a bordered/padded surface independent of any
+  parent `.card`.
+
+**Anti-patterns**
+
+- ❌ Bare `<ul class="nav nav-tabs">` without `ob-tabs` — that
+  triggers the legacy boxed look.
+- ❌ Pill tabs (`nav-pills`) anywhere in the app.
+- ❌ Per-area redeclaration of `.nav-link` colour, padding,
+  border-bottom, or `.nav-link.active` styling. The whole point
+  of `ob-tabs` is one shared treatment.
+- ❌ Re-applying `px-3 pt-2` / `px-3 pt-3` / `bg-white` on the
+  tab `<ul>` — those are baked into `ob-tabs`. Stacking them
+  double-pads the strip.
+- ❌ Adding Bootstrap's `.small` (or any `font-size` override) on
+  the tab `<ul>` or `.nav-link`. The unified `0.9rem` size is
+  baked into `ob-tabs` so every tab head reads at the same size
+  across the app.
+- ❌ Re-applying `border-top-0 rounded-top-0` on the `.card`
+  that follows `<ul ob-tabs>` — the adjacent-sibling rule
+  already handles it. Leaving the utility there is harmless but
+  noisy.
+- ❌ A short, free-floating tabs-card that doesn't fill the page
+  height. Use the *Full-height pattern* above (direct children of
+  `.content-section`, or `.ob-tabs-wrap`) so the tabs reach the
+  bottom of the viewport like the Ontology > Information card.
+- ❌ Inline `style="gap:…"` or `style="font-size:…"` on the tab
+  `<ul>` — use `.small` or an area class.
+- ❌ Hand-rolled tab JS (clicks toggling `display: none`).
+  Always use Bootstrap's `data-bs-toggle="tab"` so keyboard
+  navigation, ARIA and `shown.bs.tab` events are free.
+- ❌ Tabs without icons or without `aria-selected` /
+  `aria-controls`.
+- ❌ Adding tab styles to `main.css`'s `.nav-tabs` block —
+  that's the legacy fallback. New work goes through
+  `.ob-tabs` in `components.css`.
+
 ### Component Naming
 
 | Prefix | Owner | Use |
 |--------|-------|-----|
-| `ob-*` | OntoBricks shared components | Cross-page reusable widgets (`ob-kpi-tile`, `ob-breadcrumb`, `ob-shortcut-card`, `ob-loading-spinner`, `ob-tab-content`) |
+| `ob-*` | OntoBricks shared components | Cross-page reusable widgets (`ob-kpi-tile`, `ob-breadcrumb`, `ob-shortcut-card`, `ob-loading-spinner`, `ob-tabs`, `ob-tab-content`) |
 | `ovz-*` | OntoViz canvas | Entities, relationships, toolbar, context menu inside the OntoViz library |
 | Bootstrap classes | Bootstrap 5.3.2 | Base utilities and layout primitives |
 | Area-specific | Per-area CSS files | Local concerns; prefer to first reuse an `ob-*` component |
@@ -447,8 +643,12 @@ These already exist; reuse before reinventing.
   in `base.html` as `#domainLoadingOverlay`. Toggle via `.d-none`.
 - **Breadcrumb** — `.ob-breadcrumb` driven by `breadcrumb.js`; do not
   build a parallel breadcrumb.
-- **Tabs** — Bootstrap nav-tabs, paired with `.ob-tab-content` for the
-  bordered pane.
+- **Tabs** — `.nav.nav-tabs.ob-tabs` (flat-underline). One shared
+  visual treatment defined in `components.css`; see
+  *Tabs (`.ob-tabs`) — flat-underline style* above for the canonical
+  skeleton, allowed combinations and anti-patterns. The legacy
+  `.ob-tab-content` is kept only for the rare case where a bordered
+  pane is genuinely needed.
 - **Cards** — Bootstrap `.card` / `.card-header`; styling already neutered
   to project tokens.
 - **Forms** — Bootstrap `.form-control` / `.form-select` / `.form-label`;
@@ -683,6 +883,11 @@ src/front/static/
   breadcrumb's responsibility.
 - ❌ A custom per-page breadcrumb. Extend `_ROUTE_MAP` in
   `breadcrumb.js` instead.
+- ❌ Bare `<ul class="nav nav-tabs">` (no `ob-tabs`), pill tabs,
+  or per-area redeclaration of `.nav-link` / `.nav-link.active`
+  styles. All tab nav uses the shared `ob-tabs` flat-underline
+  treatment from `components.css` (see *Tabs (`.ob-tabs`) —
+  flat-underline style*).
 - ❌ Inline `<style>` or `style="…"` in templates. Move to
   `static/<area>/css/`.
 - ❌ Inline `<script>` blocks beyond a single tiny bootstrap call. Move

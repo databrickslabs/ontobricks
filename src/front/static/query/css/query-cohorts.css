@@ -27,19 +27,10 @@
 }
 
 /* Tabs (Describe | Build rule) ---------------------------- */
+/* Visual treatment lives in components.css (.ob-tabs); this file only
+   adds the cohort-specific font-size that we want to preserve. */
 .cohort-tabs-wrap {
     min-width: 0;
-}
-.cohort-nav-tabs {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-}
-.cohort-nav-tabs .nav-link {
-    color: var(--bs-secondary-color);
-    font-size: 0.9rem;
-    padding: 0.5rem 0.85rem;
-}
-.cohort-nav-tabs .nav-link.active {
-    font-weight: 600;
 }
 .cohort-tab-content {
     min-height: 220px;
