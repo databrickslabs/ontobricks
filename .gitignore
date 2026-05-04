@@ -65,3 +65,7 @@ src/.coding_rules.md
 
 # Release requirements / design drafts (not pushed)
 /releasereq/
+
+# Cookie jars / curl session dumps (may contain live session + CSRF tokens)
+cookies*.txt
+*.cookiejar
