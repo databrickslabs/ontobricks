@@ -9,6 +9,14 @@ DigitalTwin class
    :undoc-members:
    :show-inheritance:
 
+CohortService class
+-------------------
+
+.. automodule:: back.objects.digitaltwin.CohortService
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Models
 ------
 

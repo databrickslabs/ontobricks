@@ -80,6 +80,61 @@ class TestGlobalConfigGraphEngine:
 
 
 # ---------------------------------------------------------------
+#  GlobalConfigService – stale-while-revalidate (regression)
+#
+#  Regression for the 2026-05-04 cohort-preview timeout: when the
+#  registry backend (Lakebase) momentarily fails on a cache-miss
+#  read, the service used to fall back to ``_empty()`` and overwrite
+#  the previously-cached config. Every downstream caller then re-hit
+#  the slow backend, compounding the outage. The service now keeps
+#  the last-good cache for ``_STALE_CACHE_TTL`` and serves it on
+#  failure.
+# ---------------------------------------------------------------
+
+
+class TestGlobalConfigStaleWhileRevalidate:
+    """Backend failures must not blow away the previously-cached config."""
+
+    def _good_cfg(self) -> dict:
+        return {
+            "warehouse_id": "wh-prod",
+            "graph_engine": "ladybug",
+            "default_base_uri": "https://example.com",
+        }
+
+    def test_serves_stale_cache_on_backend_failure(self):
+        svc = GlobalConfigService()
+        good = self._good_cfg()
+
+        store_ok = MagicMock()
+        store_ok.load_global_config.return_value = good
+        store_ok.backend = "lakebase"
+        store_fail = MagicMock()
+        store_fail.load_global_config.side_effect = RuntimeError("SSL timeout")
+        store_fail.backend = "lakebase"
+
+        with patch.object(svc, "_store_for", return_value=store_ok):
+            first = svc.load("h", "t", REGISTRY_CFG, force=True)
+        assert first == good
+
+        with patch.object(svc, "_store_for", return_value=store_fail):
+            stale = svc.load("h", "t", REGISTRY_CFG, force=True)
+        assert stale == good
+        assert stale is svc._cache
+
+    def test_falls_back_to_empty_when_no_prior_cache(self):
+        svc = GlobalConfigService()
+        store_fail = MagicMock()
+        store_fail.load_global_config.side_effect = RuntimeError("SSL timeout")
+        store_fail.backend = "lakebase"
+
+        with patch.object(svc, "_store_for", return_value=store_fail):
+            data = svc.load("h", "t", REGISTRY_CFG, force=True)
+
+        assert data == GlobalConfigService._empty()
+
+
+# ---------------------------------------------------------------
 #  GlobalConfigService – graph_engine_config
 # ---------------------------------------------------------------
 

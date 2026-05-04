@@ -3523,3 +3523,129 @@ class DigitalTwin:
             else "Digital Twin partially available"
         )
         return {"indicator": "orange", "title": title, "count": count, "pending": False}
+
+    # ------------------------------------------------------------------
+    # Cohort discovery -- thin delegations to CohortService
+    # ------------------------------------------------------------------
+    #
+    # The actual logic lives in
+    # :class:`back.objects.digitaltwin.CohortService.CohortService`
+    # (Extract Class refactor).  These wrappers preserve the public
+    # surface that routes and tests have been calling so far.
+
+    def _cohort_service(self) -> Any:
+        from back.objects.digitaltwin.CohortService import CohortService
+
+        return CohortService(self._domain)
+
+    def list_cohort_rules(self) -> List[Dict[str, Any]]:
+        """Return all saved cohort rules for the active domain."""
+        return self._cohort_service().list_rules()
+
+    def save_cohort_rule(self, rule_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate and upsert *rule_dict* into ``domain.cohort_rules``."""
+        return self._cohort_service().save_rule(rule_dict)
+
+    def delete_cohort_rule(self, rule_id: str) -> bool:
+        """Remove a cohort rule by id; returns ``True`` when something was deleted."""
+        return self._cohort_service().delete_rule(rule_id)
+
+    def dry_run_cohort(
+        self,
+        rule_dict: Dict[str, Any],
+        store: Any,
+        graph_name: str,
+    ) -> Dict[str, Any]:
+        """Run the cohort engine on *rule_dict* without writing anything."""
+        return self._cohort_service().dry_run(rule_dict, store, graph_name)
+
+    def materialize_cohort(
+        self,
+        rule_id: str,
+        store: Any,
+        graph_name: str,
+        client: Any = None,
+        domain_version: str = "",
+        member_label_resolver: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Re-run the engine for a saved rule and write outputs as configured."""
+        return self._cohort_service().materialize(
+            rule_id,
+            store,
+            graph_name,
+            client=client,
+            domain_version=domain_version,
+            member_label_resolver=member_label_resolver,
+        )
+
+    def cohort_class_stats(
+        self,
+        class_uri: str,
+        store: Any,
+        graph_name: str,
+    ) -> Dict[str, Any]:
+        """Return ``{instance_count}`` for *class_uri* in the live graph."""
+        return self._cohort_service().class_stats(class_uri, store, graph_name)
+
+    def cohort_edge_count(
+        self,
+        rule_dict: Dict[str, Any],
+        store: Any,
+        graph_name: str,
+    ) -> Dict[str, Any]:
+        return self._cohort_service().edge_count(rule_dict, store, graph_name)
+
+    def cohort_node_count(
+        self,
+        rule_dict: Dict[str, Any],
+        store: Any,
+        graph_name: str,
+    ) -> Dict[str, Any]:
+        return self._cohort_service().node_count(rule_dict, store, graph_name)
+
+    def cohort_path_trace(
+        self,
+        rule_dict: Dict[str, Any],
+        store: Any,
+        graph_name: str,
+    ) -> Dict[str, Any]:
+        """Per-hop frontier diagnostic for the rule's ``links``."""
+        return self._cohort_service().path_trace(rule_dict, store, graph_name)
+
+    def cohort_sample_values(
+        self,
+        class_uri: str,
+        property_uri: str,
+        store: Any,
+        graph_name: str,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        return self._cohort_service().sample_values(
+            class_uri, property_uri, store, graph_name, limit=limit
+        )
+
+    def cohort_explain(
+        self,
+        rule_dict: Dict[str, Any],
+        target: str,
+        store: Any,
+        graph_name: str,
+    ) -> Dict[str, Any]:
+        return self._cohort_service().explain(
+            rule_dict, target, store, graph_name
+        )
+
+    def cohort_suggest_uc_target(
+        self, settings: Any = None
+    ) -> Dict[str, Any]:
+        """Return a suggested UC Delta target for the active domain."""
+        return self._cohort_service().suggest_uc_target(settings)
+
+    @staticmethod
+    def cohort_probe_uc_write(
+        target_dict: Dict[str, Any], client: Any
+    ) -> Dict[str, Any]:
+        """Run a 3-step read-only permission probe for a UC Delta target."""
+        from back.objects.digitaltwin.CohortService import CohortService
+
+        return CohortService.probe_uc_write(target_dict, client)

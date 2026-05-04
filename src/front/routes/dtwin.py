@@ -32,6 +32,7 @@ async def query_page(
         "decision_tables_count": len(ont.get("decision_tables", [])),
         "sparql_rules_count": len(ont.get("sparql_rules", [])),
         "aggregate_rules_count": len(ont.get("aggregate_rules", [])),
+        "cohort_rules_count": len(ont.get("cohort_rules", [])),
         "owlrl_available": DigitalTwin.is_owlrl_available(),
         "backend_type": DigitalTwin(domain_session).effective_backend_label(),
         "materialize_table": f"{view_table}_inferred" if view_table else "",

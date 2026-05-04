@@ -300,6 +300,13 @@
                             "requires": null
                         },
                         {
+                            "id": "cohorts",
+                            "label": "Cohorts",
+                            "icon": "bi-people-fill",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
                             "id": "axioms",
                             "label": "Expr. & Axioms",
                             "icon": "bi-diagram-2",
@@ -481,6 +488,13 @@
                             "id": "reasoning",
                             "label": "Inference",
                             "icon": "bi-lightning",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "cohorts",
+                            "label": "Cohorts",
+                            "icon": "bi-people-fill",
                             "default": false,
                             "requires": null
                         }

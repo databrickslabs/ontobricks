@@ -4,6 +4,9 @@ Internal API -- Digital Twin / query JSON endpoints.
 Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 """
 
+from dataclasses import dataclass
+from typing import Any
+
 from fastapi import APIRouter, Request, Depends
 from back.core.logging import get_logger
 from back.core.errors import (
@@ -18,7 +21,7 @@ from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql, uri_local_name
 from back.core.databricks import DatabricksClient, is_databricks_app
 from back.core.triplestore import get_triplestore
-from back.objects.digitaltwin import DigitalTwin, DomainSnapshot
+from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 from back.core.helpers import (
     effective_graph_name,
     effective_view_table,
@@ -366,6 +369,427 @@ async def detect_clusters(
     except Exception as e:
         logger.exception("Cluster detection failed: %s", e)
         raise InfrastructureError("Cluster detection failed", detail=str(e))
+
+
+# ===========================================
+# Cohort Discovery
+# ===========================================
+#
+# Routes resolve the cohort backend through a small Parameter Object
+# (:class:`CohortEngineContext`) that bundles the saved-rule store,
+# the graph backend, the resolved graph name, and a ready-to-use
+# :class:`CohortService`. This keeps every engine route to a single
+# call site and avoids 5 lines of boilerplate per handler.
+
+
+@dataclass
+class CohortEngineContext:
+    """Pre-resolved dependencies for cohort engine routes.
+
+    Carrying both ``service`` and the store/graph_name lets the route
+    body remain a single :func:`run_blocking` call into the service
+    method while preserving the original parameter shape (the engine
+    is backend-agnostic and takes ``store`` + ``graph_name`` directly).
+    """
+
+    domain: Any
+    settings: Settings
+    store: Any
+    graph_name: str
+    service: CohortService
+
+
+def cohort_engine_context(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+) -> CohortEngineContext:
+    """Resolve the cohort engine context for the active domain.
+
+    Raises :class:`ValidationError` when the graph name is not
+    configured and :class:`InfrastructureError` when the graph
+    backend cannot be instantiated.
+    """
+    domain = get_domain(session_mgr)
+    graph_name = effective_graph_name(domain)
+    if not graph_name:
+        raise ValidationError("Graph name is not configured")
+    store = get_triplestore(domain, settings, backend="graph")
+    if not store:
+        raise InfrastructureError("Graph backend is not configured")
+    return CohortEngineContext(
+        domain=domain,
+        settings=settings,
+        store=store,
+        graph_name=graph_name,
+        service=CohortService(domain),
+    )
+
+
+async def cohort_json_body(request: Request) -> dict:
+    """Decode the request body as a JSON object.
+
+    Centralises the ``"Body must be a JSON object"`` guard previously
+    duplicated in every POST handler in this block.
+    """
+    data = await request.json()
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    return data
+
+
+@router.get("/cohorts/rules")
+async def list_cohort_rules(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Return all saved cohort rules for the active domain."""
+    domain = get_domain(session_mgr)
+    rules = CohortService(domain).list_rules()
+    return {"success": True, "rules": rules, "count": len(rules)}
+
+
+@router.post(
+    "/cohorts/rules",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def upsert_cohort_rule(
+    body: dict = Depends(cohort_json_body),
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Validate and upsert a cohort rule into the active domain."""
+    domain = get_domain(session_mgr)
+    rule = CohortService(domain).save_rule(body)
+    return {"success": True, "rule": rule}
+
+
+@router.delete(
+    "/cohorts/rules/{rule_id}",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def delete_cohort_rule(
+    rule_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Delete a saved cohort rule by id."""
+    domain = get_domain(session_mgr)
+    deleted = CohortService(domain).delete_rule(rule_id)
+    if not deleted:
+        raise NotFoundError(f"Cohort rule '{rule_id}' was not found")
+    return {"success": True, "rule_id": rule_id}
+
+
+@router.post("/cohorts/dry-run")
+async def cohort_dry_run(
+    body: dict = Depends(cohort_json_body),
+    ctx: CohortEngineContext = Depends(cohort_engine_context),
+):
+    """Run the cohort engine on a candidate rule without writing anything."""
+    try:
+        result = await run_blocking(
+            ctx.service.dry_run, body, ctx.store, ctx.graph_name
+        )
+    except ValueError as exc:
+        raise ValidationError("Cohort rule is invalid", detail=str(exc))
+    return {"success": True, **result}
+
+
+@router.post(
+    "/cohorts/materialize",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def cohort_materialize(
+    body: dict = Depends(cohort_json_body),
+    ctx: CohortEngineContext = Depends(cohort_engine_context),
+):
+    """Re-run a saved rule and write outputs as configured (graph/UC table)."""
+    rule_id = (body.get("rule_id") or "").strip()
+    if not rule_id:
+        raise ValidationError("Missing rule_id")
+    client = get_databricks_client(ctx.domain, ctx.settings)
+    domain_version = getattr(ctx.domain, "current_version", "1") or "1"
+
+    def _label_resolver(uris):
+        try:
+            metadata = ctx.store.get_entity_metadata(ctx.graph_name, list(uris))
+        except Exception:
+            return {}
+        return {row.get("uri", ""): row.get("label", "") for row in metadata or []}
+
+    try:
+        result = await run_blocking(
+            ctx.service.materialize,
+            rule_id,
+            ctx.store,
+            ctx.graph_name,
+            client,
+            domain_version,
+            _label_resolver,
+        )
+    except NotFoundError:
+        raise
+    except ValueError as exc:
+        raise ValidationError("Cohort rule is invalid", detail=str(exc))
+    return {"success": True, **result}
+
+
+@router.get("/cohorts/preview/class-stats")
+async def cohort_class_stats(
+    class_uri: str,
+    ctx: CohortEngineContext = Depends(cohort_engine_context),
+):
+    """Live counter — instances of *class_uri* in the graph."""
+    if not class_uri:
+        raise ValidationError("Missing class_uri")
+    out = await run_blocking(
+        ctx.service.class_stats, class_uri, ctx.store, ctx.graph_name
+    )
+    return {"success": True, **out}
+
+
+@router.post("/cohorts/preview/edge-count")
+async def cohort_edge_count(
+    body: dict = Depends(cohort_json_body),
+    ctx: CohortEngineContext = Depends(cohort_engine_context),
+):
+    """Live counter — candidate edges produced by current ``links``."""
+    out = await run_blocking(
+        ctx.service.edge_count, body, ctx.store, ctx.graph_name
+    )
+    return {"success": True, **out}
+
+
+@router.post("/cohorts/preview/node-count")
+async def cohort_node_count(
+    body: dict = Depends(cohort_json_body),
+    ctx: CohortEngineContext = Depends(cohort_engine_context),
+):
+    """Live counter — surviving members after node-level compatibility."""
+    out = await run_blocking(
+        ctx.service.node_count, body, ctx.store, ctx.graph_name
+    )
+    return {"success": True, **out}
+
+
+@router.post("/cohorts/preview/path-trace")
+async def cohort_path_trace(
+    body: dict = Depends(cohort_json_body),
+    ctx: CohortEngineContext = Depends(cohort_engine_context),
+):
+    """Per-hop frontier diagnostic — see exactly which hop empties the
+    walk for a multi-hop linkage rule.
+
+    Body shape mirrors the rule's relevant slice::
+
+        {"class_uri": "...", "links": [...], "compatibility": [...]}
+
+    Returns the engine's trace (see :meth:`CohortBuilder.trace_paths`)
+    used by the Preview tab's *Trace path* button.
+    """
+    out = await run_blocking(
+        ctx.service.path_trace, body, ctx.store, ctx.graph_name
+    )
+    return {"success": True, **out}
+
+
+@router.post("/cohorts/sample-values")
+async def cohort_sample_values(
+    body: dict = Depends(cohort_json_body),
+    ctx: CohortEngineContext = Depends(cohort_engine_context),
+):
+    """Return up to N distinct values for a property/class pair (picker)."""
+    class_uri = (body.get("class_uri") or "").strip()
+    property_uri = (body.get("property") or "").strip()
+    limit = int(body.get("limit", 20))
+    if not class_uri or not property_uri:
+        raise ValidationError("class_uri and property are required")
+    out = await run_blocking(
+        ctx.service.sample_values,
+        class_uri,
+        property_uri,
+        ctx.store,
+        ctx.graph_name,
+        limit,
+    )
+    return {"success": True, **out}
+
+
+@router.post("/cohorts/explain")
+async def cohort_explain(
+    body: dict = Depends(cohort_json_body),
+    ctx: CohortEngineContext = Depends(cohort_engine_context),
+):
+    """Return a per-stage breakdown for a single member URI (Why? / Why not?)."""
+    rule = body.get("rule", {})
+    target = (body.get("target") or "").strip()
+    if not target:
+        raise ValidationError("Missing target URI")
+    out = await run_blocking(
+        ctx.service.explain, rule, target, ctx.store, ctx.graph_name
+    )
+    return {"success": True, **out}
+
+
+@router.get("/cohorts/uc/suggest-target")
+async def cohort_uc_suggest_target(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return suggested catalog/schema/table_name for the active domain."""
+    domain = get_domain(session_mgr)
+    out = CohortService(domain).suggest_uc_target(settings)
+    return {"success": True, **out}
+
+
+@router.post("/cohorts/uc/probe-write")
+async def cohort_uc_probe_write(
+    body: dict = Depends(cohort_json_body),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Run a 3-step read-only permission probe for a UC Delta target."""
+    domain = get_domain(session_mgr)
+    client = get_databricks_client(domain, settings)
+    if client is None:
+        raise InfrastructureError("Databricks credentials not configured")
+    out = await run_blocking(CohortService.probe_uc_write, body, client)
+    return {"success": True, **out}
+
+
+# ===========================================
+# Cohort Discovery Agent (Stage 2 — NL → CohortRule)
+# ===========================================
+
+
+@router.post("/cohorts/agent")
+async def cohorts_agent(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Translate a natural-language prompt into a validated CohortRule.
+
+    Body::
+
+        {
+            "prompt":  "find consultants who can be staffed together",
+            "history": [{"role": "user"|"assistant", "content": "..."}, ...]
+        }
+
+    Response::
+
+        {
+            "success": true,
+            "rule":  { ... validated CohortRule JSON ...} | null,
+            "reply": "...short markdown explanation...",
+            "tools": [{"name": "list_classes", "duration_ms": 12}, ...],
+            "iterations": 4,
+            "usage": {"prompt_tokens": ..., "completion_tokens": ...}
+        }
+
+    The proposed rule is *not* persisted -- the user reviews and saves it
+    via the existing ``POST /cohorts/rules`` route. If the agent could
+    not assemble a valid rule, ``rule`` is ``null`` and ``reply`` carries
+    the (likely clarifying) follow-up question.
+    """
+    import asyncio
+    import os
+
+    from agents.agent_cohort import run_agent as run_cohort_agent
+    from api.routers.internal._helpers import map_route_errors
+    from back.core.helpers import get_databricks_host_and_token
+
+    data = await request.json()
+    prompt = (data.get("prompt") or data.get("message") or "").strip()
+    client_history = data.get("history") or []
+
+    if not prompt:
+        raise ValidationError("No prompt provided")
+
+    domain = get_domain(session_mgr)
+
+    host, token = get_databricks_host_and_token(domain, settings)
+    if not host or not token:
+        raise ValidationError("Databricks credentials not configured")
+
+    llm_endpoint = (domain.info or {}).get("llm_endpoint", "") or ""
+    if not llm_endpoint:
+        llm_endpoint = _auto_discover_llm_endpoint(domain, settings)
+        if llm_endpoint:
+            logger.info(
+                "CohortAgent: auto-selected LLM endpoint '%s' (no domain default)",
+                llm_endpoint,
+            )
+    if not llm_endpoint:
+        raise ValidationError(
+            "No LLM serving endpoint available. Please set one in Domain Settings.",
+        )
+
+    reg = DigitalTwin.resolve_registry(session_mgr, settings)
+    registry_params = {
+        "registry_catalog": reg.get("catalog") or "",
+        "registry_schema": reg.get("schema") or "",
+        "registry_volume": reg.get("volume") or "",
+    }
+
+    app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+    base_url = f"http://localhost:{app_port}"
+
+    session_cookies = dict(request.cookies or {})
+    _FORWARDED_HEADER_PREFIXES = ("x-forwarded-", "x-real-")
+    _FORWARDED_EXTRA_HEADERS = {"x-csrf-token", "referer"}
+    session_headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower().startswith(_FORWARDED_HEADER_PREFIXES)
+        or k.lower() in _FORWARDED_EXTRA_HEADERS
+    }
+
+    domain_name = _chat_resolve_domain_name(domain)
+
+    logger.info(
+        "CohortAgent: prompt=%s, domain=%s, endpoint=%s",
+        prompt[:80],
+        domain_name,
+        llm_endpoint,
+    )
+
+    with map_route_errors("Cohort Discovery agent request failed", logger):
+        agent_result = await asyncio.to_thread(
+            run_cohort_agent,
+            host=host,
+            token=token,
+            endpoint_name=llm_endpoint,
+            base_url=base_url,
+            domain_name=domain_name,
+            registry_params=registry_params,
+            session_cookies=session_cookies,
+            session_headers=session_headers,
+            user_message=prompt,
+            conversation_history=client_history,
+        )
+
+    if not agent_result.success:
+        raise InfrastructureError(
+            "Cohort Discovery agent failed",
+            detail=agent_result.error or None,
+        )
+
+    tool_calls = [
+        {
+            "name": step.tool_name,
+            "duration_ms": step.duration_ms,
+        }
+        for step in agent_result.steps
+        if step.step_type == "tool_result"
+    ]
+
+    return {
+        "success": True,
+        "rule": agent_result.proposed_rule,
+        "reply": agent_result.reply,
+        "tools": tool_calls,
+        "iterations": agent_result.iterations,
+        "usage": agent_result.usage,
+    }
 
 
 @router.post("/sync/filter")

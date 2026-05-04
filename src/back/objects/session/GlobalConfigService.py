@@ -24,7 +24,13 @@ from back.objects.registry.registry_cache import set_registry_cache_ttl
 
 logger = get_logger(__name__)
 
-_CACHE_TTL = 60  # seconds
+_CACHE_TTL = 300  # seconds — admin-only settings rarely change
+
+# When a backend fetch fails but we still hold a previous (non-empty)
+# cache, keep serving it for up to this many seconds before giving up.
+# This stops a single Lakebase outage from cascading into multi-second
+# request hangs across every endpoint that resolves the graph engine.
+_STALE_CACHE_TTL = 30 * 60  # 30 minutes
 
 
 class GlobalConfigService:
@@ -90,6 +96,19 @@ class GlobalConfigService:
                 return data
         except Exception as e:
             logger.warning("Error loading global config: %s", e)
+            # Stale-while-revalidate: if we held a non-empty cache that's
+            # still within the stale window, keep serving it rather than
+            # falling back to ``_empty()`` and forcing every downstream
+            # endpoint to re-hit the backend on the next request.
+            if (
+                self._cache
+                and (now - self._cache_ts) < _STALE_CACHE_TTL
+            ):
+                logger.info(
+                    "Serving stale global config (age=%.1fs)",
+                    now - self._cache_ts,
+                )
+                return self._cache
 
         empty = self._empty()
         self._cache = empty

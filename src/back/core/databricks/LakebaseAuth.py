@@ -323,7 +323,13 @@ class LakebaseAuth:
             f"host={self.host} port={self.port} dbname={self.database} "
             f"user={self.user} password={self.password()} "
             f"sslmode=require connect_timeout={connect_timeout} "
-            f"application_name={application_name}"
+            f"application_name={application_name} "
+            # TCP keepalives: detect server-side connection drops in ~25s
+            # instead of the OS default ~130s (tcp_retries2). Without these,
+            # a borrowed-but-dead pool connection blocks the next query for
+            # 2+ minutes, which shows up as a "preview timeout" client side.
+            f"keepalives=1 keepalives_idle=10 "
+            f"keepalives_interval=5 keepalives_count=3"
         )
 
     def kwargs(
@@ -342,6 +348,11 @@ class LakebaseAuth:
             "sslmode": "require",
             "connect_timeout": connect_timeout,
             "application_name": application_name,
+            # See ``conninfo`` for the rationale on TCP keepalives.
+            "keepalives": 1,
+            "keepalives_idle": 10,
+            "keepalives_interval": 5,
+            "keepalives_count": 3,
         }
 
 

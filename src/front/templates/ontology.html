@@ -12,6 +12,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-shared-panels.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-swrl.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-business-rules.css') }}?v={{ asset_version }}">
+<!-- Cohort Discovery design UI (shared with dtwin run page) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-dataquality.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-wizard.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-groups.css') }}?v={{ asset_version }}">
@@ -82,7 +84,12 @@
             <div id="swrl-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_business_rules.html" %}
             </div>
-            
+
+            <!-- Cohort Discovery — DESIGN (Run/preview lives in Digital Twin) -->
+            <div id="cohorts-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_cohorts.html" %}
+            </div>
+
             <!-- Expressions & Axioms Section -->
             <div id="axioms-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_axioms.html" %}
@@ -114,6 +121,8 @@
 <script src="{{ url_for('static', filename='ontology/js/ontology-axioms.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-swrl.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-business-rules.js') }}?v={{ asset_version }}"></script>
+<!-- Cohort Discovery design UI (same module powers the Digital Twin run page) -->
+<script src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-owl-content.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-information.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-import.js') }}?v={{ asset_version }}"></script>

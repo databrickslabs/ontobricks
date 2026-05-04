@@ -94,6 +94,7 @@ def get_empty_domain() -> Dict[str, Any]:
             "decision_tables": [],
             "sparql_rules": [],
             "aggregate_rules": [],
+            "cohort_rules": [],
             "axioms": [],
             "expressions": [],
             "groups": [],
@@ -992,6 +993,14 @@ class DomainSession:
         self._data["ontology"]["aggregate_rules"] = value
 
     @property
+    def cohort_rules(self) -> List[Dict]:
+        return self._data["ontology"].get("cohort_rules", [])
+
+    @cohort_rules.setter
+    def cohort_rules(self, value: List[Dict]):
+        self._data["ontology"]["cohort_rules"] = value
+
+    @property
     def axioms(self) -> List[Dict]:
         """Get OWL axioms (logical assertions: equivalentClass, disjointWith, etc.)."""
         return self._data["ontology"].get("axioms", [])
@@ -1271,6 +1280,7 @@ class DomainSession:
             "decision_tables": self._data["ontology"].get("decision_tables", []),
             "sparql_rules": self._data["ontology"].get("sparql_rules", []),
             "aggregate_rules": self._data["ontology"].get("aggregate_rules", []),
+            "cohort_rules": self._data["ontology"].get("cohort_rules", []),
             "axioms": self._data["ontology"].get("axioms", []),
             "expressions": self._data["ontology"].get("expressions", []),
             "groups": self._data["ontology"].get("groups", []),

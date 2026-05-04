@@ -292,6 +292,49 @@ class LadybugFlatStore(LadybugBase):
     def optimize_table(self, table_name: str) -> None:
         pass
 
+    # -- Cohort idempotency override -------------------------------------
+
+    def delete_cohort_triples(
+        self,
+        table_name: str,
+        cohort_uri_prefix: str,
+        in_cohort_predicate: str,
+    ) -> int:
+        """Cypher counterpart of the SQL default — runs two MATCH/DELETE
+        passes against the flat ``Triple`` node table.
+        """
+        if not cohort_uri_prefix:
+            return 0
+        validate_table_name(table_name)
+        node = self._node_table(table_name)
+        conn = self._get_connection()
+        deleted = 0
+        try:
+            conn.execute(
+                f"MATCH (t:{node}) WHERE t.subject STARTS WITH $prefix DELETE t",
+                parameters={"prefix": cohort_uri_prefix},
+            )
+            deleted = -1  # Kùzu does not return affected-row count.
+        except Exception as exc:
+            logger.debug(
+                "delete_cohort_triples (subject prefix) failed: %s", exc
+            )
+        try:
+            conn.execute(
+                f"MATCH (t:{node}) "
+                f"WHERE t.predicate = $pred AND t.object STARTS WITH $prefix "
+                f"DELETE t",
+                parameters={
+                    "pred": in_cohort_predicate,
+                    "prefix": cohort_uri_prefix,
+                },
+            )
+        except Exception as exc:
+            logger.debug(
+                "delete_cohort_triples (membership) failed: %s", exc
+            )
+        return deleted
+
     # -- Named query overrides (Cypher on flat table) --------------------
 
     def get_aggregate_stats(self, table_name: str) -> Dict[str, int]:

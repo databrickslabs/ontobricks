@@ -10,6 +10,7 @@ This repository uses modular Cursor rules with scoped `.mdc` files (YAML frontma
 8. 08-testing-and-deployment.mdc
 9. 09-package-management.mdc
 10. 10-entity-panel-matrix.mdc
+11. 11-frontend-design.mdc
 
 After ANY code change (feature, fix, refactoring, review, etc.):
 * Update the changelog in /changelogs/:

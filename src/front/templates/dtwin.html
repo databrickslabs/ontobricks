@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-sigmagraph.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-dataquality.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-chat.css') }}?v={{ asset_version }}">
 <!-- Query page specific styles -->
@@ -41,7 +42,12 @@
             <div id="reasoning-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_reasoning.html" %}
             </div>
-            
+
+            <!-- Cohorts Section (Cohort Discovery) -->
+            <div id="cohorts-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_cohorts.html" %}
+            </div>
+
             <!-- Knowledge Graph Section -->
             <div id="sigmagraph-section" class="sidebar-section active">
                 {% include "partials/dtwin/_query_sigmagraph.html" %}
@@ -81,6 +87,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-dataquality.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-reasoning.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sigmagraph.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-graphql.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-chat.js') }}?v={{ asset_version }}"></script>

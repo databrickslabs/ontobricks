@@ -273,3 +273,36 @@ class TestPasswordMinting:
         with pytest.raises(ValidationError) as excinfo:
             _ = auth.password()
         assert "No Lakebase Autoscaling endpoint matched" in str(excinfo.value)
+
+
+class TestConnectionTuning:
+    """Connection-level safety nets — keepalives must be set so a server-
+    side closed socket is detected in ~25s instead of the OS default
+    ~130s, which used to surface as multi-minute "preview timeout"
+    hangs on cohort dry-runs (regression: 2026-05-04).
+    """
+
+    def test_kwargs_includes_tcp_keepalives(self, autoscaling_pg_env):
+        auth = LakebaseAuth()
+        fake_w = MagicMock()
+        fake_w.api_client = _autoscaling_api_client()
+        auth._w = fake_w
+
+        kwargs = auth.kwargs()
+        assert kwargs["keepalives"] == 1
+        assert kwargs["keepalives_idle"] == 10
+        assert kwargs["keepalives_interval"] == 5
+        assert kwargs["keepalives_count"] == 3
+        assert kwargs["connect_timeout"] == 10
+
+    def test_conninfo_includes_tcp_keepalives(self, autoscaling_pg_env):
+        auth = LakebaseAuth()
+        fake_w = MagicMock()
+        fake_w.api_client = _autoscaling_api_client()
+        auth._w = fake_w
+
+        conninfo = auth.conninfo()
+        assert "keepalives=1" in conninfo
+        assert "keepalives_idle=10" in conninfo
+        assert "keepalives_interval=5" in conninfo
+        assert "keepalives_count=3" in conninfo

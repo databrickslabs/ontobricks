@@ -1,0 +1,292 @@
+<!--
+    Cohort Discovery — DESIGN page (Ontology > Advanced > Cohorts).
+
+    Lets the SA design rules: NL prompt → review → tweak → save.
+    Execution and results live in the Digital Twin's Cohorts section.
+-->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-people-fill me-2"></i>Cohorts</h4>
+            <p class="text-muted mb-0 small">
+                Design constraint-based grouping rules — preview &amp; execute from
+                <em>Digital Twin → Cohorts</em><br>
+                <i class="bi bi-folder2-open"></i>
+                Domain: <code class="text-primary">{{ domain_name }}</code>
+                <span class="badge bg-secondary bg-opacity-50 cohort-fs-tiny">v{{ current_version }}</span>
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-primary"
+                    onclick="CohortModule.newRule()">
+                <i class="bi bi-plus-lg me-1"></i>New rule
+            </button>
+            <button class="btn btn-sm btn-primary" id="cohortSaveBtn"
+                    onclick="CohortModule.save()">
+                <i class="bi bi-check2 me-1"></i>Save rule
+            </button>
+        </div>
+    </div>
+
+    <div class="cohort-layout">
+
+        <!-- Main column: tabs (Describe | Build rule) -->
+        <section class="cohort-tabs-wrap card">
+            <div class="card-body p-0">
+                <ul class="nav nav-tabs cohort-nav-tabs px-3 pt-2" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="cohortTabDescribeBtn"
+                                data-bs-toggle="tab" data-bs-target="#cohortTabDescribe"
+                                type="button" role="tab" aria-controls="cohortTabDescribe"
+                                aria-selected="true">
+                            <i class="bi bi-stars me-1"></i>Describe
+                            <span class="text-muted small ms-1">(prompt)</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cohortTabBuildBtn"
+                                data-bs-toggle="tab" data-bs-target="#cohortTabBuild"
+                                type="button" role="tab" aria-controls="cohortTabBuild"
+                                aria-selected="false">
+                            <i class="bi bi-sliders me-1"></i>Build rule
+                            <span class="text-muted small ms-1">(steps 1–5)</span>
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content cohort-tab-content p-3">
+
+                    <!-- Tab 1 — Describe (NL agent) -->
+                    <div class="tab-pane fade show active" id="cohortTabDescribe"
+                         role="tabpanel" aria-labelledby="cohortTabDescribeBtn">
+                        <div class="cohort-agent-banner card" id="cohortAgentBanner">
+                            <div class="card-body py-3 px-3">
+                                <label class="form-label small fw-semibold mb-2">
+                                    <i class="bi bi-stars text-primary me-1"></i>
+                                    Describe the cohort you want
+                                </label>
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <input type="text" class="form-control form-control-sm flex-grow-1"
+                                           id="cohortAgentPrompt"
+                                           placeholder='e.g. "find consultants who can be staffed together on a project — exempts only with exempts"'
+                                           onkeydown="if(event.key==='Enter'){CohortModule.runAgent();}">
+                                    <button class="btn btn-sm btn-primary" id="cohortAgentRunBtn"
+                                            onclick="CohortModule.runAgent()">
+                                        <i class="bi bi-magic me-1"></i>Generate rule
+                                    </button>
+                                    <button class="btn btn-sm btn-link p-0 ms-1" type="button"
+                                            data-bs-toggle="collapse" data-bs-target="#cohortAgentTrace"
+                                            aria-expanded="false" aria-controls="cohortAgentTrace"
+                                            title="Show agent trace">
+                                        <i class="bi bi-list-task"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text small mt-1">
+                                    The agent inspects your ontology and graph, then proposes
+                                    a rule. Switch to <strong>Build rule</strong> to review
+                                    and tweak before saving.
+                                </div>
+                                <div id="cohortAgentReply" class="small mt-2 d-none"></div>
+                                <div class="collapse mt-2" id="cohortAgentTrace">
+                                    <div class="cohort-agent-trace small text-muted" id="cohortAgentTraceBody">
+                                        No agent run yet.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2 — Build rule (form) -->
+                    <div class="tab-pane fade" id="cohortTabBuild"
+                         role="tabpanel" aria-labelledby="cohortTabBuildBtn">
+
+                        <!-- Section 1 — Identity -->
+                        <div class="cohort-section mb-4">
+                            <h6 class="cohort-section-title">
+                                <span class="cohort-step">1</span> Identity
+                            </h6>
+                            <div class="row g-2">
+                                <div class="col-md-5">
+                                    <label class="form-label small mb-1">Rule name</label>
+                                    <input type="text" class="form-control form-control-sm"
+                                           id="cohortRuleLabel" placeholder="e.g. Exempt staffing pool">
+                                </div>
+                                <div class="col-md-7">
+                                    <label class="form-label small mb-1">Description (optional)</label>
+                                    <input type="text" class="form-control form-control-sm"
+                                           id="cohortRuleDescription"
+                                           placeholder="Plain-English description for fellow users">
+                                </div>
+                            </div>
+                            <div class="form-text small">
+                                Internal id: <code id="cohortRuleId" class="text-muted">(auto)</code>
+                            </div>
+                        </div>
+
+                        <!-- Section 2 — What -->
+                        <div class="cohort-section mb-4">
+                            <h6 class="cohort-section-title">
+                                <span class="cohort-step">2</span> What are we grouping?
+                            </h6>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-6">
+                                    <label class="form-label small mb-1">Group instances of class</label>
+                                    <select id="cohortClassUri" class="form-select form-select-sm">
+                                        <option value="">— select a class —</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="cohort-counter">
+                                        <i class="bi bi-people me-1 text-secondary"></i>
+                                        <span id="cohortClassCount">—</span>
+                                        <span class="text-muted">instances in graph</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 3 — Linked when -->
+                        <div class="cohort-section mb-4">
+                            <h6 class="cohort-section-title">
+                                <span class="cohort-step">3</span>
+                                When are two members linked?
+                                <span class="text-muted small ms-2">(optional)</span>
+                            </h6>
+                            <div id="cohortLinksList" class="cohort-rows"></div>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        onclick="CohortModule.addLink()">
+                                    <i class="bi bi-plus-lg me-1"></i>Add shared-resource path
+                                </button>
+                                <div class="d-flex gap-2 align-items-center small">
+                                    <span class="text-muted">Combine:</span>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <input type="radio" class="btn-check" name="cohortLinksCombine"
+                                               id="cohortCombineAny" value="any" checked
+                                               onchange="CohortModule.markDirty()">
+                                        <label class="btn btn-outline-secondary" for="cohortCombineAny">ANY</label>
+                                        <input type="radio" class="btn-check" name="cohortLinksCombine"
+                                               id="cohortCombineAll" value="all"
+                                               onchange="CohortModule.markDirty()">
+                                        <label class="btn btn-outline-secondary" for="cohortCombineAll">ALL</label>
+                                    </div>
+                                    <span class="cohort-counter ms-2">
+                                        <i class="bi bi-link-45deg me-1 text-secondary"></i>
+                                        <span id="cohortEdgeCount">—</span>
+                                        <span class="text-muted">link edges</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 4 — Compatibility -->
+                        <div class="cohort-section mb-4">
+                            <h6 class="cohort-section-title">
+                                <span class="cohort-step">4</span>
+                                Compatibility policies
+                                <span class="text-muted small ms-2">(optional)</span>
+                            </h6>
+                            <div id="cohortCompatList" class="cohort-rows"></div>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-plus-lg me-1"></i>Add constraint
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#"
+                                               onclick="CohortModule.addCompat('same_value');return false;">
+                                            Have the SAME VALUE of …
+                                        </a></li>
+                                        <li><a class="dropdown-item" href="#"
+                                               onclick="CohortModule.addCompat('value_equals');return false;">
+                                            Have … EQUAL TO …
+                                        </a></li>
+                                        <li><a class="dropdown-item" href="#"
+                                               onclick="CohortModule.addCompat('value_in');return false;">
+                                            Have … IN any of …
+                                        </a></li>
+                                        <li><a class="dropdown-item" href="#"
+                                               onclick="CohortModule.addCompat('value_range');return false;">
+                                            Have … BETWEEN min and max
+                                        </a></li>
+                                    </ul>
+                                </div>
+                                <span class="cohort-counter">
+                                    <i class="bi bi-funnel me-1 text-secondary"></i>
+                                    <span id="cohortMatchCount">—</span>
+                                    <span class="text-muted">match constraints</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Section 5 — Group type -->
+                        <div class="cohort-section mb-4">
+                            <h6 class="cohort-section-title">
+                                <span class="cohort-step">5</span> Group type
+                            </h6>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="cohort-grouptype-tile w-100" for="cohortGroupConnected">
+                                        <input type="radio" name="cohortGroupType" id="cohortGroupConnected"
+                                               class="form-check-input" value="connected" checked
+                                               onchange="CohortModule.markDirty()">
+                                        <i class="bi bi-share text-primary"></i>
+                                        <span class="cohort-tile-title">Connected</span>
+                                        <small class="text-muted d-block">
+                                            Transitive: A↔B and B↔C ⇒ {A,B,C} are one cohort.
+                                        </small>
+                                    </label>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="cohort-grouptype-tile w-100" for="cohortGroupStrict">
+                                        <input type="radio" name="cohortGroupType" id="cohortGroupStrict"
+                                               class="form-check-input" value="strict"
+                                               onchange="CohortModule.markDirty()">
+                                        <i class="bi bi-diagram-2 text-primary"></i>
+                                        <span class="cohort-tile-title">Strict (clique)</span>
+                                        <small class="text-muted d-block">
+                                            Every pair must be linked directly.
+                                        </small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="row g-2 mt-2 align-items-center">
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">Minimum cohort size</label>
+                                    <input type="number" class="form-control form-control-sm"
+                                           id="cohortMinSize" min="2" value="2"
+                                           onchange="CohortModule.markDirty()">
+                                </div>
+                            </div>
+                        </div>
+
+                    </div><!-- /tab-pane Build -->
+                </div><!-- /tab-content -->
+            </div><!-- /card-body -->
+        </section>
+
+        <!-- Right pane: Saved rules library -->
+        <aside class="cohort-rail">
+
+            <!-- Saved rules list -->
+            <div class="card cohort-rail-card">
+                <div class="card-header d-flex justify-content-between align-items-center py-2 px-3 bg-transparent">
+                    <span class="small fw-semibold text-muted">
+                        <i class="bi bi-list-ul me-1"></i>Saved rules
+                    </span>
+                    <span class="badge bg-secondary bg-opacity-50" id="cohortRulesCount">
+                        {{ reasoning_ctx.cohort_rules_count|default(0) }}
+                    </span>
+                </div>
+                <div class="cohort-rail-body" id="cohortRulesList">
+                    <div class="text-center py-4 text-muted small" id="cohortRulesEmpty">
+                        No rules yet. Click <em>New rule</em> to create one.
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div><!-- /cohort-layout -->
+</div>
+
+{% include "partials/_cohort_modals.html" %}

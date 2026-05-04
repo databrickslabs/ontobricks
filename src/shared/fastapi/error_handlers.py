@@ -38,6 +38,13 @@ def register_exception_handlers(app) -> None:
         except Exception:
             pass
 
+        # Always expose details for client-input validation errors (400):
+        # the detail describes what's wrong with the user's submission,
+        # not internal state, so it's safe and necessary for usable
+        # error messages in the UI.
+        if status_code == 400 and error_code == "validation":
+            show_detail = True
+
         body = ErrorResponse(
             error=error_code,
             message=message,

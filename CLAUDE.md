@@ -22,6 +22,7 @@ descriptive text and can be safely ignored when reading.
 @./.cursor/08-testing-and-deployment.mdc
 @./.cursor/09-package-management.mdc
 @./.cursor/10-entity-panel-matrix.mdc
+@./.cursor/11-frontend-design.mdc
 @./src/.coding_rules.md
 
 ## Claude-only additions

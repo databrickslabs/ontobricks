@@ -1,0 +1,700 @@
+---
+name: Frontend Design System
+priority: 78
+scope:
+  globs: ["src/front/**", "src/front/static/**", "src/front/templates/**"]
+  languages: ["html", "css", "javascript"]
+---
+
+### Frontend Design System
+
+This file documents the **actual design conventions in the codebase**, not
+aspirations. The two structural rules ("no inline CSS/JS in templates",
+"shared assets under `front/static/`") live in
+`05-code-style-and-structure.mdc § Frontend (HTML/CSS/JS)`. This file
+covers visual language, components, naming and asset wiring.
+
+### Design Token Systems (two coexisting scopes)
+
+There are **two namespaced token systems**, by design — do not mix them.
+
+| Scope | File | Prefix | Theme |
+|-------|------|--------|-------|
+| App shell (navbar, pages, modals, forms, KPI tiles, etc.) | `src/front/static/global/css/main.css` | `--db-*` | Databricks Red on light grey |
+| OntoViz canvas (entity boxes, relationships, toolbar) | `src/front/static/global/ontoviz/css/ontoviz-variables.css` | `--ovz-*` | Greyscale only |
+
+**Rules:**
+
+- Always use a token. Never hard-code a colour, shadow, radius or transition
+  that has a token equivalent.
+- Inside `static/global/ontoviz/**`, use `--ovz-*` tokens only.
+- Everywhere else under `static/**` and `templates/**`, use `--db-*` tokens.
+- Do not introduce a third namespace. If a new token is needed, extend the
+  appropriate file (`main.css :root` or `ontoviz-variables.css :root`).
+
+### Colour Palette (`--db-*`)
+
+| Role | Token | Value |
+|------|-------|-------|
+| Brand primary | `--db-primary` | `#FF3621` (Databricks Red) |
+| Primary dark / darker | `--db-primary-dark`, `--db-primary-darker` | `#E62E1C`, `#CC2819` |
+| Primary tint (focus rings, badges) | `--db-primary-light` | `rgba(255, 54, 33, 0.1)` |
+| Surface dark (navbar) | `--db-dark`, `--db-gray` | `#1B1C1D`, `#2C2D2E` |
+| Page background | `--db-light-gray` | `#F7F7F7` |
+| Borders | `--db-border`, `--db-border-light` | `#E0E0E0`, `#dee2e6` |
+| Text | `--db-text`, `--db-text-secondary`, `--db-text-muted` | `#1E1E1E`, `#6B6C6D`, `#666666` |
+| Status | `--db-success`, `--db-warning`, `--db-info`, `--db-success-bg`, `--db-success-text`, `--db-danger-bg`, `--db-danger-text` | Bootstrap-aligned |
+| Shadows | `--db-shadow-sm`, `--db-shadow-md`, `--db-shadow-lg`, `--db-shadow-primary` | layered |
+| Transitions | `--db-transition`, `--db-transition-fast` | `0.2s` / `0.15s ease` |
+
+### Where Primary Red Is (and Is Not) Allowed
+
+Primary red (`--db-primary`) is **reserved** for high-signal moments:
+
+- Navbar brand, navbar active state, navbar dropdown hover/active.
+- Workflow step circles and the connecting line on the home page.
+- Form-control focus ring (`box-shadow: 0 0 0 0.2rem rgba(var(--db-primary-rgb), 0.25)`).
+- `.badge-primary`, `.bg-primary`, `.text-primary`, `.border-primary` utility overrides.
+- The OntoBricks loading spinner accent.
+
+**Primary red is NOT allowed on plain buttons.** All Bootstrap colored button
+variants (`.btn-primary`, `.btn-success`, `.btn-danger`, …, including
+`.btn-outline-*`) are deliberately **forced to a neutral grey palette** in
+`global/css/components.css`. When a contributor reaches for `class="btn
+btn-success"`, they get the same grey button as `btn-secondary` — this is
+intentional. Convey state via icon, label, or a sibling `.badge` /
+`.alert`, not via button colour.
+
+### Typography
+
+- System font stack only:
+  `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`.
+- No webfont imports. No `@font-face`. No Google Fonts.
+- OntoViz uses `--ovz-font-main`, `--ovz-font-display`, `--ovz-font-mono`
+  defined in `ontoviz-variables.css`.
+- Page header sizes: `.page-header h1` = `2rem` / `600` weight; subtitle
+  paragraph = secondary text colour.
+
+### Iconography
+
+- **Bootstrap Icons** only (`<i class="bi bi-..."></i>`), loaded from CDN in
+  `base.html`.
+- Menu/sidebar icons are configured **declaratively** in
+  `src/front/config/menu_config.json` (`"icon": "bi-..."`), never hard-coded
+  in templates.
+- Do not introduce another icon font, SVG icon library, or emoji-as-icon.
+
+### Page Layout (mandatory skeleton)
+
+Every page **must** extend `templates/base.html`. The base template owns
+the entire app chrome — never duplicate or substitute any of it:
+
+| Element | Provided by `base.html` | Don't reimplement |
+|---------|-------------------------|-------------------|
+| Navbar (top) | `<nav class="navbar navbar-expand-lg navbar-dark">` driven by `menu_config.json` | a custom top bar |
+| Breadcrumb | `#obBreadcrumb` / `.ob-breadcrumb`, populated by `breadcrumb.js` | a per-page breadcrumb |
+| Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
+| Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
+| Task Tracker dropdown | `#taskTrackerDropdown` (hourglass) | a per-page task panel |
+| Help Center modal | included via `partials/layout/help_modal.html` | a custom help dialog |
+| UC File Browser modal | included via `partials/layout/uc_file_browser_modal.html` | another file picker |
+| Body data attributes | `data-app-role`, `data-domain-role`, `data-app-mode` | re-fetching them |
+| Bootstrap JS bundle | loaded after `{% block content %}` | re-loading Bootstrap |
+
+A page template **must** look like this (and nothing more at the top
+level):
+
+```html
+{% extends "base.html" %}
+
+{% block title %}<Page Name> - OntoBricks{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='<area>/css/<area>-<feature>.css') }}?v={{ asset_version }}">
+{% endblock %}
+
+{% block content %}
+   ...one of the two layout patterns below...
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='<area>/js/<area>-<feature>.js') }}?v={{ asset_version }}"></script>
+{% endblock %}
+```
+
+There are exactly **two** acceptable layouts inside `{% block content %}`.
+Pick one, do not invent a third.
+
+#### Layout 1 — Sidebar layout (default for app pages)
+
+Used by `ontology.html`, `mapping.html`, `dtwin.html`, `registry.html`,
+`domain.html`, `settings.html`. This is the default for any page that
+exposes more than one functional section.
+
+```html
+<div class="container-fluid px-0">
+    <div class="sidebar-layout">
+        <!-- Left sidebar - rendered from menu_config.json -->
+        <div class="sidebar-nav">
+            {% set sidebar_menu = get_menu('<area>') %}
+            {% include "partials/layout/_sidebar_nav.html" %}
+        </div>
+
+        <!-- Right content area: one section per sidebar item -->
+        <div class="sidebar-content">
+            <div id="information-section" class="sidebar-section active">
+                {% include "partials/<area>/_<area>_information.html" %}
+            </div>
+            <div id="design-section" class="sidebar-section">
+                {% include "partials/<area>/_<area>_design.html" %}
+            </div>
+            <!-- ...one <div id="<id>-section" class="sidebar-section"> per menu item... -->
+        </div>
+    </div>
+</div>
+```
+
+Rules for sidebar pages:
+
+- The sidebar **must** be the `_sidebar_nav.html` partial driven by
+  `menu_config.json` — never hand-code `<nav class="sidebar-nav">` items.
+- Section ids are `<menu-item-id>-section`. The id must match the
+  `data-section` attribute emitted by the partial for the
+  section-switcher to pick it up (`sidebar-nav.js`).
+- Exactly **one** section carries `.active` on initial render (typically
+  the menu item flagged `default: true`, or the section name passed via
+  `?section=...` querystring).
+- Each section's body lives in a partial under
+  `templates/partials/<area>/_<area>_<feature>.html`. Page templates
+  never inline the section bodies.
+- `.content-wrapper` constraints are intentionally overridden when a
+  `.sidebar-layout` is present (see `sidebar-layout.css`) — full width,
+  full viewport height minus chrome. Do not re-add `padding` or
+  `max-width` on the wrapper.
+
+#### Layout 2 — Standalone content (single-purpose pages only)
+
+Used by `home.html`, `about.html`, `access_denied.html`. Reserve for
+landing/info pages that do not need a sidebar.
+
+```html
+{# Content sits inside base.html's default .content-wrapper:
+   max-width: 1400px, padding: 2rem, auto-centred #}
+<div class="page-header">
+    <h1><i class="bi bi-..."></i> Page Title</h1>
+    <p>Optional subtitle in --db-text-secondary.</p>
+</div>
+
+<!-- ...page content... -->
+```
+
+Rules for standalone pages:
+
+- Use `.page-header` for the title block — do not invent another header
+  treatment.
+- Stay inside the default `.content-wrapper`. Do not wrap the content in
+  `.container-fluid` or override the wrapper's max-width.
+
+### Sidebar Behaviour
+
+The sidebar is a self-contained component owned by
+`global/js/sidebar-nav.js` + `global/css/sidebar-layout.css`. Page code
+**must not** reimplement section switching, collapse, URL sync or
+keyboard handling.
+
+**Auto-init contract**
+
+- `sidebar-nav.js` auto-initialises on `DOMContentLoaded` whenever a
+  `.sidebar-nav` exists. To opt out (extremely rare), set
+  `window.SIDEBAR_NAV_MANUAL_INIT = true` *before* the script runs and
+  call `SidebarNav.init({...})` yourself.
+- Each nav item must carry `data-section="<id>"` and the corresponding
+  content block must have id `"<id>-section"` and class
+  `"sidebar-section"`. Mismatch = silent no-op.
+- Exactly one `.nav-link` and one `.sidebar-section` carry `.active` at
+  any time. Never set `display: none / block` directly on a section —
+  the `.active` class is what the CSS reads.
+
+**State, history and keyboard**
+
+- The active section is mirrored to `?section=<id>` in the URL via
+  `history.pushState`, and restored from query string or hash on load
+  and on `popstate` (Back / Forward work).
+- Collapsed/expanded state is persisted in `localStorage` under
+  `ontobricks-sidebar-collapsed`. **Default state is collapsed** — do
+  not change this default.
+- The collapse toggle button is injected automatically at the top of
+  the sidebar. Do not author your own toggle.
+- A `sidebarSectionChanged` `CustomEvent` (`detail: { section,
+  targetSection }`) is dispatched on `document` after every switch.
+  This is the official extension point — listen to it instead of
+  patching click handlers.
+
+**Public API (use these, not raw DOM manipulation)**
+
+| Call | Purpose |
+|------|---------|
+| `SidebarNav.switchTo(name)` | Programmatically activate a section |
+| `SidebarNav.getActiveSection()` | Read the current section id |
+| `SidebarNav.toggleCollapse()` | Programmatically collapse/expand |
+| `SidebarNav.init({ onSectionChange, onBeforeSectionChange })` | Re-init with hooks; `onBeforeSectionChange` may return `false` (or a Promise resolving to `false`) to veto the switch |
+
+**Style rules**
+
+- Sidebar width: `200px` expanded, `48px` collapsed (driven by
+  `.sidebar-nav.collapsed`). Do not override per page.
+- Nav-link visual: `0.82rem`, left-border accent of `3px transparent`
+  that grows on `:hover` and `.active`. Active background is
+  `rgba(0,0,0,0.15)` (greyscale by design — do not colourise).
+- Section group titles (`.sidebar-title`) are uppercase `0.65rem`,
+  `letter-spacing: 1px`, muted grey. Hidden when collapsed.
+- Icons inside `.nav-link i` are `0.95rem`, fixed `20px` slot
+  (alignment is consistent across the menu).
+- Disabled gates: `.sidebar-disabled` (generic),
+  `.sidebar-requires-domain` (no domain loaded),
+  `.sync-requires-ready` (triplestore empty), `.view-mode-hidden`
+  (read-only viewer). Use these classes — do not invent new ones, and
+  do not toggle them per page; they're driven by `permissions.js` and
+  the `data-domain-saved` body attributes.
+- Badges inside a nav-link are auto-wrapped into the `.nav-label`
+  span by the collapse logic and hidden when collapsed.
+
+**Don'ts**
+
+- ❌ Hand-coding `<a class="nav-link">` items in the page template —
+  the menu is rendered by `partials/layout/_sidebar_nav.html` from
+  `menu_config.json`.
+- ❌ Calling `addEventListener('click', ...)` on `.nav-link` items to
+  intercept switching — use `onBeforeSectionChange` /
+  `sidebarSectionChanged`.
+- ❌ Toggling `style.display` on `.sidebar-section` directly.
+- ❌ Persisting your own per-page sidebar state — there's one
+  `localStorage` key for the whole app.
+- ❌ Adjusting `--ob-chrome-height` from page code — the breadcrumb
+  computes it.
+
+### Breadcrumb Behaviour & Style
+
+The breadcrumb is owned by `global/js/breadcrumb.js` + the
+`.ob-breadcrumb` styles in `global/css/components.css`. It is **not**
+configured per page — it is fully derived from the URL and the
+currently-active sidebar section.
+
+**Behaviour**
+
+- The breadcrumb container `#obBreadcrumb` lives in `base.html` and is
+  hidden by default (`d-none`). `breadcrumb.js` auto-runs on
+  `DOMContentLoaded`, builds the crumbs and removes `d-none` only when
+  there is more than one crumb to show. Pages that never qualify
+  (e.g. home, about) keep it hidden — that is intentional, do not
+  force it.
+- The route hierarchy is fixed in `breadcrumb.js`:
+  Registry → Domain → Ontology → Mapping → Digital Twin (plus
+  Settings as a flat entry). Adding a new top-level page means
+  extending `_ROUTE_MAP` and `_HIERARCHY` there — not patching
+  templates.
+- The "Domain" crumb label is read from `#currentDomainName` (set by
+  the navbar) — do **not** add a separate fetch for the domain name.
+- The last crumb is the active sidebar section, updated live on every
+  `sidebarSectionChanged` event. Section labels come from the
+  sidebar's `.nav-label` text, so renaming a sidebar item
+  automatically renames the breadcrumb crumb.
+- After rendering, `breadcrumb.js` writes the total chrome height
+  (navbar + breadcrumb) into the CSS variable `--ob-chrome-height`,
+  which `.sidebar-layout` reads to compute the available viewport
+  height. **Don't set this variable from anywhere else.**
+
+**Style**
+
+- Container: `.ob-breadcrumb` — `0.35rem 1rem` padding, light
+  background (`var(--bs-light, #f8f9fa)`), bottom border
+  (`var(--bs-border-color, #dee2e6)`), font-size `0.8rem`.
+- Separator: Bootstrap-icons chevron (`\F285`) at `0.65rem`. Do not
+  switch to `/`, `>`, or any other glyph.
+- Links: `var(--bs-secondary)`, no underline; underline only on
+  `:hover`.
+- Active crumb (last item): `var(--bs-body-color)`, weight 500, no
+  link.
+- Each crumb prefixes its label with a Bootstrap icon (`bi-...`).
+  Keep icons consistent with the corresponding sidebar entry.
+
+**Don'ts**
+
+- ❌ Manually mutating `#obBreadcrumbList` from page JS. Use the
+  `_ROUTE_MAP` extension or rely on `sidebarSectionChanged`.
+- ❌ Adding a per-page breadcrumb (`<nav class="breadcrumb">`) — the
+  global one is the only one allowed.
+- ❌ Changing the separator, font-size, or padding per page.
+- ❌ Forcing the breadcrumb visible on a single-crumb page just to
+  display a title — use `.page-header` instead.
+
+### Section / Partial Conventions
+
+- One partial per section. Filename:
+  `templates/partials/<area>/_<area>_<feature>.html` (note the leading
+  underscore — it marks it as a non-route partial).
+- A section partial **never** includes `<link>` or `<script>` tags. All
+  CSS/JS is wired in the parent page's `extra_css` / `extra_js` blocks.
+- A section partial may include sub-partials but **must not** redefine
+  the section wrapper (`<div id="...-section" class="sidebar-section">`)
+  — that lives in the page template.
+
+### Section Header & Top-Right Actions
+
+Every section starts with a **`.section-header`** row that pairs a
+title block on the left with action buttons on the right. This is the
+single allowed pattern for page-level actions — actions never live at
+the bottom of a section, never float on top of the content, and never
+hide inside a Bootstrap `.card-header`.
+
+**Canonical skeleton**
+
+```html
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-<icon> me-2"></i>Section Title</h4>
+        <p class="text-muted mb-0 small">One-line description of what this section does.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <!-- Utility / icon-only buttons first (refresh, expand/collapse, settings cog) -->
+        <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" title="Refresh">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+        <!-- Secondary CTAs next, primary CTA last (rightmost) -->
+        <button type="button" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-cloud-download me-1"></i> Load
+        </button>
+        <button type="button" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-circle me-1"></i> New
+        </button>
+    </div>
+</div>
+```
+
+**Rules**
+
+- Action buttons **must** sit in the **top-right** of the section, in
+  the right-hand `<div>` of `.section-header`. No exceptions: this is
+  the location users learn once and look for everywhere.
+- Use `btn-sm` (small). Section headers carry a lot of buttons — full-
+  size `.btn` makes them shout.
+- Order from left to right: **icon-only utility buttons → secondary
+  CTAs → primary CTA**. The rightmost button is the most important
+  action of the section.
+- Group icon-only utility buttons (refresh, expand all, collapse all,
+  settings) inside a `.btn-group.btn-group-sm` so they read as a
+  cluster.
+- Every icon-only button **must** have a `title=` attribute (and ideally
+  `aria-label=`) — it is the only label the user sees.
+- Use Bootstrap colour intent (`btn-primary`, `btn-outline-secondary`,
+  `btn-success`, `btn-danger`) to communicate hierarchy, even though
+  the override in `components.css` neutralises the surface — the
+  semantic class still reads correctly to assistive tech and to
+  future theme work.
+- Buttons with a label start with a Bootstrap icon followed by
+  `me-1`, e.g. `<i class="bi bi-plus-circle me-1"></i> Add Entity`.
+- Title `<h4>` uses `mb-1`; subtitle `<p>` uses `text-muted mb-0 small`.
+  Don't introduce `<h2>`/`<h3>` inside a sidebar section — `.h4` is the
+  level for section titles (page-level `<h1>` belongs to
+  `.page-header` on standalone pages only).
+- The whole row uses `mb-4`. The next sibling is the section's main
+  card / content. Don't add a `<hr>` between them — the `mb-4` is the
+  separator.
+
+**Anti-patterns**
+
+- ❌ A floating "+" FAB (Material-style) — use the top-right button.
+- ❌ Action buttons placed below the data they act on.
+- ❌ `<button>` inside `.card-header` of the section's main card —
+  wrong location, wrong styling, wrong size.
+- ❌ Full-size buttons in a section header.
+- ❌ Buttons without an icon, or icon-only buttons without `title=`.
+- ❌ Reordering so the primary CTA is on the left.
+
+### Component Naming
+
+| Prefix | Owner | Use |
+|--------|-------|-----|
+| `ob-*` | OntoBricks shared components | Cross-page reusable widgets (`ob-kpi-tile`, `ob-breadcrumb`, `ob-shortcut-card`, `ob-loading-spinner`, `ob-tab-content`) |
+| `ovz-*` | OntoViz canvas | Entities, relationships, toolbar, context menu inside the OntoViz library |
+| Bootstrap classes | Bootstrap 5.3.2 | Base utilities and layout primitives |
+| Area-specific | Per-area CSS files | Local concerns; prefer to first reuse an `ob-*` component |
+
+When introducing a new shared component:
+
+1. Pick the `ob-*` prefix.
+2. Place styles in `global/css/components.css` (or a new file under
+   `global/css/` if the component is large enough to deserve its own file
+   and load it in `base.html`).
+3. Document the component contract in a short comment block at the top of
+   its CSS section (selector skeleton + variants), in the style of
+   `.ob-kpi-tile` in `components.css`.
+
+### Reusable Components Catalog
+
+These already exist; reuse before reinventing.
+
+- **KPI tile** — `.ob-kpi-tile` with optional state variants
+  (`.tile-success`, `.tile-danger`, `.tile-warning`, `.tile-muted`) and
+  bottom-accent variants (`.tile-accent-*`). Sub-elements:
+  `.ob-kpi-tile-icon`, `.ob-kpi-tile-value`, `.ob-kpi-tile-label`.
+- **Loading spinner** — `.ob-loading-spinner` with `.ob-spinner-svg` and
+  optional `.ob-spinner-label`. SVG markup is in `base.html` (do not
+  redraw the rings/diamond — include the partial or copy verbatim).
+- **Page-level loading overlay** — `.domain-loading-overlay` already wired
+  in `base.html` as `#domainLoadingOverlay`. Toggle via `.d-none`.
+- **Breadcrumb** — `.ob-breadcrumb` driven by `breadcrumb.js`; do not
+  build a parallel breadcrumb.
+- **Tabs** — Bootstrap nav-tabs, paired with `.ob-tab-content` for the
+  bordered pane.
+- **Cards** — Bootstrap `.card` / `.card-header`; styling already neutered
+  to project tokens.
+- **Forms** — Bootstrap `.form-control` / `.form-select` / `.form-label`;
+  focus ring is already themed.
+- **Alerts** — Bootstrap `.alert` with `.alert-success` / `.alert-danger`
+  using project status background tokens.
+- **Wizard overlay** — `.wizard-form-overlay` for absolute-positioned
+  blocking spinners over a form during async tasks.
+- **Keyboard shortcut overlay** — `.ob-shortcut-overlay` + `.ob-shortcut-card`.
+
+### Popups, Modals, Confirmations & Notifications
+
+**Two non-negotiable rules:**
+
+1. **Native browser popups are forbidden.** Never call `alert()`,
+   `confirm()`, or `prompt()` from any frontend code. They bypass our
+   design system, block the main thread, look like a 2003 Windows error,
+   and cannot be tested from JS.
+2. **All user-facing messages route through the navbar Notification
+   Center.** There is one message bus for the whole app — the bell
+   dropdown in the top-right of the navbar (`#notifCenterDropdown`),
+   backed by the `NotificationCenter` singleton in
+   `global/js/utils.js`. Every success / error / warning / info that a
+   user should see goes through `showNotification(...)`. No
+   per-page toasts. No inline `<div class="alert">` blocks bolted on as
+   a status line. No console-only errors for things the user needs to
+   know.
+
+#### Single message bus — the navbar Notification Center
+
+The Notification Center is provided by `base.html` and runs on every
+page:
+
+- Bell toggle: `#notifCenterToggle` (icon `bi-bell`).
+- Dropdown: `#notifCenterDropdown` with list `#notifCenterList`.
+- Unread badge: `#notifCenterBadge` (auto-managed; shows `99+` past 99).
+- Buffer: in-memory ring buffer capped by
+  `<html data-max-notifications>` (default `10`).
+- Each entry shows icon + message + relative time
+  (`just now`, `5s ago`, `12m ago`, `3h ago`, then absolute date).
+- Opening the dropdown marks all entries read; the user can clear all
+  via the trash button in the dropdown header.
+
+**The only API you should call is `showNotification(message, type,
+duration?)`.** It pushes to the centre **and** flashes a transient
+toast for `success` / `warning` / `error` so urgent messages are
+immediately visible without forcing the user to open the bell.
+
+#### What goes through the Notification Center
+
+| Source of the message | Route via |
+|------------------------|-----------|
+| API call result (success / failure) | `showNotification(...)` in the page's `.then` / `.catch` |
+| Form validation error before submit | `showNotification(msg, 'warning')` (then keep the form open) |
+| Background task progress / completion | Already wired via the Task Tracker (`task-tracker.js`) — listen, don't reinvent |
+| Confirmation of a destructive action | `await showDeleteConfirm(name, type)` — its outcome should still produce a `showNotification` when done |
+| Question requiring user choice | `await showConfirmDialog({...})` |
+| Free-text input | A purpose-built Bootstrap modal with a `<form>` — never `prompt()` |
+| Long-form details (preview, help) | A Bootstrap modal (`DocumentPreview.open(...)` or area-specific) |
+
+#### What to use instead
+
+| You want to… | Use | Where it's defined |
+|--------------|-----|---------------------|
+| Tell the user something happened (info / success / warning / error) | `showNotification(message, type, duration?)` | `global/js/utils.js` |
+| Ask Yes/No | `await showConfirmDialog({ title, message, confirmText, cancelText, confirmClass, icon })` | `global/js/utils.js` |
+| Confirm a delete | `await showDeleteConfirm(itemName, itemType?)` (red themed) | `global/js/utils.js` |
+| Preview a file | `DocumentPreview.open(filename)` | `global/js/utils.js` |
+| Get a string from the user | A purpose-built Bootstrap modal with a `<form>` and an explicit Cancel/Save footer — never `prompt()`. |
+| Modal with custom content | A Bootstrap 5 modal in a Jinja partial, opened via `bootstrap.Modal.getOrCreateInstance(modalEl).show()` |
+
+`showNotification` already pushes the message into the navbar
+Notification Center bell **and** displays a transient toast for
+`error` / `warning` / `success`. Use it as the single entry point for
+all user-facing feedback. Toast styling lives in `pages.css`
+(`.error-toast-popup`, `.warning-toast-popup`, `.success-toast-popup`,
+`#errorToastContainer`) — do not reimplement.
+
+#### Type → toast policy
+
+| `type` | Notification Center | Floating toast | Default duration |
+|--------|---------------------|----------------|------------------|
+| `info` | yes | no | n/a |
+| `success` | yes | yes | 3000 ms |
+| `warning` | yes | yes | 4000 ms |
+| `error` | yes | yes | 6000 ms |
+
+Messages ending in `...` are treated as transient progress messages and
+are deliberately **not** added to the Notification Center — only shown
+as toasts. Use this for "Saving...", "Loading...", etc.
+
+#### Bootstrap modal pattern (for purpose-built dialogs)
+
+Every modal that's not produced by a helper above must:
+
+1. Live in a partial under `templates/partials/<area>/_<area>_<feature>_modal.html`
+   (or a shared one under `templates/partials/layout/` if cross-area),
+   and be `{% include %}`'d by the page template.
+2. Use the standard Bootstrap structure:
+   ```html
+   <div class="modal fade" id="<purpose>Modal" tabindex="-1">
+       <div class="modal-dialog modal-dialog-centered">
+           <div class="modal-content">
+               <div class="modal-header">
+                   <h5 class="modal-title">
+                       <i class="bi bi-<icon> me-2"></i>Title
+                   </h5>
+                   <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+               </div>
+               <div class="modal-body">...</div>
+               <div class="modal-footer">
+                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                   <button type="button" class="btn btn-primary" id="<purpose>SaveBtn">Save</button>
+               </div>
+           </div>
+       </div>
+   </div>
+   ```
+3. Be opened from JS via:
+   ```js
+   const modalEl = document.getElementById('<purpose>Modal');
+   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+   modal.show();
+   ```
+   Use `getOrCreateInstance` (idempotent), never `new bootstrap.Modal(...)`
+   each time.
+4. Always include the `data-bs-dismiss="modal"` button-close pattern so
+   Esc / backdrop click / Cancel all behave consistently.
+5. Never use inline `style="..."` on the modal — if a custom width is
+   needed, use Bootstrap's `modal-lg` / `modal-xl` modifier or add a
+   class in the matching CSS file.
+
+#### Reusing existing modals before building a new one
+
+Before adding a new modal, check whether one of these can be reused:
+
+- `partials/layout/uc_file_browser_modal.html` — Unity Catalog file
+  picker (`window.openUCFileBrowser(...)`).
+- `partials/layout/help_modal.html` — Help Center.
+- `DocumentPreview.open(filename)` — generic document viewer
+  (PDF / image / text).
+- `showConfirmDialog(...)` / `showDeleteConfirm(...)` — yes/no prompts.
+
+If the use case fits one of these (even loosely), extend it rather than
+duplicating modal scaffolding.
+
+### Static Asset Folder Layout
+
+```
+src/front/static/
+├── global/                <- Cross-page assets
+│   ├── css/               <- main.css, components.css, pages.css,
+│   │                         sidebar-layout.css, permissions.css, …
+│   ├── js/                <- navbar.js, sidebar-nav.js, breadcrumb.js,
+│   │                         permissions.js, utils.js, task-tracker.js, …
+│   ├── img/               <- logos, favicons, spinners (SVG)
+│   └── ontoviz/           <- The OntoViz library (CSS + JS together)
+│       ├── css/
+│       └── ontoviz.js
+├── <area>/                <- One folder per area
+│   ├── css/               <- <area>-<feature>.css (e.g. query-cohorts.css)
+│   └── js/                <- <area>-<feature>.js
+└── config/
+```
+
+**Area folders mirror partial folders.** A new file at
+`templates/partials/<area>/_<feature>.html` should pair with assets at
+`static/<area>/{css,js}/<area>-<feature>.{css,js}`.
+
+### Asset Wiring (in `base.html` / page templates)
+
+- Always cache-bust with `?v={{ asset_version }}`. The bare `?v=2` literal
+  is reserved for the favicon.
+- Load order in `base.html` is fixed; do not reorder:
+  1. Bootstrap CSS (CDN)
+  2. Bootstrap Icons (CDN)
+  3. `main.css` → `components.css` → `pages.css` → `sidebar-layout.css`
+     → `emoji-picker.css` → `help-modal.css`
+  4. `permissions.css` **must load LAST** so its `!important` role/version
+     gates win over per-component rules.
+- `permissions.js` **must be the first deferred script** so
+  `window.OB.permissions` is defined before navbar/version-check read it.
+- Per-page CSS/JS goes in `{% block extra_css %}` / `{% block extra_js %}`,
+  also cache-busted.
+
+### Read-Only & Role Gating
+
+- Role/version gating is centralised in `global/css/permissions.css` and
+  driven by body classes set by `permissions.js`:
+  `body.read-only-version`, `body.role-viewer`.
+- Inputs and action affordances are hidden / disabled via `body:is(...)`
+  selectors with `!important`. Do not duplicate this logic per page.
+- Server side, `data-app-role`, `data-domain-role` and `data-app-mode` are
+  set on `<body>` in `base.html` — read them from JS rather than calling
+  the API again.
+
+### Accessibility Baseline
+
+- Every interactive icon-only control has a `title=` (and ideally
+  `aria-label=`). See navbar bell / hourglass / help icons.
+- Decorative SVGs (chevrons, spinner glyphs) have `aria-hidden="true"`.
+- Modals use Bootstrap's modal markup so focus trapping and ESC are free.
+- Maintain Bootstrap's contrast: do not lighten text below
+  `--db-text-muted` for body copy.
+
+### What NOT to Do
+
+- ❌ `alert()`, `confirm()`, `prompt()` — use `showNotification`,
+  `showConfirmDialog`, `showDeleteConfirm`, or a Bootstrap modal.
+- ❌ A per-page toast container, alert banner, or status `<div>` for
+  user feedback. Use the navbar Notification Center.
+- ❌ `console.error(...)` as the only signal that something failed —
+  mirror it with a `showNotification(msg, 'error')`.
+- ❌ `new bootstrap.Modal(el)` on each open — use
+  `bootstrap.Modal.getOrCreateInstance(el)`.
+- ❌ Per-page reimplementation of the navbar, breadcrumb, KPI tile,
+  loading spinner, modal scaffolding, sidebar layout, notification
+  centre, task tracker, help centre, or UC file browser.
+- ❌ A page template that does not `{% extends "base.html" %}`.
+- ❌ Top-level page markup that is neither `.sidebar-layout` nor a
+  page-header + standalone block — no third pattern.
+- ❌ Action buttons placed anywhere other than the top-right of the
+  section's `.section-header`. No floating FABs, no bottom action
+  bars, no buttons inside `.card-header`.
+- ❌ Hand-coded sidebar `<a class="nav-link">` items — use
+  `_sidebar_nav.html` + `menu_config.json`.
+- ❌ `addEventListener('click', ...)` on sidebar nav links — use the
+  `sidebarSectionChanged` event or `onBeforeSectionChange` hook.
+- ❌ Setting `style.display` on `.sidebar-section` directly — toggle
+  the `.active` class via `SidebarNav.switchTo(...)`.
+- ❌ Writing `--ob-chrome-height` from page code — that's the
+  breadcrumb's responsibility.
+- ❌ A custom per-page breadcrumb. Extend `_ROUTE_MAP` in
+  `breadcrumb.js` instead.
+- ❌ Inline `<style>` or `style="…"` in templates. Move to
+  `static/<area>/css/`.
+- ❌ Inline `<script>` blocks beyond a single tiny bootstrap call. Move
+  to `static/<area>/js/`.
+- ❌ Hard-coded hex/rgb colours when a token exists.
+- ❌ Importing webfonts, FontAwesome, Material Icons, or any
+  non-Bootstrap icon font.
+- ❌ Coloured Bootstrap buttons expecting their default look.
+- ❌ Mixing `--db-*` and `--ovz-*` tokens in the same selector.
+- ❌ Loading `permissions.css` anywhere other than last, or
+  `permissions.js` anywhere other than first-defer.
+- ❌ Sidebar nav items hand-coded in templates instead of via
+  `menu_config.json` + `_sidebar_nav.html`.
+- ❌ Inline modal markup created from JS string templates for ad-hoc
+  dialogs — put the markup in a partial and `{% include %}` it.

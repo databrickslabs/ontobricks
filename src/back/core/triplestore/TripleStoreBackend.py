@@ -497,6 +497,48 @@ class TripleStoreBackend(ABC):
         """
         return []
 
+    def delete_cohort_triples(
+        self,
+        table_name: str,
+        cohort_uri_prefix: str,
+        in_cohort_predicate: str,
+    ) -> int:
+        """Remove all triples produced by a cohort rule (idempotent).
+
+        A cohort rule materialises two kinds of triples:
+
+        * Cohort-entity triples whose **subject** starts with
+          *cohort_uri_prefix* (``rdf:type``, ``rdfs:label``, ``fromRule``,
+          ``cohortSize``).
+        * Membership triples whose **predicate** is *in_cohort_predicate*
+          and whose **object** starts with *cohort_uri_prefix*.
+
+        Default implementation issues a single SQL ``DELETE`` covering
+        both cases.  Cypher backends override with a ``MATCH ... DELETE``
+        pair.  Returns the number of rows deleted (best-effort).
+        """
+        if not cohort_uri_prefix:
+            return 0
+        prefix_esc = self._sql_escape(cohort_uri_prefix)
+        in_cohort_esc = self._sql_escape(in_cohort_predicate)
+        sql = (
+            f"DELETE FROM {table_name} "
+            f"WHERE subject LIKE '{prefix_esc}%' "
+            f"OR (predicate = '{in_cohort_esc}' "
+            f"    AND object LIKE '{prefix_esc}%')"
+        )
+        try:
+            self.execute_query(sql)
+            return -1
+        except Exception as exc:
+            logger.warning(
+                "delete_cohort_triples failed on %s (%s): %s",
+                table_name,
+                cohort_uri_prefix,
+                exc,
+            )
+            return 0
+
     def expand_entity_neighbors(
         self, table_name: str, entity_uris: Set[str]
     ) -> Set[str]:

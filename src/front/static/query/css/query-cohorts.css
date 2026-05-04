@@ -1,0 +1,546 @@
+/* Cohort Discovery — minimal, reuses existing Bootstrap card primitives. */
+
+.cohort-fs-tiny { font-size: 0.7rem; }
+
+.cohort-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 1rem;
+    align-items: start;
+    /* Fill the remaining height of the flex .content-section parent and let
+       the form scroll vertically — without this the grid keeps its natural
+       content height and gets clipped by the sidebar layout. */
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* DT run page: rail (saved rules) sits on the left, preview body on the right. */
+.cohort-layout--rail-left {
+    grid-template-columns: 320px minmax(0, 1fr);
+}
+
+@media (max-width: 992px) {
+    .cohort-layout,
+    .cohort-layout--rail-left { grid-template-columns: 1fr; }
+}
+
+/* Tabs (Describe | Build rule) ---------------------------- */
+.cohort-tabs-wrap {
+    min-width: 0;
+}
+.cohort-nav-tabs {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.cohort-nav-tabs .nav-link {
+    color: var(--bs-secondary-color);
+    font-size: 0.9rem;
+    padding: 0.5rem 0.85rem;
+}
+.cohort-nav-tabs .nav-link.active {
+    font-weight: 600;
+}
+.cohort-tab-content {
+    min-height: 220px;
+}
+
+/* Right pane: Run actions + Save + saved rules ----------- */
+.cohort-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.cohort-rail-card {
+    /* each rail card is a normal Bootstrap .card; nothing extra
+       needed except making sure the saved-rules list scrolls
+       independently below */
+}
+.cohort-rail-body {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+.cohort-status-line:empty {
+    display: none;
+}
+.cohort-rule-item {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    background: transparent;
+}
+.cohort-rule-item:hover { background: rgba(0, 0, 0, 0.03); }
+.cohort-rule-item.active {
+    background: rgba(13, 110, 253, 0.08);
+    border-left: 3px solid var(--bs-primary);
+}
+.cohort-rule-item-main {
+    flex-grow: 1;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: transparent;
+    min-width: 0;
+}
+.cohort-rule-edit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.6rem;
+    color: var(--bs-secondary-color);
+    text-decoration: none;
+    border-left: 1px solid rgba(0, 0, 0, 0.05);
+}
+.cohort-rule-edit:hover {
+    color: var(--bs-primary);
+    background: rgba(13, 110, 253, 0.06);
+}
+.cohort-rule-name { font-weight: 500; }
+.cohort-rule-meta { margin-top: 2px; }
+
+/* Form sections ------------------------------------------- */
+.cohort-section-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+    color: var(--bs-body-color);
+}
+.cohort-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(13, 110, 253, 0.12);
+    color: var(--bs-primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 6px;
+}
+
+.cohort-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+    background: rgba(0, 0, 0, 0.03);
+    padding: 2px 8px;
+    border-radius: 12px;
+}
+
+.cohort-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+}
+.cohort-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+.cohort-row-label {
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+}
+.cohort-input {
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+.cohort-row-del {
+    margin-left: auto;
+    padding: 0 6px !important;
+}
+
+/* Multi-hop link path ------------------------------------ */
+.cohort-link-card {
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+    padding: 10px 12px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+.cohort-link-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+}
+.cohort-link-card-title {
+    font-size: 0.78rem;
+    color: var(--bs-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+/* Tree-style multi-hop path renderer --------------------- */
+.cohort-tree {
+    display: flex;
+    flex-direction: column;
+}
+.cohort-tree-root {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 2px 0;
+}
+.cohort-tree-root-hint {
+    font-size: 0.7rem;
+    color: var(--bs-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.cohort-tree-hops {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    margin-left: 0.35rem;
+    padding-left: 1rem;
+}
+.cohort-tree-hops:not(:empty)::before {
+    /* The dashed vertical trunk for this nesting level. Drawn as a
+       pseudo-element (rather than ``border-left``) so its height
+       can be capped exactly at the first child hop's bullet — past
+       that point the path branches via the child's own children
+       container, which carries its own trunk. Both
+       ``--cohort-trunk-up`` (extension that reaches up to the
+       parent bullet) and ``--cohort-trunk-height`` (total height
+       from that extension down to the first child's bullet) are
+       measured at render time by ``_relayoutCohortTrunks`` in
+       query-cohorts.js. */
+    content: '';
+    position: absolute;
+    left: -2px;
+    top: calc(0px - var(--cohort-trunk-up, 0.7rem));
+    height: var(--cohort-trunk-height, calc(var(--cohort-trunk-up, 0.7rem) + 3rem));
+    border-left: 2px dashed rgba(13, 110, 253, 0.25);
+    pointer-events: none;
+}
+.cohort-tree-hop {
+    position: relative;
+    padding: 0.4rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.cohort-tree-hop::before {
+    /* horizontal connector that lands on the bullet of this hop */
+    content: '';
+    position: absolute;
+    left: -1rem;
+    top: var(--cohort-bullet-y, 3rem);
+    width: 1.35rem;
+    border-top: 2px dashed rgba(13, 110, 253, 0.25);
+    pointer-events: none;
+}
+.cohort-tree-edge {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.cohort-tree-edge-prefix {
+    font-size: 0.7rem;
+    color: var(--bs-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+.cohort-tree-edge .cohort-hop-via {
+    flex: 1;
+    min-width: 12rem;
+    max-width: 22rem;
+}
+.cohort-tree-edge-arrow {
+    color: var(--bs-primary);
+    opacity: 0.5;
+    font-size: 0.9rem;
+}
+.cohort-tree-node {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+.cohort-tree-bullet {
+    color: var(--bs-primary);
+    font-size: 0.55rem;
+    width: 0.7rem;
+    display: inline-flex;
+    justify-content: center;
+}
+.cohort-tree-hop-terminal .cohort-tree-bullet {
+    color: var(--bs-success);
+    font-size: 0.85rem;
+}
+.cohort-class-chip {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(13, 110, 253, 0.1);
+    color: var(--bs-primary);
+    padding: 2px 4px 2px 10px;
+    border-radius: 14px;
+    font-weight: 500;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+.cohort-class-chip-root {
+    background: rgba(108, 117, 125, 0.14);
+    color: var(--bs-body-color);
+    padding: 2px 12px;
+}
+.cohort-class-chip-terminal {
+    background: rgba(25, 135, 84, 0.12);
+    color: var(--bs-success-text-emphasis, #0a3622);
+}
+.cohort-class-chip-select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    padding: 2px 18px 2px 4px;
+    cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 10px) 50%, calc(100% - 6px) 50%;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+    opacity: 0.95;
+}
+.cohort-class-chip-select:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+.cohort-class-chip-select:focus {
+    outline: 0;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+    border-radius: 10px;
+}
+.cohort-hop-terminal-badge {
+    font-size: 0.7rem;
+    color: var(--bs-success);
+    background: rgba(25, 135, 84, 0.1);
+    padding: 1px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+.cohort-hop-add {
+    align-self: flex-start;
+}
+
+/* Per-hop "where" filter pane ---------------------------- */
+.cohort-hop-where-badge {
+    font-size: 0.7rem;
+    color: var(--bs-info-text-emphasis, #055160);
+    background: rgba(13, 202, 240, 0.12);
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 4px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.cohort-hop-where-badge i { font-size: 0.65rem; }
+.cohort-hop-where {
+    margin-left: 1.85rem;
+    margin-top: 2px;
+}
+.cohort-hop-where-pane {
+    border-left: 2px dotted rgba(13, 110, 253, 0.18);
+    padding: 4px 0 4px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.cohort-hop-where-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: var(--bs-secondary-color);
+}
+.cohort-hop-where-title strong { color: var(--bs-body-color); }
+.cohort-hop-where-actions {
+    display: flex;
+    gap: 8px;
+}
+.cohort-hop-where-actions .btn { font-size: 0.75rem; }
+.cohort-hop-where-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.cohort-hop-where-row {
+    background: rgba(0, 0, 0, 0.015);
+    border-radius: 6px;
+    padding: 4px 6px;
+}
+
+/* Path-trace diagnostic ---------------------------------- */
+.cohort-preview-trace .cohort-trace-table {
+    table-layout: auto;
+}
+.cohort-preview-trace .cohort-trace-table th {
+    font-weight: 500;
+    font-size: 0.72rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 6px;
+}
+.cohort-preview-trace .cohort-trace-table td {
+    padding: 4px 6px;
+    vertical-align: middle;
+}
+.cohort-preview-trace .cohort-trace-table tr.cohort-trace-collapse td {
+    background: rgba(220, 53, 69, 0.06);
+}
+.cohort-preview-trace .cohort-trace-diag {
+    background: rgba(220, 53, 69, 0.05);
+    border-left: 3px solid var(--bs-danger);
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+/* Group-type tiles --------------------------------------- */
+.cohort-grouptype-tile {
+    display: block;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+}
+.cohort-grouptype-tile:has(input:checked) {
+    border-color: var(--bs-primary);
+    background: rgba(13, 110, 253, 0.05);
+}
+.cohort-grouptype-tile i { font-size: 1.4rem; margin-right: 8px; }
+.cohort-tile-title { font-weight: 600; }
+
+/* Preview tab pane --------------------------------------- */
+.cohort-preview-pane {
+    min-height: 200px;
+}
+.cohort-preview-explain {
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 6px;
+    padding: 0.75rem;
+}
+.cohort-preview-summary {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.cohort-preview-list { max-height: 50vh; overflow-y: auto; }
+.cohort-preview-item {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+}
+.cohort-preview-members {
+    list-style: none;
+    padding-left: 0;
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+}
+.cohort-preview-member {
+    padding: 5px 8px;
+    margin: 3px 0;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    line-height: 1.35;
+}
+.cohort-preview-member-headline {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+.cohort-preview-member-label {
+    font-weight: 500;
+    color: var(--bs-body-color);
+}
+.cohort-preview-member-id {
+    font-size: 0.72rem;
+    color: var(--bs-secondary-color);
+    background: rgba(13, 110, 253, 0.08);
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+.cohort-preview-member-uri {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.7rem;
+    color: var(--bs-secondary-color);
+    word-break: break-all;
+    cursor: pointer;
+    user-select: all;
+    transition: color 120ms ease;
+}
+.cohort-preview-member-uri:hover {
+    color: var(--bs-primary);
+}
+.cohort-preview-member-uri.copied {
+    color: var(--bs-success);
+    font-weight: 500;
+}
+.cohort-preview-more {
+    font-style: italic;
+    padding: 4px 8px;
+}
+
+/* Probe result rows ------------------------------------- */
+.cohort-probe-row {
+    padding: 4px 0;
+}
+
+/* Stage 2 — Cohort Discovery agent (inside Describe tab) */
+.cohort-agent-banner {
+    border: 1px solid rgba(13, 110, 253, 0.18);
+    background: rgba(13, 110, 253, 0.03);
+}
+.cohort-agent-trace {
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 6px;
+    padding: 8px 10px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+.cohort-agent-trace ol li code { font-size: 0.78rem; }
+
+/* Sample-values picker modal */
+.cohort-sample-values-list {
+    max-height: 18rem;
+    overflow-y: auto;
+    border: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.1));
+    border-radius: 4px;
+}
+.cohort-sample-values-list .list-group-item {
+    cursor: pointer;
+    padding: 0.35rem 0.6rem;
+    border-left: 0;
+    border-right: 0;
+}
+.cohort-sample-values-list .list-group-item:first-child { border-top: 0; }
+.cohort-sample-values-list .list-group-item:last-child { border-bottom: 0; }
+.cohort-sample-values-list .list-group-item.active {
+    background: rgba(13, 110, 253, 0.12);
+    color: inherit;
+    border-color: transparent;
+}
+.cohort-sample-meta {
+    font-family: var(--bs-font-monospace, monospace);
+    word-break: break-all;
+}

@@ -2,9 +2,11 @@
 
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 from back.objects.digitaltwin.models import DomainSnapshot
+from back.objects.digitaltwin.CohortService import CohortService
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 
 __all__ = [
+    "CohortService",
     "DigitalTwin",
     "DomainSnapshot",
     "RDF_TYPE",
