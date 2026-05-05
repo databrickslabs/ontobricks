@@ -1044,10 +1044,27 @@ class TestMaterialisation:
         # Second call: insert_triples.
         assert store.insert_triples.called
         inserted = store.insert_triples.call_args.args[1]
-        # 4 cohort-entity triples per cohort + 1 :inCohort per member.
+        # 4 cohort-entity triples per cohort + 1 :inCohort<RuleId> per member.
         cohort_count = result.stats.cohort_count
         member_count = sum(c.size for c in result.cohorts)
         assert len(inserted) == 4 * cohort_count + member_count
+
+        # Membership predicate is rule-scoped (`<base>/inCohort<rule.id>`)
+        # so the same graph can host multiple cohort rules without
+        # collisions on the predicate column.
+        expected_pred = f"{BASE_URI}inCohort{rule.id}"
+        membership = [t for t in inserted if t["predicate"] == expected_pred]
+        assert len(membership) == member_count
+        # And the historic single-predicate form should NOT appear in the
+        # output anymore -- guards against accidental regressions.
+        legacy_pred = f"{BASE_URI}inCohort"
+        assert all(t["predicate"] != legacy_pred for t in inserted)
+
+        # The delete pass uses the same rule-scoped predicate so a
+        # re-materialise only wipes this rule's membership triples.
+        delete_args = store.delete_cohort_triples.call_args
+        assert delete_args is not None
+        assert delete_args.args[2] == expected_pred
 
     def test_materialize_to_uc_chunks_inserts_and_deletes_partition(self):
         triples = _build_test_graph()

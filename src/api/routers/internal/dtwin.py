@@ -630,12 +630,18 @@ async def cohort_explain(
 
 @router.get("/cohorts/uc/suggest-target")
 async def cohort_uc_suggest_target(
+    rule_name: str = "",
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return suggested catalog/schema/table_name for the active domain."""
+    """Return suggested catalog/schema/table_name for the active domain.
+
+    The optional ``rule_name`` query parameter scopes the suggested UC
+    table name to the rule being configured -- the modal proposes
+    ``cohorts_<snake_rule_name>`` so the table is self-describing.
+    """
     domain = get_domain(session_mgr)
-    out = CohortService(domain).suggest_uc_target(settings)
+    out = CohortService(domain).suggest_uc_target(settings, rule_name)
     return {"success": True, **out}
 
 

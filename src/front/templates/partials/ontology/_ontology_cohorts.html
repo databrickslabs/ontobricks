@@ -130,7 +130,16 @@
                                 <div class="col-md-5">
                                     <label class="form-label small mb-1">Rule name</label>
                                     <input type="text" class="form-control form-control-sm"
-                                           id="cohortRuleLabel" placeholder="e.g. Exempt staffing pool">
+                                           id="cohortRuleLabel"
+                                           placeholder="e.g. ExemptStaffingPool"
+                                           pattern="[A-Za-z][A-Za-z0-9]*"
+                                           autocomplete="off"
+                                           spellcheck="false"
+                                           title="Letters and digits only, starting with a letter (camelCase).">
+                                    <div class="form-text small text-muted">
+                                        Letters and digits only, starting with a letter
+                                        (camelCase) — e.g. <code>ExemptStaffingPool</code>.
+                                    </div>
                                 </div>
                                 <div class="col-md-7">
                                     <label class="form-label small mb-1">Description (optional)</label>

@@ -453,15 +453,58 @@
     border: 1px solid rgba(0, 0, 0, 0.04);
     line-height: 1.35;
 }
-.cohort-preview-member-headline {
+/* One-line layout: badge first, then optional id chip, then the URI in
+   parens as muted info text. ``flex-wrap: wrap`` lets long URIs spill
+   onto a second visual line within the same ``<li>`` instead of
+   overflowing horizontally. */
+.cohort-preview-member-row {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 0.45rem;
     flex-wrap: wrap;
 }
-.cohort-preview-member-label {
+/* Clickable entity badge: opens the knowledge-graph view focused on the
+   member URI in a new tab. Pill shape + diagram icon makes it read as
+   "this is a navigable entity"; the trailing arrow is a discreet
+   external-link affordance that fades in on hover. */
+.cohort-preview-member-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: rgba(13, 110, 253, 0.10);
+    color: var(--bs-primary);
     font-weight: 500;
-    color: var(--bs-body-color);
+    font-size: 0.78rem;
+    line-height: 1.4;
+    text-decoration: none;
+    border: 1px solid rgba(13, 110, 253, 0.18);
+    transition: background 120ms ease, border-color 120ms ease,
+                color 120ms ease, box-shadow 120ms ease;
+}
+.cohort-preview-member-badge:hover,
+.cohort-preview-member-badge:focus-visible {
+    background: rgba(13, 110, 253, 0.18);
+    border-color: rgba(13, 110, 253, 0.35);
+    color: var(--bs-primary);
+    text-decoration: none;
+    box-shadow: 0 1px 3px rgba(13, 110, 253, 0.18);
+}
+.cohort-preview-member-badge-arrow {
+    font-size: 0.68rem;
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+.cohort-preview-member-badge:hover .cohort-preview-member-badge-arrow,
+.cohort-preview-member-badge:focus-visible .cohort-preview-member-badge-arrow {
+    opacity: 0.8;
+}
+.cohort-preview-member-badge-disabled {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--bs-secondary-color);
+    border-color: rgba(0, 0, 0, 0.06);
+    cursor: default;
 }
 .cohort-preview-member-id {
     font-size: 0.72rem;
@@ -470,21 +513,27 @@
     padding: 1px 6px;
     border-radius: 8px;
 }
+/* URI is informational only — sits inline next to the badge, wrapped
+   in parens, small and muted. The badge carries the click-to-graph
+   action; this span just lets the user inspect / copy the canonical
+   URI without the row growing taller. */
 .cohort-preview-member-uri {
-    display: block;
-    margin-top: 2px;
-    font-size: 0.7rem;
+    display: inline;
+    font-size: 0.66rem;
     color: var(--bs-secondary-color);
+    opacity: 0.75;
     word-break: break-all;
     cursor: pointer;
     user-select: all;
-    transition: color 120ms ease;
+    transition: color 120ms ease, opacity 120ms ease;
 }
 .cohort-preview-member-uri:hover {
     color: var(--bs-primary);
+    opacity: 1;
 }
 .cohort-preview-member-uri.copied {
     color: var(--bs-success);
+    opacity: 1;
     font-weight: 500;
 }
 .cohort-preview-more {

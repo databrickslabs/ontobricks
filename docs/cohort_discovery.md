@@ -173,9 +173,13 @@ share one table cheaply.
 
 The **Configure outputs** modal exposes two safety nets:
 
-* **Auto-pick** (`/dtwin/cohorts/uc/suggest-target`) — proposes
-  catalog/schema/table_name from the domain settings, source-table
-  metadata, or registry, falling back to a literal `cohorts` schema.
+* **Auto-pick** (`/dtwin/cohorts/uc/suggest-target?rule_name=…`) —
+  proposes catalog/schema from the domain settings, source-table
+  metadata, or registry (falling back to a literal `cohorts` schema),
+  and `table_name = cohorts_<snake_rule_name>` so the table reads as
+  `cohorts_exempt_staffing_pool` for a rule named `ExemptStaffingPool`.
+  When `rule_name` is omitted (legacy callers) the table falls back to
+  `cohorts_<domain_slug>`.
 * **Test write access** (`/dtwin/cohorts/uc/probe-write`) — runs a
   three-step read-only probe (catalog → schema → table) so users find
   out about a missing privilege *before* clicking Materialise.
@@ -246,9 +250,11 @@ A re-materialise of a saved rule:
 1. Wipes the rule's old graph triples via
    `store.delete_cohort_triples(table, prefix, in_cohort)` — the cohort
    URI prefix is `<base_uri>/cohort/<rule_id>/`, and the predicate is
-   `:inCohort`.  SQL backends use `DELETE FROM ... WHERE subject LIKE
-   'prefix%' OR (predicate = '<inCohort>' AND object LIKE 'prefix%')`;
-   LadybugDB overrides with two `MATCH ... DELETE` Cypher passes.
+   `:inCohort<RuleId>` (rule-scoped, so multiple rules can co-exist in
+   the same graph without sharing a predicate column).  SQL backends use
+   `DELETE FROM ... WHERE subject LIKE 'prefix%' OR (predicate =
+   '<inCohort<RuleId>>' AND object LIKE 'prefix%')`; LadybugDB overrides
+   with two `MATCH ... DELETE` Cypher passes.
 2. Wipes the rule's old Delta-table partition via
    `DELETE FROM <fq> WHERE rule_id = ?`.
 3. Re-inserts fresh rows — content-hash URIs are stable, so unchanged

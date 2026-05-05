@@ -566,10 +566,10 @@ class CohortBuilder:
         if self._store is None:
             return 0
         prefix = CohortVocabulary.cohort_prefix(self._base_uri, rule.id)
-        in_cohort = CohortVocabulary.in_cohort(self._base_uri)
+        in_cohort = CohortVocabulary.in_cohort(self._base_uri, rule.id)
 
         # Delete by URI prefix — wipes both cohort entity triples (subject
-        # under prefix) and membership triples (predicate=inCohort,
+        # under prefix) and membership triples (predicate=inCohort<RuleId>,
         # object under prefix).  Implementation lives on the backend.
         delete_fn = getattr(self._store, "delete_cohort_triples", None)
         if callable(delete_fn):
@@ -1092,7 +1092,7 @@ class CohortBuilder:
         klass = CohortVocabulary.cohort_class(self._base_uri)
         from_rule = CohortVocabulary.from_rule(self._base_uri)
         size_pred = CohortVocabulary.cohort_size(self._base_uri)
-        in_cohort = CohortVocabulary.in_cohort(self._base_uri)
+        in_cohort = CohortVocabulary.in_cohort(self._base_uri, rule.id)
 
         triples: List[Dict[str, str]] = []
         for c in result.cohorts:

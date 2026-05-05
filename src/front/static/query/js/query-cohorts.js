@@ -357,13 +357,41 @@ const CohortModule = {
         const el = document.getElementById('cohortRuleLabel');
         if (!el || el._cohortHooked) return;
         el._cohortHooked = true;
+        // Rule names are constrained to camelCase (alphanumeric only) so
+        // they map cleanly onto the rule id and onto downstream identifiers
+        // (UC table suffixes, registry keys, URL params). Strip invalid
+        // chars on input, camelize whole-text paste, and validate on save.
         el.addEventListener('input', () => {
+            const cursor = el.selectionStart || 0;
+            const before = el.value.slice(0, cursor);
+            const cleaned = el.value.replace(/[^A-Za-z0-9]/g, '');
+            if (cleaned !== el.value) {
+                const cleanedBefore = before.replace(/[^A-Za-z0-9]/g, '');
+                el.value = cleaned;
+                try { el.setSelectionRange(cleanedBefore.length, cleanedBefore.length); }
+                catch { /* setSelectionRange not supported on type=number, etc. */ }
+            }
             this.rule.label = el.value;
             if (!this.activeRuleId) {
-                this.rule.id = this._slug(el.value);
+                this.rule.id = this.rule.label;
                 document.getElementById('cohortRuleId').textContent = this.rule.id || '(auto)';
             }
             this.markDirty();
+        });
+        el.addEventListener('paste', (ev) => {
+            const cd = ev.clipboardData || window.clipboardData;
+            const pasted = cd ? cd.getData('text') : '';
+            if (!pasted) return;
+            ev.preventDefault();
+            const camelized = this._toCamelCase(pasted);
+            if (!camelized) return;
+            const start = el.selectionStart || 0;
+            const end = el.selectionEnd || 0;
+            const next = el.value.slice(0, start) + camelized + el.value.slice(end);
+            el.value = next;
+            try { el.setSelectionRange(start + camelized.length, start + camelized.length); }
+            catch { /* noop */ }
+            el.dispatchEvent(new Event('input', { bubbles: true }));
         });
         const desc = document.getElementById('cohortRuleDescription');
         if (desc && !desc._cohortHooked) {
@@ -399,7 +427,7 @@ const CohortModule = {
         const r = this.rule;
         r.label = document.getElementById('cohortRuleLabel').value || '';
         r.description = document.getElementById('cohortRuleDescription').value || '';
-        if (!this.activeRuleId) r.id = this._slug(r.label);
+        if (!this.activeRuleId) r.id = r.label;
         r.class_uri = document.getElementById('cohortClassUri').value || '';
         r.min_size = parseInt(document.getElementById('cohortMinSize').value || '2', 10) || 2;
         r.links_combine = document.querySelector('input[name="cohortLinksCombine"]:checked')?.value || 'any';
@@ -1113,14 +1141,37 @@ const CohortModule = {
         const label = obj.label || '';
         const headline = label || id || uri || '(unknown)';
         const sub = label && id ? id : '';
+        // The badge navigates to the knowledge-graph view focused on the
+        // member entity. ``/dtwin/?section=sigmagraph&focus=<uri>`` is the
+        // same deep-link pattern Domain.py mints for cross-domain entity
+        // resolution and `query.js` uses for the bridge flow. We do an
+        // in-page navigation (no ``target="_blank"``) so the user stays
+        // inside the Digital Twin shell rather than spawning a tab.
+        const graphHref = uri
+            ? `/dtwin/?section=sigmagraph&focus=${encodeURIComponent(uri)}`
+            : '';
+        const badge = graphHref
+            ? `<a class="cohort-preview-member-badge"
+                  href="${this._esc(graphHref)}"
+                  title="Open ${this._esc(headline)} in the knowledge graph">
+                   <i class="bi bi-diagram-3 me-1"></i>${this._esc(headline)}
+                   <i class="bi bi-arrow-right-short ms-1 cohort-preview-member-badge-arrow"></i>
+               </a>`
+            : `<span class="cohort-preview-member-badge cohort-preview-member-badge-disabled">
+                   <i class="bi bi-diagram-3 me-1"></i>${this._esc(headline)}
+               </span>`;
+        // Single-line layout: ``[badge] [id-chip] (uri)``. The URI
+        // sits inline as muted info text in parens; long URIs wrap
+        // naturally because the row is a ``flex-wrap`` container, but
+        // each member still occupies its own ``<li>`` so the visual
+        // density is one entity per line.
         return `
-            <li class="cohort-preview-member">
-                <div class="cohort-preview-member-headline">
-                    <span class="cohort-preview-member-label">${this._esc(headline)}</span>
-                    ${sub ? `<code class="cohort-preview-member-id">${this._esc(sub)}</code>` : ''}
-                </div>
-                <code class="cohort-preview-member-uri" title="Click to copy"
-                      data-copy="${this._esc(uri)}">${this._esc(uri)}</code>
+            <li class="cohort-preview-member cohort-preview-member-row">
+                ${badge}
+                ${sub ? `<code class="cohort-preview-member-id">${this._esc(sub)}</code>` : ''}
+                ${uri ? `<span class="cohort-preview-member-uri"
+                              title="Entity URI — click to copy"
+                              data-copy="${this._esc(uri)}">(${this._esc(uri)})</span>` : ''}
             </li>
         `;
     },
@@ -1158,6 +1209,14 @@ const CohortModule = {
         this._setStatus('');
         if (!this.rule.label || !this.rule.class_uri) {
             this._notify('A label and an entity are required.', 'warning');
+            return;
+        }
+        if (!this._isValidRuleName(this.rule.label)) {
+            this._notify(
+                'Rule name must be camelCase (letters and digits only, '
+                + 'starting with a letter) — e.g. ExemptStaffingPool.',
+                'warning',
+            );
             return;
         }
         try {
@@ -1230,6 +1289,11 @@ const CohortModule = {
         document.getElementById('cohortUCSchema').value = out.uc_table?.schema || '';
         document.getElementById('cohortUCTableName').value = out.uc_table?.table_name || '';
         document.getElementById('cohortUCProbeResult').innerHTML = '';
+        // Inline the active rule name into the helper hints so the user
+        // sees the exact predicate / table that will be written, not a
+        // ``<RuleName>`` placeholder. Falls back to the placeholder when
+        // the rule has no name yet (fresh draft).
+        this._refreshOutputHints();
         document.getElementById('cohortOutputUC').onchange = (ev) => {
             document.getElementById('cohortUCConfig').classList.toggle('d-none', !ev.target.checked);
             if (ev.target.checked && !document.getElementById('cohortUCCatalog').value) {
@@ -1237,6 +1301,22 @@ const CohortModule = {
             }
         };
         new bootstrap.Modal('#cohortOutputsModal').show();
+    },
+
+    _refreshOutputHints() {
+        const ruleName = (this.rule && (this.rule.label || this.rule.id)) || '';
+        const predHint = document.getElementById('cohortGraphPredHint');
+        if (predHint) {
+            predHint.textContent = ruleName
+                ? `:inCohort${ruleName}`
+                : ':inCohort<RuleName>';
+        }
+        const tableHint = document.getElementById('cohortUcTableHint');
+        if (tableHint) {
+            tableHint.textContent = ruleName
+                ? `cohorts_${this._toSnakeCase(ruleName)}`
+                : 'cohorts_<rule_name>';
+        }
     },
 
     // ---- UC target helpers (Auto-pick / Test write access) -------------
@@ -1288,9 +1368,17 @@ const CohortModule = {
 
     async suggestUCTarget() {
         this._renderProbeWorking('Auto-picking a Unity Catalog target…');
+        // Pass the active rule name so the backend can propose
+        // ``cohorts_<rule_name>`` instead of falling back to a
+        // domain-level slug. The label is the source of truth (id
+        // mirrors it for new rules) and is camelCase by construction.
+        const ruleName = (this.rule && (this.rule.label || this.rule.id)) || '';
+        const url = ruleName
+            ? `/dtwin/cohorts/uc/suggest-target?rule_name=${encodeURIComponent(ruleName)}`
+            : '/dtwin/cohorts/uc/suggest-target';
         let resp;
         try {
-            resp = await this._ucFetch('/dtwin/cohorts/uc/suggest-target');
+            resp = await this._ucFetch(url);
         } catch (e) {
             this._renderProbeError('Auto-pick failed (network)', null, String(e));
             this._notify('Auto-pick failed: network error', 'error');
@@ -1471,11 +1559,12 @@ const CohortModule = {
                    </label>
                </div>`
             : '';
+        const inCohortPred = `:inCohort${this._esc(this.rule.id || this.rule.label || '')}`;
         const graphLine = this.rule.output?.graph !== false
             ? `<div class="form-check">
                    <input class="form-check-input" type="checkbox" id="cohortDoGraph" checked>
                    <label class="form-check-label" for="cohortDoGraph">
-                       Graph triples — ${triples} <code>:inCohort</code> + cohort entity triples
+                       Graph triples — ${triples} <code>${inCohortPred}</code> + cohort entity triples
                    </label>
                </div>`
             : '';
@@ -1879,6 +1968,14 @@ const CohortModule = {
         if (!this.rule.min_size || this.rule.min_size < 2) this.rule.min_size = 2;
         if (!this.rule.links_combine) this.rule.links_combine = 'any';
         if (!this.rule.group_type) this.rule.group_type = 'connected';
+        // The agent has historically returned labels like "Exempt staffing
+        // pool" — coerce to the camelCase form the form now enforces, and
+        // mirror it onto ``id`` so downstream lookups stay consistent.
+        const camel = this._toCamelCase(this.rule.label || this.rule.id || '');
+        if (camel) {
+            this.rule.label = camel;
+            this.rule.id = camel;
+        }
         this.dirty = true;
         this._hydrateForm();
         this._renderRulesList();
@@ -1893,9 +1990,47 @@ const CohortModule = {
 
     // ---- helpers --------------------------------------------------------
 
-    _slug(s) {
-        return (s || '').toString().trim().toLowerCase()
-            .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    /**
+     * Normalize an arbitrary string into a camelCase rule name.
+     *
+     * Splits on any non-alphanumeric run, capitalises the first letter of
+     * each segment, preserves digits, and drops anything that isn't
+     * ``[A-Za-z0-9]``. A leading digit is dropped because rule names also
+     * serve as JS-friendly identifiers downstream (UC suffixes, etc.).
+     */
+    _toCamelCase(s) {
+        const raw = (s || '').toString();
+        const segments = raw.split(/[^A-Za-z0-9]+/).filter(Boolean);
+        if (!segments.length) return '';
+        const out = segments
+            .map(seg => seg.charAt(0).toUpperCase() + seg.slice(1))
+            .join('');
+        return out.replace(/^[0-9]+/, '');
+    },
+
+    _isValidRuleName(s) {
+        return /^[A-Za-z][A-Za-z0-9]*$/.test((s || '').toString());
+    },
+
+    /**
+     * Convert a camelCase / PascalCase rule name to snake_case.
+     *
+     * Mirrors ``CohortService._snake_case`` (Python) so the
+     * UC-table hint shown in the Configure-outputs modal matches what
+     * the Auto-pick endpoint will actually return:
+     * ``ExemptStaffingPool`` → ``exempt_staffing_pool`` and
+     * ``URLPathUsers`` → ``url_path_users``. Returns ``''`` on empty
+     * input so callers can render a placeholder instead of an empty
+     * suffix.
+     */
+    _toSnakeCase(s) {
+        if (!s) return '';
+        let spaced = String(s)
+            .replace(/(?<=[a-z0-9])([A-Z])/g, '_$1')
+            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2');
+        return spaced.toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
     },
 
     _localName(uri) {

@@ -23,7 +23,9 @@
                     <label class="form-check-label" for="cohortOutputGraph">
                         <strong>Graph triples</strong>
                         <small class="text-muted d-block">
-                            Writes <code>:inCohort</code> triples into the knowledge graph.
+                            Writes <code id="cohortGraphPredHint">:inCohort&lt;RuleName&gt;</code> triples
+                            into the knowledge graph (one membership predicate
+                            per rule, so multiple rules co-exist cleanly).
                         </small>
                     </label>
                 </div>
@@ -32,7 +34,9 @@
                     <label class="form-check-label" for="cohortOutputUC">
                         <strong>Unity Catalog table</strong>
                         <small class="text-muted d-block">
-                            Writes one row per (cohort, member) into a Delta table.
+                            Writes one row per (cohort, member) into a Delta
+                            table. Auto-pick proposes
+                            <code id="cohortUcTableHint">cohorts_&lt;rule_name&gt;</code>.
                         </small>
                     </label>
                 </div>

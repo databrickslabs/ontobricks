@@ -376,7 +376,28 @@ class CohortService:
     # UC target helpers
     # ------------------------------------------------------------------
 
-    def suggest_uc_target(self, settings: Any = None) -> Dict[str, Any]:
+    @staticmethod
+    def _snake_case(name: str) -> str:
+        """Convert a camelCase / PascalCase rule name to snake_case.
+
+        Used for UC table names so the proposed ``cohorts_<name>`` reads
+        naturally (``ExemptStaffingPool`` → ``exempt_staffing_pool``).
+        Non-alphanumeric characters collapse into a single underscore;
+        leading/trailing underscores are trimmed. An empty input returns
+        an empty string -- callers fall back to a domain-level slug.
+        """
+        if not name:
+            return ""
+        # Split a lowercase/digit run from the next uppercase run so
+        # "ExemptStaffingPool" → "Exempt_Staffing_Pool" before lowering.
+        spaced = re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", str(name))
+        # Also handle trailing-acronym shape like "URLPath" → "URL_Path".
+        spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", spaced)
+        return re.sub(r"[^a-z0-9]+", "_", spaced.lower()).strip("_")
+
+    def suggest_uc_target(
+        self, settings: Any = None, rule_name: str = ""
+    ) -> Dict[str, Any]:
         """Return a suggested UC Delta target for the active domain.
 
         Priority for catalog/schema:
@@ -384,11 +405,28 @@ class CohortService:
           2. First source-table catalog/schema in ``domain.metadata.tables``
           3. Registry catalog/schema
           4. Literal ``cohorts`` for schema as a last resort.
+
+        ``table_name`` is derived from *rule_name* when the caller knows
+        which rule the target is for (the modal in the Cohorts run page
+        always does, since the user picks a rule before configuring
+        outputs). Form-enforced rule names are camelCase, so we
+        snake-case them for the UC convention --
+        ``ExemptStaffingPool`` → ``cohorts_exempt_staffing_pool``. When
+        no rule name is supplied (legacy / introspection), we fall back
+        to ``cohorts_<domain_slug>`` so the endpoint stays usable
+        without a selected rule.
         """
         domain = self._domain
         info = getattr(domain, "info", {}) or {}
         domain_name = info.get("name", "") or ""
-        slug = re.sub(r"[^a-z0-9]+", "_", domain_name.lower()).strip("_") or "domain"
+        rule_slug = self._snake_case(rule_name)
+        if rule_slug:
+            slug = rule_slug
+        else:
+            slug = (
+                re.sub(r"[^a-z0-9]+", "_", domain_name.lower()).strip("_")
+                or "domain"
+            )
         table_name = f"cohorts_{slug}"
 
         catalog = ""

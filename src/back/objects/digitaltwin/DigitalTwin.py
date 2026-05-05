@@ -3636,10 +3636,15 @@ class DigitalTwin:
         )
 
     def cohort_suggest_uc_target(
-        self, settings: Any = None
+        self, settings: Any = None, rule_name: str = ""
     ) -> Dict[str, Any]:
-        """Return a suggested UC Delta target for the active domain."""
-        return self._cohort_service().suggest_uc_target(settings)
+        """Return a suggested UC Delta target for the active domain.
+
+        When *rule_name* is provided, the suggested ``table_name`` is
+        ``cohorts_<snake_rule_name>`` so the UC table reads naturally
+        and stays scoped to the rule the user is editing.
+        """
+        return self._cohort_service().suggest_uc_target(settings, rule_name)
 
     @staticmethod
     def cohort_probe_uc_write(

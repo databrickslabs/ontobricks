@@ -2,6 +2,7 @@
 
 import pytest
 
+from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.models import (
     CohortCompat,
     CohortHop,
@@ -306,3 +307,31 @@ class TestCohortRule:
             )
         ]
         assert r.validate() == []
+
+
+class TestCohortVocabularyInCohort:
+    """``inCohort<RuleId>`` predicate URI builder."""
+
+    BASE = "http://acme/"
+
+    def test_in_cohort_appends_rule_id_to_predicate(self):
+        uri = CohortVocabulary.in_cohort(self.BASE, "ExemptStaffingPool")
+        assert uri == "http://acme/inCohortExemptStaffingPool"
+
+    def test_in_cohort_strips_internal_spaces(self):
+        # Defensive: rule ids should never contain spaces, but the
+        # builder must not produce an invalid URI if one slips through.
+        uri = CohortVocabulary.in_cohort(self.BASE, " Exempt Pool ")
+        assert uri == "http://acme/inCohortExemptPool"
+
+    def test_in_cohort_without_rule_id_returns_legacy_form(self):
+        # The unparameterised form is still useful for documentation /
+        # introspection -- production materialise paths always pass an id.
+        assert (
+            CohortVocabulary.in_cohort(self.BASE)
+            == "http://acme/inCohort"
+        )
+
+    def test_in_cohort_handles_hash_terminated_base(self):
+        uri = CohortVocabulary.in_cohort("http://acme#", "RuleA")
+        assert uri == "http://acme#inCohortRuleA"

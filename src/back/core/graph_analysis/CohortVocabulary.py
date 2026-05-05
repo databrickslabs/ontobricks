@@ -10,7 +10,11 @@ Vocabulary
 ----------
 * ``Cohort``        -- the OWL class minted under ``base_uri`` for every
                        cohort that materialises to the graph.
-* ``inCohort``      -- subject predicate linking a member to its cohort.
+* ``inCohort<RuleId>`` -- subject predicate linking a member to its
+                       cohort. The predicate fragment carries the rule id
+                       (camelCase) so multiple cohort rules co-exist in
+                       the same graph without sharing a predicate. Form:
+                       ``<base_uri>/inCohort<RuleId>``.
 * ``fromRule``      -- object predicate recording the rule that produced
                        a cohort (one rule may produce many cohorts).
 * ``cohortSize``    -- datatype predicate carrying the cohort cardinality
@@ -64,9 +68,26 @@ class CohortVocabulary:
         return cls.join(base_uri, cls.COHORT_CLASS_FRAGMENT)
 
     @classmethod
-    def in_cohort(cls, base_uri: str) -> str:
-        """Return the ``inCohort`` predicate URI for a given domain."""
-        return cls.join(base_uri, cls.IN_COHORT_FRAGMENT)
+    def in_cohort(cls, base_uri: str, rule_id: str = "") -> str:
+        """Return the per-rule ``inCohort<RuleId>`` predicate URI.
+
+        The rule id is concatenated to the ``inCohort`` fragment so each
+        cohort rule owns its own membership predicate. With camelCase
+        rule names (form-enforced) the result reads naturally, e.g.
+        ``<base>/inCohortExemptStaffingPool``. ``rule_id`` is treated
+        as an opaque URI segment: spaces are stripped, everything else
+        is preserved so legacy ids with hyphens or underscores still
+        produce valid URIs.
+
+        When *rule_id* is empty the historic single-predicate form
+        (``<base>/inCohort``) is returned -- this is reserved for
+        callers that legitimately need to reference the unparameterised
+        predicate (docs, generic introspection); production materialise
+        / delete paths always pass a rule id.
+        """
+        rule_segment = (rule_id or "").strip().replace(" ", "")
+        fragment = cls.IN_COHORT_FRAGMENT + rule_segment
+        return cls.join(base_uri, fragment)
 
     @classmethod
     def from_rule(cls, base_uri: str) -> str:

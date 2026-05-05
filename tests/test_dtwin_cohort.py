@@ -342,6 +342,30 @@ class TestUCTarget:
         assert out["catalog"] == "lake"
         assert out["schema"] == "hr"
 
+    def test_suggest_target_uses_rule_name_for_table(self, domain):
+        domain._data["settings"] = {
+            "databricks": {"catalog": "main", "schema": "ai"},
+        }
+        out = DigitalTwin(domain).cohort_suggest_uc_target(
+            None, rule_name="ExemptStaffingPool"
+        )
+        # camelCase rule name → snake_case table suffix.
+        assert out["table_name"] == "cohorts_exempt_staffing_pool"
+
+    def test_suggest_target_handles_acronym_in_rule_name(self, domain):
+        domain._data["settings"] = {"databricks": {}}
+        out = DigitalTwin(domain).cohort_suggest_uc_target(
+            None, rule_name="URLPathUsers"
+        )
+        # ``URLPath`` should split as ``url_path``, not ``urlpath``.
+        assert out["table_name"] == "cohorts_url_path_users"
+
+    def test_suggest_target_falls_back_to_domain_when_rule_missing(self, domain):
+        domain._data["settings"] = {"databricks": {}}
+        out = DigitalTwin(domain).cohort_suggest_uc_target(None)
+        # No rule name → domain-slug fallback (``AcmeConsulting`` here).
+        assert out["table_name"] == "cohorts_acmeconsulting"
+
     def test_probe_no_client(self):
         out = DigitalTwin.cohort_probe_uc_write({"catalog": "c"}, None)
         assert out["ok"] is False
