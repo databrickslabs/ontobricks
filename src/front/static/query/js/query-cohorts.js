@@ -1304,19 +1304,38 @@ const CohortModule = {
             );
             return;
         }
-        const { catalog = '', schema = '', table_name = '', provenance = '' } = resp.data;
+        const { catalog = '', schema = '', table_name = '', provenance } = resp.data;
         document.getElementById('cohortUCCatalog').value = catalog;
         document.getElementById('cohortUCSchema').value = schema;
         document.getElementById('cohortUCTableName').value = table_name;
         const fq = [catalog, schema, table_name].filter(Boolean).join('.');
+        const provenanceText = this._formatProvenance(provenance);
         this._renderProbeStatus(`
             <div class="text-success">
                 <i class="bi bi-magic me-1"></i>
                 Picked <code>${this._esc(fq || '(empty)')}</code>
-                ${provenance ? `<span class="text-muted">(${this._esc(provenance)})</span>` : ''}
+                ${provenanceText ? `<span class="text-muted">(${this._esc(provenanceText)})</span>` : ''}
             </div>
         `);
         this._notify(`Auto-picked ${fq || 'empty target'}`, 'success');
+    },
+
+    // Backend returns provenance as either:
+    //   - a string (e.g. "registry") for single-source picks, or
+    //   - a dict (e.g. {catalog: "registry", schema: "first source table"})
+    //     when catalog and schema came from different fallbacks.
+    // Render both shapes as a compact human-readable string.
+    _formatProvenance(provenance) {
+        if (!provenance) return '';
+        if (typeof provenance === 'string') return provenance;
+        if (typeof provenance !== 'object') return String(provenance);
+        const entries = Object.entries(provenance).filter(([, v]) => v);
+        if (!entries.length) return '';
+        const distinctSources = new Set(entries.map(([, v]) => String(v)));
+        if (distinctSources.size === 1) {
+            return `from ${[...distinctSources][0]}`;
+        }
+        return entries.map(([k, v]) => `${k} from ${v}`).join(', ');
     },
 
     async probeUCTarget() {
