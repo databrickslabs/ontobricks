@@ -27,19 +27,22 @@ set -euo pipefail
 # ``ontobricks_registry`` (the dedicated ``datname`` bound by the Apps
 # ``postgres`` resource when the bundle targets that DB — see
 # ``lakebase_database_resource_segment`` in ``databricks.yml``), schema
-# ``ontobricks_registry``, and grantees ``ontobricks-020`` +
+# ``ontobricks_registry``, and grantees ``ontobricks-030`` +
 # ``mcp-ontobricks``. If your instance still uses the shared default DB
 # ``databricks_postgres`` with a registry **schema** named
 # ``ontobricks_registry`` inside it, pass ``-d databricks_postgres``.
 # Pass ``-i`` / ``-d`` / ``-s`` / ``-a`` to retarget any of those when
 # you migrate to a different project, database, schema, or app.
+# Defaults can also be set via env (``INSTANCE`` / ``DATABASE`` /
+# ``SCHEMA``) — ``scripts/deploy.sh`` does this from
+# ``scripts/deploy.config.sh``.
 #
 # Usage:
 #   scripts/bootstrap-lakebase-perms.sh                # default: dev sandbox
 #                                                       (ontobricks-app → ontobricks_registry DB → ontobricks_registry schema → apps)
 #   scripts/bootstrap-lakebase-perms.sh -a ontobricks  # production app on the same instance
 #   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -d databricks_postgres -s ontobricks_registry \
-#                                       -a ontobricks-020   # shared default Postgres database
+#                                       -a ontobricks-030   # shared default Postgres database
 #   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -d ontobricks_registry -s ontobricks_registry \
 #                                       -a ontobricks -a ontobricks-dev  # legacy multi-grantee layout
 #
@@ -51,9 +54,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
-INSTANCE="ontobricks-app"
-DATABASE="ontobricks_registry"
-SCHEMA="ontobricks_registry"
+INSTANCE="${INSTANCE:-ontobricks-app}"
+DATABASE="${DATABASE:-ontobricks_registry}"
+SCHEMA="${SCHEMA:-ontobricks_registry}"
 APPS=()
 
 while [[ $# -gt 0 ]]; do
@@ -76,8 +79,10 @@ if [[ ${#APPS[@]} -eq 0 ]]; then
     # Defaults to the Lakebase-backed dev app only. The production
     # ``ontobricks`` app currently runs on the Volume backend and
     # would not benefit from these grants — pass ``-a ontobricks``
-    # explicitly when you migrate it.
-    APPS=("ontobricks-020" "mcp-ontobricks")
+    # explicitly when you migrate it. ``APP_NAME`` / ``MCP_APP_NAME``
+    # come from ``scripts/deploy.config.sh`` when invoked via
+    # ``scripts/deploy.sh``.
+    APPS=("${APP_NAME:-ontobricks-030}" "${MCP_APP_NAME:-mcp-ontobricks}")
 fi
 
 for cmd in databricks psql python3; do

@@ -13,8 +13,10 @@ set -euo pipefail
 #
 # Usage:
 #   scripts/bootstrap-app-permissions.sh                        # bootstrap default sandbox apps
-#   scripts/bootstrap-app-permissions.sh ontobricks-020       # explicit
-#   scripts/bootstrap-app-permissions.sh a b c           # bootstrap several apps
+#   scripts/bootstrap-app-permissions.sh ontobricks-030         # explicit (positional)
+#   scripts/bootstrap-app-permissions.sh a b c                  # bootstrap several apps
+#   APP_NAME=ontobricks-040 scripts/bootstrap-app-permissions.sh   # override default sandbox app
+#   MCP_APP_NAME=mcp-foo  scripts/bootstrap-app-permissions.sh    # override default sandbox MCP
 #
 # Prerequisites:
 #   - Databricks CLI authenticated (databricks auth login ...)
@@ -23,10 +25,20 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
-# This bundle only manages the dev sandbox app. The production
+# Default sandbox app pair. Override via env (e.g.
+# `APP_NAME=ontobricks-040 scripts/bootstrap-app-permissions.sh`) to
+# target a parallel sandbox without editing this file. Positional
+# args, when provided, take precedence over both the env vars and
+# these defaults. The names below match the Makefile's $(APP_NAME)
+# variable to keep `make bootstrap-perms` and direct invocation in
+# sync.
+#
+# This bundle only manages the dev sandbox apps. The production
 # ``ontobricks`` and ``mcp-ontobricks`` apps were carved out on
 # 2026-04-27 and live in a different repo/bundle.
-DEFAULT_APPS=("ontobricks-020" "mcp-ontobricks")
+APP_NAME="${APP_NAME:-ontobricks-030}"
+MCP_APP_NAME="${MCP_APP_NAME:-mcp-ontobricks}"
+DEFAULT_APPS=("$APP_NAME" "$MCP_APP_NAME")
 
 if [[ $# -gt 0 ]]; then
     APPS=("$@")

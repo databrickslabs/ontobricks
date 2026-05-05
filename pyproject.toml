@@ -1,6 +1,6 @@
 [project]
 name = "ontobricks"
-version = "0.2.0"
+version = "0.3.0"
 description = "Ontology Management Tool for Databricks"
 requires-python = ">=3.10"
 dependencies = [

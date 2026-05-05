@@ -64,7 +64,7 @@ const CohortModule = {
     _populateClassSelect() {
         const sel = document.getElementById('cohortClassUri');
         if (!sel) return;
-        sel.innerHTML = '<option value="">— select a class —</option>';
+        sel.innerHTML = '<option value="">— select an entity —</option>';
         const classes = (this.classes || []).slice().sort((a, b) =>
             (a.label || a.name || a.uri || '').localeCompare(b.label || b.name || b.uri || '')
         );
@@ -645,7 +645,7 @@ const CohortModule = {
         const card = document.createElement('div');
         card.className = 'cohort-link-card';
         const rootUri = this.rule.class_uri || '';
-        const rootLabel = this._classLabelByUri(rootUri) || 'class?';
+        const rootLabel = this._classLabelByUri(rootUri) || 'entity?';
         card.innerHTML = `
             <div class="cohort-link-card-header">
                 <span class="cohort-link-card-title">Path ${linkIdx + 1}</span>
@@ -715,7 +715,7 @@ const CohortModule = {
                 <select class="form-select form-select-sm cohort-input cohort-hop-via"
                         ${viaDisabled ? 'disabled' : ''}>
                     <option value="">${viaDisabled
-                        ? 'pick previous class first'
+                        ? 'pick previous entity first'
                         : (viaProps.length ? '— predicate —' : 'no compatible relationship')}</option>
                     ${viaProps.map(p => {
                         const uri = p.uri || p.iri || p.id || '';
@@ -734,7 +734,7 @@ const CohortModule = {
                             ${targetDisabled ? 'disabled' : ''}>
                         <option value="">${targetDisabled
                             ? 'pick predicate first'
-                            : (targetClasses.length ? '— class —' : 'no compatible target')}</option>
+                            : (targetClasses.length ? '— entity —' : 'no compatible target')}</option>
                         ${targetClasses.map(c => {
                             const uri = c.uri || c.iri || c.id || '';
                             const lbl = c.label || c.name || uri;
@@ -742,7 +742,7 @@ const CohortModule = {
                         }).join('')}
                     </select>
                 </span>
-                ${isTerminal ? '<span class="cohort-hop-terminal-badge" title="Two members are linked when they reach the same instance of this class">shared</span>' : ''}
+                ${isTerminal ? '<span class="cohort-hop-terminal-badge" title="Two members are linked when they reach the same instance of this entity">shared</span>' : ''}
                 ${whereCount ? `<span class="cohort-hop-where-badge" title="${whereCount} where filter${whereCount === 1 ? '' : 's'} on this hop">
                     <i class="bi bi-funnel-fill"></i>${whereCount}
                 </span>` : ''}
@@ -914,7 +914,7 @@ const CohortModule = {
         list.innerHTML = '';
         const items = this.rule.compatibility || [];
         if (!items.length) {
-            list.innerHTML = '<div class="text-muted small fst-italic">No compatibility constraints — every member of the class is eligible.</div>';
+            list.innerHTML = '<div class="text-muted small fst-italic">No compatibility constraints — every member of the entity is eligible.</div>';
             return;
         }
         for (let i = 0; i < items.length; i++) {
@@ -1017,7 +1017,7 @@ const CohortModule = {
                     classUri: this.rule.class_uri,
                     property: cc.property,
                     currentValue: cc.value ?? '',
-                    metaLabel: `${cc.property || '(no property)'} on rule class`,
+                    metaLabel: `${cc.property || '(no property)'} on rule entity`,
                 });
                 if (choice == null) return;
                 cc.value = choice;
@@ -1157,7 +1157,7 @@ const CohortModule = {
         // (Computing preview…, Unsaved changes…) and is cleared here.
         this._setStatus('');
         if (!this.rule.label || !this.rule.class_uri) {
-            this._notify('A label and a class are required.', 'warning');
+            this._notify('A label and an entity are required.', 'warning');
             return;
         }
         try {
@@ -1239,14 +1239,84 @@ const CohortModule = {
         new bootstrap.Modal('#cohortOutputsModal').show();
     },
 
+    // ---- UC target helpers (Auto-pick / Test write access) -------------
+    //
+    // Both buttons must always give the user *some* visible feedback —
+    // silent failure was the recurring complaint. Strategy:
+    //   1. While the request is in flight, render a subtle "Working…"
+    //      line into #cohortUCProbeResult so the click registers.
+    //   2. On HTTP error, parse the OntoBricks error envelope
+    //      (`{error, message, detail, request_id}`) and surface the
+    //      message + detail inline; also emit a toast for prominence.
+    //   3. On success, suggest writes the values + a one-line
+    //      provenance note; probe renders the per-check rows it
+    //      already had, but now also handles the
+    //      empty-checks edge case (e.g. malformed envelope).
+
+    _renderProbeStatus(html) {
+        const el = document.getElementById('cohortUCProbeResult');
+        if (el) el.innerHTML = html;
+    },
+
+    _renderProbeWorking(label) {
+        this._renderProbeStatus(`
+            <div class="text-muted">
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                ${this._esc(label)}
+            </div>
+        `);
+    },
+
+    _renderProbeError(prefix, data, fallback) {
+        const message = (data && (data.message || data.error)) || fallback || 'Request failed';
+        const detail = data && data.detail;
+        this._renderProbeStatus(`
+            <div class="text-danger">
+                <i class="bi bi-x-circle me-1"></i>
+                <strong>${this._esc(prefix)}:</strong> ${this._esc(message)}
+                ${detail ? `<div class="text-muted small mt-1"><code>${this._esc(detail)}</code></div>` : ''}
+            </div>
+        `);
+    },
+
+    async _ucFetch(url, init) {
+        const r = await fetch(url, { credentials: 'include', ...(init || {}) });
+        let data = {};
+        try { data = await r.json(); } catch { /* non-JSON body */ }
+        return { ok: r.ok, status: r.status, data };
+    },
+
     async suggestUCTarget() {
+        this._renderProbeWorking('Auto-picking a Unity Catalog target…');
+        let resp;
         try {
-            const r = await fetch('/dtwin/cohorts/uc/suggest-target', { credentials: 'include' });
-            const data = await r.json();
-            document.getElementById('cohortUCCatalog').value = data.catalog || '';
-            document.getElementById('cohortUCSchema').value = data.schema || '';
-            document.getElementById('cohortUCTableName').value = data.table_name || '';
-        } catch { /* noop */ }
+            resp = await this._ucFetch('/dtwin/cohorts/uc/suggest-target');
+        } catch (e) {
+            this._renderProbeError('Auto-pick failed (network)', null, String(e));
+            this._notify('Auto-pick failed: network error', 'error');
+            return;
+        }
+        if (!resp.ok) {
+            this._renderProbeError('Auto-pick failed', resp.data, `HTTP ${resp.status}`);
+            this._notify(
+                `Auto-pick failed: ${resp.data.message || resp.data.error || 'HTTP ' + resp.status}`,
+                'error',
+            );
+            return;
+        }
+        const { catalog = '', schema = '', table_name = '', provenance = '' } = resp.data;
+        document.getElementById('cohortUCCatalog').value = catalog;
+        document.getElementById('cohortUCSchema').value = schema;
+        document.getElementById('cohortUCTableName').value = table_name;
+        const fq = [catalog, schema, table_name].filter(Boolean).join('.');
+        this._renderProbeStatus(`
+            <div class="text-success">
+                <i class="bi bi-magic me-1"></i>
+                Picked <code>${this._esc(fq || '(empty)')}</code>
+                ${provenance ? `<span class="text-muted">(${this._esc(provenance)})</span>` : ''}
+            </div>
+        `);
+        this._notify(`Auto-picked ${fq || 'empty target'}`, 'success');
     },
 
     async probeUCTarget() {
@@ -1255,27 +1325,64 @@ const CohortModule = {
             schema: document.getElementById('cohortUCSchema').value,
             table_name: document.getElementById('cohortUCTableName').value,
         };
+        if (!target.catalog || !target.schema || !target.table_name) {
+            this._renderProbeError(
+                'Test write access',
+                { message: 'Catalog, schema and table name are all required.' },
+            );
+            this._notify('Fill in catalog, schema and table name first.', 'warning');
+            return;
+        }
+        this._renderProbeWorking(
+            `Probing write access to ${target.catalog}.${target.schema}.${target.table_name}…`,
+        );
+        let resp;
         try {
-            const r = await fetch('/dtwin/cohorts/uc/probe-write', {
+            resp = await this._ucFetch('/dtwin/cohorts/uc/probe-write', {
                 method: 'POST',
-                credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(target),
             });
-            const data = await r.json();
-            const html = (data.checks || []).map(c => `
-                <div class="cohort-probe-row ${c.status}">
-                    <i class="bi bi-${c.status === 'ok' ? 'check-circle text-success'
-                        : c.status === 'warning' ? 'exclamation-triangle text-warning'
-                        : 'x-circle text-danger'} me-1"></i>
-                    <strong>${this._esc(c.name)}:</strong> ${this._esc(c.message)}
-                </div>
-            `).join('');
-            document.getElementById('cohortUCProbeResult').innerHTML = html;
         } catch (e) {
-            document.getElementById('cohortUCProbeResult').innerHTML =
-                `<div class="text-danger small">Probe failed: ${this._esc(String(e))}</div>`;
+            this._renderProbeError('Probe failed (network)', null, String(e));
+            this._notify('Probe failed: network error', 'error');
+            return;
         }
+        if (!resp.ok) {
+            this._renderProbeError('Probe failed', resp.data, `HTTP ${resp.status}`);
+            this._notify(
+                `Probe failed: ${resp.data.message || resp.data.error || 'HTTP ' + resp.status}`,
+                'error',
+            );
+            return;
+        }
+        const checks = resp.data.checks || [];
+        if (!checks.length) {
+            this._renderProbeError(
+                'Probe returned no checks',
+                resp.data,
+                'The server returned an empty result — try again or check server logs.',
+            );
+            this._notify('Probe returned no checks', 'warning');
+            return;
+        }
+        const rowsHtml = checks.map(c => `
+            <div class="cohort-probe-row ${c.status}">
+                <i class="bi bi-${c.status === 'ok' ? 'check-circle text-success'
+                    : c.status === 'warning' ? 'exclamation-triangle text-warning'
+                    : 'x-circle text-danger'} me-1"></i>
+                <strong>${this._esc(c.name)}:</strong> ${this._esc(c.message)}
+            </div>
+        `).join('');
+        const okAll = resp.data.ok === true;
+        const headline = okAll
+            ? '<div class="text-success mb-1"><i class="bi bi-shield-check me-1"></i>Write access looks good.</div>'
+            : '<div class="text-danger mb-1"><i class="bi bi-shield-exclamation me-1"></i>Write access has issues — see below.</div>';
+        this._renderProbeStatus(headline + rowsHtml);
+        this._notify(
+            okAll ? 'Write access OK' : 'Write access has issues',
+            okAll ? 'success' : 'warning',
+        );
     },
 
     async saveOutputs() {
@@ -1473,7 +1580,7 @@ const CohortModule = {
                 ${hops[collapsedAt].neighbours_raw === 0
                     ? 'no neighbours found via this predicate. Check the predicate URI and whether your data actually uses it.'
                     : (hops[collapsedAt].dropped_type === hops[collapsedAt].neighbours_raw
-                        ? "every neighbour was rejected by <code>target_class</code>. The hop's target class URI probably doesn't match the URIs used in <code>rdf:type</code> triples."
+                        ? "every neighbour was rejected by <code>target_class</code>. The hop's target entity URI probably doesn't match the URIs used in <code>rdf:type</code> triples."
                         : (hops[collapsedAt].dropped_where === (hops[collapsedAt].neighbours_raw - hops[collapsedAt].dropped_type)
                             ? 'every neighbour was rejected by the hop <code>where</code> filter. Check the property URI, the literal value (case / type), and the <code>allow_missing</code> flag.'
                             : 'a mix of filters dropped every neighbour — open the rule JSON and confirm each filter against actual data.')
@@ -1510,6 +1617,15 @@ const CohortModule = {
     async explain() {
         const target = (document.getElementById('cohortExplainTarget').value || '').trim();
         if (!target) return;
+        // Sync the form into this.rule before posting (mirrors what
+        // preview() does). Without this, an explain run right after
+        // the user tweaked the form would post a stale rule and the
+        // diagnostic would describe a configuration the user no
+        // longer has on screen.
+        if (typeof this._collectFromForm === 'function'
+                && document.getElementById('cohortRuleLabel')) {
+            this._collectFromForm();
+        }
         const r = await fetch('/dtwin/cohorts/explain', {
             method: 'POST',
             credentials: 'include',
@@ -1519,7 +1635,7 @@ const CohortModule = {
         const data = await r.json();
         let html = '';
         if (!data.in_class) {
-            html = `<div class="text-muted small">${this._esc(data.reason || 'Not in target class.')}</div>`;
+            html = `<div class="text-muted small">${this._esc(data.reason || 'Not in target entity.')}</div>`;
         } else if (data.in_cohort) {
             html = `<div class="small">
                 <strong>${this._esc(this._localName(target))}</strong> is in cohort #${data.in_cohort.idx}
@@ -1548,7 +1664,7 @@ const CohortModule = {
 
     async _pickSampleValue({ classUri, property, currentValue = '', metaLabel = '' }) {
         if (!classUri || !property) {
-            this._setStatus('Pick a target class and property first.', 'warn');
+            this._setStatus('Pick a target entity and property first.', 'warn');
             return null;
         }
         const modalEl = document.getElementById('cohortSampleValuesModal');

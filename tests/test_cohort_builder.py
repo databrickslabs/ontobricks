@@ -733,6 +733,129 @@ class TestOntologyDataNamespaceDrift:
         # Without base_uri, the rewrite is skipped → exact-match miss.
         assert result.stats.edge_count == 0
 
+    # --- class-URI drift on rdf:type triples -------------------------
+    #
+    # Reproduces the production "explain says not an instance" bug:
+    # the loader emits rdf:type triples with the class URI in the
+    # **data** namespace (``…/Person``) but the rule references the
+    # **ontology** namespace (``…#Person``). The membership check
+    # must match across both forms.
+
+    def _drifted_graph_data_form_types(self) -> List[Dict[str, str]]:
+        """Same shape as :meth:`_drifted_graph` but rdf:type objects
+        ALSO use the data namespace — mirrors what the user reported
+        (``…/Consulting/Person/9`` typed as ``…/Consulting/Person``).
+        """
+        return [
+            {"subject": self.DATA_NS + "Person/Alice",
+             "predicate": RDF_TYPE, "object": self.DATA_NS + "Person"},
+            {"subject": self.DATA_NS + "Person/Bob",
+             "predicate": RDF_TYPE, "object": self.DATA_NS + "Person"},
+            {"subject": self.DATA_NS + "Person/Carol",
+             "predicate": RDF_TYPE, "object": self.DATA_NS + "Person"},
+            {"subject": self.DATA_NS + "Project/P1",
+             "predicate": RDF_TYPE, "object": self.DATA_NS + "Project"},
+            {"subject": self.DATA_NS + "Project/P2",
+             "predicate": RDF_TYPE, "object": self.DATA_NS + "Project"},
+            {"subject": self.DATA_NS + "Person/Alice",
+             "predicate": self.DATA_NS + "PhasProject",
+             "object": self.DATA_NS + "Project/P1"},
+            {"subject": self.DATA_NS + "Person/Bob",
+             "predicate": self.DATA_NS + "PhasProject",
+             "object": self.DATA_NS + "Project/P1"},
+            {"subject": self.DATA_NS + "Person/Carol",
+             "predicate": self.DATA_NS + "PhasProject",
+             "object": self.DATA_NS + "Project/P2"},
+        ]
+
+    def test_members_of_class_matches_data_form_rdf_type(self):
+        """rdf:type uses ``…/Person`` (data form), rule uses
+        ``…#Person`` (ontology form). Must still resolve."""
+        b = self._builder_with_base_uri(self._drifted_graph_data_form_types())
+        members = b._members_of_class(
+            b._load_triples(None, allow_overflow=True),
+            self.BASE_HASH + "Person",   # # form
+        )
+        assert members == {
+            self.DATA_NS + "Person/Alice",
+            self.DATA_NS + "Person/Bob",
+            self.DATA_NS + "Person/Carol",
+        }
+
+    def test_members_of_class_matches_mixed_rdf_type(self):
+        """Mixed graph: some rdf:type triples in ontology form, some
+        in data form. Both forms must be picked up."""
+        triples = self._drifted_graph()  # # form for rdf:type
+        triples += [
+            {"subject": "Dave",
+             "predicate": RDF_TYPE,
+             "object": self.DATA_NS + "Person"},   # / form
+        ]
+        b = self._builder_with_base_uri(triples)
+        members = b._members_of_class(
+            b._load_triples(None, allow_overflow=True),
+            self.BASE_HASH + "Person",
+        )
+        assert members == {"Alice", "Bob", "Carol", "Dave"}
+
+    def test_explain_membership_resolves_data_form_target(self):
+        """End-to-end reproducer of the user's bug: target URI in
+        data form, rule class_uri in ontology form, rdf:type triples
+        in data form. Explain must report ``in_class=True`` (no
+        ``not an instance`` reason)."""
+        b = self._builder_with_base_uri(self._drifted_graph_data_form_types())
+        rule = CohortRule(
+            id="cohort",
+            label="Cohort",
+            class_uri=self.BASE_HASH + "Person",
+            links=[CohortLink(path=[
+                CohortHop(
+                    via=self.BASE_HASH + "PhasProject",
+                    target_class=self.BASE_HASH + "Project",
+                ),
+            ])],
+        )
+        out = b.explain_membership(
+            rule, self.DATA_NS + "Person/Alice"
+        )
+        assert out["in_class"] is True
+        assert "reason" not in out  # no failure message
+
+    def test_explain_diagnoses_wrong_type(self):
+        """Target IS in the graph and HAS a type, just not the rule's
+        class. The new diagnostic must call that out (and quote the
+        actual type) so the user can fix the rule."""
+        triples = self._drifted_graph()
+        # Bob is a Project not a Person — shouldn't pass class check.
+        triples += [
+            {"subject": "Misfit",
+             "predicate": RDF_TYPE,
+             "object": self.BASE_HASH + "Project"},
+        ]
+        b = self._builder_with_base_uri(triples)
+        rule = CohortRule(
+            id="cohort",
+            label="Cohort",
+            class_uri=self.BASE_HASH + "Person",
+        )
+        out = b.explain_membership(rule, "Misfit")
+        assert out["in_class"] is False
+        assert "Project" in out["reason"]
+        assert "typed as" in out["reason"]
+
+    def test_explain_diagnoses_unknown_uri(self):
+        """Target URI doesn't appear in any triple — the diagnostic
+        must say so (so the user knows it's a typo / wrong domain)."""
+        b = self._builder_with_base_uri(self._drifted_graph())
+        rule = CohortRule(
+            id="cohort",
+            label="Cohort",
+            class_uri=self.BASE_HASH + "Person",
+        )
+        out = b.explain_membership(rule, self.DATA_NS + "Person/Ghost")
+        assert out["in_class"] is False
+        assert "not found" in out["reason"]
+
 
 class TestTracePaths:
     """Per-hop path-trace diagnostic powering the Preview tab's

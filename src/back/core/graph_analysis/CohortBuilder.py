@@ -103,8 +103,14 @@ class CohortBuilder:
     # translation before querying triples (see
     # :meth:`SPARQLRuleEngine._build_uri_map`); the cohort engine has to
     # do the same or otherwise lookups by raw ontology URI silently
-    # return zero matches on R2RML-loaded data. Class URIs are NOT
-    # translated — the data uses the ontology form for ``rdf:type``.
+    # return zero matches on R2RML-loaded data.
+    #
+    # Class URIs are *usually* preserved in ontology form by R2RML
+    # (``rr:class`` keeps the URI verbatim — see
+    # :class:`R2RMLGenerator`), but some loader paths and W3C
+    # round-trips emit ``rdf:type`` triples with class URIs in the
+    # data namespace. To stay robust we always compare ``rdf:type``
+    # objects against *both* forms via :meth:`_class_uri_variants`.
 
     def _data_namespace(self) -> str:
         if not self._base_uri:
@@ -131,6 +137,42 @@ class CohortBuilder:
         if uri.startswith(self._base_uri):
             return data_ns + uri[len(self._base_uri):]
         return uri
+
+    def _to_ontology_uri(self, uri: str) -> str:
+        """Inverse of :meth:`_to_data_uri` — rewrite a data-namespace URI
+        back to ontology form (``base_uri`` + ``#`` + local).
+
+        - Already-ontology URIs (those that don't start with the data
+          namespace) are returned unchanged.
+        - The ontology separator follows the configured ``base_uri``
+          (``#`` if it ends with ``#``, ``/`` otherwise).
+        - URIs in foreign namespaces are returned unchanged.
+        """
+        if not uri or not self._base_uri:
+            return uri
+        data_ns = self._data_namespace()
+        if not data_ns or not uri.startswith(data_ns):
+            return uri
+        local = uri[len(data_ns):]
+        base_no_sep = self._base_uri.rstrip("#").rstrip("/")
+        sep = "#" if self._base_uri.endswith("#") else "/"
+        return base_no_sep + sep + local
+
+    def _class_uri_variants(self, class_uri: str) -> Set[str]:
+        """Every URI form a class might be stored under in ``rdf:type``
+        triples — the rule's own form, the data-namespace form, and
+        the ontology-namespace form. Used to defend against R2RML /
+        W3C-import drift between the rule (typically ``…#Person``)
+        and the data (``…/Person`` or ``…#Person`` depending on the
+        loader).
+        """
+        if not class_uri:
+            return set()
+        variants = {class_uri}
+        if self._base_uri:
+            variants.add(self._to_data_uri(class_uri))
+            variants.add(self._to_ontology_uri(class_uri))
+        return {v for v in variants if v}
 
     def _normalized_links(self, links: List[CohortLink]) -> List[CohortLink]:
         """Return a copy of *links* with every hop's ``via`` and
@@ -410,9 +452,7 @@ class CohortBuilder:
             return {
                 "uri": target,
                 "in_class": False,
-                "reason": (
-                    f"'{target}' is not an instance of '{rule.class_uri}' in the graph."
-                ),
+                "reason": self._explain_missing_member(triples, rule, target),
             }
 
         norm_compat = self._normalized_compat(rule.compatibility)
@@ -464,6 +504,57 @@ class CohortBuilder:
             "failing_constraints": failing_constraints,
             "in_cohort": in_cohort,
         }
+
+    def _explain_missing_member(
+        self,
+        triples: List[Dict[str, str]],
+        rule: CohortRule,
+        target: str,
+    ) -> str:
+        """Build a diagnostic ``reason`` string when *target* is not in
+        the rule's class membership set.
+
+        Tells the user *why* the lookup failed by inspecting what the
+        graph actually carries for the target subject:
+
+        - the target has rdf:type triples but to a different class →
+          report what it *is* typed as
+        - the target appears as a subject but has no rdf:type triple →
+          report the missing-type case (cohort matching needs an
+          explicit type)
+        - the target is nowhere in the graph → report the URI was not
+          seen at all
+        """
+        actual_types: Set[str] = set()
+        seen_as_subject = False
+        for t in triples:
+            if t.get("subject") != target:
+                continue
+            seen_as_subject = True
+            if t.get("predicate") == RDF_TYPE:
+                obj = t.get("object")
+                if obj:
+                    actual_types.add(obj)
+        class_uri = rule.class_uri
+        if actual_types:
+            types_str = ", ".join(f"'{t}'" for t in sorted(actual_types))
+            return (
+                f"'{target}' exists in the graph but is typed as {types_str}, "
+                f"not as '{class_uri}'. Either pick the matching class in "
+                f"step 2 or fix the rdf:type triples in the registry."
+            )
+        if seen_as_subject:
+            return (
+                f"'{target}' exists in the graph but has no rdf:type triple. "
+                f"Cohort matching needs an explicit rdf:type to "
+                f"'{class_uri}' — check your R2RML mapping or the loader."
+            )
+        return (
+            f"'{target}' was not found as the subject of any triple — "
+            f"the URI is unknown to the graph. Double-check the URI you "
+            f"pasted (case, encoding, trailing slash) and confirm the "
+            f"member appears in a Preview run for rule '{class_uri}'."
+        )
 
     # ---- materialisation --------------------------------------------
 
@@ -540,10 +631,11 @@ class CohortBuilder:
     ) -> Set[str]:
         if not class_uri:
             return set()
+        variants = self._class_uri_variants(class_uri)
         return {
             t["subject"]
             for t in triples
-            if t.get("predicate") == RDF_TYPE and t.get("object") == class_uri
+            if t.get("predicate") == RDF_TYPE and t.get("object") in variants
         }
 
     # ------------------------------------------------------------------
@@ -669,11 +761,17 @@ class CohortBuilder:
             idx.setdefault((subj, pred), []).append(obj)
         return idx
 
-    @staticmethod
     def _type_index_for_links(
+        self,
         triples: List[Dict[str, str]],
         links: List[CohortLink],
     ) -> Dict[str, Set[str]]:
+        """Index ``hop.target_class -> {subject URIs typed as that class}``.
+
+        Robust to URI-form drift: each ``rdf:type`` object is matched
+        against every variant (ontology + data form) of every wanted
+        class — see :meth:`_class_uri_variants`.
+        """
         wanted: Set[str] = set()
         for lk in links:
             for h in lk.hops():
@@ -681,13 +779,25 @@ class CohortBuilder:
                     wanted.add(h.target_class)
         if not wanted:
             return {}
+        # variant_to_canonical: every URI form (ontology + data) ->
+        # the canonical wanted class URI it represents. A single triple
+        # can therefore route into multiple buckets if two wanted
+        # classes share a variant (rare but legal).
+        variant_to_canonical: Dict[str, Set[str]] = {}
+        for cls in wanted:
+            for v in self._class_uri_variants(cls):
+                variant_to_canonical.setdefault(v, set()).add(cls)
         index: Dict[str, Set[str]] = {c: set() for c in wanted}
         for t in triples:
             if t.get("predicate") != RDF_TYPE:
                 continue
             obj = t.get("object")
-            if obj in index:
-                index[obj].add(t.get("subject", ""))
+            canonicals = variant_to_canonical.get(obj or "")
+            if not canonicals:
+                continue
+            subj = t.get("subject", "")
+            for c in canonicals:
+                index[c].add(subj)
         return index
 
     @staticmethod

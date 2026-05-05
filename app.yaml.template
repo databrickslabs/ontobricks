@@ -1,0 +1,99 @@
+# OntoBricks - Databricks Apps Configuration
+# See: https://docs.databricks.com/en/dev-tools/databricks-apps/configuration.html
+#
+# ╔════════════════════════════════════════════════════════════════╗
+# ║  GENERATED FILE — DO NOT EDIT app.yaml DIRECTLY                 ║
+# ║                                                                 ║
+# ║  This template is rendered into ./app.yaml at deploy time by    ║
+# ║  scripts/deploy.sh (which calls scripts/_render-app-yaml.py).   ║
+# ║  Edit `scripts/deploy.config.sh` to change the values below,    ║
+# ║  then run `make deploy`.                                        ║
+# ║                                                                 ║
+# ║  app.yaml is .gitignored — only this template is tracked.       ║
+# ╚════════════════════════════════════════════════════════════════╝
+
+# Command to run the application (FastAPI with uvicorn).
+# uv manages dependencies from pyproject.toml.
+#
+# `--extra lakebase` installs `psycopg[binary]` and `psycopg-pool`
+# (defined in `pyproject.toml`'s optional `[project.optional-dependencies]
+# lakebase = [...]`) so the Lakebase Postgres backend works in the
+# deployed app even when the `database` resource is not yet bound.
+# This is what powers the runtime backend toggle in
+# **Settings → Registry Location**: the admin can switch
+# Volume ↔ Lakebase without redeploying. On a Volume-only deployment
+# the extra costs ~10MB of unused wheels but the app continues to
+# run normally — the Lakebase code paths are guarded by
+# `LakebaseAuth.is_available` and never reached.
+#
+# Databricks Apps sets DATABRICKS_APP_PORT automatically.
+# MCP endpoint is exposed at /mcp (Streamable HTTP transport).
+command:
+  - "uv"
+  - "run"
+  - "--extra"
+  - "lakebase"
+  - "python"
+  - "run.py"
+
+env:
+  # SQL Warehouse ID — injected from the configured resource,
+  # with a static fallback for MCP / session-less API calls.
+  - name: DATABRICKS_SQL_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT
+    value: "${APP_SQL_WAREHOUSE_FALLBACK}"
+  # Default catalog/schema for ad-hoc Unity Catalog operations.
+  - name: DATABRICKS_CATALOG
+    value: "${APP_DATABRICKS_CATALOG}"
+  - name: DATABRICKS_SCHEMA
+    value: "${APP_DATABRICKS_SCHEMA}"
+  # Default fully-qualified Delta triple store table (catalog.schema.table).
+  # Used as fallback when no domain session is active (e.g. MCP API calls).
+  - name: DATABRICKS_TRIPLESTORE_TABLE
+    value: "${APP_TRIPLESTORE_TABLE}"
+  # Domain Registry — injected from the configured Volume resource.
+  # The path looks like /Volumes/<catalog>/<schema>/<volume>.
+  - name: REGISTRY_VOLUME_PATH
+    valueFrom: volume
+  # Static fallbacks used for local dev / MCP when no resource is bound.
+  - name: REGISTRY_CATALOG
+    value: "${APP_REGISTRY_CATALOG}"
+  - name: REGISTRY_SCHEMA
+    value: "${APP_REGISTRY_SCHEMA}"
+  - name: REGISTRY_VOLUME
+    value: "${APP_REGISTRY_VOLUME}"
+  # App name for permission management — auto-detected at runtime from
+  # the Databricks Apps platform (the runtime injects DATABRICKS_APP_NAME
+  # as the deployed app's name, e.g. "ontobricks" for prod and
+  # "ontobricks-dev" for the dev sandbox). Settings reads it via an
+  # alias chain on ONTOBRICKS_APP_NAME -> DATABRICKS_APP_NAME, so the
+  # same app.yaml powers every deployment without per-app duplication.
+  # Set ONTOBRICKS_APP_NAME explicitly in .env only for local dev.
+  # ── Lakebase (optional) ───────────────────────────────────────
+  # When the bundle is deployed to a *-lakebase target the DAB binds
+  # a `database` resource to this app. Databricks Apps then
+  # auto-injects PGHOST/PGPORT/PGDATABASE/PGUSER/PGAPPNAME/PGSSLMODE
+  # into the runtime — no explicit `valueFrom` mapping needed.
+  # The OAuth token used as the Postgres password is minted on the fly
+  # by `LakebaseAuth` (see src/back/core/databricks/LakebaseAuth.py).
+  # Without that resource binding the env vars stay unset and the
+  # admin UI keeps the Lakebase backend disabled — the app continues
+  # to run normally on the Unity Catalog Volume backend.
+  - name: LAKEBASE_SCHEMA
+    value: "${APP_LAKEBASE_SCHEMA}"
+  # MLflow — ensure traces are persisted to the workspace tracking server.
+  - name: MLFLOW_TRACKING_URI
+    value: "${APP_MLFLOW_TRACKING_URI}"
+
+# Resources that this app uses.
+# Configure these resources in the Databricks Apps UI after deployment.
+resources:
+  - name: sql-warehouse
+    description: "SQL Warehouse for executing queries and metadata operations"
+    sql_warehouse:
+      permission: CAN_USE
+  - name: volume
+    description: "Unity Catalog Volume for the OntoBricks domain registry"
+    volume:
+      permission: CAN_READ_WRITE

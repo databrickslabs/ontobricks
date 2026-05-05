@@ -28,7 +28,28 @@
         </div>
     </div>
 
-    <div class="cohort-layout">
+    <div class="cohort-layout cohort-layout--rail-left">
+
+        <!-- Left pane: Saved rules library -->
+        <aside class="cohort-rail">
+
+            <!-- Saved rules list -->
+            <div class="card cohort-rail-card">
+                <div class="card-header d-flex justify-content-between align-items-center py-2 px-3 bg-transparent">
+                    <span class="small fw-semibold text-muted">
+                        <i class="bi bi-list-ul me-1"></i>Saved rules
+                    </span>
+                    <span class="badge bg-secondary bg-opacity-50" id="cohortRulesCount">
+                        {{ reasoning_ctx.cohort_rules_count|default(0) }}
+                    </span>
+                </div>
+                <div class="cohort-rail-body" id="cohortRulesList">
+                    <div class="text-center py-4 text-muted small" id="cohortRulesEmpty">
+                        No rules yet. Click <em>New rule</em> to create one.
+                    </div>
+                </div>
+            </div>
+        </aside>
 
         <!-- Main column: tabs (Describe | Build rule) -->
         <section class="cohort-tabs-wrap card">
@@ -130,9 +151,9 @@
                             </h6>
                             <div class="row g-2 align-items-end">
                                 <div class="col-md-6">
-                                    <label class="form-label small mb-1">Group instances of class</label>
+                                    <label class="form-label small mb-1">Group instances of entity</label>
                                     <select id="cohortClassUri" class="form-select form-select-sm">
-                                        <option value="">— select a class —</option>
+                                        <option value="">— select an entity —</option>
                                     </select>
                                 </div>
                                 <div class="col-md-6">
@@ -149,9 +170,20 @@
                         <div class="cohort-section mb-4">
                             <h6 class="cohort-section-title">
                                 <span class="cohort-step">3</span>
-                                When are two members linked?
+                                Link members via a shared entity
                                 <span class="text-muted small ms-2">(optional)</span>
                             </h6>
+                            <p class="form-text small text-muted mt-0 mb-2">
+                                Two members are <strong>linked</strong> when they reach the
+                                <strong>same terminal entity</strong> by walking a path of
+                                object-properties (1 or more hops, e.g.
+                                <code>Person → assignedTo → Project → governedBy → ComplianceType</code>).
+                                Each hop can carry an optional <em>where</em> condition on the
+                                intermediate node (equal&nbsp;/ in&nbsp;/ between). Add several paths and
+                                combine them with <strong>ANY</strong> (link if any path matches) or
+                                <strong>ALL</strong> (link only if every path matches). Skip this
+                                section to treat every pair of members as linked.
+                            </p>
                             <div id="cohortLinksList" class="cohort-rows"></div>
                             <div class="d-flex justify-content-between align-items-center mt-2">
                                 <button class="btn btn-sm btn-outline-secondary"
@@ -183,9 +215,17 @@
                         <div class="cohort-section mb-4">
                             <h6 class="cohort-section-title">
                                 <span class="cohort-step">4</span>
-                                Compatibility policies
+                                Conditions every member must satisfy
                                 <span class="text-muted small ms-2">(optional)</span>
                             </h6>
+                            <p class="form-text small text-muted mt-0 mb-2">
+                                Attribute filters that narrow who qualifies for a cohort. Pick
+                                <strong>same value of …</strong> to require all members agree on a
+                                property (e.g. same <code>:status</code>), or restrict members by literal
+                                value: <strong>equal to</strong>, <strong>in any of</strong>, or
+                                <strong>between min and max</strong>. Without any constraint, every
+                                instance from step 2 qualifies.
+                            </p>
                             <div id="cohortCompatList" class="cohort-rows"></div>
                             <div class="d-flex justify-content-between align-items-center mt-2">
                                 <div class="dropdown">
@@ -265,27 +305,6 @@
                 </div><!-- /tab-content -->
             </div><!-- /card-body -->
         </section>
-
-        <!-- Right pane: Saved rules library -->
-        <aside class="cohort-rail">
-
-            <!-- Saved rules list -->
-            <div class="card cohort-rail-card">
-                <div class="card-header d-flex justify-content-between align-items-center py-2 px-3 bg-transparent">
-                    <span class="small fw-semibold text-muted">
-                        <i class="bi bi-list-ul me-1"></i>Saved rules
-                    </span>
-                    <span class="badge bg-secondary bg-opacity-50" id="cohortRulesCount">
-                        {{ reasoning_ctx.cohort_rules_count|default(0) }}
-                    </span>
-                </div>
-                <div class="cohort-rail-body" id="cohortRulesList">
-                    <div class="text-center py-4 text-muted small" id="cohortRulesEmpty">
-                        No rules yet. Click <em>New rule</em> to create one.
-                    </div>
-                </div>
-            </div>
-        </aside>
     </div><!-- /cohort-layout -->
 </div>
 
