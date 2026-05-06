@@ -163,6 +163,10 @@ class DatabricksAuth:
             "http_path": f"/sql/1.0/warehouses/{self.warehouse_id}",
             "_socket_timeout": _SQL_SOCKET_TIMEOUT,
         }
+        # *** START FIX - CLOUD FETCH WITH DEPLOYED APPS ***
+        if self.is_app_mode:
+            params["use_cloud_fetch"] = False
+        # *** END FIX - CLOUD FETCH WITH DEPLOYED APPS ***
         if self.is_app_mode and self.client_id and self.client_secret:
             params["access_token"] = self.get_oauth_token()
         elif self.token:
