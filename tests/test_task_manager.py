@@ -1,7 +1,11 @@
 """Tests for back.core.task_manager — async task tracking."""
 
+import logging
+import time
+
 import pytest
 from back.core.task_manager import TaskManager, TaskStatus, Task, TaskStep
+from back.core.task_manager.TaskManager import _format_duration
 
 
 @pytest.fixture(autouse=True)
@@ -250,3 +254,102 @@ class TestQueryAndCleanup:
         mgr.create_task("T5", "t")
         mgr.create_task("T6", "t")
         assert len(mgr.get_all_tasks()) <= 5
+
+
+class TestDuration:
+    def test_format_duration_buckets(self):
+        assert _format_duration(None) == "n/a"
+        assert _format_duration(0.25).endswith("ms")
+        assert _format_duration(2.5).endswith("s")
+        assert "m " in _format_duration(75)
+        assert "h " in _format_duration(3700)
+
+    def test_pending_duration_grows_from_creation(self, mgr):
+        task = mgr.create_task("T", "t")
+        first = task.duration_seconds()
+        assert first is not None and first >= 0.0
+        time.sleep(0.01)
+        second = task.duration_seconds()
+        assert second >= first
+
+    def test_running_duration_uses_started_at(self, mgr):
+        task = mgr.create_task("T", "t")
+        mgr.start_task(task.id)
+        time.sleep(0.01)
+        d = task.duration_seconds()
+        assert d is not None and d > 0.0
+
+    def test_completed_duration_is_frozen(self, mgr):
+        task = mgr.create_task("T", "t")
+        mgr.start_task(task.id)
+        time.sleep(0.01)
+        mgr.complete_task(task.id)
+        first = task.duration_seconds()
+        time.sleep(0.02)
+        second = task.duration_seconds()
+        assert first == second  # terminal duration must not keep growing
+
+    def test_duration_seconds_in_to_dict(self, mgr):
+        task = mgr.create_task("T", "t")
+        d = task.to_dict()
+        assert "duration_seconds" in d
+        assert isinstance(d["duration_seconds"], float)
+
+
+class TestStartEndLogging:
+    """Verify the START/END markers and duration suffix in TaskManager logs.
+
+    LogManager.setup() (triggered by other tests in the full suite) sets
+    ``propagate=False`` on the ``ontobricks`` logger, so caplog's default
+    root-level capture misses them.  We attach the caplog handler directly
+    to the TaskManager's logger to make these tests robust to suite order.
+    """
+
+    @pytest.fixture
+    def task_logs(self, caplog):
+        target = logging.getLogger("ontobricks.core.task_manager.TaskManager")
+        target.addHandler(caplog.handler)
+        target.setLevel(logging.INFO)
+        try:
+            yield caplog
+        finally:
+            target.removeHandler(caplog.handler)
+
+    def test_start_log_uses_start_marker(self, mgr, task_logs):
+        task = mgr.create_task("MyTask", "demo")
+        mgr.start_task(task.id, "Begin")
+        assert any(
+            "START task" in r.message and task.id in r.message
+            for r in task_logs.records
+        )
+
+    def test_complete_log_uses_end_marker_with_duration(self, mgr, task_logs):
+        task = mgr.create_task("MyTask", "demo")
+        mgr.start_task(task.id)
+        mgr.complete_task(task.id, message="Done")
+        end = [
+            r for r in task_logs.records
+            if "END task" in r.message and task.id in r.message
+        ]
+        assert end, "expected END log line on completion"
+        assert "completed in" in end[-1].message
+
+    def test_fail_log_uses_end_marker_with_duration(self, mgr, task_logs):
+        task = mgr.create_task("MyTask", "demo")
+        mgr.start_task(task.id)
+        mgr.fail_task(task.id, "boom")
+        end = [
+            r for r in task_logs.records
+            if "END task" in r.message and "failed in" in r.message
+        ]
+        assert end
+
+    def test_cancel_log_uses_end_marker_with_duration(self, mgr, task_logs):
+        task = mgr.create_task("MyTask", "demo")
+        mgr.start_task(task.id)
+        mgr.cancel_task(task.id)
+        end = [
+            r for r in task_logs.records
+            if "END task" in r.message and "cancelled in" in r.message
+        ]
+        assert end

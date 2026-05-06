@@ -295,19 +295,35 @@ const CohortModule = {
         const className = this._classLabelByUri(r.class_uri || '') || '—';
         const linkCount = (r.links || []).length;
         const compatCount = (r.compatibility || []).length;
+        // Outputs cell: graph + UC are independent toggles -- show
+        // every enabled sink, joined by " + ", so a rule that writes
+        // both ``:inCohort<RuleId>`` triples *and* a Delta table
+        // doesn't hide the graph half. Empty config (neither enabled)
+        // surfaces as a muted "no outputs" badge so the user notices.
         const ucCfg = r.output?.uc_table;
-        const ucCell = ucCfg && ucCfg.table_name
-            ? `<code>${this._esc(ucCfg.catalog || '')}.${this._esc(ucCfg.schema || '')}.${this._esc(ucCfg.table_name)}</code>`
-            : '<span class="text-muted">graph triples only</span>';
+        const graphOn = r.output?.graph !== false;
+        const ucOn = !!(ucCfg && ucCfg.table_name);
+        const outParts = [];
+        if (graphOn) outParts.push('graph triples');
+        if (ucOn) {
+            const fq = `${ucCfg.catalog || ''}.${ucCfg.schema || ''}.${ucCfg.table_name}`;
+            outParts.push(`UC <code>${this._esc(fq)}</code>`);
+        }
+        const ucCell = outParts.length
+            ? outParts.join(' + ')
+            : '<span class="text-muted">no outputs</span>';
+        // The bare rule id (snake-cased slug for legacy rules, camelCase
+        // for new ones) used to render as a small code chip on the
+        // right-hand side of the title row, but it duplicated the
+        // bolded label and read like a cryptic "second name" -- removed.
+        // The free-form ``description`` field is preserved as the
+        // muted tail of the title line.
         el.innerHTML = `
             <div class="card border-primary border-opacity-25 bg-light bg-opacity-50">
                 <div class="card-body py-2 px-3">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <strong>${this._esc(r.label || r.id)}</strong>
-                            ${r.description ? `<span class="text-muted small ms-2">— ${this._esc(r.description)}</span>` : ''}
-                        </div>
-                        <code class="small text-muted">${this._esc(r.id)}</code>
+                    <div>
+                        <strong>${this._esc(r.label || r.id)}</strong>
+                        ${r.description ? `<span class="text-muted small ms-2">— ${this._esc(r.description)}</span>` : ''}
                     </div>
                     <div class="small text-muted mt-1">
                         <span class="me-3"><i class="bi bi-people me-1"></i>${this._esc(className)}</span>

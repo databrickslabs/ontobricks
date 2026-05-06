@@ -35,7 +35,11 @@ function initTaskTracker() {
     
     // Start polling
     startPolling();
-    
+
+    // Tick the visible elapsed-time labels every second so users see a
+    // smoothly advancing timer rather than the 3s polling cadence.
+    setInterval(tickRunningDurations, 1000);
+
     // Setup event listeners
     setupTaskTrackerEvents();
 }
@@ -109,18 +113,20 @@ async function fetchTasks() {
  */
 function notifyTaskTransition(task) {
     const name = escapeHtml(task.name || 'Task');
+    const duration = computeTaskDuration(task);
+    const durSuffix = duration ? ` <span class="text-muted small">(in ${duration})</span>` : '';
     let type = 'info';
     let body;
     if (task.status === 'completed') {
         type = 'success';
-        body = `Task <strong>${name}</strong> completed`;
+        body = `Task <strong>${name}</strong> completed${durSuffix}`;
     } else if (task.status === 'failed') {
         type = 'error';
         const err = task.error || task.message || 'Unknown error';
-        body = `Task <strong>${name}</strong> failed: ${escapeHtml(err)}`;
+        body = `Task <strong>${name}</strong> failed${durSuffix}: ${escapeHtml(err)}`;
     } else if (task.status === 'cancelled') {
         type = 'warning';
-        body = `Task <strong>${name}</strong> cancelled`;
+        body = `Task <strong>${name}</strong> cancelled${durSuffix}`;
     } else {
         return;
     }
@@ -268,7 +274,6 @@ function updateTaskDropdown() {
  */
 function renderTaskItem(task) {
     const statusConfig = getTaskStatusConfig(task.status);
-    const timeAgo = getTimeAgo(task.created_at);
 
     let progressHtml = '';
     if (task.status === 'running') {
@@ -290,6 +295,17 @@ function renderTaskItem(task) {
         </button>`
         : '';
 
+    // Right-column label: live elapsed for running tasks, queued-ago for pending.
+    // ``data-task-elapsed`` is targeted by ``tickRunningDurations`` so the timer
+    // advances between server polls without re-fetching.
+    let rightLabel;
+    if (task.status === 'running') {
+        const elapsedSrc = task.started_at || task.created_at;
+        rightLabel = `<small class="text-muted" data-task-elapsed="${elapsedSrc || ''}" title="Running for">${escapeHtml(computeTaskDuration(task) || '0s')}</small>`;
+    } else {
+        rightLabel = `<small class="text-muted">${getTimeAgo(task.created_at)}</small>`;
+    }
+
     return `
         <div class="task-item px-3 py-2 border-bottom" data-task-id="${task.id}">
             <div class="d-flex justify-content-between align-items-start">
@@ -302,12 +318,25 @@ function renderTaskItem(task) {
                     ${progressHtml}
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <small class="text-muted">${timeAgo}</small>
+                    ${rightLabel}
                     ${actionsHtml}
                 </div>
             </div>
         </div>
     `;
+}
+
+/**
+ * Re-render the elapsed time on every running row.  Runs on a 1s timer so
+ * the duration ticks visibly between the slower server polls (3s active /
+ * 30s idle).  Cheap because it only touches the small text node.
+ */
+function tickRunningDurations() {
+    document.querySelectorAll('[data-task-elapsed]').forEach(el => {
+        const startISO = el.getAttribute('data-task-elapsed');
+        const text = formatDuration(startISO, null);
+        if (text) el.textContent = text;
+    });
 }
 
 /**
@@ -425,6 +454,58 @@ function waitForTask(taskId, onProgress = null) {
 // =====================================================
 
 /**
+ * Format a duration between two ISO timestamps as a short, human-readable
+ * string (e.g. ``"450ms"``, ``"2.4s"``, ``"1m 23s"``, ``"1h 5m"``).
+ *
+ * If ``endISO`` is null/undefined, ``now`` is used so callers can show a
+ * live timer for running tasks.
+ */
+function formatDuration(startISO, endISO) {
+    if (!startISO) return '';
+    const start = new Date(startISO);
+    if (Number.isNaN(start.getTime())) return '';
+    const end = endISO ? new Date(endISO) : new Date();
+    if (Number.isNaN(end.getTime())) return '';
+    const ms = Math.max(0, end - start);
+    if (ms < 1000) return `${ms}ms`;
+    const sec = ms / 1000;
+    if (sec < 60) return `${sec.toFixed(1)}s`;
+    const minTotal = Math.floor(sec / 60);
+    const remSec = Math.round(sec - minTotal * 60);
+    if (minTotal < 60) return `${minTotal}m ${remSec}s`;
+    const hr = Math.floor(minTotal / 60);
+    const remMin = minTotal - hr * 60;
+    return `${hr}h ${remMin}m`;
+}
+
+/**
+ * Pick the right anchors and compute a task's duration string.  Prefer
+ * the server-provided ``duration_seconds`` so the value matches whatever
+ * the backend logged; fall back to client-side computation when missing.
+ */
+function computeTaskDuration(task) {
+    if (typeof task.duration_seconds === 'number') {
+        return formatSeconds(task.duration_seconds);
+    }
+    const start = task.started_at || task.created_at;
+    const end = task.completed_at || null;
+    return formatDuration(start, end);
+}
+
+/** Internal: same scale as formatDuration but starting from a number. */
+function formatSeconds(seconds) {
+    if (seconds == null) return '';
+    if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
+    if (seconds < 60) return `${seconds.toFixed(1)}s`;
+    const minTotal = Math.floor(seconds / 60);
+    const remSec = Math.round(seconds - minTotal * 60);
+    if (minTotal < 60) return `${minTotal}m ${remSec}s`;
+    const hr = Math.floor(minTotal / 60);
+    const remMin = minTotal - hr * 60;
+    return `${hr}h ${remMin}m`;
+}
+
+/**
  * Get relative time string
  */
 function getTimeAgo(isoString) {
@@ -455,6 +536,7 @@ window.cancelTask = cancelTask;
 window.refreshTasks = refreshTasks;
 window.waitForTask = waitForTask;
 window.trackedTasks = trackedTasks;
+window.formatTaskDuration = formatDuration;
 
 // Auto-initialize when DOM is ready
 if (document.readyState === 'loading') {

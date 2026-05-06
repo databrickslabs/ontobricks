@@ -11,6 +11,21 @@ from back.core.task_manager.models import Task, TaskStatus, TaskStep
 logger = get_logger(__name__)
 
 
+def _format_duration(seconds: Optional[float]) -> str:
+    """Human-friendly duration used in log lines and notifications."""
+    if seconds is None:
+        return "n/a"
+    if seconds < 1:
+        return f"{int(seconds * 1000)}ms"
+    if seconds < 60:
+        return f"{seconds:.2f}s"
+    minutes, rem = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{int(minutes)}m {rem:.1f}s"
+    hours, rem_min = divmod(minutes, 60)
+    return f"{int(hours)}h {int(rem_min)}m"
+
+
 class TaskManager:
     """Manages async tasks in memory."""
 
@@ -79,13 +94,21 @@ class TaskManager:
             task.steps[0].started_at = datetime.now().isoformat()
             task.current_step = 0
             logger.info(
-                "Task %s started, step 1/%s: %s",
+                "START task %s [%s] — %s (step 1/%s: %s)",
                 task_id,
+                task.task_type,
+                task.name,
                 len(task.steps),
                 task.steps[0].name,
             )
         else:
-            logger.info("Task %s started: %s", task_id, message)
+            logger.info(
+                "START task %s [%s] — %s: %s",
+                task_id,
+                task.task_type,
+                task.name,
+                message,
+            )
         return True
 
     def update_progress(self, task_id: str, progress: int, message: str = None) -> bool:
@@ -139,7 +162,13 @@ class TaskManager:
             if step.status != "completed":
                 step.status = "completed"
                 step.completed_at = datetime.now().isoformat()
-        logger.info("Task %s completed: %s", task_id, message)
+        logger.info(
+            "END task %s [%s] completed in %s — %s",
+            task_id,
+            task.task_type,
+            _format_duration(task.duration_seconds()),
+            message,
+        )
         return True
 
     def fail_task(self, task_id: str, error: str) -> bool:
@@ -152,7 +181,14 @@ class TaskManager:
         task.message = f"Failed: {error[:100]}"
         if task.steps and task.current_step < len(task.steps):
             task.steps[task.current_step].status = "failed"
-        logger.error("Task %s failed: %s", task_id, error)
+        duration = _format_duration(task.duration_seconds())
+        logger.error("Task %s failed after %s: %s", task_id, duration, error)
+        logger.info(
+            "END task %s [%s] failed in %s",
+            task_id,
+            task.task_type,
+            duration,
+        )
         return True
 
     def cancel_task(self, task_id: str) -> bool:
@@ -163,7 +199,12 @@ class TaskManager:
             task.status = TaskStatus.CANCELLED
             task.completed_at = datetime.now().isoformat()
             task.message = "Cancelled"
-            logger.info("Task %s cancelled", task_id)
+            logger.info(
+                "END task %s [%s] cancelled in %s",
+                task_id,
+                task.task_type,
+                _format_duration(task.duration_seconds()),
+            )
             return True
         return False
 
