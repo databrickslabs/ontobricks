@@ -59,6 +59,42 @@
         '</div>';
     }
 
+    function _renderPermissionRow(perm) {
+        // The backend returns a flat list, one row per distinct
+        // catalog.schema.table.  We use the same collapsible card shape
+        // as entities/relationships so the visual style stays uniform,
+        // even though there's only ever one inner check (`select`).
+        var id = _safeId('diag-perm-', perm.table || perm.check);
+        var refs = (perm.referenced_by || []).join(', ');
+        var refsDisplay = refs.length > 160 ? refs.substring(0, 160) + '…' : refs;
+        var label = perm.table || perm.check || 'Permission check';
+
+        var inner = '<table class="diag-checks-table">' +
+            '<tr class="diag-check-row diag-check-' + perm.status + '">' +
+                '<td class="diag-check-icon">' + _icon(perm.status) + '</td>' +
+                '<td class="diag-check-name">' + _escapeHtml(perm.check || 'select') + '</td>' +
+                '<td class="diag-check-detail">' + _escapeHtml(perm.detail) + '</td>' +
+            '</tr></table>';
+
+        return '<div class="diag-item diag-item-' + perm.status + '">' +
+            '<div class="diag-item-header" data-bs-toggle="collapse" data-bs-target="#' + id + '">' +
+                '<span class="diag-item-status">' + _icon(perm.status) + '</span>' +
+                '<span class="diag-item-label"><code>' + _escapeHtml(label) + '</code></span>' +
+                '<span class="diag-item-meta text-muted small ms-3">' + _escapeHtml(refsDisplay) + '</span>' +
+                '<i class="bi bi-chevron-down diag-chevron ms-auto"></i>' +
+            '</div>' +
+            '<div id="' + id + '" class="collapse diag-item-body">' +
+                (perm.table
+                    ? '<div class="diag-detail-row"><strong>Table:</strong> <code>' + _escapeHtml(perm.table) + '</code></div>'
+                    : '') +
+                (refs
+                    ? '<div class="diag-detail-row"><strong>Referenced by:</strong> ' + _escapeHtml(refs) + '</div>'
+                    : '') +
+                inner +
+            '</div>' +
+        '</div>';
+    }
+
     function _renderRelRow(rel) {
         var id = _safeId('diag-rel-', rel.property);
 
@@ -117,6 +153,7 @@
 
             var entities = data.entities || [];
             var rels = data.relationships || [];
+            var perms = data.permissions || [];
 
             document.getElementById('diagEntitiesBody').innerHTML =
                 entities.map(_renderEntityRow).join('') || '<p class="text-muted p-3">No entity mappings found.</p>';
@@ -125,6 +162,11 @@
             document.getElementById('diagRelationshipsBody').innerHTML =
                 rels.map(_renderRelRow).join('') || '<p class="text-muted p-3">No relationship mappings found.</p>';
             _updateBadge('diagRelBadge', rels);
+
+            document.getElementById('diagPermissionsBody').innerHTML =
+                perms.map(_renderPermissionRow).join('') ||
+                '<p class="text-muted p-3">No source tables to verify.</p>';
+            _updateBadge('diagPermBadge', perms);
 
             _showSection('diagKpiTiles', true);
             _showSection('diagResults', true);

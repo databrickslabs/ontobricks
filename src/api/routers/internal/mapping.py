@@ -360,10 +360,20 @@ async def save_mapping_to_uc(
 
 
 @router.get("/diagnostics")
-async def run_diagnostics(session_mgr: SessionManager = Depends(get_session_manager)):
-    """Run comprehensive validation on all entity and relationship mappings."""
+async def run_diagnostics(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Run comprehensive validation on all entity and relationship mappings.
+
+    Includes a SELECT-permission probe on every distinct source table
+    when a Databricks client is configured (Databricks Apps mode or a
+    PAT in local dev).  The probe runs in a thread via ``run_blocking``
+    so concurrent slow warehouse calls do not stall the event loop.
+    """
     domain = get_domain(session_mgr)
-    return Mapping(domain).run_diagnostics()
+    client = get_databricks_client(domain, settings)
+    return await run_blocking(Mapping(domain).run_diagnostics, client=client)
 
 
 # ===========================================
