@@ -147,6 +147,43 @@ class TaskManager:
         task.progress = max(task.progress, step_progress)
         return True
 
+    def skip_step(self, task_id: str, message: str = None) -> bool:
+        """Mark the current step as skipped and advance to the next one.
+
+        Use this when a workflow phase isn't executed for the current run
+        (e.g. *Checking source tables* when the user forced a full rebuild).
+        Without this, the seeded step list and the actual execution drift
+        because the next ``advance_step`` call lands a "creating view"
+        message inside a row labelled "checking source tables".
+        """
+        task = self._tasks.get(task_id)
+        if not task or not task.steps:
+            return False
+        now = datetime.now().isoformat()
+        if task.current_step < len(task.steps):
+            step = task.steps[task.current_step]
+            step.status = "skipped"
+            step.started_at = step.started_at or now
+            step.completed_at = now
+            logger.info(
+                "Task %s step %s/%s skipped: %s",
+                task_id,
+                task.current_step + 1,
+                len(task.steps),
+                step.name,
+            )
+        task.current_step += 1
+        if task.current_step < len(task.steps):
+            task.steps[task.current_step].status = "running"
+            task.steps[task.current_step].started_at = datetime.now().isoformat()
+            if message:
+                task.message = message
+            else:
+                task.message = task.steps[task.current_step].description
+        step_progress = int((task.current_step / len(task.steps)) * 100)
+        task.progress = max(task.progress, step_progress)
+        return True
+
     def complete_task(
         self, task_id: str, result: Any = None, message: str = "Completed"
     ) -> bool:
@@ -159,7 +196,7 @@ class TaskManager:
         task.message = message
         task.result = result
         for step in task.steps:
-            if step.status != "completed":
+            if step.status not in ("completed", "skipped"):
                 step.status = "completed"
                 step.completed_at = datetime.now().isoformat()
         logger.info(

@@ -607,6 +607,7 @@ async function startTripleStoreSync() {
 
     showSyncProgress();
     updateSyncProgress(0, 'Starting synchronization...');
+    showBuildLog();
 
     try {
         const response = await fetch('/dtwin/sync/start', {
@@ -662,6 +663,7 @@ async function monitorSyncTask(taskId) {
 
             const task = data.task;
             updateSyncProgress(task.progress || 0, task.current_step_description || task.message || '');
+            renderBuildLog(task);
 
             if (task.status === 'completed') {
                 sessionStorage.removeItem(SYNC_TASK_KEY);
@@ -756,6 +758,276 @@ function updateSyncProgress(percent, stepText) {
     }
     if (step) step.textContent = stepText;
     if (status) status.textContent = stepText;
+}
+
+// =====================================================
+// BUILDING DIGITAL TWIN — live log
+// =====================================================
+
+let _syncBuildLogTickerStarted = false;
+// Latest task payload rendered into the build-log panel. Cached so the
+// Export button can dump it without re-fetching, and so users can save
+// the log of a finished build before navigating away.
+let _syncBuildLogLastTask = null;
+
+/**
+ * Show the live build-log card and wipe any previous content. Called when
+ * the user clicks Build so the panel slides in next to the Digital Twin
+ * card and grows row-by-row as the backend reports each phase.
+ */
+function showBuildLog() {
+    const card = document.getElementById('syncBuildLogCard');
+    const list = document.getElementById('syncBuildLogList');
+    const total = document.getElementById('syncBuildLogTotal');
+    const badge = document.getElementById('syncBuildLogBadge');
+    const exportBtn = document.getElementById('syncBuildLogExport');
+    if (!card) return;
+    card.classList.remove('d-none');
+    if (list) list.innerHTML = '<div class="text-muted small py-2"><i class="bi bi-hourglass-split me-1"></i>Waiting for the build to start…</div>';
+    if (total) total.textContent = '';
+    if (badge) {
+        badge.textContent = 'running';
+        badge.className = 'badge bg-primary ms-1';
+    }
+    _syncBuildLogLastTask = null;
+    if (exportBtn) exportBtn.disabled = true;
+    _ensureBuildLogTicker();
+}
+
+function hideBuildLog() {
+    const card = document.getElementById('syncBuildLogCard');
+    if (card) card.classList.add('d-none');
+}
+
+/**
+ * Render the per-step rows from a Task payload. Steps already include
+ * description / status / started_at / completed_at — this function only
+ * decorates them with icons, elapsed time and the running sub-message.
+ */
+function renderBuildLog(task) {
+    const list = document.getElementById('syncBuildLogList');
+    const total = document.getElementById('syncBuildLogTotal');
+    const badge = document.getElementById('syncBuildLogBadge');
+    const exportBtn = document.getElementById('syncBuildLogExport');
+    if (!list || !task) return;
+    _syncBuildLogLastTask = task;
+    if (exportBtn) exportBtn.disabled = false;
+
+    const steps = Array.isArray(task.steps) ? task.steps : [];
+    if (steps.length === 0) {
+        list.innerHTML = '<div class="text-muted small py-2">No build steps reported.</div>';
+        return;
+    }
+
+    const runningMessage = task.message || '';
+    const rows = steps.map((step, idx) => _renderBuildStepRow(step, idx, runningMessage));
+    list.innerHTML = rows.join('');
+
+    if (total) {
+        const dur = computeTaskDuration(task);
+        total.textContent = dur ? 'Total: ' + dur : '';
+    }
+    if (badge) {
+        if (task.status === 'completed') {
+            badge.textContent = 'done';
+            badge.className = 'badge bg-success ms-1';
+        } else if (task.status === 'failed') {
+            badge.textContent = 'failed';
+            badge.className = 'badge bg-danger ms-1';
+        } else if (task.status === 'cancelled') {
+            badge.textContent = 'cancelled';
+            badge.className = 'badge bg-warning text-dark ms-1';
+        } else {
+            badge.textContent = 'running';
+            badge.className = 'badge bg-primary ms-1';
+        }
+    }
+}
+
+/**
+ * Build the HTML for a single step row. The running step also shows the
+ * live ``task.message`` so users see fine-grained progress like
+ * "Written 4500/15000 triples…".
+ */
+function _renderBuildStepRow(step, idx, runningMessage) {
+    const cfg = _getStepConfig(step.status);
+    const desc = escapeHtml(step.description || step.name || ('Step ' + (idx + 1)));
+
+    let detailHtml = '';
+    if (step.status === 'running' && runningMessage) {
+        detailHtml = '<div class="sync-step-detail">' + escapeHtml(runningMessage) + '</div>';
+    } else if (step.status === 'skipped') {
+        detailHtml = '<div class="sync-step-detail text-muted">Not needed for this build</div>';
+    } else if (step.status === 'failed' && runningMessage) {
+        detailHtml = '<div class="sync-step-detail text-danger">' + escapeHtml(runningMessage) + '</div>';
+    }
+
+    const timeHtml = _renderStepTime(step);
+
+    return (
+        '<div class="sync-build-row sync-step-' + step.status + '">' +
+            '<span class="sync-step-icon"><i class="bi ' + cfg.icon + ' ' + cfg.colorClass + '"></i></span>' +
+            '<div class="sync-step-body">' +
+                '<div class="sync-step-title">' + desc + '</div>' +
+                detailHtml +
+            '</div>' +
+            '<div class="sync-step-time">' + timeHtml + '</div>' +
+        '</div>'
+    );
+}
+
+/**
+ * Pick icon + colour for a step status. ``skipped`` mirrors Bootstrap's
+ * muted dash so the row reads as "we didn't need this".
+ */
+function _getStepConfig(status) {
+    const map = {
+        pending:   { icon: 'bi-circle',           colorClass: 'text-muted' },
+        running:   { icon: 'bi-arrow-repeat spin-animation', colorClass: 'text-primary' },
+        completed: { icon: 'bi-check-circle-fill', colorClass: 'text-success' },
+        skipped:   { icon: 'bi-dash-circle',       colorClass: 'text-muted' },
+        failed:    { icon: 'bi-x-circle-fill',     colorClass: 'text-danger' }
+    };
+    return map[status] || map.pending;
+}
+
+/**
+ * Render the right-hand time column. Running steps get a live timer so
+ * users see the seconds tick during the slower poll cadence; finished
+ * steps show their wall-clock duration.
+ */
+function _renderStepTime(step) {
+    if (step.status === 'completed' || step.status === 'failed' || step.status === 'skipped') {
+        const start = step.started_at;
+        const end = step.completed_at || step.started_at;
+        if (!start) return '<span class="text-muted">—</span>';
+        return '<span class="text-muted small">' + escapeHtml(formatDuration(start, end) || '—') + '</span>';
+    }
+    if (step.status === 'running' && step.started_at) {
+        return '<span class="text-primary small" data-step-elapsed="' + escapeHtml(step.started_at) + '">'
+            + escapeHtml(formatDuration(step.started_at, null) || '0s')
+            + '</span>';
+    }
+    return '<span class="text-muted small">—</span>';
+}
+
+/**
+ * Tick the running-step elapsed label every second so the timer advances
+ * smoothly between the 1.5s polls. Cheap because it only updates one
+ * text node per running row, not the entire list.
+ */
+function _ensureBuildLogTicker() {
+    if (_syncBuildLogTickerStarted) return;
+    _syncBuildLogTickerStarted = true;
+    setInterval(function () {
+        document.querySelectorAll('#syncBuildLogList [data-step-elapsed]').forEach(function (el) {
+            const startISO = el.getAttribute('data-step-elapsed');
+            const txt = formatDuration(startISO, null);
+            if (txt) el.textContent = txt;
+        });
+    }, 1000);
+}
+
+/**
+ * Build a plain-text dump of the last rendered task and trigger a
+ * browser download. The format is intentionally human-readable so users
+ * can paste it into a support ticket without any tooling.
+ */
+function exportBuildLog() {
+    const task = _syncBuildLogLastTask;
+    if (!task) {
+        showNotification('No build log to export yet', 'warning');
+        return;
+    }
+
+    const text = _formatBuildLogAsText(task);
+    const stamp = (task.started_at || task.created_at || new Date().toISOString())
+        .replace(/[:.]/g, '-')
+        .replace('T', '_')
+        .slice(0, 19);
+    const fname = 'digital-twin-build_' + stamp + '.log';
+
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+/**
+ * Format a Task payload as a human-readable, copy-paste-friendly log.
+ * One header block (task metadata + final result), one section per
+ * step with status, timestamps, duration and the running message.
+ */
+function _formatBuildLogAsText(task) {
+    const lines = [];
+    const sep = '─'.repeat(60);
+
+    lines.push(sep);
+    lines.push('OntoBricks — Digital Twin Build Log');
+    lines.push(sep);
+    lines.push('Task ID         : ' + (task.id || ''));
+    lines.push('Name            : ' + (task.name || ''));
+    lines.push('Status          : ' + (task.status || ''));
+    if (task.created_at)   lines.push('Created at      : ' + task.created_at);
+    if (task.started_at)   lines.push('Started at      : ' + task.started_at);
+    if (task.completed_at) lines.push('Completed at    : ' + task.completed_at);
+    const totalDur = computeTaskDuration(task);
+    if (totalDur) lines.push('Total duration  : ' + totalDur);
+    if (task.progress != null) lines.push('Progress        : ' + task.progress + '%');
+    if (task.message) lines.push('Last message    : ' + task.message);
+    if (task.error)   lines.push('Error           : ' + task.error);
+    lines.push('');
+
+    const steps = Array.isArray(task.steps) ? task.steps : [];
+    if (steps.length > 0) {
+        lines.push('Steps');
+        lines.push(sep);
+        steps.forEach(function (step, idx) {
+            const num = String(idx + 1).padStart(2, ' ');
+            const status = (step.status || 'pending').toUpperCase().padEnd(9, ' ');
+            const desc = step.description || step.name || ('Step ' + (idx + 1));
+            lines.push('[' + num + '] ' + status + ' ' + desc);
+            if (step.started_at)   lines.push('     started   : ' + step.started_at);
+            if (step.completed_at) lines.push('     completed : ' + step.completed_at);
+            if (step.started_at) {
+                const dur = formatDuration(step.started_at, step.completed_at || null);
+                if (dur) {
+                    const label = step.completed_at ? '     duration  : ' : '     elapsed   : ';
+                    lines.push(label + dur);
+                }
+            }
+            if (step.status === 'running' && task.message) {
+                lines.push('     detail    : ' + task.message);
+            }
+            lines.push('');
+        });
+    }
+
+    if (task.result && typeof task.result === 'object') {
+        lines.push('Result');
+        lines.push(sep);
+        const r = task.result;
+        if (r.build_mode != null)       lines.push('Build mode      : ' + r.build_mode);
+        if (r.skipped_reason)           lines.push('Skipped reason  : ' + r.skipped_reason);
+        if (r.triple_count != null)     lines.push('Triples         : ' + r.triple_count);
+        if (r.diff && typeof r.diff === 'object') {
+            lines.push('Diff            : +' + (r.diff.added || 0) + ' / -' + (r.diff.removed || 0));
+        }
+        if (r.view_table)               lines.push('View table      : ' + r.view_table);
+        if (r.graph_name)               lines.push('Graph name      : ' + r.graph_name);
+        if (r.duration_seconds != null) lines.push('Duration (s)    : ' + r.duration_seconds);
+        lines.push('');
+    }
+
+    lines.push(sep);
+    lines.push('Exported at     : ' + new Date().toISOString());
+    lines.push(sep);
+    return lines.join('\n');
 }
 
 /**
@@ -1237,6 +1509,24 @@ document.addEventListener('DOMContentLoaded', async function() {
             else if (act === 'drop-snapshot-table') dropSnapshotTable();
             else if (act === 'reload-graph-from-registry') reloadGraphFromRegistry();
         });
+    }
+
+    const hideLogBtn = document.getElementById('syncBuildLogHide');
+    if (hideLogBtn) {
+        hideLogBtn.addEventListener('click', hideBuildLog);
+    }
+
+    const exportLogBtn = document.getElementById('syncBuildLogExport');
+    if (exportLogBtn) {
+        exportLogBtn.addEventListener('click', exportBuildLog);
+    }
+
+    // Resume the live log if a build was already running when the user
+    // navigated away and came back to this section.
+    const resumeId = sessionStorage.getItem(SYNC_TASK_KEY);
+    if (resumeId) {
+        showBuildLog();
+        monitorSyncTask(resumeId);
     }
 
     // Re-load when the sync section becomes visible after navigating away and back

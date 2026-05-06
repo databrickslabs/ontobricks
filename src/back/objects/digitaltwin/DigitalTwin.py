@@ -2493,6 +2493,8 @@ class DigitalTwin:
 
                 if not is_api:
                     tm.update_progress(task_id, 15, "Source changes detected")
+            else:
+                tm.skip_step(task_id, "Full rebuild requested — skipping change check")
 
             t_phase = time.time()
             tm.advance_step(task_id, f"Creating VIEW {view_table}...")
@@ -2587,12 +2589,16 @@ class DigitalTwin:
                         "No snapshot table — first build will be full + create snapshot"
                     )
                 actual_mode = "full"
+                tm.skip_step(
+                    task_id,
+                    "No previous snapshot — full rebuild instead",
+                )
 
             t_phase = time.time()
             apply_msg = (
                 "Applying changes to graph..."
                 if is_api
-                else "Applying changes to LadybugDB graph..."
+                else "Applying changes to the knowledge graph..."
             )
             tm.advance_step(task_id, apply_msg)
 

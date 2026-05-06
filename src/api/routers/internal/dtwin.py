@@ -228,16 +228,34 @@ async def start_triplestore_sync(
         name="Digital Twin Build",
         task_type="triplestore_sync",
         steps=[
-            {"name": "prepare", "description": "Preparing mappings and generating SQL"},
-            {"name": "gate", "description": "Checking source tables for changes"},
+            {
+                "name": "prepare",
+                "description": "Preparing mappings and generating queries",
+            },
+            {
+                "name": "gate",
+                "description": "Checking source tables for new data",
+            },
             {
                 "name": "view",
-                "description": "Creating Triple-Store VIEW in Unity Catalog",
+                "description": "Creating the Digital Twin view",
             },
-            {"name": "diff", "description": "Computing incremental diff"},
-            {"name": "graph", "description": "Applying changes to LadybugDB graph"},
-            {"name": "snapshot", "description": "Refreshing snapshot table"},
-            {"name": "archive", "description": "Archiving graph to registry"},
+            {
+                "name": "diff",
+                "description": "Detecting what changed since last build",
+            },
+            {
+                "name": "graph",
+                "description": "Updating the knowledge graph",
+            },
+            {
+                "name": "snapshot",
+                "description": "Saving a snapshot for next time",
+            },
+            {
+                "name": "archive",
+                "description": "Backing up the graph to the registry",
+            },
         ],
     )
 

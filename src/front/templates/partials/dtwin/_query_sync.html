@@ -262,6 +262,33 @@
                 </div>
             </div>
 
+            <!-- Building Digital Twin (live build log) -->
+            <div class="card d-none mb-3" id="syncBuildLogCard">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-list-check me-1"></i>Building Digital Twin
+                            <span id="syncBuildLogBadge" class="badge bg-primary ms-1 d-none"></span>
+                        </h6>
+                        <div class="d-flex align-items-center gap-2">
+                            <small class="text-muted" id="syncBuildLogTotal"></small>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                                    id="syncBuildLogExport" title="Download the build log as a text file" disabled>
+                                <i class="bi bi-download me-1"></i>Export
+                            </button>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-muted"
+                                    id="syncBuildLogHide" title="Hide log">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-2" id="syncBuildLogIntro">
+                        Live progress of the build. Each row is one stage; details appear under the running stage.
+                    </p>
+                    <div id="syncBuildLogList" class="sync-build-log"></div>
+                </div>
+            </div>
+
             <!-- Last Sync Result -->
             <div class="card d-none" id="syncResultCard">
                 <div class="card-body">

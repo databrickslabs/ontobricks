@@ -140,6 +140,47 @@ class TestTaskLifecycle:
     def test_advance_step_nonexistent(self, mgr):
         assert mgr.advance_step("nope") is False
 
+    def test_skip_step_marks_skipped_and_advances(self, mgr):
+        steps = [
+            {"name": "s1", "description": "d1"},
+            {"name": "s2", "description": "d2"},
+            {"name": "s3", "description": "d3"},
+        ]
+        task = mgr.create_task("T", "t", steps=steps)
+        mgr.start_task(task.id)
+        assert mgr.skip_step(task.id, "skip reason")
+        assert task.steps[0].status == "skipped"
+        assert task.steps[0].started_at is not None
+        assert task.steps[0].completed_at is not None
+        assert task.steps[1].status == "running"
+        assert task.current_step == 1
+
+    def test_skip_step_no_steps(self, mgr):
+        task = mgr.create_task("T", "t")
+        assert mgr.skip_step(task.id) is False
+
+    def test_skip_step_nonexistent(self, mgr):
+        assert mgr.skip_step("nope") is False
+
+    def test_complete_preserves_skipped_status(self, mgr):
+        steps = [
+            {"name": "s1", "description": "d1"},
+            {"name": "s2", "description": "d2"},
+        ]
+        task = mgr.create_task("T", "t", steps=steps)
+        mgr.start_task(task.id)
+        mgr.skip_step(task.id)
+        mgr.complete_task(task.id)
+        assert task.steps[0].status == "skipped"
+        assert task.steps[1].status == "completed"
+
+    def test_skip_step_in_to_dict(self, mgr):
+        task = mgr.create_task("T", "t", steps=[{"name": "s1", "description": "d1"}])
+        mgr.start_task(task.id)
+        mgr.skip_step(task.id)
+        d = task.to_dict()
+        assert d["steps"][0]["status"] == "skipped"
+
     def test_complete(self, mgr):
         task = mgr.create_task("T", "t")
         mgr.start_task(task.id)

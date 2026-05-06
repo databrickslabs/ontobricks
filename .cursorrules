@@ -14,7 +14,8 @@ This repository uses modular Cursor rules with scoped `.mdc` files (YAML frontma
 
 After ANY code change (feature, fix, refactoring, review, etc.):
 * Update the changelog in /changelogs/:
-    - Use today's date as filename: YYYY-MM-DD.log
+    - Use the version (vX.X.X) as the first level for storing the logs. Each application update must be affected to the right version/folder.
+    - Use today's date as filename: YYYY-MM-DD.log (for example if i make an update on the version 0.2.1 the 2026 May 20th i should have the file /changelogs/v0.2.1/2026-05-20.log)
     - If the file already exists, append a new section (one file per day).
     - If the file does not exist, create it.
     - Each section must include: a title, context, numbered list of changes
