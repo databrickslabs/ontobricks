@@ -16,18 +16,29 @@ def client():
 
 class TestHealthRoutes:
     def test_health_check(self, client):
+        # ``/health`` is now a comprehensive readiness probe.  Individual
+        # checks may fail (no warehouse / no Lakebase in the test env)
+        # but the route always returns 200 and a stable shape so external
+        # probes can keep parsing the top-level ``status`` and
+        # ``summary.errors`` fields.
         response = client.get("/health")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "healthy"
+        assert data["status"] in ("ok", "warning", "error")
         assert data["framework"] == "FastAPI"
+        assert data["service"] == "OntoBricks"
+        assert "summary" in data
+        assert "checks" in data
+        assert isinstance(data["checks"], list) and data["checks"]
+        for c in data["checks"]:
+            assert {"name", "label", "status", "detail", "duration_ms"} <= c.keys()
+            assert c["status"] in ("ok", "warning", "error")
 
-    def test_detailed_health(self, client):
+    def test_detailed_health_removed(self, client):
+        # ``/health/detailed`` was retired — its information now lives in
+        # ``/health``.  FastAPI returns 404 for the removed route.
         response = client.get("/health/detailed")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert "components" in data
+        assert response.status_code == 404
 
 
 class TestMainRoutes:
@@ -56,6 +67,20 @@ class TestSettingsRoutes:
     def test_settings_page(self, client):
         response = client.get("/settings")
         assert response.status_code == 200
+
+    def test_settings_page_includes_health_tab(self, client):
+        # In tests the request is treated as ``user_role == 'admin'`` (the
+        # PermissionMiddleware short-circuit for non-Apps mode), so the
+        # admin-only Health tab must be rendered.  Asserting on the nav-
+        # link and the include's KPI container catches both the tab
+        # registration and the partial wiring.
+        response = client.get("/settings")
+        assert response.status_code == 200
+        body = response.text
+        assert 'id="tab-health"' in body
+        assert 'id="pane-health"' in body
+        assert 'id="healthKpiTiles"' in body
+        assert "settings-health.js" in body
 
     def test_settings_current(self, client):
         response = client.get("/settings/current")

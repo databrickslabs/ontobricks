@@ -44,6 +44,12 @@
             <i class="bi bi-archive me-1"></i> Registry
         </button>
     </li>
+    <li class="nav-item" role="presentation" id="tab-health-wrapper">
+        <button class="nav-link" id="tab-health" data-bs-toggle="tab" data-bs-target="#pane-health"
+                type="button" role="tab" aria-controls="pane-health" aria-selected="false">
+            <i class="bi bi-heart-pulse me-1"></i> Health
+        </button>
+    </li>
     {% endif %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-ladybugdb" data-bs-toggle="tab" data-bs-target="#pane-ladybugdb"
@@ -147,6 +153,11 @@
             <!-- ==================== REGISTRY TAB ==================== -->
             <div class="tab-pane fade" id="pane-registry" role="tabpanel" aria-labelledby="tab-registry">
                 {% include "partials/registry/_registry_configuration.html" %}
+            </div>
+
+            <!-- ==================== HEALTH TAB ==================== -->
+            <div class="tab-pane fade" id="pane-health" role="tabpanel" aria-labelledby="tab-health">
+                {% include "partials/settings/_settings_health.html" %}
             </div>
             {% endif %}
 
@@ -295,5 +306,6 @@
 {% if user_role == 'admin' %}
 <script src="{{ url_for('static', filename='config/js/permissions.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/settings-health.js') }}?v={{ asset_version }}"></script>
 {% endif %}
 {% endblock %}

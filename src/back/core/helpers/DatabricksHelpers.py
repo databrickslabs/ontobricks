@@ -27,6 +27,22 @@ def make_volume_file_service(domain, settings=None):
     return VolumeFileService(host=host, token=token)
 
 
+def _domain_databricks(domain) -> Dict[str, Any]:
+    """Return ``domain.databricks`` as a dict, ``{}`` when *domain* is ``None``.
+
+    The credential / warehouse helpers were originally written for the
+    HTTP request lifecycle where ``DomainSession`` is always present.
+    Session-less callers — the readiness probe, MCP server, scheduled
+    jobs — pass ``domain=None`` and would otherwise blow up with
+    ``'NoneType' object has no attribute 'databricks'``. Mirrors the
+    ``domain is None`` short-circuit already used by
+    ``RegistryCfg.from_domain``.
+    """
+    if domain is None:
+        return {}
+    return getattr(domain, "databricks", None) or {}
+
+
 class DatabricksHelpers:
     @staticmethod
     async def run_blocking(func: Callable, *args: Any, **kwargs: Any) -> Any:
@@ -90,7 +106,7 @@ class DatabricksHelpers:
             except Exception as exc:
                 logger.debug("Could not read global warehouse config: %s", exc)
 
-        session_wid = domain.databricks.get("warehouse_id", "")
+        session_wid = _domain_databricks(domain).get("warehouse_id", "")
         if session_wid:
             return session_wid
 
@@ -154,8 +170,9 @@ class DatabricksHelpers:
         Returns:
             DatabricksClient instance or None if not configured
         """
-        host = domain.databricks.get("host") or settings.databricks_host
-        token = domain.databricks.get("token") or settings.databricks_token
+        dbcfg = _domain_databricks(domain)
+        host = dbcfg.get("host") or settings.databricks_host
+        token = dbcfg.get("token") or settings.databricks_token
         warehouse_id = DatabricksHelpers.resolve_warehouse_id(domain, settings)
 
         # In Databricks Apps mode, always create a client (SDK handles auth)
@@ -203,8 +220,9 @@ class DatabricksHelpers:
         Returns:
             Tuple of (host, token)
         """
-        host = domain.databricks.get("host") or settings.databricks_host
-        token = domain.databricks.get("token") or settings.databricks_token
+        dbcfg = _domain_databricks(domain)
+        host = dbcfg.get("host") or settings.databricks_host
+        token = dbcfg.get("token") or settings.databricks_token
 
         if host and token:
             return _databricks.normalize_host(host), token

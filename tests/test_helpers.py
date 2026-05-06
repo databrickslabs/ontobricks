@@ -89,3 +89,34 @@ class TestGetDatabricksHostAndToken:
         host, token = get_databricks_host_and_token(domain, settings)
         assert "test.databricks.com" in host
         assert token == "tok-123"
+
+    @patch("back.core.databricks.is_databricks_app", return_value=False)
+    def test_none_domain_falls_back_to_settings(self, _):
+        # Session-less callers (the readiness probe, MCP, scheduled jobs)
+        # pass ``domain=None``.  Helpers must not blow up on
+        # ``domain.databricks.get(...)``; they should fall through to the
+        # Pydantic Settings defaults instead.
+        settings = _make_settings()
+        host, token = get_databricks_host_and_token(None, settings)
+        assert "test.databricks.com" in host
+        assert token == "tok-123"
+
+
+class TestNoneDomainSafety:
+    """Regression coverage: every credential helper must accept ``domain=None``."""
+
+    @patch("back.core.databricks.is_databricks_app", return_value=False)
+    def test_get_databricks_client_with_none_domain(self, _):
+        client = get_databricks_client(None, _make_settings())
+        assert client is not None
+        assert "test.databricks.com" in client.host
+
+    @patch("back.core.databricks.is_databricks_app", return_value=False)
+    def test_get_databricks_credentials_with_none_domain(self, _):
+        host, token, wh = get_databricks_credentials(None, _make_settings())
+        assert host and token and wh
+
+    @patch("back.core.databricks.is_databricks_app", return_value=False)
+    def test_get_databricks_client_none_domain_no_creds_returns_none(self, _):
+        settings = _make_settings(databricks_host="", databricks_token="")
+        assert get_databricks_client(None, settings) is None

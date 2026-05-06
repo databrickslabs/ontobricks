@@ -1154,7 +1154,7 @@ The MCP app's SP needs `CAN_USE` permission on the main app. The `users` group s
 - **Structured JSON logs**: Set `LOG_FORMAT=json` to emit one JSON object per log line — ideal for log aggregation and search
 - **Request timing**: Every non-static request is logged with method, path, status code, and duration in milliseconds
 - **Thread pool**: Tune concurrent blocking work via `ONTOBRICKS_THREAD_POOL_SIZE` (default `20`)
-- **Health checks**: `GET /health` and `GET /health/detailed`
+- **Health checks**: `GET /health` runs a comprehensive readiness probe (`/tmp` + session/log dirs, Databricks auth, SQL warehouse, registry UC volume read+write, registry catalog/schema view DDL, Lakebase USAGE) and returns `{status, summary:{ok,warnings,errors}, checks:[…]}`. The endpoint always returns HTTP 200 — external probes should look at the top-level `status` and `summary.errors` fields rather than the HTTP code, so a single flickering dependency does not pull the app out of rotation.
 - **Agent traces**: View under **Machine Learning > Experiments > `/Shared/ontobricks-agents`** — each agent call shows a span tree with inputs, outputs, latency, and token usage
 
 ### Updating
