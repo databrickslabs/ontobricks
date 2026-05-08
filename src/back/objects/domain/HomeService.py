@@ -464,18 +464,37 @@ class HomeService:
     ) -> Dict[str, Any]:
         """Build the navbar state in a single call.
 
-        The navbar only displays domain identity and SQL Warehouse status,
-        so this intentionally skips the expensive Digital Twin and validation
-        I/O that used to run here.  Those checks are available on the
-        validation page (``/validate/detailed``) and the DT Sync
-        page (``/dtwin/sync/info``).
+        The navbar only displays domain identity, SQL Warehouse status,
+        and the (optionally customised) brand logo, so this intentionally
+        skips the expensive Digital Twin and validation I/O that used to
+        run here. Those checks are available on the validation page
+        (``/validate/detailed``) and the DT Sync page
+        (``/dtwin/sync/info``).
         """
         from back.objects.domain.Domain import Domain
+        from back.core.helpers import get_databricks_host_and_token
+        from back.objects.registry import RegistryCfg
+        from back.objects.session import global_config_service
 
         logger.debug("Building navbar state")
         domain_data = Domain(domain, settings).get_domain_info()
 
+        custom_logo = ""
+        try:
+            host, token = get_databricks_host_and_token(domain, settings)
+            registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+            custom_logo = global_config_service.get_navbar_logo(
+                host, token, registry_cfg
+            )
+        except Exception as e:
+            # Branding is non-critical — never fail navbar rendering for it.
+            logger.debug("Could not resolve custom navbar logo: %s", e)
+
         return {
             "domain": domain_data,
             "warehouse": {"warehouse_id": warehouse_id},
+            "branding": {
+                "logo_url": custom_logo or "",
+                "is_custom": bool(custom_logo),
+            },
         }

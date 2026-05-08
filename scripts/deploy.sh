@@ -89,6 +89,10 @@ _dab_var_overrides=(
     "--var=lakebase_registry_schema=${LAKEBASE_REGISTRY_SCHEMA}"
 )
 
+EXPECTED_VOLUME_FQN="${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}.${REGISTRY_VOLUME}"
+EXPECTED_PG_BRANCH_PATH="projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}"
+EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
+
 echo "=== OntoBricks Deployment (DAB) ==="
 echo "Config  : $CONFIG_FILE"
 echo "Target  : $TARGET"
@@ -157,6 +161,85 @@ print(f'{state}  {url}')
 " 2>/dev/null || echo "NOT DEPLOYED")
 printf "  %-20s %s\n" "$APP_NAME" "$STATUS"
 
+verify_app_resources() {
+    local app_name="$1"
+    local expect_lakebase="$2"
+    local app_json
+    app_json="$(databricks apps get "$app_name" -o json 2>/dev/null || true)"
+    if [[ -z "$app_json" ]]; then
+        echo "  [$app_name] ✗ could not fetch app details to verify resources"
+        return 1
+    fi
+
+    if APP_JSON="$app_json" \
+        EXPECT_WAREHOUSE="$WAREHOUSE_ID" \
+        EXPECT_VOLUME="$EXPECTED_VOLUME_FQN" \
+        EXPECT_PG_BRANCH="$EXPECTED_PG_BRANCH_PATH" \
+        EXPECT_PG_DATABASE="$EXPECTED_PG_DATABASE_PATH" \
+        EXPECT_LAKEBASE="$expect_lakebase" \
+        python3 - <<'PY'
+import json, os, sys
+
+data = json.loads(os.environ["APP_JSON"])
+resources = {r.get("name", ""): r for r in data.get("resources", [])}
+errors: list[str] = []
+
+sqlw = ((resources.get("sql-warehouse") or {}).get("sql_warehouse") or {}).get("id")
+if sqlw != os.environ["EXPECT_WAREHOUSE"]:
+    errors.append(
+        f"sql-warehouse.id mismatch: got={sqlw!r} expected={os.environ['EXPECT_WAREHOUSE']!r}"
+    )
+
+volume = (
+    (resources.get("volume") or {})
+    .get("uc_securable", {})
+    .get("securable_full_name")
+)
+if volume != os.environ["EXPECT_VOLUME"]:
+    errors.append(
+        f"volume.securable_full_name mismatch: got={volume!r} expected={os.environ['EXPECT_VOLUME']!r}"
+    )
+
+expect_lakebase = os.environ["EXPECT_LAKEBASE"] == "true"
+postgres = (resources.get("postgres") or {}).get("postgres") or {}
+if expect_lakebase:
+    if postgres.get("branch") != os.environ["EXPECT_PG_BRANCH"]:
+        errors.append(
+            f"postgres.branch mismatch: got={postgres.get('branch')!r} expected={os.environ['EXPECT_PG_BRANCH']!r}"
+        )
+    if postgres.get("database") != os.environ["EXPECT_PG_DATABASE"]:
+        errors.append(
+            f"postgres.database mismatch: got={postgres.get('database')!r} expected={os.environ['EXPECT_PG_DATABASE']!r}"
+        )
+
+if errors:
+    for e in errors:
+        print(e)
+    sys.exit(1)
+print("ok")
+PY
+    then
+        echo "  [$app_name] ✓ resources match configured values"
+        return 0
+    fi
+
+    echo "  [$app_name] ✗ resource verification failed"
+    return 1
+}
+
+echo ""
+echo "--- Resource binding check ---"
+VERIFY_FAILED=0
+if ! verify_app_resources "$APP_NAME" "$([[ "$TARGET" == *lakebase* ]] && echo true || echo false)"; then
+    VERIFY_FAILED=$((VERIFY_FAILED + 1))
+fi
+if ! verify_app_resources "$MCP_APP_NAME" "$([[ "$TARGET" == *lakebase* ]] && echo true || echo false)"; then
+    VERIFY_FAILED=$((VERIFY_FAILED + 1))
+fi
+if [[ $VERIFY_FAILED -gt 0 ]]; then
+    echo "  ⚠ One or more app resources do not match deploy.config values."
+fi
+
 if ! $DO_BOOTSTRAP; then
     echo ""
     echo "(skipping bootstrap steps per --no-bootstrap)"
@@ -168,6 +251,8 @@ fi
 # ── 8. App self-permissions (first-deploy bootstrap) ───────────────
 # The app's service principal needs CAN_MANAGE on its OWN app so the
 # middleware can read the ACL to resolve admin/app-user roles.
+# The MCP app service principal also needs CAN_USE on the main app so
+# MCP tool calls can reach /api/v1/* without 401.
 # Idempotent — safe to re-run. The bootstrap script reads APP_NAME /
 # MCP_APP_NAME from the env we exported via deploy.config.sh.
 echo ""
@@ -192,6 +277,7 @@ if [[ "$TARGET" == *lakebase* ]]; then
     chmod +x scripts/bootstrap-lakebase-perms.sh
     if ! scripts/bootstrap-lakebase-perms.sh \
             -i "$LAKEBASE_BOOTSTRAP_INSTANCE" \
+            -b "$LAKEBASE_BOOTSTRAP_BRANCH" \
             -d "$LAKEBASE_BOOTSTRAP_DATABASE" \
             -s "$LAKEBASE_BOOTSTRAP_SCHEMA" \
             -a "$APP_NAME" \
@@ -202,6 +288,7 @@ if [[ "$TARGET" == *lakebase* ]]; then
         echo "    from Settings > Registry > Initialize and re-run:"
         echo "      scripts/bootstrap-lakebase-perms.sh \\"
         echo "        -i $LAKEBASE_BOOTSTRAP_INSTANCE \\"
+        echo "        -b $LAKEBASE_BOOTSTRAP_BRANCH \\"
         echo "        -d $LAKEBASE_BOOTSTRAP_DATABASE \\"
         echo "        -s $LAKEBASE_BOOTSTRAP_SCHEMA \\"
         echo "        -a $APP_NAME -a $MCP_APP_NAME"

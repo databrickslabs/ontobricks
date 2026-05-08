@@ -5,7 +5,7 @@ import os
 import shutil
 import tarfile
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from back.core.graphdb.ladybugdb import (
     local_db_path,
@@ -102,6 +102,32 @@ class TestSyncToVolume:
         )
         assert not ok
         assert "Permission denied" in msg
+
+    def test_sync_uses_fast_gzip_compresslevel(self):
+        """``sync_to_volume`` must pass ``compresslevel=1`` into ``tarfile.open``."""
+        db_dir = os.path.join(TEMP_BASE, "gztest.lbug")
+        os.makedirs(db_dir)
+        with open(os.path.join(db_dir, "data.bin"), "wb") as f:
+            f.write(b"x" * 100)
+
+        uc_mock = MagicMock()
+        uc_mock.write_binary_file.return_value = (True, "OK")
+
+        real_open = tarfile.open
+
+        def _spy_open(*args, **kwargs):
+            assert kwargs.get("compresslevel") == 1
+            return real_open(*args, **kwargs)
+
+        with patch("back.core.graphdb.ladybugdb.GraphSyncService.tarfile.open", _spy_open):
+            ok, msg = sync_to_volume(
+                uc_mock,
+                "/Volumes/cat/sch/vol/domains/proj",
+                "gztest",
+                local_base=TEMP_BASE,
+            )
+        assert ok
+        uc_mock.write_binary_file.assert_called_once()
 
 
 class TestSyncFromVolume:

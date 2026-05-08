@@ -594,6 +594,8 @@ async function startTripleStoreSync() {
 
     var buildModeEl = document.querySelector('input[name="buildMode"]:checked');
     var buildMode = buildModeEl ? buildModeEl.value : 'incremental';
+    var archiveEl = document.getElementById('syncArchiveToRegistry');
+    var archiveToRegistry = archiveEl ? archiveEl.checked : true;
 
     // Disable button and menus
     const btn = document.getElementById('syncStartBtn');
@@ -614,7 +616,8 @@ async function startTripleStoreSync() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                build_mode: buildMode
+                build_mode: buildMode,
+                archive_to_registry: archiveToRegistry
             }),
             credentials: 'same-origin'
         });
@@ -820,7 +823,9 @@ function renderBuildLog(task) {
     }
 
     const runningMessage = task.message || '';
-    const rows = steps.map((step, idx) => _renderBuildStepRow(step, idx, runningMessage));
+    const rows = steps.map(function (step, idx) {
+        return _renderBuildStepRow(step, idx, runningMessage, task);
+    });
     list.innerHTML = rows.join('');
 
     if (total) {
@@ -849,7 +854,7 @@ function renderBuildLog(task) {
  * live ``task.message`` so users see fine-grained progress like
  * "Written 4500/15000 triples…".
  */
-function _renderBuildStepRow(step, idx, runningMessage) {
+function _renderBuildStepRow(step, idx, runningMessage, task) {
     const cfg = _getStepConfig(step.status);
     const desc = escapeHtml(step.description || step.name || ('Step ' + (idx + 1)));
 
@@ -860,9 +865,11 @@ function _renderBuildStepRow(step, idx, runningMessage) {
         detailHtml = '<div class="sync-step-detail text-muted">Not needed for this build</div>';
     } else if (step.status === 'failed' && runningMessage) {
         detailHtml = '<div class="sync-step-detail text-danger">' + escapeHtml(runningMessage) + '</div>';
+    } else if (_isArchiveBackgroundStep(step, task)) {
+        detailHtml = '<div class="sync-step-detail text-muted">The registry file copy keeps running on the server; the time on the right is only the hand-off, not the upload.</div>';
     }
 
-    const timeHtml = _renderStepTime(step);
+    const timeHtml = _renderStepTime(step, task);
 
     return (
         '<div class="sync-build-row sync-step-' + step.status + '">' +
@@ -892,12 +899,32 @@ function _getStepConfig(status) {
 }
 
 /**
+ * Registry backup is kicked off in a background thread; the TaskManager
+ * marks the archive step completed immediately so the build can finish.
+ * ``started_at`` and ``completed_at`` are therefore the same tick — show
+ * an honest label instead of "0ms".
+ */
+function _isArchiveBackgroundStep(step, task) {
+    return !!(
+        step &&
+        step.name === 'archive' &&
+        step.status === 'completed' &&
+        task &&
+        task.result &&
+        task.result.archive_background
+    );
+}
+
+/**
  * Render the right-hand time column. Running steps get a live timer so
  * users see the seconds tick during the slower poll cadence; finished
  * steps show their wall-clock duration.
  */
-function _renderStepTime(step) {
+function _renderStepTime(step, task) {
     if (step.status === 'completed' || step.status === 'failed' || step.status === 'skipped') {
+        if (_isArchiveBackgroundStep(step, task)) {
+            return '<span class="text-muted small" title="The registry file copy continues in the background">Continues after build</span>';
+        }
         const start = step.started_at;
         const end = step.completed_at || step.started_at;
         if (!start) return '<span class="text-muted">—</span>';
@@ -995,10 +1022,14 @@ function _formatBuildLogAsText(task) {
             if (step.started_at)   lines.push('     started   : ' + step.started_at);
             if (step.completed_at) lines.push('     completed : ' + step.completed_at);
             if (step.started_at) {
-                const dur = formatDuration(step.started_at, step.completed_at || null);
-                if (dur) {
-                    const label = step.completed_at ? '     duration  : ' : '     elapsed   : ';
-                    lines.push(label + dur);
+                if (_isArchiveBackgroundStep(step, task)) {
+                    lines.push('     duration  : (registry copy runs in the background — not the seconds shown on this row)');
+                } else {
+                    const dur = formatDuration(step.started_at, step.completed_at || null);
+                    if (dur) {
+                        const label = step.completed_at ? '     duration  : ' : '     elapsed   : ';
+                        lines.push(label + dur);
+                    }
                 }
             }
             if (step.status === 'running' && task.message) {
@@ -1021,6 +1052,12 @@ function _formatBuildLogAsText(task) {
         if (r.view_table)               lines.push('View table      : ' + r.view_table);
         if (r.graph_name)               lines.push('Graph name      : ' + r.graph_name);
         if (r.duration_seconds != null) lines.push('Duration (s)    : ' + r.duration_seconds);
+        if (r.archive_to_registry === false) {
+            lines.push('Registry archive: skipped (checkbox off)');
+        } else if (r.archive_background) {
+            const archiveTask = r.archive_task_id ? `task ${r.archive_task_id}` : 'background task';
+            lines.push(`Registry archive: started in background (${archiveTask}; upload may still be running)`);
+        }
         lines.push('');
     }
 

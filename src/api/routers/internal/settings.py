@@ -427,6 +427,89 @@ async def save_base_uri(
     )
 
 
+@router.get("/get-cloud-fetch")
+async def get_cloud_fetch(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get global CloudFetch toggle (instance-global)."""
+    return config_service.get_cloud_fetch_result(session_mgr, settings)
+
+
+@router.post("/save-cloud-fetch")
+async def save_cloud_fetch(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save global CloudFetch toggle (admin only, stored globally)."""
+    data = await request.json()
+    enabled = bool(data.get("use_cloud_fetch", True))
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_cloud_fetch_result(
+        enabled, email, user_token, session_mgr, settings
+    )
+
+
+# ===========================================
+# Branding (Navbar Logo)
+# ===========================================
+
+
+@router.get("/navbar-logo")
+async def get_navbar_logo(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the configured navbar logo (or the bundled default)."""
+    return config_service.get_navbar_logo_result(session_mgr, settings)
+
+
+@router.post("/navbar-logo")
+async def upload_navbar_logo(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Upload a custom navbar logo (admin only, stored globally).
+
+    Multipart form with a single field ``file``. The image is base64-
+    encoded and stored as a ``data:`` URL inside the global config
+    blob, so it works identically in local and Databricks App modes
+    without touching Volumes or local disk. Recommended source size:
+    64×64 px (square).
+    """
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        raise ValidationError("Missing 'file' field in upload")
+    content = await upload.read()
+    content_type = getattr(upload, "content_type", "") or ""
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.upload_navbar_logo_result(
+        content, content_type, email, user_token, session_mgr, settings
+    )
+
+
+@router.delete("/navbar-logo")
+async def reset_navbar_logo(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Reset the navbar logo to the bundled default (admin only)."""
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.reset_navbar_logo_result(
+        email, user_token, session_mgr, settings
+    )
+
+
 @router.get("/get-registry-cache-ttl")
 async def get_registry_cache_ttl(
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -760,3 +843,91 @@ async def delete_schedule(
 ):
     """Remove a build schedule for a domain."""
     return config_service.delete_schedule_result(domain_name, session_mgr, settings)
+
+
+@router.post("/schedules/{domain_name}/run-now")
+async def run_schedule_now(
+    domain_name: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Fire the build schedule for *domain_name* immediately (one-shot)."""
+    return config_service.trigger_schedule_now_result(
+        domain_name, session_mgr, settings
+    )
+
+
+# ===========================================
+# Scheduled Cohort Materialisations
+# ===========================================
+
+
+@router.get("/cohort-schedules")
+async def list_cohort_schedules(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return all per-(domain, rule) cohort schedules."""
+    return config_service.list_cohort_schedules_result(session_mgr, settings)
+
+
+@router.get("/cohort-schedules/rules/{domain_name}")
+async def list_cohort_rules_for_domain(
+    domain_name: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List saved cohort rules for *domain_name* (used by the schedule modal)."""
+    return config_service.list_cohort_rules_for_domain_result(
+        domain_name, session_mgr, settings
+    )
+
+
+@router.post("/cohort-schedules")
+async def save_cohort_schedule(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Create or update a cohort materialisation schedule."""
+    data = await request.json()
+    return config_service.save_cohort_schedule_result(data, session_mgr, settings)
+
+
+@router.get("/cohort-schedules/{domain_name}/{rule_id}/history")
+async def get_cohort_schedule_history(
+    domain_name: str,
+    rule_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the run history for a single cohort schedule."""
+    return config_service.get_cohort_schedule_history_result(
+        domain_name, rule_id, session_mgr, settings
+    )
+
+
+@router.delete("/cohort-schedules/{domain_name}/{rule_id}")
+async def delete_cohort_schedule(
+    domain_name: str,
+    rule_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Remove a cohort schedule for *(domain_name, rule_id)*."""
+    return config_service.delete_cohort_schedule_result(
+        domain_name, rule_id, session_mgr, settings
+    )
+
+
+@router.post("/cohort-schedules/{domain_name}/{rule_id}/run-now")
+async def run_cohort_schedule_now(
+    domain_name: str,
+    rule_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Fire the cohort schedule for *(domain_name, rule_id)* immediately."""
+    return config_service.trigger_cohort_schedule_now_result(
+        domain_name, rule_id, session_mgr, settings
+    )

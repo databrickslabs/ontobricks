@@ -57,8 +57,20 @@ class GraphSyncService:
         safe = GraphSyncService.sanitize_db_name(self._db_name)
         return f"{uc_domain_path}/ontobricks_{safe}.lbug.tar.gz"
 
-    def sync_to_volume(self, uc_domain_path: str) -> Tuple[bool, str]:
-        """Archive the local ``.lbug`` directory and upload it to the registry."""
+    def sync_to_volume(
+        self, uc_domain_path: str, compresslevel: int = 1
+    ) -> Tuple[bool, str]:
+        """Archive the local ``.lbug`` directory and upload it to the registry.
+
+        ``compresslevel`` defaults to ``1`` (fastest gzip).  The default
+        ``9`` was unbearably slow on large graphs (~1–2 GB ``.lbug``
+        files): pure-Python zlib at level 9 is single-threaded and runs
+        ~3–5× slower than level 1 for ~10–15% better compression — a
+        bad trade-off for a workspace Volume where storage is cheap and
+        the wait is paid by the user.
+        """
+        import time
+
         local_path = self.local_db_path
         if not os.path.exists(local_path):
             msg = f"Local graph not found: {local_path}"
@@ -68,23 +80,33 @@ class GraphSyncService:
         vol_path = self.volume_path(uc_domain_path)
 
         try:
+            t0 = time.time()
             buf = io.BytesIO()
-            with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            with tarfile.open(
+                fileobj=buf, mode="w:gz", compresslevel=compresslevel
+            ) as tar:
                 tar.add(local_path, arcname=os.path.basename(local_path))
             archive_bytes = buf.getvalue()
             logger.info(
-                "LadybugDB graph archived: %s (%.1f KB)",
+                "LadybugDB graph archived: %s (%.1f MB, gz level %d, %.1fs)",
                 local_path,
-                len(archive_bytes) / 1024,
+                len(archive_bytes) / (1024 * 1024),
+                compresslevel,
+                time.time() - t0,
             )
         except Exception as exc:
             msg = f"Failed to archive graph directory: {exc}"
             logger.exception(msg)
             return False, msg
 
+        t0 = time.time()
         ok, msg = self._uc.write_binary_file(vol_path, archive_bytes)
         if ok:
-            logger.info("LadybugDB graph synced to Volume: %s", vol_path)
+            logger.info(
+                "LadybugDB graph synced to Volume: %s (%.1fs)",
+                vol_path,
+                time.time() - t0,
+            )
         else:
             logger.error("Failed to upload graph archive: %s", msg)
         return ok, msg
@@ -158,9 +180,11 @@ class GraphSyncService:
         uc_domain_path: str,
         db_name: str,
         local_base: str = "/tmp/ontobricks",
+        compresslevel: int = 1,
     ) -> Tuple[bool, str]:
         return GraphSyncService(uc_service, db_name, local_base).sync_to_volume(
             uc_domain_path,
+            compresslevel=compresslevel,
         )
 
     @staticmethod

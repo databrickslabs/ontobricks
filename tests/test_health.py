@@ -356,6 +356,87 @@ class TestCheckLakebase:
         assert status == "warning"
 
 
+class TestCheckLakebasePermissions:
+    def test_skipped_when_pg_not_bound(self):
+        auth = MagicMock(is_available=False)
+        with patch(
+            "back.core.databricks.LakebaseAuth.get_lakebase_auth",
+            return_value=auth,
+        ):
+            status, detail = health._check_lakebase_permissions(MagicMock())
+        assert status == "ok"
+        assert "skipped" in detail.lower()
+
+    def test_no_usage_is_error(self):
+        auth = MagicMock(is_available=True)
+        store = MagicMock(schema="s")
+        store.init_status.return_value = {
+            "initialized": False,
+            "reason": "no_usage",
+            "error": "Role lacks USAGE on schema",
+        }
+        with patch(
+            "back.core.databricks.LakebaseAuth.get_lakebase_auth",
+            return_value=auth,
+        ), patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()), \
+           patch(
+               "back.objects.registry.store.lakebase.store.LakebaseRegistryStore",
+               return_value=store,
+           ):
+            status, detail = health._check_lakebase_permissions(MagicMock())
+        assert status == "error"
+        assert "USAGE" in detail
+
+    def test_ok_when_privileges_present(self):
+        auth = MagicMock(is_available=True)
+        store = MagicMock(schema="ontobricks_registry")
+        store.init_status.return_value = {
+            "initialized": True,
+            "reason": "ok",
+            "error": None,
+        }
+
+        # Simulate the three fetches performed by _check_lakebase_permissions:
+        # schema perms, table perms aggregate, sequence perms aggregate.
+        cursor = MagicMock()
+        cursor.fetchone.side_effect = [
+            ("db", "role", True, True),
+            (True, True, True, True, 6),
+            (True, True, True, 2),
+        ]
+
+        class _CursorCtx:
+            def __enter__(self):
+                return cursor
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        conn = MagicMock()
+        conn.cursor.return_value = _CursorCtx()
+
+        class _ConnCtx:
+            def __enter__(self):
+                return conn
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        store._connect.return_value = _ConnCtx()
+
+        with patch(
+            "back.core.databricks.LakebaseAuth.get_lakebase_auth",
+            return_value=auth,
+        ), patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()), \
+           patch(
+               "back.objects.registry.store.lakebase.store.LakebaseRegistryStore",
+               return_value=store,
+           ):
+            status, detail = health._check_lakebase_permissions(MagicMock())
+        assert status == "ok"
+        assert "permissions ok" in detail.lower()
+
+
 # ---------------------------------------------------------------------------
 # Aggregator + route shape
 # ---------------------------------------------------------------------------
@@ -369,9 +450,6 @@ class TestRunReadinessChecks:
         assert result["framework"] == "FastAPI"
         assert result["status"] in ("ok", "warning", "error")
         names = {c["name"] for c in result["checks"]}
-        # The probes the user explicitly requested must always be present
-        # in the response, even when the underlying dependency is missing
-        # (in which case they degrade to a warning rather than vanishing).
         assert {
             "filesystem.tmp",
             "registry.cfg",
@@ -379,11 +457,11 @@ class TestRunReadinessChecks:
             "registry.volume_write",
             "registry.uc_schema_ddl",
             "lakebase",
+            "lakebase.permissions",
+            "databricks.cloudfetch",
         } <= names
 
     def test_overall_status_is_worst(self):
-        # Run with a forced ERROR probe; aggregator must elevate the
-        # top-level status accordingly.
         with patch.object(health, "_check_tmp", return_value=("error", "boom")):
             result = health.run_readiness_checks()
         assert result["status"] == "error"

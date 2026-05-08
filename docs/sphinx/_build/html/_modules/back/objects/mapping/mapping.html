@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -1329,13 +1330,219 @@
     <span class="c1"># Diagnostics</span>
     <span class="c1"># ------------------------------------------------------------------</span>
 
+    <span class="c1"># Match a 3-part Unity Catalog reference following ``FROM`` / ``JOIN``</span>
+    <span class="c1"># in a SQL query.  Tolerates back-ticks around any segment but requires</span>
+    <span class="c1"># all three segments — bare ``FROM tbl`` references depend on the</span>
+    <span class="c1"># warehouse&#39;s default catalog/schema and are intentionally skipped</span>
+    <span class="c1"># because we cannot probe permissions without ambiguity.</span>
+    <span class="n">_FQN_TABLE_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+        <span class="sa">r</span><span class="s2">&quot;\b(?:FROM|JOIN)\s+`?([A-Za-z_][\w-]*)`?\.`?([A-Za-z_][\w-]*)`?\.`?([A-Za-z_][\w-]*)`?&quot;</span><span class="p">,</span>
+        <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_fqn_from_sql</span><span class="p">(</span><span class="n">sql_query</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return every ``catalog.schema.table`` triple found in *sql_query*.</span>
+
+<span class="sd">        Matches identifiers after ``FROM`` or ``JOIN`` (with optional</span>
+<span class="sd">        backticks).  Two-part and one-part references are skipped — there</span>
+<span class="sd">        is no reliable way to verify permissions on them without resolving</span>
+<span class="sd">        the warehouse&#39;s default catalog/schema, which depends on runtime</span>
+<span class="sd">        state.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">sql_query</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">Mapping</span><span class="o">.</span><span class="n">_FQN_TABLE_RE</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+        <span class="p">]</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_split_table_ref</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse a string like ``catalog.schema.table`` (with or without</span>
+<span class="sd">        backticks) into a tuple, or ``None`` if it isn&#39;t a 3-part name.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">cleaned</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;`&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">cleaned</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">strip</span><span class="p">()]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_collect_source_tables</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Aggregate every distinct 3-part source table referenced by the</span>
+<span class="sd">        current mapping, with the entities/relationships that reference it.</span>
+
+<span class="sd">        Sources, in priority order:</span>
+<span class="sd">          - explicit ``catalog`` + ``schema`` + ``table`` triple on entities</span>
+<span class="sd">          - fully-qualified table mentions in entity ``sql_query``</span>
+<span class="sd">          - ``source_table`` / ``target_table`` strings on relationships</span>
+<span class="sd">          - fully-qualified table mentions in relationship ``sql_query``</span>
+
+<span class="sd">        Returns a mapping ``{(catalog, schema, table): [referrer, ...]}``</span>
+<span class="sd">        where each *referrer* is a short label such as ``Entity: Person``</span>
+<span class="sd">        or ``Rel: assignedTo (source)`` so the diagnostic UI can show</span>
+<span class="sd">        *why* this table is being checked.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">assignment</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">assignment</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">result</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_add</span><span class="p">(</span><span class="n">triple</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="n">referrer</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">triple</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">triple</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="k">if</span> <span class="n">referrer</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="n">triple</span><span class="p">]:</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">triple</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">referrer</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">ent</span> <span class="ow">in</span> <span class="n">assignment</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entities&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;excluded&quot;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">label</span> <span class="o">=</span> <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology_class_label&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">uri_local_name</span><span class="p">(</span>
+                <span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology_class&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;?&quot;</span>
+            <span class="n">referrer</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Entity: </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">cat</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="p">(</span><span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+                <span class="p">(</span><span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+                <span class="p">(</span><span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;table&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">cat</span> <span class="ow">and</span> <span class="n">sch</span> <span class="ow">and</span> <span class="n">tbl</span><span class="p">:</span>
+                <span class="n">_add</span><span class="p">((</span><span class="n">cat</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">referrer</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">triple</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_fqn_from_sql</span><span class="p">(</span><span class="n">ent</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sql_query&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+                <span class="n">_add</span><span class="p">(</span><span class="n">triple</span><span class="p">,</span> <span class="n">referrer</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">rel</span> <span class="ow">in</span> <span class="n">assignment</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;relationships&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;excluded&quot;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">prop</span> <span class="o">=</span> <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property_label&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">uri_local_name</span><span class="p">(</span>
+                <span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;?&quot;</span>
+            <span class="k">for</span> <span class="n">side</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;source_table&quot;</span><span class="p">,</span> <span class="s2">&quot;target_table&quot;</span><span class="p">):</span>
+                <span class="n">referrer</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Rel: </span><span class="si">{</span><span class="n">prop</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">side</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span>
+                <span class="n">_add</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_split_table_ref</span><span class="p">(</span><span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">side</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span> <span class="n">referrer</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">triple</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_fqn_from_sql</span><span class="p">(</span><span class="n">rel</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sql_query&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+                <span class="n">_add</span><span class="p">(</span><span class="n">triple</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Rel: </span><span class="si">{</span><span class="n">prop</span><span class="si">}</span><span class="s2"> (sql)&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_classify_sql_error</span><span class="p">(</span><span class="n">exc</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Map a warehouse exception to a ``(status, detail)`` pair.</span>
+
+<span class="sd">        We look at the message text — the SDK exposes Databricks error</span>
+<span class="sd">        codes as substrings inside the message rather than a typed code,</span>
+<span class="sd">        so this is the safest approach without coupling to internals.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span> <span class="ow">or</span> <span class="n">exc</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
+        <span class="n">upper</span> <span class="o">=</span> <span class="n">msg</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="c1"># Permission-denied class — most useful signal of &quot;missing SELECT&quot;.</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="s2">&quot;PERMISSION_DENIED&quot;</span> <span class="ow">in</span> <span class="n">upper</span>
+            <span class="ow">or</span> <span class="s2">&quot;PERMISSION DENIED&quot;</span> <span class="ow">in</span> <span class="n">upper</span>
+            <span class="ow">or</span> <span class="s2">&quot;INSUFFICIENT&quot;</span> <span class="ow">in</span> <span class="n">upper</span>
+            <span class="ow">or</span> <span class="s2">&quot;DOES NOT HAVE PRIVILEGE&quot;</span> <span class="ow">in</span> <span class="n">upper</span>
+            <span class="ow">or</span> <span class="s2">&quot;ACCESS_DENIED&quot;</span> <span class="ow">in</span> <span class="n">upper</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="s2">&quot;error&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;Missing SELECT privilege for the app&#39;s principal: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="c1"># Object-not-found class.</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="s2">&quot;TABLE_OR_VIEW_NOT_FOUND&quot;</span> <span class="ow">in</span> <span class="n">upper</span>
+            <span class="ow">or</span> <span class="s2">&quot;TABLE NOT FOUND&quot;</span> <span class="ow">in</span> <span class="n">upper</span>
+            <span class="ow">or</span> <span class="s2">&quot;TABLE OR VIEW NOT FOUND&quot;</span> <span class="ow">in</span> <span class="n">upper</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Table not found: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;SCHEMA_NOT_FOUND&quot;</span> <span class="ow">in</span> <span class="n">upper</span> <span class="ow">or</span> <span class="s2">&quot;SCHEMA NOT FOUND&quot;</span> <span class="ow">in</span> <span class="n">upper</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Schema not found: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;CATALOG_NOT_FOUND&quot;</span> <span class="ow">in</span> <span class="n">upper</span> <span class="ow">or</span> <span class="s2">&quot;CATALOG NOT FOUND&quot;</span> <span class="ow">in</span> <span class="n">upper</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Catalog not found: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Probe failed: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_run_permission_checks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Verify SELECT privileges on every distinct source table.</span>
+
+<span class="sd">        For each ``catalog.schema.table`` referenced by an entity or</span>
+<span class="sd">        relationship mapping we execute ``SELECT * FROM … LIMIT 0`` via</span>
+<span class="sd">        the warehouse.  ``LIMIT 0`` exercises the SELECT permission path</span>
+<span class="sd">        without returning any data.  Errors are categorised by message</span>
+<span class="sd">        keywords (PERMISSION_DENIED, TABLE_OR_VIEW_NOT_FOUND, …) so the</span>
+<span class="sd">        UI can show actionable detail.</span>
+
+<span class="sd">        When *client* is ``None`` we return a single advisory check so</span>
+<span class="sd">        the diagnostic still tells the user why the section is empty.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;checks&quot;</span><span class="p">:</span> <span class="p">[</span>
+                    <span class="p">{</span>
+                        <span class="s2">&quot;table&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;referenced_by&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;check&quot;</span><span class="p">:</span> <span class="s2">&quot;client&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;detail&quot;</span><span class="p">:</span> <span class="p">(</span>
+                            <span class="s2">&quot;Databricks client is not configured — connect a &quot;</span>
+                            <span class="s2">&quot;warehouse to verify SELECT permissions.&quot;</span>
+                        <span class="p">),</span>
+                    <span class="p">}</span>
+                <span class="p">],</span>
+                <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;warnings&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;errors&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+            <span class="p">}</span>
+
+        <span class="n">triples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_source_tables</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;checks&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;warnings&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;errors&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+            <span class="p">}</span>
+
+        <span class="n">checks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">cat</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">referrers</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">triples</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+            <span class="n">fqn</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">cat</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">sch</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">tbl</span><span class="si">}</span><span class="s2">`&quot;</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT * FROM </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2"> LIMIT 0&quot;</span><span class="p">)</span>
+                <span class="n">status</span><span class="p">,</span> <span class="n">detail</span> <span class="o">=</span> <span class="s2">&quot;ok&quot;</span><span class="p">,</span> <span class="s2">&quot;SELECT verified (LIMIT 0 returned)&quot;</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 — vendor SDK error surface</span>
+                <span class="n">status</span><span class="p">,</span> <span class="n">detail</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_classify_sql_error</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;Mapping diagnostics — SELECT probe failed for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cat</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">sch</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">tbl</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">exc</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;table&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cat</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">sch</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">tbl</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;referenced_by&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">referrers</span><span class="p">),</span>
+                    <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
+                    <span class="s2">&quot;check&quot;</span><span class="p">:</span> <span class="s2">&quot;select&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;detail&quot;</span><span class="p">:</span> <span class="n">detail</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+
+        <span class="n">ok</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span> <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;ok&quot;</span><span class="p">)</span>
+        <span class="n">warnings</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span> <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;warning&quot;</span><span class="p">)</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span> <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;error&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;checks&quot;</span><span class="p">:</span> <span class="n">checks</span><span class="p">,</span>
+            <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">checks</span><span class="p">),</span>
+                <span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span>
+                <span class="s2">&quot;warnings&quot;</span><span class="p">:</span> <span class="n">warnings</span><span class="p">,</span>
+                <span class="s2">&quot;errors&quot;</span><span class="p">:</span> <span class="n">errors</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+
 <div class="viewcode-block" id="Mapping.run_diagnostics">
 <a class="viewcode-back" href="../../../../api/app.objects.mapping.html#back.objects.mapping.Mapping.Mapping.run_diagnostics">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">run_diagnostics</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_diagnostics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">client</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Run comprehensive validation on all entity and relationship mappings.</span>
 
 <span class="sd">        Checks column existence in source SQL, entity-relationship</span>
-<span class="sd">        cross-references, and ontology consistency.</span>
+<span class="sd">        cross-references, ontology consistency, and — when *client* is</span>
+<span class="sd">        provided — verifies that the app&#39;s SQL principal has SELECT on</span>
+<span class="sd">        every distinct source table referenced by the mapping.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="n">DigitalTwin</span>
 
@@ -1693,22 +1900,33 @@
                 <span class="p">}</span>
             <span class="p">)</span>
 
-        <span class="n">ok</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;ok&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span>
-            <span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;ok&quot;</span>
+        <span class="n">permission_section</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run_permission_checks</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+        <span class="n">perm_checks</span> <span class="o">=</span> <span class="n">permission_section</span><span class="p">[</span><span class="s2">&quot;checks&quot;</span><span class="p">]</span>
+        <span class="n">perm_summary</span> <span class="o">=</span> <span class="n">permission_section</span><span class="p">[</span><span class="s2">&quot;summary&quot;</span><span class="p">]</span>
+
+        <span class="n">ok</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;ok&quot;</span><span class="p">)</span>
+            <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;ok&quot;</span><span class="p">)</span>
+            <span class="o">+</span> <span class="n">perm_summary</span><span class="p">[</span><span class="s2">&quot;ok&quot;</span><span class="p">]</span>
         <span class="p">)</span>
-        <span class="n">warnings</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;warning&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span>
-            <span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;warning&quot;</span>
+        <span class="n">warnings</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;warning&quot;</span><span class="p">)</span>
+            <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;warning&quot;</span><span class="p">)</span>
+            <span class="o">+</span> <span class="n">perm_summary</span><span class="p">[</span><span class="s2">&quot;warnings&quot;</span><span class="p">]</span>
         <span class="p">)</span>
-        <span class="n">errors</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;error&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span>
-            <span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;error&quot;</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entity_results</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;error&quot;</span><span class="p">)</span>
+            <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;error&quot;</span><span class="p">)</span>
+            <span class="o">+</span> <span class="n">perm_summary</span><span class="p">[</span><span class="s2">&quot;errors&quot;</span><span class="p">]</span>
         <span class="p">)</span>
 
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
             <span class="s2">&quot;entities&quot;</span><span class="p">:</span> <span class="n">entity_results</span><span class="p">,</span>
             <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="n">rel_results</span><span class="p">,</span>
+            <span class="s2">&quot;permissions&quot;</span><span class="p">:</span> <span class="n">perm_checks</span><span class="p">,</span>
             <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_results</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">rel_results</span><span class="p">),</span>
+                <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_results</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">rel_results</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">perm_checks</span><span class="p">),</span>
                 <span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span>
                 <span class="s2">&quot;warnings&quot;</span><span class="p">:</span> <span class="n">warnings</span><span class="p">,</span>
                 <span class="s2">&quot;errors&quot;</span><span class="p">:</span> <span class="n">errors</span><span class="p">,</span>

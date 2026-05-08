@@ -24,9 +24,10 @@ import os
 import re
 from typing import Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import FileResponse
 
+from back.core.errors import InfrastructureError, NotFoundError
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -180,17 +181,17 @@ _ASSET_SUBDIRS = {"images", "screenshots"}
 def _serve_doc_asset(subdir: str, name: str) -> FileResponse:
     """Serve a whitelisted asset file from ``docs/<subdir>/``."""
     if subdir not in _ASSET_SUBDIRS:
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise NotFoundError("Asset not found")
     if not _IMAGE_NAME_RE.match(name):
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise NotFoundError("Asset not found")
 
     assets_root = os.path.realpath(os.path.join(_docs_dir(), subdir))
     path = os.path.join(_docs_dir(), subdir, name)
     real_path = os.path.realpath(path)
     if not real_path.startswith(assets_root + os.sep) and real_path != assets_root:
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise NotFoundError("Asset not found")
     if not os.path.isfile(real_path):
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise NotFoundError("Asset not found")
 
     return FileResponse(real_path)
 
@@ -212,19 +213,21 @@ async def get_doc(slug: str):
     """Return the raw Markdown text for a given doc slug."""
     doc = _DOC_INDEX.get(slug)
     if not doc:
-        raise HTTPException(status_code=404, detail="Doc not found")
+        raise NotFoundError("Doc not found")
 
     path = os.path.join(_docs_dir(), doc["file"])
     if not os.path.isfile(path):
         logger.warning("Help doc file missing on disk: %s", path)
-        raise HTTPException(status_code=404, detail="Doc file missing")
+        raise NotFoundError("Doc file missing")
 
     try:
         with open(path, "r", encoding="utf-8") as fh:
             markdown = fh.read()
     except OSError as exc:
         logger.error("Failed to read help doc %s: %s", path, exc)
-        raise HTTPException(status_code=500, detail="Failed to read doc") from exc
+        raise InfrastructureError(
+            "Failed to read doc", detail=str(exc)
+        ) from exc
 
     return {
         "slug": doc["slug"],

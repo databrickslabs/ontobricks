@@ -155,14 +155,37 @@ class DomainSession:
         return self._migrate_legacy()
 
     def _ensure_structure(self, data: Dict) -> Dict:
-        """Ensure all required keys exist in domain data and migrate legacy structures."""
-        empty = get_empty_domain()
+        """Ensure all required keys exist in domain data and migrate legacy structures.
 
-        # Legacy top-level payload key "project" → "domain"
+        Composed of small, single-concern migrators kept as ``@staticmethod``
+        helpers; each one is idempotent so repeated reads of the same session
+        do not re-trigger work. Adding a new migration step means adding one
+        more helper and listing it in this orchestrator — no big-method
+        surgery required.
+        """
+        empty = get_empty_domain()
+        self._migrate_top_level_renames(data, empty)
+        self._migrate_uc_location(data)
+        self._migrate_databricks_and_preferences(data, empty)
+        self._fill_default_settings(data, empty)
+        self._strip_stale_root_keys(data)
+        self._fill_default_domain_subkeys(data, empty)
+        self._fill_default_top_level_keys(data, empty)
+        self._migrate_triplestore_node(data, empty)
+        self._migrate_legacy_ontology_root_keys(data)
+        self._split_mixed_axioms(data)
+        self._migrate_mapping_to_assignment(data)
+        self._migrate_design_layout(data)
+        self._drop_legacy_reasoning(data)
+        self._migrate_root_metadata(data)
+        return data
+
+    @staticmethod
+    def _migrate_top_level_renames(data: Dict, empty: Dict) -> None:
+        """Rename ``project`` → ``domain``, ``project_folder`` → ``domain_folder``."""
         if "domain" not in data and "project" in data:
             data["domain"] = data.pop("project")
 
-        # Legacy domain_folder stored as project_folder
         if (
             "domain" in data
             and "domain_folder" not in data["domain"]
@@ -170,7 +193,6 @@ class DomainSession:
         ):
             data["domain"]["domain_folder"] = data["domain"].pop("project_folder", "")
 
-        # Migrate from old flat structure to new /domain structure
         if "domain" not in data:
             data["domain"] = empty["domain"].copy()
             if "info" in data:
@@ -178,11 +200,12 @@ class DomainSession:
             if "current_version" in data:
                 data["domain"]["current_version"] = data.pop("current_version")
 
-        # Always migrate is_active_version from root to domain (even if domain exists)
         if "is_active_version" in data:
             data["domain"]["is_active_version"] = data.pop("is_active_version")
 
-        # --- Migrate uc_location → domain.domain_folder -----------------
+    @staticmethod
+    def _migrate_uc_location(data: Dict) -> None:
+        """Move legacy ``uc_location`` payload onto ``domain.domain_folder``."""
         old_uc = data.get("domain", {}).pop("uc_location", None) or data.pop(
             "uc_location", None
         )
@@ -190,11 +213,12 @@ class DomainSession:
             data["domain"].setdefault("domain_folder", old_uc["project_folder"])
         data.pop("uc_location", None)
 
-        # --- Migrate databricks + preferences → settings ------------------
+    @staticmethod
+    def _migrate_databricks_and_preferences(data: Dict, empty: Dict) -> None:
+        """Fold legacy top-level ``databricks`` / ``preferences`` into ``settings``."""
         if "settings" not in data:
             data["settings"] = empty["settings"].copy()
 
-        # Move old top-level databricks into settings.databricks
         old_db = data.pop("databricks", None)
         if old_db:
             data["settings"]["databricks"] = {
@@ -202,10 +226,8 @@ class DomainSession:
                 **old_db,
             }
 
-        # Move old top-level preferences into settings
         old_prefs = data.pop("preferences", None)
         if old_prefs:
-            # Move registry_* keys into settings.registry sub-node
             reg = data["settings"].setdefault(
                 "registry", dict(empty["settings"]["registry"])
             )
@@ -213,11 +235,12 @@ class DomainSession:
                 val = old_prefs.pop(rk, None)
                 if val:
                     reg[rk.replace("registry_", "")] = val
-            # Override settings with remaining pref keys (default_emoji, ...)
             for k, v in old_prefs.items():
                 data["settings"][k] = v
 
-        # Ensure all settings sub-keys exist
+    @staticmethod
+    def _fill_default_settings(data: Dict, empty: Dict) -> None:
+        """Make sure every ``settings.*`` sub-key from the empty template exists."""
         for sk in empty["settings"]:
             if sk not in data["settings"]:
                 data["settings"][sk] = empty["settings"][sk]
@@ -226,12 +249,14 @@ class DomainSession:
                     if ssk not in data["settings"][sk]:
                         data["settings"][sk][ssk] = empty["settings"][sk][ssk]
 
-        # Remove stale/unused root-level keys
-        data.pop("query_result", None)
-        data.pop("success", None)
-        data.pop("available_versions", None)
+    @staticmethod
+    def _strip_stale_root_keys(data: Dict) -> None:
+        """Drop transient root-level fields that should never be persisted."""
+        for k in ("query_result", "success", "available_versions"):
+            data.pop(k, None)
 
-        # Ensure domain sub-keys exist
+    @staticmethod
+    def _fill_default_domain_subkeys(data: Dict, empty: Dict) -> None:
         for subkey in empty["domain"]:
             if subkey not in data["domain"]:
                 data["domain"][subkey] = empty["domain"][subkey]
@@ -242,7 +267,8 @@ class DomainSession:
                             subsubkey
                         ]
 
-        # Add missing top-level keys (excluding 'domain' and 'settings' already handled)
+    @staticmethod
+    def _fill_default_top_level_keys(data: Dict, empty: Dict) -> None:
         for key in empty:
             if key in ("domain", "settings"):
                 continue
@@ -253,9 +279,9 @@ class DomainSession:
                     if subkey not in data[key]:
                         data[key][subkey] = empty[key][subkey]
 
-        # ----------------------------------------------------------
-        # Triplestore node migration
-        # ----------------------------------------------------------
+    @staticmethod
+    def _migrate_triplestore_node(data: Dict, empty: Dict) -> None:
+        """Bring the ``domain.triplestore`` sub-tree up to date and drop legacy backends."""
         empty_ts = empty["domain"]["triplestore"]
         ts = data["domain"].setdefault("triplestore", {})
         for k in empty_ts:
@@ -266,11 +292,9 @@ class DomainSession:
 
         info = data["domain"].get("info", {})
 
-        # Strip any persisted triplestore.delta (now derived from registry)
         ts.pop("delta", None)
         data["domain"].pop("delta", None)
 
-        # Drop legacy lakebase data (backend removed)
         if "lakebase" in data["domain"]:
             data["domain"].pop("lakebase")
         data.pop("lakebase", None)
@@ -278,35 +302,32 @@ class DomainSession:
         for old_key in [k for k in info if k.startswith("lakebase_")]:
             info.pop(old_key)
 
-        # Drop legacy ladybug config and snapshot_table (both are now computed)
         ts.pop("ladybug", None)
         ts.pop("snapshot_table", None)
 
-        # Remove legacy backend selector (dual digital twin: both view + graph)
         ts.pop("backend", None)
         info.pop("triplestore_backend", None)
 
-        # Migrate domain.info.triplestore_stats -> domain.triplestore.stats
         if "triplestore_stats" in info:
             ts["stats"] = info.pop("triplestore_stats")
 
-        # Drop legacy domain.info.triplestore_table (now derived from registry)
         info.pop("triplestore_table", None)
 
-        # Migrate root-level constraints/swrl_rules/axioms into ontology (legacy fix)
+    @staticmethod
+    def _migrate_legacy_ontology_root_keys(data: Dict) -> None:
+        """Move root-level ``constraints``/``swrl_rules``/``axioms`` into ``ontology``."""
         if "constraints" in data and data["constraints"]:
             data["ontology"]["constraints"] = data["constraints"]
         if "swrl_rules" in data and data["swrl_rules"]:
             data["ontology"]["swrl_rules"] = data["swrl_rules"]
         if "axioms" in data and data["axioms"]:
             data["ontology"]["axioms"] = data["axioms"]
+        for k in ("constraints", "swrl_rules", "axioms"):
+            data.pop(k, None)
 
-        # Remove legacy root-level keys (they now live in ontology)
-        data.pop("constraints", None)
-        data.pop("swrl_rules", None)
-        data.pop("axioms", None)
-
-        # Split mixed axioms list into axioms + expressions (idempotent)
+    @staticmethod
+    def _split_mixed_axioms(data: Dict) -> None:
+        """Idempotently split mixed axioms list into ``axioms`` + ``expressions``."""
         ont = data.get("ontology", {})
         if "expressions" not in ont or not ont["expressions"]:
             mixed = ont.get("axioms", [])
@@ -315,7 +336,9 @@ class DomainSession:
                 ont["axioms"] = pure_axioms
                 ont["expressions"] = expressions
 
-        # Migrate legacy 'mapping' key to 'assignment' (old key/sub-keys to new)
+    @staticmethod
+    def _migrate_mapping_to_assignment(data: Dict) -> None:
+        """Rename legacy ``mapping`` key + its inner sub-keys to the new ``assignment`` shape."""
         if "mapping" in data:
             old_m = data.pop("mapping", {})
             data["assignment"] = {
@@ -328,61 +351,58 @@ class DomainSession:
                 "r2rml_output": old_m.get("r2rml_output", ""),
             }
 
-        # Migrate design_layout from old structure to new views/map structure
-        if "design_layout" in data:
-            dl = data["design_layout"]
+    @staticmethod
+    def _migrate_design_layout(data: Dict) -> None:
+        """Move flat ``design_layout`` into the new ``views``/``map`` structure."""
+        if "design_layout" not in data:
+            return
 
-            # Remove old 'positions' key (no longer used)
-            dl.pop("positions", None)
+        dl = data["design_layout"]
 
-            # Ensure new structure exists
-            if "views" not in dl:
-                dl["views"] = {}
-            if "map" not in dl:
-                dl["map"] = {}
+        dl.pop("positions", None)
 
-            # Migrate old root-level entities/relationships/inheritances into default view
-            # then remove them from root level
-            old_entities = dl.pop("entities", None)
-            old_relationships = dl.pop("relationships", None)
-            old_inheritances = dl.pop("inheritances", None)
-            old_visibility = dl.pop("visibility", None)
+        if "views" not in dl:
+            dl["views"] = {}
+        if "map" not in dl:
+            dl["map"] = {}
 
-            # If default view is empty and we have old data, migrate it
-            if "default" not in dl["views"] or not dl["views"].get("default"):
-                if old_entities or old_relationships or old_inheritances:
-                    dl["views"]["default"] = {
-                        "entities": old_entities or [],
-                        "relationships": old_relationships or [],
-                        "inheritances": old_inheritances or [],
-                    }
-                    if old_visibility:
-                        dl["views"]["default"]["visibility"] = old_visibility
+        old_entities = dl.pop("entities", None)
+        old_relationships = dl.pop("relationships", None)
+        old_inheritances = dl.pop("inheritances", None)
+        old_visibility = dl.pop("visibility", None)
 
-            # Set current_view: only to 'default' if it exists, otherwise None
-            if "current_view" not in dl:
-                dl["current_view"] = (
-                    "default"
-                    if "default" in dl["views"]
-                    else (list(dl["views"].keys())[0] if dl["views"] else None)
-                )
+        if "default" not in dl["views"] or not dl["views"].get("default"):
+            if old_entities or old_relationships or old_inheritances:
+                dl["views"]["default"] = {
+                    "entities": old_entities or [],
+                    "relationships": old_relationships or [],
+                    "inheritances": old_inheritances or [],
+                }
+                if old_visibility:
+                    dl["views"]["default"]["visibility"] = old_visibility
 
-        # Drop legacy persisted reasoning (results are only in task completion payloads)
+        if "current_view" not in dl:
+            dl["current_view"] = (
+                "default"
+                if "default" in dl["views"]
+                else (list(dl["views"].keys())[0] if dl["views"] else None)
+            )
+
+    @staticmethod
+    def _drop_legacy_reasoning(data: Dict) -> None:
+        """Reasoning results live only in task completion payloads now."""
         data.pop("reasoning", None)
         ont = data.get("ontology")
         if isinstance(ont, dict):
             ont.pop("reasoning", None)
 
-        # Migrate root-level UC table metadata -> domain.metadata
+    @staticmethod
+    def _migrate_root_metadata(data: Dict) -> None:
+        """Move root ``metadata`` into ``domain.metadata`` (UC table info)."""
         if "metadata" in data:
             legacy_m = data.pop("metadata", None)
             if isinstance(legacy_m, dict):
                 data["domain"]["metadata"] = legacy_m
-
-        # Note: r2rml_output is kept in session for runtime use
-        # It's only excluded from export (see export_for_save)
-
-        return data
 
     def _migrate_legacy(self) -> Dict:
         """Migrate from legacy separate session keys to unified structure."""

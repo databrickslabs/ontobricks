@@ -162,6 +162,32 @@ class TestTaskLifecycle:
     def test_skip_step_nonexistent(self, mgr):
         assert mgr.skip_step("nope") is False
 
+    def test_complete_current_step_marks_running_done(self, mgr):
+        steps = [
+            {"name": "s1", "description": "d1"},
+            {"name": "s2", "description": "d2"},
+        ]
+        task = mgr.create_task("T", "t", steps=steps)
+        mgr.start_task(task.id)
+        assert mgr.complete_current_step(task.id, "Phase done async")
+        assert task.steps[0].status == "completed"
+        assert task.current_step == 1
+        assert task.message == "Phase done async"
+        assert task.steps[1].status == "pending"
+
+    def test_complete_current_step_at_last_step_sets_progress_100(self, mgr):
+        steps = [{"name": "only", "description": "solo"}]
+        task = mgr.create_task("T", "t", steps=steps)
+        mgr.start_task(task.id)
+        assert mgr.complete_current_step(task.id)
+        assert task.current_step == 1
+        assert task.progress == 100
+        assert task.steps[0].status == "completed"
+
+    def test_complete_current_step_no_steps(self, mgr):
+        task = mgr.create_task("T", "t")
+        assert mgr.complete_current_step(task.id) is False
+
     def test_complete_preserves_skipped_status(self, mgr):
         steps = [
             {"name": "s1", "description": "d1"},
@@ -335,6 +361,16 @@ class TestDuration:
         d = task.to_dict()
         assert "duration_seconds" in d
         assert isinstance(d["duration_seconds"], float)
+
+    def test_duration_tolerates_mixed_tz_timestamps(self):
+        task = Task(
+            id="tz1",
+            name="TZ",
+            task_type="unit",
+            started_at="2026-05-07T08:00:00+00:00",
+            completed_at="2026-05-07T08:00:01",
+        )
+        assert task.duration_seconds() == 1.0
 
 
 class TestStartEndLogging:

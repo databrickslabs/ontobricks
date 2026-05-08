@@ -97,6 +97,25 @@ OWL Generator Agent
    :show-inheritance:
    :exclude-members: ToolContext
 
+Cohort Discovery Agent
+----------------------
+
+.. automodule:: agents.agent_cohort
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.agent_cohort.engine
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.agent_cohort.tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :exclude-members: ToolContext
+
 Shared Tools
 ------------
 

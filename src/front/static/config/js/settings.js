@@ -13,7 +13,9 @@ document.addEventListener('DOMContentLoaded', function () {
     loadCurrentConfig();
     loadBaseUri();
     loadCurrentDefaultEmoji();
+    loadCloudFetch();
     loadRegistryCacheTtl();
+    loadNavbarLogo();
 
     // =====================================================================
     //  DATABRICKS TAB
@@ -180,6 +182,19 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    async function loadCloudFetch() {
+        try {
+            const resp = await fetch('/settings/get-cloud-fetch', { credentials: 'same-origin' });
+            const result = await resp.json();
+            const toggle = document.getElementById('cloudFetchEnabled');
+            if (toggle && result.success && typeof result.use_cloud_fetch === 'boolean') {
+                toggle.checked = result.use_cloud_fetch;
+            }
+        } catch (error) {
+            console.log('Using default CloudFetch setting');
+        }
+    }
+
     // =====================================================================
     //  GLOBAL TAB – Default Emoji Picker (uses shared EmojiPicker module)
     // =====================================================================
@@ -224,6 +239,128 @@ document.addEventListener('DOMContentLoaded', function () {
             containerEl: document.getElementById('defaultEmojiPickerMount'),
             showSearch:  false,
             onSelect:    function (emoji) { selectDefaultEmoji(emoji); }
+        });
+    }
+
+    // =====================================================================
+    //  GLOBAL TAB – Application Logo (top-bar branding)
+    // =====================================================================
+
+    async function loadNavbarLogo() {
+        try {
+            const resp = await fetch('/settings/navbar-logo', { credentials: 'same-origin' });
+            const result = await resp.json();
+            if (!result.success) return;
+            const previewEl = document.getElementById('navbarLogoPreview');
+            if (previewEl && result.logo_url) previewEl.src = result.logo_url;
+            const statusEl = document.getElementById('navbarLogoStatus');
+            if (statusEl) {
+                statusEl.textContent = result.is_custom ? 'Custom logo active' : 'Using default logo';
+            }
+        } catch (e) {
+            console.log('Could not load navbar logo settings');
+        }
+    }
+
+    const logoFileInput = document.getElementById('navbarLogoFile');
+    const logoUploadBtn = document.getElementById('btnUploadNavbarLogo');
+    const logoResetBtn  = document.getElementById('btnResetNavbarLogo');
+    const logoPreviewEl = document.getElementById('navbarLogoPreview');
+    const logoStatusEl  = document.getElementById('navbarLogoStatus');
+
+    if (logoFileInput) {
+        logoFileInput.addEventListener('change', () => {
+            const file = logoFileInput.files && logoFileInput.files[0];
+            if (logoUploadBtn) logoUploadBtn.disabled = !file;
+            if (file && logoPreviewEl) {
+                const reader = new FileReader();
+                reader.onload = (ev) => { logoPreviewEl.src = ev.target.result; };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    if (logoUploadBtn) {
+        logoUploadBtn.addEventListener('click', async () => {
+            const file = logoFileInput && logoFileInput.files && logoFileInput.files[0];
+            if (!file) return;
+            const MAX = 1024 * 1024;
+            if (file.size > MAX) {
+                showNotification(`Image too large (${file.size} bytes); max ${MAX} bytes`, 'error');
+                return;
+            }
+            logoUploadBtn.disabled = true;
+            const original = logoUploadBtn.innerHTML;
+            logoUploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading...';
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const resp = await fetch('/settings/navbar-logo', {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin'
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    if (logoPreviewEl && result.logo_url) logoPreviewEl.src = result.logo_url;
+                    if (logoStatusEl) logoStatusEl.textContent = 'Custom logo active';
+                    if (logoFileInput) logoFileInput.value = '';
+                    if (typeof fetchCachedInvalidate === 'function') {
+                        fetchCachedInvalidate('/navbar/state');
+                    }
+                    const navImg = document.getElementById('brandLogoImg');
+                    if (navImg && result.logo_url) navImg.src = result.logo_url;
+                    showNotification('Application logo updated', 'success', 2500);
+                } else {
+                    showNotification('Error: ' + (result.message || 'upload failed'), 'error');
+                }
+            } catch (e) {
+                showNotification('Error uploading logo: ' + e.message, 'error');
+            } finally {
+                logoUploadBtn.innerHTML = original;
+                logoUploadBtn.disabled = !(logoFileInput && logoFileInput.files && logoFileInput.files[0]);
+            }
+        });
+    }
+
+    if (logoResetBtn) {
+        logoResetBtn.addEventListener('click', async () => {
+            const confirmed = await (typeof showConfirmDialog === 'function'
+                ? showConfirmDialog({
+                    title: 'Reset application logo',
+                    message: 'Restore the default OntoBricks logo for all users?',
+                    confirmText: 'Reset',
+                    confirmClass: 'btn-warning',
+                    icon: 'arrow-counterclockwise'
+                })
+                : Promise.resolve(window.confirm('Restore the default logo?')));
+            if (!confirmed) return;
+            logoResetBtn.disabled = true;
+            try {
+                const resp = await fetch('/settings/navbar-logo', {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    if (logoPreviewEl && result.logo_url) logoPreviewEl.src = result.logo_url;
+                    if (logoStatusEl) logoStatusEl.textContent = 'Using default logo';
+                    if (logoFileInput) logoFileInput.value = '';
+                    if (logoUploadBtn) logoUploadBtn.disabled = true;
+                    if (typeof fetchCachedInvalidate === 'function') {
+                        fetchCachedInvalidate('/navbar/state');
+                    }
+                    const navImg = document.getElementById('brandLogoImg');
+                    if (navImg && result.logo_url) navImg.src = result.logo_url;
+                    showNotification('Application logo reset to default', 'success', 2500);
+                } else {
+                    showNotification('Error: ' + (result.message || 'reset failed'), 'error');
+                }
+            } catch (e) {
+                showNotification('Error resetting logo: ' + e.message, 'error');
+            } finally {
+                logoResetBtn.disabled = false;
+            }
         });
     }
 
@@ -447,7 +584,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // =====================================================================
-    //  GLOBAL SAVE BUTTON – saves Warehouse + Base URI
+    //  GLOBAL SAVE BUTTON – saves Warehouse + Global preferences
     // =====================================================================
 
     document.getElementById('btnSaveAllSettings')?.addEventListener('click', async function () {
@@ -504,6 +641,21 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (!r.success) errors.push('Cache TTL: ' + r.message);
                 } catch (e) { errors.push('Cache TTL: ' + e.message); }
             }
+        }
+
+        // 4. Save CloudFetch toggle
+        const cloudFetchToggle = document.getElementById('cloudFetchEnabled');
+        if (cloudFetchToggle) {
+            try {
+                const resp = await fetch('/settings/save-cloud-fetch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ use_cloud_fetch: !!cloudFetchToggle.checked })
+                });
+                const r = await resp.json();
+                if (!r.success) errors.push('CloudFetch: ' + r.message);
+            } catch (e) { errors.push('CloudFetch: ' + e.message); }
         }
 
         btn.disabled = false;

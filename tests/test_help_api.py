@@ -54,7 +54,10 @@ class TestHelpDocFetch:
     def test_unknown_slug_returns_404(self, client):
         response = client.get("/api/help/docs/this-slug-does-not-exist")
         assert response.status_code == 404
-        assert response.json()["detail"] == "Doc not found"
+        body = response.json()
+        # OntoBricks-wide error envelope: {error, message, detail, request_id}.
+        assert body["error"] == "not_found"
+        assert body["message"] == "Doc not found"
 
     def test_known_slug_returns_markdown_or_404(self, client):
         """A catalogued slug returns either the markdown (200) or a 404 if

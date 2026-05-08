@@ -193,12 +193,20 @@ class CohortService:
         client: Any = None,
         domain_version: str = "",
         member_label_resolver: Optional[Any] = None,
+        output_graph: Optional[bool] = None,
+        output_uc: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Re-run the engine for a saved rule and write outputs as configured.
 
         ``client`` is required when the rule's ``output.uc_table`` is set.
         ``member_label_resolver`` is an optional callable
         ``(uris) -> Dict[uri, label]`` used to enrich the UC rows.
+
+        ``output_graph`` / ``output_uc`` are optional overrides — when
+        ``None`` the rule's saved ``output`` config is honoured; when
+        ``False`` that target is skipped for this run only (without
+        mutating the saved rule). Callers (e.g. scheduled jobs) use
+        these to opt out of one output without editing the rule.
         """
         from back.core.graph_analysis import CohortRule
 
@@ -221,7 +229,10 @@ class CohortService:
             "uc_table": None,
         }
 
-        if rule.output.graph:
+        write_graph = rule.output.graph if output_graph is None else bool(output_graph)
+        write_uc = True if output_uc is None else bool(output_uc)
+
+        if write_graph:
             try:
                 triple_count = builder.materialize_to_graph(rule, result)
                 out["materialized_triples"] = max(int(triple_count or 0), 0)
@@ -232,7 +243,7 @@ class CohortService:
                 out["materialize_graph_error"] = str(exc)
 
         target = rule.output.uc_table
-        if target and target.table_name:
+        if write_uc and target and target.table_name:
             if client is None:
                 out["materialize_uc_error"] = (
                     "Databricks SQL client is not configured"

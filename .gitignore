@@ -46,6 +46,9 @@ fastapi_session/
 .ontobricks.log
 
 /logs/*
+# Log files anywhere in the tree must never be committed
+*.log
+**/logs/
 
 # MLflow local artifacts
 mlflow.db

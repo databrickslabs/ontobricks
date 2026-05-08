@@ -55,7 +55,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="{{ menu_config.brand.route }}">
-                <img src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="{{ menu_config.brand.label }}" width="24" height="24" class="me-2">
+                <img id="brandLogoImg" src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="{{ menu_config.brand.label }}" width="24" height="24" class="me-2">
                 {{ menu_config.brand.label }}
                 {% if app_version %}<span style="font-size: 0.65rem; font-weight: 300; opacity: 0.55; align-self: flex-end; margin-left: 0.35em; line-height: 1;">v{{ app_version }}</span>{% endif %}
             </a>

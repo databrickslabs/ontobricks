@@ -324,3 +324,106 @@ class TestPydanticModels:
 
         r = BuildProgressResponse(success=True, task_id="abc", status="running")
         assert r.progress == 0
+
+
+# ---------------------------------------------------------------------------
+# Cohort external API — Pydantic models + helper
+# ---------------------------------------------------------------------------
+
+
+class TestCohortPydanticModels:
+    def test_rule_summary_defaults(self):
+        from api.routers.digitaltwin import CohortRuleSummary
+
+        r = CohortRuleSummary(id="r1", label="R1", class_uri="http://x#C")
+        assert r.enabled is True
+        assert r.description == ""
+        assert r.rule == {}
+
+    def test_rules_response_count(self):
+        from api.routers.digitaltwin import CohortRuleSummary, CohortRulesResponse
+
+        rules = [
+            CohortRuleSummary(id="r1", label="R1", class_uri="http://x#C"),
+            CohortRuleSummary(id="r2", label="R2", class_uri="http://x#D"),
+        ]
+        r = CohortRulesResponse(rules=rules, count=len(rules))
+        assert r.count == 2
+        assert [s.id for s in r.rules] == ["r1", "r2"]
+
+    def test_dry_run_request_requires_rule(self):
+        from api.routers.digitaltwin import CohortDryRunRequest
+
+        r = CohortDryRunRequest(rule={"id": "candidate", "class_uri": "http://x#C"})
+        assert r.rule["id"] == "candidate"
+
+    def test_dry_run_response_defaults(self):
+        from api.routers.digitaltwin import CohortDryRunResponse
+
+        r = CohortDryRunResponse(rule_id="r1")
+        assert r.cohorts == []
+        assert r.stats.cohort_count == 0
+        assert r.stats.elapsed_ms == 0
+
+    def test_materialize_request_optional_overrides(self):
+        from api.routers.digitaltwin import CohortMaterializeRequest
+
+        r = CohortMaterializeRequest(rule_id="r1")
+        assert r.output_graph is None
+        assert r.output_uc is None
+
+    def test_materialize_response_defaults(self):
+        from api.routers.digitaltwin import CohortMaterializeResponse
+
+        r = CohortMaterializeResponse(rule_id="r1")
+        assert r.cohort_count == 0
+        assert r.uc_table is None
+        assert r.materialize_graph_error is None
+
+
+class TestResolveCohortContext:
+    """Smoke-test ``_resolve_cohort_context`` -- the helper raises clearly
+    when the graph backend is missing, otherwise wires up a CohortService.
+    """
+
+    @patch("api.routers.digitaltwin.get_triplestore", return_value=None)
+    @patch("api.routers.digitaltwin.effective_graph_name", return_value="dom_V1")
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
+    def test_raises_when_no_store(self, mock_resolve, _eff, _store):
+        from api.routers.digitaltwin import _resolve_cohort_context
+        from back.core.errors import InfrastructureError
+
+        mock_resolve.return_value = MagicMock()
+        with pytest.raises(InfrastructureError):
+            _resolve_cohort_context(
+                "dom", None, None, None, None, MagicMock(), MagicMock()
+            )
+
+    @patch("api.routers.digitaltwin.get_triplestore")
+    @patch("api.routers.digitaltwin.effective_graph_name", return_value="")
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
+    def test_raises_when_no_graph_name(self, mock_resolve, _eff, _store):
+        from api.routers.digitaltwin import _resolve_cohort_context
+        from back.core.errors import ValidationError
+
+        mock_resolve.return_value = MagicMock()
+        with pytest.raises(ValidationError):
+            _resolve_cohort_context(
+                "dom", None, None, None, None, MagicMock(), MagicMock()
+            )
+
+    @patch("api.routers.digitaltwin.get_triplestore")
+    @patch("api.routers.digitaltwin.effective_graph_name", return_value="dom_V1")
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
+    def test_returns_service_when_configured(self, mock_resolve, _eff, mock_store):
+        from api.routers.digitaltwin import _resolve_cohort_context
+        from back.objects.digitaltwin import CohortService
+
+        mock_resolve.return_value = MagicMock()
+        mock_store.return_value = MagicMock()
+        domain, store, graph_name, service = _resolve_cohort_context(
+            "dom", None, None, None, None, MagicMock(), MagicMock()
+        )
+        assert graph_name == "dom_V1"
+        assert store is mock_store.return_value
+        assert isinstance(service, CohortService)

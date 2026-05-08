@@ -401,9 +401,11 @@ class LadybugFlatStore(LadybugBase):
         field: str = "any",
         match_type: str = "contains",
         value: str = "",
+        limit: int = 0,
     ) -> Set[str]:
         node = self._node_table(table_name)
         conn = self._get_connection()
+        limit_clause = f" LIMIT {int(limit)}" if int(limit or 0) > 0 else ""
 
         def _cypher_match(alias_prop: str, val: str) -> str:
             if match_type == "exact":
@@ -419,23 +421,16 @@ class LadybugFlatStore(LadybugBase):
         search_id = field in ("id", "any")
 
         if entity_type and value:
-            type_rows = conn.execute(
-                f"MATCH (t:{node}) "
-                f"WHERE t.predicate = $rdf_type AND t.object = $type_uri "
-                f"RETURN DISTINCT t.subject AS subject",
-                parameters={"rdf_type": RDF_TYPE, "type_uri": entity_type},
-            )
-            typed_subjects = {row[0] for row in type_rows}
-            if not typed_subjects:
-                return set()
-
+            # Search first, then constrain by rdf:type on the matched subset.
+            # This avoids building a potentially huge typed_subjects set before
+            # applying a selective text filter.
             matched: Set[str] = set()
             if search_label:
                 lbl_cond = _cypher_match("lbl.object", val_lower)
                 lbl_rows = conn.execute(
                     f"MATCH (lbl:{node}) "
                     f"WHERE lbl.predicate = $rdfs_label AND {lbl_cond} "
-                    f"RETURN DISTINCT lbl.subject AS subject",
+                    f"RETURN DISTINCT lbl.subject AS subject{limit_clause}",
                     parameters={"rdfs_label": RDFS_LABEL, "val": val_lower},
                 )
                 matched.update(row[0] for row in lbl_rows)
@@ -444,17 +439,30 @@ class LadybugFlatStore(LadybugBase):
                 id_rows = conn.execute(
                     f"MATCH (t:{node}) "
                     f"WHERE t.predicate = $rdf_type AND {id_cond} "
-                    f"RETURN DISTINCT t.subject AS subject",
+                    f"RETURN DISTINCT t.subject AS subject{limit_clause}",
                     parameters={"rdf_type": RDF_TYPE, "val": val_lower},
                 )
                 matched.update(row[0] for row in id_rows)
-            return typed_subjects & matched
+            if not matched:
+                return set()
+            typed_rows = conn.execute(
+                f"MATCH (t:{node}) "
+                f"WHERE t.predicate = $rdf_type AND t.object = $type_uri "
+                f"AND t.subject IN $subjects "
+                f"RETURN DISTINCT t.subject AS subject{limit_clause}",
+                parameters={
+                    "rdf_type": RDF_TYPE,
+                    "type_uri": entity_type,
+                    "subjects": list(matched),
+                },
+            )
+            return {row[0] for row in typed_rows}
 
         elif entity_type:
             result = conn.execute(
                 f"MATCH (t:{node}) "
                 f"WHERE t.predicate = $rdf_type AND t.object = $type_uri "
-                f"RETURN DISTINCT t.subject AS subject",
+                f"RETURN DISTINCT t.subject AS subject{limit_clause}",
                 parameters={"rdf_type": RDF_TYPE, "type_uri": entity_type},
             )
             return {row[0] for row in result}
@@ -466,7 +474,7 @@ class LadybugFlatStore(LadybugBase):
                 lbl_rows = conn.execute(
                     f"MATCH (t:{node}) "
                     f"WHERE t.predicate = $rdfs_label AND {lbl_cond} "
-                    f"RETURN DISTINCT t.subject AS subject",
+                    f"RETURN DISTINCT t.subject AS subject{limit_clause}",
                     parameters={"rdfs_label": RDFS_LABEL, "val": val_lower},
                 )
                 matched.update(row[0] for row in lbl_rows)
@@ -475,7 +483,7 @@ class LadybugFlatStore(LadybugBase):
                 id_rows = conn.execute(
                     f"MATCH (t:{node}) "
                     f"WHERE t.predicate = $rdf_type AND {id_cond} "
-                    f"RETURN DISTINCT t.subject AS subject",
+                    f"RETURN DISTINCT t.subject AS subject{limit_clause}",
                     parameters={"rdf_type": RDF_TYPE, "val": val_lower},
                 )
                 matched.update(row[0] for row in id_rows)

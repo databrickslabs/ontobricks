@@ -659,7 +659,45 @@ function fetchCachedInvalidate(url) {
 
 // Automatically attach CSRF token to state-changing fetch requests
 const _origFetch = window.fetch;
+
+function _rewriteDevLoopUrlForDeployedApp(input) {
+    // Guardrail: when running on deployed app hosts, never call local dev
+    // servers like localhost:8000. If a stale script/request still points
+    // there, rewrite it back to same-origin path.
+    try {
+        const currentHost = (window.location && window.location.hostname) ? window.location.hostname : '';
+        if (!currentHost || currentHost === 'localhost' || currentHost === '127.0.0.1') {
+            return input;
+        }
+
+        const isDevLoopHost = function (host) {
+            const h = (host || '').toLowerCase();
+            return h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0';
+        };
+
+        if (typeof input === 'string') {
+            const parsed = new URL(input, window.location.origin);
+            if (isDevLoopHost(parsed.hostname)) {
+                return parsed.pathname + parsed.search + parsed.hash;
+            }
+            return input;
+        }
+
+        if (input instanceof Request) {
+            const parsed = new URL(input.url, window.location.origin);
+            if (isDevLoopHost(parsed.hostname)) {
+                const rewritten = parsed.pathname + parsed.search + parsed.hash;
+                return new Request(rewritten, input);
+            }
+        }
+    } catch (_) {
+        // Best-effort rewrite only; fall back to original input.
+    }
+    return input;
+}
+
 window.fetch = function(input, init) {
+    input = _rewriteDevLoopUrlForDeployedApp(input);
     init = init || {};
     const method = (init.method || 'GET').toUpperCase();
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {

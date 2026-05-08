@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -141,6 +142,22 @@
 
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_domain_databricks</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``domain.databricks`` as a dict, ``{}`` when *domain* is ``None``.</span>
+
+<span class="sd">    The credential / warehouse helpers were originally written for the</span>
+<span class="sd">    HTTP request lifecycle where ``DomainSession`` is always present.</span>
+<span class="sd">    Session-less callers — the readiness probe, MCP server, scheduled</span>
+<span class="sd">    jobs — pass ``domain=None`` and would otherwise blow up with</span>
+<span class="sd">    ``&#39;NoneType&#39; object has no attribute &#39;databricks&#39;``. Mirrors the</span>
+<span class="sd">    ``domain is None`` short-circuit already used by</span>
+<span class="sd">    ``RegistryCfg.from_domain``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">domain</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;databricks&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+
+
 <div class="viewcode-block" id="DatabricksHelpers">
 <a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">DatabricksHelpers</span><span class="p">:</span>
@@ -211,7 +228,7 @@
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not read global warehouse config: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
 
-        <span class="n">session_wid</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;warehouse_id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">session_wid</span> <span class="o">=</span> <span class="n">_domain_databricks</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;warehouse_id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">session_wid</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">session_wid</span>
 
@@ -268,6 +285,23 @@
         <span class="p">)</span></div>
 
 
+<div class="viewcode-block" id="DatabricksHelpers.resolve_use_cloud_fetch">
+<a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.resolve_use_cloud_fetch">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resolve_use_cloud_fetch</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve CloudFetch enablement from global config (default: enabled).&quot;&quot;&quot;</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">_resolve_global_setting</span><span class="p">(</span>
+            <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;get_use_cloud_fetch&quot;</span>
+        <span class="p">)</span>
+        <span class="c1"># Global boolean getter returns a bool, but keep string fallback for</span>
+        <span class="c1"># backward compatibility if older stores persisted textual values.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">val</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">val</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="k">return</span> <span class="n">val</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">,</span> <span class="s2">&quot;yes&quot;</span><span class="p">,</span> <span class="s2">&quot;on&quot;</span><span class="p">}</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
 <div class="viewcode-block" id="DatabricksHelpers.get_databricks_client">
 <a class="viewcode-back" href="../../../../api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.get_databricks_client">[docs]</a>
     <span class="nd">@staticmethod</span>
@@ -284,19 +318,27 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            DatabricksClient instance or None if not configured</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
-        <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
+        <span class="n">dbcfg</span> <span class="o">=</span> <span class="n">_domain_databricks</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="n">dbcfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">dbcfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
         <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">resolve_warehouse_id</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">use_cloud_fetch</span> <span class="o">=</span> <span class="n">DatabricksHelpers</span><span class="o">.</span><span class="n">resolve_use_cloud_fetch</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
         <span class="c1"># In Databricks Apps mode, always create a client (SDK handles auth)</span>
         <span class="k">if</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">is_databricks_app</span><span class="p">():</span>
             <span class="k">return</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">DatabricksClient</span><span class="p">(</span>
-                <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span>
+                <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
+                <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
+                <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span><span class="p">,</span>
+                <span class="n">use_cloud_fetch</span><span class="o">=</span><span class="n">use_cloud_fetch</span><span class="p">,</span>
             <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">token</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">DatabricksClient</span><span class="p">(</span>
-                <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span>
+                <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
+                <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
+                <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span><span class="p">,</span>
+                <span class="n">use_cloud_fetch</span><span class="o">=</span><span class="n">use_cloud_fetch</span><span class="p">,</span>
             <span class="p">)</span>
 
         <span class="k">return</span> <span class="kc">None</span></div>
@@ -339,8 +381,9 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            Tuple of (host, token)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">host</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
-        <span class="n">token</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
+        <span class="n">dbcfg</span> <span class="o">=</span> <span class="n">_domain_databricks</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="n">dbcfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">dbcfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
 
         <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">token</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">_databricks</span><span class="o">.</span><span class="n">normalize_host</span><span class="p">(</span><span class="n">host</span><span class="p">),</span> <span class="n">token</span>

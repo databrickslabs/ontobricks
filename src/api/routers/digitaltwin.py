@@ -28,11 +28,13 @@ from shared.config.settings import get_settings, Settings
 from back.core.triplestore import get_triplestore
 from back.core.helpers import (
     get_databricks_credentials,
+    get_databricks_client,
     sql_escape,
     effective_view_table,
     effective_graph_name,
+    run_blocking,
 )
-from back.objects.digitaltwin import DigitalTwin, DomainSnapshot
+from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
 _resolve_registry = DigitalTwin.resolve_registry
@@ -90,6 +92,10 @@ class BuildRequest(BaseModel):
     )
     drop_existing: bool = Field(
         False, description="Deprecated: use build_mode='full' instead"
+    )
+    archive_to_registry: bool = Field(
+        True,
+        description="When true, upload the LadybugDB graph archive to the registry Volume after build",
     )
 
 
@@ -532,6 +538,7 @@ async def dt_build(
             force_full,
             snapshot_version=snap.current_version,
             build_kind="api",
+            archive_to_registry=body.archive_to_registry,
         )
 
     threading.Thread(target=_run, daemon=True).start()
@@ -1109,3 +1116,438 @@ async def dt_inference_results(
 )
 async def dt_inference_progress(task_id: str):
     return _poll_task(task_id)
+
+
+# ===========================================================================
+# Cohort Discovery
+# ===========================================================================
+#
+# Stateless cohort operations on a domain loaded from the registry. Mirrors
+# the internal ``/dtwin/cohorts/*`` surface (see
+# ``api.routers.internal.dtwin``) without requiring a browser session, and
+# scopes by the standard ``domain_name`` / ``domain_version`` query
+# parameters used by the rest of this router.
+#
+# Why under ``/digitaltwin``:
+#   The cohort engine writes to the *digital twin's* knowledge graph (and
+#   optionally a UC Delta table). Grouping the routes here keeps a single
+#   resource path for everything that operates on the materialised twin —
+#   ``status``, ``stats``, ``triples``, ``inference``, and now ``cohorts``.
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
+
+
+class CohortRuleSummary(BaseModel):
+    """Compact view of a saved cohort rule (full dict in ``rule``).
+
+    The ``rule`` field carries the full ``CohortRule.to_dict()`` payload so
+    callers that need links/compatibility/output don't need a second
+    round-trip; the flat fields above are convenience accessors for
+    listings.
+    """
+
+    id: str
+    label: str
+    class_uri: str
+    enabled: bool = True
+    description: str = ""
+    rule: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Full saved rule payload (links, compatibility, output, ...).",
+    )
+
+
+class CohortRulesResponse(BaseModel):
+    """Response for ``GET /cohorts/rules``."""
+
+    success: bool = True
+    rules: List[CohortRuleSummary] = []
+    count: int = 0
+
+
+class CohortRuleResponse(BaseModel):
+    """Response for ``GET /cohorts/rules/{rule_id}``."""
+
+    success: bool = True
+    rule: Dict[str, Any]
+
+
+class CohortDryRunRequest(BaseModel):
+    """Body for ``POST /cohorts/dry-run`` — runs the engine without writing."""
+
+    rule: Dict[str, Any] = Field(
+        ...,
+        description="Candidate cohort rule (same shape as a saved rule).",
+        examples=[
+            {
+                "id": "candidate",
+                "label": "Candidate cohort",
+                "class_uri": "http://example.org/onto#Person",
+                "links": [],
+                "compatibility": [],
+                "group_type": "connected",
+                "min_size": 2,
+            }
+        ],
+    )
+
+
+class CohortStatsModel(BaseModel):
+    """Engine statistics returned by dry-run."""
+
+    rule_id: str = ""
+    class_member_count: int = 0
+    survivor_count: int = 0
+    edge_count: int = 0
+    cohort_count: int = 0
+    grouped_member_count: int = 0
+    elapsed_ms: int = 0
+
+
+class CohortDryRunResponse(BaseModel):
+    """Response for ``POST /cohorts/dry-run``."""
+
+    success: bool = True
+    rule_id: str = ""
+    cohorts: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Discovered cohorts; each member is ``{uri, id, label}``.",
+    )
+    stats: CohortStatsModel = Field(default_factory=CohortStatsModel)
+
+
+class CohortMaterializeRequest(BaseModel):
+    """Body for ``POST /cohorts/materialize`` — re-run a saved rule."""
+
+    rule_id: str = Field(..., description="Id of the saved cohort rule to run.")
+    output_graph: Optional[bool] = Field(
+        None,
+        description="Override the rule's ``output.graph`` flag for this run "
+        "only. ``None`` honours the saved rule.",
+    )
+    output_uc: Optional[bool] = Field(
+        None,
+        description="Override the rule's UC-table output for this run only. "
+        "``None`` defaults to *write* when the rule has a target configured.",
+    )
+
+
+class CohortMaterializeResponse(BaseModel):
+    """Response for ``POST /cohorts/materialize``."""
+
+    success: bool = True
+    rule_id: str
+    cohort_count: int = 0
+    grouped_member_count: int = 0
+    elapsed_ms: int = 0
+    materialized_triples: int = 0
+    uc_rows_written: int = 0
+    uc_table: Optional[Dict[str, str]] = None
+    materialize_graph_error: Optional[str] = None
+    materialize_uc_error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Helper — resolve domain + graph store + cohort service for one request
+# ---------------------------------------------------------------------------
+
+
+def _resolve_cohort_context(
+    domain_name: Optional[str],
+    domain_version: Optional[str],
+    registry_catalog: Optional[str],
+    registry_schema: Optional[str],
+    registry_volume: Optional[str],
+    session_mgr: SessionManager,
+    settings: Settings,
+):
+    """Resolve ``(domain, store, graph_name, service)`` for the active request.
+
+    Centralised so every cohort handler reads the same way — load the
+    domain from the registry (or session fallback), pick the configured
+    graph backend, and bind a ``CohortService``. Mirrors the internal
+    ``cohort_engine_context`` dependency used by the in-app router.
+    """
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
+    graph_name = effective_graph_name(domain)
+    if not graph_name:
+        raise ValidationError("Graph name is not configured")
+    store = get_triplestore(domain, settings, backend="graph")
+    if not store:
+        raise InfrastructureError("Graph backend is not configured")
+    return domain, store, graph_name, CohortService(domain)
+
+
+# ---------------------------------------------------------------------------
+# GET /cohorts/rules — list saved cohort rules
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/cohorts/rules",
+    response_model=CohortRulesResponse,
+    summary="List saved cohort rules",
+    description="Return every cohort rule saved on the active domain. "
+    "Each entry includes the full rule payload so callers can re-run, "
+    "preview, or materialise without a second round-trip.",
+    tags=["Cohort"],
+)
+async def dt_cohort_list_rules(
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
+    rules = CohortService(domain).list_rules()
+    summaries = [
+        CohortRuleSummary(
+            id=str(r.get("id", "")),
+            label=str(r.get("label", "") or r.get("id", "")),
+            class_uri=str(r.get("class_uri", "")),
+            enabled=bool(r.get("enabled", True)),
+            description=str(r.get("description", "") or ""),
+            rule=r,
+        )
+        for r in rules
+    ]
+    return CohortRulesResponse(rules=summaries, count=len(summaries))
+
+
+# ---------------------------------------------------------------------------
+# GET /cohorts/rules/{rule_id} — fetch one saved rule
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/cohorts/rules/{rule_id}",
+    response_model=CohortRuleResponse,
+    summary="Get a saved cohort rule",
+    description="Return the full payload for a single saved cohort rule.",
+    tags=["Cohort"],
+)
+async def dt_cohort_get_rule(
+    rule_id: str,
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
+    rules = CohortService(domain).list_rules()
+    match = next((r for r in rules if r.get("id") == rule_id), None)
+    if not match:
+        raise NotFoundError(f"Cohort rule '{rule_id}' was not found")
+    return CohortRuleResponse(rule=match)
+
+
+# ---------------------------------------------------------------------------
+# POST /cohorts/dry-run — preview a candidate rule without writing
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/cohorts/dry-run",
+    response_model=CohortDryRunResponse,
+    summary="Preview a cohort rule",
+    description="Run the cohort engine on a candidate rule and return the "
+    "discovered cohorts (with member ``{uri, id, label}``) and engine "
+    "statistics. Nothing is persisted.",
+    tags=["Cohort"],
+)
+async def dt_cohort_dry_run(
+    body: CohortDryRunRequest,
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    _, store, graph_name, service = _resolve_cohort_context(
+        domain_name,
+        domain_version,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        session_mgr,
+        settings,
+    )
+    try:
+        result = await run_blocking(service.dry_run, body.rule, store, graph_name)
+    except ValueError as exc:
+        raise ValidationError("Cohort rule is invalid", detail=str(exc))
+    return CohortDryRunResponse(
+        rule_id=str(result.get("rule_id", "")),
+        cohorts=list(result.get("cohorts", []) or []),
+        stats=CohortStatsModel(**(result.get("stats", {}) or {})),
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /cohorts/materialize — re-run a saved rule and write outputs
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/cohorts/materialize",
+    response_model=CohortMaterializeResponse,
+    summary="Materialise a saved cohort rule",
+    description="Re-run a saved cohort rule and persist the outputs as "
+    "configured by the rule (graph triples, UC Delta table). "
+    "Use ``output_graph`` / ``output_uc`` to skip a target for this "
+    "run only — the saved rule is unchanged.",
+    tags=["Cohort"],
+)
+async def dt_cohort_materialize(
+    body: CohortMaterializeRequest,
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_version", "project_version"),
+        description="Domain version to load (uses latest version if omitted)",
+    ),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    rule_id = (body.rule_id or "").strip()
+    if not rule_id:
+        raise ValidationError("Missing rule_id")
+
+    domain, store, graph_name, service = _resolve_cohort_context(
+        domain_name,
+        domain_version,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        session_mgr,
+        settings,
+    )
+
+    client = get_databricks_client(domain, settings)
+    domain_version_str = getattr(domain, "current_version", "1") or "1"
+
+    def _label_resolver(uris):
+        try:
+            metadata = store.get_entity_metadata(graph_name, list(uris))
+        except Exception:
+            return {}
+        return {row.get("uri", ""): row.get("label", "") for row in metadata or []}
+
+    try:
+        result = await run_blocking(
+            service.materialize,
+            rule_id,
+            store,
+            graph_name,
+            client,
+            str(domain_version_str),
+            _label_resolver,
+            body.output_graph,
+            body.output_uc,
+        )
+    except NotFoundError:
+        raise
+    except ValueError as exc:
+        raise ValidationError("Cohort rule is invalid", detail=str(exc))
+
+    return CohortMaterializeResponse(
+        rule_id=str(result.get("rule_id", rule_id)),
+        cohort_count=int(result.get("cohort_count", 0) or 0),
+        grouped_member_count=int(result.get("grouped_member_count", 0) or 0),
+        elapsed_ms=int(result.get("elapsed_ms", 0) or 0),
+        materialized_triples=int(result.get("materialized_triples", 0) or 0),
+        uc_rows_written=int(result.get("uc_rows_written", 0) or 0),
+        uc_table=result.get("uc_table"),
+        materialize_graph_error=result.get("materialize_graph_error"),
+        materialize_uc_error=result.get("materialize_uc_error"),
+    )

@@ -59,21 +59,23 @@
 <li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#local-development-setup">1. Local Development Setup</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#databricks-apps-deployment-dab">2. Databricks Apps Deployment (DAB)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#permission-management">3. Permission Management</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#deploying-to-a-new-workspace">4. Deploying to a New Workspace</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#triple-store-backend-configuration">5. Triple Store Backend Configuration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#mcp-server-deployment-databricks-playground">6. MCP Server Deployment (Databricks Playground)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#mlflow-agent-observability">7. MLflow Agent Observability</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#dab-reference">8. DAB Reference</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#full-deployment-checklist">9. Full Deployment Checklist</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#troubleshooting">10. Troubleshooting</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#production-considerations">11. Production Considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#unity-catalog-permissions-for-the-service-principal">3. Unity Catalog Permissions for the Service Principal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#permission-management">4. Permission Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#deploying-to-a-new-workspace">5. Deploying to a New Workspace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triple-store-backend-configuration">6. Triple Store Backend Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mcp-server-deployment-databricks-playground">7. MCP Server Deployment (Databricks Playground)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mlflow-agent-observability">8. MLflow Agent Observability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dab-reference">9. DAB Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#full-deployment-checklist">10. Full Deployment Checklist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#troubleshooting">11. Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#production-considerations">12. Production Considerations</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
@@ -133,7 +135,7 @@
 <p>Deployment uses <strong>Databricks Asset Bundles (DAB)</strong> — a declarative, repeatable approach that deploys both apps in a single command from <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> at the project root.</p>
 <p><strong>Architecture at a glance:</strong></p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>┌──────────────────────┐      ┌──────────────────────┐
-│   ontobricks         │      │   mcp-ontobricks     │
+│   ontobricks-XXX     │      │   mcp-ontobricks     │
 │   (Databricks App)   │◄─────│   (Databricks App)   │
 │                      │ REST │                      │
 │   Web UI + REST API  │ API  │   MCP Server for     │
@@ -253,6 +255,7 @@ uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </sp
 <section id="databricks-apps-deployment-dab">
 <h2>2. Databricks Apps Deployment (DAB)<a class="headerlink" href="#databricks-apps-deployment-dab" title="Link to this heading">¶</a></h2>
 <p>Deployment uses <strong>Databricks Asset Bundles</strong> to deploy both the main app and the MCP server declaratively from a single <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> at the project root.</p>
+<p><strong>Naming in this guide:</strong> <strong><code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code></strong> stands for whatever main app <strong><code class="docutils literal notranslate"><span class="pre">name</span></code></strong> you set under <code class="docutils literal notranslate"><span class="pre">resources.apps.ontobricks_dev_app</span></code> in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> (replace it in every command and UI path). The MCP app name in this bundle is typically <strong><code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code></strong>.</p>
 <section id="id1">
 <h3>Prerequisites<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
 <table class="docutils align-default">
@@ -276,6 +279,9 @@ uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </sp
 </tr>
 <tr class="row-even"><td><p>Unity Catalog</p></td>
 <td><p>A catalog, schema, and volume for the project registry</p></td>
+</tr>
+<tr class="row-odd"><td><p>UC grants for the app SP</p></td>
+<td><p>The app runs as a service principal. See <a class="reference internal" href="#3-unity-catalog-permissions-for-the-service-principal"><span class="xref myst">§3 Unity Catalog Permissions for the Service Principal</span></a> for the exact grants required on the registry catalog/schema, the registry volume, and your source tables.</p></td>
 </tr>
 </tbody>
 </table>
@@ -311,18 +317,16 @@ databricks<span class="w"> </span>current-user<span class="w"> </span>me
 <td><p>Default triple store table</p></td>
 <td><p>Choose or create a <code class="docutils literal notranslate"><span class="pre">catalog.schema.table</span></code> for triple storage</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_APP_NAME</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></p></td>
-<td><p>Deployed app name (for permission checks)</p></td>
-<td><p>Must match the name in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> (default: <code class="docutils literal notranslate"><span class="pre">ontobricks</span></code>)</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code></p></td>
 <td><p>Main app URL</p></td>
-<td><p>Set after first deploy — <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span> <span class="pre">ontobricks</span></code></p></td>
+<td><p>Set after first deploy — <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span> <span class="pre">&lt;main-app-name&gt;</span></code> (must match <code class="docutils literal notranslate"><span class="pre">resources.apps.ontobricks_dev_app.name</span></code> in your <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>; this guide uses the placeholder <strong><code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code></strong>)</p></td>
 </tr>
 </tbody>
 </table>
+<blockquote>
+<div><p><strong>Note</strong> — the deployed app name no longer needs an explicit <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_APP_NAME</span></code> env var. The runtime auto-detects it from the Databricks-Apps-injected <code class="docutils literal notranslate"><span class="pre">DATABRICKS_APP_NAME</span></code> (your bundle’s main app <code class="docutils literal notranslate"><span class="pre">name</span></code>, written as <strong><code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code></strong> in this guide, or e.g. <code class="docutils literal notranslate"><span class="pre">ontobricks</span></code> in another deployment). Set <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_APP_NAME</span></code> only as an explicit override (e.g. in <code class="docutils literal notranslate"><span class="pre">.env</span></code> for local development).</p>
+</div></blockquote>
 <p>The <code class="docutils literal notranslate"><span class="pre">REGISTRY_CATALOG</span></code>, <code class="docutils literal notranslate"><span class="pre">REGISTRY_SCHEMA</span></code>, and <code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME</span></code> static variables are <strong>only needed for local development</strong>. In a deployed app the <code class="docutils literal notranslate"><span class="pre">volume</span></code> resource binding injects the registry path automatically.</p>
 </section>
 <section id="step-3-customize-databricks-yml-bundle-variables">
@@ -336,9 +340,32 @@ databricks<span class="w"> </span>current-user<span class="w"> </span>me
 <span class="w">  </span><span class="nt">registry_schema</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;your-schema&gt;&quot;</span>
 <span class="w">  </span><span class="nt">registry_volume</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;OntoBricksRegistry&quot;</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;registry&quot;</span><span class="w">   </span><span class="c1"># volume name segment; full UC path is catalog.schema.volume</span>
 </pre></div>
 </div>
+<p><strong>Lakebase (only if you use target <code class="docutils literal notranslate"><span class="pre">dev-lakebase</span></code>)</strong> — the bundle also defines:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lakebase_project</span></code></p></td>
+<td><p>Autoscaling <strong>project id</strong> (segment after <code class="docutils literal notranslate"><span class="pre">projects/</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">lakebase_branch</span></code></p></td>
+<td><p>Branch id (e.g. <code class="docutils literal notranslate"><span class="pre">production</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lakebase_database_resource_segment</span></code></p></td>
+<td><p><strong>Must</strong> be the <code class="docutils literal notranslate"><span class="pre">db-…</span></code> suffix from the Postgres API <code class="docutils literal notranslate"><span class="pre">name</span></code> field — <strong>not</strong> the Postgres <code class="docutils literal notranslate"><span class="pre">datname</span></code> / <code class="docutils literal notranslate"><span class="pre">status.postgres_database</span></code> string. Resolve it with <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">postgres</span> <span class="pre">list-databases</span> <span class="pre">&quot;projects/&lt;project&gt;/branches/&lt;branch&gt;&quot;</span> <span class="pre">-o</span> <span class="pre">json</span></code> (see comments in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> for <code class="docutils literal notranslate"><span class="pre">jq</span></code> / <code class="docutils literal notranslate"><span class="pre">python3</span></code> one-liners).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">lakebase_registry_schema</span></code></p></td>
+<td><p>OntoBricks registry <strong>schema</strong> inside Postgres; mirror the same value as <code class="docutils literal notranslate"><span class="pre">LAKEBASE_SCHEMA</span></code> in <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Do <strong>not</strong> set <code class="docutils literal notranslate"><span class="pre">lakebase_database_resource_segment</span></code> to the schema name <code class="docutils literal notranslate"><span class="pre">ontobricks_registry</span></code> unless you intentionally bind a dedicated Postgres database whose <strong>resource</strong> id is that string (rare). This repository’s Lakebase binding targets a dedicated Postgres database whose <code class="docutils literal notranslate"><span class="pre">datname</span></code> is <code class="docutils literal notranslate"><span class="pre">ontobricks_registry</span></code>, with registry tables in the schema <code class="docutils literal notranslate"><span class="pre">ontobricks_registry</span></code>. Older single-DB layouts used <code class="docutils literal notranslate"><span class="pre">databricks_postgres</span></code> as <code class="docutils literal notranslate"><span class="pre">datname</span></code> with the same schema name inside it — use <code class="docutils literal notranslate"><span class="pre">list-databases</span></code> to see which <code class="docutils literal notranslate"><span class="pre">db-…</span></code> row matches your bind.</p>
 <p>Update the <code class="docutils literal notranslate"><span class="pre">permissions</span></code> section to grant <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> to the deploying user:</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">permissions</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CAN_MANAGE</span>
@@ -350,52 +377,72 @@ databricks<span class="w"> </span>current-user<span class="w"> </span>me
 </section>
 <section id="step-4-validate-the-bundle">
 <h3>Step 4 — Validate the bundle<a class="headerlink" href="#step-4-validate-the-bundle" title="Link to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>validate
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Volume-only target (no Lakebase postgres resource in the bundle)</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>validate<span class="w"> </span>-t<span class="w"> </span>dev
+
+<span class="c1"># Default sandbox with Lakebase Autoscaling postgres binding</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>validate<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
 <p>This checks the bundle configuration without deploying. Fix any errors before proceeding.</p>
 </section>
 <section id="step-5-deploy">
 <h3>Step 5 — Deploy<a class="headerlink" href="#step-5-deploy" title="Link to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Deploy both apps (dev target)</span>
-databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
+<p>This repository’s <strong><code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span></code></strong> defaults to <strong><code class="docutils literal notranslate"><span class="pre">dev-lakebase</span></code></strong> (Volume + Lakebase postgres binding). Use <strong><code class="docutils literal notranslate"><span class="pre">-t</span> <span class="pre">dev</span></code></strong> for Volume-only (no postgres resource).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Deploy both apps (main + MCP) with Lakebase binding — recommended</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 
-<span class="c1"># Or use the convenience script</span>
+<span class="c1"># Or use the convenience script (validate + deploy + start main app)</span>
 scripts/deploy.sh
+
+<span class="c1"># Volume-only registry backend (no Lakebase bind)</span>
+scripts/deploy.sh<span class="w"> </span>-t<span class="w"> </span>dev
 </pre></div>
 </div>
-<p>If the apps already exist in the workspace (e.g., from a previous manual deploy), bind them first:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>ontobricks_app<span class="w"> </span>ontobricks
-databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>mcp-ontobricks
-databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
+<p>If the apps already exist in the workspace (e.g., from a previous manual deploy), bind bundle resources to them <strong>once</strong> (resource keys and app <strong>names</strong> must match <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>ontobricks_dev_app<span class="w"> </span>ontobricks-XXX<span class="w"> </span>-t<span class="w"> </span>dev-lakebase<span class="w"> </span>--auto-approve
+databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>mcp-ontobricks<span class="w"> </span>-t<span class="w"> </span>dev-lakebase<span class="w"> </span>--auto-approve
+databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
+<p>Or run <code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span> <span class="pre">--bind</span> <span class="pre">-t</span> <span class="pre">dev-lakebase</span></code> to bind the <strong>main</strong> app only (see script header for MCP bind if you extend the script).</p>
+</section>
+<section id="step-5b-lakebase-schema-grants-target-dev-lakebase-only">
+<h3>Step 5b — Lakebase schema grants (target <code class="docutils literal notranslate"><span class="pre">dev-lakebase</span></code> only)<a class="headerlink" href="#step-5b-lakebase-schema-grants-target-dev-lakebase-only" title="Link to this heading">¶</a></h3>
+<p>Databricks does <strong>not</strong> auto-grant the app service principal <code class="docutils literal notranslate"><span class="pre">USAGE</span></code> on your registry schema. After the app can reach Lakebase, run <strong><code class="docutils literal notranslate"><span class="pre">scripts/bootstrap-lakebase-perms.sh</span></code></strong> as a human user that owns the schema (or has <code class="docutils literal notranslate"><span class="pre">GRANT</span> <span class="pre">OPTION</span></code>).</p>
+<p>Script defaults use Postgres database <strong><code class="docutils literal notranslate"><span class="pre">ontobricks_registry</span></code></strong> (dedicated <code class="docutils literal notranslate"><span class="pre">datname</span></code> matching the bundle bind) and schema <strong><code class="docutils literal notranslate"><span class="pre">ontobricks_registry</span></code></strong>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/bootstrap-lakebase-perms.sh<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-i<span class="w"> </span><span class="s2">&quot;&lt;lakebase_project&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span>ontobricks_registry<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-s<span class="w"> </span>ontobricks_registry<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-a<span class="w"> </span>ontobricks-XXX<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-a<span class="w"> </span>mcp-ontobricks
+</pre></div>
+</div>
+<p>If your Lakebase instance still uses the shared default database <strong><code class="docutils literal notranslate"><span class="pre">databricks_postgres</span></code></strong> with the registry schema <strong><code class="docutils literal notranslate"><span class="pre">ontobricks_registry</span></code></strong> inside it, pass <strong><code class="docutils literal notranslate"><span class="pre">-d</span> <span class="pre">databricks_postgres</span></code></strong>.</p>
+<p>Defaults inside the script are aligned with <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> (<code class="docutils literal notranslate"><span class="pre">ontobricks-app</span></code>, <code class="docutils literal notranslate"><span class="pre">ontobricks_registry</span></code> database, both apps); override <strong><code class="docutils literal notranslate"><span class="pre">-i</span></code> / <code class="docutils literal notranslate"><span class="pre">-d</span></code> / <code class="docutils literal notranslate"><span class="pre">-s</span></code> / <code class="docutils literal notranslate"><span class="pre">-a</span></code></strong> when your workspace differs. The script is idempotent.</p>
 </section>
 <section id="step-6-start-the-apps">
 <h3>Step 6 — Start the apps<a class="headerlink" href="#step-6-start-the-apps" title="Link to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Start the main app</span>
-databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>ontobricks_app
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Start the main UI app (resource key ontobricks_dev_app)</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>ontobricks_dev_app<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 
-<span class="c1"># Start the MCP server</span>
-databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>mcp_ontobricks_app
+<span class="c1"># Start the MCP server (resource key mcp_ontobricks_app)</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
-<p>Or use the convenience script:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/deploy.sh<span class="w">              </span><span class="c1"># deploy + start main app</span>
-scripts/deploy.sh<span class="w"> </span>--all<span class="w">        </span><span class="c1"># deploy + start both apps</span>
-scripts/deploy.sh<span class="w"> </span>--mcp-only<span class="w">   </span><span class="c1"># deploy + start MCP only</span>
-</pre></div>
-</div>
+<p><code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span></code> (without <code class="docutils literal notranslate"><span class="pre">--no-run</span></code>) starts <strong>only</strong> the main app (<code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code>). Start the MCP app with <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">bundle</span> <span class="pre">run</span> <span class="pre">mcp_ontobricks_app</span> <span class="pre">-t</span> <span class="pre">dev-lakebase</span></code>, or use <strong><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">deploy</span></code></strong> then run the MCP command separately.</p>
 </section>
 <section id="step-7-bind-resources-first-deploy-only">
 <h3>Step 7 — Bind resources (first deploy only)<a class="headerlink" href="#step-7-bind-resources-first-deploy-only" title="Link to this heading">¶</a></h3>
 <p>After the first deployment, bind the app resources in the Databricks workspace UI:</p>
 <ol class="arabic simple">
-<li><p>Go to <strong>Compute &gt; Apps</strong> and find <code class="docutils literal notranslate"><span class="pre">ontobricks</span></code></p></li>
+<li><p>Go to <strong>Compute &gt; Apps</strong> and open your main app (placeholder <strong><code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code></strong> — same string as <code class="docutils literal notranslate"><span class="pre">resources.apps.ontobricks_dev_app.name</span></code> in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>).</p></li>
 <li><p>Click <strong>Resources</strong></p></li>
 <li><p>Bind <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> to a running SQL Warehouse</p></li>
-<li><p>Bind <code class="docutils literal notranslate"><span class="pre">volume</span></code> to the Unity Catalog Volume for the project registry (e.g., <code class="docutils literal notranslate"><span class="pre">your_catalog.your_schema.OntoBricksRegistry</span></code>)</p></li>
-<li><p>Repeat for <code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code> (same warehouse and volume)</p></li>
+<li><p>Bind <code class="docutils literal notranslate"><span class="pre">volume</span></code> to the Unity Catalog Volume for the project registry (e.g., <code class="docutils literal notranslate"><span class="pre">your_catalog.your_schema.registry</span></code> — match <code class="docutils literal notranslate"><span class="pre">registry_*</span></code> variables in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>)</p></li>
+<li><p>Repeat for <strong><code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code></strong> (same warehouse and volume)</p></li>
+<li><p>For <strong><code class="docutils literal notranslate"><span class="pre">dev-lakebase</span></code></strong>, confirm the <strong>postgres</strong> resource is bound to the Lakebase database you configured (no extra UI step if deploy succeeded).</p></li>
 <li><p>Verify both apps show status <strong>Running</strong></p></li>
 </ol>
 <blockquote>
@@ -413,24 +460,23 @@ scripts/deploy.sh<span class="w"> </span>--mcp-only<span class="w">   </span><sp
 </section>
 <section id="step-9-verify">
 <h3>Step 9 — Verify<a class="headerlink" href="#step-9-verify" title="Link to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check app status</span>
-databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check app status (names must match databricks.yml resources.apps.*.name)</span>
+databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks-XXX
 databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>mcp-ontobricks
 
 <span class="c1"># Or via bundle</span>
-databricks<span class="w"> </span>bundle<span class="w"> </span>summary
+databricks<span class="w"> </span>bundle<span class="w"> </span>summary<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
 </section>
 <section id="scripts-deploy-sh-reference">
 <h3><code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span></code> Reference<a class="headerlink" href="#scripts-deploy-sh-reference" title="Link to this heading">¶</a></h3>
-<p>The convenience script wraps all DAB commands:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/deploy.sh<span class="w">                  </span><span class="c1"># validate + deploy + run main app (dev)</span>
-scripts/deploy.sh<span class="w"> </span>--all<span class="w">            </span><span class="c1"># validate + deploy + run both apps</span>
-scripts/deploy.sh<span class="w"> </span>--mcp-only<span class="w">       </span><span class="c1"># validate + deploy + run MCP only</span>
-scripts/deploy.sh<span class="w"> </span>-t<span class="w"> </span>prod<span class="w">          </span><span class="c1"># deploy to production target</span>
-scripts/deploy.sh<span class="w"> </span>--no-run<span class="w">         </span><span class="c1"># deploy without starting apps</span>
-scripts/deploy.sh<span class="w"> </span>--bind<span class="w">           </span><span class="c1"># also bind existing apps post-deploy</span>
+<p>The convenience script wraps <strong><code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">bundle</span> <span class="pre">validate</span></code></strong>, <strong><code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">bundle</span> <span class="pre">deploy</span></code></strong>, optional <strong><code class="docutils literal notranslate"><span class="pre">bundle</span> <span class="pre">deployment</span> <span class="pre">bind</span></code></strong>, <strong><code class="docutils literal notranslate"><span class="pre">bundle</span> <span class="pre">run</span></code></strong> (main app only), <strong><code class="docutils literal notranslate"><span class="pre">bootstrap-app-permissions.sh</span></code></strong>, and <strong><code class="docutils literal notranslate"><span class="pre">bootstrap-lakebase-perms.sh</span></code></strong> (when target is <code class="docutils literal notranslate"><span class="pre">dev-lakebase</span></code>):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/deploy.sh<span class="w">                    </span><span class="c1"># default: -t dev-lakebase — validate + deploy + run ontobricks-XXX</span>
+scripts/deploy.sh<span class="w"> </span>-t<span class="w"> </span>dev<span class="w">             </span><span class="c1"># Volume-only target (no Lakebase postgres bind)</span>
+scripts/deploy.sh<span class="w"> </span>-t<span class="w"> </span>dev-lakebase<span class="w">    </span><span class="c1"># explicit Lakebase target (same as default)</span>
+scripts/deploy.sh<span class="w"> </span>--no-run<span class="w">           </span><span class="c1"># deploy artifacts without starting the app</span>
+scripts/deploy.sh<span class="w"> </span>--bind<span class="w">             </span><span class="c1"># bind main app resource key → existing app name, then deploy</span>
 </pre></div>
 </div>
 </section>
@@ -484,10 +530,10 @@ scripts/deploy.sh<span class="w"> </span>--bind<span class="w">           </span
 <span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;OntoBricksRegistry&quot;</span>
 
 <span class="w">  </span><span class="c1"># ── Permission Management ──────────────────────────────────────</span>
-<span class="w">  </span><span class="c1"># App name used to check CAN_MANAGE permissions via the Databricks API</span>
-<span class="w">  </span><span class="c1"># Must match the deployed app name exactly</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ONTOBRICKS_APP_NAME</span>
-<span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ontobricks&quot;</span>
+<span class="w">  </span><span class="c1"># The deployed app name is auto-detected from the Databricks-Apps-</span>
+<span class="w">  </span><span class="c1"># injected DATABRICKS_APP_NAME env var (matches the resource name in</span>
+<span class="w">  </span><span class="c1"># databricks.yml automatically). Set ONTOBRICKS_APP_NAME only as an</span>
+<span class="w">  </span><span class="c1"># explicit override (e.g. in .env for local development).</span>
 
 <span class="w">  </span><span class="c1"># ── MLflow ─────────────────────────────────────────────────────</span>
 <span class="w">  </span><span class="c1"># Persist agent traces to the workspace tracking server</span>
@@ -535,8 +581,169 @@ scripts/deploy.sh<span class="w"> </span>--bind<span class="w">           </span
 </section>
 </section>
 <hr class="docutils" />
+<section id="unity-catalog-permissions-for-the-service-principal">
+<h2>3. Unity Catalog Permissions for the Service Principal<a class="headerlink" href="#unity-catalog-permissions-for-the-service-principal" title="Link to this heading">¶</a></h2>
+<p>Databricks Apps run as a <strong>service principal</strong> (SP) created automatically when the app is deployed. The app’s workspace bindings (<code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code>, <code class="docutils literal notranslate"><span class="pre">volume</span></code>) only cover the compute and the registry volume — they do <strong>not</strong> grant Unity Catalog privileges on the catalogs, schemas, or tables OntoBricks reads from and writes to. These grants are your responsibility and must be done once per workspace.</p>
+<p>You can look up the app’s SP ID with:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks-XXX<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; d=json.load(sys.stdin); print(d.get(&#39;service_principal_client_id&#39;))&quot;</span>
+</pre></div>
+</div>
+<p>Throughout this guide, replace <strong><code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code></strong> with your workspace’s actual main app name from <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>.</p>
+<p>Throughout this section that identifier is written as <code class="docutils literal notranslate"><span class="pre">&lt;app-sp&gt;</span></code> (it is a UUID / client-id, not an email).</p>
+<blockquote>
+<div><p><strong>Privilege mental model.</strong> In Unity Catalog, to reference any object you need <code class="docutils literal notranslate"><span class="pre">USE</span> <span class="pre">CATALOG</span></code> on its catalog and <code class="docutils literal notranslate"><span class="pre">USE</span> <span class="pre">SCHEMA</span></code> on its schema. To read table/view data you need <code class="docutils literal notranslate"><span class="pre">SELECT</span></code>. To create new tables or views in a schema you need schema-level <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span></code> / <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">VIEW</span></code>. To modify or replace an object that <strong>already exists</strong> (including <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">OR</span> <span class="pre">REPLACE</span></code> over an existing object) you must own it or hold <code class="docutils literal notranslate"><span class="pre">MANAGE</span></code> on it. Volumes are separate: files under <code class="docutils literal notranslate"><span class="pre">/Volumes/...</span></code> need <code class="docutils literal notranslate"><span class="pre">READ</span> <span class="pre">VOLUME</span></code> and <code class="docutils literal notranslate"><span class="pre">WRITE</span> <span class="pre">VOLUME</span></code>. <code class="docutils literal notranslate"><span class="pre">ALL</span> <span class="pre">PRIVILEGES</span></code> is a convenient shorthand during onboarding but you should narrow it down before production.</p>
+</div></blockquote>
+<section id="what-ontobricks-actually-does-in-uc">
+<h3>3.1 — What OntoBricks actually does in UC<a class="headerlink" href="#what-ontobricks-actually-does-in-uc" title="Link to this heading">¶</a></h3>
+<p>The main app’s service principal performs the following operations at runtime. Every one of them needs a UC grant.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Operation</p></th>
+<th class="head"><p>Target</p></th>
+<th class="head"><p>UC privilege required</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">CATALOGS</span></code>, <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">SCHEMAS</span></code>, <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">TABLES</span></code>, <code class="docutils literal notranslate"><span class="pre">DESCRIBE</span></code>, <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">VOLUMES</span></code>, <code class="docutils literal notranslate"><span class="pre">information_schema.tables</span></code> lookups (Data Source picker)</p></td>
+<td><p>Source catalogs + registry catalog</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">USE</span> <span class="pre">CATALOG</span></code> + <code class="docutils literal notranslate"><span class="pre">USE</span> <span class="pre">SCHEMA</span></code> + <code class="docutils literal notranslate"><span class="pre">SELECT</span></code> on browsed tables</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SELECT</span></code> on source tables referenced by R2RML <code class="docutils literal notranslate"><span class="pre">sql_query</span></code> entries (VIEW creation + build)</p></td>
+<td><p>Each source table/view</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SELECT</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">OR</span> <span class="pre">REPLACE</span> <span class="pre">VIEW</span> <span class="pre">&lt;registry_catalog&gt;.&lt;registry_schema&gt;.triplestore_&lt;domain&gt;_V&lt;n&gt;</span></code> (Digital Twin Sync)</p></td>
+<td><p>Registry schema</p></td>
+<td><p>Schema <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">VIEW</span></code>. If an object with the same name already exists from a previous build, additionally <code class="docutils literal notranslate"><span class="pre">MANAGE</span></code> on it or SP ownership.</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">subject,</span> <span class="pre">predicate,</span> <span class="pre">object</span> <span class="pre">FROM</span> <span class="pre">&lt;triplestore</span> <span class="pre">VIEW&gt;</span></code> (SPARQL + Ladybug population)</p></td>
+<td><p>The triplestore VIEW</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SELECT</span></code> (inherited by the SP as owner once it created the VIEW in step 3).</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">OR</span> <span class="pre">REPLACE</span> <span class="pre">TABLE</span> <span class="pre">&lt;registry_catalog&gt;.&lt;registry_schema&gt;._ob_snapshot_&lt;domain&gt;_v&lt;n&gt;</span> <span class="pre">AS</span> <span class="pre">SELECT</span> <span class="pre">...</span></code> (incremental mode)</p></td>
+<td><p>Registry schema</p></td>
+<td><p>Schema <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span></code> (+ <code class="docutils literal notranslate"><span class="pre">MANAGE</span></code> / ownership if the snapshot already exists from a prior run).</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SELECT</span></code> / <code class="docutils literal notranslate"><span class="pre">DROP</span> <span class="pre">TABLE</span> <span class="pre">IF</span> <span class="pre">EXISTS</span></code> on the snapshot table (incremental diff and cleanup)</p></td>
+<td><p>Snapshot table</p></td>
+<td><p>Inherited via ownership once the SP created it.</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span> <span class="pre">IF</span> <span class="pre">NOT</span> <span class="pre">EXISTS</span> <span class="pre">&lt;table&gt;(subject</span> <span class="pre">STRING,</span> <span class="pre">predicate</span> <span class="pre">STRING,</span> <span class="pre">object</span> <span class="pre">STRING)</span> <span class="pre">USING</span> <span class="pre">DELTA</span></code>, <code class="docutils literal notranslate"><span class="pre">DELETE</span> <span class="pre">FROM</span></code>, <code class="docutils literal notranslate"><span class="pre">INSERT</span> <span class="pre">INTO</span></code> on the optional <code class="docutils literal notranslate"><span class="pre">DATABRICKS_TRIPLESTORE_TABLE</span></code> fallback (reasoning materialisation, MCP session-less calls)</p></td>
+<td><p>Fallback triple-store table</p></td>
+<td><p>Schema <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span></code>. If the table pre-exists, <code class="docutils literal notranslate"><span class="pre">MODIFY</span></code> to <code class="docutils literal notranslate"><span class="pre">DELETE</span></code>/<code class="docutils literal notranslate"><span class="pre">INSERT</span></code> + <code class="docutils literal notranslate"><span class="pre">SELECT</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>File I/O under <code class="docutils literal notranslate"><span class="pre">/Volumes/&lt;registry_catalog&gt;/&lt;registry_schema&gt;/&lt;registry_volume&gt;/</span></code> (projects, domains, history log, LadybugDB archives)</p></td>
+<td><p>Registry volume</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">READ</span> <span class="pre">VOLUME</span></code> + <code class="docutils literal notranslate"><span class="pre">WRITE</span> <span class="pre">VOLUME</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/2.1/unity-catalog/volumes</span></code> — only triggered from <strong>Settings → Registry → Initialize</strong> when the volume does not yet exist</p></td>
+<td><p>Registry schema</p></td>
+<td><p>Schema <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">VOLUME</span></code> (skip if you create the volume manually up front).</p></td>
+</tr>
+</tbody>
+</table>
+<p>All the above run through the <strong>SQL Warehouse</strong> bound to the app (<code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> resource) on behalf of the app SP. The <code class="docutils literal notranslate"><span class="pre">CAN_USE</span></code> grant on the warehouse covers compute access; data access is controlled by UC.</p>
+</section>
+<section id="registry-catalog-schema-grants-minimum-viable-set">
+<h3>3.2 — Registry catalog/schema grants (minimum viable set)<a class="headerlink" href="#registry-catalog-schema-grants-minimum-viable-set" title="Link to this heading">¶</a></h3>
+<p>Run these SQL statements <strong>once</strong> as a workspace admin (or anyone with <code class="docutils literal notranslate"><span class="pre">MANAGE</span></code> on the catalog/schema), substituting your bundle values from <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="c1">-- The catalog the registry lives in</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="n">USE</span><span class="w"> </span><span class="k">CATALOG</span><span class="w">   </span><span class="k">ON</span><span class="w"> </span><span class="k">CATALOG</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="w">               </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+
+<span class="c1">-- The schema that holds the triplestore VIEW, snapshot tables, and the registry Volume</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="n">USE</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w">    </span><span class="k">ON</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w">  </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w">  </span><span class="k">ON</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w">  </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">CREATE</span><span class="w"> </span><span class="k">VIEW</span><span class="w">   </span><span class="k">ON</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w">  </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+
+<span class="c1">-- Registry Volume (files: projects, domains, history, Ladybug archives).</span>
+<span class="c1">-- The `volume` resource binding only grants compute reach-through; UC ACLs still apply.</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">READ</span><span class="w"> </span><span class="n">VOLUME</span><span class="w">   </span><span class="k">ON</span><span class="w"> </span><span class="n">VOLUME</span><span class="w">  </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_volume</span><span class="o">&gt;`</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">WRITE</span><span class="w"> </span><span class="n">VOLUME</span><span class="w">  </span><span class="k">ON</span><span class="w"> </span><span class="n">VOLUME</span><span class="w">  </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_volume</span><span class="o">&gt;`</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+
+<span class="c1">-- Optional — only if you want the Settings UI to be able to create the</span>
+<span class="c1">-- registry volume itself on first run (otherwise create it once as admin).</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">CREATE</span><span class="w"> </span><span class="n">VOLUME</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w">  </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Alternatively — shorter, broader, and fine for a dev workspace:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">GRANT</span><span class="w"> </span><span class="n">USE</span><span class="w"> </span><span class="k">CATALOG</span><span class="w">    </span><span class="k">ON</span><span class="w"> </span><span class="k">CATALOG</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="w">                   </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">ALL</span><span class="w"> </span><span class="k">PRIVILEGES</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w">  </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Prefer the explicit list above for a production workspace because <code class="docutils literal notranslate"><span class="pre">ALL</span> <span class="pre">PRIVILEGES</span></code> also implies <code class="docutils literal notranslate"><span class="pre">MANAGE</span></code>, which is broader than what the app needs day to day.</p>
+</section>
+<section id="source-data-grants-customer-tables-views">
+<h3>3.3 — Source data grants (customer tables/views)<a class="headerlink" href="#source-data-grants-customer-tables-views" title="Link to this heading">¶</a></h3>
+<p>For every table or view referenced in an R2RML mapping (i.e. anything that appears in the <strong>Data Sources</strong> tab of a domain), the app SP needs to read the data:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">GRANT</span><span class="w"> </span><span class="n">USE</span><span class="w"> </span><span class="k">CATALOG</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">CATALOG</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">source_catalog</span><span class="o">&gt;`</span><span class="w">                               </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="n">USE</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w">  </span><span class="k">ON</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w">  </span><span class="o">`&lt;</span><span class="n">source_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">source_schema</span><span class="o">&gt;`</span><span class="w">             </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+
+<span class="c1">-- Per-object is tightest:</span>
+<span class="k">GRANT</span><span class="w"> </span><span class="k">SELECT</span><span class="w">      </span><span class="k">ON</span><span class="w"> </span><span class="k">TABLE</span><span class="w">   </span><span class="o">`&lt;</span><span class="n">source_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">source_schema</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="k">table</span><span class="o">&gt;`</span><span class="w">   </span><span class="k">TO</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="p">;</span>
+
+<span class="c1">-- Or grant schema-wide if you trust the SP with the whole schema:</span>
+<span class="c1">-- GRANT SELECT   ON SCHEMA  `&lt;source_catalog&gt;`.`&lt;source_schema&gt;`             TO `&lt;app-sp&gt;`;</span>
+</pre></div>
+</div>
+<p>If any mapping <code class="docutils literal notranslate"><span class="pre">sql_query</span></code> joins tables from multiple schemas or catalogs, repeat the <code class="docutils literal notranslate"><span class="pre">USE</span> <span class="pre">CATALOG</span></code> / <code class="docutils literal notranslate"><span class="pre">USE</span> <span class="pre">SCHEMA</span></code> / <code class="docutils literal notranslate"><span class="pre">SELECT</span></code> chain for each. The VIEW creation in step 3 will fail with <code class="docutils literal notranslate"><span class="pre">TABLE_OR_VIEW_NOT_FOUND</span></code> or <code class="docutils literal notranslate"><span class="pre">PERMISSION_DENIED</span></code> if one is missing.</p>
+</section>
+<section id="what-you-do-not-need-to-grant">
+<h3>3.4 — What you do <strong>not</strong> need to grant<a class="headerlink" href="#what-you-do-not-need-to-grant" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MODIFY</span></code> on source tables — the app only reads them.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MANAGE</span></code> on the registry schema — <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span></code> + <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">VIEW</span></code> are sufficient because the SP automatically owns the objects it creates.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MANAGE</span></code> on the registry catalog — not required unless you want the SP to <code class="docutils literal notranslate"><span class="pre">DROP</span> <span class="pre">CATALOG</span></code> / <code class="docutils literal notranslate"><span class="pre">ALTER</span> <span class="pre">CATALOG</span></code>, which OntoBricks never does.</p></li>
+</ul>
+</section>
+<section id="known-pitfall-stale-object-blocking-create-or-replace-view">
+<h3>3.5 — Known pitfall: stale object blocking <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">OR</span> <span class="pre">REPLACE</span> <span class="pre">VIEW</span></code><a class="headerlink" href="#known-pitfall-stale-object-blocking-create-or-replace-view" title="Link to this heading">¶</a></h3>
+<p>If a build previously materialised the triplestore as a <strong>TABLE</strong> (legacy code path or a manual CTAS in SQL Editor), the next Sync will try to run <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">OR</span> <span class="pre">REPLACE</span> <span class="pre">VIEW</span></code> over the same name. Databricks refuses this because:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">OR</span> <span class="pre">REPLACE</span> <span class="pre">VIEW</span></code> cannot convert an existing TABLE to a VIEW, even for the owner.</p></li>
+<li><p>Even if it could, the SP would need <code class="docutils literal notranslate"><span class="pre">MANAGE</span></code> on that pre-existing object.</p></li>
+</ol>
+<p>The user-facing error surfaces as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Sync</span> <span class="n">failed</span><span class="p">:</span> <span class="n">Failed</span> <span class="n">to</span> <span class="n">create</span> <span class="n">VIEW</span><span class="p">:</span> <span class="n">PERMISSION_DENIED</span><span class="p">:</span> <span class="n">User</span> <span class="n">does</span> <span class="ow">not</span> <span class="n">have</span> <span class="n">MANAGE</span> <span class="n">on</span> <span class="n">Table</span> <span class="s1">&#39;&lt;cat&gt;.&lt;schema&gt;.triplestore_&lt;domain&gt;_v&lt;n&gt;&#39;</span><span class="o">.</span>
+</pre></div>
+</div>
+<p><strong>Fix (once):</strong> drop the stale object yourself, then re-run Sync:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">DROP</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`</span><span class="n">triplestore_</span><span class="o">&lt;</span><span class="k">domain</span><span class="o">&gt;</span><span class="n">_v</span><span class="o">&lt;</span><span class="n">n</span><span class="o">&gt;`</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Once dropped, the app SP recreates the object as a VIEW and owns it from then on.</p>
+</section>
+<section id="granting-when-the-sp-id-is-unknown-yet">
+<h3>3.6 — Granting when the SP ID is unknown yet<a class="headerlink" href="#granting-when-the-sp-id-is-unknown-yet" title="Link to this heading">¶</a></h3>
+<p>If <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span></code> reports the SP client-id as <code class="docutils literal notranslate"><span class="pre">None</span></code> (app not fully provisioned), bind it by email-alias instead. Apps expose a dedicated SP user with the form <code class="docutils literal notranslate"><span class="pre">&lt;app-name&gt;&#64;&lt;account-id&gt;.iam.databricks.com</span></code>, visible under <strong>Admin → Service principals</strong> after the first deploy. You can grant against that principal with the same SQL, substituting its identifier in the <code class="docutils literal notranslate"><span class="pre">TO</span></code> clause.</p>
+</section>
+<section id="quick-verification">
+<h3>3.7 — Quick verification<a class="headerlink" href="#quick-verification" title="Link to this heading">¶</a></h3>
+<p>Once grants are in place, you can verify from any SQL editor or notebook authenticated as the app SP (or by running a build in the app and watching the logs):</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="c1">-- Should succeed (list registry schema objects)</span>
+<span class="k">SHOW</span><span class="w"> </span><span class="n">TABLES</span><span class="w">  </span><span class="k">IN</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="p">;</span>
+<span class="k">SHOW</span><span class="w"> </span><span class="n">VOLUMES</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="p">;</span>
+
+<span class="c1">-- Should return the current SP&#39;s privileges on the schema</span>
+<span class="k">SHOW</span><span class="w"> </span><span class="n">GRANTS</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">app</span><span class="o">-</span><span class="n">sp</span><span class="o">&gt;`</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">registry_catalog</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="n">registry_schema</span><span class="o">&gt;`</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>If a user reports a sync failure, the app now surfaces the underlying Databricks error in the task status (<code class="docutils literal notranslate"><span class="pre">PERMISSION_DENIED</span></code>, <code class="docutils literal notranslate"><span class="pre">TABLE_OR_VIEW_NOT_FOUND</span></code>, unresolved column, etc.). The full traceback is always in the app logs.</p>
+</section>
+</section>
+<hr class="docutils" />
 <section id="permission-management">
-<h2>3. Permission Management<a class="headerlink" href="#permission-management" title="Link to this heading">¶</a></h2>
+<h2>4. Permission Management<a class="headerlink" href="#permission-management" title="Link to this heading">¶</a></h2>
 <p>OntoBricks includes a built-in permission system that controls who can access the app and what they can do. Permissions are managed in <strong>Settings &gt; Permissions</strong> and are only active when running as a Databricks App (local development has no restrictions).</p>
 <section id="how-it-works">
 <h3>How It Works<a class="headerlink" href="#how-it-works" title="Link to this heading">¶</a></h3>
@@ -577,7 +784,7 @@ scripts/deploy.sh<span class="w"> </span>--bind<span class="w">           </span
 <p>Databricks Apps do not grant the freshly-created service principal any permission on the app it runs. Until that is fixed, <code class="docutils literal notranslate"><span class="pre">list_app_principals</span></code> returns <code class="docutils literal notranslate"><span class="pre">403</span></code>, the middleware cannot resolve any user (including <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> deployers), and the access-denied page appears on the very first request.</p>
 <p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">deploy</span></code> (via <code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span></code>) runs the fix automatically. For manual deploys:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>bootstrap-perms
-<span class="c1"># equivalent to: scripts/bootstrap-app-permissions.sh ontobricks mcp-ontobricks</span>
+<span class="c1"># equivalent to: scripts/bootstrap-app-permissions.sh ontobricks-XXX mcp-ontobricks</span>
 </pre></div>
 </div>
 <p>The script is idempotent. It discovers each app’s service principal via <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span></code> and grants it <code class="docutils literal notranslate"><span class="pre">CAN_MANAGE</span></code> on itself. If the first post-deploy page load shows a <strong>“First-deploy bootstrap required”</strong> banner, that is exactly the situation — run the command and reload.</p>
@@ -585,7 +792,7 @@ scripts/deploy.sh<span class="w"> </span>--bind<span class="w">           </span
 <section id="managing-permissions">
 <h3>Managing Permissions<a class="headerlink" href="#managing-permissions" title="Link to this heading">¶</a></h3>
 <ol class="arabic simple">
-<li><p>Ensure you have <strong>CAN_MANAGE</strong> on the <code class="docutils literal notranslate"><span class="pre">ontobricks</span></code> app in the Databricks UI (Compute &gt; Apps &gt; ontobricks &gt; Permissions)</p></li>
+<li><p>Ensure you have <strong>CAN_MANAGE</strong> on the sandbox app <strong><code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code></strong> in the Databricks UI (<strong>Compute &gt; Apps &gt; ontobricks-XXX &gt; Permissions</strong>), or on your production app name if different</p></li>
 <li><p>Open the app and go to <strong>Settings &gt; Permissions</strong></p></li>
 <li><p>Click <strong>Add</strong> to grant access to workspace users or groups</p></li>
 <li><p>Assign each principal a <strong>Viewer</strong> or <strong>Editor</strong> role</p></li>
@@ -610,10 +817,10 @@ scripts/deploy.sh<span class="w"> </span>--bind<span class="w">           </span
 </section>
 <hr class="docutils" />
 <section id="deploying-to-a-new-workspace">
-<h2>4. Deploying to a New Workspace<a class="headerlink" href="#deploying-to-a-new-workspace" title="Link to this heading">¶</a></h2>
+<h2>5. Deploying to a New Workspace<a class="headerlink" href="#deploying-to-a-new-workspace" title="Link to this heading">¶</a></h2>
 <p>When moving OntoBricks to a different Databricks workspace, follow these steps.</p>
 <section id="authenticate-to-the-new-workspace">
-<h3>4.1 — Authenticate to the new workspace<a class="headerlink" href="#authenticate-to-the-new-workspace" title="Link to this heading">¶</a></h3>
+<h3>5.1 — Authenticate to the new workspace<a class="headerlink" href="#authenticate-to-the-new-workspace" title="Link to this heading">¶</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Option A: Set as default</span>
 databricks<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--host<span class="w"> </span>https://&lt;new-workspace&gt;.cloud.databricks.com
 
@@ -628,7 +835,7 @@ databricks<span class="w"> </span>auth<span class="w"> </span>login<span class="
 </div>
 </section>
 <section id="prepare-unity-catalog-resources">
-<h3>4.2 — Prepare Unity Catalog resources<a class="headerlink" href="#prepare-unity-catalog-resources" title="Link to this heading">¶</a></h3>
+<h3>5.2 — Prepare Unity Catalog resources<a class="headerlink" href="#prepare-unity-catalog-resources" title="Link to this heading">¶</a></h3>
 <p>The new workspace needs a catalog/schema where OntoBricks can store projects and triple stores:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create a schema for OntoBricks (adjust catalog name)</span>
 databricks<span class="w"> </span>sql<span class="w"> </span>query<span class="w"> </span><span class="s2">&quot;CREATE SCHEMA IF NOT EXISTS main.ontobricks&quot;</span>
@@ -639,7 +846,7 @@ databricks<span class="w"> </span>sql<span class="w"> </span>query<span class="w
 </div>
 </section>
 <section id="update-configuration-files">
-<h3>4.3 — Update configuration files<a class="headerlink" href="#update-configuration-files" title="Link to this heading">¶</a></h3>
+<h3>5.3 — Update configuration files<a class="headerlink" href="#update-configuration-files" title="Link to this heading">¶</a></h3>
 <p><strong><code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code></strong> — update the variable defaults:</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">variables</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">warehouse_id</span><span class="p">:</span>
@@ -648,6 +855,17 @@ databricks<span class="w"> </span>sql<span class="w"> </span>query<span class="w
 <span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;new-catalog&gt;&quot;</span>
 <span class="w">  </span><span class="nt">registry_schema</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;new-schema&gt;&quot;</span>
+<span class="w">  </span><span class="nt">registry_volume</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;registry&quot;</span>
+<span class="w">  </span><span class="c1"># If you use dev-lakebase — set Lakebase project/branch and the db-… segment from list-databases</span>
+<span class="w">  </span><span class="nt">lakebase_project</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;lakebase-project-id&gt;&quot;</span>
+<span class="w">  </span><span class="nt">lakebase_branch</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;production&quot;</span>
+<span class="w">  </span><span class="nt">lakebase_database_resource_segment</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;db-…</span><span class="nv"> </span><span class="s">from</span><span class="nv"> </span><span class="s">databricks</span><span class="nv"> </span><span class="s">postgres</span><span class="nv"> </span><span class="s">list-databases</span><span class="nv"> </span><span class="s">…</span><span class="nv"> </span><span class="s">-o</span><span class="nv"> </span><span class="s">json&gt;&quot;</span>
+<span class="w">  </span><span class="nt">lakebase_registry_schema</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ontobricks_registry&quot;</span>
 </pre></div>
 </div>
 <p>Update the <code class="docutils literal notranslate"><span class="pre">permissions</span></code> section with the deploying user’s email.</p>
@@ -665,67 +883,73 @@ databricks<span class="w"> </span>sql<span class="w"> </span>query<span class="w
 </div>
 </section>
 <section id="deploy">
-<h3>4.4 — Deploy<a class="headerlink" href="#deploy" title="Link to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Validate first</span>
-databricks<span class="w"> </span>bundle<span class="w"> </span>validate
+<h3>5.4 — Deploy<a class="headerlink" href="#deploy" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Validate first (use the same target you will deploy)</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>validate<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 
-<span class="c1"># Deploy and start</span>
-scripts/deploy.sh<span class="w"> </span>--all
+<span class="c1"># Deploy and start main app (Lakebase target); start MCP separately if needed</span>
+scripts/deploy.sh<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
 </section>
 <section id="bind-resources">
-<h3>4.5 — Bind resources<a class="headerlink" href="#bind-resources" title="Link to this heading">¶</a></h3>
+<h3>5.5 — Bind resources<a class="headerlink" href="#bind-resources" title="Link to this heading">¶</a></h3>
 <ol class="arabic simple">
-<li><p>Go to <strong>Compute &gt; Apps &gt; ontobricks &gt; Resources</strong></p></li>
+<li><p>Go to <strong>Compute &gt; Apps &gt; ontobricks-XXX &gt; Resources</strong> (or your main app name)</p></li>
 <li><p>Bind <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> to a running SQL Warehouse</p></li>
 <li><p>Bind <code class="docutils literal notranslate"><span class="pre">volume</span></code> to the registry UC Volume</p></li>
 <li><p>Repeat for <code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code></p></li>
 </ol>
 </section>
 <section id="initialize-and-verify">
-<h3>4.6 — Initialize and verify<a class="headerlink" href="#initialize-and-verify" title="Link to this heading">¶</a></h3>
+<h3>5.6 — Initialize and verify<a class="headerlink" href="#initialize-and-verify" title="Link to this heading">¶</a></h3>
 <ol class="arabic simple">
 <li><p>Open the app URL</p></li>
 <li><p>Go to <strong>Settings &gt; Registry &gt; Initialize</strong> (if the volume is empty)</p></li>
-<li><p>Verify both apps are <strong>Running</strong>: <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span> <span class="pre">ontobricks</span></code></p></li>
+<li><p>Verify both apps are <strong>Running</strong>: <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span> <span class="pre">ontobricks-XXX</span></code> and <code class="docutils literal notranslate"><span class="pre">databricks</span> <span class="pre">apps</span> <span class="pre">get</span> <span class="pre">mcp-ontobricks</span></code></p></li>
 </ol>
 </section>
 <section id="update-mcp-server-url">
-<h3>4.7 — Update MCP server URL<a class="headerlink" href="#update-mcp-server-url" title="Link to this heading">¶</a></h3>
+<h3>5.7 — Update MCP server URL<a class="headerlink" href="#update-mcp-server-url" title="Link to this heading">¶</a></h3>
 <p>After the main app is deployed and running:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Get the main app URL</span>
-databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;</span>
+databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks-XXX<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;</span>
 </pre></div>
 </div>
-<p>Update <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code> in <code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code> with this URL, then redeploy:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scripts/deploy.sh<span class="w"> </span>--mcp-only
+<p>Update <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code> in <code class="docutils literal notranslate"><span class="pre">src/mcp-server/app.yaml</span></code> with this URL, then redeploy the bundle and restart the MCP app:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
 </section>
 <section id="new-workspace-checklist">
 <h3>New Workspace Checklist<a class="headerlink" href="#new-workspace-checklist" title="Link to this heading">¶</a></h3>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span> <span class="p">]</span> <span class="mf">1.</span>  <span class="n">databricks</span> <span class="n">auth</span> <span class="n">login</span> <span class="o">--</span><span class="n">host</span> <span class="n">https</span><span class="p">:</span><span class="o">//&lt;</span><span class="n">new</span><span class="o">-</span><span class="n">workspace</span><span class="o">&gt;</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">2.</span>  <span class="n">Verify</span><span class="p">:</span> <span class="n">databricks</span> <span class="n">current</span><span class="o">-</span><span class="n">user</span> <span class="n">me</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">3.</span>  <span class="n">Create</span> <span class="n">Unity</span> <span class="n">Catalog</span> <span class="n">resources</span> <span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">volume</span><span class="p">)</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">4.</span>  <span class="n">Update</span> <span class="n">databricks</span><span class="o">.</span><span class="n">yml</span> <span class="n">variables</span> <span class="p">(</span><span class="n">warehouse_id</span><span class="p">,</span> <span class="n">registry_</span><span class="o">*</span><span class="p">)</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">5.</span>  <span class="n">Update</span> <span class="n">databricks</span><span class="o">.</span><span class="n">yml</span> <span class="n">permissions</span> <span class="p">(</span><span class="n">your</span> <span class="n">email</span><span class="p">)</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">6.</span>  <span class="n">Update</span> <span class="n">app</span><span class="o">.</span><span class="n">yaml</span> <span class="p">(</span><span class="n">DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT</span><span class="p">,</span> <span class="n">DATABRICKS_TRIPLESTORE_TABLE</span><span class="p">)</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">7.</span>  <span class="n">databricks</span> <span class="n">bundle</span> <span class="n">validate</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">8.</span>  <span class="n">scripts</span><span class="o">/</span><span class="n">deploy</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="nb">all</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">9.</span>  <span class="n">Bind</span> <span class="n">sql</span><span class="o">-</span><span class="n">warehouse</span> <span class="ow">and</span> <span class="n">volume</span> <span class="n">resources</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">Apps</span> <span class="n">UI</span> <span class="p">(</span><span class="n">both</span> <span class="n">apps</span><span class="p">)</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">10.</span> <span class="n">Initialize</span> <span class="n">registry</span> <span class="p">(</span><span class="n">Settings</span> <span class="o">&gt;</span> <span class="n">Registry</span> <span class="o">&gt;</span> <span class="n">Initialize</span><span class="p">)</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">11.</span> <span class="n">Verify</span> <span class="n">both</span> <span class="n">apps</span> <span class="n">are</span> <span class="n">RUNNING</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">12.</span> <span class="n">Update</span> <span class="n">ONTOBRICKS_URL</span> <span class="ow">in</span> <span class="n">src</span><span class="o">/</span><span class="n">mcp</span><span class="o">-</span><span class="n">server</span><span class="o">/</span><span class="n">app</span><span class="o">.</span><span class="n">yaml</span> <span class="k">with</span> <span class="n">the</span> <span class="n">main</span> <span class="n">app</span> <span class="n">URL</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">13.</span> <span class="n">scripts</span><span class="o">/</span><span class="n">deploy</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">mcp</span><span class="o">-</span><span class="n">only</span> <span class="p">(</span><span class="n">redeploy</span> <span class="n">MCP</span> <span class="k">with</span> <span class="n">correct</span> <span class="n">URL</span><span class="p">)</span>
-<span class="p">[</span> <span class="p">]</span> <span class="mf">14.</span> <span class="n">Verify</span> <span class="n">MCP</span> <span class="n">appears</span> <span class="ow">in</span> <span class="n">Databricks</span> <span class="n">Playground</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>[ ] 1.  databricks auth login --host https://&lt;new-workspace&gt;
+[ ] 2.  Verify: databricks current-user me
+[ ] 3.  Create Unity Catalog resources (schema, volume)
+[ ] 4.  Update databricks.yml variables (warehouse_id, registry_*, and if using dev-lakebase: lakebase_*)
+[ ] 5.  Update databricks.yml permissions (your email)
+[ ] 6.  Update app.yaml (DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT, DATABRICKS_TRIPLESTORE_TABLE, LAKEBASE_SCHEMA)
+[ ] 7.  databricks bundle validate -t dev-lakebase
+[ ] 8.  scripts/deploy.sh -t dev-lakebase   # or: databricks bundle deploy -t dev-lakebase
+[ ] 9.  Bind sql-warehouse and volume resources in the Apps UI (both apps: ontobricks-XXX, mcp-ontobricks)
+[ ] 10. If dev-lakebase: scripts/bootstrap-lakebase-perms.sh (see §2 Step 5b)
+[ ] 11. Grant UC privileges to each app&#39;s service principal (see §3):
+        registry USE CATALOG/USE SCHEMA/CREATE TABLE/CREATE VIEW +
+        volume READ/WRITE + source-table SELECT
+[ ] 12. Initialize registry (Settings &gt; Registry &gt; Initialize)
+[ ] 13. Verify both apps are RUNNING
+[ ] 14. Update ONTOBRICKS_URL in src/mcp-server/app.yaml with the main app URL
+[ ] 15. databricks bundle deploy -t dev-lakebase &amp;&amp; databricks bundle run mcp_ontobricks_app -t dev-lakebase
+[ ] 16. Verify MCP appears in Databricks Playground
 </pre></div>
 </div>
 </section>
 </section>
 <hr class="docutils" />
 <section id="triple-store-backend-configuration">
-<h2>5. Triple Store Backend Configuration<a class="headerlink" href="#triple-store-backend-configuration" title="Link to this heading">¶</a></h2>
+<h2>6. Triple Store Backend Configuration<a class="headerlink" href="#triple-store-backend-configuration" title="Link to this heading">¶</a></h2>
 <p>OntoBricks supports two triple store backends. Choose one in your project settings.</p>
 <section id="delta-view-no-extra-setup-required">
 <h3>Delta (<code class="docutils literal notranslate"><span class="pre">view</span></code>) — No Extra Setup Required<a class="headerlink" href="#delta-view-no-extra-setup-required" title="Link to this heading">¶</a></h3>
@@ -738,7 +962,7 @@ databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"
 </section>
 <hr class="docutils" />
 <section id="mcp-server-deployment-databricks-playground">
-<h2>6. MCP Server Deployment (Databricks Playground)<a class="headerlink" href="#mcp-server-deployment-databricks-playground" title="Link to this heading">¶</a></h2>
+<h2>7. MCP Server Deployment (Databricks Playground)<a class="headerlink" href="#mcp-server-deployment-databricks-playground" title="Link to this heading">¶</a></h2>
 <p>The MCP server (<code class="docutils literal notranslate"><span class="pre">mcp-ontobricks</span></code>) is a <strong>separate</strong> Databricks App that exposes OntoBricks knowledge-graph tools to the Databricks Playground. It must have a name starting with <code class="docutils literal notranslate"><span class="pre">mcp-</span></code> to be discoverable.</p>
 <section id="id2">
 <h3>Prerequisites<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
@@ -750,7 +974,7 @@ databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"
 </thead>
 <tbody>
 <tr class="row-even"><td><p>Main app deployed</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">ontobricks</span></code> must be deployed and running first</p></td>
+<td><p>Your main app (<strong><code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code></strong> in examples — the <code class="docutils literal notranslate"><span class="pre">name</span></code> under <code class="docutils literal notranslate"><span class="pre">ontobricks_dev_app</span></code> in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>) must be deployed and running first</p></td>
 </tr>
 <tr class="row-odd"><td><p>Databricks CLI</p></td>
 <td><p>Authenticated to the same workspace</p></td>
@@ -764,11 +988,14 @@ databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"
 <section id="deploy-with-dab">
 <h3>Deploy with DAB<a class="headerlink" href="#deploy-with-dab" title="Link to this heading">¶</a></h3>
 <p>The MCP server is deployed alongside the main app by the same <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code> bundle:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Deploy both apps</span>
-scripts/deploy.sh<span class="w"> </span>--all
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Deploy both app definitions (single bundle deploy)</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 
-<span class="c1"># Or deploy MCP only (main app already running)</span>
-scripts/deploy.sh<span class="w"> </span>--mcp-only
+<span class="c1"># Or the convenience script (starts main app only — start MCP separately)</span>
+scripts/deploy.sh<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
+
+<span class="c1"># After the main app is up, start the MCP app if needed</span>
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
 </section>
@@ -800,7 +1027,7 @@ scripts/deploy.sh<span class="w"> </span>--mcp-only
 </div>
 <blockquote>
 <div><p><strong>Important</strong>: Update <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code> to match your main app’s URL before deploying. Find it with:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks-XXX<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;</span>
 </pre></div>
 </div>
 </div></blockquote>
@@ -817,13 +1044,14 @@ scripts/deploy.sh<span class="w"> </span>--mcp-only
 <section id="grant-the-mcp-app-access-to-the-main-app">
 <h3>Grant the MCP App Access to the Main App<a class="headerlink" href="#grant-the-mcp-app-access-to-the-main-app" title="Link to this heading">¶</a></h3>
 <p>The MCP server calls the main app’s REST API using its service principal’s OAuth token. The <code class="docutils literal notranslate"><span class="pre">users</span></code> group should already have <code class="docutils literal notranslate"><span class="pre">CAN_USE</span></code> on the main app (set in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>). If it doesn’t:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>apps<span class="w"> </span>update-permissions<span class="w"> </span>ontobricks<span class="w"> </span>--json<span class="w"> </span><span class="s1">&#39;{</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>apps<span class="w"> </span>update-permissions<span class="w"> </span>ontobricks-XXX<span class="w"> </span>--json<span class="w"> </span><span class="s1">&#39;{</span>
 <span class="s1">  &quot;access_control_list&quot;: [</span>
 <span class="s1">    { &quot;group_name&quot;: &quot;users&quot;, &quot;permission_level&quot;: &quot;CAN_USE&quot; }</span>
 <span class="s1">  ]</span>
 <span class="s1">}&#39;</span>
 </pre></div>
 </div>
+<p>Use your real main app name everywhere <strong><code class="docutils literal notranslate"><span class="pre">ontobricks-XXX</span></code></strong> appears (from <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>).</p>
 </section>
 <section id="using-in-databricks-playground">
 <h3>Using in Databricks Playground<a class="headerlink" href="#using-in-databricks-playground" title="Link to this heading">¶</a></h3>
@@ -914,7 +1142,7 @@ python<span class="w"> </span>src/mcp-server/mcp_server.py<span class="w"> </spa
 </section>
 <hr class="docutils" />
 <section id="mlflow-agent-observability">
-<h2>7. MLflow Agent Observability<a class="headerlink" href="#mlflow-agent-observability" title="Link to this heading">¶</a></h2>
+<h2>8. MLflow Agent Observability<a class="headerlink" href="#mlflow-agent-observability" title="Link to this heading">¶</a></h2>
 <p>OntoBricks agents are instrumented with MLflow tracing. When deployed to Databricks, traces are persisted to the workspace tracking server.</p>
 <section id="id3">
 <h3>How It Works<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
@@ -965,7 +1193,7 @@ python<span class="w"> </span>src/mcp-server/mcp_server.py<span class="w"> </spa
 </section>
 <hr class="docutils" />
 <section id="dab-reference">
-<h2>8. DAB Reference<a class="headerlink" href="#dab-reference" title="Link to this heading">¶</a></h2>
+<h2>9. DAB Reference<a class="headerlink" href="#dab-reference" title="Link to this heading">¶</a></h2>
 <section id="bundle-structure">
 <h3>Bundle Structure<a class="headerlink" href="#bundle-structure" title="Link to this heading">¶</a></h3>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>OntoBricks/
@@ -991,83 +1219,77 @@ python<span class="w"> </span>src/mcp-server/mcp_server.py<span class="w"> </spa
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dev</span></code></p></td>
 <td><p>development</p></td>
-<td><p>Default. Uses the authenticated user’s workspace path.</p></td>
+<td><p>Volume-only registry backend — <strong>no</strong> Apps <code class="docutils literal notranslate"><span class="pre">postgres</span></code> resource.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">prod</span></code></p></td>
-<td><p>production</p></td>
-<td><p>Explicit root path, restricted permissions.</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dev-lakebase</span></code></p></td>
+<td><p>development</p></td>
+<td><p>Same apps plus <strong>Lakebase Autoscaling</strong> <code class="docutils literal notranslate"><span class="pre">postgres</span></code> binding (default for <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">deploy</span></code> / <code class="docutils literal notranslate"><span class="pre">scripts/deploy.sh</span></code>).</p></td>
 </tr>
 </tbody>
 </table>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>prod
-databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>ontobricks_app<span class="w"> </span>-t<span class="w"> </span>prod
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>ontobricks_dev_app<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
 </section>
 <section id="variables">
 <h3>Variables<a class="headerlink" href="#variables" title="Link to this heading">¶</a></h3>
-<p>Override defaults with <code class="docutils literal notranslate"><span class="pre">--var</span></code> flags or in a target-specific <code class="docutils literal notranslate"><span class="pre">variables:</span></code> block:</p>
+<p>Override defaults with <code class="docutils literal notranslate"><span class="pre">--var</span></code> flags or in a target-specific <code class="docutils literal notranslate"><span class="pre">variables:</span></code> block. <strong>Authoritative defaults</strong> live in <code class="docutils literal notranslate"><span class="pre">databricks.yml</span></code>; the table below summarizes intent:</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Variable</p></th>
-<th class="head"><p>Default</p></th>
 <th class="head"><p>Description</p></th>
 </tr>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">warehouse_id</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">66e8366e84d57752</span></code></p></td>
-<td><p>SQL Warehouse ID</p></td>
+<td><p>SQL Warehouse ID for the <code class="docutils literal notranslate"><span class="pre">sql-warehouse</span></code> resource.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">registry_catalog</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">benoit_cayla</span></code></p></td>
-<td><p>Catalog for the project registry</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">registry_catalog</span></code> / <code class="docutils literal notranslate"><span class="pre">registry_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">registry_volume</span></code></p></td>
+<td><p>UC triple for the <code class="docutils literal notranslate"><span class="pre">volume</span></code> resource (<code class="docutils literal notranslate"><span class="pre">catalog.schema.volume</span></code> name).</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">registry_schema</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">ontobricks</span></code></p></td>
-<td><p>Schema for the project registry</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lakebase_project</span></code> / <code class="docutils literal notranslate"><span class="pre">lakebase_branch</span></code> / <code class="docutils literal notranslate"><span class="pre">lakebase_database_resource_segment</span></code></p></td>
+<td><p>Lakebase Autoscaling binding (final segment must be <code class="docutils literal notranslate"><span class="pre">db-…</span></code> from <code class="docutils literal notranslate"><span class="pre">list-databases</span></code>).</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">registry_volume</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">OntoBricksRegistry</span></code></p></td>
-<td><p>Volume name for the project registry</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">lakebase_registry_schema</span></code></p></td>
+<td><p>Postgres schema for the registry (mirror <code class="docutils literal notranslate"><span class="pre">LAKEBASE_SCHEMA</span></code> in <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code>).</p></td>
 </tr>
 </tbody>
 </table>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>--var<span class="w"> </span><span class="nv">warehouse_id</span><span class="o">=</span>abc123def456
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>dev-lakebase<span class="w"> </span>--var<span class="w"> </span><span class="nv">warehouse_id</span><span class="o">=</span>abc123def456
 </pre></div>
 </div>
 </section>
-<section id="makefile-targets">
-<h3>Makefile Targets<a class="headerlink" href="#makefile-targets" title="Link to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>bundle-validate<span class="w">        </span><span class="c1"># Validate the bundle config</span>
-make<span class="w"> </span>bundle-deploy<span class="w">          </span><span class="c1"># Deploy both apps (dev)</span>
-make<span class="w"> </span>bundle-deploy-prod<span class="w">     </span><span class="c1"># Deploy both apps (prod)</span>
-make<span class="w"> </span>bundle-run<span class="w">             </span><span class="c1"># Start the main app</span>
-make<span class="w"> </span>bundle-run-mcp<span class="w">         </span><span class="c1"># Start the MCP server</span>
-make<span class="w"> </span>bundle-summary<span class="w">         </span><span class="c1"># Show bundle summary</span>
+<section id="makefile-targets-excerpt">
+<h3>Makefile targets (excerpt)<a class="headerlink" href="#makefile-targets-excerpt" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>deploy<span class="w">              </span><span class="c1"># scripts/deploy.sh -t dev-lakebase</span>
+make<span class="w"> </span>deploy-volume<span class="w">       </span><span class="c1"># Volume-only: scripts/deploy.sh -t dev</span>
+make<span class="w"> </span>deploy-no-run<span class="w">       </span><span class="c1"># Deploy without bundle run</span>
+make<span class="w"> </span>bundle-validate<span class="w">     </span><span class="c1"># databricks bundle validate -t dev-lakebase</span>
+make<span class="w"> </span>bundle-summary<span class="w">      </span><span class="c1"># databricks bundle summary -t dev-lakebase</span>
+make<span class="w"> </span>bootstrap-perms<span class="w">     </span><span class="c1"># app SP CAN_MANAGE on self (see scripts/bootstrap-app-permissions.sh)</span>
+make<span class="w"> </span>bootstrap-lakebase<span class="w">  </span><span class="c1"># Lakebase schema grants (see scripts/bootstrap-lakebase-perms.sh)</span>
 </pre></div>
 </div>
 </section>
 <section id="file-sync">
 <h3>File Sync<a class="headerlink" href="#file-sync" title="Link to this heading">¶</a></h3>
-<p>The <code class="docutils literal notranslate"><span class="pre">.databricksignore</span></code> at the project root excludes non-runtime files (tests, docs, data, IDE config, the MCP server source) from the main app sync. The MCP server has its own <code class="docutils literal notranslate"><span class="pre">source_code_path</span></code> pointing directly to <code class="docutils literal notranslate"><span class="pre">src/mcp-server/</span></code>.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">.databricksignore</span></code> at the project root excludes non-runtime files (tests, docs, data, IDE config, etc.) from the main app sync. The MCP server has its own <code class="docutils literal notranslate"><span class="pre">source_code_path</span></code> pointing directly to <code class="docutils literal notranslate"><span class="pre">src/mcp-server/</span></code>.</p>
 </section>
 <section id="binding-existing-apps">
-<h3>Binding Existing Apps<a class="headerlink" href="#binding-existing-apps" title="Link to this heading">¶</a></h3>
-<p>If the apps already exist in the workspace from a previous manual deployment:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Bind the bundle definitions to existing workspace apps</span>
-databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>ontobricks_app<span class="w"> </span>ontobricks
-databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>mcp-ontobricks
-
-<span class="c1"># Then deploy normally</span>
-databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
+<h3>Binding existing apps<a class="headerlink" href="#binding-existing-apps" title="Link to this heading">¶</a></h3>
+<p>If the apps already exist in the workspace from a previous deployment:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>ontobricks_dev_app<span class="w"> </span>ontobricks-XXX<span class="w"> </span>-t<span class="w"> </span>dev-lakebase<span class="w"> </span>--auto-approve
+databricks<span class="w"> </span>bundle<span class="w"> </span>deployment<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>mcp-ontobricks<span class="w"> </span>-t<span class="w"> </span>dev-lakebase<span class="w"> </span>--auto-approve
+databricks<span class="w"> </span>bundle<span class="w"> </span>deploy<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
 </section>
 </section>
 <hr class="docutils" />
 <section id="full-deployment-checklist">
-<h2>9. Full Deployment Checklist<a class="headerlink" href="#full-deployment-checklist" title="Link to this heading">¶</a></h2>
+<h2>10. Full Deployment Checklist<a class="headerlink" href="#full-deployment-checklist" title="Link to this heading">¶</a></h2>
 <p>Use this checklist when deploying OntoBricks from scratch on any workspace:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>[ ] 1.  Databricks CLI installed (&gt;= 0.250.0) and authenticated
           databricks auth login --host https://&lt;workspace&gt;
@@ -1078,40 +1300,49 @@ databricks<span class="w"> </span>bundle<span class="w"> </span>deploy
         [ ] A schema within that catalog (e.g., ontobricks)
         [ ] A Volume for the project registry (e.g., OntoBricksRegistry)
 [ ] 4.  Update databricks.yml:
-        [ ] Variable defaults (warehouse_id, registry_catalog, registry_schema, registry_volume)
+        [ ] Variable defaults (warehouse_id, registry_*, and if dev-lakebase: lakebase_*)
         [ ] Permissions (your email with CAN_MANAGE)
 [ ] 5.  Update app.yaml:
         [ ] DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT
         [ ] DATABRICKS_TRIPLESTORE_TABLE
+        [ ] LAKEBASE_SCHEMA (must match lakebase_registry_schema when using Lakebase)
         [ ] (local dev only) REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME
-[ ] 6.  Validate: databricks bundle validate
-[ ] 7.  Deploy main app:
-          scripts/deploy.sh
-[ ] 8.  Bind sql-warehouse resource in the Apps UI
-[ ] 9.  Bind volume resource to the registry UC Volume
-[ ] 10. Verify main app is RUNNING:
-          databricks apps get ontobricks
-[ ] 11. Initialize registry if the volume is empty:
+[ ] 6.  Validate: databricks bundle validate -t dev-lakebase
+[ ] 7.  Deploy: scripts/deploy.sh -t dev-lakebase   (or databricks bundle deploy -t dev-lakebase)
+[ ] 8.  Bind sql-warehouse resource in the Apps UI (main + MCP apps)
+[ ] 9.  Bind volume resource to the registry UC Volume (both apps)
+[ ] 10. If dev-lakebase: run scripts/bootstrap-lakebase-perms.sh (see §2 Step 5b)
+[ ] 11. Grant Unity Catalog privileges to the app service principal (see §3):
+        [ ] Registry catalog: USE CATALOG
+        [ ] Registry schema : USE SCHEMA + CREATE TABLE + CREATE VIEW
+        [ ] Registry volume : READ VOLUME + WRITE VOLUME
+        [ ] Each source catalog/schema referenced in R2RML mappings:
+            USE CATALOG + USE SCHEMA + SELECT (per table or schema-wide)
+[ ] 12. make bootstrap-perms   (or scripts/bootstrap-app-permissions.sh ontobricks-XXX mcp-ontobricks)
+[ ] 13. Verify main app is RUNNING:
+          databricks apps get ontobricks-XXX
+[ ] 14. Initialize registry if the volume is empty:
           Open app → Settings → Registry → Initialize
-[ ] 12. (If using MCP) Update ONTOBRICKS_URL in src/mcp-server/app.yaml:
-          databricks apps get ontobricks -o json | python3 -c &quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;
-[ ] 13. (If using MCP) Deploy MCP server:
-          scripts/deploy.sh --mcp-only
-[ ] 14. (If using MCP) Bind MCP resources (same warehouse + volume)
-[ ] 15. (If using MCP) Verify in Databricks Playground
+[ ] 15. (If using MCP) Update ONTOBRICKS_URL in src/mcp-server/app.yaml:
+          databricks apps get ontobricks-XXX -o json | python3 -c &quot;import sys,json; print(json.load(sys.stdin)[&#39;url&#39;])&quot;
+[ ] 16. (If using MCP) Redeploy and start MCP:
+          databricks bundle deploy -t dev-lakebase &amp;&amp; databricks bundle run mcp_ontobricks_app -t dev-lakebase
+[ ] 17. (If using MCP) Bind MCP resources (same warehouse + volume)
+[ ] 18. (If using MCP) Verify in Databricks Playground
 </pre></div>
 </div>
 </section>
 <hr class="docutils" />
 <section id="troubleshooting">
-<h2>10. Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">¶</a></h2>
+<h2>11. Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">¶</a></h2>
 <section id="app-wont-start">
 <h3>App Won’t Start<a class="headerlink" href="#app-wont-start" title="Link to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check app status</span>
-databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check app status (use your bundle’s app names)</span>
+databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>ontobricks-XXX
+databricks<span class="w"> </span>apps<span class="w"> </span>get<span class="w"> </span>mcp-ontobricks
 
 <span class="c1"># Check recent deployment status</span>
-databricks<span class="w"> </span>apps<span class="w"> </span>list-deployments<span class="w"> </span>ontobricks
+databricks<span class="w"> </span>apps<span class="w"> </span>list-deployments<span class="w"> </span>ontobricks-XXX
 </pre></div>
 </div>
 </section>
@@ -1138,9 +1369,26 @@ databricks<span class="w"> </span>apps<span class="w"> </span>list-deployments<s
 <h3>Connection Errors<a class="headerlink" href="#connection-errors" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>Verify the SQL Warehouse is running and the resource binding is correct</p></li>
-<li><p>Check the SP has correct permissions on catalogs/schemas</p></li>
+<li><p>Check the SP has correct permissions on catalogs/schemas — see <a class="reference internal" href="#3-unity-catalog-permissions-for-the-service-principal"><span class="xref myst">§3 Unity Catalog Permissions for the Service Principal</span></a></p></li>
 <li><p>Review app logs in the Databricks Apps UI</p></li>
 </ul>
+</section>
+<section id="digital-twin-sync-permission-denied-failed-to-create-view">
+<h3>Digital Twin Sync: <code class="docutils literal notranslate"><span class="pre">PERMISSION_DENIED</span></code> / <code class="docutils literal notranslate"><span class="pre">Failed</span> <span class="pre">to</span> <span class="pre">create</span> <span class="pre">VIEW</span></code><a class="headerlink" href="#digital-twin-sync-permission-denied-failed-to-create-view" title="Link to this heading">¶</a></h3>
+<p>If <strong>Sync</strong> fails with a message like</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Sync</span> <span class="n">failed</span><span class="p">:</span> <span class="n">Failed</span> <span class="n">to</span> <span class="n">create</span> <span class="n">VIEW</span><span class="p">:</span> <span class="n">PERMISSION_DENIED</span><span class="p">:</span>
+<span class="n">User</span> <span class="n">does</span> <span class="ow">not</span> <span class="n">have</span> <span class="n">MANAGE</span> <span class="n">on</span> <span class="n">Table</span> <span class="s1">&#39;&lt;cat&gt;.&lt;schema&gt;.triplestore_&lt;domain&gt;_v&lt;n&gt;&#39;</span><span class="o">.</span>
+</pre></div>
+</div>
+<p>then an object with the same name already exists in UC as a <strong>TABLE</strong> — typically left behind by a legacy materialised build — and <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">OR</span> <span class="pre">REPLACE</span> <span class="pre">VIEW</span></code> cannot overwrite it. Drop the stale object once as an admin and retry:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">DROP</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="o">`&lt;</span><span class="n">cat</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`&lt;</span><span class="k">schema</span><span class="o">&gt;`</span><span class="p">.</span><span class="o">`</span><span class="n">triplestore_</span><span class="o">&lt;</span><span class="k">domain</span><span class="o">&gt;</span><span class="n">_v</span><span class="o">&lt;</span><span class="n">n</span><span class="o">&gt;`</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>If the failure is a plain <code class="docutils literal notranslate"><span class="pre">PERMISSION_DENIED</span></code> without a pre-existing object, the app SP is missing a UC grant — see <a class="reference internal" href="#32--registry-catalogschema-grants-minimum-viable-set"><span class="xref myst">§3.2</span></a> for the registry schema and <a class="reference internal" href="#33--source-data-grants-customer-tablesviews"><span class="xref myst">§3.3</span></a> for source tables.</p>
+</section>
+<section id="digital-twin-sync-table-or-view-not-found">
+<h3>Digital Twin Sync: <code class="docutils literal notranslate"><span class="pre">TABLE_OR_VIEW_NOT_FOUND</span></code><a class="headerlink" href="#digital-twin-sync-table-or-view-not-found" title="Link to this heading">¶</a></h3>
+<p>The app SP lacks <code class="docutils literal notranslate"><span class="pre">USE</span> <span class="pre">CATALOG</span></code> / <code class="docutils literal notranslate"><span class="pre">USE</span> <span class="pre">SCHEMA</span></code> / <code class="docutils literal notranslate"><span class="pre">SELECT</span></code> on one of the source tables referenced in an R2RML mapping. Identify which source from the error message and grant per <a class="reference internal" href="#33--source-data-grants-customer-tablesviews"><span class="xref myst">§3.3</span></a>.</p>
 </section>
 <section id="localhost-redirects-when-deployed">
 <h3><code class="docutils literal notranslate"><span class="pre">localhost</span></code> Redirects When Deployed<a class="headerlink" href="#localhost-redirects-when-deployed" title="Link to this heading">¶</a></h3>
@@ -1170,7 +1418,7 @@ databricks<span class="w"> </span>workspace<span class="w"> </span>delete<span c
 </section>
 <hr class="docutils" />
 <section id="production-considerations">
-<h2>11. Production Considerations<a class="headerlink" href="#production-considerations" title="Link to this heading">¶</a></h2>
+<h2>12. Production Considerations<a class="headerlink" href="#production-considerations" title="Link to this heading">¶</a></h2>
 <section id="security">
 <h3>Security<a class="headerlink" href="#security" title="Link to this heading">¶</a></h3>
 <ul class="simple">
@@ -1193,7 +1441,7 @@ databricks<span class="w"> </span>workspace<span class="w"> </span>delete<span c
 <li><p><strong>Structured JSON logs</strong>: Set <code class="docutils literal notranslate"><span class="pre">LOG_FORMAT=json</span></code> to emit one JSON object per log line — ideal for log aggregation and search</p></li>
 <li><p><strong>Request timing</strong>: Every non-static request is logged with method, path, status code, and duration in milliseconds</p></li>
 <li><p><strong>Thread pool</strong>: Tune concurrent blocking work via <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_THREAD_POOL_SIZE</span></code> (default <code class="docutils literal notranslate"><span class="pre">20</span></code>)</p></li>
-<li><p><strong>Health checks</strong>: <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code> and <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health/detailed</span></code></p></li>
+<li><p><strong>Health checks</strong>: <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code> runs a comprehensive readiness probe (<code class="docutils literal notranslate"><span class="pre">/tmp</span></code> + session/log dirs, Databricks auth, SQL warehouse, registry UC volume read+write, registry catalog/schema view DDL, Lakebase USAGE) and returns <code class="docutils literal notranslate"><span class="pre">{status,</span> <span class="pre">summary:{ok,warnings,errors},</span> <span class="pre">checks:[…]}</span></code>. The endpoint always returns HTTP 200 — external probes should look at the top-level <code class="docutils literal notranslate"><span class="pre">status</span></code> and <code class="docutils literal notranslate"><span class="pre">summary.errors</span></code> fields rather than the HTTP code, so a single flickering dependency does not pull the app out of rotation.</p></li>
 <li><p><strong>Agent traces</strong>: View under <strong>Machine Learning &gt; Experiments &gt; <code class="docutils literal notranslate"><span class="pre">/Shared/ontobricks-agents</span></code></strong> — each agent call shows a span tree with inputs, outputs, latency, and token usage</p></li>
 </ul>
 </section>
@@ -1201,7 +1449,8 @@ databricks<span class="w"> </span>workspace<span class="w"> </span>delete<span c
 <h3>Updating<a class="headerlink" href="#updating" title="Link to this heading">¶</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Pull latest code and redeploy</span>
 git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>main
-scripts/deploy.sh<span class="w"> </span>--all
+scripts/deploy.sh<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
+databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="w"> </span>mcp_ontobricks_app<span class="w"> </span>-t<span class="w"> </span>dev-lakebase
 </pre></div>
 </div>
 </section>

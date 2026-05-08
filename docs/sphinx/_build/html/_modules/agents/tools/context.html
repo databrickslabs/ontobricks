@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -152,7 +154,14 @@
     <span class="n">ontology_classes</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">ontology_properties</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">ontology_base_uri</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="n">ontology_dirty</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+    <span class="n">ontology_dirty</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="c1"># Graph Chat agent fields (``agent_dtwin_chat``) – loopback REST caller</span>
+    <span class="n">dtwin_base_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">dtwin_session_cookies</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">dtwin_session_headers</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">dtwin_registry_params</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">dtwin_domain_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
 
 </pre></div>
 

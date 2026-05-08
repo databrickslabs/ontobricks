@@ -58,7 +58,9 @@
 <li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Development</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#ontobricks-dependencies">OntoBricks Dependencies</a></li>
@@ -1036,7 +1038,7 @@ uv<span class="w"> </span>sync<span class="w"> </span>--dev
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TestHealthRoutes</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health/detailed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code> (readiness probe — verifies the response shape and that <code class="docutils literal notranslate"><span class="pre">/health/detailed</span></code> has been retired)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TestMainPages</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/about</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/session-status</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/ontology-status</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/validate/*</span></code></p></td>
@@ -1907,8 +1909,8 @@ user has no access to any part of the application.</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_APP_NAME</span></code></p></td>
-<td><p>Yes</p></td>
-<td><p>Must match the deployed Databricks App name (e.g., <code class="docutils literal notranslate"><span class="pre">&quot;ontobricks&quot;</span></code>). Used to query the app’s permission ACL.</p></td>
+<td><p>No</p></td>
+<td><p>Optional override of the deployed Databricks App name used to query the app’s permission ACL. If unset, the runtime auto-detects it from the Databricks-Apps-injected <code class="docutils literal notranslate"><span class="pre">DATABRICKS_APP_NAME</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">ontobricks</span></code> for prod, <code class="docutils literal notranslate"><span class="pre">ontobricks-dev</span></code> for the sandbox). Useful in <code class="docutils literal notranslate"><span class="pre">.env</span></code> for local development.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">REGISTRY_CATALOG</span></code></p></td>
 <td><p>Yes</p></td>

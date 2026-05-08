@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -132,9 +133,11 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -208,6 +211,7 @@
             <span class="s2">&quot;decision_tables&quot;</span><span class="p">:</span> <span class="p">[],</span>
             <span class="s2">&quot;sparql_rules&quot;</span><span class="p">:</span> <span class="p">[],</span>
             <span class="s2">&quot;aggregate_rules&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s2">&quot;cohort_rules&quot;</span><span class="p">:</span> <span class="p">[],</span>
             <span class="s2">&quot;axioms&quot;</span><span class="p">:</span> <span class="p">[],</span>
             <span class="s2">&quot;expressions&quot;</span><span class="p">:</span> <span class="p">[],</span>
             <span class="s2">&quot;groups&quot;</span><span class="p">:</span> <span class="p">[],</span>
@@ -615,30 +619,38 @@
 
         <span class="k">return</span> <span class="n">data</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_config_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a quick hash of ontology + mapping for change detection.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sanitized_ontology_for_hash</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a deep-copied ontology with volatile runtime flags stripped.</span>
 
-<span class="sd">        Strips volatile runtime flags (``excluded``, ``r2rml_output``) so</span>
-<span class="sd">        the hash only reflects real user-controlled content.</span>
+<span class="sd">        The ``excluded`` flag on classes and properties is a UI-level</span>
+<span class="sd">        marker that lives in the mapping (single source of truth); it</span>
+<span class="sd">        must never participate in change-detection hashing.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="kn">import</span><span class="w"> </span><span class="nn">copy</span><span class="o">,</span><span class="w"> </span><span class="nn">hashlib</span><span class="o">,</span><span class="w"> </span><span class="nn">json</span>
-
         <span class="n">ont</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{}))</span>
         <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">ont</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[]):</span>
             <span class="bp">cls</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;excluded&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">ont</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[]):</span>
             <span class="n">prop</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;excluded&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ont</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sha256_json</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;SHA-256 of a JSON-serialized payload with stable ordering.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span>
+            <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_config_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a quick hash of ontology + mapping for change detection.&quot;&quot;&quot;</span>
+        <span class="n">ont</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sanitized_ontology_for_hash</span><span class="p">()</span>
         <span class="n">asgn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;assignment&quot;</span><span class="p">,</span> <span class="p">{})</span>
-        <span class="n">payload</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sha256_json</span><span class="p">(</span>
             <span class="p">{</span>
                 <span class="s2">&quot;ontology&quot;</span><span class="p">:</span> <span class="n">ont</span><span class="p">,</span>
                 <span class="s2">&quot;entities&quot;</span><span class="p">:</span> <span class="n">asgn</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entities&quot;</span><span class="p">,</span> <span class="p">[]),</span>
                 <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="n">asgn</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;relationships&quot;</span><span class="p">,</span> <span class="p">[]),</span>
-            <span class="p">},</span>
-            <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-            <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+            <span class="p">}</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_rebake_snapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Re-capture initial snapshots from current data so save() sees no diff.&quot;&quot;&quot;</span>
@@ -647,29 +659,18 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_initial_ontology_snapshot</span> <span class="o">=</span> <span class="n">ont_snap</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_initial_assignment_snapshot</span> <span class="o">=</span> <span class="n">asgn_snap</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_split_snapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_split_snapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return separate (ontology_hash, assignment_hash) for granular change detection.&quot;&quot;&quot;</span>
-        <span class="kn">import</span><span class="w"> </span><span class="nn">copy</span><span class="o">,</span><span class="w"> </span><span class="nn">hashlib</span><span class="o">,</span><span class="w"> </span><span class="nn">json</span>
-
-        <span class="n">ont</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{}))</span>
-        <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">ont</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[]):</span>
-            <span class="bp">cls</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;excluded&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">prop</span> <span class="ow">in</span> <span class="n">ont</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[]):</span>
-            <span class="n">prop</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;excluded&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">ont</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sanitized_ontology_for_hash</span><span class="p">()</span>
         <span class="n">asgn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;assignment&quot;</span><span class="p">,</span> <span class="p">{})</span>
-
-        <span class="n">ont_payload</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">ont</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span>
-        <span class="n">asgn_payload</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
-            <span class="p">{</span>
-                <span class="s2">&quot;entities&quot;</span><span class="p">:</span> <span class="n">asgn</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entities&quot;</span><span class="p">,</span> <span class="p">[]),</span>
-                <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="n">asgn</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;relationships&quot;</span><span class="p">,</span> <span class="p">[]),</span>
-            <span class="p">},</span>
-            <span class="n">sort_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-            <span class="n">default</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
-        <span class="p">)</span>
         <span class="k">return</span> <span class="p">(</span>
-            <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">ont_payload</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">(),</span>
-            <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">asgn_payload</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">(),</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_sha256_json</span><span class="p">(</span><span class="n">ont</span><span class="p">),</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_sha256_json</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;entities&quot;</span><span class="p">:</span> <span class="n">asgn</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entities&quot;</span><span class="p">,</span> <span class="p">[]),</span>
+                    <span class="s2">&quot;relationships&quot;</span><span class="p">:</span> <span class="n">asgn</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;relationships&quot;</span><span class="p">,</span> <span class="p">[]),</span>
+                <span class="p">}</span>
+            <span class="p">),</span>
         <span class="p">)</span>
 
 <div class="viewcode-block" id="DomainSession.save">
@@ -937,7 +938,7 @@
 <span class="sd">        resolution happens inside :class:`RegistryService` at I/O time.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">_DOMAINS_FOLDER</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.RegistryService</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">_DOMAINS_FOLDER</span>
 
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">get_settings</span><span class="p">())</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">is_configured</span><span class="p">:</span>
@@ -1139,6 +1140,14 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">][</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
 
     <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cohort_rules&quot;</span><span class="p">,</span> <span class="p">[])</span>
+
+    <span class="nd">@cohort_rules</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">][</span><span class="s2">&quot;cohort_rules&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">axioms</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get OWL axioms (logical assertions: equivalentClass, disjointWith, etc.).&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;axioms&quot;</span><span class="p">,</span> <span class="p">[])</span>
@@ -1189,14 +1198,40 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">delta</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Derived Delta triplestore location (catalog, schema, table_name).</span>
 
-<span class="sd">        The Delta VIEW always lives in the same Unity Catalog catalog.schema</span>
-<span class="sd">        as the domain registry, and the view name is computed from the</span>
-<span class="sd">        domain name and current version.  Returns a fresh dict on every</span>
-<span class="sd">        access; mutations are not persisted.</span>
+<span class="sd">        The Delta VIEW always lives in the same Unity Catalog</span>
+<span class="sd">        catalog.schema as the domain registry, and the view name is</span>
+<span class="sd">        computed from the domain name and current version. Returns a</span>
+<span class="sd">        fresh dict on every access; mutations are not persisted.</span>
+
+<span class="sd">        catalog/schema are resolved via :class:`RegistryCfg.from_domain`</span>
+<span class="sd">        so the same precedence applies here as for ``uc_domain_path``,</span>
+<span class="sd">        ``uc_version_path`` and the rest of the registry-aware code:</span>
+<span class="sd">        UI override for backend/Lakebase knobs → Lakebase ``registries``</span>
+<span class="sd">        row merged with bound Volume path (when ``REGISTRY_VOLUME_PATH``</span>
+<span class="sd">        parses) → bound path alone → env vars → raw</span>
+<span class="sd">        ``settings[&quot;registry&quot;]``. Without this delegation the Build</span>
+<span class="sd">        page resolved ``effective_view_table`` against whatever</span>
+<span class="sd">        catalog/schema happened to be persisted in the session, even</span>
+<span class="sd">        when the active backend pointed at a *different* triplet — so</span>
+<span class="sd">        the Triple-Store badge went red against the wrong catalog</span>
+<span class="sd">        while ``uc_version_path`` looked at the right one.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">reg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;settings&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;registry&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="ow">or</span> <span class="p">{}</span>
-        <span class="n">catalog</span> <span class="o">=</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
-        <span class="n">schema</span> <span class="o">=</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.RegistryService</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">get_settings</span><span class="p">())</span>
+            <span class="n">catalog</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">schema</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">schema</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="c1"># Fail-soft: fall back to raw session values so a broken</span>
+            <span class="c1"># registry (e.g. local dev without env vars) still yields a</span>
+            <span class="c1"># usable name shape rather than a hard 500. The downstream</span>
+            <span class="c1"># existence check will simply return ``view_exists = False``</span>
+            <span class="c1"># which the UI surfaces as a red badge — same as today.</span>
+            <span class="n">reg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;settings&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;registry&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="n">catalog</span> <span class="o">=</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">schema</span> <span class="o">=</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
         <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
         <span class="n">version</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_version</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
         <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
@@ -1418,6 +1453,7 @@
             <span class="s2">&quot;decision_tables&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;decision_tables&quot;</span><span class="p">,</span> <span class="p">[]),</span>
             <span class="s2">&quot;sparql_rules&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sparql_rules&quot;</span><span class="p">,</span> <span class="p">[]),</span>
             <span class="s2">&quot;aggregate_rules&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">,</span> <span class="p">[]),</span>
+            <span class="s2">&quot;cohort_rules&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cohort_rules&quot;</span><span class="p">,</span> <span class="p">[]),</span>
             <span class="s2">&quot;axioms&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;axioms&quot;</span><span class="p">,</span> <span class="p">[]),</span>
             <span class="s2">&quot;expressions&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;expressions&quot;</span><span class="p">,</span> <span class="p">[]),</span>
             <span class="s2">&quot;groups&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data</span><span class="p">[</span><span class="s2">&quot;ontology&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;groups&quot;</span><span class="p">,</span> <span class="p">[]),</span>

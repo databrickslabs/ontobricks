@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -109,7 +110,12 @@
           <div class="body" role="main">
             
   <h1>Source code for back.objects.domain.version_status</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;TTL cache for registry-backed version status (shared across Domain instances).&quot;&quot;&quot;</span>
+<span></span><span class="sd">&quot;&quot;&quot;TTL cache for registry-backed version status (shared across Domain instances).</span>
+
+<span class="sd">The cache is encapsulated in :class:`VersionStatusCache`; a module-level</span>
+<span class="sd">singleton is exposed via free-function accessors to preserve the previous</span>
+<span class="sd">public surface (see ``__init__.py``).</span>
+<span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -120,32 +126,90 @@
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">_version_status_cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<span class="n">_VERSION_STATUS_TTL</span> <span class="o">=</span> <span class="mi">30</span>
+<span class="n">_DEFAULT_TTL_SECONDS</span> <span class="o">=</span> <span class="mi">30</span>
+
+
+<div class="viewcode-block" id="VersionStatusCache">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">VersionStatusCache</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Process-wide TTL cache for per-domain version status entries.</span>
+
+<span class="sd">    Each entry is keyed by an opaque ``cache_key`` (catalog/schema/domain</span>
+<span class="sd">    tuple) and is considered fresh for :attr:`ttl_seconds` seconds after</span>
+<span class="sd">    it is written.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ttl_seconds</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">_DEFAULT_TTL_SECONDS</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ttl_seconds</span> <span class="o">=</span> <span class="n">ttl_seconds</span>
+
+<div class="viewcode-block" id="VersionStatusCache.clear">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache.clear">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Invalidate the whole cache (after UC save/load).&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="VersionStatusCache.get">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache.get">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cache_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the cached value if present and fresh, else ``None``.&quot;&quot;&quot;</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cache_key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">and</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">cached</span><span class="p">[</span><span class="s2">&quot;_ts&quot;</span><span class="p">])</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">ttl_seconds</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="VersionStatusCache.set">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache.set">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cache_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Store ``data`` against ``cache_key`` with the current timestamp.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="p">[</span><span class="n">cache_key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;_ts&quot;</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()}</span></div>
+
+
+<div class="viewcode-block" id="VersionStatusCache.snapshot">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache.snapshot">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a serialisable snapshot of the cache state for debugging.&quot;&quot;&quot;</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">entries</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">age</span> <span class="o">=</span> <span class="n">now</span> <span class="o">-</span> <span class="n">value</span><span class="p">[</span><span class="s2">&quot;_ts&quot;</span><span class="p">]</span>
+            <span class="n">entries</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;age_seconds&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">age</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+                <span class="s2">&quot;ttl_remaining&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ttl_seconds</span> <span class="o">-</span> <span class="n">age</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span>
+            <span class="p">}</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;ttl_seconds&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ttl_seconds</span><span class="p">,</span> <span class="s2">&quot;entries&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">}</span></div>
+</div>
+
+
+
+<span class="n">_cache</span> <span class="o">=</span> <span class="n">VersionStatusCache</span><span class="p">()</span>
+
+<span class="n">_version_status_cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">_cache</span><span class="o">.</span><span class="n">_store</span>
 
 
 <div class="viewcode-block" id="clear_version_status_cache">
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.clear_version_status_cache">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">clear_version_status_cache</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Invalidate server-side version status cache (after UC save/load).&quot;&quot;&quot;</span>
-    <span class="n">_version_status_cache</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+    <span class="n">_cache</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
 
 
 
 <div class="viewcode-block" id="get_cached_version_status">
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.get_cached_version_status">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_cached_version_status</span><span class="p">(</span><span class="n">cache_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">cached</span> <span class="o">=</span> <span class="n">_version_status_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cache_key</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">cached</span> <span class="ow">and</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">cached</span><span class="p">[</span><span class="s2">&quot;_ts&quot;</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">_VERSION_STATUS_TTL</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">cached</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span>
-    <span class="k">return</span> <span class="kc">None</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the cached value for ``cache_key`` if still fresh.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cache_key</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="set_cached_version_status">
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.set_cached_version_status">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">set_cached_version_status</span><span class="p">(</span><span class="n">cache_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">_version_status_cache</span><span class="p">[</span><span class="n">cache_key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;_ts&quot;</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()}</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Store ``data`` in the version-status cache under ``cache_key``.&quot;&quot;&quot;</span>
+    <span class="n">_cache</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">cache_key</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span></div>
 
 
 
@@ -153,15 +217,7 @@
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.version_status.get_version_status_cache_snapshot">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_version_status_cache_snapshot</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a serialisable snapshot of the cache state for debugging.&quot;&quot;&quot;</span>
-    <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-    <span class="n">entries</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">_version_status_cache</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="n">age</span> <span class="o">=</span> <span class="n">now</span> <span class="o">-</span> <span class="n">value</span><span class="p">[</span><span class="s2">&quot;_ts&quot;</span><span class="p">]</span>
-        <span class="n">entries</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">&quot;age_seconds&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">age</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
-            <span class="s2">&quot;ttl_remaining&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">_VERSION_STATUS_TTL</span> <span class="o">-</span> <span class="n">age</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span>
-        <span class="p">}</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;ttl_seconds&quot;</span><span class="p">:</span> <span class="n">_VERSION_STATUS_TTL</span><span class="p">,</span> <span class="s2">&quot;entries&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">}</span></div>
+    <span class="k">return</span> <span class="n">_cache</span><span class="o">.</span><span class="n">snapshot</span><span class="p">()</span></div>
 
 </pre></div>
 

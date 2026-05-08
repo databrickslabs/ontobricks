@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -114,13 +116,33 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.task_manager.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">Task</span><span class="p">,</span> <span class="n">TaskStatus</span><span class="p">,</span> <span class="n">TaskStep</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_now_iso</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return UTC ISO timestamp for API consumers.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_format_duration</span><span class="p">(</span><span class="n">seconds</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Human-friendly duration used in log lines and notifications.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">seconds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;n/a&quot;</span>
+    <span class="k">if</span> <span class="n">seconds</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">seconds</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1000</span><span class="p">)</span><span class="si">}</span><span class="s2">ms&quot;</span>
+    <span class="k">if</span> <span class="n">seconds</span> <span class="o">&lt;</span> <span class="mi">60</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">seconds</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">s&quot;</span>
+    <span class="n">minutes</span><span class="p">,</span> <span class="n">rem</span> <span class="o">=</span> <span class="nb">divmod</span><span class="p">(</span><span class="n">seconds</span><span class="p">,</span> <span class="mi">60</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">minutes</span> <span class="o">&lt;</span> <span class="mi">60</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">minutes</span><span class="p">)</span><span class="si">}</span><span class="s2">m </span><span class="si">{</span><span class="n">rem</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s&quot;</span>
+    <span class="n">hours</span><span class="p">,</span> <span class="n">rem_min</span> <span class="o">=</span> <span class="nb">divmod</span><span class="p">(</span><span class="n">minutes</span><span class="p">,</span> <span class="mi">60</span><span class="p">)</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">hours</span><span class="p">)</span><span class="si">}</span><span class="s2">h </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">rem_min</span><span class="p">)</span><span class="si">}</span><span class="s2">m&quot;</span>
 
 
 <div class="viewcode-block" id="TaskManager">
@@ -199,21 +221,29 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">task</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="n">task</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">TaskStatus</span><span class="o">.</span><span class="n">RUNNING</span>
-        <span class="n">task</span><span class="o">.</span><span class="n">started_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">started_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
         <span class="n">task</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">message</span>
         <span class="n">task</span><span class="o">.</span><span class="n">progress</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">:</span>
             <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;running&quot;</span>
-            <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">started_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">started_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
             <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="s2">&quot;Task </span><span class="si">%s</span><span class="s2"> started, step 1/</span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;START task </span><span class="si">%s</span><span class="s2"> [</span><span class="si">%s</span><span class="s2">] — </span><span class="si">%s</span><span class="s2"> (step 1/</span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
                 <span class="n">task_id</span><span class="p">,</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">,</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">),</span>
                 <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Task </span><span class="si">%s</span><span class="s2"> started: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;START task </span><span class="si">%s</span><span class="s2"> [</span><span class="si">%s</span><span class="s2">] — </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">task_id</span><span class="p">,</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">,</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">message</span><span class="p">,</span>
+            <span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span></div>
 
 
@@ -238,11 +268,11 @@
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">):</span>
             <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;completed&quot;</span>
-            <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
         <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">):</span>
             <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;running&quot;</span>
-            <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">started_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">started_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">message</span><span class="p">:</span>
                 <span class="n">task</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">message</span>
             <span class="k">else</span><span class="p">:</span>
@@ -259,6 +289,76 @@
         <span class="k">return</span> <span class="kc">True</span></div>
 
 
+<div class="viewcode-block" id="TaskManager.complete_current_step">
+<a class="viewcode-back" href="../../../../api/app.core.html#back.core.task_manager.TaskManager.complete_current_step">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">complete_current_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Mark the currently *running* step as completed without starting the next.</span>
+
+<span class="sd">        Unlike ``advance_step``, this does not activate a subsequent step.  Use</span>
+<span class="sd">        when the step&#39;s heavy work continues in another thread (e.g. Volume</span>
+<span class="sd">        upload) but the tracked job should show this phase as done so the UI</span>
+<span class="sd">        can move on to ``complete_task``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tasks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">task_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">task</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">step</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;running&quot;</span><span class="p">:</span>
+            <span class="n">step</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;completed&quot;</span>
+            <span class="n">step</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">message</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">message</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">)</span>
+        <span class="n">pct</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">/</span> <span class="n">n</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span> <span class="k">if</span> <span class="n">n</span> <span class="k">else</span> <span class="mi">100</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">progress</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">progress</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="n">pct</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">&gt;=</span> <span class="n">n</span><span class="p">:</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">progress</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">progress</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="TaskManager.skip_step">
+<a class="viewcode-back" href="../../../../api/app.core.html#back.core.task_manager.TaskManager.skip_step">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">skip_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Mark the current step as skipped and advance to the next one.</span>
+
+<span class="sd">        Use this when a workflow phase isn&#39;t executed for the current run</span>
+<span class="sd">        (e.g. *Checking source tables* when the user forced a full rebuild).</span>
+<span class="sd">        Without this, the seeded step list and the actual execution drift</span>
+<span class="sd">        because the next ``advance_step`` call lands a &quot;creating view&quot;</span>
+<span class="sd">        message inside a row labelled &quot;checking source tables&quot;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tasks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">task_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">task</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">):</span>
+            <span class="n">step</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span>
+            <span class="n">step</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;skipped&quot;</span>
+            <span class="n">step</span><span class="o">.</span><span class="n">started_at</span> <span class="o">=</span> <span class="n">step</span><span class="o">.</span><span class="n">started_at</span> <span class="ow">or</span> <span class="n">now</span>
+            <span class="n">step</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">now</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Task </span><span class="si">%s</span><span class="s2"> step </span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2"> skipped: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">task_id</span><span class="p">,</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">),</span>
+                <span class="n">step</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">):</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;running&quot;</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">started_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">message</span><span class="p">:</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">message</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">description</span>
+        <span class="n">step_progress</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">))</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">progress</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">progress</span><span class="p">,</span> <span class="n">step_progress</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
 <div class="viewcode-block" id="TaskManager.complete_task">
 <a class="viewcode-back" href="../../../../api/app.core.html#back.core.task_manager.TaskManager.complete_task">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">complete_task</span><span class="p">(</span>
@@ -268,15 +368,21 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">task</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="n">task</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">TaskStatus</span><span class="o">.</span><span class="n">COMPLETED</span>
-        <span class="n">task</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
         <span class="n">task</span><span class="o">.</span><span class="n">progress</span> <span class="o">=</span> <span class="mi">100</span>
         <span class="n">task</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">message</span>
         <span class="n">task</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">result</span>
         <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="s2">&quot;completed&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;completed&quot;</span><span class="p">,</span> <span class="s2">&quot;skipped&quot;</span><span class="p">):</span>
                 <span class="n">step</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;completed&quot;</span>
-                <span class="n">step</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Task </span><span class="si">%s</span><span class="s2"> completed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+                <span class="n">step</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;END task </span><span class="si">%s</span><span class="s2"> [</span><span class="si">%s</span><span class="s2">] completed in </span><span class="si">%s</span><span class="s2"> — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">task_id</span><span class="p">,</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">,</span>
+            <span class="n">_format_duration</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">duration_seconds</span><span class="p">()),</span>
+            <span class="n">message</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span></div>
 
 
@@ -287,12 +393,19 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">task</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="n">task</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">TaskStatus</span><span class="o">.</span><span class="n">FAILED</span>
-        <span class="n">task</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
         <span class="n">task</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="n">error</span>
         <span class="n">task</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Failed: </span><span class="si">{</span><span class="n">error</span><span class="p">[:</span><span class="mi">100</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">steps</span> <span class="ow">and</span> <span class="n">task</span><span class="o">.</span><span class="n">current_step</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">):</span>
             <span class="n">task</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">task</span><span class="o">.</span><span class="n">current_step</span><span class="p">]</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;failed&quot;</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Task </span><span class="si">%s</span><span class="s2"> failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
+        <span class="n">duration</span> <span class="o">=</span> <span class="n">_format_duration</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">duration_seconds</span><span class="p">())</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Task </span><span class="si">%s</span><span class="s2"> failed after </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;END task </span><span class="si">%s</span><span class="s2"> [</span><span class="si">%s</span><span class="s2">] failed in </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">task_id</span><span class="p">,</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">,</span>
+            <span class="n">duration</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="k">return</span> <span class="kc">True</span></div>
 
 
@@ -304,9 +417,14 @@
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="n">task</span><span class="o">.</span><span class="n">status</span> <span class="ow">in</span> <span class="p">(</span><span class="n">TaskStatus</span><span class="o">.</span><span class="n">PENDING</span><span class="p">,</span> <span class="n">TaskStatus</span><span class="o">.</span><span class="n">RUNNING</span><span class="p">):</span>
             <span class="n">task</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">TaskStatus</span><span class="o">.</span><span class="n">CANCELLED</span>
-            <span class="n">task</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">completed_at</span> <span class="o">=</span> <span class="n">_now_iso</span><span class="p">()</span>
             <span class="n">task</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Cancelled&quot;</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Task </span><span class="si">%s</span><span class="s2"> cancelled&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;END task </span><span class="si">%s</span><span class="s2"> [</span><span class="si">%s</span><span class="s2">] cancelled in </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">task_id</span><span class="p">,</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">task_type</span><span class="p">,</span>
+                <span class="n">_format_duration</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">duration_seconds</span><span class="p">()),</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span></div>
 

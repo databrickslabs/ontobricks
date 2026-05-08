@@ -96,6 +96,11 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Non-blocking expand spinner (top-right) -->
+                    <div id="sgExpandSpinner" class="sg-expand-spinner d-none" role="status" aria-live="polite">
+                        <div class="spinner-border spinner-border-sm text-primary me-2" aria-hidden="true"></div>
+                        <span class="small fw-semibold" id="sgExpandSpinnerLabel">Expanding…</span>
+                    </div>
                     <!-- Node Context Menu (dynamic content) -->
                     <div id="sgNodeContextMenu" class="graph-context-menu"></div>
                     <!-- Canvas Context Menu -->
@@ -306,8 +311,8 @@
                             </select>
                             <label class="form-label small mb-1" for="sgFilterValue">Search Value</label>
                             <input type="text" class="form-control form-control-sm mb-2" id="sgFilterValue" placeholder="Enter search term..." data-sg-keyenter="executeGraphFilter">
-                            <label class="form-label small mb-1" for="sgFilterDepth">Depth: <span id="sgFilterDepthValue">3</span></label>
-                            <input type="range" class="form-range form-range-sm mb-2" id="sgFilterDepth" min="1" max="10" value="3" title="Number of relationship levels to traverse" data-sg-input="updateFilterDepthLabel">
+                            <label class="form-label small mb-1" for="sgFilterDepth">Depth: <span id="sgFilterDepthValue">2</span></label>
+                            <input type="range" class="form-range form-range-sm mb-2" id="sgFilterDepth" min="1" max="10" value="2" title="Number of relationship levels to traverse" data-sg-input="updateFilterDepthLabel">
                             <div class="d-flex gap-1">
                                 <button type="button" class="btn btn-sm btn-primary flex-grow-1" data-sg-action="executeGraphSearch">
                                     <i class="bi bi-search"></i> Search

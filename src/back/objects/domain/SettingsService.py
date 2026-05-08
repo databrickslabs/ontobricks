@@ -1368,6 +1368,143 @@ class SettingsService:
         return {"success": True, "base_uri": base_uri}
 
     @staticmethod
+    def get_cloud_fetch_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        enabled = global_config_service.get_use_cloud_fetch(host, token, registry_cfg)
+        return {"success": True, "use_cloud_fetch": bool(enabled)}
+
+    # Recommended upload size & format for the top-bar logo.
+    # The navbar renders the image at 24×24 CSS pixels; keeping the source
+    # at 64×64 (≈2.7×) gives crisp rendering on retina displays without
+    # bloating the global config blob.
+    NAVBAR_LOGO_RECOMMENDED_SIZE = "64×64 px"
+    NAVBAR_LOGO_DEFAULT_PATH = "/static/global/img/favicon.svg"
+    _NAVBAR_LOGO_ALLOWED_MIME = {
+        "image/svg+xml",
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif",
+    }
+    _NAVBAR_LOGO_MAX_BYTES = 1024 * 1024  # 1 MB — way more than a 64×64 icon needs
+
+    @staticmethod
+    def get_navbar_logo_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the configured navbar logo (data URL) or the bundled default."""
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        custom = global_config_service.get_navbar_logo(host, token, registry_cfg)
+        return {
+            "success": True,
+            "logo_url": custom or SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
+            "is_custom": bool(custom),
+            "default_url": SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
+            "recommended_size": SettingsService.NAVBAR_LOGO_RECOMMENDED_SIZE,
+            "max_bytes": SettingsService._NAVBAR_LOGO_MAX_BYTES,
+            "allowed_mime": sorted(SettingsService._NAVBAR_LOGO_ALLOWED_MIME),
+        }
+
+    @staticmethod
+    def upload_navbar_logo_result(
+        content: bytes,
+        content_type: str,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Validate and persist an uploaded navbar logo (admin only, stored globally)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        if not content:
+            raise ValidationError("Empty file — pick an image to upload")
+        if len(content) > SettingsService._NAVBAR_LOGO_MAX_BYTES:
+            raise ValidationError(
+                f"Logo too large ({len(content)} bytes); "
+                f"max {SettingsService._NAVBAR_LOGO_MAX_BYTES} bytes"
+            )
+
+        mime = (content_type or "").split(";", 1)[0].strip().lower()
+        if mime not in SettingsService._NAVBAR_LOGO_ALLOWED_MIME:
+            raise ValidationError(
+                f"Unsupported image type '{mime}'. "
+                f"Allowed: {', '.join(sorted(SettingsService._NAVBAR_LOGO_ALLOWED_MIME))}"
+            )
+
+        import base64
+
+        b64 = base64.b64encode(content).decode("ascii")
+        data_url = f"data:{mime};base64,{b64}"
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ok, msg = global_config_service.set_navbar_logo(
+            host, token, registry_cfg, data_url
+        )
+        if not ok:
+            raise InfrastructureError("Failed to save navbar logo", detail=msg)
+        return {
+            "success": True,
+            "logo_url": data_url,
+            "is_custom": True,
+            "size_bytes": len(content),
+            "mime": mime,
+        }
+
+    @staticmethod
+    def reset_navbar_logo_result(
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Clear the custom navbar logo so the bundled default is used again."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ok, msg = global_config_service.set_navbar_logo(
+            host, token, registry_cfg, ""
+        )
+        if not ok:
+            raise InfrastructureError("Failed to reset navbar logo", detail=msg)
+        return {
+            "success": True,
+            "logo_url": SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
+            "is_custom": False,
+        }
+
+    @staticmethod
+    def save_cloud_fetch_result(
+        enabled: bool,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ok, msg = global_config_service.set_use_cloud_fetch(
+            host, token, registry_cfg, bool(enabled)
+        )
+        if not ok:
+            raise InfrastructureError("Failed to save CloudFetch setting", detail=msg)
+        return {"success": True, "use_cloud_fetch": bool(enabled)}
+
+    @staticmethod
     def get_registry_cache_ttl_result(
         session_mgr: SessionManager,
         settings: Settings,
@@ -2146,3 +2283,296 @@ class SettingsService:
         except Exception as e:
             logger.exception("delete_schedule failed: %s", e)
             raise InfrastructureError("Failed to remove schedule", detail=str(e)) from e
+
+    @staticmethod
+    def trigger_schedule_now_result(
+        domain_name: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Fire the build schedule for *domain_name* immediately."""
+        try:
+            _, host, token, registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            scheduler = SettingsService._get_scheduler()
+            ok, msg = scheduler.run_schedule_now(
+                host, token, registry_cfg, settings, domain_name
+            )
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to trigger schedule", detail=msg
+                )
+            return {"success": True, "message": msg}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("trigger_schedule_now failed: %s", e)
+            raise InfrastructureError(
+                "Failed to trigger schedule", detail=str(e)
+            ) from e
+
+    # ------------------------------------------------------------------
+    # Cohort schedules — periodic Cohort analysis + materialisation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def list_cohort_schedules_result(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        scheduler = SettingsService._get_scheduler()
+        try:
+            entries = scheduler.get_all_cohort_schedules(host, token, registry_cfg)
+            return {"success": True, "schedules": entries}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("list_cohort_schedules failed: %s", e)
+            raise InfrastructureError(
+                "Failed to list cohort schedules", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def list_cohort_rules_for_domain_result(
+        domain_name: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return ``[{id, label}]`` for the saved cohort rules of *domain_name*.
+
+        Reads the latest version of the domain headlessly (no session
+        switch) so the schedule modal can list rules for any domain
+        in the registry.
+        """
+        try:
+            _, host, token, _registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            domain_obj = get_domain(session_mgr)
+            svc = RegistryService.from_context(domain_obj, settings)
+            if not svc.cfg.is_configured:
+                raise ValidationError("Registry not configured")
+
+            ok, data, version, err = svc.load_latest_domain_data(domain_name)
+            if not ok:
+                raise NotFoundError(
+                    err or f"Domain '{domain_name}' not found in registry"
+                )
+
+            doc = data if isinstance(data, dict) else {}
+
+            # Persisted shape (Volume + Lakebase):
+            #   { "info": {...},
+            #     "versions": { "<v>": { "ontology": { "cohort_rules": [...] }, ... } } }
+            # Try the versioned path first, then fall back to the flat
+            # legacy shapes for resilience.
+            ontology: Dict[str, Any] = {}
+            versions = doc.get("versions") or {}
+            if isinstance(versions, dict) and versions:
+                version_data = versions.get(version) or versions.get(str(version))
+                if version_data is None and versions:
+                    # Pick the highest version key as a last resort.
+                    try:
+                        latest_key = max(
+                            versions.keys(), key=lambda v: tuple(int(p) for p in str(v).split("."))
+                        )
+                    except (TypeError, ValueError):
+                        latest_key = next(iter(versions))
+                    version_data = versions.get(latest_key)
+                if isinstance(version_data, dict):
+                    ontology = version_data.get("ontology") or {}
+            if not ontology:
+                ontology = doc.get("ontology") or {}
+
+            rules = (
+                ontology.get("cohort_rules")
+                or doc.get("cohort_rules")
+                or []
+            )
+            simple = []
+            for r in rules:
+                rid = r.get("id", "")
+                if not rid:
+                    continue
+                output = r.get("output") or {}
+                uc_table = output.get("uc_table") or {}
+                simple.append(
+                    {
+                        "id": rid,
+                        "label": r.get("label", "") or rid,
+                        "class_uri": r.get("class_uri", ""),
+                        "output": {
+                            "graph": bool(output.get("graph", True)),
+                            "uc_table": (
+                                {
+                                    "catalog": uc_table.get("catalog", ""),
+                                    "schema": uc_table.get("schema", ""),
+                                    "table_name": uc_table.get(
+                                        "table_name", ""
+                                    ),
+                                }
+                                if uc_table.get("table_name")
+                                else None
+                            ),
+                        },
+                    }
+                )
+            return {"success": True, "rules": simple}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception(
+                "list_cohort_rules_for_domain(%s) failed: %s", domain_name, e
+            )
+            raise InfrastructureError(
+                "Failed to list cohort rules", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def save_cohort_schedule_result(
+        data: Dict[str, Any],
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        try:
+            domain_name = (data.get("domain_name") or "").strip()
+            rule_id = (data.get("rule_id") or "").strip()
+            interval_minutes = int(data.get("interval_minutes", 60))
+            enabled = bool(data.get("enabled", True))
+            version = (data.get("version") or "latest").strip()
+            output_graph = bool(data.get("output_graph", True))
+            output_uc = bool(data.get("output_uc", True))
+
+            if not domain_name:
+                raise ValidationError("Domain name is required")
+            if not rule_id:
+                raise ValidationError("Cohort rule id is required")
+            if not output_graph and not output_uc:
+                raise ValidationError(
+                    "At least one output target (graph or UC table) is required"
+                )
+
+            _, host, token, registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+
+            scheduler = SettingsService._get_scheduler()
+            ok, msg = scheduler.save_cohort_schedule(
+                host,
+                token,
+                registry_cfg,
+                settings,
+                domain_name,
+                rule_id,
+                interval_minutes,
+                enabled,
+                version=version,
+                output_graph=output_graph,
+                output_uc=output_uc,
+            )
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to save cohort schedule", detail=msg
+                )
+            return {"success": ok, "message": msg}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("save_cohort_schedule failed: %s", e)
+            raise InfrastructureError(
+                "Failed to save cohort schedule", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def get_cohort_schedule_history_result(
+        domain_name: str,
+        rule_id: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        scheduler = SettingsService._get_scheduler()
+        try:
+            entries = scheduler.get_cohort_schedule_history(
+                host, token, registry_cfg, domain_name, rule_id
+            )
+            return {
+                "success": True,
+                "domain_name": domain_name,
+                "rule_id": rule_id,
+                "history": entries,
+            }
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception(
+                "get_cohort_schedule_history failed for '%s/%s': %s",
+                domain_name,
+                rule_id,
+                e,
+            )
+            raise InfrastructureError(
+                "Failed to load cohort schedule history", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def delete_cohort_schedule_result(
+        domain_name: str,
+        rule_id: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        try:
+            _, host, token, registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            scheduler = SettingsService._get_scheduler()
+            ok, msg = scheduler.remove_cohort_schedule(
+                host, token, registry_cfg, domain_name, rule_id
+            )
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to remove cohort schedule", detail=msg
+                )
+            return {"success": ok, "message": msg}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("delete_cohort_schedule failed: %s", e)
+            raise InfrastructureError(
+                "Failed to remove cohort schedule", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def trigger_cohort_schedule_now_result(
+        domain_name: str,
+        rule_id: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Fire the cohort materialisation schedule for *(domain, rule)* now."""
+        try:
+            _, host, token, registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            scheduler = SettingsService._get_scheduler()
+            ok, msg = scheduler.run_cohort_schedule_now(
+                host, token, registry_cfg, settings, domain_name, rule_id
+            )
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to trigger cohort schedule", detail=msg
+                )
+            return {"success": True, "message": msg}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("trigger_cohort_schedule_now failed: %s", e)
+            raise InfrastructureError(
+                "Failed to trigger cohort schedule", detail=str(e)
+            ) from e

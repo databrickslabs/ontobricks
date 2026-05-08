@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -120,8 +121,8 @@
             
   <section id="back-objects-registry-project-registry-permissions">
 <h1><code class="docutils literal notranslate"><span class="pre">back.objects.registry</span></code> – Project Registry &amp; Permissions<a class="headerlink" href="#back-objects-registry-project-registry-permissions" title="Link to this heading">¶</a></h1>
-<section id="module-back.objects.registry.service">
-<span id="registry-service"></span><h2>Registry Service<a class="headerlink" href="#module-back.objects.registry.service" title="Link to this heading">¶</a></h2>
+<section id="module-back.objects.registry.RegistryService">
+<span id="registry-service"></span><h2>Registry Service<a class="headerlink" href="#module-back.objects.registry.RegistryService" title="Link to this heading">¶</a></h2>
 <p>Registry Service for OntoBricks.</p>
 <p>Centralises all domain-registry management (config resolution, path
 construction, domain CRUD, version management) behind a single
@@ -137,96 +138,204 @@ compatibility, if the new folder does not exist but the legacy
 <span class="n">ok</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">list_domains</span><span class="p">()</span>
 </pre></div>
 </div>
+<dl class="py function">
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.resolve_default_backend">
+<span class="sig-prename descclassname"><span class="pre">back.objects.registry.RegistryService.</span></span><span class="sig-name descname"><span class="pre">resolve_default_backend</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#resolve_default_backend"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.resolve_default_backend" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve <code class="docutils literal notranslate"><span class="pre">raw</span></code> into a concrete backend name (<code class="docutils literal notranslate"><span class="pre">&quot;volume&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;lakebase&quot;</span></code>).</p>
+<p><code class="docutils literal notranslate"><span class="pre">raw</span></code> may be <code class="docutils literal notranslate"><span class="pre">None</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code> (case-insensitive), or any
+of the literal backend names. Anything unrecognised falls back to
+<code class="docutils literal notranslate"><span class="pre">&quot;volume&quot;</span></code> — the safe default that works without optional deps.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code> rule:</p>
+<ul class="simple">
+<li><p>Lakebase wins when <code class="xref py py-func docutils literal notranslate"><span class="pre">_lakebase_runtime_available()</span></code> returns
+<code class="docutils literal notranslate"><span class="pre">True</span></code> (psycopg installed <em>and</em> PG* env bound). This means a
+fresh Databricks Apps deployment with the <code class="docutils literal notranslate"><span class="pre">database</span></code> resource
+bound and the <code class="docutils literal notranslate"><span class="pre">--extra</span> <span class="pre">lakebase</span></code> install flag picks Lakebase
+out of the box, which matches operator expectations after they
+went to the trouble of binding the resource.</p></li>
+<li><p>Otherwise (local dev without psycopg, or App without the
+database binding) we stay on Volume.</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>raw</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py class">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.registry.service.</span></span><span class="sig-name descname"><span class="pre">RegistryCfg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">catalog</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">volume</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryCfg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryCfg" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.registry.RegistryService.</span></span><span class="sig-name descname"><span class="pre">RegistryCfg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">catalog</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">volume</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'volume'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lakebase_schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ontobricks_registry'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lakebase_database</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryCfg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <p>Immutable registry location triplet (catalog, schema, volume).</p>
+<p><code class="docutils literal notranslate"><span class="pre">backend</span></code> selects the data-store implementation:
+<code class="docutils literal notranslate"><span class="pre">&quot;volume&quot;</span></code> (default) for JSON-on-UC-Volume, <code class="docutils literal notranslate"><span class="pre">&quot;lakebase&quot;</span></code> for
+Postgres-on-Lakebase. Binary artifacts live on the Volume in both
+cases, so the catalog/schema/volume triplet stays meaningful even
+when <code class="docutils literal notranslate"><span class="pre">backend</span> <span class="pre">==</span> <span class="pre">&quot;lakebase&quot;</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">lakebase_schema</span></code> is the Postgres schema for registry tables. It
+is ignored when <code class="docutils literal notranslate"><span class="pre">backend</span> <span class="pre">==</span> <span class="pre">&quot;volume&quot;</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">lakebase_database</span></code> (optional) overrides the bound Postgres
+database name. When empty (the default), the Lakebase backend uses
+the <code class="docutils literal notranslate"><span class="pre">PGDATABASE</span></code> env var auto-injected by the Databricks Apps
+runtime from the <code class="docutils literal notranslate"><span class="pre">database</span></code> resource binding. Setting this lets
+an admin point the registry at any other database that lives on
+the same Lakebase instance — provided the app’s service principal
+has <code class="docutils literal notranslate"><span class="pre">CONNECT</span></code> on it. The Lakebase JWT scope is per-instance, so
+no token re-mint is required.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>volume</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>backend</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>lakebase_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>lakebase_database</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.catalog">
-<span class="sig-name descname"><span class="pre">catalog</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.catalog" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.catalog">
+<span class="sig-name descname"><span class="pre">catalog</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.catalog" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.schema">
-<span class="sig-name descname"><span class="pre">schema</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.schema" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.schema">
+<span class="sig-name descname"><span class="pre">schema</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.schema" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.volume">
-<span class="sig-name descname"><span class="pre">volume</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.volume" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.volume">
+<span class="sig-name descname"><span class="pre">volume</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.volume" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.backend">
+<span class="sig-name descname"><span class="pre">backend</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'volume'</span></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.backend" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.lakebase_schema">
+<span class="sig-name descname"><span class="pre">lakebase_schema</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'ontobricks_registry'</span></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.lakebase_schema" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.lakebase_database">
+<span class="sig-name descname"><span class="pre">lakebase_database</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.lakebase_database" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.from_volume_path">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_volume_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryCfg.from_volume_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.from_volume_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.from_volume_path">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_volume_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'volume'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lakebase_schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ontobricks_registry'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lakebase_database</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryCfg.from_volume_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.from_volume_path" title="Link to this definition">¶</a></dt>
 <dd><p>Parse <code class="docutils literal notranslate"><span class="pre">/Volumes/&lt;catalog&gt;/&lt;schema&gt;/&lt;volume&gt;</span></code> into a RegistryCfg.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>backend</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>lakebase_schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>lakebase_database</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="#back.objects.registry.service.RegistryCfg" title="back.objects.registry.service.RegistryCfg"><em>RegistryCfg</em></a></p>
+<dd class="field-even"><p><a class="reference internal" href="#back.objects.registry.RegistryService.RegistryCfg" title="back.objects.registry.RegistryService.RegistryCfg"><em>RegistryCfg</em></a></p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.from_domain">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryCfg.from_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.from_domain" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.from_domain">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefer_volume_binding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryCfg.from_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.from_domain" title="Link to this definition">¶</a></dt>
 <dd><p>Build from a <em>DomainSession</em> and <em>Settings</em> with env-var fallbacks.</p>
-<p>When the app is deployed with a Volume resource the injected path
-(<code class="docutils literal notranslate"><span class="pre">settings.registry_volume_path</span></code>) takes highest priority so that
-admin-level Databricks App resource configuration always wins.</p>
+<p>Resolution order (highest priority first):</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">domain.settings[&quot;registry&quot;]</span></code> — admin choices made from the
+Settings UI. These ALWAYS win for the <em>backend chooser</em> and
+the Lakebase-side knobs (<code class="docutils literal notranslate"><span class="pre">lakebase_schema</span></code> /
+<code class="docutils literal notranslate"><span class="pre">lakebase_database</span></code>), even on a Databricks Apps deployment
+where the Volume is bound by the platform. Without this
+precedence, flipping the backend radio in Settings would be
+silently discarded on every request, because the Volume path
+branch below would re-read <code class="docutils literal notranslate"><span class="pre">backend</span></code> from the env and
+overwrite the freshly-saved value.</p></li>
+<li><p><strong>Lakebase ``registries`` row</strong> — when <code class="docutils literal notranslate"><span class="pre">backend</span></code> resolves to
+<code class="docutils literal notranslate"><span class="pre">&quot;lakebase&quot;</span></code> and Lakebase is reachable, the
+catalog/schema/volume triplet is <em>initially</em> read from the row
+so <code class="docutils literal notranslate"><span class="pre">effective_view_table</span></code> and <code class="docutils literal notranslate"><span class="pre">uc_version_path</span></code> follow
+where artefacts were archived. <strong>However</strong>, when step 3’s
+bound Volume path is present and parses successfully, its
+catalog/schema/volume <strong>replace</strong> the row values for the UC
+triplet. Otherwise a Databricks Apps deployment whose bundle
+Volume name changed (or whose <code class="docutils literal notranslate"><span class="pre">registries</span></code> row still holds
+the env default <code class="docutils literal notranslate"><span class="pre">OntoBricksRegistry</span></code>) would keep resolving
+binary paths against the wrong Volume while the platform had
+mounted the resource named in <code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME_PATH</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">settings.registry_volume_path</span></code> — when present (Databricks
+Apps with a bound Volume resource) and parses as
+<code class="docutils literal notranslate"><span class="pre">/Volumes/&lt;c&gt;/&lt;s&gt;/&lt;v&gt;</span></code>, that triplet is the authoritative UC
+location for this process (merged into step 2 when Lakebase
+is active; used alone when step 2 does not return a row).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">settings.*</span></code> env vars — last-resort fallback for catalog,
+schema, volume, backend, <code class="docutils literal notranslate"><span class="pre">lakebase_schema</span></code> and
+<code class="docutils literal notranslate"><span class="pre">lakebase_database</span></code>.</p></li>
+</ol>
+<p><code class="docutils literal notranslate"><span class="pre">prefer_volume_binding</span></code> (Initialize path only): when <code class="docutils literal notranslate"><span class="pre">True</span></code>
+the Lakebase row read in step 2 is skipped. Lets the Initialize
+flow re-pin the registry triplet to the <em>current</em> Volume
+binding so a re-bind + re-init cycle propagates the new
+catalog/schema/volume into the <code class="docutils literal notranslate"><span class="pre">registries</span></code> row. Without this
+flag, re-initialising on a re-bound app silently re-upserts the
+stale triplet that was already in the row, leaving downstream
+artefact paths pointing at the previous Volume.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#back.objects.registry.service.RegistryCfg" title="back.objects.registry.service.RegistryCfg"><em>RegistryCfg</em></a></p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>prefer_volume_binding</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.objects.registry.RegistryService.RegistryCfg" title="back.objects.registry.RegistryService.RegistryCfg"><em>RegistryCfg</em></a></p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.from_session">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryCfg.from_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.from_session" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.from_session">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryCfg.from_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.from_session" title="Link to this definition">¶</a></dt>
 <dd><p>Build from <em>SessionManager</em> and <em>Settings</em>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#back.objects.registry.service.RegistryCfg" title="back.objects.registry.service.RegistryCfg"><em>RegistryCfg</em></a></p>
+<dd class="field-odd"><p><a class="reference internal" href="#back.objects.registry.RegistryService.RegistryCfg" title="back.objects.registry.RegistryService.RegistryCfg"><em>RegistryCfg</em></a></p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.from_dict">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryCfg.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.from_dict" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.from_dict">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryCfg.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.from_dict" title="Link to this definition">¶</a></dt>
 <dd><p>Build from a plain dict (e.g. an existing <code class="docutils literal notranslate"><span class="pre">registry_cfg</span></code>).</p>
+<p><code class="docutils literal notranslate"><span class="pre">backend</span></code> may be <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>/empty — <a class="reference internal" href="#back.objects.registry.RegistryService.resolve_default_backend" title="back.objects.registry.RegistryService.resolve_default_backend"><code class="xref py py-func docutils literal notranslate"><span class="pre">resolve_default_backend()</span></code></a>
+picks Lakebase or Volume based on runtime availability.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>d</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="#back.objects.registry.service.RegistryCfg" title="back.objects.registry.service.RegistryCfg"><em>RegistryCfg</em></a></p>
+<dd class="field-even"><p><a class="reference internal" href="#back.objects.registry.RegistryService.RegistryCfg" title="back.objects.registry.RegistryService.RegistryCfg"><em>RegistryCfg</em></a></p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.is_configured">
-<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_configured</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.is_configured" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.is_configured">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_configured</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.is_configured" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryCfg.as_dict">
-<span class="sig-name descname"><span class="pre">as_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryCfg.as_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryCfg.as_dict" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryCfg.as_dict">
+<span class="sig-name descname"><span class="pre">as_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryCfg.as_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryCfg.as_dict" title="Link to this definition">¶</a></dt>
 <dd><p>Dict representation for backward compatibility with legacy callers.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
@@ -238,49 +347,66 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.registry.service.</span></span><span class="sig-name descname"><span class="pre">RegistryService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.registry.RegistryService.</span></span><span class="sig-name descname"><span class="pre">RegistryService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Encapsulates every UC-Volume registry operation.</p>
+<p>Encapsulates every registry operation regardless of backend.</p>
+<p>All JSON-shaped data (domains, versions, permissions, schedules,
+global config) is routed through a <code class="xref py py-class docutils literal notranslate"><span class="pre">RegistryStore</span></code> instance
+(Volume or Lakebase). Binary artifacts (<code class="docutils literal notranslate"><span class="pre">documents/</span></code> and
+<code class="docutils literal notranslate"><span class="pre">*.lbug.tar.gz</span></code>) stay on the Unity Catalog Volume in both backends
+and are managed via <a class="reference internal" href="#back.objects.registry.RegistryService.RegistryService.uc" title="back.objects.registry.RegistryService.RegistryService.uc"><code class="xref py py-attr docutils literal notranslate"><span class="pre">uc</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>cfg</strong> (<a class="reference internal" href="#back.objects.registry.service.RegistryCfg" title="back.objects.registry.service.RegistryCfg"><em>RegistryCfg</em></a>)</p></li>
+<li><p><strong>cfg</strong> (<a class="reference internal" href="#back.objects.registry.RegistryService.RegistryCfg" title="back.objects.registry.RegistryService.RegistryCfg"><em>RegistryCfg</em></a>)</p></li>
 <li><p><strong>uc</strong> (<a class="reference internal" href="app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService" title="back.core.databricks.VolumeFileService.VolumeFileService"><em>VolumeFileService</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.from_context">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.from_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.from_context" title="Link to this definition">¶</a></dt>
-<dd><p>One-call factory: resolve config + build VolumeFileService.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.from_context">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefer_volume_binding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.from_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.from_context" title="Link to this definition">¶</a></dt>
+<dd><p>One-call factory: resolve config + build VolumeFileService + store.</p>
+<p><code class="docutils literal notranslate"><span class="pre">prefer_volume_binding</span></code> (Initialize path only) is forwarded to
+<a class="reference internal" href="#back.objects.registry.RegistryService.RegistryCfg.from_domain" title="back.objects.registry.RegistryService.RegistryCfg.from_domain"><code class="xref py py-meth docutils literal notranslate"><span class="pre">RegistryCfg.from_domain()</span></code></a> — see that docstring for why it
+matters when re-running Initialize against a re-bound app.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a></p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>prefer_volume_binding</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a></p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.cfg">
-<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cfg</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#back.objects.registry.service.RegistryCfg" title="back.objects.registry.service.RegistryCfg"><span class="pre">RegistryCfg</span></a></span><a class="headerlink" href="#back.objects.registry.service.RegistryService.cfg" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.cfg">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cfg</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#back.objects.registry.RegistryService.RegistryCfg" title="back.objects.registry.RegistryService.RegistryCfg"><span class="pre">RegistryCfg</span></a></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.cfg" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.uc">
-<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">uc</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService" title="back.core.databricks.VolumeFileService.VolumeFileService"><span class="pre">VolumeFileService</span></a></span><a class="headerlink" href="#back.objects.registry.service.RegistryService.uc" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.uc">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">uc</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService" title="back.core.databricks.VolumeFileService.VolumeFileService"><span class="pre">VolumeFileService</span></a></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.uc" title="Link to this definition">¶</a></dt>
 <dd><p>Expose the underlying VolumeFileService for callers that need it.</p>
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.cache_key">
-<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cache_key</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.service.RegistryService.cache_key" title="Link to this definition">¶</a></dt>
-<dd><p>Build a cache key from the registry config triplet.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.store">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">store</span></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.store" title="Link to this definition">¶</a></dt>
+<dd><p>Underlying <code class="xref py py-class docutils literal notranslate"><span class="pre">RegistryStore</span></code> (for advanced callers).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.cache_key">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cache_key</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.cache_key" title="Link to this definition">¶</a></dt>
+<dd><p>Cache key bound to the <em>store identity</em> (backend-aware).</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.volume_root">
-<span class="sig-name descname"><span class="pre">volume_root</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.volume_root"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.volume_root" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.volume_root">
+<span class="sig-name descname"><span class="pre">volume_root</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.volume_root"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.volume_root" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -289,8 +415,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.domains_path">
-<span class="sig-name descname"><span class="pre">domains_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.domains_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.domains_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.domains_path">
+<span class="sig-name descname"><span class="pre">domains_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.domains_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.domains_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -299,8 +425,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.domain_path">
-<span class="sig-name descname"><span class="pre">domain_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.domain_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.domain_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.domain_path">
+<span class="sig-name descname"><span class="pre">domain_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.domain_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.domain_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
@@ -312,8 +438,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.version_path">
-<span class="sig-name descname"><span class="pre">version_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.version_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.version_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.version_path">
+<span class="sig-name descname"><span class="pre">version_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.version_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.version_path" title="Link to this definition">¶</a></dt>
 <dd><p>Return the version directory: <code class="docutils literal notranslate"><span class="pre">.../domains/{folder}/V{version}</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -329,8 +455,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.version_file_path">
-<span class="sig-name descname"><span class="pre">version_file_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.version_file_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.version_file_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.version_file_path">
+<span class="sig-name descname"><span class="pre">version_file_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.version_file_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.version_file_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -345,8 +471,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.marker_path">
-<span class="sig-name descname"><span class="pre">marker_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.marker_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.marker_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.marker_path">
+<span class="sig-name descname"><span class="pre">marker_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.marker_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.marker_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -355,8 +481,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.config_file_path">
-<span class="sig-name descname"><span class="pre">config_file_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.config_file_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.config_file_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.config_file_path">
+<span class="sig-name descname"><span class="pre">config_file_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.config_file_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.config_file_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
@@ -365,8 +491,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.history_file_path">
-<span class="sig-name descname"><span class="pre">history_file_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.history_file_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.history_file_path" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.history_file_path">
+<span class="sig-name descname"><span class="pre">history_file_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.history_file_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.history_file_path" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
@@ -378,9 +504,11 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.is_initialized">
-<span class="sig-name descname"><span class="pre">is_initialized</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.is_initialized"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.is_initialized" title="Link to this definition">¶</a></dt>
-<dd><p>Check whether the <code class="docutils literal notranslate"><span class="pre">.registry</span></code> marker exists.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.is_initialized">
+<span class="sig-name descname"><span class="pre">is_initialized</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.is_initialized"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.is_initialized" title="Link to this definition">¶</a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> when the active backend reports a usable registry.</p>
+<p>For the Volume backend this checks the <code class="docutils literal notranslate"><span class="pre">.registry</span></code> marker;
+for the Lakebase backend it probes for the <code class="docutils literal notranslate"><span class="pre">registries</span></code> row.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
@@ -389,11 +517,20 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.initialize">
-<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.initialize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.initialize" title="Link to this definition">¶</a></dt>
-<dd><p>Create the registry volume (if missing) and write the marker.</p>
-<p><em>client</em> must be a <code class="docutils literal notranslate"><span class="pre">DatabricksClient</span></code> that supports
-<code class="docutils literal notranslate"><span class="pre">list_volumes</span></code> / <code class="docutils literal notranslate"><span class="pre">create_volume</span></code>.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.initialize">
+<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.initialize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.initialize" title="Link to this definition">¶</a></dt>
+<dd><p>Bring the registry up to a usable state (idempotent).</p>
+<p><em>client</em> is a <code class="docutils literal notranslate"><span class="pre">DatabricksClient</span></code> used to create the UC Volume
+on first use. Both backends use it: Volume to host
+<code class="docutils literal notranslate"><span class="pre">.registry</span></code> + <code class="docutils literal notranslate"><span class="pre">/domains/</span></code>, Lakebase for binary artefacts
+(<code class="docutils literal notranslate"><span class="pre">documents/</span></code>, <code class="docutils literal notranslate"><span class="pre">*.lbug.tar.gz</span></code>) that always live on the
+Volume regardless of where registry rows are stored.</p>
+<p>For the Lakebase backend, callers should construct this service
+with <code class="docutils literal notranslate"><span class="pre">RegistryService.from_context(...,</span> <span class="pre">prefer_volume_binding</span>
+<span class="pre">=True)</span></code> so <a class="reference internal" href="#back.objects.registry.RegistryService.RegistryService.cfg" title="back.objects.registry.RegistryService.RegistryService.cfg"><code class="xref py py-attr docutils literal notranslate"><span class="pre">cfg</span></code></a> reflects the <em>current</em> Volume binding
+rather than the (potentially stale) Lakebase <code class="docutils literal notranslate"><span class="pre">registries</span></code>
+row. Without that flag, re-running Initialize after re-binding
+the Volume resource silently re-upserts the old triplet.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
@@ -402,8 +539,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_domains">
-<span class="sig-name descname"><span class="pre">list_domains</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_domains" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.list_domains">
+<span class="sig-name descname"><span class="pre">list_domains</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.list_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.list_domains" title="Link to this definition">¶</a></dt>
 <dd><p>Return sorted domain folder names (hidden dirs excluded).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
@@ -413,9 +550,9 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_domains_cached">
-<span class="sig-name descname"><span class="pre">list_domains_cached</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_domains_cached"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_domains_cached" title="Link to this definition">¶</a></dt>
-<dd><p>Like <a class="reference internal" href="#back.objects.registry.service.RegistryService.list_domains" title="back.objects.registry.service.RegistryService.list_domains"><code class="xref py py-meth docutils literal notranslate"><span class="pre">list_domains()</span></code></a> but with an in-memory TTL cache.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.list_domains_cached">
+<span class="sig-name descname"><span class="pre">list_domains_cached</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.list_domains_cached"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.list_domains_cached" title="Link to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#back.objects.registry.RegistryService.RegistryService.list_domains" title="back.objects.registry.RegistryService.RegistryService.list_domains"><code class="xref py py-meth docutils literal notranslate"><span class="pre">list_domains()</span></code></a> but with an in-memory TTL cache.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>], <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
@@ -424,8 +561,8 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.domain_exists">
-<span class="sig-name descname"><span class="pre">domain_exists</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.domain_exists"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.domain_exists" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.domain_exists">
+<span class="sig-name descname"><span class="pre">domain_exists</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.domain_exists"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.domain_exists" title="Link to this definition">¶</a></dt>
 <dd><p>Check whether a domain folder already exists in the registry.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -438,12 +575,9 @@ admin-level Databricks App resource configuration always wins.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_domain_details">
-<span class="sig-name descname"><span class="pre">list_domain_details</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_domain_details"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_domain_details" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.list_domain_details">
+<span class="sig-name descname"><span class="pre">list_domain_details</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.list_domain_details"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.list_domain_details" title="Link to this definition">¶</a></dt>
 <dd><p>List domains with name, URI, description and enriched version list.</p>
-<p>For each domain folder every version file is opened to extract
-<code class="docutils literal notranslate"><span class="pre">info.mcp_enabled</span></code> (exposed as <code class="docutils literal notranslate"><span class="pre">active</span></code>).  The latest version
-also provides description and base URI.</p>
 <p>Each entry in <code class="docutils literal notranslate"><span class="pre">versions</span></code> is a dict:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="s2">&quot;2&quot;</span><span class="p">,</span> <span class="s2">&quot;active&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
  <span class="s2">&quot;last_update&quot;</span><span class="p">:</span> <span class="s2">&quot;2025-…&quot;</span><span class="p">,</span> <span class="s2">&quot;last_build&quot;</span><span class="p">:</span> <span class="s2">&quot;2025-…&quot;</span><span class="p">}</span>
@@ -457,9 +591,9 @@ also provides description and base URI.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_domain_details_cached">
-<span class="sig-name descname"><span class="pre">list_domain_details_cached</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_domain_details_cached"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_domain_details_cached" title="Link to this definition">¶</a></dt>
-<dd><p>Like <a class="reference internal" href="#back.objects.registry.service.RegistryService.list_domain_details" title="back.objects.registry.service.RegistryService.list_domain_details"><code class="xref py py-meth docutils literal notranslate"><span class="pre">list_domain_details()</span></code></a> but with an in-memory TTL cache.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.list_domain_details_cached">
+<span class="sig-name descname"><span class="pre">list_domain_details_cached</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.list_domain_details_cached"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.list_domain_details_cached" title="Link to this definition">¶</a></dt>
+<dd><p>Like <a class="reference internal" href="#back.objects.registry.RegistryService.RegistryService.list_domain_details" title="back.objects.registry.RegistryService.RegistryService.list_domain_details"><code class="xref py py-meth docutils literal notranslate"><span class="pre">list_domain_details()</span></code></a> but with an in-memory TTL cache.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]], <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
@@ -468,8 +602,8 @@ also provides description and base URI.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.normalize_entity_uri">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">normalize_entity_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.normalize_entity_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.normalize_entity_uri" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.normalize_entity_uri">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">normalize_entity_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.normalize_entity_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.normalize_entity_uri" title="Link to this definition">¶</a></dt>
 <dd><p>Restore double-slash after scheme when proxies collapse it.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -482,8 +616,8 @@ also provides description and base URI.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.resolve_uri_to_domain">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_uri_to_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entity_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current_domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current_base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.resolve_uri_to_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.resolve_uri_to_domain" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.resolve_uri_to_domain">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_uri_to_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entity_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current_domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current_base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.resolve_uri_to_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.resolve_uri_to_domain" title="Link to this definition">¶</a></dt>
 <dd><p>Find the registry domain whose base URI longest-prefix matches <em>entity_uri</em>.</p>
 <p>Returns the domain folder name to bridge to, or <code class="docutils literal notranslate"><span class="pre">None</span></code> when the URI
 already belongs to the current domain (no switch needed) or when no
@@ -505,8 +639,8 @@ match is found. <em>current_base_uri</em> should be normalized with
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_mcp_domains">
-<span class="sig-name descname"><span class="pre">list_mcp_domains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">require_ontology</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_mcp_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_mcp_domains" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.list_mcp_domains">
+<span class="sig-name descname"><span class="pre">list_mcp_domains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">require_ontology</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.list_mcp_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.list_mcp_domains" title="Link to this definition">¶</a></dt>
 <dd><p>List domains that have an MCP-enabled version.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(ok,</span> <span class="pre">domains,</span> <span class="pre">message)</span></code> where each domain is
 <code class="docutils literal notranslate"><span class="pre">{&quot;name&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;description&quot;:</span> <span class="pre">...}</span></code>.  When <em>require_ontology</em> is
@@ -523,9 +657,9 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.delete_domain">
-<span class="sig-name descname"><span class="pre">delete_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.delete_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.delete_domain" title="Link to this definition">¶</a></dt>
-<dd><p>Delete a domain directory and all its contents.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.delete_domain">
+<span class="sig-name descname"><span class="pre">delete_domain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.delete_domain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.delete_domain" title="Link to this definition">¶</a></dt>
+<dd><p>Delete a domain (rows + binary directory) and return any errors.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
@@ -537,8 +671,8 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.recursive_delete">
-<span class="sig-name descname"><span class="pre">recursive_delete</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dir_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.recursive_delete"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.recursive_delete" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.recursive_delete">
+<span class="sig-name descname"><span class="pre">recursive_delete</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dir_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.recursive_delete"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.recursive_delete" title="Link to this definition">¶</a></dt>
 <dd><p>Recursively delete all files and then empty directories.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -551,10 +685,9 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_versions">
-<span class="sig-name descname"><span class="pre">list_versions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_versions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_versions" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.list_versions">
+<span class="sig-name descname"><span class="pre">list_versions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.list_versions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.list_versions" title="Link to this definition">¶</a></dt>
 <dd><p>Return version strings (e.g. <code class="docutils literal notranslate"><span class="pre">['2',</span> <span class="pre">'1']</span></code>) for a domain folder.</p>
-<p>Scans <code class="docutils literal notranslate"><span class="pre">V{N}/</span></code> subdirectories inside the domain folder.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
@@ -566,8 +699,8 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_versions_sorted">
-<span class="sig-name descname"><span class="pre">list_versions_sorted</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">reverse</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_versions_sorted"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_versions_sorted" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.list_versions_sorted">
+<span class="sig-name descname"><span class="pre">list_versions_sorted</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">reverse</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.list_versions_sorted"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.list_versions_sorted" title="Link to this definition">¶</a></dt>
 <dd><p>Convenience: sorted version list (empty on failure).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -583,8 +716,8 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.get_latest_version">
-<span class="sig-name descname"><span class="pre">get_latest_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.get_latest_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.get_latest_version" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.get_latest_version">
+<span class="sig-name descname"><span class="pre">get_latest_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.get_latest_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.get_latest_version" title="Link to this definition">¶</a></dt>
 <dd><p>Return the highest version string, or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -597,9 +730,9 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.read_version">
-<span class="sig-name descname"><span class="pre">read_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.read_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.read_version" title="Link to this definition">¶</a></dt>
-<dd><p>Read and JSON-parse a version file.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.read_version">
+<span class="sig-name descname"><span class="pre">read_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.read_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.read_version" title="Link to this definition">¶</a></dt>
+<dd><p>Read and parse a version document from the active backend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -614,9 +747,11 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.write_version">
-<span class="sig-name descname"><span class="pre">write_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.write_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.write_version" title="Link to this definition">¶</a></dt>
-<dd><p>Write a version file (<code class="docutils literal notranslate"><span class="pre">data</span></code> should be a JSON string).</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.write_version">
+<span class="sig-name descname"><span class="pre">write_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.write_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.write_version" title="Link to this definition">¶</a></dt>
+<dd><p>Persist a version document.</p>
+<p><code class="docutils literal notranslate"><span class="pre">data</span></code> is accepted as either a JSON string (legacy) or a
+<code class="docutils literal notranslate"><span class="pre">dict</span></code> (new). The store always receives a parsed dict.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -632,9 +767,9 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.delete_version">
-<span class="sig-name descname"><span class="pre">delete_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.delete_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.delete_version" title="Link to this definition">¶</a></dt>
-<dd><p>Delete an entire version directory (<code class="docutils literal notranslate"><span class="pre">V{version}/</span></code>) and its contents.</p>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.delete_version">
+<span class="sig-name descname"><span class="pre">delete_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.delete_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.delete_version" title="Link to this definition">¶</a></dt>
+<dd><p>Delete a version (rows + binary directory).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -649,8 +784,8 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.load_latest_domain_data">
-<span class="sig-name descname"><span class="pre">load_latest_domain_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.load_latest_domain_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.load_latest_domain_data" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.load_latest_domain_data">
+<span class="sig-name descname"><span class="pre">load_latest_domain_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.load_latest_domain_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.load_latest_domain_data" title="Link to this definition">¶</a></dt>
 <dd><p>Load the latest version for <em>folder</em>.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(ok,</span> <span class="pre">data_dict,</span> <span class="pre">version_str,</span> <span class="pre">error_msg)</span></code>.</p>
 <dl class="field-list simple">
@@ -664,8 +799,8 @@ list are included.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.find_mcp_version">
-<span class="sig-name descname"><span class="pre">find_mcp_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.find_mcp_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.find_mcp_version" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.find_mcp_version">
+<span class="sig-name descname"><span class="pre">find_mcp_version</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.find_mcp_version"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.find_mcp_version" title="Link to this definition">¶</a></dt>
 <dd><p>Find the version with <code class="docutils literal notranslate"><span class="pre">mcp_enabled=True</span></code> for <em>folder</em>.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(version_str,</span> <span class="pre">data_dict)</span></code> or <code class="docutils literal notranslate"><span class="pre">(None,</span> <span class="pre">{})</span></code> when no
 version has the flag set.</p>
@@ -680,8 +815,8 @@ version has the flag set.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.load_mcp_domain_data">
-<span class="sig-name descname"><span class="pre">load_mcp_domain_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.load_mcp_domain_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.load_mcp_domain_data" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.load_mcp_domain_data">
+<span class="sig-name descname"><span class="pre">load_mcp_domain_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.load_mcp_domain_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.load_mcp_domain_data" title="Link to this definition">¶</a></dt>
 <dd><p>Load the MCP-enabled version for <em>folder</em>.</p>
 <p>Falls back to the latest version when no version has
 <code class="docutils literal notranslate"><span class="pre">mcp_enabled</span></code> set.</p>
@@ -697,8 +832,8 @@ version has the flag set.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.copy_version_documents">
-<span class="sig-name descname"><span class="pre">copy_version_documents</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src_version</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst_version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.copy_version_documents"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.copy_version_documents" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.copy_version_documents">
+<span class="sig-name descname"><span class="pre">copy_version_documents</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">src_version</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dst_version</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.copy_version_documents"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.copy_version_documents" title="Link to this definition">¶</a></dt>
 <dd><p>Copy all documents from one version directory to another.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(copied_count,</span> <span class="pre">error_messages)</span></code>.</p>
 <dl class="field-list simple">
@@ -716,10 +851,13 @@ version has the flag set.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.list_all_bridges">
-<span class="sig-name descname"><span class="pre">list_all_bridges</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.list_all_bridges"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.list_all_bridges" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.list_all_bridges">
+<span class="sig-name descname"><span class="pre">list_all_bridges</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.list_all_bridges"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.list_all_bridges" title="Link to this definition">¶</a></dt>
 <dd><p>Collect all bridges across every domain in the registry.</p>
-<p>Iterates over each domain, loads its latest version, and extracts
+<p>Iterates over each domain (via the active backend’s
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">RegistryStore.list_domain_folders()</span></code> so Lakebase
+registries that have no on-Volume <code class="docutils literal notranslate"><span class="pre">domains/</span></code> directory still
+return their content), loads its latest version, and extracts
 bridges from <code class="docutils literal notranslate"><span class="pre">ontology.classes[].bridges</span></code>.</p>
 <p>Returns <code class="docutils literal notranslate"><span class="pre">(ok,</span> <span class="pre">domains_with_bridges,</span> <span class="pre">error_msg)</span></code> where each entry
 has <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">base_uri</span></code>, and <code class="docutils literal notranslate"><span class="pre">bridges</span></code> (list of bridge dicts
@@ -734,8 +872,8 @@ with <code class="docutils literal notranslate"><span class="pre">source_class</
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.service.RegistryService.migrate_domain_layout">
-<span class="sig-name descname"><span class="pre">migrate_domain_layout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/service.html#RegistryService.migrate_domain_layout"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.service.RegistryService.migrate_domain_layout" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.RegistryService.RegistryService.migrate_domain_layout">
+<span class="sig-name descname"><span class="pre">migrate_domain_layout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/RegistryService.html#RegistryService.migrate_domain_layout"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.RegistryService.RegistryService.migrate_domain_layout" title="Link to this definition">¶</a></dt>
 <dd><p>Migrate a single domain from the flat layout to the versioned layout.</p>
 <p>Flat layout (old):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">domains</span><span class="o">/</span><span class="p">{</span><span class="n">folder</span><span class="p">}</span><span class="o">/</span><span class="n">v1</span><span class="o">.</span><span class="n">json</span>
@@ -767,8 +905,8 @@ with <code class="docutils literal notranslate"><span class="pre">source_class</
 </dd></dl>
 
 </section>
-<section id="module-back.objects.registry.permissions">
-<span id="permissions"></span><h2>Permissions<a class="headerlink" href="#module-back.objects.registry.permissions" title="Link to this heading">¶</a></h2>
+<section id="module-back.objects.registry.PermissionService">
+<span id="permissions"></span><h2>Permissions<a class="headerlink" href="#module-back.objects.registry.PermissionService" title="Link to this heading">¶</a></h2>
 <p>Permission Service for OntoBricks.</p>
 <p>New permission model:</p>
 <ul class="simple">
@@ -783,8 +921,8 @@ users with no entry on a given domain have <strong>no access</strong> to it.</p>
 <p>Active only in Databricks App mode (DATABRICKS_APP_PORT is set).  In local
 mode every user has unrestricted access.</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.role_level">
-<span class="sig-prename descclassname"><span class="pre">back.objects.registry.permissions.</span></span><span class="sig-name descname"><span class="pre">role_level</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">role</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#role_level"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.role_level" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.role_level">
+<span class="sig-prename descclassname"><span class="pre">back.objects.registry.PermissionService.</span></span><span class="sig-name descname"><span class="pre">role_level</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">role</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#role_level"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.role_level" title="Link to this definition">¶</a></dt>
 <dd><p>Return the numeric level for <em>role</em> (0 for unknown).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -797,8 +935,8 @@ mode every user has unrestricted access.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.min_role">
-<span class="sig-prename descclassname"><span class="pre">back.objects.registry.permissions.</span></span><span class="sig-name descname"><span class="pre">min_role</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#min_role"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.min_role" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.min_role">
+<span class="sig-prename descclassname"><span class="pre">back.objects.registry.PermissionService.</span></span><span class="sig-name descname"><span class="pre">min_role</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#min_role"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.min_role" title="Link to this definition">¶</a></dt>
 <dd><p>Return the less-privileged of two roles.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -814,13 +952,13 @@ mode every user has unrestricted access.</p>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.registry.permissions.</span></span><span class="sig-name descname"><span class="pre">PermissionService</span></span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.registry.PermissionService.</span></span><span class="sig-name descname"><span class="pre">PermissionService</span></span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <p>Resolve App-level access and per-domain roles, plus manage team files.</p>
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.get_user_role">
-<span class="sig-name descname"><span class="pre">get_user_role</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.get_user_role"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.get_user_role" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.get_user_role">
+<span class="sig-name descname"><span class="pre">get_user_role</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.get_user_role"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.get_user_role" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the app-level access for <em>email</em>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -851,8 +989,8 @@ previous signature but is no longer used.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.clear_user_groups_cache">
-<span class="sig-name descname"><span class="pre">clear_user_groups_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.clear_user_groups_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.clear_user_groups_cache" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.clear_user_groups_cache">
+<span class="sig-name descname"><span class="pre">clear_user_groups_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.clear_user_groups_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.clear_user_groups_cache" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
@@ -861,8 +999,8 @@ previous signature but is no longer used.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.is_admin">
-<span class="sig-name descname"><span class="pre">is_admin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.is_admin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.is_admin" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.is_admin">
+<span class="sig-name descname"><span class="pre">is_admin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.is_admin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.is_admin" title="Link to this definition">¶</a></dt>
 <dd><p>Check if <em>email</em> has CAN_MANAGE on the Databricks App.</p>
 <p>Tries every available auth path until one gives a definitive
 answer (<code class="docutils literal notranslate"><span class="pre">True</span></code> or <code class="docutils literal notranslate"><span class="pre">False</span></code>).  A <code class="docutils literal notranslate"><span class="pre">None</span></code> return from a check
@@ -886,9 +1024,9 @@ the next path is attempted.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.load_domain_permissions">
-<span class="sig-name descname"><span class="pre">load_domain_permissions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">force</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.load_domain_permissions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.load_domain_permissions" title="Link to this definition">¶</a></dt>
-<dd><p>Load and cache per-domain permission file.</p>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.load_domain_permissions">
+<span class="sig-name descname"><span class="pre">load_domain_permissions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">force</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.load_domain_permissions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.load_domain_permissions" title="Link to this definition">¶</a></dt>
+<dd><p>Load and cache per-domain permissions from the active store.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -906,9 +1044,9 @@ the next path is attempted.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.save_domain_permissions">
-<span class="sig-name descname"><span class="pre">save_domain_permissions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.save_domain_permissions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.save_domain_permissions" title="Link to this definition">¶</a></dt>
-<dd><p>Write the per-domain permission file.</p>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.save_domain_permissions">
+<span class="sig-name descname"><span class="pre">save_domain_permissions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.save_domain_permissions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.save_domain_permissions" title="Link to this definition">¶</a></dt>
+<dd><p>Persist per-domain permissions via the active store.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -926,8 +1064,8 @@ the next path is attempted.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.get_domain_role">
-<span class="sig-name descname"><span class="pre">get_domain_role</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_role</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.get_domain_role"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.get_domain_role" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.get_domain_role">
+<span class="sig-name descname"><span class="pre">get_domain_role</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_role</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.get_domain_role"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.get_domain_role" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve the effective role for <em>email</em> on a specific domain.</p>
 <p>Strict model:</p>
 <ul class="simple">
@@ -957,8 +1095,8 @@ already-resolved app role to avoid a redundant admin lookup.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.list_domain_entries">
-<span class="sig-name descname"><span class="pre">list_domain_entries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.list_domain_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.list_domain_entries" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.list_domain_entries">
+<span class="sig-name descname"><span class="pre">list_domain_entries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.list_domain_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.list_domain_entries" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -975,8 +1113,8 @@ already-resolved app role to avoid a redundant admin lookup.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.add_or_update_domain_entry">
-<span class="sig-name descname"><span class="pre">add_or_update_domain_entry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">display_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">role</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.add_or_update_domain_entry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.add_or_update_domain_entry" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.add_or_update_domain_entry">
+<span class="sig-name descname"><span class="pre">add_or_update_domain_entry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">display_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">role</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.add_or_update_domain_entry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.add_or_update_domain_entry" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -997,8 +1135,8 @@ already-resolved app role to avoid a redundant admin lookup.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.remove_domain_entry">
-<span class="sig-name descname"><span class="pre">remove_domain_entry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.remove_domain_entry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.remove_domain_entry" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.remove_domain_entry">
+<span class="sig-name descname"><span class="pre">remove_domain_entry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">principal</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.remove_domain_entry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.remove_domain_entry" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1016,8 +1154,8 @@ already-resolved app role to avoid a redundant admin lookup.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.clear_domain_perm_cache">
-<span class="sig-name descname"><span class="pre">clear_domain_perm_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.clear_domain_perm_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.clear_domain_perm_cache" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.clear_domain_perm_cache">
+<span class="sig-name descname"><span class="pre">clear_domain_perm_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.clear_domain_perm_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.clear_domain_perm_cache" title="Link to this definition">¶</a></dt>
 <dd><p>Drop cached domain permission data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1027,8 +1165,35 @@ already-resolved app role to avoid a redundant admin lookup.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.save_domain_permissions_batch">
-<span class="sig-name descname"><span class="pre">save_domain_permissions_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.save_domain_permissions_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.save_domain_permissions_batch" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.filter_accessible_domains">
+<span class="sig-name descname"><span class="pre">filter_accessible_domains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entries</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_role</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.filter_accessible_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.filter_accessible_domains" title="Link to this definition">¶</a></dt>
+<dd><p>Return only the entries the user has a role != <code class="docutils literal notranslate"><span class="pre">ROLE_NONE</span></code> on.</p>
+<p>Admins (either by passed-in <em>app_role</em> or via live lookup) get the
+full list back unchanged.  When <em>key</em> is <code class="docutils literal notranslate"><span class="pre">None</span></code> each entry is
+treated as a folder name string, or <code class="docutils literal notranslate"><span class="pre">entry[&quot;name&quot;]</span></code> for dicts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>registry_cfg</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>app_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>entries</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p></li>
+<li><p><strong>user_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>app_role</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>key</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.save_domain_permissions_batch">
+<span class="sig-name descname"><span class="pre">save_domain_permissions_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_cfg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">changes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.save_domain_permissions_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.save_domain_permissions_batch" title="Link to this definition">¶</a></dt>
 <dd><p>Apply a batch of team changes across several domains in one pass.</p>
 <p>Each change is a dict:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
@@ -1060,8 +1225,8 @@ applies all operations, and writes the file back once per domain.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.clear_admin_cache">
-<span class="sig-name descname"><span class="pre">clear_admin_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.clear_admin_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.clear_admin_cache" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.clear_admin_cache">
+<span class="sig-name descname"><span class="pre">clear_admin_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.clear_admin_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.clear_admin_cache" title="Link to this definition">¶</a></dt>
 <dd><p>Drop cached admin result so the next call hits the API.</p>
 <p>If <em>email</em> is given, only that entry is removed; otherwise the
 entire admin cache is cleared.</p>
@@ -1073,19 +1238,24 @@ entire admin cache is cleared.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.clear_principals_cache">
-<span class="sig-name descname"><span class="pre">clear_principals_cache</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.clear_principals_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.clear_principals_cache" title="Link to this definition">¶</a></dt>
-<dd><p>Invalidate the cached users/groups so the next call fetches fresh data.</p>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.clear_principals_cache">
+<span class="sig-name descname"><span class="pre">clear_principals_cache</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.clear_principals_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.clear_principals_cache" title="Link to this definition">¶</a></dt>
+<dd><p>Invalidate every principal-related cache.</p>
+<p>Drops the app-scoped principals (<code class="docutils literal notranslate"><span class="pre">list_app_principals</span></code>), the
+workspace-scoped users/groups (<code class="docutils literal notranslate"><span class="pre">list_users</span></code> / <code class="docutils literal notranslate"><span class="pre">list_groups</span></code>),
+the per-user admin cache and the SCIM group-membership cache, and
+resets the bootstrap-403 flag. Used by the Settings UI when the
+user explicitly asks for a fresh fetch.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.list_app_principals">
-<span class="sig-name descname"><span class="pre">list_app_principals</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.list_app_principals"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.list_app_principals" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.list_app_principals">
+<span class="sig-name descname"><span class="pre">list_app_principals</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">app_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.list_app_principals"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.list_app_principals" title="Link to this definition">¶</a></dt>
 <dd><p>Return users and groups that have permissions on the Databricks App.</p>
 <p>Also captures whether the underlying REST call came back 403, which
 indicates the app’s own service principal is not allowed to read its
 own ACL (first-deploy bootstrap).  The flag is exposed via
-<a class="reference internal" href="#back.objects.registry.permissions.PermissionService.is_app_principals_forbidden" title="back.objects.registry.permissions.PermissionService.is_app_principals_forbidden"><code class="xref py py-meth docutils literal notranslate"><span class="pre">is_app_principals_forbidden()</span></code></a> and consumed by the permission
+<a class="reference internal" href="#back.objects.registry.PermissionService.PermissionService.is_app_principals_forbidden" title="back.objects.registry.PermissionService.PermissionService.is_app_principals_forbidden"><code class="xref py py-meth docutils literal notranslate"><span class="pre">is_app_principals_forbidden()</span></code></a> and consumed by the permission
 middleware to render a targeted access-denied page.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1102,8 +1272,8 @@ middleware to render a targeted access-denied page.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.is_app_principals_forbidden">
-<span class="sig-name descname"><span class="pre">is_app_principals_forbidden</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.is_app_principals_forbidden"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.is_app_principals_forbidden" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.is_app_principals_forbidden">
+<span class="sig-name descname"><span class="pre">is_app_principals_forbidden</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.is_app_principals_forbidden"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.is_app_principals_forbidden" title="Link to this definition">¶</a></dt>
 <dd><p>Return True if the last <code class="docutils literal notranslate"><span class="pre">list_app_principals</span></code> call was denied.</p>
 <p>Used by the middleware to detect the first-deploy chicken-and-egg:
 the app service principal has no permission on its own app, so the
@@ -1116,9 +1286,10 @@ ACL can’t be read and every user ends up as <code class="docutils literal notr
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.list_users">
-<span class="sig-name descname"><span class="pre">list_users</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.list_users"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.list_users" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.list_users">
+<span class="sig-name descname"><span class="pre">list_users</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.list_users"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.list_users" title="Link to this definition">¶</a></dt>
+<dd><p>Return every workspace user via SCIM (full directory).</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -1132,9 +1303,10 @@ ACL can’t be read and every user ends up as <code class="docutils literal notr
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="back.objects.registry.permissions.PermissionService.list_groups">
-<span class="sig-name descname"><span class="pre">list_groups</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/permissions.html#PermissionService.list_groups"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.permissions.PermissionService.list_groups" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dt class="sig sig-object py" id="back.objects.registry.PermissionService.PermissionService.list_groups">
+<span class="sig-name descname"><span class="pre">list_groups</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/registry/PermissionService.html#PermissionService.list_groups"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.registry.PermissionService.PermissionService.list_groups" title="Link to this definition">¶</a></dt>
+<dd><p>Return every workspace group via SCIM (full directory).</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>

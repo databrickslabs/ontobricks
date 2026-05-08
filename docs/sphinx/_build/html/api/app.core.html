@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -208,6 +209,17 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.helpers.DatabricksHelpers.resolve_use_cloud_fetch">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_use_cloud_fetch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/helpers/DatabricksHelpers.html#DatabricksHelpers.resolve_use_cloud_fetch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.helpers.DatabricksHelpers.resolve_use_cloud_fetch" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve CloudFetch enablement from global config (default: enabled).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -482,6 +494,17 @@ static fallback defined in <code class="docutils literal notranslate"><span clas
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.helpers.resolve_use_cloud_fetch">
+<span class="sig-prename descclassname"><span class="pre">back.core.helpers.</span></span><span class="sig-name descname"><span class="pre">resolve_use_cloud_fetch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.helpers.resolve_use_cloud_fetch" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve CloudFetch enablement from global config (default: enabled).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -993,6 +1016,21 @@ all modules share the same hierarchy.</p>
 <dd></dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="back.core.task_manager.Task.duration_seconds">
+<span class="sig-name descname"><span class="pre">duration_seconds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/task_manager/models.html#Task.duration_seconds"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.task_manager.Task.duration_seconds" title="Link to this definition">¶</a></dt>
+<dd><p>Wall-clock duration in seconds.</p>
+<p>For terminal tasks: <code class="docutils literal notranslate"><span class="pre">completed_at</span> <span class="pre">-</span> <span class="pre">started_at</span></code> (falls back to
+<code class="docutils literal notranslate"><span class="pre">created_at</span></code> if the worker never called <code class="docutils literal notranslate"><span class="pre">start_task</span></code>).
+For running/pending tasks: elapsed time until <em>now</em> so the UI can
+show a live timer. <code class="docutils literal notranslate"><span class="pre">None</span></code> only if no usable timestamp exists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="back.core.task_manager.Task.to_dict">
 <span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/task_manager/models.html#Task.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.task_manager.Task.to_dict" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
@@ -1099,6 +1137,49 @@ all modules share the same hierarchy.</p>
 <dt class="sig sig-object py" id="back.core.task_manager.TaskManager.advance_step">
 <span class="sig-name descname"><span class="pre">advance_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/task_manager/TaskManager.html#TaskManager.advance_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.task_manager.TaskManager.advance_step" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>task_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.task_manager.TaskManager.complete_current_step">
+<span class="sig-name descname"><span class="pre">complete_current_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/task_manager/TaskManager.html#TaskManager.complete_current_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.task_manager.TaskManager.complete_current_step" title="Link to this definition">¶</a></dt>
+<dd><p>Mark the currently <em>running</em> step as completed without starting the next.</p>
+<p>Unlike <code class="docutils literal notranslate"><span class="pre">advance_step</span></code>, this does not activate a subsequent step.  Use
+when the step’s heavy work continues in another thread (e.g. Volume
+upload) but the tracked job should show this phase as done so the UI
+can move on to <code class="docutils literal notranslate"><span class="pre">complete_task</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>task_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.task_manager.TaskManager.skip_step">
+<span class="sig-name descname"><span class="pre">skip_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/task_manager/TaskManager.html#TaskManager.skip_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.task_manager.TaskManager.skip_step" title="Link to this definition">¶</a></dt>
+<dd><p>Mark the current step as skipped and advance to the next one.</p>
+<p>Use this when a workflow phase isn’t executed for the current run
+(e.g. <em>Checking source tables</em> when the user forced a full rebuild).
+Without this, the seeded step list and the actual execution drift
+because the next <code class="docutils literal notranslate"><span class="pre">advance_step</span></code> call lands a “creating view”
+message inside a row labelled “checking source tables”.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>task_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>

@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -237,12 +239,29 @@
 
 
 
+<div class="viewcode-block" id="is_app_mode">
+<a class="viewcode-back" href="../../../api/app.fastapi.html#front.fastapi.dependencies.is_app_mode">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_app_mode</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True when the server runs as a Databricks App.</span>
+
+<span class="sd">    Mirrors :func:`back.core.databricks.is_databricks_app` so templates</span>
+<span class="sd">    can decide whether to render permission-aware UI gates without a</span>
+<span class="sd">    second API round-trip.  In local-dev mode every caller is treated</span>
+<span class="sd">    as admin, so the gates can simply turn into no-ops.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_databricks_app</span> <span class="k">as</span> <span class="n">_is_app</span>
+
+    <span class="k">return</span> <span class="n">_is_app</span><span class="p">()</span></div>
+
+
+
 <span class="c1"># Add custom globals to Jinja2 environment</span>
 <span class="n">templates</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">globals</span><span class="p">[</span><span class="s2">&quot;url_for&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">url_for</span>
 <span class="n">templates</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">globals</span><span class="p">[</span><span class="s2">&quot;range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">range_filter</span>
 <span class="n">templates</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">globals</span><span class="p">[</span><span class="s2">&quot;get_user_email&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_user_email</span>
 <span class="n">templates</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">globals</span><span class="p">[</span><span class="s2">&quot;get_user_role&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_user_role</span>
 <span class="n">templates</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">globals</span><span class="p">[</span><span class="s2">&quot;get_user_domain_role&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_user_domain_role</span>
+<span class="n">templates</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">globals</span><span class="p">[</span><span class="s2">&quot;is_app_mode&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">is_app_mode</span>
 
 <span class="c1"># Menu configuration available in all templates as {{ menu_config }}</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">front.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_menu_config</span><span class="p">,</span> <span class="n">get_menu_by_id</span>

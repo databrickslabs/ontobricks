@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -109,6 +110,8 @@
   <h1>All modules for which code is available</h1>
 <ul><li><a href="agents/agent_auto_assignment/engine.html">agents.agent_auto_assignment.engine</a></li>
 <li><a href="agents/agent_auto_icon_assign/engine.html">agents.agent_auto_icon_assign.engine</a></li>
+<li><a href="agents/agent_cohort/engine.html">agents.agent_cohort.engine</a></li>
+<li><a href="agents/agent_cohort/tools.html">agents.agent_cohort.tools</a></li>
 <li><a href="agents/agent_ontology_assistant/engine.html">agents.agent_ontology_assistant.engine</a></li>
 <li><a href="agents/agent_ontology_assistant/tools.html">agents.agent_ontology_assistant.tools</a></li>
 <li><a href="agents/agent_owl_generator/engine.html">agents.agent_owl_generator.engine</a></li>
@@ -125,6 +128,7 @@
 <li><a href="api/routers/digitaltwin.html">api.routers.digitaltwin</a></li>
 <li><a href="api/routers/internal/domain.html">api.routers.internal.domain</a></li>
 <li><a href="api/routers/internal/dtwin.html">api.routers.internal.dtwin</a></li>
+<li><a href="api/routers/internal/help.html">api.routers.internal.help</a></li>
 <li><a href="api/routers/internal/home.html">api.routers.internal.home</a></li>
 <li><a href="api/routers/internal/mapping.html">api.routers.internal.mapping</a></li>
 <li><a href="api/routers/internal/ontology.html">api.routers.internal.ontology</a></li>
@@ -147,7 +151,9 @@
 <li><a href="back/core/errors/NotFoundError.html">back.core.errors.NotFoundError</a></li>
 <li><a href="back/core/errors/OntoBricksError.html">back.core.errors.OntoBricksError</a></li>
 <li><a href="back/core/errors/ValidationError.html">back.core.errors.ValidationError</a></li>
-</ul><li><a href="back/core/graph_analysis/CommunityDetector.html">back.core.graph_analysis.CommunityDetector</a></li>
+</ul><li><a href="back/core/graph_analysis/CohortBuilder.html">back.core.graph_analysis.CohortBuilder</a></li>
+<li><a href="back/core/graph_analysis/CohortVocabulary.html">back.core.graph_analysis.CohortVocabulary</a></li>
+<li><a href="back/core/graph_analysis/CommunityDetector.html">back.core.graph_analysis.CommunityDetector</a></li>
 <li><a href="back/core/graph_analysis/models.html">back.core.graph_analysis.models</a></li>
 <li><a href="back/core/graphdb/GraphDBBackend.html">back.core.graphdb.GraphDBBackend</a></li>
 <li><a href="back/core/graphdb/GraphDBFactory.html">back.core.graphdb.GraphDBFactory</a></li>
@@ -200,6 +206,7 @@
 <li><a href="back/core/w3c/sparql/SparqlQueryRunner.html">back.core.w3c.sparql.SparqlQueryRunner</a></li>
 <li><a href="back/core/w3c/sparql/SparqlTranslator.html">back.core.w3c.sparql.SparqlTranslator</a></li>
 <li><a href="back/fastapi/graphql_routes.html">back.fastapi.graphql_routes</a></li>
+<li><a href="back/objects/digitaltwin/CohortService.html">back.objects.digitaltwin.CohortService</a></li>
 <li><a href="back/objects/digitaltwin/DigitalTwin.html">back.objects.digitaltwin.DigitalTwin</a></li>
 <li><a href="back/objects/digitaltwin/models.html">back.objects.digitaltwin.models</a></li>
 <li><a href="back/objects/domain/Domain.html">back.objects.domain.Domain</a></li>
@@ -212,9 +219,9 @@
 <li><a href="back/objects/mapping/json_views.html">back.objects.mapping.json_views</a></li>
 <li><a href="back/objects/ontology/Ontology.html">back.objects.ontology.Ontology</a></li>
 <li><a href="back/objects/ontology/json_views.html">back.objects.ontology.json_views</a></li>
-<li><a href="back/objects/registry/permissions.html">back.objects.registry.permissions</a></li>
+<li><a href="back/objects/registry/PermissionService.html">back.objects.registry.PermissionService</a></li>
+<li><a href="back/objects/registry/RegistryService.html">back.objects.registry.RegistryService</a></li>
 <li><a href="back/objects/registry/scheduler.html">back.objects.registry.scheduler</a></li>
-<li><a href="back/objects/registry/service.html">back.objects.registry.service</a></li>
 <li><a href="back/objects/session/DomainSession.html">back.objects.session.DomainSession</a></li>
 <li><a href="back/objects/session/FileSessionMiddleware.html">back.objects.session.FileSessionMiddleware</a></li>
 <li><a href="back/objects/session/SessionManager.html">back.objects.session.SessionManager</a></li>

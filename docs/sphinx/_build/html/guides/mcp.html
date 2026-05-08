@@ -16,7 +16,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Development" href="development.html" />
-    <link rel="prev" title="OntoBricks External REST API" href="api.html" />
+    <link rel="prev" title="Data Access Wrappers — Engine Map" href="data-access.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
@@ -58,7 +58,9 @@
 <li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">OntoBricks MCP Server</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#workflow">Workflow</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#available-tools">Available Tools</a></li>
@@ -108,7 +110,7 @@
 <h3>Related Topics</h3>
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
-      <li>Previous: <a href="api.html" title="previous chapter">OntoBricks External REST API</a></li>
+      <li>Previous: <a href="data-access.html" title="previous chapter">Data Access Wrappers — Engine Map</a></li>
       <li>Next: <a href="development.html" title="next chapter">Development</a></li>
   </ul></li>
 </ul>
@@ -138,6 +140,7 @@ Python package deployed separately from the main OntoBricks web application.</p>
 <li><p><strong>Choose a domain</strong> — call <code class="docutils literal notranslate"><span class="pre">list_domains</span></code> to see available knowledge graphs with descriptions, then <code class="docutils literal notranslate"><span class="pre">select_domain</span></code> to activate one. Only domains with the <strong>API / MCP</strong> flag enabled in OntoBricks are listed.</p></li>
 <li><p><strong>Query the knowledge graph</strong> — use <code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code>, <code class="docutils literal notranslate"><span class="pre">describe_entity</span></code>, or <code class="docutils literal notranslate"><span class="pre">get_status</span></code> on the selected domain.</p></li>
 </ol>
+<p><strong>Which version?</strong> For each domain folder, the registry stores exactly one <strong>Active</strong> (MCP/API-enabled) version at a time. Operators set that version in the main OntoBricks app under <strong>Registry → Browse</strong> (expand the domain, then <strong>Set as Active</strong> on a row). <strong>Domain → Versions</strong> shows the outcome as a read-only badge but does not change it.</p>
 <p><strong>Advanced — GraphQL querying:</strong></p>
 <p>After selecting a domain, the LLM can also leverage GraphQL for structured data retrieval:</p>
 <ol class="arabic simple">

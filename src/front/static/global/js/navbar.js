@@ -44,12 +44,29 @@ async function loadNavbarState() {
         const state = await fetchCached('/navbar/state', 15000);
         applyDomainInfo(state.domain || {});
         applyWarehouseIcon(state.warehouse || {});
+        applyBrandLogo(state.branding || {});
     } catch (error) {
         console.error('Error loading navbar state:', error);
         updateDomainMenuVisibility(false);
         updateMenusForDomainStatus(false);
     }
 }
+
+/**
+ * Swap the navbar brand image to the admin-configured custom logo when one
+ * is set in Settings → Global. The default favicon is rendered server-side
+ * via base.html, so this only mutates the DOM when a custom logo exists —
+ * keeping initial paint flicker-free for the default-branding case.
+ */
+function applyBrandLogo(branding) {
+    const img = document.getElementById('brandLogoImg');
+    if (!img) return;
+    if (branding && branding.is_custom && branding.logo_url) {
+        img.src = branding.logo_url;
+    }
+}
+
+window.applyBrandLogo = applyBrandLogo;
 
 
 /**

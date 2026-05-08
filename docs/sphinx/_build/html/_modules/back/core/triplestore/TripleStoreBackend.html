@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -502,12 +503,14 @@
         <span class="n">field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;any&quot;</span><span class="p">,</span>
         <span class="n">match_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;contains&quot;</span><span class="p">,</span>
         <span class="n">value</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return distinct subjects matching type and/or value criteria.</span>
 
 <span class="sd">        *field* is ``&quot;label&quot;`` (match on ``rdfs:label``) or ``&quot;id&quot;`` (match on</span>
 <span class="sd">        the subject URI itself).  *match_type* is ``&quot;contains&quot;``, ``&quot;exact&quot;``,</span>
-<span class="sd">        ``&quot;starts&quot;``, or ``&quot;ends&quot;``.</span>
+<span class="sd">        ``&quot;starts&quot;``, or ``&quot;ends&quot;``. ``limit`` (when &gt; 0) caps returned</span>
+<span class="sd">        subjects for responsive preview queries.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">esc_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sql_escape</span><span class="p">(</span><span class="n">entity_type</span><span class="p">)</span> <span class="k">if</span> <span class="n">entity_type</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
         <span class="n">safe_val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sql_escape</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
@@ -625,7 +628,12 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;transitive_closure SQL failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;transitive_closure SQL failed on </span><span class="si">%s</span><span class="s2">, returning empty result: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="p">,</span>
+                <span class="n">e</span><span class="p">,</span>
+                <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span></div>
 
 
@@ -656,7 +664,12 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;symmetric_expand SQL failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;symmetric_expand SQL failed on </span><span class="si">%s</span><span class="s2">, returning empty result: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="p">,</span>
+                <span class="n">e</span><span class="p">,</span>
+                <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span></div>
 
 
@@ -676,6 +689,51 @@
 <span class="sd">        algorithms.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="TripleStoreBackend.delete_cohort_triples">
+<a class="viewcode-back" href="../../../../api/app.core.triplestore.html#back.core.triplestore.TripleStoreBackend.TripleStoreBackend.delete_cohort_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_cohort_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">cohort_uri_prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">in_cohort_predicate</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove all triples produced by a cohort rule (idempotent).</span>
+
+<span class="sd">        A cohort rule materialises two kinds of triples:</span>
+
+<span class="sd">        * Cohort-entity triples whose **subject** starts with</span>
+<span class="sd">          *cohort_uri_prefix* (``rdf:type``, ``rdfs:label``, ``fromRule``,</span>
+<span class="sd">          ``cohortSize``).</span>
+<span class="sd">        * Membership triples whose **predicate** is *in_cohort_predicate*</span>
+<span class="sd">          and whose **object** starts with *cohort_uri_prefix*.</span>
+
+<span class="sd">        Default implementation issues a single SQL ``DELETE`` covering</span>
+<span class="sd">        both cases.  Cypher backends override with a ``MATCH ... DELETE``</span>
+<span class="sd">        pair.  Returns the number of rows deleted (best-effort).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cohort_uri_prefix</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">prefix_esc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sql_escape</span><span class="p">(</span><span class="n">cohort_uri_prefix</span><span class="p">)</span>
+        <span class="n">in_cohort_esc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sql_escape</span><span class="p">(</span><span class="n">in_cohort_predicate</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;DELETE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE subject LIKE &#39;</span><span class="si">{</span><span class="n">prefix_esc</span><span class="si">}</span><span class="s2">%&#39; &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;OR (predicate = &#39;</span><span class="si">{</span><span class="n">in_cohort_esc</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;    AND object LIKE &#39;</span><span class="si">{</span><span class="n">prefix_esc</span><span class="si">}</span><span class="s2">%&#39;)&quot;</span>
+        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span>
+            <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;delete_cohort_triples failed on </span><span class="si">%s</span><span class="s2"> (</span><span class="si">%s</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="p">,</span>
+                <span class="n">cohort_uri_prefix</span><span class="p">,</span>
+                <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="mi">0</span></div>
 
 
 <div class="viewcode-block" id="TripleStoreBackend.expand_entity_neighbors">

@@ -22,6 +22,8 @@ def _clear_databricks_env(monkeypatch):
         "DATABRICKS_CLIENT_ID",
         "DATABRICKS_CLIENT_SECRET",
         "DATABRICKS_SQL_WAREHOUSE_ID",
+        "DATABRICKS_DISABLE_CLOUD_FETCH",
+        "DATABRICKS_FORCE_CLOUD_FETCH",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -183,7 +185,8 @@ class TestGetAuthHeaders:
 
 
 class TestGetSqlConnectionParams:
-    def test_params_with_pat(self, monkeypatch):
+    @patch.object(DatabricksAuth, "can_use_cloud_fetch", return_value=False)
+    def test_params_with_pat(self, _mock_cf, monkeypatch):
         _clear_databricks_env(monkeypatch)
         auth = DatabricksAuth(
             host="https://ws.databricks.com",
@@ -195,9 +198,11 @@ class TestGetSqlConnectionParams:
         assert params["http_path"] == "/sql/1.0/warehouses/wh-99"
         assert params["access_token"] == "sql-pat"
         assert params["_socket_timeout"] == 30
+        assert params["use_cloud_fetch"] is False
 
+    @patch.object(DatabricksAuth, "can_use_cloud_fetch", return_value=True)
     @patch.object(DatabricksAuth, "get_oauth_token", return_value="sql-oauth")
-    def test_params_with_oauth_in_app_mode(self, mock_oauth, monkeypatch):
+    def test_params_with_oauth_in_app_mode(self, mock_oauth, _mock_cf, monkeypatch):
         _clear_databricks_env(monkeypatch)
         monkeypatch.setenv("DATABRICKS_APP_PORT", "8080")
         monkeypatch.setenv("DATABRICKS_CLIENT_ID", "cid")
@@ -210,7 +215,117 @@ class TestGetSqlConnectionParams:
         )
         params = auth.get_sql_connection_params()
         assert params["access_token"] == "sql-oauth"
+        assert params["use_cloud_fetch"] is True
         mock_oauth.assert_called()
+
+
+class TestCloudFetchCapability:
+    @staticmethod
+    def _reset_cache():
+        DatabricksAuth._cloud_fetch_cache.clear()
+
+    def test_cloud_fetch_disabled_when_pyarrow_missing(self, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        self._reset_cache()
+        auth = DatabricksAuth(
+            host="https://ws.cloud.databricks.com",
+            token="sql-pat",
+            warehouse_id="wh-1",
+        )
+        with patch.dict("sys.modules", {"pyarrow": None}):
+            assert auth.can_use_cloud_fetch() is False
+            ok, reason = auth.probe_cloud_fetch_capability()
+            assert ok is False
+            assert "pyarrow" in reason.lower()
+
+    @patch("databricks.sql.connect")
+    def test_probe_cloud_fetch_capability_success(self, mock_connect, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        self._reset_cache()
+        auth = DatabricksAuth(
+            host="https://ws.cloud.databricks.com",
+            token="sql-pat",
+            warehouse_id="wh-1",
+        )
+
+        conn_cm = MagicMock()
+        cur_cm = MagicMock()
+        mock_connect.return_value.__enter__.return_value = conn_cm
+        conn_cm.cursor.return_value.__enter__.return_value = cur_cm
+        cur_cm.fetchall.return_value = [(1,)]
+
+        ok, reason = auth.probe_cloud_fetch_capability()
+        assert ok is True
+        assert "succeeded" in reason.lower()
+        kwargs = mock_connect.call_args.kwargs
+        assert kwargs["use_cloud_fetch"] is True
+        assert kwargs["server_hostname"] == "ws.cloud.databricks.com"
+
+        # Cached result drives can_use_cloud_fetch with no extra connect.
+        mock_connect.reset_mock()
+        assert auth.can_use_cloud_fetch() is True
+        mock_connect.assert_not_called()
+
+    @patch("databricks.sql.connect", side_effect=RuntimeError("blocked"))
+    def test_probe_cloud_fetch_capability_failure(self, _mock_connect, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        self._reset_cache()
+        auth = DatabricksAuth(
+            host="https://ws.cloud.databricks.com",
+            token="sql-pat",
+            warehouse_id="wh-1",
+        )
+        ok, reason = auth.probe_cloud_fetch_capability()
+        assert ok is False
+        assert "blocked" in reason
+
+        assert auth.can_use_cloud_fetch() is False
+
+    def test_can_use_cloud_fetch_default_app_mode_enabled(self, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        self._reset_cache()
+        monkeypatch.setenv("DATABRICKS_APP_PORT", "8080")
+        monkeypatch.setenv("DATABRICKS_CLIENT_ID", "cid")
+        monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "csec")
+        auth = DatabricksAuth(
+            host="https://ws.cloud.databricks.com",
+            token="",
+            warehouse_id="wh-1",
+        )
+        assert auth.can_use_cloud_fetch() is True
+
+    def test_can_use_cloud_fetch_disabled_by_global_setting(self, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        self._reset_cache()
+        auth = DatabricksAuth(
+            host="https://ws.cloud.databricks.com",
+            token="sql-pat",
+            warehouse_id="wh-1",
+            use_cloud_fetch=False,
+        )
+        assert auth.can_use_cloud_fetch() is False
+
+    def test_env_force_overrides(self, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        self._reset_cache()
+        monkeypatch.setenv("DATABRICKS_FORCE_CLOUD_FETCH", "1")
+        auth = DatabricksAuth(
+            host="https://ws.cloud.databricks.com",
+            token="sql-pat",
+            warehouse_id="wh-1",
+        )
+        assert auth.can_use_cloud_fetch() is True
+
+    def test_env_disable_overrides(self, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        self._reset_cache()
+        monkeypatch.setenv("DATABRICKS_DISABLE_CLOUD_FETCH", "1")
+        auth = DatabricksAuth(
+            host="https://ws.cloud.databricks.com",
+            token="sql-pat",
+            warehouse_id="wh-1",
+        )
+        assert auth.can_use_cloud_fetch() is False
 
 
 class TestHasValidAuth:

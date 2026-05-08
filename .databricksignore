@@ -38,14 +38,13 @@ logs/
 mlflow.db
 
 # ── Documentation ─────────────────────────────────────────────
-# docs/*.md are served by the in-app Help Center (see
-# src/front/routes/help.py → /api/help/docs/*), so they MUST be
-# shipped with the app. We still exclude the Sphinx build output
-# and any auxiliary folders that aren't needed at runtime.
+# Keep deployment payload minimal: ship no docs/ or markdown files.
 data/
 licenses/
 dab/
-docs/sphinx/
+docs/
+*.md
+*.txt
 documentation.html
 
 # ── DAB config (not needed at runtime) ───────────────────────

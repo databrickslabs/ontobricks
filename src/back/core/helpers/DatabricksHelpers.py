@@ -157,6 +157,37 @@ class DatabricksHelpers:
         )
 
     @staticmethod
+    def resolve_use_cloud_fetch(domain, settings) -> bool:
+        """Resolve CloudFetch enablement from global config (default: enabled).
+
+        Calls ``global_config_service.get_use_cloud_fetch`` directly rather
+        than going through ``_resolve_global_setting`` because the latter
+        treats falsy returns as "not configured" (``if val: return val``)
+        and would swallow an explicit ``False`` from the admin toggle,
+        leaving CloudFetch erroneously enabled.
+        """
+        from back.objects.session import global_config_service
+
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
+
+        if not host or not registry_cfg.get("catalog") or not registry_cfg.get(
+            "schema"
+        ):
+            return True
+
+        try:
+            return bool(
+                global_config_service.get_use_cloud_fetch(host, token, registry_cfg)
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort default resolution
+            logger.debug(
+                "Could not resolve global CloudFetch setting, defaulting to enabled: %s",
+                exc,
+            )
+            return True
+
+    @staticmethod
     def get_databricks_client(domain, settings):
         """Get Databricks client from domain session or settings.
 
@@ -174,16 +205,23 @@ class DatabricksHelpers:
         host = dbcfg.get("host") or settings.databricks_host
         token = dbcfg.get("token") or settings.databricks_token
         warehouse_id = DatabricksHelpers.resolve_warehouse_id(domain, settings)
+        use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch(domain, settings)
 
         # In Databricks Apps mode, always create a client (SDK handles auth)
         if _databricks.is_databricks_app():
             return _databricks.DatabricksClient(
-                host=host, token=token, warehouse_id=warehouse_id
+                host=host,
+                token=token,
+                warehouse_id=warehouse_id,
+                use_cloud_fetch=use_cloud_fetch,
             )
 
         if host and token:
             return _databricks.DatabricksClient(
-                host=host, token=token, warehouse_id=warehouse_id
+                host=host,
+                token=token,
+                warehouse_id=warehouse_id,
+                use_cloud_fetch=use_cloud_fetch,
             )
 
         return None

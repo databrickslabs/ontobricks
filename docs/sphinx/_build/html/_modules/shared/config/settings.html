@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -114,7 +116,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseSettings</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigDict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">AliasChoices</span><span class="p">,</span> <span class="n">ConfigDict</span><span class="p">,</span> <span class="n">Field</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">lru_cache</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 
@@ -147,14 +149,58 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Alias used by resolve_warehouse_id().&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">databricks_sql_warehouse_id</span>
 
-    <span class="c1"># Domain Registry (single Volume for all domains)</span>
+    <span class="c1"># Domain Registry — storage backend</span>
+    <span class="c1"># ``auto`` (default) prefers Lakebase when the Apps runtime has bound</span>
+    <span class="c1"># the Postgres ``database`` resource (PG* env vars present) AND the</span>
+    <span class="c1"># optional ``psycopg`` extra is installed; otherwise falls back to</span>
+    <span class="c1"># ``volume``. Operators can pin the choice with</span>
+    <span class="c1"># ``REGISTRY_BACKEND=volume`` or ``REGISTRY_BACKEND=lakebase``.</span>
+    <span class="c1"># ``volume`` keeps the original JSON-on-UC-Volume layout.</span>
+    <span class="c1"># ``lakebase`` stores registry-shaped data in a Postgres schema on</span>
+    <span class="c1"># Databricks Lakebase; binaries (documents/, *.lbug.tar.gz) stay on</span>
+    <span class="c1"># the Volume regardless of this choice. Resolution lives in</span>
+    <span class="c1"># :func:`back.objects.registry.resolve_default_backend`.</span>
+    <span class="n">registry_backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span>
+
+    <span class="c1"># Domain Registry (single Volume for all domains) — used by both</span>
+    <span class="c1"># backends for binary artifacts and by the volume backend for</span>
+    <span class="c1"># everything else.</span>
     <span class="n">registry_volume_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">registry_catalog</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">registry_schema</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">registry_volume</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;OntoBricksRegistry&quot;</span>
 
-    <span class="c1"># Databricks App name (for permission management)</span>
-    <span class="n">ontobricks_app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="c1"># Lakebase: Postgres schema where the registry tables live.</span>
+    <span class="c1"># Connection parameters (PGHOST/PGPORT/PGDATABASE/PGUSER) come from</span>
+    <span class="c1"># the Databricks App database resource binding at runtime; the OAuth</span>
+    <span class="c1"># token used as password is minted by ``LakebaseAuth`` via the</span>
+    <span class="c1"># workspace SDK.</span>
+    <span class="n">lakebase_schema</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ontobricks_registry&quot;</span>
+
+    <span class="c1"># Lakebase: optional override of the Postgres database name. When</span>
+    <span class="c1"># empty (the default), the Lakebase backend uses ``PGDATABASE`` as</span>
+    <span class="c1"># auto-injected by the Apps runtime. Setting this picks a different</span>
+    <span class="c1"># database on the *same* bound Lakebase instance — useful when the</span>
+    <span class="c1"># admin wants to change the registry database without redeploying</span>
+    <span class="c1"># the bundle. The service principal must have ``CONNECT`` on the</span>
+    <span class="c1"># target database. The JWT scope is per-instance so no token</span>
+    <span class="c1"># re-mint is needed.</span>
+    <span class="n">lakebase_database</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="c1"># Databricks App name (for permission management).</span>
+    <span class="c1"># Reads ``ONTOBRICKS_APP_NAME`` first (explicit override, e.g. via .env</span>
+    <span class="c1"># for local dev), then falls back to ``DATABRICKS_APP_NAME`` which the</span>
+    <span class="c1"># Databricks Apps runtime auto-injects as the deployed app&#39;s name</span>
+    <span class="c1"># (e.g. ``ontobricks`` for prod, ``ontobricks-dev`` for the sandbox).</span>
+    <span class="c1"># This lets the same ``app.yaml`` and source tree power multiple</span>
+    <span class="c1"># Databricks App deployments without requiring a per-app override.</span>
+    <span class="n">ontobricks_app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">validation_alias</span><span class="o">=</span><span class="n">AliasChoices</span><span class="p">(</span>
+            <span class="s2">&quot;ONTOBRICKS_APP_NAME&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;DATABRICKS_APP_NAME&quot;</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
 
     <span class="c1"># Session settings - use /tmp in Databricks Apps</span>
     <span class="n">session_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">_get_default_session_dir</span><span class="p">()</span>
@@ -164,6 +210,12 @@
         <span class="n">env_prefix</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">case_sensitive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">env_file</span><span class="o">=</span><span class="s2">&quot;.env&quot;</span><span class="p">,</span>
+        <span class="c1"># ``PGHOST``/``PGPORT``/``PGDATABASE``/``PGUSER`` and</span>
+        <span class="c1"># ``DATABASE_INSTANCE_NAME`` are consumed directly via</span>
+        <span class="c1"># ``os.environ`` by :class:`back.core.databricks.LakebaseAuth`</span>
+        <span class="c1"># — they don&#39;t need to be Pydantic fields. ``ignore`` keeps</span>
+        <span class="c1"># the .env file tolerant of extra Lakebase-related entries.</span>
+        <span class="n">extra</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 

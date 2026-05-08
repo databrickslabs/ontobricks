@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -954,7 +955,14 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
             <span class="n">clear_version_status_cache</span><span class="p">()</span>
             <span class="n">invalidate_registry_cache</span><span class="p">()</span>
-            <span class="n">graph_warning</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sync_ladybug_from_volume</span><span class="p">(</span><span class="n">svc</span><span class="o">.</span><span class="n">uc</span><span class="p">)</span>
+            <span class="c1"># Lazy graph load: skip the eager sync_ladybug_from_volume</span>
+            <span class="c1"># download here. The .lbug archive can be tens of MB and the</span>
+            <span class="c1"># SQL Warehouse Files API is the slow part of &quot;Load Domain&quot;.</span>
+            <span class="c1"># LadybugBase._get_connection auto-restores from the registry</span>
+            <span class="c1"># on first DT/Build access via the auto_restore callback wired</span>
+            <span class="c1"># up by GraphDBFactory, and the explicit &quot;Reload from registry&quot;</span>
+            <span class="c1"># admin button (POST /sync/reload-from-registry) remains</span>
+            <span class="c1"># available for forced refreshes.</span>
             <span class="n">ts_stats</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">triplestore</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;stats&quot;</span><span class="p">,</span> <span class="p">{})</span>
             <span class="n">ts_stats</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="n">ts_stats</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;dt_existence&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
@@ -962,8 +970,6 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
             <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;Latest&quot;</span> <span class="k">if</span> <span class="n">is_latest</span> <span class="k">else</span> <span class="s2">&quot;Read-only&quot;</span>
             <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Domain loaded: </span><span class="si">{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2"> v</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">)&quot;</span>
-            <span class="k">if</span> <span class="n">graph_warning</span><span class="p">:</span>
-                <span class="n">msg</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (graph sync warning: </span><span class="si">{</span><span class="n">graph_warning</span><span class="si">}</span><span class="s2">)&quot;</span>
             <span class="k">return</span> <span class="p">{</span>
                 <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
                 <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
@@ -1091,11 +1097,14 @@
                     <span class="k">return</span> <span class="n">cached</span>
 
             <span class="n">available_versions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">active_version</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">has_registry</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
                     <span class="n">svc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">build_registry_service</span><span class="p">()</span>
                     <span class="n">folder</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">uc_domain_folder</span>
                     <span class="n">available_versions</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">list_versions_sorted</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
+                    <span class="n">mcp_ver</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">find_mcp_version</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
+                    <span class="n">active_version</span> <span class="o">=</span> <span class="n">mcp_ver</span>
                 <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                     <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not fetch versions from UC: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
                     <span class="n">available_versions</span> <span class="o">=</span> <span class="p">[</span><span class="n">version</span><span class="p">]</span>
@@ -1104,12 +1113,18 @@
 
             <span class="n">is_latest</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">available_versions</span> <span class="ow">or</span> <span class="n">version</span> <span class="o">==</span> <span class="n">available_versions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">is_active_version</span> <span class="o">=</span> <span class="n">is_latest</span>
+            <span class="c1"># ``is_active`` keeps its legacy meaning (&quot;loaded version is the</span>
+            <span class="c1"># latest, so writes are allowed&quot;) because version-check.js uses</span>
+            <span class="c1"># it to gate the read-only body class. The MCP-enabled version</span>
+            <span class="c1"># is exposed separately via ``active_version`` so the Cockpit</span>
+            <span class="c1"># tile can show what&#39;s actually live on the API/MCP surface.</span>
             <span class="n">is_active</span> <span class="o">=</span> <span class="n">is_latest</span>
             <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
                 <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
                 <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="n">version</span><span class="p">,</span>
                 <span class="s2">&quot;is_active&quot;</span><span class="p">:</span> <span class="n">is_active</span><span class="p">,</span>
                 <span class="s2">&quot;is_latest&quot;</span><span class="p">:</span> <span class="n">is_latest</span><span class="p">,</span>
+                <span class="s2">&quot;active_version&quot;</span><span class="p">:</span> <span class="n">active_version</span><span class="p">,</span>
                 <span class="s2">&quot;available_versions&quot;</span><span class="p">:</span> <span class="n">available_versions</span><span class="p">,</span>
                 <span class="s2">&quot;has_registry&quot;</span><span class="p">:</span> <span class="n">has_registry</span><span class="p">,</span>
                 <span class="s2">&quot;registry&quot;</span><span class="p">:</span> <span class="p">(</span>

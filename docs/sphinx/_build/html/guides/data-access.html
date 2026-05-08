@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Data Access Wrappers — Engine Map &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=a58bc63e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="OntoBricks MCP Server" href="mcp.html" />
+    <link rel="prev" title="OntoBricks External REST API" href="api.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Knowledge Graph Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Data Access Wrappers — Engine Map</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-five-access-wrappers">1. The five access wrappers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#storage-backends-which-engine-speaks-which-language">2. Storage backends — which engine speaks which language</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#decision-tree-which-wrapper-fires-for-what">3. Decision tree — which wrapper fires for what?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ui-features-engine-map">4. UI features — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mcp-server-src-mcp-server-engine-map">5. MCP server (<code class="docutils literal notranslate"><span class="pre">src/mcp-server</span></code>) — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#graph-chat-src-agents-agent-dtwin-chat-engine-map">6. Graph Chat (<code class="docutils literal notranslate"><span class="pre">src/agents/agent_dtwin_chat</span></code>) — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#other-llm-agents-engine-map">7. Other LLM agents — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reasoning-engine-engine-map">8. Reasoning engine — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#three-end-to-end-query-flows">9. Three end-to-end query flows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tl-dr-matrix-what-each-surface-exposes">10. TL;DR matrix — what each surface exposes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#source-code-anchors-quick-links">11. Source-code anchors (quick links)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.triplestore.html"><code class="docutils literal notranslate"><span class="pre">back.core.triplestore</span></code> – Pluggable RDF/Graph Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="api.html" title="previous chapter">OntoBricks External REST API</a></li>
+      <li>Next: <a href="mcp.html" title="next chapter">OntoBricks MCP Server</a></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="data-access-wrappers-engine-map">
+<h1>Data Access Wrappers — Engine Map<a class="headerlink" href="#data-access-wrappers-engine-map" title="Link to this heading">¶</a></h1>
+<p>This document inventories every way the OntoBricks platform reads (or asks the
+backend to read) data, and pins each user-facing feature to the underlying
+query engine(s) it ends up using.</p>
+<p>The goal is to answer, for any feature in the <strong>UI</strong>, the <strong>MCP server</strong>, or
+the <strong>Graph Chat</strong> assistant: <em>“when I click this, which engine actually
+runs?”</em></p>
+<hr class="docutils" />
+<section id="the-five-access-wrappers">
+<h2>1. The five access wrappers<a class="headerlink" href="#the-five-access-wrappers" title="Link to this heading">¶</a></h2>
+<p>OntoBricks exposes data through five layered wrappers. Three are user-facing
+languages, two are engine-facing dialects the platform translates <em>down to</em>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Layer</p></th>
+<th class="head"><p>Implementation</p></th>
+<th class="head"><p>Where the bytes finally land</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>REST</strong></p></td>
+<td><p>user-facing</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">api/external_app.py</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/...</span></code>, <code class="docutils literal notranslate"><span class="pre">api/routers/internal/dtwin.py</span></code></p></td>
+<td><p>Calls into Python services (<code class="docutils literal notranslate"><span class="pre">DigitalTwin</span></code>, <code class="docutils literal notranslate"><span class="pre">DomainQueryService</span></code>, registry, …)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>GraphQL</strong></p></td>
+<td><p>user-facing</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/core/graphql/GraphQLSchemaBuilder.py</span></code>, <code class="docutils literal notranslate"><span class="pre">ResolverFactory.py</span></code>, <code class="docutils literal notranslate"><span class="pre">back/fastapi/graphql_routes.py</span></code></p></td>
+<td><p>Resolvers internally call SPARQL / triples-find → Spark SQL</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>SPARQL</strong></p></td>
+<td><p>user-facing (read-only in chat)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/sparql/SparqlTranslator.py</span></code>, <code class="docutils literal notranslate"><span class="pre">SparqlQueryRunner.py</span></code>, <code class="docutils literal notranslate"><span class="pre">DomainQueryService.py</span></code></p></td>
+<td><p>Translated to <strong>Spark SQL</strong> via R2RML mappings</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Spark SQL</strong></p></td>
+<td><p>engine-facing</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/core/triplestore/delta/DeltaTripleStore.py</span></code></p></td>
+<td><p>Native execution on Databricks SQL Warehouse against Delta views in Unity Catalog</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Cypher</strong></p></td>
+<td><p>engine-facing</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/core/graphdb/GraphDBBackend.py</span></code> + concrete engines under <code class="docutils literal notranslate"><span class="pre">back/core/graphdb/&lt;engine&gt;/</span></code> (<code class="docutils literal notranslate"><span class="pre">supports_cypher</span> <span class="pre">=</span> <span class="pre">True</span></code>, <code class="docutils literal notranslate"><span class="pre">query_dialect</span> <span class="pre">=</span> <span class="pre">&quot;cypher&quot;</span></code>)</p></td>
+<td><p>Native execution on the embedded GraphDB engine (default: LadybugDB, file-based <code class="docutils literal notranslate"><span class="pre">.lbug</span></code>)</p></td>
+</tr>
+</tbody>
+</table>
+<section id="supporting-w3c-standards-not-query-languages">
+<h3>Supporting W3C standards (not query languages)<a class="headerlink" href="#supporting-w3c-standards-not-query-languages" title="Link to this heading">¶</a></h3>
+<p>These layers <strong>shape</strong> queries but don’t run them — they are mappings,
+constraints, and rule definitions:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Standard</p></th>
+<th class="head"><p>Role</p></th>
+<th class="head"><p>Where</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>R2RML</strong></p></td>
+<td><p>Maps relational tables → RDF; consumed by <code class="docutils literal notranslate"><span class="pre">SparqlTranslator</span></code> to lift SPARQL to Spark SQL</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/r2rml/</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>SHACL</strong></p></td>
+<td><p>Constraint validation over RDF (data quality)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/shacl/SHACLService.py</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>OWL / RDFS</strong></p></td>
+<td><p>Schema definition + entailment (<code class="docutils literal notranslate"><span class="pre">OWLRLReasoner</span></code> materializes derived triples)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/core/w3c/owl/</span></code>, <code class="docutils literal notranslate"><span class="pre">back/core/reasoning/OWLRLReasoner.py</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>SWRL</strong></p></td>
+<td><p>Rule language; compiled to either SQL (<code class="docutils literal notranslate"><span class="pre">SWRLSQLTranslator</span></code>) or Cypher (<code class="docutils literal notranslate"><span class="pre">SWRLCypherTranslator</span></code>) depending on backend</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">back/core/reasoning/SWRL*.py</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="storage-backends-which-engine-speaks-which-language">
+<h2>2. Storage backends — which engine speaks which language<a class="headerlink" href="#storage-backends-which-engine-speaks-which-language" title="Link to this heading">¶</a></h2>
+<p>Which engine actually runs your query depends on the domain’s configured
+triple-store backend (<code class="docutils literal notranslate"><span class="pre">TripleStoreFactory.create(...)</span></code>):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Domain backend</p></th>
+<th class="head"><p>Storage</p></th>
+<th class="head"><p>Native engine</p></th>
+<th class="head"><p>SPARQL path</p></th>
+<th class="head"><p>Cypher path</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">view</span></code> (<code class="docutils literal notranslate"><span class="pre">DeltaTripleStore</span></code>)</p></td>
+<td><p>Delta view in Unity Catalog</p></td>
+<td><p><strong>Spark SQL</strong> (Databricks SQL Warehouse)</p></td>
+<td><p>SPARQL → Spark SQL via R2RML</p></td>
+<td><p>n/a</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">graph</span></code> (<code class="docutils literal notranslate"><span class="pre">GraphDBBackend</span></code>)</p></td>
+<td><p>Engine-specific embedded file (synced to UC Volume)</p></td>
+<td><p><strong>Cypher</strong></p></td>
+<td><p>SPARQL → SQL or Cypher (subclass-dependent)</p></td>
+<td><p>Native</p></td>
+</tr>
+</tbody>
+</table>
+<p>The selection is made in <code class="docutils literal notranslate"><span class="pre">back/core/triplestore/TripleStoreFactory.py</span></code>. By
+default a domain uses the <strong>graph</strong> backend; switching to <strong>view</strong> is purely
+a configuration change — the user-facing wrappers (REST / GraphQL / SPARQL)
+don’t change.</p>
+<blockquote>
+<div><p><strong>GraphDB engines.</strong> <code class="docutils literal notranslate"><span class="pre">GraphDBBackend</span></code> is the abstract base class; concrete
+engines live under <code class="docutils literal notranslate"><span class="pre">back/core/graphdb/&lt;engine&gt;/</span></code>. The current
+default/embedded engine is <strong>LadybugDB</strong> (file-based <code class="docutils literal notranslate"><span class="pre">.lbug</span></code>); additional
+engines (e.g. KuzuDB, Neo4j) can be plugged in via <code class="docutils literal notranslate"><span class="pre">GraphDBFactory</span></code>
+without changing any of the user-facing wrappers above.</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="decision-tree-which-wrapper-fires-for-what">
+<h2>3. Decision tree — which wrapper fires for what?<a class="headerlink" href="#decision-tree-which-wrapper-fires-for-what" title="Link to this heading">¶</a></h2>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>            &quot;I want to ...&quot;
+                  │
+        ┌─────────┴──────────────────────────────────────┐
+        │                                                │
+&quot;... explore / browse / mutate&quot;                &quot;... read graph data&quot;
+   the registry, ontology,                              │
+   mapping, permissions                                 │
+        │                                  ┌────────────┼────────────────┐
+        │                                  │            │                │
+       REST                              SPARQL      GraphQL          Cypher
+   (/api/v1/* or /dtwin/*)            (free-form    (typed,       (graph traversal,
+                                       triples,     nested,        SWRL rules)
+                                       aggregates,  schema-driven)       │
+                                       analytics)                        │
+                                                                  Internal only
+                                                                 (GraphDB engine
+                                                                  + reasoning)
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="ui-features-engine-map">
+<h2>4. UI features — engine map<a class="headerlink" href="#ui-features-engine-map" title="Link to this heading">¶</a></h2>
+<p>Pages live under <code class="docutils literal notranslate"><span class="pre">src/front/templates/</span></code> and <code class="docutils literal notranslate"><span class="pre">src/front/static/&lt;page&gt;/js/...</span></code>.
+Each row maps a UI feature to the wire protocol it speaks (column <strong>Wrapper</strong>)
+and the engine that ultimately runs (column <strong>Engine</strong>).</p>
+<section id="registry-domain">
+<h3>4.1 Registry &amp; Domain<a class="headerlink" href="#registry-domain" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>UI Feature</p></th>
+<th class="head"><p>Page / JS file</p></th>
+<th class="head"><p>Endpoint(s)</p></th>
+<th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Browse / open / create / save domain</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">templates/registry.html</span></code>, <code class="docutils literal notranslate"><span class="pre">templates/domain.html</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET/POST</span> <span class="pre">/api/v1/domain/...</span></code>, <code class="docutils literal notranslate"><span class="pre">/registry/...</span></code>, <code class="docutils literal notranslate"><span class="pre">/domain/...</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Python services (<code class="docutils literal notranslate"><span class="pre">DomainService</span></code>, <code class="docutils literal notranslate"><span class="pre">RegistryService</span></code>); files on UC Volumes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Schedule (background actions)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">registry-schedule.html</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/registry/schedule/*</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Python <code class="docutils literal notranslate"><span class="pre">BuildScheduler</span></code> + Databricks Jobs SDK</p></td>
+</tr>
+<tr class="row-even"><td><p>Cockpit / readiness</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">domain-validation</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domain/design-status</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Python aggregator over OWL / R2RML / metadata</p></td>
+</tr>
+<tr class="row-odd"><td><p>Data Sources (UC tables preview)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">domain-metadata</span></code></p></td>
+<td><p>Internal REST → <code class="docutils literal notranslate"><span class="pre">databricks-sql-connector</span></code></p></td>
+<td><p>REST → Spark SQL</p></td>
+<td><p><strong>Spark SQL</strong> on UC tables (sample queries)</p></td>
+</tr>
+<tr class="row-even"><td><p>Versions</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">domain-versions</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/api/v1/domain/versions</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>UC Volume listing</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="ontology-designer">
+<h3>4.2 Ontology Designer<a class="headerlink" href="#ontology-designer" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>UI Feature</p></th>
+<th class="head"><p>JS file</p></th>
+<th class="head"><p>Endpoint(s)</p></th>
+<th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Visual ontology editor (<code class="docutils literal notranslate"><span class="pre">Model</span></code>, <code class="docutils literal notranslate"><span class="pre">Entities</span></code>, <code class="docutils literal notranslate"><span class="pre">Relationships</span></code>, <code class="docutils literal notranslate"><span class="pre">Groups</span></code>, <code class="docutils literal notranslate"><span class="pre">Business</span> <span class="pre">Views</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontology-design.js</span></code>, <code class="docutils literal notranslate"><span class="pre">ontology-shared-panels.js</span></code>, <code class="docutils literal notranslate"><span class="pre">ontology-groups.js</span></code></p></td>
+<td><p>Internal REST <code class="docutils literal notranslate"><span class="pre">/ontology/...</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Python ontology object model</p></td>
+</tr>
+<tr class="row-odd"><td><p>OWL viewer / generator</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontology-owl.js</span></code>, agent <code class="docutils literal notranslate"><span class="pre">OWLGenerator</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/ontology/owl/...</span></code>, <code class="docutils literal notranslate"><span class="pre">/agents/owl-generator/run</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">OntologyParser</span></code>, <code class="docutils literal notranslate"><span class="pre">OntologyGenerator</span></code> (rdflib)</p></td>
+</tr>
+<tr class="row-even"><td><p>Import (OWL, FIBO, CDISC, IOF)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontology-import.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/ontology/import/*</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>rdflib parsers</p></td>
+</tr>
+<tr class="row-odd"><td><p>Generate (Wizard)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontology-wizard.js</span></code></p></td>
+<td><p>LLM endpoint via <code class="docutils literal notranslate"><span class="pre">agent_owl_generator</span></code></p></td>
+<td><p>REST → LLM</p></td>
+<td><p>Databricks Foundation Model API + tool-calling</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Data Quality</strong> rules editor</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontology-dataquality.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/ontology/dataquality/...</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>SHACL (<code class="docutils literal notranslate"><span class="pre">SHACLService</span></code>) on the in-memory ontology</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Business Rules (SWRL)</strong> editor</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontology-business-rules.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/ontology/swrl/...</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SWRLParser</span></code>, validated against ontology</p></td>
+</tr>
+<tr class="row-even"><td><p>Expressions &amp; Axioms</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ontology-axioms.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/ontology/axioms/...</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>OWL axiom storage</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="mapping-r2rml">
+<h3>4.3 Mapping (R2RML)<a class="headerlink" href="#mapping-r2rml" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>UI Feature</p></th>
+<th class="head"><p>JS file</p></th>
+<th class="head"><p>Endpoint(s)</p></th>
+<th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Mapping designer / manual mapping</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mapping-design.js</span></code>, <code class="docutils literal notranslate"><span class="pre">mapping-manual.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/mapping/...</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">R2RMLGenerator</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Auto-Map (LLM)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mapping-autoassign.js</span></code>, agent <code class="docutils literal notranslate"><span class="pre">AutoAssignment</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/agents/auto-assignment/run</span></code></p></td>
+<td><p>REST → LLM</p></td>
+<td><p>Databricks FM API; agent samples UC tables via Spark SQL through <code class="docutils literal notranslate"><span class="pre">databricks-sql-connector</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Diagnostics</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mapping-diagnostics.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/mapping/diagnostics/*</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Python validator</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>R2RML</strong> view</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mapping-r2rml.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/mapping/r2rml/raw</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>rdflib serializer</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Spark SQL</strong> preview</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">mapping-sparksql.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/translate</span></code></p></td>
+<td><p>REST → SPARQL <strong>translation only</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SparqlTranslator</span></code> (no execution; shows the generated SQL)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="digital-twin-the-core-read-surface">
+<h3>4.4 Digital Twin (the core read surface)<a class="headerlink" href="#digital-twin-the-core-read-surface" title="Link to this heading">¶</a></h3>
+<p>This is where users actually query the knowledge graph. <strong>Knowledge Graph</strong>,
+<strong>GraphQL</strong>, and <strong>Graph Chat</strong> all sit under the <em>Digital Twin</em> menu; they
+hit different wrappers but eventually share the same Delta / GraphDB
+storage.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>UI Feature</p></th>
+<th class="head"><p>JS file</p></th>
+<th class="head"><p>Endpoint(s)</p></th>
+<th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Insight / Overview</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query-sync.js</span></code> (stats panel), <code class="docutils literal notranslate"><span class="pre">query.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/sync/stats</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/sync/status</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Spark SQL aggregates on the triple view (Delta) <strong>or</strong> GraphDB stats (graph)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Knowledge Graph</strong> (Sigma.js viz)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query-sigmagraph.js</span></code>, <code class="docutils literal notranslate"><span class="pre">query-d3graph.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/groups</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/sync/filter</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/sync/stats?refresh=true</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/clusters/detect</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/reasoning/inferred</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Each <code class="docutils literal notranslate"><span class="pre">/sync/filter</span></code> call is a <strong>SPARQL</strong> under the hood, translated to <strong>Spark SQL</strong> (Delta backend) or <strong>Cypher</strong> (GraphDB backend)</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Knowledge Graph → SPARQL panel</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query-execute.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/execute</span></code></p></td>
+<td><p><strong>SPARQL</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SparqlQueryRunner</span></code> → <strong>Spark SQL</strong> on the SQL Warehouse (Delta) — never runs raw Cypher even on the GraphDB backend</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>GraphQL</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query-graphql.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/graphql/{domain}/schema</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/graphql/{domain}</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/graphql/settings/depth</span></code></p></td>
+<td><p><strong>GraphQL</strong></p></td>
+<td><p>Schema generated from OWL; resolvers call <code class="docutils literal notranslate"><span class="pre">DomainQueryService</span></code> → SPARQL → <strong>Spark SQL</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Graph Chat</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query-chat.js</span></code>, agent <code class="docutils literal notranslate"><span class="pre">agent_dtwin_chat</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/assistant/chat</span></code>, <code class="docutils literal notranslate"><span class="pre">GET/DELETE</span> <span class="pre">/dtwin/assistant/history</span></code></p></td>
+<td><p>REST → LLM tool-calling</p></td>
+<td><p>LLM calls REST + GraphQL + SPARQL tools (see §6)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Build</strong> (materialize triple store)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query-sync.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/sync/start</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/sync/load</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/sync/reload-from-registry</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/sync/drop-snapshot</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">IncrementalBuildService</span></code> runs <strong>Spark SQL</strong> INSERTs against Delta, or GraphDB bulk-load into the embedded graph</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Data Quality</strong> (SHACL execution)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query-dataquality.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/dataquality/start</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/dataquality/execute</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SHACLService</span></code> translates shapes to <strong>Spark SQL</strong> SELECTs that find violations</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Inference (Reasoning)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">query-reasoning.js</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/reasoning/start</span></code>, <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/reasoning/materialize</span></code>, <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/reasoning/inferred</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ReasoningService</span></code>: OWL-RL closure (rdflib) <strong>+</strong> SWRL rules compiled to <strong>Spark SQL</strong> (Delta) <strong>or</strong> <strong>Cypher</strong> (GraphDB), <strong>or</strong> <code class="docutils literal notranslate"><span class="pre">SPARQLRuleEngine</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="settings-permissions-help">
+<h3>4.5 Settings / Permissions / Help<a class="headerlink" href="#settings-permissions-help" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>UI Feature</p></th>
+<th class="head"><p>Endpoint(s)</p></th>
+<th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Settings (warehouse, profile)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/settings/*</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Python config service</p></td>
+</tr>
+<tr class="row-odd"><td><p>Permissions</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/permissions/*</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PermissionService</span></code> (in-memory + UC Volume manifest)</p></td>
+</tr>
+<tr class="row-even"><td><p>Help / docs modal</p></td>
+<td><p>static templates</p></td>
+<td><p>n/a</p></td>
+<td><p>n/a</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="mcp-server-src-mcp-server-engine-map">
+<h2>5. MCP server (<code class="docutils literal notranslate"><span class="pre">src/mcp-server</span></code>) — engine map<a class="headerlink" href="#mcp-server-src-mcp-server-engine-map" title="Link to this heading">¶</a></h2>
+<p>The MCP server is a <strong>thin proxy</strong> over the OntoBricks public REST + GraphQL
+surface (<code class="docutils literal notranslate"><span class="pre">/api/v1/...</span></code> and <code class="docutils literal notranslate"><span class="pre">/graphql/...</span></code>). It runs as its own Databricks
+App, authenticates with an M2M OAuth token, and uses <code class="docutils literal notranslate"><span class="pre">httpx.AsyncClient</span></code>. It
+<strong>never speaks SPARQL or Cypher directly.</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>MCP Tool</p></th>
+<th class="head"><p>Endpoint hit</p></th>
+<th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_domains</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domains</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>UC Volume listing</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">list_domain_versions</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domain/versions</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>UC Volume listing</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_design_status</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/domain/design-status</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Python aggregator</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">select_domain</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/digitaltwin/status</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>DeltaTripleStore status (Spark SQL) or GraphDB status</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/digitaltwin/stats</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><strong>Spark SQL</strong> GROUP BY on the triple view (Delta) or GraphDB MATCH counts</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">describe_entity</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/digitaltwin/triples/find</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>SPARQL-style BFS internally → <strong>Spark SQL</strong> (Delta) or <strong>Cypher</strong> (GraphDB)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_status</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/digitaltwin/status</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Same as <code class="docutils literal notranslate"><span class="pre">select_domain</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_graphql_schema</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/graphql/{domain}/schema</span></code></p></td>
+<td><p><strong>GraphQL</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GraphQLSchemaBuilder</span></code> (no DB hit; SDL only)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">query_graphql</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/graphql/{domain}</span></code></p></td>
+<td><p><strong>GraphQL</strong></p></td>
+<td><p>Resolvers → SPARQL → <strong>Spark SQL</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ontobricks://*</span></code> resources</p></td>
+<td><p>various</p></td>
+<td><p>REST / GraphQL</p></td>
+<td><p>Same as the equivalent tools</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><strong>Note.</strong> MCP only sees <strong>published</strong> domain versions because <code class="docutils literal notranslate"><span class="pre">/api/v1/...</span></code>
+requires a registry version. To query an unsaved working session, use the
+Graph Chat (next section), which talks to the session-aware <code class="docutils literal notranslate"><span class="pre">/dtwin/...</span></code>
+internal routes instead.</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="graph-chat-src-agents-agent-dtwin-chat-engine-map">
+<h2>6. Graph Chat (<code class="docutils literal notranslate"><span class="pre">src/agents/agent_dtwin_chat</span></code>) — engine map<a class="headerlink" href="#graph-chat-src-agents-agent-dtwin-chat-engine-map" title="Link to this heading">¶</a></h2>
+<p>The Graph Chat agent runs <strong>inside</strong> the OntoBricks process, talks to
+loopback (<code class="docutils literal notranslate"><span class="pre">http://localhost:8000</span></code>), forwards user session cookies + the
+Databricks Apps <code class="docutils literal notranslate"><span class="pre">X-Forwarded-*</span></code> headers, and targets the <strong>internal</strong>
+session-aware <code class="docutils literal notranslate"><span class="pre">/dtwin/...</span></code> routes. This means it works on unsaved domains
+and (uniquely) speaks SPARQL.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Chat Tool</p></th>
+<th class="head"><p>Endpoint hit</p></th>
+<th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">list_entity_types</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/sync/stats</span></code></p></td>
+<td><p>REST</p></td>
+<td><p><strong>Spark SQL</strong> stats (Delta) or GraphDB stats</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_status</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/sync/status</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Triple store status</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">describe_entity</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/triples/find</span></code></p></td>
+<td><p>REST</p></td>
+<td><p>Bounded BFS → <strong>Spark SQL</strong> (Delta) or <strong>Cypher</strong> (GraphDB)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_graphql_schema</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/dtwin/graphql/schema</span></code></p></td>
+<td><p><strong>GraphQL</strong></p></td>
+<td><p>Schema built from in-session ontology (no DB)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">query_graphql</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/graphql/execute</span></code></p></td>
+<td><p><strong>GraphQL</strong></p></td>
+<td><p>Resolvers → SPARQL → <strong>Spark SQL</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">run_sparql</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/execute</span></code></p></td>
+<td><p><strong>SPARQL</strong> (read-only — DROP/DELETE/INSERT/CREATE/CLEAR/LOAD/COPY/MOVE/ADD blocked by regex)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SparqlQueryRunner</span></code> → <strong>Spark SQL</strong> on the SQL Warehouse</p></td>
+</tr>
+</tbody>
+</table>
+<p>The system prompt steers the LLM’s protocol choice:</p>
+<ul class="simple">
+<li><p><em>“Tell me about X”</em> → <code class="docutils literal notranslate"><span class="pre">describe_entity</span></code> (REST/triples)</p></li>
+<li><p><em>“How many / group by / aggregate”</em> → <code class="docutils literal notranslate"><span class="pre">run_sparql</span></code> (SPARQL → Spark SQL)</p></li>
+<li><p><em>“Customer + orders + products in one payload”</em> → <code class="docutils literal notranslate"><span class="pre">get_graphql_schema</span></code> then <code class="docutils literal notranslate"><span class="pre">query_graphql</span></code></p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="other-llm-agents-engine-map">
+<h2>7. Other LLM agents — engine map<a class="headerlink" href="#other-llm-agents-engine-map" title="Link to this heading">¶</a></h2>
+<p>These agents do not query the triple store at runtime; they operate on the
+<strong>design-time</strong> ontology / metadata.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Agent</p></th>
+<th class="head"><p>Purpose</p></th>
+<th class="head"><p>Tools call</p></th>
+<th class="head"><p>Wrapper</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">agent_owl_generator</span></code></p></td>
+<td><p>Build an OWL ontology from metadata + documents</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">metadata.list_tables</span></code>, <code class="docutils literal notranslate"><span class="pre">metadata.preview_table</span></code>, <code class="docutils literal notranslate"><span class="pre">documents.read</span></code>, <code class="docutils literal notranslate"><span class="pre">ontology.write_owl</span></code></p></td>
+<td><p>REST + Spark SQL (samples)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">databricks-sql-connector</span></code> against UC tables, plus rdflib write</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">agent_auto_assignment</span></code></p></td>
+<td><p>Map ontology entities to Spark SQL queries</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tables.list</span></code>, <code class="docutils literal notranslate"><span class="pre">tables.sample</span></code>, <code class="docutils literal notranslate"><span class="pre">mapping.write</span></code></p></td>
+<td><p>REST + Spark SQL (samples)</p></td>
+<td><p>Same as above; output stored as R2RML</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">agent_auto_icon_assign</span></code></p></td>
+<td><p>Pick emojis for entities</p></td>
+<td><p>Inspects ontology + metadata</p></td>
+<td><p>REST</p></td>
+<td><p>None — generation only</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">agent_ontology_assistant</span></code></p></td>
+<td><p>Conversational ontology editing</p></td>
+<td><p>Dozens of tools mutating the in-session ontology</p></td>
+<td><p>REST</p></td>
+<td><p>Python ontology object model</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">agent_dtwin_chat</span></code></p></td>
+<td><p>Conversational graph querying</p></td>
+<td><p>See §6</p></td>
+<td><p>REST + <strong>GraphQL</strong> + <strong>SPARQL</strong></p></td>
+<td><p><strong>Spark SQL</strong> + <strong>Cypher</strong> (engine-side)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="reasoning-engine-engine-map">
+<h2>8. Reasoning engine — engine map<a class="headerlink" href="#reasoning-engine-engine-map" title="Link to this heading">¶</a></h2>
+<p>The reasoning pipeline (<code class="docutils literal notranslate"><span class="pre">back/core/reasoning/</span></code>) chooses a translation target
+based on the active triple-store backend’s <code class="docutils literal notranslate"><span class="pre">query_dialect</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Component</p></th>
+<th class="head"><p>Input</p></th>
+<th class="head"><p>Compiled to</p></th>
+<th class="head"><p>Engine</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">OWLRLReasoner</span></code></p></td>
+<td><p>OWL 2 RL fragment + facts</p></td>
+<td><p>RDF graph operations (rdflib)</p></td>
+<td><p>Python in-memory; results materialized to triple store via Spark SQL or GraphDB bulk insert</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SWRLEngine</span></code> + <code class="docutils literal notranslate"><span class="pre">SWRLSQLTranslator</span></code></p></td>
+<td><p>SWRL rules</p></td>
+<td><p><strong>Spark SQL</strong></p></td>
+<td><p>Databricks SQL Warehouse on the Delta triple view</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SWRLEngine</span></code> + <code class="docutils literal notranslate"><span class="pre">SWRLCypherTranslator</span></code> / <code class="docutils literal notranslate"><span class="pre">SWRLFlatCypherTranslator</span></code></p></td>
+<td><p>SWRL rules</p></td>
+<td><p><strong>Cypher</strong></p></td>
+<td><p>GraphDB engine (graph backend only)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SPARQLRuleEngine</span></code></p></td>
+<td><p>SPARQL <code class="docutils literal notranslate"><span class="pre">CONSTRUCT</span></code> rules</p></td>
+<td><p><strong>SPARQL</strong> → Spark SQL</p></td>
+<td><p>Same as SPARQL execution path</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DecisionTableEngine</span></code></p></td>
+<td><p>Decision tables</p></td>
+<td><p><strong>Spark SQL</strong></p></td>
+<td><p>Databricks SQL Warehouse</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">AggregateRuleEngine</span></code></p></td>
+<td><p>Aggregate rules</p></td>
+<td><p><strong>Spark SQL</strong></p></td>
+<td><p>Databricks SQL Warehouse</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="three-end-to-end-query-flows">
+<h2>9. Three end-to-end query flows<a class="headerlink" href="#three-end-to-end-query-flows" title="Link to this heading">¶</a></h2>
+<section id="user-clicks-graph-chat-how-many-customers-per-country">
+<h3>9.1 User clicks <strong>Graph Chat</strong> → “How many Customers per Country?”<a class="headerlink" href="#user-clicks-graph-chat-how-many-customers-per-country" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Browser  ──POST /dtwin/assistant/chat──▶  api/routers/internal/dtwin.py
+                                                  │
+                                                  ▼
+                                       agent_dtwin_chat.engine.run_agent
+                                                  │
+                                                  │ tool_call: run_sparql
+                                                  ▼
+                          POST /dtwin/execute  (loopback HTTP, session cookies)
+                                                  │
+                                                  ▼
+                                  SparqlTranslator (SPARQL → Spark SQL via R2RML)
+                                                  │
+                                                  ▼
+                                  Databricks SQL Warehouse on Delta view
+                                                  │
+                                                  ▼
+                                       rows → markdown table → reply
+</pre></div>
+</div>
+<p>Wrappers in play: REST → SPARQL → <strong>Spark SQL</strong>.</p>
+</section>
+<section id="external-llm-cursor-calls-mcp-query-graphql">
+<h3>9.2 External LLM (Cursor) calls MCP <code class="docutils literal notranslate"><span class="pre">query_graphql</span></code><a class="headerlink" href="#external-llm-cursor-calls-mcp-query-graphql" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Cursor (stdio)  ──FastMCP──▶  src/mcp-server/server/app.py
+                                       │
+                                       ▼
+                       POST /graphql/{domain}  (httpx, M2M OAuth bearer)
+                                       │
+                                       ▼
+                    back/fastapi/graphql_routes.py → ResolverFactory
+                                       │
+                                       ▼
+                              DomainQueryService (SPARQL)
+                                       │
+                                       ▼
+                       Databricks SQL Warehouse on Delta view
+</pre></div>
+</div>
+<p>Wrappers in play: REST (transport) → <strong>GraphQL</strong> (query) → SPARQL → <strong>Spark SQL</strong>.</p>
+</section>
+<section id="user-opens-knowledge-graph-tab-and-applies-a-filter">
+<h3>9.3 User opens <strong>Knowledge Graph</strong> tab and applies a filter<a class="headerlink" href="#user-opens-knowledge-graph-tab-and-applies-a-filter" title="Link to this heading">¶</a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Browser  ──POST /dtwin/sync/filter──▶  api/routers/internal/dtwin.py
+                                                │
+                                                ▼
+                                        DigitalTwin.filter()
+                                                │
+                                                │   backend = &quot;view&quot;          backend = &quot;graph&quot;
+                                                ▼                                    ▼
+                                  SparqlTranslator             GraphDBBackend.cypher(...)
+                                  (SPARQL → Spark SQL)         (e.g. LadybugDB engine)
+                                                │                            │
+                                                ▼                            ▼
+                              Databricks SQL Warehouse           Embedded GraphDB file
+                                                                  (default: .lbug)
+                                                │                            │
+                                                └──────► triples ◀───────────┘
+                                                            │
+                                                            ▼
+                                              Sigma.js renders the graph
+</pre></div>
+</div>
+<p>Wrappers in play: REST → (SPARQL → <strong>Spark SQL</strong>) <strong>or</strong> <strong>Cypher</strong>, depending on backend.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="tl-dr-matrix-what-each-surface-exposes">
+<h2>10. TL;DR matrix — what each surface exposes<a class="headerlink" href="#tl-dr-matrix-what-each-surface-exposes" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Surface</p></th>
+<th class="head text-center"><p>REST</p></th>
+<th class="head text-center"><p>GraphQL</p></th>
+<th class="head text-center"><p>SPARQL</p></th>
+<th class="head text-center"><p>Spark SQL (engine-side)</p></th>
+<th class="head text-center"><p>Cypher (engine-side)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>UI — Registry / Domain / Ontology / Mapping</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p>sample-only</p></td>
+<td class="text-center"><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>UI — Knowledge Graph (Sigma)</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p>(via filter)</p></td>
+<td class="text-center"><p>✓ (Delta backend)</p></td>
+<td class="text-center"><p>✓ (graph backend)</p></td>
+</tr>
+<tr class="row-even"><td><p>UI — SPARQL panel</p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>UI — GraphQL tab</p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>(under)</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+</tr>
+<tr class="row-even"><td><p>UI — Graph Chat</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>(via reasoning only)</p></td>
+</tr>
+<tr class="row-odd"><td><p>UI — Inference</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p>(<code class="docutils literal notranslate"><span class="pre">SPARQLRuleEngine</span></code>)</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+</tr>
+<tr class="row-even"><td><p>UI — Data Quality (SHACL)</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>MCP server</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓ (graph backend only)</p></td>
+</tr>
+<tr class="row-even"><td><p>Graph Chat agent</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p>✓ (graph backend only)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Other agents (OWL gen, auto-map, …)</p></td>
+<td class="text-center"><p>✓</p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p></p></td>
+<td class="text-center"><p>✓ (sampling UC)</p></td>
+<td class="text-center"><p></p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><strong>User-visible</strong> query languages today: <strong>REST, GraphQL, SPARQL.</strong>
+<strong>Engine-side</strong> dialects the platform compiles down to: <strong>Spark SQL</strong> (Delta backend) and <strong>Cypher</strong> (GraphDB backend — default engine: LadybugDB).</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="source-code-anchors-quick-links">
+<h2>11. Source-code anchors (quick links)<a class="headerlink" href="#source-code-anchors-quick-links" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>REST routes — <code class="docutils literal notranslate"><span class="pre">src/api/routers/internal/dtwin.py</span></code>, <code class="docutils literal notranslate"><span class="pre">src/api/routers/v1.py</span></code>, <code class="docutils literal notranslate"><span class="pre">src/api/external_app.py</span></code></p></li>
+<li><p>GraphQL — <code class="docutils literal notranslate"><span class="pre">src/back/fastapi/graphql_routes.py</span></code>, <code class="docutils literal notranslate"><span class="pre">src/back/core/graphql/{GraphQLSchemaBuilder,ResolverFactory,SchemaMetadata}.py</span></code></p></li>
+<li><p>SPARQL — <code class="docutils literal notranslate"><span class="pre">src/back/core/w3c/sparql/{SparqlTranslator,SparqlQueryRunner,DomainQueryService}.py</span></code></p></li>
+<li><p>Triple-store factory — <code class="docutils literal notranslate"><span class="pre">src/back/core/triplestore/TripleStoreFactory.py</span></code></p></li>
+<li><p>Delta backend — <code class="docutils literal notranslate"><span class="pre">src/back/core/triplestore/delta/DeltaTripleStore.py</span></code></p></li>
+<li><p>GraphDB backend — <code class="docutils literal notranslate"><span class="pre">src/back/core/graphdb/GraphDBBackend.py</span></code>, <code class="docutils literal notranslate"><span class="pre">src/back/core/graphdb/GraphDBFactory.py</span></code></p></li>
+<li><p>GraphDB engine (default: LadybugDB) — <code class="docutils literal notranslate"><span class="pre">src/back/core/graphdb/ladybugdb/{LadybugBase,LadybugFlatStore,LadybugGraphStore}.py</span></code></p></li>
+<li><p>Reasoning — <code class="docutils literal notranslate"><span class="pre">src/back/core/reasoning/{OWLRLReasoner,SWRLSQLTranslator,SWRLCypherTranslator,SWRLFlatCypherTranslator,SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py</span></code></p></li>
+<li><p>MCP server — <code class="docutils literal notranslate"><span class="pre">src/mcp-server/server/app.py</span></code>, <code class="docutils literal notranslate"><span class="pre">src/mcp-server/mcp_server.py</span></code></p></li>
+<li><p>Graph Chat — <code class="docutils literal notranslate"><span class="pre">src/agents/agent_dtwin_chat/{engine,tools}.py</span></code></p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/guides/data-access.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

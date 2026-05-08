@@ -1563,30 +1563,62 @@ const CohortModule = {
             this._notify('Save the rule before materialising.', 'warning');
             return;
         }
-        const triples = (this.lastPreview.cohorts?.length || 0) * 4
-            + (this.lastPreview.stats?.grouped_member_count || 0);
+        const cohortCount = this.lastPreview.cohorts?.length || 0;
+        const memberCount = this.lastPreview.stats?.grouped_member_count || 0;
+        // Mirrors CohortBuilder._build_cohort_triples: per cohort we emit 4
+        // metadata triples (rdf:type, rdfs:label, :fromRule, :cohortSize)
+        // and one membership triple per member.
+        const metadataTriples = cohortCount * 4;
+        const membershipTriples = memberCount;
+        const totalTriples = metadataTriples + membershipTriples;
+
         const ucT = this.rule.output?.uc_table;
         const ucLine = ucT && ucT.table_name
-            ? `<div class="form-check">
+            ? `<div class="form-check mb-2">
                    <input class="form-check-input" type="checkbox" id="cohortDoUC" checked>
-                   <label class="form-check-label" for="cohortDoUC">
-                       Unity Catalog table — ${this.lastPreview.stats?.grouped_member_count || 0}
-                       rows → <code>${this._esc(ucT.catalog)}.${this._esc(ucT.schema)}.${this._esc(ucT.table_name)}</code>
+                   <label class="form-check-label cohort-mat-label" for="cohortDoUC">
+                       <strong>Unity Catalog table</strong>
+                       <span class="text-muted">— ${memberCount} row${memberCount === 1 ? '' : 's'} (one per cohort member)</span>
+                       <div class="cohort-mat-target small text-muted mt-1">
+                           <i class="bi bi-arrow-right me-1"></i>
+                           <code>${this._esc(ucT.catalog)}.${this._esc(ucT.schema)}.${this._esc(ucT.table_name)}</code>
+                       </div>
                    </label>
                </div>`
             : '';
-        const inCohortPred = `:inCohort${this._esc(this.rule.id || this.rule.label || '')}`;
+
+        // Predicate display matches the Configure-outputs modal's
+        // ``_refreshOutputHints`` exactly: ``:inCohort<RuleName>`` where
+        // ``<RuleName>`` is ``rule.label || rule.id``. For new rules the
+        // form keeps id and label in lock-step (camelCase), so this also
+        // matches the backend URI fragment ``inCohort<rule_id>`` built by
+        // ``CohortVocabulary.in_cohort``.
+        const ruleName = (this.rule.label || this.rule.id || '').toString();
+        const inCohortPred = `:inCohort${this._esc(ruleName)}`;
+
         const graphLine = this.rule.output?.graph !== false
-            ? `<div class="form-check">
+            ? `<div class="form-check mb-2">
                    <input class="form-check-input" type="checkbox" id="cohortDoGraph" checked>
-                   <label class="form-check-label" for="cohortDoGraph">
-                       Graph triples — ${triples} <code>${inCohortPred}</code> + cohort entity triples
+                   <label class="form-check-label cohort-mat-label" for="cohortDoGraph">
+                       <strong>Graph triples</strong>
+                       <span class="text-muted">— ${totalTriples} triple${totalTriples === 1 ? '' : 's'}</span>
+                       <div class="cohort-mat-breakdown small text-muted mt-1">
+                           ${cohortCount} cohort${cohortCount === 1 ? '' : 's'} × 4 metadata
+                           <span class="text-muted">(<code>rdf:type</code>, <code>rdfs:label</code>, <code>:fromRule</code>, <code>:cohortSize</code>)</span>
+                           + ${membershipTriples} membership triple${membershipTriples === 1 ? '' : 's'}
+                       </div>
+                       <div class="cohort-mat-target small text-muted mt-1">
+                           Membership predicate: <code>${inCohortPred}</code>
+                       </div>
                    </label>
                </div>`
             : '';
         document.getElementById('cohortMaterializeBody').innerHTML = `
             ${graphLine}${ucLine}
-            <div class="text-muted small mt-2">Replacing previous outputs for this rule (idempotent).</div>
+            <div class="text-muted small mt-2 border-top pt-2">
+                <i class="bi bi-arrow-repeat me-1"></i>
+                Replaces previous outputs for this rule (idempotent — old triples are deleted first).
+            </div>
         `;
         new bootstrap.Modal('#cohortMaterializeModal').show();
     },

@@ -4,7 +4,7 @@
 Registry Service
 ----------------
 
-.. automodule:: back.objects.registry.service
+.. automodule:: back.objects.registry.RegistryService
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +12,7 @@ Registry Service
 Permissions
 -----------
 
-.. automodule:: back.objects.registry.permissions
+.. automodule:: back.objects.registry.PermissionService
    :members:
    :undoc-members:
    :show-inheritance:

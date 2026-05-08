@@ -80,6 +80,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
@@ -763,6 +764,14 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <li><p>The dashboard displays data specific to the selected entity</p></li>
 </ol>
 <p><strong>Note</strong>: Empty entities (type URIs without data) are automatically filtered out.</p>
+<p><strong>Right-click on a node (Expand neighbours):</strong></p>
+<p>Right-click any entity node and pick <strong>Expand neighbours (N hops)</strong> to enrich the displayed graph in place — without re-running a full SPARQL query.</p>
+<ul class="simple">
+<li><p>The hop count follows the <strong>Depth</strong> slider in the right-pane filter panel (default <code class="docutils literal notranslate"><span class="pre">2</span></code>).</p></li>
+<li><p>A small spinner appears in the top-right corner of the canvas while the request is running; the rest of the UI stays interactive.</p></li>
+<li><p>Newly added entities are merged with the existing graph, briefly ringed with a highlight, and the camera zooms to frame them.</p></li>
+<li><p>The same context menu still exposes the existing <strong>View Dashboard</strong> and <strong>Bridges</strong> entries when configured for the entity’s class.</p></li>
+</ul>
 <p><strong>Data Clusters:</strong></p>
 <p>The Knowledge Graph includes a <strong>Data Clusters</strong> panel (in the View tab) for detecting communities in the graph:</p>
 <ol class="arabic simple">
@@ -934,6 +943,7 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </tr>
 </tbody>
 </table>
+<p>When you <strong>commit</strong> the domain name (blur the field or trigger <code class="docutils literal notranslate"><span class="pre">change</span></code>) or change the <strong>Version</strong>, the Triple Store, snapshot table FQN, and local Ladybug path fields are <strong>recomputed</strong> so they match the naming rules the server will use on save — without waiting for a round-trip.</p>
 <p><strong>Backend details:</strong></p>
 <table class="docutils align-default">
 <thead>
@@ -979,6 +989,7 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <li><p>Select <strong>Catalog</strong> and <strong>Schema</strong> for storage</p></li>
 <li><p>Click <strong>Save to Unity Catalog</strong></p></li>
 </ol>
+<p>If a domain with the <strong>same sanitized folder name</strong> already exists in the registry, the save is <strong>blocked</strong> (inline validation on the domain name and a final check when you confirm save) — pick a different CamelCase name.</p>
 <p>OntoBricks will:</p>
 <ol class="arabic simple">
 <li><p>Create a volume named after your domain (if it doesn’t exist)</p></li>
@@ -994,62 +1005,55 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </ul>
 </section>
 </section>
-<section id="version-management">
-<h3>Version Management<a class="headerlink" href="#version-management" title="Link to this heading">¶</a></h3>
-<section id="listing-versions">
-<h4>Listing Versions<a class="headerlink" href="#listing-versions" title="Link to this heading">¶</a></h4>
-<ol class="arabic simple">
-<li><p>Go to <strong>Domain</strong> → <strong>Actions</strong> tab</p></li>
-<li><p>Select catalog/schema containing your domain</p></li>
-<li><p>Click <strong>Load versions</strong> to see all saved versions</p></li>
-</ol>
-<p>The version list shows:</p>
-<ul class="simple">
-<li><p>Version number (e.g., 1, 2, 3)</p></li>
-<li><p>File name (e.g., <code class="docutils literal notranslate"><span class="pre">v1.json</span></code>, <code class="docutils literal notranslate"><span class="pre">v2.json</span></code>)</p></li>
-<li><p>Active version indicator</p></li>
-</ul>
+<section id="domain-cockpit-validation">
+<h3>Domain Cockpit (Validation)<a class="headerlink" href="#domain-cockpit-validation" title="Link to this heading">¶</a></h3>
+<p>Under <strong>Domain → Validation</strong> (Cockpit), tiles summarise registry and build readiness. The <strong>Active Version</strong> tile shows which registry version is currently <strong>exposed via API and MCP</strong> (the “MCP-enabled” version). That can differ from the version you have <strong>loaded</strong> in the editor; when it does, the tile adds a <em>(not loaded)</em> hint. This is <strong>not</strong> the same as “you are on the latest writable version” — read-only UI for ontology/mapping is still driven by whether the loaded version is the <strong>latest</strong> on disk (see <strong>Version status</strong> below).</p>
 </section>
+<section id="version-management-domain-versions">
+<h3>Version Management (Domain → Versions)<a class="headerlink" href="#version-management-domain-versions" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Open <strong>Domain</strong> in the sidebar and go to the <strong>Versions</strong> section.</p></li>
+<li><p>The table lists every saved version with description, author, and actions.</p></li>
+<li><p><strong>MCP / API</strong> column: read-only — a green <strong>Active</strong> badge marks the single version currently exposed through the REST catalogue and MCP tools. To <strong>change</strong> which version is Active, go to <strong>Registry → Browse</strong>, expand the domain, and click <strong>Set as Active</strong> on the desired version (Domain → Versions no longer includes a toggle).</p></li>
+<li><p><strong>Load</strong> loads another version from the registry (confirms; unsaved work is lost).</p></li>
+<li><p><strong>New Version</strong> copies the current state to the next version number; <strong>Reload Saved</strong> discards local edits and reloads the current version from the registry.</p></li>
+</ol>
 <section id="creating-a-new-version">
 <h4>Creating a New Version<a class="headerlink" href="#creating-a-new-version" title="Link to this heading">¶</a></h4>
-<p>To create a new version (preserving the current state):</p>
 <ol class="arabic simple">
-<li><p>Go to <strong>Domain</strong> → <strong>Actions</strong> tab</p></li>
-<li><p>Click <strong>Create New Version</strong></p></li>
-<li><p>OntoBricks will:</p>
-<ul class="simple">
-<li><p>Increment the version number (e.g., 1 → 2)</p></li>
-<li><p>Save the new version to Unity Catalog</p></li>
-<li><p>Keep previous versions intact</p></li>
-</ul>
-</li>
+<li><p><strong>Domain</strong> → <strong>Versions</strong> → <strong>New Version</strong>.</p></li>
+<li><p>OntoBricks increments the version number, saves under <code class="docutils literal notranslate"><span class="pre">/domains/&lt;folder&gt;/V&lt;n&gt;/</span></code>, and keeps prior versions.</p></li>
 </ol>
-<p><strong>Example version progression:</strong></p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>my_domain/
-├── v1.json    (initial version)
-├── v2.json    (after first &quot;Create New Version&quot;)
-└── v3.json    (after second &quot;Create New Version&quot;)
-</pre></div>
-</div>
 </section>
 <section id="loading-a-domain-from-registry">
 <h4>Loading a Domain from Registry<a class="headerlink" href="#loading-a-domain-from-registry" title="Link to this heading">¶</a></h4>
 <ol class="arabic simple">
-<li><p>Click <strong>Load Domain</strong> in the top menu</p></li>
-<li><p>Select a domain from the dropdown</p></li>
-<li><p>The <strong>active (latest) version</strong> is automatically selected</p></li>
-<li><p>Change the version if needed, then click <strong>Load</strong></p></li>
+<li><p>Use <strong>Load Domain</strong> in the top navbar (or <strong>Registry → Browse</strong> → <strong>Load</strong> on a version row).</p></li>
+<li><p>Pick domain and version in the dialog. Loading an <strong>older</strong> than latest version enables read-only mode for edits that require the tip version — create a new version or switch back to the latest to edit freely.</p></li>
 </ol>
-<p><strong>Note</strong>: Loading an older version puts you in “read-only” mode. Create a new version to make changes.</p>
 </section>
 </section>
-<section id="version-status">
-<h3>Version Status<a class="headerlink" href="#version-status" title="Link to this heading">¶</a></h3>
-<p>The Domain page shows the current version status:</p>
-<ul class="simple">
-<li><p><strong>Active Version</strong>: You’re working on the latest version</p></li>
-<li><p><strong>Historical Version</strong>: You’ve loaded an older version (read-only for new versions)</p></li>
-</ul>
+<section id="version-status-loaded-vs-latest-vs-mcp-active">
+<h3>Version status (loaded vs latest vs MCP-active)<a class="headerlink" href="#version-status-loaded-vs-latest-vs-mcp-active" title="Link to this heading">¶</a></h3>
+<p>Three related ideas:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Concept</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Loaded version</strong></p></td>
+<td><p>The <code class="docutils literal notranslate"><span class="pre">v{n}</span></code> document currently in your browser session.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Latest on disk</strong></p></td>
+<td><p>Highest version number in the registry folder. When your loaded version is <strong>not</strong> the latest, the UI treats many writes as read-only.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Active (API/MCP)</strong></p></td>
+<td><p>The one version flagged for external tools and MCP — shown on the Cockpit <strong>Active Version</strong> tile and as a badge on <strong>Domain → Versions</strong>; changed only from <strong>Registry → Browse</strong>.</p></td>
+</tr>
+</tbody>
+</table>
 </section>
 <section id="domain-save-load">
 <h3>Domain Save/Load<a class="headerlink" href="#domain-save-load" title="Link to this heading">¶</a></h3>
@@ -2265,7 +2269,7 @@ UI refreshes (entities, relationships, map)
 <li><p><strong>Start small</strong>: When importing a large standard like FIBO, start with the required foundation module and one domain to evaluate the result before adding more.</p></li>
 <li><p><strong>Network access</strong>: Industry-standard imports require outbound internet access to fetch modules from their public repositories. If running in Databricks Apps with restricted egress, download the files manually and use the OWL file import instead.</p></li>
 <li><p><strong>Incremental import</strong>: Each import replaces the current ontology. If you need to combine multiple standards, export after each import and merge the OWL files externally.</p></li>
-<li><p><strong>Layout reset</strong>: After importing a large ontology, use <strong>Auto-Layout</strong> in the Model view to arrange entities automatically.</p></li>
+<li><p><strong>Layout reset</strong>: After importing a large ontology, use <strong>Auto-Layout</strong> in the <strong>Ontology Designer</strong> view to arrange entities automatically.</p></li>
 </ul>
 </section>
 </section>

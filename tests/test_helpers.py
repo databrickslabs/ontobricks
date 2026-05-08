@@ -7,7 +7,9 @@ from back.core.helpers import (
     get_databricks_client,
     get_databricks_credentials,
     get_databricks_host_and_token,
+    resolve_use_cloud_fetch,
 )
+from back.core.helpers.DatabricksHelpers import DatabricksHelpers
 
 
 def _make_domain(**overrides):
@@ -100,6 +102,76 @@ class TestGetDatabricksHostAndToken:
         host, token = get_databricks_host_and_token(None, settings)
         assert "test.databricks.com" in host
         assert token == "tok-123"
+
+
+class TestResolveUseCloudFetch:
+    """Admin-disabled CloudFetch must propagate through the helper.
+
+    Regression for a bug where ``resolve_use_cloud_fetch`` went through
+    ``_resolve_global_setting`` whose ``if val: return val`` short-circuit
+    treated a legitimate ``False`` as "not configured" and silently
+    returned the ``True`` default — re-enabling CloudFetch despite the
+    admin toggle being off.
+    """
+
+    @patch.object(
+        DatabricksHelpers,
+        "_resolve_registry_cfg",
+        return_value={"catalog": "main", "schema": "ob"},
+    )
+    @patch.object(
+        DatabricksHelpers,
+        "get_databricks_host_and_token",
+        return_value=("https://test.databricks.com", "tok-123"),
+    )
+    def test_returns_false_when_globally_disabled(self, _hst, _rcfg):
+        with patch(
+            "back.objects.session.global_config_service.get_use_cloud_fetch",
+            return_value=False,
+        ):
+            assert resolve_use_cloud_fetch(_make_domain(), _make_settings()) is False
+
+    @patch.object(
+        DatabricksHelpers,
+        "_resolve_registry_cfg",
+        return_value={"catalog": "main", "schema": "ob"},
+    )
+    @patch.object(
+        DatabricksHelpers,
+        "get_databricks_host_and_token",
+        return_value=("https://test.databricks.com", "tok-123"),
+    )
+    def test_returns_true_when_globally_enabled(self, _hst, _rcfg):
+        with patch(
+            "back.objects.session.global_config_service.get_use_cloud_fetch",
+            return_value=True,
+        ):
+            assert resolve_use_cloud_fetch(_make_domain(), _make_settings()) is True
+
+    @patch.object(
+        DatabricksHelpers,
+        "_resolve_registry_cfg",
+        return_value={"catalog": "", "schema": ""},
+    )
+    @patch.object(
+        DatabricksHelpers,
+        "get_databricks_host_and_token",
+        return_value=("https://test.databricks.com", "tok-123"),
+    )
+    def test_defaults_to_true_when_registry_unconfigured(self, _hst, _rcfg):
+        assert resolve_use_cloud_fetch(_make_domain(), _make_settings()) is True
+
+
+class TestGetDatabricksClientCloudFetch:
+    """End-to-end: a disabled global toggle must reach ``DatabricksAuth``."""
+
+    @patch("back.core.databricks.is_databricks_app", return_value=False)
+    @patch.object(DatabricksHelpers, "resolve_use_cloud_fetch", return_value=False)
+    def test_disabled_propagates_to_auth(self, _rcf, _app):
+        client = get_databricks_client(_make_domain(), _make_settings())
+        assert client is not None
+        assert client.auth.use_cloud_fetch is False
+        assert client.auth.can_use_cloud_fetch() is False
 
 
 class TestNoneDomainSafety:

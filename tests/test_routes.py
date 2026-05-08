@@ -106,6 +106,10 @@ class TestSettingsRoutes:
         response = client.get("/settings/get-base-uri")
         assert response.status_code == 200
 
+    def test_get_cloud_fetch_setting(self, client):
+        response = client.get("/settings/get-cloud-fetch")
+        assert response.status_code == 200
+
 
 class TestOntologyRoutes:
     def test_ontology_page(self, client):
@@ -589,6 +593,16 @@ class TestDigitalTwinAPIRoutes:
 
     def test_triples_find_with_search(self, client):
         response = client.get("/api/v1/digitaltwin/triples/find?search=test")
+        assert response.status_code in (200, 400, 502)
+
+    def test_neighbors_requires_uri(self, client):
+        response = client.get("/dtwin/neighbors")
+        assert response.status_code == 422
+
+    def test_neighbors_with_uri_no_domain(self, client):
+        response = client.get(
+            "/dtwin/neighbors?uri=http://example.org/Thing/1&depth=2"
+        )
         assert response.status_code in (200, 400, 502)
 
     def test_triples_without_domain(self, client):

@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -108,12 +110,17 @@
           <div class="body" role="main">
             
   <h1>Source code for back.core.graph_analysis.models</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Data models for graph community detection.&quot;&quot;&quot;</span>
+<span></span><span class="sd">&quot;&quot;&quot;Data models for graph analysis: community detection and cohort discovery.&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Community detection (existing)</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
 
 
 <div class="viewcode-block" id="ClusterRequest">
@@ -165,6 +172,470 @@
 
     <span class="n">clusters</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ClusterResult</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">stats</span><span class="p">:</span> <span class="n">DetectionStats</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">DetectionStats</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Cohort discovery</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="c1"># Compatibility primitive types.</span>
+<span class="n">_COMPAT_SAME_VALUE</span> <span class="o">=</span> <span class="s2">&quot;same_value&quot;</span>
+<span class="n">_COMPAT_VALUE_EQUALS</span> <span class="o">=</span> <span class="s2">&quot;value_equals&quot;</span>
+<span class="n">_COMPAT_VALUE_IN</span> <span class="o">=</span> <span class="s2">&quot;value_in&quot;</span>
+<span class="n">_COMPAT_VALUE_RANGE</span> <span class="o">=</span> <span class="s2">&quot;value_range&quot;</span>
+<span class="n">COHORT_COMPAT_TYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="n">_COMPAT_SAME_VALUE</span><span class="p">,</span>
+        <span class="n">_COMPAT_VALUE_EQUALS</span><span class="p">,</span>
+        <span class="n">_COMPAT_VALUE_IN</span><span class="p">,</span>
+        <span class="n">_COMPAT_VALUE_RANGE</span><span class="p">,</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+<span class="n">COHORT_GROUP_TYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">&quot;connected&quot;</span><span class="p">,</span> <span class="s2">&quot;strict&quot;</span><span class="p">})</span>
+<span class="n">COHORT_LINKS_COMBINE</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">&quot;any&quot;</span><span class="p">,</span> <span class="s2">&quot;all&quot;</span><span class="p">})</span>
+
+
+<div class="viewcode-block" id="CohortHop">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortHop</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One hop along a multi-hop linkage path.</span>
+
+<span class="sd">    *via* — predicate URI traversed in this hop (e.g. ``:assignedTo``).</span>
+<span class="sd">    *target_class* — class URI of the hop&#39;s target node (e.g. ``:Project``).</span>
+<span class="sd">    *where* — optional per-hop attribute filters applied to the hop&#39;s</span>
+<span class="sd">    target node before it&#39;s added to the next frontier. Reuses the</span>
+<span class="sd">    :class:`CohortCompat` primitives (``value_equals`` / ``value_in`` /</span>
+<span class="sd">    ``value_range``); ``same_value`` is not meaningful at hop scope and</span>
+<span class="sd">    is ignored. Lets users say *&quot;Person → Project → ComplianceType</span>
+<span class="sd">    where complianceTypeId = &#39;Individual&#39;&quot;* without misusing the</span>
+<span class="sd">    rule-level compatibility (which filters the source class only).</span>
+
+<span class="sd">    The hop&#39;s *source class* is implicit: hop 0 starts at the rule&#39;s</span>
+<span class="sd">    ``class_uri``; hop *i* starts at hop *i-1*&#39;s ``target_class``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">via</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">target_class</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">where</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;CohortCompat&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CohortHop.to_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">via</span><span class="p">,</span>
+            <span class="s2">&quot;target_class&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_class</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">where</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;where&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">where</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="CohortHop.from_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop.from_dict">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;CohortHop&quot;</span><span class="p">:</span>
+        <span class="n">where_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;where&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">where</span> <span class="o">=</span> <span class="p">[</span><span class="n">CohortCompat</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">w</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">where_data</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">CohortHop</span><span class="p">(</span>
+            <span class="n">via</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;via&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">target_class</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">where</span><span class="o">=</span><span class="n">where</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CohortLink">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortLink</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Together-relation: two members are linked when they share an entity</span>
+<span class="sd">    reachable by an ordered path.</span>
+
+<span class="sd">    The canonical representation is *path* — a list of :class:`CohortHop`</span>
+<span class="sd">    starting from the rule&#39;s ``class_uri`` and ending at the &quot;shared</span>
+<span class="sd">    entity&quot; the two members must agree on.</span>
+
+<span class="sd">    *shared_class* and *via* are the legacy 1-hop fields, kept for</span>
+<span class="sd">    backwards compatibility. When *path* is empty but those fields are</span>
+<span class="sd">    set, ``hops()`` synthesises a single-hop path on the fly so the</span>
+<span class="sd">    engine has a uniform representation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">shared_class</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">via</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">path</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;CohortHop&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CohortLink.hops">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.hops">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">hops</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;CohortHop&quot;</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the canonical hop list (legacy 1-hop links auto-promoted).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shared_class</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">via</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">CohortHop</span><span class="p">(</span><span class="n">via</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">via</span><span class="p">,</span> <span class="n">target_class</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">shared_class</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="p">[]</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">terminal_class</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Class URI of the shared entity at the end of the path.&quot;&quot;&quot;</span>
+        <span class="n">hops</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hops</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">hops</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">target_class</span> <span class="k">if</span> <span class="n">hops</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+
+<div class="viewcode-block" id="CohortLink.to_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shared_class</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;shared_class&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shared_class</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">via</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;via&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">via</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;path&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">h</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="CohortLink.from_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.from_dict">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;CohortLink&quot;</span><span class="p">:</span>
+        <span class="n">path_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;path&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="p">[</span><span class="n">CohortHop</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">path_data</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">CohortLink</span><span class="p">(</span>
+            <span class="n">shared_class</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shared_class&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">via</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;via&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CohortCompat">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortCompat</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One compatibility constraint applied to candidate cohort members.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="nb">property</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">value</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">values</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="nb">min</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="nb">max</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">allow_missing</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="CohortCompat.to_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">&quot;property&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">property</span><span class="p">}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">min</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;min&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">min</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;max&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">allow_missing</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;allow_missing&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="CohortCompat.from_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.from_dict">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;CohortCompat&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">CohortCompat</span><span class="p">(</span>
+            <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="nb">property</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">value</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">),</span>
+            <span class="n">values</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;values&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="nb">min</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;min&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;min&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="nb">max</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;max&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;max&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">allow_missing</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;allow_missing&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)),</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CohortUCTarget">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortUCTarget</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Unity Catalog Delta table target for cohort materialisation.&quot;&quot;&quot;</span>
+
+    <span class="n">catalog</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span>
+
+<div class="viewcode-block" id="CohortUCTarget.fq_name">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.fq_name">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fq_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the fully-qualified ``catalog.schema.table_name`` identifier.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">table_name</span><span class="si">}</span><span class="s2">`&quot;</span></div>
+
+
+<div class="viewcode-block" id="CohortUCTarget.to_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;catalog&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">catalog</span><span class="p">,</span>
+            <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+            <span class="s2">&quot;table_name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">table_name</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="CohortUCTarget.from_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.from_dict">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;CohortUCTarget&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">CohortUCTarget</span><span class="p">(</span>
+            <span class="n">catalog</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">schema</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">table_name</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;table_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CohortOutput">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortOutput">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortOutput</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Where cohort results should be written.&quot;&quot;&quot;</span>
+
+    <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">uc_table</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">CohortUCTarget</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="CohortOutput.to_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortOutput.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;graph&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph</span><span class="p">)}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">uc_table</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;uc_table&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uc_table</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="CohortOutput.from_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortOutput.from_dict">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;CohortOutput&quot;</span><span class="p">:</span>
+        <span class="n">uc</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uc_table&quot;</span><span class="p">)</span>
+        <span class="n">target</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">CohortUCTarget</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">uc</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="n">uc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;table_name&quot;</span><span class="p">):</span>
+            <span class="n">target</span> <span class="o">=</span> <span class="n">CohortUCTarget</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">uc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">CohortOutput</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)),</span> <span class="n">uc_table</span><span class="o">=</span><span class="n">target</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CohortRule">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortRule</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A user-authored cohort discovery rule.&quot;&quot;&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">label</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">class_uri</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">links</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">CohortLink</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">links_combine</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;any&quot;</span>
+    <span class="n">compatibility</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">CohortCompat</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">group_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;connected&quot;</span>
+    <span class="n">min_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">max_triples</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500_000</span>
+    <span class="n">output</span><span class="p">:</span> <span class="n">CohortOutput</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">CohortOutput</span><span class="p">)</span>
+    <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+<div class="viewcode-block" id="CohortRule.validate">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.validate">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a list of human-readable validation errors (empty when OK).&quot;&quot;&quot;</span>
+        <span class="n">errors</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Rule id is required.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">label</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">label</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Rule label is required.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_uri</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;Target class URI is required.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">links_combine</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">COHORT_LINKS_COMBINE</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;links_combine must be one of </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">COHORT_LINKS_COMBINE</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">group_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">COHORT_GROUP_TYPES</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;group_type must be one of </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">COHORT_GROUP_TYPES</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_size</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;min_size must be at least 2.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_triples</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;max_triples must be a positive integer.&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">lk</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">links</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">hops</span> <span class="o">=</span> <span class="n">lk</span><span class="o">.</span><span class="n">hops</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">hops</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">: path is required (at least one hop).&quot;</span>
+                <span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">h_idx</span><span class="p">,</span> <span class="n">h</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">hops</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">h</span><span class="o">.</span><span class="n">via</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> hop </span><span class="si">{</span><span class="n">h_idx</span><span class="si">}</span><span class="s2">: via predicate is required.&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">h</span><span class="o">.</span><span class="n">target_class</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> hop </span><span class="si">{</span><span class="n">h_idx</span><span class="si">}</span><span class="s2">: target_class is required.&quot;</span>
+                    <span class="p">)</span>
+                <span class="k">for</span> <span class="n">w_idx</span><span class="p">,</span> <span class="n">w</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">h</span><span class="o">.</span><span class="n">where</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">w</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_COMPAT_SAME_VALUE</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> hop </span><span class="si">{</span><span class="n">h_idx</span><span class="si">}</span><span class="s2"> where #</span><span class="si">{</span><span class="n">w_idx</span><span class="si">}</span><span class="s2">: &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;&#39;same_value&#39; is not meaningful at hop scope.&quot;</span>
+                        <span class="p">)</span>
+                        <span class="k">continue</span>
+                    <span class="k">if</span> <span class="n">w</span><span class="o">.</span><span class="n">type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">COHORT_COMPAT_TYPES</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> hop </span><span class="si">{</span><span class="n">h_idx</span><span class="si">}</span><span class="s2"> where #</span><span class="si">{</span><span class="n">w_idx</span><span class="si">}</span><span class="s2">: &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;unknown type &#39;</span><span class="si">{</span><span class="n">w</span><span class="o">.</span><span class="n">type</span><span class="si">}</span><span class="s2">&#39;.&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">property</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> hop </span><span class="si">{</span><span class="n">h_idx</span><span class="si">}</span><span class="s2"> where #</span><span class="si">{</span><span class="n">w_idx</span><span class="si">}</span><span class="s2">: &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;property is required.&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">w</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_COMPAT_VALUE_EQUALS</span> <span class="ow">and</span> <span class="n">w</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> hop </span><span class="si">{</span><span class="n">h_idx</span><span class="si">}</span><span class="s2"> where #</span><span class="si">{</span><span class="n">w_idx</span><span class="si">}</span><span class="s2"> &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;(value_equals): value is required.&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">w</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_COMPAT_VALUE_IN</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> hop </span><span class="si">{</span><span class="n">h_idx</span><span class="si">}</span><span class="s2"> where #</span><span class="si">{</span><span class="n">w_idx</span><span class="si">}</span><span class="s2"> &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;(value_in): values list is required.&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">w</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_COMPAT_VALUE_RANGE</span> <span class="ow">and</span> <span class="p">(</span>
+                        <span class="n">w</span><span class="o">.</span><span class="n">min</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">w</span><span class="o">.</span><span class="n">max</span> <span class="ow">is</span> <span class="kc">None</span>
+                    <span class="p">):</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Link #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> hop </span><span class="si">{</span><span class="n">h_idx</span><span class="si">}</span><span class="s2"> where #</span><span class="si">{</span><span class="n">w_idx</span><span class="si">}</span><span class="s2"> &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;(value_range): min or max is required.&quot;</span>
+                        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">cc</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">compatibility</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">cc</span><span class="o">.</span><span class="n">type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">COHORT_COMPAT_TYPES</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Compatibility #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">: unknown type &#39;</span><span class="si">{</span><span class="n">cc</span><span class="o">.</span><span class="n">type</span><span class="si">}</span><span class="s2">&#39;.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cc</span><span class="o">.</span><span class="n">property</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Compatibility #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">: property is required.&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">cc</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_COMPAT_VALUE_EQUALS</span> <span class="ow">and</span> <span class="n">cc</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Compatibility #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> (value_equals): value is required.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">cc</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_COMPAT_VALUE_IN</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">cc</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Compatibility #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> (value_in): values list is required.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">cc</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">_COMPAT_VALUE_RANGE</span> <span class="ow">and</span> <span class="p">(</span>
+                <span class="n">cc</span><span class="o">.</span><span class="n">min</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">cc</span><span class="o">.</span><span class="n">max</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="p">):</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Compatibility #</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2"> (value_range): min or max is required.&quot;</span>
+                <span class="p">)</span>
+        <span class="k">return</span> <span class="n">errors</span></div>
+
+
+<div class="viewcode-block" id="CohortRule.to_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+            <span class="s2">&quot;class_uri&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_uri</span><span class="p">,</span>
+            <span class="s2">&quot;links&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">lk</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">lk</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">links</span><span class="p">],</span>
+            <span class="s2">&quot;links_combine&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">links_combine</span><span class="p">,</span>
+            <span class="s2">&quot;compatibility&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">cc</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">cc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compatibility</span><span class="p">],</span>
+            <span class="s2">&quot;group_type&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">group_type</span><span class="p">,</span>
+            <span class="s2">&quot;min_size&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">min_size</span><span class="p">),</span>
+            <span class="s2">&quot;max_triples&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_triples</span><span class="p">),</span>
+            <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(),</span>
+            <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">enabled</span><span class="p">),</span>
+            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="CohortRule.from_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.from_dict">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;CohortRule&quot;</span><span class="p">:</span>
+        <span class="n">links</span> <span class="o">=</span> <span class="p">[</span><span class="n">CohortLink</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">lk</span><span class="p">)</span> <span class="k">for</span> <span class="n">lk</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;links&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]]</span>
+        <span class="n">compats</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">CohortCompat</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">cc</span><span class="p">)</span> <span class="k">for</span> <span class="n">cc</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;compatibility&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="p">]</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">CohortOutput</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="ow">or</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="n">CohortRule</span><span class="p">(</span>
+            <span class="nb">id</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">label</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">class_uri</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">links</span><span class="o">=</span><span class="n">links</span><span class="p">,</span>
+            <span class="n">links_combine</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;links_combine&quot;</span><span class="p">,</span> <span class="s2">&quot;any&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;any&quot;</span><span class="p">,</span>
+            <span class="n">compatibility</span><span class="o">=</span><span class="n">compats</span><span class="p">,</span>
+            <span class="n">group_type</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;group_type&quot;</span><span class="p">,</span> <span class="s2">&quot;connected&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="ow">or</span> <span class="s2">&quot;connected&quot;</span><span class="p">,</span>
+            <span class="n">min_size</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;min_size&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="n">max_triples</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;max_triples&quot;</span><span class="p">,</span> <span class="mi">500_000</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">500_000</span><span class="p">),</span>
+            <span class="n">output</span><span class="o">=</span><span class="n">output</span><span class="p">,</span>
+            <span class="n">enabled</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)),</span>
+            <span class="n">description</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CohortGroup">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortGroup">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortGroup</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One detected cohort: a content-hash URI and the sorted member list.&quot;&quot;&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">size</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">members</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="CohortStats">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortStats</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Aggregate statistics from a cohort discovery run.&quot;&quot;&quot;</span>
+
+    <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">class_member_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">survivor_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">edge_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">cohort_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">grouped_member_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">elapsed_ms</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+
+
+<div class="viewcode-block" id="CohortResult">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortResult">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Full result of a cohort discovery run.&quot;&quot;&quot;</span>
+
+    <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">cohorts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">CohortGroup</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">stats</span><span class="p">:</span> <span class="n">CohortStats</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="n">CohortStats</span><span class="p">(</span><span class="n">rule_id</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="p">)</span></div>
 
 </pre></div>
 

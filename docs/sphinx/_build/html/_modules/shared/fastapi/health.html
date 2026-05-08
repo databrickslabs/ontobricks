@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -108,42 +110,639 @@
           <div class="body" role="main">
             
   <h1>Source code for shared.fastapi.health</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Health check endpoints.&quot;&quot;&quot;</span>
+<span></span><span class="sd">&quot;&quot;&quot;Readiness probe for OntoBricks — ``GET /health``.</span>
 
+<span class="sd">This endpoint replaces the previous static dummy with a real</span>
+<span class="sd">end-to-end check of every external dependency the application needs</span>
+<span class="sd">to operate correctly:</span>
+
+<span class="sd">* local filesystem — ``/tmp``, the session directory and the log</span>
+<span class="sd">  directory must be writable, with enough free disk space;</span>
+<span class="sd">* Databricks authentication — OAuth client-credentials in Apps mode</span>
+<span class="sd">  or PAT in local development;</span>
+<span class="sd">* SQL warehouse — TCP/SQL reachability via ``SELECT 1``;</span>
+<span class="sd">* CloudFetch capability — connector prerequisites and lightweight</span>
+<span class="sd">  runtime probe for ``use_cloud_fetch=True``;</span>
+<span class="sd">* registry **UC volume** — Files-API read + write probe (a tiny</span>
+<span class="sd">  sentinel file is written then deleted);</span>
+<span class="sd">* registry **catalog/schema** — DDL probe via</span>
+<span class="sd">  ``CREATE OR REPLACE VIEW &lt;fqn&gt; AS SELECT 1`` then ``DROP VIEW`` so</span>
+<span class="sd">  view materialisation will succeed during Digital-Twin builds;</span>
+<span class="sd">* **Lakebase** — when ``PG*`` env vars are bound, connectivity/init</span>
+<span class="sd">  checks plus explicit schema/table/sequence permission probes.</span>
+
+<span class="sd">Each probe returns ``{name, label, status, detail, duration_ms}``;</span>
+<span class="sd">the top-level ``status`` is the worst severity across all probes.</span>
+<span class="sd">``GET /health/detailed`` was removed — its information is now part of</span>
+<span class="sd">``GET /health``.</span>
+
+<span class="sd">The endpoint stays anonymous: ``/health`` is in the bypass list of</span>
+<span class="sd">:class:`PermissionMiddleware`, :class:`CSRFMiddleware` and</span>
+<span class="sd">:class:`RequestTimingMiddleware`, so external uptime probes (load</span>
+<span class="sd">balancer, k8s liveness/readiness, Datadog) can call it without a</span>
+<span class="sd">session cookie.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Depends</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">APP_VERSION</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">Settings</span><span class="p">,</span> <span class="n">get_settings</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_blocking</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Health&quot;</span><span class="p">])</span>
+
+<span class="n">_OK</span> <span class="o">=</span> <span class="s2">&quot;ok&quot;</span>
+<span class="n">_WARNING</span> <span class="o">=</span> <span class="s2">&quot;warning&quot;</span>
+<span class="n">_ERROR</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span>
+<span class="n">_SEVERITY_RANK</span> <span class="o">=</span> <span class="p">{</span><span class="n">_OK</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="n">_WARNING</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="n">_ERROR</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Probe runner</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_safely_run</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run *fn* and convert it to a stable check dict.</span>
+
+<span class="sd">    *fn* is expected to return ``(status, detail)``. Any exception is</span>
+<span class="sd">    caught and surfaced as ``error`` so a single broken probe never</span>
+<span class="sd">    fails the whole readiness response.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">status</span><span class="p">,</span> <span class="n">detail</span> <span class="o">=</span> <span class="n">fn</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 — catch-all is the point</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Health check </span><span class="si">%s</span><span class="s2"> raised: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+        <span class="n">status</span><span class="p">,</span> <span class="n">detail</span> <span class="o">=</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Probe raised: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
+        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
+        <span class="s2">&quot;detail&quot;</span><span class="p">:</span> <span class="n">detail</span><span class="p">,</span>
+        <span class="s2">&quot;duration_ms&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">),</span>
+    <span class="p">}</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Filesystem probes</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_format_gb</span><span class="p">(</span><span class="n">num_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">num_bytes</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="mi">1024</span><span class="w"> </span><span class="o">**</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> GB&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_directory_writable</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">low_warn_gb</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">low_err_gb</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generic &quot;this directory is usable&quot; probe.</span>
+
+<span class="sd">    Verifies the directory exists (creating it if missing), is</span>
+<span class="sd">    writable, and has enough free space. ``low_warn_gb`` / ``low_err_gb``</span>
+<span class="sd">    define the warning / error thresholds in GiB.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Cannot create </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">access</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">W_OK</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2"> is not writable by the app process&quot;</span>
+
+    <span class="n">sentinel</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;.health_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">sentinel</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;ok&quot;</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">sentinel</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Write probe failed at </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="n">usage</span> <span class="o">=</span> <span class="n">shutil</span><span class="o">.</span><span class="n">disk_usage</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">free_gb</span> <span class="o">=</span> <span class="n">usage</span><span class="o">.</span><span class="n">free</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">**</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">base_msg</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Writable; </span><span class="si">{</span><span class="n">_format_gb</span><span class="p">(</span><span class="n">usage</span><span class="o">.</span><span class="n">free</span><span class="p">)</span><span class="si">}</span><span class="s2"> free of </span><span class="si">{</span><span class="n">_format_gb</span><span class="p">(</span><span class="n">usage</span><span class="o">.</span><span class="n">total</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">free_gb</span> <span class="o">&lt;</span> <span class="n">low_err_gb</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Critically low disk space — </span><span class="si">{</span><span class="n">base_msg</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="n">free_gb</span> <span class="o">&lt;</span> <span class="n">low_warn_gb</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Low disk space — </span><span class="si">{</span><span class="n">base_msg</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="n">_OK</span><span class="p">,</span> <span class="n">base_msg</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_tmp</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="n">_check_directory_writable</span><span class="p">(</span><span class="s2">&quot;/tmp&quot;</span><span class="p">,</span> <span class="n">low_warn_gb</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">low_err_gb</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_session_dir</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">return</span> <span class="n">_check_directory_writable</span><span class="p">(</span>
+        <span class="n">settings</span><span class="o">.</span><span class="n">session_dir</span><span class="p">,</span> <span class="n">low_warn_gb</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">low_err_gb</span><span class="o">=</span><span class="mf">0.05</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_log_dir</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the live log directory and verify it is writable.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging.LogManager</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogManager</span>
+
+    <span class="n">mgr</span> <span class="o">=</span> <span class="n">LogManager</span><span class="o">.</span><span class="n">instance</span><span class="p">()</span>
+    <span class="n">log_path</span> <span class="o">=</span> <span class="n">mgr</span><span class="o">.</span><span class="n">log_path</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">log_path</span><span class="p">:</span>
+        <span class="c1"># Logging may not be configured yet (e.g. running under tests</span>
+        <span class="c1"># that imported this module before ``LogManager.setup``). Treat</span>
+        <span class="c1"># as advisory rather than failing the probe.</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;Log manager has not been initialised yet&quot;</span>
+    <span class="n">log_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">log_path</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_check_directory_writable</span><span class="p">(</span><span class="n">log_dir</span><span class="p">,</span> <span class="n">low_warn_gb</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">low_err_gb</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Databricks probes</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_databricks_auth</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Verify the app has usable Databricks credentials.</span>
+
+<span class="sd">    In Apps mode we additionally exercise the M2M OAuth path so a</span>
+<span class="sd">    misconfigured ``DATABRICKS_CLIENT_ID`` / ``CLIENT_SECRET`` fails</span>
+<span class="sd">    here rather than at the first warehouse call.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.DatabricksAuth</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksAuth</span>
+
+    <span class="n">auth</span> <span class="o">=</span> <span class="n">DatabricksAuth</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">auth</span><span class="o">.</span><span class="n">has_valid_auth</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">auth</span><span class="o">.</span><span class="n">is_app_mode</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">_ERROR</span><span class="p">,</span>
+                <span class="s2">&quot;App mode but DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET are missing&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">_ERROR</span><span class="p">,</span>
+            <span class="s2">&quot;Local mode but DATABRICKS_TOKEN is not set&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">auth</span><span class="o">.</span><span class="n">is_app_mode</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">auth</span><span class="o">.</span><span class="n">get_oauth_token</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 — vendor surface</span>
+            <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;OAuth token request failed: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">_OK</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;App mode OAuth credentials valid (host=</span><span class="si">{</span><span class="n">auth</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2">)&quot;</span>
+    <span class="k">return</span> <span class="n">_OK</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Personal Access Token configured (host=</span><span class="si">{</span><span class="n">auth</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2">)&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_health_client</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Settings</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Instantiate a ``DatabricksClient`` with no domain/session.</span>
+
+<span class="sd">    ``get_databricks_client`` already supports a ``None`` domain via</span>
+<span class="sd">    ``RegistryCfg.from_domain(None, settings)``-style fallbacks, so the</span>
+<span class="sd">    readiness route does not need a SessionManager.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_client</span>
+
+    <span class="k">return</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">settings</span> <span class="ow">or</span> <span class="n">get_settings</span><span class="p">())</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_warehouse</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Settings</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="n">client</span> <span class="o">=</span> <span class="n">_build_health_client</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;No Databricks credentials available — warehouse not probed&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="s2">&quot;warehouse_id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;DATABRICKS_SQL_WAREHOUSE_ID is not configured&quot;</span>
+    <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">test_connection</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">_OK</span> <span class="k">if</span> <span class="n">ok</span> <span class="k">else</span> <span class="n">_ERROR</span><span class="p">),</span> <span class="n">msg</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_cloud_fetch</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Settings</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Report CloudFetch capability via the real runtime probe.</span>
+
+<span class="sd">    Always calls :meth:`DatabricksAuth.probe_cloud_fetch_capability`,</span>
+<span class="sd">    which issues a tiny ``SELECT 1`` with ``use_cloud_fetch=True`` and</span>
+<span class="sd">    surfaces the actual outcome. Result is cached on the auth instance</span>
+<span class="sd">    so SQL connections share the same verdict.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">client</span> <span class="o">=</span> <span class="n">_build_health_client</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;Databricks credentials unavailable — CloudFetch not probed&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="s2">&quot;warehouse_id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;SQL warehouse not configured — CloudFetch not probed&quot;</span>
+
+    <span class="n">capable</span><span class="p">,</span> <span class="n">reason</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">probe_cloud_fetch_capability</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">capable</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_OK</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;CloudFetch enabled — </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;CloudFetch unavailable — </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Registry probes</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_resolve_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">):</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+
+    <span class="k">return</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">_resolve_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">schema</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">_WARNING</span><span class="p">,</span>
+            <span class="s2">&quot;Registry catalog/schema/volume not fully resolved — set REGISTRY_VOLUME_PATH &quot;</span>
+            <span class="s2">&quot;or bind a Volume resource to the Databricks App&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">_OK</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">&quot;Backend=</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">backend</span><span class="si">}</span><span class="s2"> catalog=</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2"> schema=</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2"> volume=</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_registry_volume_read</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">_resolve_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">schema</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;Registry volume not configured — skipped&quot;</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.DatabricksAuth</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksAuth</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.VolumeFileService</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+
+    <span class="n">svc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">auth</span><span class="o">=</span><span class="n">DatabricksAuth</span><span class="p">())</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">svc</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="s2">&quot;Databricks credentials not available for Files API&quot;</span>
+    <span class="n">vol_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">(</span><span class="n">vol_path</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ok</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_OK</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Listed </span><span class="si">{</span><span class="n">vol_path</span><span class="si">}</span><span class="s2"> — </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">items</span><span class="p">)</span><span class="si">}</span><span class="s2"> entries&quot;</span>
+    <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Cannot list </span><span class="si">{</span><span class="n">vol_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_registry_volume_write</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;End-to-end write probe — write a tiny sentinel and delete it.</span>
+
+<span class="sd">    Far stronger than ``SHOW GRANTS`` because it actually exercises the</span>
+<span class="sd">    same Files API code path that the registry uses to persist</span>
+<span class="sd">    ``.global_config.json`` and binary archives.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">_resolve_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">schema</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;Registry volume not configured — skipped&quot;</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.DatabricksAuth</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksAuth</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.VolumeFileService</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
+
+    <span class="n">svc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">auth</span><span class="o">=</span><span class="n">DatabricksAuth</span><span class="p">())</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">svc</span><span class="o">.</span><span class="n">is_configured</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="s2">&quot;Databricks credentials not available for Files API&quot;</span>
+
+    <span class="n">sentinel</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;/.health_check_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">.txt&quot;</span>
+    <span class="p">)</span>
+    <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span><span class="n">sentinel</span><span class="p">,</span> <span class="s2">&quot;ok&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Volume write failed (</span><span class="si">{</span><span class="n">sentinel</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="c1"># Best-effort cleanup; a leftover file is harmless but noisy.</span>
+    <span class="n">deleted</span><span class="p">,</span> <span class="n">_del_msg</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">delete_file</span><span class="p">(</span><span class="n">sentinel</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">deleted</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_OK</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Wrote+deleted sentinel at </span><span class="si">{</span><span class="n">sentinel</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">_WARNING</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">&quot;Wrote sentinel but cleanup failed (please remove manually): </span><span class="si">{</span><span class="n">sentinel</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_registry_uc_schema_ddl</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Probe ``CREATE OR REPLACE VIEW`` in the registry schema.</span>
+
+<span class="sd">    The Digital-Twin build creates views in the registry catalog/schema.</span>
+<span class="sd">    Failing this probe at startup catches missing</span>
+<span class="sd">    ``CREATE`` / ``USE_SCHEMA`` grants long before the build job</span>
+<span class="sd">    surfaces an opaque ``PERMISSION_DENIED`` deep in a SQL stack.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">_resolve_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;Registry catalog/schema not configured — skipped&quot;</span>
+
+    <span class="n">client</span> <span class="o">=</span> <span class="n">_build_health_client</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;No Databricks credentials — DDL probe skipped&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="s2">&quot;warehouse_id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="s2">&quot;No SQL warehouse configured — DDL probe skipped&quot;</span>
+
+    <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;_ontobricks_health_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">fqn</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">`.`</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">`&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">execute_statement</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CREATE OR REPLACE VIEW </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2"> AS SELECT 1 AS ok&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Cannot create view in </span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">execute_statement</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DROP VIEW IF EXISTS </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+        <span class="c1"># Created but couldn&#39;t clean up — admins will see the stray view.</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;View created but DROP failed for </span><span class="si">{</span><span class="n">fqn</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="n">_OK</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;CREATE/DROP VIEW succeeded in </span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Lakebase probe</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_lakebase</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.LakebaseAuth</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_lakebase_auth</span>
+
+    <span class="n">auth</span> <span class="o">=</span> <span class="n">get_lakebase_auth</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">auth</span><span class="o">.</span><span class="n">is_available</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">_OK</span><span class="p">,</span>
+            <span class="s2">&quot;Lakebase not bound (PG* env vars unset) — registry uses Volume backend&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">_resolve_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.store.lakebase.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">LakebaseRegistryStore</span>
+
+    <span class="n">store</span> <span class="o">=</span> <span class="n">LakebaseRegistryStore</span><span class="p">(</span>
+        <span class="n">registry_cfg</span><span class="o">=</span><span class="n">cfg</span><span class="p">,</span>
+        <span class="n">schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span> <span class="ow">or</span> <span class="s2">&quot;ontobricks_registry&quot;</span><span class="p">,</span>
+        <span class="n">database</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">status_dict</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">init_status</span><span class="p">()</span>
+    <span class="n">reason</span> <span class="o">=</span> <span class="n">status_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)</span>
+    <span class="n">err</span> <span class="o">=</span> <span class="n">status_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">status_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">status_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;initialized&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_OK</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Lakebase ready — schema=</span><span class="si">{</span><span class="n">store</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">)&quot;</span>
+    <span class="k">if</span> <span class="n">reason</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;no_registries_table&quot;</span><span class="p">,</span> <span class="s2">&quot;no_registry_row&quot;</span><span class="p">):</span>
+        <span class="c1"># Schema reachable, just not bootstrapped — admins can run</span>
+        <span class="c1"># *Initialize* from Settings → Registry. Treat as warning.</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">err</span><span class="p">)</span>
+    <span class="c1"># ``no_usage`` / ``connect_failed`` / unknown — these block the app.</span>
+    <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">err</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_lakebase_permissions</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Verify Lakebase registry privileges expected by OntoBricks runtime.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.LakebaseAuth</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_lakebase_auth</span>
+
+    <span class="n">auth</span> <span class="o">=</span> <span class="n">get_lakebase_auth</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">auth</span><span class="o">.</span><span class="n">is_available</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">_OK</span><span class="p">,</span>
+            <span class="s2">&quot;Lakebase not bound (PG* env vars unset) — permission checks skipped&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">_resolve_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.store.lakebase.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">LakebaseRegistryStore</span>
+
+    <span class="n">store</span> <span class="o">=</span> <span class="n">LakebaseRegistryStore</span><span class="p">(</span>
+        <span class="n">registry_cfg</span><span class="o">=</span><span class="n">cfg</span><span class="p">,</span>
+        <span class="n">schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span> <span class="ow">or</span> <span class="s2">&quot;ontobricks_registry&quot;</span><span class="p">,</span>
+        <span class="n">database</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">status_dict</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">init_status</span><span class="p">()</span>
+    <span class="n">reason</span> <span class="o">=</span> <span class="n">status_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)</span>
+    <span class="n">err</span> <span class="o">=</span> <span class="n">status_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">status_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">reason</span> <span class="o">==</span> <span class="s2">&quot;no_usage&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">err</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">reason</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;no_registries_table&quot;</span><span class="p">,</span> <span class="s2">&quot;no_registry_row&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_WARNING</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Lakebase not initialized (</span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">) — permission probe partial: </span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="n">reason</span> <span class="o">!=</span> <span class="s2">&quot;ok&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Lakebase probe unavailable (</span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">store</span><span class="o">.</span><span class="n">_connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">,</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="s2">&quot;SELECT current_database(), current_user, &quot;</span>
+                <span class="s2">&quot;       has_schema_privilege(current_user, </span><span class="si">%s</span><span class="s2">, &#39;USAGE&#39;), &quot;</span>
+                <span class="s2">&quot;       has_schema_privilege(current_user, </span><span class="si">%s</span><span class="s2">, &#39;CREATE&#39;)&quot;</span><span class="p">,</span>
+                <span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="n">store</span><span class="o">.</span><span class="n">schema</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span> <span class="ow">or</span> <span class="p">(</span><span class="s2">&quot;?&quot;</span><span class="p">,</span> <span class="s2">&quot;?&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+            <span class="n">cur_db</span><span class="p">,</span> <span class="n">cur_user</span><span class="p">,</span> <span class="n">has_usage</span><span class="p">,</span> <span class="n">has_create</span> <span class="o">=</span> <span class="n">row</span>
+
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="s2">&quot;SELECT &quot;</span>
+                <span class="s2">&quot;COALESCE(bool_and(has_table_privilege(&quot;</span>
+                <span class="s2">&quot;current_user, format(&#39;</span><span class="si">%%</span><span class="s2">I.</span><span class="si">%%</span><span class="s2">I&#39;, table_schema, table_name), &#39;SELECT&#39;)), true), &quot;</span>
+                <span class="s2">&quot;COALESCE(bool_and(has_table_privilege(&quot;</span>
+                <span class="s2">&quot;current_user, format(&#39;</span><span class="si">%%</span><span class="s2">I.</span><span class="si">%%</span><span class="s2">I&#39;, table_schema, table_name), &#39;INSERT&#39;)), true), &quot;</span>
+                <span class="s2">&quot;COALESCE(bool_and(has_table_privilege(&quot;</span>
+                <span class="s2">&quot;current_user, format(&#39;</span><span class="si">%%</span><span class="s2">I.</span><span class="si">%%</span><span class="s2">I&#39;, table_schema, table_name), &#39;UPDATE&#39;)), true), &quot;</span>
+                <span class="s2">&quot;COALESCE(bool_and(has_table_privilege(&quot;</span>
+                <span class="s2">&quot;current_user, format(&#39;</span><span class="si">%%</span><span class="s2">I.</span><span class="si">%%</span><span class="s2">I&#39;, table_schema, table_name), &#39;DELETE&#39;)), true), &quot;</span>
+                <span class="s2">&quot;COUNT(*) &quot;</span>
+                <span class="s2">&quot;FROM information_schema.tables &quot;</span>
+                <span class="s2">&quot;WHERE table_schema = </span><span class="si">%s</span><span class="s2"> AND table_type=&#39;BASE TABLE&#39;&quot;</span><span class="p">,</span>
+                <span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">schema</span><span class="p">,),</span>
+            <span class="p">)</span>
+            <span class="n">tbl_sel</span><span class="p">,</span> <span class="n">tbl_ins</span><span class="p">,</span> <span class="n">tbl_upd</span><span class="p">,</span> <span class="n">tbl_del</span><span class="p">,</span> <span class="n">tbl_count</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span> <span class="ow">or</span> <span class="p">(</span>
+                <span class="kc">True</span><span class="p">,</span>
+                <span class="kc">True</span><span class="p">,</span>
+                <span class="kc">True</span><span class="p">,</span>
+                <span class="kc">True</span><span class="p">,</span>
+                <span class="mi">0</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="s2">&quot;SELECT &quot;</span>
+                <span class="s2">&quot;COALESCE(bool_and(has_sequence_privilege(&quot;</span>
+                <span class="s2">&quot;current_user, format(&#39;</span><span class="si">%%</span><span class="s2">I.</span><span class="si">%%</span><span class="s2">I&#39;, sequence_schema, sequence_name), &#39;USAGE&#39;)), true), &quot;</span>
+                <span class="s2">&quot;COALESCE(bool_and(has_sequence_privilege(&quot;</span>
+                <span class="s2">&quot;current_user, format(&#39;</span><span class="si">%%</span><span class="s2">I.</span><span class="si">%%</span><span class="s2">I&#39;, sequence_schema, sequence_name), &#39;SELECT&#39;)), true), &quot;</span>
+                <span class="s2">&quot;COALESCE(bool_and(has_sequence_privilege(&quot;</span>
+                <span class="s2">&quot;current_user, format(&#39;</span><span class="si">%%</span><span class="s2">I.</span><span class="si">%%</span><span class="s2">I&#39;, sequence_schema, sequence_name), &#39;UPDATE&#39;)), true), &quot;</span>
+                <span class="s2">&quot;COUNT(*) &quot;</span>
+                <span class="s2">&quot;FROM information_schema.sequences &quot;</span>
+                <span class="s2">&quot;WHERE sequence_schema = </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">schema</span><span class="p">,),</span>
+            <span class="p">)</span>
+            <span class="n">seq_use</span><span class="p">,</span> <span class="n">seq_sel</span><span class="p">,</span> <span class="n">seq_upd</span><span class="p">,</span> <span class="n">seq_count</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span> <span class="ow">or</span> <span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+        <span class="k">return</span> <span class="n">_ERROR</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Lakebase permission probe failed: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="n">missing</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">has_usage</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;schema USAGE&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">has_create</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;schema CREATE&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tbl_sel</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;table SELECT&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tbl_ins</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;table INSERT&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tbl_upd</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;table UPDATE&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tbl_del</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;table DELETE&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">seq_use</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;sequence USAGE&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">seq_sel</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;sequence SELECT&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">seq_upd</span><span class="p">:</span>
+        <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;sequence UPDATE&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">_ERROR</span><span class="p">,</span>
+            <span class="s2">&quot;Missing Lakebase grants for role &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">cur_user</span><span class="si">}</span><span class="s2">&#39; on </span><span class="si">{</span><span class="n">cur_db</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">store</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">missing</span><span class="p">)</span><span class="si">}</span><span class="s2">. &quot;</span>
+            <span class="s2">&quot;Run scripts/bootstrap-lakebase-perms.sh.&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">_OK</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">&quot;Lakebase permissions OK (</span><span class="si">{</span><span class="n">cur_db</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">store</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">; &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;tables=</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">tbl_count</span><span class="p">)</span><span class="si">}</span><span class="s2">, sequences=</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">seq_count</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Aggregator</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+
+<div class="viewcode-block" id="run_readiness_checks">
+<a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.health.run_readiness_checks">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_readiness_checks</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Settings</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute every probe sequentially and roll up the worst severity.</span>
+
+<span class="sd">    The function is synchronous so individual probes can use blocking</span>
+<span class="sd">    SDK calls without ``await``. Wrap the whole thing in</span>
+<span class="sd">    :func:`run_blocking` from an ``async`` route to keep the event</span>
+<span class="sd">    loop free.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">settings</span> <span class="o">=</span> <span class="n">settings</span> <span class="ow">or</span> <span class="n">get_settings</span><span class="p">()</span>
+
+    <span class="n">checks</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;runtime&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Application runtime&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="p">(</span>
+                <span class="n">_OK</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;Python </span><span class="si">{</span><span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> — OntoBricks </span><span class="si">{</span><span class="n">APP_VERSION</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_safely_run</span><span class="p">(</span><span class="s2">&quot;filesystem.tmp&quot;</span><span class="p">,</span> <span class="s2">&quot;/tmp writable + free space&quot;</span><span class="p">,</span> <span class="n">_check_tmp</span><span class="p">))</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;filesystem.session_dir&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Session directory writable&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="n">_check_session_dir</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span><span class="s2">&quot;filesystem.log_dir&quot;</span><span class="p">,</span> <span class="s2">&quot;Log directory writable&quot;</span><span class="p">,</span> <span class="n">_check_log_dir</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span><span class="s2">&quot;databricks.auth&quot;</span><span class="p">,</span> <span class="s2">&quot;Databricks authentication&quot;</span><span class="p">,</span> <span class="n">_check_databricks_auth</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;databricks.warehouse&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;SQL warehouse reachable&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="n">_check_warehouse</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;databricks.cloudfetch&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;CloudFetch capability&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="n">_check_cloud_fetch</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;registry.cfg&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Registry configuration resolved&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="n">_check_registry_cfg</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;registry.volume_read&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Registry UC volume — list&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="n">_check_registry_volume_read</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;registry.volume_write&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Registry UC volume — write&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="n">_check_registry_volume_write</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;registry.uc_schema_ddl&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Registry catalog/schema — view DDL&quot;</span><span class="p">,</span>
+            <span class="n">_check_registry_uc_schema_ddl</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;lakebase&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Lakebase Postgres&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="n">_check_lakebase</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">checks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+        <span class="n">_safely_run</span><span class="p">(</span>
+            <span class="s2">&quot;lakebase.permissions&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Lakebase permissions&quot;</span><span class="p">,</span>
+            <span class="k">lambda</span><span class="p">:</span> <span class="n">_check_lakebase_permissions</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="n">summary</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">checks</span><span class="p">),</span>
+        <span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span> <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">_OK</span><span class="p">),</span>
+        <span class="s2">&quot;warnings&quot;</span><span class="p">:</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span> <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">_WARNING</span><span class="p">),</span>
+        <span class="s2">&quot;errors&quot;</span><span class="p">:</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span> <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">_ERROR</span><span class="p">),</span>
+    <span class="p">}</span>
+    <span class="n">overall</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span>
+        <span class="p">(</span><span class="n">c</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">checks</span><span class="p">),</span>
+        <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="n">_SEVERITY_RANK</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">_OK</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">overall</span><span class="p">,</span>
+        <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="n">APP_VERSION</span><span class="p">,</span>
+        <span class="s2">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;OntoBricks&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;framework&quot;</span><span class="p">:</span> <span class="s2">&quot;FastAPI&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="n">summary</span><span class="p">,</span>
+        <span class="s2">&quot;checks&quot;</span><span class="p">:</span> <span class="n">checks</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Route</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
 
 
 <div class="viewcode-block" id="health_check">
 <a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.health.health_check">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/health&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">health_check</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Health check endpoint.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="p">{</span>
-        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;healthy&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="n">APP_VERSION</span><span class="p">,</span>
-        <span class="s2">&quot;service&quot;</span><span class="p">:</span> <span class="s2">&quot;OntoBricks&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;framework&quot;</span><span class="p">:</span> <span class="s2">&quot;FastAPI&quot;</span><span class="p">,</span>
-    <span class="p">}</span></div>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">health_check</span><span class="p">(</span><span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Readiness probe — returns ``200`` even when individual checks fail.</span>
 
-
-
-<div class="viewcode-block" id="detailed_health">
-<a class="viewcode-back" href="../../../api/app.fastapi.html#shared.fastapi.health.detailed_health">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/health/detailed&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">detailed_health</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Detailed health check with component status.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="p">{</span>
-        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;healthy&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="n">APP_VERSION</span><span class="p">,</span>
-        <span class="s2">&quot;python_version&quot;</span><span class="p">:</span> <span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
-        <span class="s2">&quot;components&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;api&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">,</span> <span class="s2">&quot;session&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">,</span> <span class="s2">&quot;static_files&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">},</span>
-    <span class="p">}</span></div>
+<span class="sd">    External probes / load balancers should look at the top-level</span>
+<span class="sd">    ``status`` field (``ok`` / ``warning`` / ``error``) and the</span>
+<span class="sd">    ``summary.errors`` count. Returning a non-200 HTTP status would</span>
+<span class="sd">    take the app out of rotation as soon as a *single* dependency</span>
+<span class="sd">    flickered, which is rarely what you want for an analytical app.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">run_readiness_checks</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
 
 </pre></div>
 

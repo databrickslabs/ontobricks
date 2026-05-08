@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -115,10 +116,11 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">AuthorizationError</span><span class="p">,</span>
@@ -148,6 +150,12 @@
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">LADYBUG_BASE_DIR</span> <span class="o">=</span> <span class="s2">&quot;/tmp/ontobricks&quot;</span>
+
+<span class="c1"># Postgres database identifier — letters, digits, &#39;_&#39; or &#39;-&#39;, must</span>
+<span class="c1"># start with a letter or &#39;_&#39;. Conservatively narrower than the spec</span>
+<span class="c1"># (no quoted identifiers) so we never have to worry about quoting it</span>
+<span class="c1"># in dynamic SQL or in libpq conninfo strings.</span>
+<span class="n">_SAFE_DBNAME_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^[a-zA-Z_][a-zA-Z0-9_-]*$&quot;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="SettingsService">
@@ -481,7 +489,15 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">build_registry_get_payload</span><span class="p">(</span>
         <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Payload for GET /settings/registry.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Payload for GET /settings/registry.</span>
+
+<span class="sd">        Includes the registry triplet (catalog/schema/volume), the</span>
+<span class="sd">        active ``backend`` (``volume`` or ``lakebase``), the configured</span>
+<span class="sd">        ``lakebase_schema``, and a read-only ``lakebase`` block that</span>
+<span class="sd">        surfaces the runtime-injected Postgres connection parameters</span>
+<span class="sd">        (``PGHOST``/``PGPORT``/``PGDATABASE``/``PGUSER``) plus</span>
+<span class="sd">        availability/health for the admin UI.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">rcfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_session</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="n">initialized</span> <span class="o">=</span> <span class="kc">False</span>
 
@@ -497,7 +513,630 @@
             <span class="o">**</span><span class="n">rcfg</span><span class="o">.</span><span class="n">as_dict</span><span class="p">(),</span>
             <span class="s2">&quot;configured&quot;</span><span class="p">:</span> <span class="n">initialized</span><span class="p">,</span>
             <span class="s2">&quot;registry_locked&quot;</span><span class="p">:</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">is_registry_locked</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span>
+            <span class="s2">&quot;available_backends&quot;</span><span class="p">:</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_available_backends</span><span class="p">(),</span>
+            <span class="s2">&quot;lakebase&quot;</span><span class="p">:</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_lakebase_runtime_info</span><span class="p">(</span><span class="n">rcfg</span><span class="p">),</span>
         <span class="p">}</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_available_backends</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return which backends are usable in the current process.</span>
+
+<span class="sd">        ``volume`` is always available. ``lakebase`` requires the</span>
+<span class="sd">        optional :mod:`psycopg` extra and the four ``PG*`` environment</span>
+<span class="sd">        variables that the Databricks App resource binding injects at</span>
+<span class="sd">        runtime.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">psycopg</span>  <span class="c1"># noqa: F401  -- detect optional dep</span>
+
+            <span class="n">has_psycopg</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="n">has_psycopg</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="n">env_ready</span> <span class="o">=</span> <span class="nb">all</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;PGHOST&quot;</span><span class="p">,</span> <span class="s2">&quot;PGDATABASE&quot;</span><span class="p">,</span> <span class="s2">&quot;PGUSER&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;volume&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;available&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">},</span>
+            <span class="s2">&quot;lakebase&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;available&quot;</span><span class="p">:</span> <span class="n">has_psycopg</span> <span class="ow">and</span> <span class="n">env_ready</span><span class="p">,</span>
+                <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="s2">&quot;&quot;</span>
+                    <span class="k">if</span> <span class="n">has_psycopg</span> <span class="ow">and</span> <span class="n">env_ready</span>
+                    <span class="k">else</span> <span class="p">(</span>
+                        <span class="s2">&quot;psycopg extra not installed&quot;</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">has_psycopg</span>
+                        <span class="k">else</span> <span class="s2">&quot;Lakebase resource not bound (PGHOST/PGDATABASE/PGUSER missing)&quot;</span>
+                    <span class="p">)</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;psycopg_installed&quot;</span><span class="p">:</span> <span class="n">has_psycopg</span><span class="p">,</span>
+                <span class="s2">&quot;env_ready&quot;</span><span class="p">:</span> <span class="n">env_ready</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lakebase_runtime_info</span><span class="p">(</span><span class="n">rcfg</span><span class="p">:</span> <span class="n">RegistryCfg</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Surface the read-only PG* connection params for the UI.</span>
+
+<span class="sd">        Returns an empty block when the Lakebase resource is not bound.</span>
+<span class="sd">        Never raises and never includes the OAuth token.</span>
+
+<span class="sd">        When PG* env vars are present, also tries to enrich the payload</span>
+<span class="sd">        with Databricks metadata about the bound instance (name, tier,</span>
+<span class="sd">        state, pg_version, node_count). The lookup is best-effort and</span>
+<span class="sd">        degrades silently on failure.</span>
+
+<span class="sd">        ``database`` is the bound ``PGDATABASE``. ``database_override``</span>
+<span class="sd">        is the (optional) admin-selected override stored in the</span>
+<span class="sd">        registry config. ``effective_database`` is whichever of the</span>
+<span class="sd">        two the store actually connects to — the override wins when</span>
+<span class="sd">        set, otherwise the bound database is used.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+        <span class="n">host</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGHOST&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">bound_db</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGDATABASE&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">override_db</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rcfg</span><span class="p">,</span> <span class="s2">&quot;lakebase_database&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">effective_db</span> <span class="o">=</span> <span class="n">override_db</span> <span class="ow">or</span> <span class="n">bound_db</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;host&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;port&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;database&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;database_override&quot;</span><span class="p">:</span> <span class="n">override_db</span><span class="p">,</span>
+                <span class="s2">&quot;effective_database&quot;</span><span class="p">:</span> <span class="n">effective_db</span><span class="p">,</span>
+                <span class="s2">&quot;user&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="n">rcfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                <span class="s2">&quot;bound&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;initialized&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;populated&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;instance&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="c1"># Single probe: returns ``{initialized, populated}``. ``populated``</span>
+        <span class="c1"># is true when the schema has the registry tables AND any of the</span>
+        <span class="c1"># canonical data tables (domains, permission_sets, scheduled_*)</span>
+        <span class="c1"># has at least one row. Used by the admin UI to:</span>
+        <span class="c1">#   - hide *Migrate to Lakebase* when the admin is already on</span>
+        <span class="c1">#     Lakebase and the tables hold data (the button doesn&#39;t make</span>
+        <span class="c1">#     sense — it would silently overwrite live rows),</span>
+        <span class="c1">#   - keep the button visible on Volume but downgrade it to a</span>
+        <span class="c1">#     red *Re-sync* with a hard warning popup when Lakebase</span>
+        <span class="c1">#     already holds data from a previous migration.</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_lakebase_schema_status</span><span class="p">(</span><span class="n">rcfg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;host&quot;</span><span class="p">:</span> <span class="n">host</span><span class="p">,</span>
+            <span class="s2">&quot;port&quot;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGPORT&quot;</span><span class="p">,</span> <span class="s2">&quot;5432&quot;</span><span class="p">),</span>
+            <span class="s2">&quot;database&quot;</span><span class="p">:</span> <span class="n">bound_db</span><span class="p">,</span>
+            <span class="s2">&quot;database_override&quot;</span><span class="p">:</span> <span class="n">override_db</span><span class="p">,</span>
+            <span class="s2">&quot;effective_database&quot;</span><span class="p">:</span> <span class="n">effective_db</span><span class="p">,</span>
+            <span class="s2">&quot;user&quot;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGUSER&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="n">rcfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+            <span class="s2">&quot;bound&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;initialized&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">[</span><span class="s2">&quot;initialized&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;populated&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">[</span><span class="s2">&quot;populated&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;instance&quot;</span><span class="p">:</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_lakebase_instance_metadata</span><span class="p">(</span>
+                <span class="n">host</span><span class="p">,</span> <span class="n">bound_db</span>
+            <span class="p">),</span>
+        <span class="p">}</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lakebase_schema_initialized</span><span class="p">(</span><span class="n">rcfg</span><span class="p">:</span> <span class="n">RegistryCfg</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Best-effort probe of ``store.is_initialized()``. Never raises.</span>
+
+<span class="sd">        Kept for callers that only need the boolean — internally</span>
+<span class="sd">        :meth:`_lakebase_schema_status` is the canonical entry point</span>
+<span class="sd">        because it returns both ``initialized`` and ``populated`` from</span>
+<span class="sd">        a single store instance.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_lakebase_schema_status</span><span class="p">(</span><span class="n">rcfg</span><span class="p">)[</span><span class="s2">&quot;initialized&quot;</span><span class="p">]</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lakebase_schema_status</span><span class="p">(</span><span class="n">rcfg</span><span class="p">:</span> <span class="n">RegistryCfg</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Probe ``initialized`` + ``populated`` for the Lakebase schema.</span>
+
+<span class="sd">        ``initialized`` mirrors :meth:`RegistryStore.is_initialized` —</span>
+<span class="sd">        true when the registry tables exist and a registry row matches</span>
+<span class="sd">        this schema. ``populated`` is true when at least one of the</span>
+<span class="sd">        canonical data tables (``domains``, ``domain_versions``,</span>
+<span class="sd">        ``domain_permissions``, ``schedules``, ``schedule_runs``)</span>
+<span class="sd">        carries one or more rows. Both default to ``False`` when</span>
+<span class="sd">        psycopg is missing, the Lakebase resource is unbound, or any</span>
+<span class="sd">        error occurs — this is purely informational UI plumbing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;initialized&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;populated&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">}</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">psycopg</span>  <span class="c1"># noqa: F401  -- gate on optional extra</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryFactory</span>
+
+            <span class="n">store</span> <span class="o">=</span> <span class="n">RegistryFactory</span><span class="o">.</span><span class="n">lakebase</span><span class="p">(</span>
+                <span class="n">registry_cfg</span><span class="o">=</span><span class="n">rcfg</span><span class="p">,</span>
+                <span class="n">schema</span><span class="o">=</span><span class="n">rcfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                <span class="n">database</span><span class="o">=</span><span class="n">rcfg</span><span class="o">.</span><span class="n">lakebase_database</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">result</span><span class="p">[</span><span class="s2">&quot;initialized&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">is_initialized</span><span class="p">())</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 -- purely informational</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Lakebase schema init probe failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;initialized&quot;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="c1"># Cheap row-count probe across the canonical tables. The store</span>
+        <span class="c1"># already short-circuits unknown table names so this is safe</span>
+        <span class="c1"># even for partial schemas.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">counts</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">table_row_counts</span><span class="p">(</span>
+                <span class="p">(</span>
+                    <span class="s2">&quot;domains&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;domain_versions&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;domain_permissions&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;schedules&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;schedule_runs&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">result</span><span class="p">[</span><span class="s2">&quot;populated&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">any</span><span class="p">((</span><span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">counts</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Lakebase populated probe failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lakebase_instance_metadata</span><span class="p">(</span>
+        <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">bound_database</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Look up Databricks metadata for the Lakebase project at ``host``.</span>
+
+<span class="sd">        OntoBricks targets **Lakebase Autoscaling exclusively**. This</span>
+<span class="sd">        helper walks ``/api/2.0/postgres/projects`` → branches →</span>
+<span class="sd">        endpoints and matches ``status.hosts.host`` /</span>
+<span class="sd">        ``status.hosts.read_only_host`` against ``host``. The legacy</span>
+<span class="sd">        Database Instance API (``list_database_instances``) is</span>
+<span class="sd">        deliberately not consulted — it cannot see Autoscaling-only</span>
+<span class="sd">        projects (typical for sandboxes created via the Autoscaling UI</span>
+<span class="sd">        or the Postgres API).</span>
+
+<span class="sd">        Returns a JSON-friendly dict suitable for the admin UI on a</span>
+<span class="sd">        match, or ``None`` on miss / failure. Provisioned-only fields</span>
+<span class="sd">        (``capacity``, ``pg_version``, ``node_count``) are returned as</span>
+<span class="sd">        empty so the UI degrades to a ``—`` placeholder; the</span>
+<span class="sd">        ``autoscaling_min_cu`` / ``autoscaling_max_cu`` pair populated</span>
+<span class="sd">        by :meth:`_lakebase_branch_info` is the Autoscaling-native</span>
+<span class="sd">        replacement.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">databricks.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">WorkspaceClient</span>
+
+            <span class="n">w</span> <span class="o">=</span> <span class="n">WorkspaceClient</span><span class="p">()</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_find_autoscaling_endpoint_for_host</span><span class="p">(</span>
+                <span class="n">w</span><span class="p">,</span> <span class="n">host</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;No Autoscaling project endpoint matched PGHOST=</span><span class="si">%s</span><span class="s2"> &quot;</span>
+                    <span class="s2">&quot;(walked /api/2.0/postgres/projects → branches → &quot;</span>
+                    <span class="s2">&quot;endpoints)&quot;</span><span class="p">,</span>
+                    <span class="n">host</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">project_id</span><span class="p">,</span> <span class="n">primary_host</span><span class="p">,</span> <span class="n">ro_host</span> <span class="o">=</span> <span class="n">match</span>
+            <span class="n">payload</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">project_id</span><span class="p">,</span>
+                <span class="c1"># ``uid``, ``state``, ``creator``, ``creation_time`` are</span>
+                <span class="c1"># not surfaced on the project list endpoint; the admin</span>
+                <span class="c1"># UI shows ``—`` placeholders when they&#39;re empty. We</span>
+                <span class="c1"># could fetch them via ``GET /api/2.0/postgres/projects/&lt;id&gt;``</span>
+                <span class="c1"># but ``_lakebase_branch_info`` already does that and</span>
+                <span class="c1"># cares only about branch + autoscaling CU range, so</span>
+                <span class="c1"># we stay cheap here.</span>
+                <span class="s2">&quot;uid&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;stopped&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="c1"># Provisioned-only fields — left empty on Autoscaling.</span>
+                <span class="s2">&quot;capacity&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;pg_version&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;node_count&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="s2">&quot;creator&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;creation_time&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;endpoint&quot;</span><span class="p">:</span> <span class="n">primary_host</span><span class="p">,</span>
+                <span class="s2">&quot;read_only_endpoint&quot;</span><span class="p">:</span> <span class="n">ro_host</span><span class="p">,</span>
+                <span class="s2">&quot;branch&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;branch_resource&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;autoscaling_min_cu&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="s2">&quot;autoscaling_max_cu&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="n">payload</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="n">SettingsService</span><span class="o">.</span><span class="n">_lakebase_branch_info</span><span class="p">(</span>
+                    <span class="n">w</span><span class="p">,</span> <span class="n">project_id</span><span class="p">,</span> <span class="n">bound_database</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">payload</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 -- best-effort enrichment</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Lakebase instance lookup failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_find_autoscaling_endpoint_for_host</span><span class="p">(</span>
+        <span class="n">w</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Walk Lakebase Autoscaling projects/branches/endpoints for ``host``.</span>
+
+<span class="sd">        Returns ``(project_id, primary_host, read_only_host)`` on match,</span>
+<span class="sd">        ``None`` otherwise. Mirrors the resolution path used at runtime</span>
+<span class="sd">        by :class:`back.core.databricks.LakebaseAuth.LakebaseAuth` so the</span>
+<span class="sd">        admin UI sees the same project the auth helper authenticates</span>
+<span class="sd">        against.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">api</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="s2">&quot;api_client&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">api</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">api</span><span class="p">,</span> <span class="s2">&quot;do&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">projects</span> <span class="o">=</span> <span class="p">(</span><span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="s2">&quot;/api/2.0/postgres/projects&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s2">&quot;projects&quot;</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">project</span> <span class="ow">in</span> <span class="n">projects</span><span class="p">:</span>
+            <span class="n">project_path</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">project_path</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">branches</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/</span><span class="si">{</span><span class="n">project_path</span><span class="si">}</span><span class="s2">/branches&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;branches&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">branch</span> <span class="ow">in</span> <span class="n">branches</span><span class="p">:</span>
+                <span class="n">branch_path</span> <span class="o">=</span> <span class="n">branch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">branch_path</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">endpoints</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/</span><span class="si">{</span><span class="n">branch_path</span><span class="si">}</span><span class="s2">/endpoints&quot;</span><span class="p">)</span>
+                    <span class="ow">or</span> <span class="p">{}</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;endpoints&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">endpoint</span> <span class="ow">in</span> <span class="n">endpoints</span><span class="p">:</span>
+                    <span class="n">hosts</span> <span class="o">=</span> <span class="p">(</span><span class="n">endpoint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;hosts&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+                    <span class="n">primary</span> <span class="o">=</span> <span class="p">(</span><span class="n">hosts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="n">ro</span> <span class="o">=</span> <span class="p">(</span><span class="n">hosts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;read_only_host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">host</span> <span class="ow">in</span> <span class="p">(</span><span class="n">primary</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">ro</span><span class="o">.</span><span class="n">lower</span><span class="p">()):</span>
+                        <span class="k">return</span> <span class="p">(</span>
+                            <span class="n">project_path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+                            <span class="n">primary</span><span class="p">,</span>
+                            <span class="n">ro</span><span class="p">,</span>
+                        <span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lakebase_branch_info</span><span class="p">(</span>
+        <span class="n">w</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">instance_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">bound_database</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Look up the active branch + autoscaling CU range for an instance.</span>
+
+<span class="sd">        Hits ``GET /api/2.0/postgres/projects/&lt;name&gt;`` to read the</span>
+<span class="sd">        Autoscaling project metadata: default branch path and the</span>
+<span class="sd">        project&#39;s autoscaling CU min/max settings. Then walks</span>
+<span class="sd">        ``/projects/&lt;name&gt;/branches/*/databases`` to identify which</span>
+<span class="sd">        branch actually hosts the bound ``PGDATABASE``; falls back to</span>
+<span class="sd">        the project&#39;s ``default_branch`` if the database name is empty</span>
+<span class="sd">        or unmatched.</span>
+
+<span class="sd">        Always returns a dict; on any failure the dict is empty so</span>
+<span class="sd">        callers can merge it on top of the base payload without losing</span>
+<span class="sd">        the default values. OntoBricks expects every instance to be</span>
+<span class="sd">        Autoscaling — Provisioned instances are not supported.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">instance_name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">project</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">api_client</span><span class="o">.</span><span class="n">do</span><span class="p">(</span>
+                <span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/projects/</span><span class="si">{</span><span class="n">instance_name</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Lakebase project lookup for </span><span class="si">%r</span><span class="s2"> failed (Autoscaling &quot;</span>
+                <span class="s2">&quot;metadata unavailable): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">instance_name</span><span class="p">,</span>
+                <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">default_branch_path</span> <span class="o">=</span> <span class="n">status</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;default_branch&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">default_branch</span> <span class="o">=</span> <span class="n">default_branch_path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">default_branch_path</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">endpoint_settings</span> <span class="o">=</span> <span class="n">status</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;default_endpoint_settings&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;branch&quot;</span><span class="p">:</span> <span class="n">default_branch</span><span class="p">,</span>
+            <span class="s2">&quot;branch_resource&quot;</span><span class="p">:</span> <span class="n">default_branch_path</span><span class="p">,</span>
+            <span class="s2">&quot;autoscaling_min_cu&quot;</span><span class="p">:</span> <span class="n">endpoint_settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;autoscaling_limit_min_cu&quot;</span><span class="p">),</span>
+            <span class="s2">&quot;autoscaling_max_cu&quot;</span><span class="p">:</span> <span class="n">endpoint_settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;autoscaling_limit_max_cu&quot;</span><span class="p">),</span>
+        <span class="p">}</span>
+        <span class="n">active_branch</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_lakebase_active_branch</span><span class="p">(</span>
+            <span class="n">w</span><span class="p">,</span> <span class="n">instance_name</span><span class="p">,</span> <span class="n">bound_database</span><span class="p">,</span> <span class="n">default_branch_path</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">active_branch</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;branch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">active_branch</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;branch_resource&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">active_branch</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lakebase_active_branch</span><span class="p">(</span>
+        <span class="n">w</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">instance_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">bound_database</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">default_branch_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find the branch that hosts ``bound_database`` (best-effort).</span>
+
+<span class="sd">        Returns the full resource path (``projects/&lt;name&gt;/branches/&lt;b&gt;``)</span>
+<span class="sd">        or ``&quot;&quot;`` on any miss. Walks every branch&#39;s database listing</span>
+<span class="sd">        and matches on ``status.postgres_database``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">bound_database</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">default_branch_path</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">listing</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">api_client</span><span class="o">.</span><span class="n">do</span><span class="p">(</span>
+                <span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/projects/</span><span class="si">{</span><span class="n">instance_name</span><span class="si">}</span><span class="s2">/branches&quot;</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Lakebase branch listing for </span><span class="si">%r</span><span class="s2"> failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">instance_name</span><span class="p">,</span> <span class="n">exc</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">default_branch_path</span>
+        <span class="n">branches</span> <span class="o">=</span> <span class="p">(</span><span class="n">listing</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;branches&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">branch</span> <span class="ow">in</span> <span class="n">branches</span><span class="p">:</span>
+            <span class="n">branch_path</span> <span class="o">=</span> <span class="n">branch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">branch_path</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">dbs</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">api_client</span><span class="o">.</span><span class="n">do</span><span class="p">(</span>
+                    <span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/</span><span class="si">{</span><span class="n">branch_path</span><span class="si">}</span><span class="s2">/databases&quot;</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;Lakebase database listing for </span><span class="si">%r</span><span class="s2"> failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">branch_path</span><span class="p">,</span>
+                    <span class="n">exc</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">db</span> <span class="ow">in</span> <span class="p">(</span><span class="n">dbs</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;databases&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]:</span>
+                <span class="n">pg_name</span> <span class="o">=</span> <span class="p">((</span><span class="n">db</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;postgres_database&quot;</span><span class="p">))</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                <span class="k">if</span> <span class="n">pg_name</span> <span class="o">==</span> <span class="n">bound_database</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">branch_path</span>
+        <span class="k">return</span> <span class="n">default_branch_path</span>
+
+<div class="viewcode-block" id="SettingsService.list_lakebase_databases_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.list_lakebase_databases_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_lakebase_databases_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List Postgres databases on the bound Lakebase instance.</span>
+
+<span class="sd">        Used by the admin Registry Location modal so the admin can pick</span>
+<span class="sd">        a database different from the one auto-injected via the Apps</span>
+<span class="sd">        ``database`` resource binding (the bound ``PGDATABASE``). The</span>
+<span class="sd">        Lakebase JWT scope is per-instance, so the cached token can</span>
+<span class="sd">        connect to every database the SP is allowed on.</span>
+
+<span class="sd">        Returns a JSON-friendly payload::</span>
+
+<span class="sd">            {</span>
+<span class="sd">              &quot;success&quot;: true,</span>
+<span class="sd">              &quot;bound_database&quot;: &quot;ontobricks_registry&quot;,  # PGDATABASE</span>
+<span class="sd">              &quot;selected_database&quot;: &quot;ontobricks_other&quot;,  # registry config override</span>
+<span class="sd">              &quot;databases&quot;: [</span>
+<span class="sd">                {&quot;name&quot;: &quot;ontobricks_registry&quot;, &quot;connectable&quot;: true,</span>
+<span class="sd">                 &quot;is_bound&quot;: true, &quot;is_selected&quot;: false},</span>
+<span class="sd">                {&quot;name&quot;: &quot;ontobricks_other&quot;,    &quot;connectable&quot;: true,</span>
+<span class="sd">                 &quot;is_bound&quot;: false, &quot;is_selected&quot;: true},</span>
+<span class="sd">                ...</span>
+<span class="sd">              ]</span>
+<span class="sd">            }</span>
+
+<span class="sd">        ``connectable`` reflects ``has_database_privilege(current_user,</span>
+<span class="sd">        datname, &#39;CONNECT&#39;)`` so the UI can disable databases the SP</span>
+<span class="sd">        is not authorised on. Template / system databases are filtered</span>
+<span class="sd">        out. The query runs against the *bound* database so it works</span>
+<span class="sd">        even if the configured override has been revoked.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_lakebase_auth</span>
+
+        <span class="n">auth</span> <span class="o">=</span> <span class="n">get_lakebase_auth</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">auth</span><span class="o">.</span><span class="n">is_available</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Lakebase resource not bound (PGHOST/PGUSER missing)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;bound_database&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;selected_database&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;databases&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="p">}</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_session</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Could not resolve registry context: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;bound_database&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;selected_database&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;databases&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="p">}</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">psycopg</span>  <span class="c1"># noqa: F401  -- ensure extra is installed</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;psycopg not installed&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;bound_database&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;selected_database&quot;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span><span class="p">,</span>
+                <span class="s2">&quot;databases&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="p">}</span>
+
+        <span class="n">bound_db</span> <span class="o">=</span> <span class="n">auth</span><span class="o">.</span><span class="n">database</span>
+        <span class="n">selected_db</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="c1"># Connect to the *bound* database to enumerate. The bound DB</span>
+        <span class="c1"># is the one we know the SP is authorised on.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">psycopg</span>
+
+            <span class="k">with</span> <span class="n">psycopg</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span>
+                <span class="n">autocommit</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">auth</span><span class="o">.</span><span class="n">kwargs</span><span class="p">(</span><span class="n">application_name</span><span class="o">=</span><span class="s2">&quot;ontobricks-registry&quot;</span><span class="p">),</span>
+            <span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+                    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<span class="w">                        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                        SELECT datname,</span>
+<span class="sd">                               has_database_privilege(</span>
+<span class="sd">                                   current_user, datname, &#39;CONNECT&#39;</span>
+<span class="sd">                               )</span>
+<span class="sd">                        FROM pg_database</span>
+<span class="sd">                        WHERE datistemplate = false</span>
+<span class="sd">                          AND datname NOT IN (&#39;postgres&#39;, &#39;rdsadmin&#39;)</span>
+<span class="sd">                        ORDER BY datname</span>
+<span class="sd">                        &quot;&quot;&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">rows</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Lakebase list-databases failed&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Could not list databases: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;bound_database&quot;</span><span class="p">:</span> <span class="n">bound_db</span><span class="p">,</span>
+                <span class="s2">&quot;selected_database&quot;</span><span class="p">:</span> <span class="n">selected_db</span><span class="p">,</span>
+                <span class="s2">&quot;databases&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="p">}</span>
+
+        <span class="n">databases</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+                <span class="s2">&quot;connectable&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">connectable</span><span class="p">),</span>
+                <span class="s2">&quot;is_bound&quot;</span><span class="p">:</span> <span class="n">name</span> <span class="o">==</span> <span class="n">bound_db</span><span class="p">,</span>
+                <span class="s2">&quot;is_selected&quot;</span><span class="p">:</span> <span class="n">name</span> <span class="o">==</span> <span class="n">selected_db</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">connectable</span><span class="p">)</span> <span class="ow">in</span> <span class="n">rows</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;bound_database&quot;</span><span class="p">:</span> <span class="n">bound_db</span><span class="p">,</span>
+            <span class="s2">&quot;selected_database&quot;</span><span class="p">:</span> <span class="n">selected_db</span><span class="p">,</span>
+            <span class="s2">&quot;databases&quot;</span><span class="p">:</span> <span class="n">databases</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="SettingsService.lakebase_stats_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.lakebase_stats_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">lakebase_stats_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return per-table row counts for the Lakebase registry schema.</span>
+
+<span class="sd">        Used by the admin Registry Location panel to give a quick at-a-</span>
+<span class="sd">        glance inventory of what currently lives in Lakebase. Never</span>
+<span class="sd">        raises — surfaces failures via ``success=False`` + ``message``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_lakebase_auth</span>
+
+        <span class="n">auth</span> <span class="o">=</span> <span class="n">get_lakebase_auth</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">auth</span><span class="o">.</span><span class="n">is_available</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Lakebase resource not bound (PGHOST/PGUSER missing)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="p">}</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+            <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Could not resolve registry context: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="p">}</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryFactory</span>
+
+            <span class="n">lakebase_cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="p">(</span>
+                <span class="n">catalog</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="p">,</span>
+                <span class="n">schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+                <span class="n">volume</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="p">,</span>
+                <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;lakebase&quot;</span><span class="p">,</span>
+                <span class="n">lakebase_schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                <span class="n">lakebase_database</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="n">RegistryFactory</span><span class="o">.</span><span class="n">lakebase</span><span class="p">(</span>
+                <span class="n">registry_cfg</span><span class="o">=</span><span class="n">lakebase_cfg</span><span class="p">,</span>
+                <span class="n">schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                <span class="n">database</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Lakebase backend not installed (missing psycopg)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="p">}</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Could not build Lakebase store: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="p">}</span>
+
+        <span class="n">tables</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">&quot;registries&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;global_config&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;domains&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;domain_versions&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;domain_permissions&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;schedules&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;schedule_runs&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">counts</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">table_row_counts</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Lakebase table_row_counts failed&quot;</span><span class="p">)</span>
+            <span class="c1"># Surface the *kind* of failure so the admin can</span>
+            <span class="c1"># distinguish &quot;schema not initialised yet&quot; from &quot;service</span>
+            <span class="c1"># principal lacks USAGE&quot; or &quot;instance unreachable&quot; — the</span>
+            <span class="c1"># 0-rows-everywhere alternative used to mask real</span>
+            <span class="c1"># deployment problems.</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                <span class="s2">&quot;initialized&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="s2">&quot;table_count_failed&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Could not query Lakebase: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">t</span><span class="p">,</span> <span class="s2">&quot;rows&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tables</span><span class="p">],</span>
+            <span class="p">}</span>
+        <span class="c1"># Use the detailed probe so the UI can distinguish &quot;missing</span>
+        <span class="c1"># USAGE on the schema&quot; (silent before — looked like an empty</span>
+        <span class="c1"># registry) from genuine first-run states. Falls back to the</span>
+        <span class="c1"># plain bool for stores that haven&#39;t grown ``init_status``.</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="s2">&quot;init_status&quot;</span><span class="p">):</span>
+            <span class="n">status</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">init_status</span><span class="p">()</span>
+            <span class="n">initialized</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;initialized&quot;</span><span class="p">))</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="n">status</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reason&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="s2">&quot;ok&quot;</span> <span class="k">if</span> <span class="n">initialized</span> <span class="k">else</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)</span>
+            <span class="n">error</span> <span class="o">=</span> <span class="n">status</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">initialized</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">is_initialized</span><span class="p">())</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="s2">&quot;ok&quot;</span> <span class="k">if</span> <span class="n">initialized</span> <span class="k">else</span> <span class="s2">&quot;unknown&quot;</span>
+            <span class="n">error</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">payload</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+            <span class="s2">&quot;initialized&quot;</span><span class="p">:</span> <span class="n">initialized</span><span class="p">,</span>
+            <span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="n">reason</span><span class="p">,</span>
+            <span class="s2">&quot;tables&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">t</span><span class="p">,</span> <span class="s2">&quot;rows&quot;</span><span class="p">:</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="mi">0</span><span class="p">)}</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tables</span><span class="p">],</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">error</span><span class="p">:</span>
+            <span class="n">payload</span><span class="p">[</span><span class="s2">&quot;message&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">error</span>
+        <span class="k">return</span> <span class="n">payload</span></div>
 
 
 <div class="viewcode-block" id="SettingsService.apply_registry_save">
@@ -506,7 +1145,18 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">apply_registry_save</span><span class="p">(</span>
         <span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Persist registry catalog/schema/volume from request body.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Persist registry triplet, backend choice, and lakebase schema.</span>
+
+<span class="sd">        Expected payload (all optional, partial updates allowed):</span>
+
+<span class="sd">        - ``catalog`` / ``schema`` / ``volume``: Unity Catalog triplet.</span>
+<span class="sd">        - ``backend``: ``&quot;volume&quot;`` or ``&quot;lakebase&quot;``.</span>
+<span class="sd">        - ``lakebase_schema``: Postgres schema for registry tables.</span>
+<span class="sd">        - ``lakebase_database``: optional Postgres database override.</span>
+<span class="sd">          Empty string clears the override (falls back to the bound</span>
+<span class="sd">          ``PGDATABASE``); the key must be present in the payload to</span>
+<span class="sd">          opt into the change so a partial save never wipes it out.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
         <span class="n">reg</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">settings</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;registry&quot;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">):</span>
@@ -515,8 +1165,108 @@
             <span class="n">reg</span><span class="p">[</span><span class="s2">&quot;schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;schema&quot;</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;volume&quot;</span><span class="p">):</span>
             <span class="n">reg</span><span class="p">[</span><span class="s2">&quot;volume&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;volume&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s2">&quot;backend&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+            <span class="n">backend</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;backend&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;volume&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">backend</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;volume&quot;</span><span class="p">,</span> <span class="s2">&quot;lakebase&quot;</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Unknown registry backend &#39;</span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2">&#39; — expected volume or lakebase&quot;</span>
+                <span class="p">)</span>
+            <span class="n">reg</span><span class="p">[</span><span class="s2">&quot;backend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">backend</span>
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lakebase_schema&quot;</span><span class="p">):</span>
+            <span class="n">reg</span><span class="p">[</span><span class="s2">&quot;lakebase_schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;lakebase_schema&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s2">&quot;lakebase_database&quot;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+            <span class="n">override</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lakebase_database&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">override</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">_SAFE_DBNAME_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">override</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Invalid Lakebase database name </span><span class="si">{</span><span class="n">override</span><span class="si">!r}</span><span class="s2">. &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;Use letters, digits, &#39;_&#39; or &#39;-&#39; (start with a letter or &#39;_&#39;).&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">reg</span><span class="p">[</span><span class="s2">&quot;lakebase_database&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">override</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">reg</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;lakebase_database&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Registry configuration saved&quot;</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="SettingsService.migrate_to_lakebase_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.migrate_to_lakebase_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">migrate_to_lakebase_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copy Volume registry data into Lakebase tables.</span>
+
+<span class="sd">        Builds a :class:`VolumeRegistryStore` from the active session</span>
+<span class="sd">        configuration and a :class:`LakebaseRegistryStore` using the</span>
+<span class="sd">        injected ``PG*`` env vars and the configured Lakebase schema.</span>
+<span class="sd">        Binary artefacts (``documents/``, ``*.lbug.tar.gz``) are not</span>
+<span class="sd">        moved — they always live on the Volume.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+            <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                    <span class="s2">&quot;Registry catalog and schema must be configured first&quot;</span>
+                <span class="p">)</span>
+
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.store</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                <span class="n">RegistryFactory</span><span class="p">,</span>
+                <span class="n">migrate_volume_to_lakebase</span><span class="p">,</span>
+                <span class="n">summarize_migration</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">volume_cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="p">(</span>
+                <span class="n">catalog</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="p">,</span>
+                <span class="n">schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+                <span class="n">volume</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="p">,</span>
+                <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;volume&quot;</span><span class="p">,</span>
+                <span class="n">lakebase_schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                <span class="n">lakebase_database</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">lakebase_cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="p">(</span>
+                <span class="n">catalog</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span><span class="p">,</span>
+                <span class="n">schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+                <span class="n">volume</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">volume</span><span class="p">,</span>
+                <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;lakebase&quot;</span><span class="p">,</span>
+                <span class="n">lakebase_schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                <span class="n">lakebase_database</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">src_store</span> <span class="o">=</span> <span class="n">RegistryFactory</span><span class="o">.</span><span class="n">volume</span><span class="p">(</span>
+                <span class="n">registry_cfg</span><span class="o">=</span><span class="n">volume_cfg</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span>
+            <span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">dst_store</span> <span class="o">=</span> <span class="n">RegistryFactory</span><span class="o">.</span><span class="n">lakebase</span><span class="p">(</span>
+                    <span class="n">registry_cfg</span><span class="o">=</span><span class="n">lakebase_cfg</span><span class="p">,</span>
+                    <span class="n">schema</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                    <span class="n">database</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">lakebase_database</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+                    <span class="s2">&quot;Lakebase backend not installed&quot;</span><span class="p">,</span>
+                    <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">),</span>
+                <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+            <span class="n">report</span> <span class="o">=</span> <span class="n">migrate_volume_to_lakebase</span><span class="p">(</span><span class="n">src_store</span><span class="p">,</span> <span class="n">dst_store</span><span class="p">)</span>
+            <span class="n">ok</span><span class="p">,</span> <span class="n">summary</span> <span class="o">=</span> <span class="n">summarize_migration</span><span class="p">(</span><span class="n">report</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="s2">&quot;Migration complete — &quot;</span> <span class="k">if</span> <span class="n">ok</span> <span class="k">else</span> <span class="s2">&quot;Migration completed with errors — &quot;</span>
+                <span class="p">)</span>
+                <span class="o">+</span> <span class="n">summary</span><span class="p">,</span>
+                <span class="s2">&quot;report&quot;</span><span class="p">:</span> <span class="n">report</span><span class="o">.</span><span class="n">as_dict</span><span class="p">(),</span>
+            <span class="p">}</span>
+        <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
+            <span class="k">raise</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Migrate to Lakebase failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+                <span class="s2">&quot;Migrate to Lakebase failed&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
 
 
 <div class="viewcode-block" id="SettingsService.initialize_registry_result">
@@ -527,7 +1277,16 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-            <span class="n">svc</span> <span class="o">=</span> <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="c1"># ``prefer_volume_binding=True`` so the Initialize flow</span>
+            <span class="c1"># pins the registry triplet to the *current* Volume binding</span>
+            <span class="c1"># (not the cached Lakebase ``registries`` row). Without</span>
+            <span class="c1"># this, re-binding the Volume resource and re-clicking</span>
+            <span class="c1"># Initialize would silently no-op the row update — the row</span>
+            <span class="c1"># is the source of truth for read paths, so callers would</span>
+            <span class="c1"># keep seeing the stale catalog/schema/volume.</span>
+            <span class="n">svc</span> <span class="o">=</span> <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span>
+                <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">prefer_volume_binding</span><span class="o">=</span><span class="kc">True</span>
+            <span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">svc</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">is_configured</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
                     <span class="s2">&quot;Registry catalog, schema, and volume must be configured first&quot;</span>
@@ -540,6 +1299,21 @@
             <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Registry initialization failed&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span><span class="p">)</span>
+            <span class="c1"># Drop the process-local Lakebase triplet cache so the next</span>
+            <span class="c1"># ``RegistryCfg.from_domain`` reads the freshly-upserted</span>
+            <span class="c1"># ``registries`` row instead of returning the stale triplet</span>
+            <span class="c1"># captured before this Initialize.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.store.lakebase.store</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                    <span class="n">reset_lakebase_triplet_cache</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="n">reset_lakebase_triplet_cache</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;reset_lakebase_triplet_cache unavailable; skipping&quot;</span><span class="p">,</span>
+                    <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="p">)</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
         <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
             <span class="k">raise</span>
@@ -779,6 +1553,42 @@
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">base_uri</span><span class="p">}</span></div>
 
 
+<div class="viewcode-block" id="SettingsService.get_cloud_fetch_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.get_cloud_fetch_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_cloud_fetch_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
+            <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
+        <span class="p">)</span>
+        <span class="n">enabled</span> <span class="o">=</span> <span class="n">global_config_service</span><span class="o">.</span><span class="n">get_use_cloud_fetch</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;use_cloud_fetch&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">enabled</span><span class="p">)}</span></div>
+
+
+<div class="viewcode-block" id="SettingsService.save_cloud_fetch_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.save_cloud_fetch_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save_cloud_fetch_result</span><span class="p">(</span>
+        <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">user_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">SettingsService</span><span class="o">.</span><span class="n">require_admin_error</span><span class="p">(</span><span class="n">email</span><span class="p">,</span> <span class="n">user_token</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
+            <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
+        <span class="p">)</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">global_config_service</span><span class="o">.</span><span class="n">set_use_cloud_fetch</span><span class="p">(</span>
+            <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="nb">bool</span><span class="p">(</span><span class="n">enabled</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Failed to save CloudFetch setting&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;use_cloud_fetch&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">enabled</span><span class="p">)}</span></div>
+
+
 <div class="viewcode-block" id="SettingsService.get_registry_cache_ttl_result">
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.get_registry_cache_ttl_result">[docs]</a>
     <span class="nd">@staticmethod</span>
@@ -919,10 +1729,13 @@
 
         <span class="n">role</span> <span class="o">=</span> <span class="s2">&quot;none&quot;</span>
         <span class="n">is_app_admin</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">domain_role</span> <span class="o">=</span> <span class="n">user_domain_role</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">domain_folder</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
+            <span class="n">domain</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
                 <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
             <span class="p">)</span>
+            <span class="n">domain_folder</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;domain_folder&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
 
             <span class="n">permission_service</span><span class="o">.</span><span class="n">clear_admin_cache</span><span class="p">(</span><span class="n">email</span><span class="p">)</span>
             <span class="n">is_app_admin</span> <span class="o">=</span> <span class="n">permission_service</span><span class="o">.</span><span class="n">is_admin</span><span class="p">(</span>
@@ -940,6 +1753,19 @@
                 <span class="n">settings</span><span class="o">.</span><span class="n">ontobricks_app_name</span><span class="p">,</span>
                 <span class="n">user_token</span><span class="o">=</span><span class="n">user_token</span><span class="p">,</span>
             <span class="p">)</span>
+            <span class="c1"># Re-resolve domain role fresh so it matches what the</span>
+            <span class="c1"># middleware sees on the next request (useful for debugging</span>
+            <span class="c1"># why a viewer can/can&#39;t write).</span>
+            <span class="n">domain_role</span> <span class="o">=</span> <span class="n">permission_service</span><span class="o">.</span><span class="n">get_domain_role</span><span class="p">(</span>
+                <span class="n">email</span><span class="p">,</span>
+                <span class="n">host</span><span class="p">,</span>
+                <span class="n">token</span><span class="p">,</span>
+                <span class="n">registry_cfg</span><span class="p">,</span>
+                <span class="n">settings</span><span class="o">.</span><span class="n">ontobricks_app_name</span><span class="p">,</span>
+                <span class="n">domain_folder</span><span class="p">,</span>
+                <span class="n">user_token</span><span class="o">=</span><span class="n">user_token</span><span class="p">,</span>
+                <span class="n">app_role</span><span class="o">=</span><span class="n">role</span><span class="p">,</span>
+            <span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
                 <span class="s2">&quot;permissions/me: error resolving role for </span><span class="si">%s</span><span class="s2"> (middleware app/domain role=</span><span class="si">%r</span><span class="s2">/</span><span class="si">%r</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
@@ -956,6 +1782,8 @@
             <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="n">role</span><span class="p">,</span>
             <span class="s2">&quot;is_app_admin&quot;</span><span class="p">:</span> <span class="n">is_app_admin</span><span class="p">,</span>
             <span class="s2">&quot;is_app_mode&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;domain_folder&quot;</span><span class="p">:</span> <span class="n">domain_folder</span><span class="p">,</span>
+            <span class="s2">&quot;domain_role&quot;</span><span class="p">:</span> <span class="n">domain_role</span><span class="p">,</span>
         <span class="p">}</span></div>
 
 

@@ -9,6 +9,7 @@ let trackedTasks = [];
 let pollInterval = null;
 const POLL_INTERVAL_ACTIVE = 3000;  // 3s when tasks are running
 const POLL_INTERVAL_IDLE = 30000;   // 30s when idle
+let lastFetchErrorAt = 0;
 
 // Task type to URL mapping
 const TASK_TYPE_URLS = {
@@ -17,6 +18,7 @@ const TASK_TYPE_URLS = {
     'metadata_load': '/domain#metadata',
     'metadata_update': '/domain#metadata',
     'triplestore_sync': '/dtwin#sync',
+    'registry_archive': '/dtwin#sync',
     'quality_checks': '/dtwin#quality'
 };
 
@@ -103,7 +105,11 @@ async function fetchTasks() {
         // Adjust polling interval based on active tasks reported by the server.
         adjustPollingInterval(data.active_count || 0);
     } catch (error) {
-        console.error('[TaskTracker] Error fetching tasks:', error);
+        const now = Date.now();
+        if ((now - lastFetchErrorAt) > 30000) {
+            console.error('[TaskTracker] Error fetching tasks:', error);
+            lastFetchErrorAt = now;
+        }
     }
 }
 
@@ -129,13 +135,6 @@ function notifyTaskTransition(task) {
         body = `Task <strong>${name}</strong> cancelled${durSuffix}`;
     } else {
         return;
-    }
-
-    // If a known page exists for this task type, make the notification
-    // clickable so the user can jump straight to the result.
-    const url = TASK_TYPE_URLS[task.task_type];
-    if (url) {
-        body += ` <a href="${url}" class="ms-1">Open</a>`;
     }
 
     if (typeof NotificationCenter !== 'undefined' && NotificationCenter.add) {

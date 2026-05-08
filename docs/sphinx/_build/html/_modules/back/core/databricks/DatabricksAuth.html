@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -117,7 +119,7 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
@@ -128,6 +130,8 @@
 <span class="p">)</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="n">_CLOUD_FETCH_PROBE_TTL_SECONDS</span> <span class="o">=</span> <span class="mi">300</span>
+<span class="n">_CLOUD_FETCH_PROBE_TIMEOUT_SECONDS</span> <span class="o">=</span> <span class="mi">8</span>
 
 
 <div class="viewcode-block" id="DatabricksAuth">
@@ -141,6 +145,9 @@
 <span class="sd">       ``DATABRICKS_CLIENT_SECRET``.</span>
 <span class="sd">    2. **Local development** — Personal Access Token (``DATABRICKS_TOKEN``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Class-level cache: { (host, warehouse_id): (capable, reason, ts) }</span>
+    <span class="n">_cloud_fetch_cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 
 <div class="viewcode-block" id="DatabricksAuth.is_databricks_app">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.is_databricks_app">[docs]</a>
@@ -165,6 +172,28 @@
             <span class="n">host</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;https://</span><span class="si">{</span><span class="n">host</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="k">return</span> <span class="n">host</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span></div>
 
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_global_cloud_fetch_default</span><span class="p">(</span><span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Best-effort load of global CloudFetch setting (default: enabled).&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">global_config_service</span>
+
+            <span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>
+            <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="s2">&quot;schema&quot;</span>
+            <span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">global_config_service</span><span class="o">.</span><span class="n">get_use_cloud_fetch</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 - best-effort default resolution</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Could not resolve global CloudFetch setting, defaulting to enabled: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
 
 <div class="viewcode-block" id="DatabricksAuth.get_workspace_host">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.get_workspace_host">[docs]</a>
@@ -199,6 +228,7 @@
         <span class="n">host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">token</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">warehouse_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">use_cloud_fetch</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">token</span> <span class="o">=</span> <span class="n">token</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_TOKEN&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">warehouse_id</span> <span class="o">=</span> <span class="p">(</span>
@@ -216,6 +246,12 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">host</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">DatabricksAuth</span><span class="o">.</span><span class="n">normalize_host</span><span class="p">(</span><span class="n">host</span><span class="p">)</span> <span class="k">if</span> <span class="n">host</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_workspace_host</span><span class="p">()</span>
         <span class="p">)</span>
+        <span class="k">if</span> <span class="n">use_cloud_fetch</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">use_cloud_fetch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_global_cloud_fetch_default</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">token</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">use_cloud_fetch</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">use_cloud_fetch</span><span class="p">)</span>
 
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="s2">&quot;DatabricksAuth init — host=</span><span class="si">%s</span><span class="s2">, app_mode=</span><span class="si">%s</span><span class="s2">, warehouse=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
@@ -285,19 +321,160 @@
 <div class="viewcode-block" id="DatabricksAuth.get_sql_connection_params">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.get_sql_connection_params">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_sql_connection_params</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return kwargs suitable for ``databricks.sql.connect()``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return kwargs suitable for ``databricks.sql.connect()``.</span>
+
+<span class="sd">        ``use_cloud_fetch`` reflects the latest cached capability probe</span>
+<span class="sd">        (see :meth:`probe_cloud_fetch_capability`). When no probe has run</span>
+<span class="sd">        yet, it follows global settings (enabled by default) and</span>
+<span class="sd">        prerequisite checks.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">server_hostname</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;https://&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;http://&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">params</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">&quot;server_hostname&quot;</span><span class="p">:</span> <span class="n">server_hostname</span><span class="p">,</span>
             <span class="s2">&quot;http_path&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;/sql/1.0/warehouses/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">warehouse_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="s2">&quot;_socket_timeout&quot;</span><span class="p">:</span> <span class="n">_SQL_SOCKET_TIMEOUT</span><span class="p">,</span>
         <span class="p">}</span>
+        <span class="n">params</span><span class="p">[</span><span class="s2">&quot;use_cloud_fetch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">can_use_cloud_fetch</span><span class="p">()</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_app_mode</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">client_id</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">client_secret</span><span class="p">:</span>
             <span class="n">params</span><span class="p">[</span><span class="s2">&quot;access_token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_oauth_token</span><span class="p">()</span>
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">token</span><span class="p">:</span>
             <span class="n">params</span><span class="p">[</span><span class="s2">&quot;access_token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">token</span>
         <span class="k">return</span> <span class="n">params</span></div>
 
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_env_true</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">,</span> <span class="s2">&quot;yes&quot;</span><span class="p">,</span> <span class="s2">&quot;on&quot;</span><span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_cloud_fetch_prerequisites</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;host is missing&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">warehouse_id</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;warehouse_id is missing&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_valid_auth</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;credentials are missing&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span>  <span class="c1"># noqa: F401</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 - optional dependency probe</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;pyarrow unavailable: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;prerequisites ok&quot;</span>
+
+<div class="viewcode-block" id="DatabricksAuth.cloud_fetch_status">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.cloud_fetch_status">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cloud_fetch_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return ``(capable, reason)`` for CloudFetch in the current runtime.</span>
+
+<span class="sd">        Cached per ``(host, warehouse_id)`` for</span>
+<span class="sd">        ``_CLOUD_FETCH_PROBE_TTL_SECONDS``. Pass ``force=True`` to bypass</span>
+<span class="sd">        the cache (used by ``/health``).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_true</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_DISABLE_CLOUD_FETCH&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Disabled by DATABRICKS_DISABLE_CLOUD_FETCH&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_true</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_FORCE_CLOUD_FETCH&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Forced by DATABRICKS_FORCE_CLOUD_FETCH&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cloud_fetch</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Disabled by global settings&quot;</span>
+
+        <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_fetch_prerequisites</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">msg</span>
+
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">warehouse_id</span><span class="p">)</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="n">DatabricksAuth</span><span class="o">.</span><span class="n">_cloud_fetch_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">force</span> <span class="ow">and</span> <span class="n">cached</span> <span class="ow">and</span> <span class="p">(</span><span class="n">now</span> <span class="o">-</span> <span class="n">cached</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">_CLOUD_FETCH_PROBE_TTL_SECONDS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">cached</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">probe_cloud_fetch_capability</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="DatabricksAuth.can_use_cloud_fetch">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.can_use_cloud_fetch">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">can_use_cloud_fetch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return whether CloudFetch should be enabled for SQL params.</span>
+
+<span class="sd">        Reads the cached probe outcome if any, otherwise falls back to a</span>
+<span class="sd">        settings-driven default (enabled unless explicitly disabled)</span>
+<span class="sd">        without triggering a probe — so building connection params stays a</span>
+<span class="sd">        cheap, side-effect-free operation.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_true</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_DISABLE_CLOUD_FETCH&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_true</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_FORCE_CLOUD_FETCH&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cloud_fetch</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">ok</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_fetch_prerequisites</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">warehouse_id</span><span class="p">)</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="n">DatabricksAuth</span><span class="o">.</span><span class="n">_cloud_fetch_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">and</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">cached</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">_CLOUD_FETCH_PROBE_TTL_SECONDS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="DatabricksAuth.probe_cloud_fetch_capability">
+<a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.probe_cloud_fetch_capability">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">probe_cloud_fetch_capability</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Issue a tiny ``SELECT 1`` with ``use_cloud_fetch=True`` and cache the outcome.</span>
+
+<span class="sd">        Returns ``(capable, reason)``. The result is cached at the class</span>
+<span class="sd">        level for ``_CLOUD_FETCH_PROBE_TTL_SECONDS`` so subsequent SQL</span>
+<span class="sd">        connections can read the verdict cheaply.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_true</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_DISABLE_CLOUD_FETCH&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Disabled by DATABRICKS_DISABLE_CLOUD_FETCH&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_true</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_FORCE_CLOUD_FETCH&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;Forced by DATABRICKS_FORCE_CLOUD_FETCH&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_cloud_fetch</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Disabled by global settings&quot;</span>
+
+        <span class="n">prereq_ok</span><span class="p">,</span> <span class="n">prereq_msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_fetch_prerequisites</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">prereq_ok</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_record_cloud_fetch</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="n">prereq_msg</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">prereq_msg</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">sql</span>
+
+            <span class="n">probe_params</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;server_hostname&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;https://&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
+                    <span class="s2">&quot;http://&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+                <span class="p">),</span>
+                <span class="s2">&quot;http_path&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;/sql/1.0/warehouses/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">warehouse_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;_socket_timeout&quot;</span><span class="p">:</span> <span class="n">_CLOUD_FETCH_PROBE_TIMEOUT_SECONDS</span><span class="p">,</span>
+                <span class="s2">&quot;use_cloud_fetch&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_app_mode</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">client_id</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">client_secret</span><span class="p">:</span>
+                <span class="n">probe_params</span><span class="p">[</span><span class="s2">&quot;access_token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_oauth_token</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">token</span><span class="p">:</span>
+                <span class="n">probe_params</span><span class="p">[</span><span class="s2">&quot;access_token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">token</span>
+
+            <span class="k">with</span> <span class="n">sql</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">probe_params</span><span class="p">)</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+                    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT 1&quot;</span><span class="p">)</span>
+                    <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;Probe SELECT 1 succeeded with use_cloud_fetch=True&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_record_cloud_fetch</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;CloudFetch probe: capable (</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">msg</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 - vendor/network surface</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Probe SELECT 1 failed with use_cloud_fetch=True: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_record_cloud_fetch</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;CloudFetch probe: not capable (</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">msg</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_record_cloud_fetch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">capable</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">DatabricksAuth</span><span class="o">.</span><span class="n">_cloud_fetch_cache</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">warehouse_id</span><span class="p">)]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">capable</span><span class="p">,</span>
+            <span class="n">reason</span><span class="p">,</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span>
+        <span class="p">)</span>
 
 <div class="viewcode-block" id="DatabricksAuth.has_valid_auth">
 <a class="viewcode-back" href="../../../../api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.has_valid_auth">[docs]</a>

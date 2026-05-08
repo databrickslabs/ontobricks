@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -152,13 +153,11 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span><span class="p">,</span> <span class="n">NotFoundError</span><span class="p">,</span> <span class="n">InfrastructureError</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.global_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">global_config_service</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_GRAPH_NAME</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">_SCHEDULES_KEY</span> <span class="o">=</span> <span class="s2">&quot;schedules&quot;</span>
-<span class="n">_HISTORY_FILENAME</span> <span class="o">=</span> <span class="s2">&quot;.schedule_history.json&quot;</span>
 <span class="n">_MAX_HISTORY</span> <span class="o">=</span> <span class="mi">50</span>
 <span class="n">_JOB_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;scheduled_build_&quot;</span>
 
@@ -437,29 +436,48 @@
     <span class="c1"># Persistence helpers</span>
     <span class="c1"># ------------------------------------------------------------------</span>
 
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_store_for</span><span class="p">(</span><span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]):</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.store</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryFactory</span>
+
+        <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">RegistryFactory</span><span class="o">.</span><span class="n">from_cfg</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_load_schedules</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">{}</span>
-        <span class="n">cfg</span> <span class="o">=</span> <span class="n">global_config_service</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SCHEDULES_KEY</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store_for</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">load_schedules</span><span class="p">()</span> <span class="ow">or</span> <span class="p">{})</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not load schedules: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_persist_schedules</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">schedules</span><span class="p">:</span> <span class="n">Dict</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Databricks credentials or registry not configured&quot;</span>
-        <span class="k">return</span> <span class="n">global_config_service</span><span class="o">.</span><span class="n">_save</span><span class="p">(</span>
-            <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="p">{</span><span class="n">_SCHEDULES_KEY</span><span class="p">:</span> <span class="n">schedules</span><span class="p">}</span>
-        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store_for</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
+            <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">save_schedules</span><span class="p">(</span><span class="n">schedules</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ok</span><span class="p">:</span>
+                <span class="c1"># Invalidate the in-process global-config cache so other</span>
+                <span class="c1"># readers (e.g. settings UI, GlobalConfigService.load) see</span>
+                <span class="c1"># the schedule changes on next load.</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.global_config</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                    <span class="n">global_config_service</span><span class="p">,</span>
+                <span class="p">)</span>
 
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_history_path</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">_DOMAINS_FOLDER</span>
-
-        <span class="n">c</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">)</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;/Volumes/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">catalog</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">schema</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">c</span><span class="o">.</span><span class="n">volume</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_DOMAINS_FOLDER</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">domain_name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">_HISTORY_FILENAME</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="n">global_config_service</span><span class="o">.</span><span class="n">_cache</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="n">global_config_service</span><span class="o">.</span><span class="n">_cache_ts</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="k">return</span> <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Could not persist schedules: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_load_domain_history</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -470,17 +488,12 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">registry_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">[]</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.VolumeFileService</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
-
-        <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_history_path</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
-            <span class="n">ok</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">uc</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">ok</span> <span class="ow">and</span> <span class="n">content</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store_for</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">load_schedule_history</span><span class="p">(</span><span class="n">domain_name</span><span class="p">))</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not load history for &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-        <span class="k">return</span> <span class="p">[]</span>
+            <span class="k">return</span> <span class="p">[]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_append_history</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -490,24 +503,29 @@
         <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">entry</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">entries</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_domain_history</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
-        <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">_MAX_HISTORY</span><span class="p">:</span>
-            <span class="n">entries</span> <span class="o">=</span> <span class="n">entries</span><span class="p">[</span><span class="o">-</span><span class="n">_MAX_HISTORY</span><span class="p">:]</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.VolumeFileService</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumeFileService</span>
-
-        <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_history_path</span><span class="p">(</span><span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
-            <span class="n">uc</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_store_for</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
+            <span class="n">store</span><span class="o">.</span><span class="n">append_schedule_history</span><span class="p">(</span>
+                <span class="n">domain_name</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">max_entries</span><span class="o">=</span><span class="n">_MAX_HISTORY</span>
+            <span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not save history for &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_creds</span><span class="p">(</span><span class="n">settings</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve host/token/registry from env-level settings (for startup).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve host/token/registry from env-level settings (for startup).</span>
+
+<span class="sd">        The returned ``cfg`` carries ``backend``, ``lakebase_schema`` and</span>
+<span class="sd">        ``lakebase_database`` from *Settings* so that schedule-related</span>
+<span class="sd">        store calls made *before* the global config has been loaded</span>
+<span class="sd">        (e.g. on app boot, when restoring jobs) target the right</span>
+<span class="sd">        backend instead of silently defaulting to Volume. This matters</span>
+<span class="sd">        for Databricks Apps deployments that bind a Lakebase database</span>
+<span class="sd">        and want their schedules persisted there from the very first</span>
+<span class="sd">        APScheduler tick.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_databricks_app</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.RegistryService</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
 
         <span class="n">host</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_host</span>
         <span class="n">token</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">databricks_token</span>
@@ -519,10 +537,40 @@
 
             <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">_Stub</span><span class="p">(),</span> <span class="n">settings</span><span class="p">)</span>
 
+        <span class="c1"># ``&quot;auto&quot;`` (the new default) → Lakebase when the runtime has</span>
+        <span class="c1"># injected PG* env vars and psycopg is importable, otherwise</span>
+        <span class="c1"># Volume. Centralised in ``resolve_default_backend`` so the</span>
+        <span class="c1"># scheduler subprocess and the FastAPI request path agree on</span>
+        <span class="c1"># which backend to use.</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_default_backend</span>
+
+        <span class="n">backend</span> <span class="o">=</span> <span class="n">resolve_default_backend</span><span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;registry_backend&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">lakebase_schema</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;lakebase_schema&quot;</span><span class="p">,</span> <span class="s2">&quot;ontobricks_registry&quot;</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="s2">&quot;ontobricks_registry&quot;</span>
+        <span class="p">)</span>
+        <span class="n">lakebase_database</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;lakebase_database&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="n">vol_path</span> <span class="o">=</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;registry_volume_path&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">vol_path</span><span class="p">:</span>
+            <span class="n">parsed</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_volume_path</span><span class="p">(</span>
+                <span class="n">vol_path</span><span class="p">,</span>
+                <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+                <span class="n">lakebase_schema</span><span class="o">=</span><span class="n">lakebase_schema</span><span class="p">,</span>
+                <span class="n">lakebase_database</span><span class="o">=</span><span class="n">lakebase_database</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">parsed</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">and</span> <span class="n">parsed</span><span class="o">.</span><span class="n">schema</span> <span class="ow">and</span> <span class="n">parsed</span><span class="o">.</span><span class="n">volume</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">parsed</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
+
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="p">(</span>
             <span class="n">catalog</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">registry_catalog</span><span class="p">,</span>
             <span class="n">schema</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">registry_schema</span><span class="p">,</span>
             <span class="n">volume</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">registry_volume</span> <span class="ow">or</span> <span class="s2">&quot;OntoBricksRegistry&quot;</span><span class="p">,</span>
+            <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+            <span class="n">lakebase_schema</span><span class="o">=</span><span class="n">lakebase_schema</span><span class="p">,</span>
+            <span class="n">lakebase_database</span><span class="o">=</span><span class="n">lakebase_database</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
 
@@ -754,17 +802,18 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_persist_domain_metadata</span><span class="p">(</span>
-    <span class="n">uc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">latest</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">svc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Stamp last_build and write domain JSON back to the registry.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Stamp last_build and write the domain doc via the active store.</span>
+
+<span class="sd">    ``svc`` is the :class:`RegistryService` that owns the right</span>
+<span class="sd">    :class:`RegistryStore` for the current backend (Volume or Lakebase).</span>
+<span class="sd">    ``version`` is the numeric version string (e.g. ``&quot;1&quot;``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">last_build</span> <span class="o">=</span> <span class="n">build_ts</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">domain_data</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">export_for_save</span><span class="p">()</span>
-        <span class="n">w_ok</span><span class="p">,</span> <span class="n">w_msg</span> <span class="o">=</span> <span class="n">uc</span><span class="o">.</span><span class="n">write_file</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">domain_path</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">latest</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-            <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">domain_data</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
-            <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="n">w_ok</span><span class="p">,</span> <span class="n">w_msg</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">_store</span><span class="o">.</span><span class="n">write_version</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">domain_data</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">w_ok</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: stamped last_build=</span><span class="si">%s</span><span class="s2"> in registry&quot;</span><span class="p">,</span>
@@ -773,7 +822,7 @@
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
-                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: write_file returned failure: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;Scheduled build [</span><span class="si">%s</span><span class="s2">]: write_version returned failure: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="n">domain_name</span><span class="p">,</span>
                 <span class="n">w_msg</span><span class="p">,</span>
             <span class="p">)</span>
@@ -853,7 +902,7 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Databricks host/token not available&quot;</span><span class="p">)</span>
 
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.service</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">RegistryService</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.RegistryService</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span><span class="p">,</span> <span class="n">RegistryService</span>
 
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">reg</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cfg</span><span class="o">.</span><span class="n">schema</span><span class="p">:</span>
@@ -949,7 +998,7 @@
                     <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;success&quot;</span>
                     <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;No changes — </span><span class="si">{</span><span class="n">triple_count</span><span class="si">}</span><span class="s2"> triples unchanged&quot;</span>
                     <span class="n">_persist_domain_metadata</span><span class="p">(</span>
-                        <span class="n">uc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">,</span> <span class="n">domain_name</span>
+                        <span class="n">svc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">,</span> <span class="n">domain_name</span>
                     <span class="p">)</span>
                     <span class="k">return</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -994,7 +1043,7 @@
             <span class="p">)</span>
 
         <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">95</span><span class="p">,</span> <span class="s2">&quot;Saving domain metadata...&quot;</span><span class="p">)</span>
-        <span class="n">_persist_domain_metadata</span><span class="p">(</span><span class="n">uc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">domain_path</span><span class="p">,</span> <span class="n">latest</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
+        <span class="n">_persist_domain_metadata</span><span class="p">(</span><span class="n">svc</span><span class="p">,</span> <span class="n">domain</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">build_ts</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
 
         <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;success&quot;</span>
         <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Built </span><span class="si">{</span><span class="n">triple_count</span><span class="si">}</span><span class="s2"> triples in </span><span class="si">{</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s&quot;</span>

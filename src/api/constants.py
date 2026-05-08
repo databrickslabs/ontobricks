@@ -85,6 +85,12 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
         "status, build trigger, and triple retrieval.",
     },
     {
+        "name": "Cohort",
+        "description": "**Cohort API** — List saved cohort rules, dry-run a "
+        "rule against the active graph, and materialise a saved rule "
+        "to the graph and/or a Unity Catalog Delta table.",
+    },
+    {
         "name": "GraphQL",
         "description": "**GraphQL API** — List domains, GraphiQL playground, execute queries, and SDL "
         "for the auto-generated ontology-backed schema.",

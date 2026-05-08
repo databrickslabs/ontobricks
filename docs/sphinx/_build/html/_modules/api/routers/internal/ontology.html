@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -1490,50 +1491,108 @@
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Use the auto-icon-assign agent to suggest emoji icons for entity names.&quot;&quot;&quot;</span>
-    <span class="k">with</span> <span class="n">map_route_errors</span><span class="p">(</span><span class="s2">&quot;Auto-assign icons failed&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-        <span class="n">entity_names</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entity_names&quot;</span><span class="p">,</span> <span class="p">[])</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Start the auto-icon-assign agent as a background task.</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">entity_names</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No entity names provided&quot;</span><span class="p">)</span>
+<span class="sd">    Returns a ``task_id`` immediately; poll ``GET /tasks/{task_id}`` for</span>
+<span class="sd">    ``result.icons`` once ``status == &quot;completed&quot;``. Mirrors the wizard</span>
+<span class="sd">    ontology generator pattern (``/wizard/generate-async``) so the icon</span>
+<span class="sd">    agent is visible in the global task tracker and survives page</span>
+<span class="sd">    navigation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
 
-        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">require_serving_llm</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">entity_names</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entity_names&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">entity_names</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No entity names provided&quot;</span><span class="p">)</span>
 
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;AutoIcons: launching agent for </span><span class="si">%d</span><span class="s2"> entities&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">))</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">require_serving_llm</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
-        <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">assign_icons_with_agent</span><span class="p">(</span>
-            <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
-            <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
-            <span class="n">endpoint_name</span><span class="o">=</span><span class="n">llm_endpoint</span><span class="p">,</span>
-            <span class="n">entity_names</span><span class="o">=</span><span class="n">entity_names</span><span class="p">,</span>
-        <span class="p">)</span>
+    <span class="n">tm</span> <span class="o">=</span> <span class="n">get_task_manager</span><span class="p">()</span>
+    <span class="n">task</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Assign Icons (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">)</span><span class="si">}</span><span class="s2"> entities)&quot;</span><span class="p">,</span>
+        <span class="n">task_type</span><span class="o">=</span><span class="s2">&quot;auto_assign_icons&quot;</span><span class="p">,</span>
+        <span class="n">steps</span><span class="o">=</span><span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;init&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Preparing agent&quot;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;agent&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Asking the LLM&quot;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;apply&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Merging icons&quot;</span><span class="p">},</span>
+        <span class="p">],</span>
+    <span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;AutoIcons: task </span><span class="si">%s</span><span class="s2"> created for </span><span class="si">%d</span><span class="s2"> entities&quot;</span><span class="p">,</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">),</span>
+    <span class="p">)</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;AutoIcons: agent failed — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">error</span><span class="p">)</span>
-            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                <span class="s2">&quot;Agent failed to assign icons&quot;</span><span class="p">,</span>
-                <span class="n">detail</span><span class="o">=</span><span class="n">agent_result</span><span class="o">.</span><span class="n">error</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_icons</span><span class="p">():</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;Starting icon agent…&quot;</span><span class="p">)</span>
+
+            <span class="k">def</span><span class="w"> </span><span class="nf">on_step</span><span class="p">(</span><span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">progress</span><span class="p">,</span> <span class="n">msg</span><span class="p">)</span>
+
+            <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;Asking the LLM…&quot;</span><span class="p">)</span>
+            <span class="n">agent_result</span> <span class="o">=</span> <span class="n">Ontology</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">assign_icons_with_agent</span><span class="p">(</span>
+                <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
+                <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
+                <span class="n">endpoint_name</span><span class="o">=</span><span class="n">llm_endpoint</span><span class="p">,</span>
+                <span class="n">entity_names</span><span class="o">=</span><span class="n">entity_names</span><span class="p">,</span>
+                <span class="n">on_step</span><span class="o">=</span><span class="n">on_step</span><span class="p">,</span>
             <span class="p">)</span>
 
-        <span class="n">final_map</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">merge_icon_suggestions</span><span class="p">(</span><span class="n">entity_names</span><span class="p">,</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">icons</span><span class="p">)</span>
-        <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">entity_names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">final_map</span><span class="p">]</span>
-        <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;AutoIcons: No icon for: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">missing</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;AutoIcons[</span><span class="si">%s</span><span class="s2">]: agent failed — </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                    <span class="n">agent_result</span><span class="o">.</span><span class="n">error</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span>
+                    <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                    <span class="n">agent_result</span><span class="o">.</span><span class="n">error</span> <span class="ow">or</span> <span class="s2">&quot;Agent did not produce icons&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span>
 
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-            <span class="s2">&quot;AutoIcons: agent completed — </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2"> icons assigned in </span><span class="si">%d</span><span class="s2"> iterations&quot;</span><span class="p">,</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">final_map</span><span class="p">),</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">),</span>
-            <span class="n">agent_result</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
-        <span class="p">)</span>
+            <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;Merging icons…&quot;</span><span class="p">)</span>
+            <span class="n">final_map</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">merge_icon_suggestions</span><span class="p">(</span>
+                <span class="n">entity_names</span><span class="p">,</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">icons</span>
+            <span class="p">)</span>
+            <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">entity_names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">final_map</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;AutoIcons[</span><span class="si">%s</span><span class="s2">]: no icon for </span><span class="si">%d</span><span class="s2"> entity(ies): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">),</span>
+                    <span class="n">missing</span><span class="p">,</span>
+                <span class="p">)</span>
 
-        <span class="k">return</span> <span class="p">{</span>
-            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-            <span class="s2">&quot;icons&quot;</span><span class="p">:</span> <span class="n">final_map</span><span class="p">,</span>
-            <span class="s2">&quot;agent_iterations&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
-        <span class="p">}</span></div>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;AutoIcons[</span><span class="si">%s</span><span class="s2">]: completed — </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2"> icons in </span><span class="si">%d</span><span class="s2"> iterations&quot;</span><span class="p">,</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">final_map</span><span class="p">),</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">),</span>
+                <span class="n">agent_result</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">tm</span><span class="o">.</span><span class="n">complete_task</span><span class="p">(</span>
+                <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                <span class="n">result</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s2">&quot;icons&quot;</span><span class="p">:</span> <span class="n">final_map</span><span class="p">,</span>
+                    <span class="s2">&quot;missing&quot;</span><span class="p">:</span> <span class="n">missing</span><span class="p">,</span>
+                    <span class="s2">&quot;agent_iterations&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
+                    <span class="s2">&quot;agent_usage&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">usage</span><span class="p">,</span>
+                    <span class="s2">&quot;agent_steps&quot;</span><span class="p">:</span> <span class="n">serialize_agent_steps</span><span class="p">(</span><span class="n">agent_result</span><span class="o">.</span><span class="n">steps</span><span class="p">),</span>
+                <span class="p">},</span>
+                <span class="n">message</span><span class="o">=</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">final_map</span><span class="p">)</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">)</span><span class="si">}</span><span class="s2"> icons assigned &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">agent_result</span><span class="o">.</span><span class="n">iterations</span><span class="si">}</span><span class="s2"> agent iterations)&quot;</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;AutoIcons[</span><span class="si">%s</span><span class="s2">]: unexpected failure: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;Icon assignment failed unexpectedly&quot;</span><span class="p">)</span>
+
+    <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">run_icons</span><span class="p">,</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;task_id&quot;</span><span class="p">:</span> <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Agent task started&quot;</span><span class="p">}</span></div>
 
 
 

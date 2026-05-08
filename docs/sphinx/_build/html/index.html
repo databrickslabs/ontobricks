@@ -59,6 +59,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/product.html">Product &amp; go-to-market</a></li>
@@ -149,15 +150,16 @@ RST summaries; see the architecture guide for the full design document.</p>
 <li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#overview">Overview</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#local-development-setup">1. Local Development Setup</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#databricks-apps-deployment-dab">2. Databricks Apps Deployment (DAB)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#permission-management">3. Permission Management</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#deploying-to-a-new-workspace">4. Deploying to a New Workspace</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#triple-store-backend-configuration">5. Triple Store Backend Configuration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#mcp-server-deployment-databricks-playground">6. MCP Server Deployment (Databricks Playground)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#mlflow-agent-observability">7. MLflow Agent Observability</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#dab-reference">8. DAB Reference</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#full-deployment-checklist">9. Full Deployment Checklist</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#troubleshooting">10. Troubleshooting</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#production-considerations">11. Production Considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#unity-catalog-permissions-for-the-service-principal">3. Unity Catalog Permissions for the Service Principal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#permission-management">4. Permission Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#deploying-to-a-new-workspace">5. Deploying to a New Workspace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#triple-store-backend-configuration">6. Triple Store Backend Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#mcp-server-deployment-databricks-playground">7. MCP Server Deployment (Databricks Playground)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#mlflow-agent-observability">8. MLflow Agent Observability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#dab-reference">9. DAB Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#full-deployment-checklist">10. Full Deployment Checklist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#troubleshooting">11. Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/deployment.html#production-considerations">12. Production Considerations</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="guides/architecture.html">OntoBricks Architecture</a><ul>
@@ -169,7 +171,7 @@ RST summaries; see the architecture guide for the full design document.</p>
 <li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#ontoviz-component-architecture">OntoViz Component Architecture</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#user-interface-architecture">User Interface Architecture</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#data-flow">Data Flow</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#unity-catalog-versioning">Unity Catalog Versioning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#registry-storage-backends">Registry Storage Backends</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#triple-store-backends">Triple Store Backends</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#reasoning-engine">Reasoning Engine</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/architecture.html#graph-analysis-community-detection">Graph Analysis — Community Detection</a></li>
@@ -232,6 +234,20 @@ RST summaries; see the architecture guide for the full design document.</p>
 <li class="toctree-l2"><a class="reference internal" href="guides/api.html#notes">Notes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/api.html#internal-rest-api-reference-merged">Internal REST API reference (merged)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/api.html#ontobricks-api-reference">OntoBricks API Reference</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="guides/data-access.html">Data Access Wrappers — Engine Map</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#the-five-access-wrappers">1. The five access wrappers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#storage-backends-which-engine-speaks-which-language">2. Storage backends — which engine speaks which language</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#decision-tree-which-wrapper-fires-for-what">3. Decision tree — which wrapper fires for what?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#ui-features-engine-map">4. UI features — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#mcp-server-src-mcp-server-engine-map">5. MCP server (<code class="docutils literal notranslate"><span class="pre">src/mcp-server</span></code>) — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#graph-chat-src-agents-agent-dtwin-chat-engine-map">6. Graph Chat (<code class="docutils literal notranslate"><span class="pre">src/agents/agent_dtwin_chat</span></code>) — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#other-llm-agents-engine-map">7. Other LLM agents — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#reasoning-engine-engine-map">8. Reasoning engine — engine map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#three-end-to-end-query-flows">9. Three end-to-end query flows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#tl-dr-matrix-what-each-surface-exposes">10. TL;DR matrix — what each surface exposes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/data-access.html#source-code-anchors-quick-links">11. Source-code anchors (quick links)</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="guides/mcp.html">OntoBricks MCP Server</a><ul>
@@ -407,6 +423,7 @@ RST summaries; see the architecture guide for the full design document.</p>
 <li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.agent_auto_icon_assign">Auto Icon Assignment Agent</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.agent_ontology_assistant">Ontology Assistant Agent</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.agent_owl_generator">OWL Generator Agent</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.agent_cohort">Cohort Discovery Agent</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/agents.html#module-agents.tools.context">Shared Tools</a></li>
 </ul>
 </li>

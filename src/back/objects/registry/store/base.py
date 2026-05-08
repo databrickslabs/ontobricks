@@ -178,6 +178,53 @@ class RegistryStore(ABC):
         """Append *entry* and trim to the last *max_entries* rows."""
 
     # ------------------------------------------------------------------
+    # Cohort schedules + history
+    #
+    # Cohort schedules are keyed by ``"<domain_name>::<rule_id>"`` so a
+    # single domain can host many independent schedules (one per saved
+    # cohort rule). Default implementations stash the data inside the
+    # global-config blob under ``cohort_schedules`` /
+    # ``cohort_schedule_history`` — that keeps backends free of new DDL
+    # while still persisting to whichever store (Volume or Lakebase)
+    # holds the registry. Backends are free to override with dedicated
+    # tables / files later.
+    # ------------------------------------------------------------------
+
+    def load_cohort_schedules(self) -> Dict[str, Dict[str, Any]]:
+        """Return ``{ "<domain>::<rule_id>": cohort_schedule_dict }``."""
+        cfg = self.load_global_config()
+        return dict(cfg.get("cohort_schedules") or {})
+
+    def save_cohort_schedules(
+        self, schedules: Dict[str, Dict[str, Any]]
+    ) -> Tuple[bool, str]:
+        return self.save_global_config({"cohort_schedules": schedules})
+
+    def load_cohort_schedule_history(
+        self, key: str
+    ) -> List[ScheduleHistoryEntry]:
+        """Oldest-first run history for the cohort schedule *key*."""
+        cfg = self.load_global_config()
+        histories = cfg.get("cohort_schedule_history") or {}
+        return list(histories.get(key) or [])
+
+    def append_cohort_schedule_history(
+        self,
+        key: str,
+        entry: ScheduleHistoryEntry,
+        *,
+        max_entries: int = 50,
+    ) -> None:
+        cfg = self.load_global_config()
+        histories = dict(cfg.get("cohort_schedule_history") or {})
+        entries = list(histories.get(key) or [])
+        entries.append(dict(entry))
+        if len(entries) > max_entries:
+            entries = entries[-max_entries:]
+        histories[key] = entries
+        self.save_global_config({"cohort_schedule_history": histories})
+
+    # ------------------------------------------------------------------
     # Global config
     # ------------------------------------------------------------------
 

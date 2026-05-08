@@ -77,6 +77,11 @@ Internal JSON API routers
    :undoc-members:
    :show-inheritance:
 
+.. automodule:: api.routers.internal.help
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Home and settings orchestration
 -------------------------------
 

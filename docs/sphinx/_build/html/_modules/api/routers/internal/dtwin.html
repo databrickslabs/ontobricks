@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -115,22 +116,25 @@
 <span class="sd">Moved from app/frontend/digitaltwin/routes.py during the front/back split.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">Depends</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">AuthorizationError</span><span class="p">,</span>
     <span class="n">InfrastructureError</span><span class="p">,</span>
     <span class="n">NotFoundError</span><span class="p">,</span>
     <span class="n">ValidationError</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">role_level</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">require</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_session_manager</span><span class="p">,</span> <span class="n">get_domain</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span><span class="p">,</span> <span class="n">Settings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparql</span><span class="p">,</span> <span class="n">uri_local_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span><span class="p">,</span> <span class="n">is_databricks_app</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_triplestore</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="n">DigitalTwin</span><span class="p">,</span> <span class="n">DomainSnapshot</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="n">CohortService</span><span class="p">,</span> <span class="n">DigitalTwin</span><span class="p">,</span> <span class="n">DomainSnapshot</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">effective_graph_name</span><span class="p">,</span>
     <span class="n">effective_view_table</span><span class="p">,</span>
@@ -268,7 +272,10 @@
 
 <div class="viewcode-block" id="start_triplestore_sync">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.start_triplestore_sync">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/sync/start&quot;</span><span class="p">)</span>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
+    <span class="s2">&quot;/sync/start&quot;</span><span class="p">,</span>
+    <span class="n">dependencies</span><span class="o">=</span><span class="p">[</span><span class="n">Depends</span><span class="p">(</span><span class="n">require</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;domain&quot;</span><span class="p">))],</span>
+<span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">start_triplestore_sync</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
@@ -286,15 +293,10 @@
     <span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.task_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_task_manager</span>
 
-    <span class="n">effective_role</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_domain_role&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span>
-        <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_role&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
-    <span class="p">)</span>
-    <span class="k">if</span> <span class="n">role_level</span><span class="p">(</span><span class="n">effective_role</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">role_level</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="n">AuthorizationError</span><span class="p">(</span><span class="s2">&quot;Only builders and admins can build a digital twin&quot;</span><span class="p">)</span>
-
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
     <span class="n">build_mode</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;build_mode&quot;</span><span class="p">,</span> <span class="s2">&quot;incremental&quot;</span><span class="p">)</span>
     <span class="n">force_full</span> <span class="o">=</span> <span class="n">build_mode</span> <span class="o">==</span> <span class="s2">&quot;full&quot;</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;drop_existing&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">archive_to_registry</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;archive_to_registry&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
 
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
 
@@ -351,16 +353,34 @@
         <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Digital Twin Build&quot;</span><span class="p">,</span>
         <span class="n">task_type</span><span class="o">=</span><span class="s2">&quot;triplestore_sync&quot;</span><span class="p">,</span>
         <span class="n">steps</span><span class="o">=</span><span class="p">[</span>
-            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;prepare&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Preparing mappings and generating SQL&quot;</span><span class="p">},</span>
-            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;gate&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Checking source tables for changes&quot;</span><span class="p">},</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;prepare&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Preparing mappings and generating queries&quot;</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;gate&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Checking source tables for new data&quot;</span><span class="p">,</span>
+            <span class="p">},</span>
             <span class="p">{</span>
                 <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;view&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Creating Triple-Store VIEW in Unity Catalog&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Creating the Digital Twin view&quot;</span><span class="p">,</span>
             <span class="p">},</span>
-            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;diff&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Computing incremental diff&quot;</span><span class="p">},</span>
-            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;graph&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Applying changes to LadybugDB graph&quot;</span><span class="p">},</span>
-            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;snapshot&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Refreshing snapshot table&quot;</span><span class="p">},</span>
-            <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;archive&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Archiving graph to registry&quot;</span><span class="p">},</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;diff&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Detecting what changed since last build&quot;</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;graph&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Updating the knowledge graph&quot;</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;snapshot&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Saving a snapshot for next time&quot;</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;archive&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Backing up the graph to the registry&quot;</span><span class="p">,</span>
+            <span class="p">},</span>
         <span class="p">],</span>
     <span class="p">)</span>
 
@@ -386,6 +406,7 @@
             <span class="n">config_changed</span><span class="o">=</span><span class="n">config_changed</span><span class="p">,</span>
             <span class="n">snapshot_version</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;current_version&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span>
             <span class="n">build_kind</span><span class="o">=</span><span class="s2">&quot;session&quot;</span><span class="p">,</span>
+            <span class="n">archive_to_registry</span><span class="o">=</span><span class="n">archive_to_registry</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="n">thread</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">run_sync</span><span class="p">,</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -501,6 +522,484 @@
 
 
 
+<span class="c1"># ===========================================</span>
+<span class="c1"># Cohort Discovery</span>
+<span class="c1"># ===========================================</span>
+<span class="c1">#</span>
+<span class="c1"># Routes resolve the cohort backend through a small Parameter Object</span>
+<span class="c1"># (:class:`CohortEngineContext`) that bundles the saved-rule store,</span>
+<span class="c1"># the graph backend, the resolved graph name, and a ready-to-use</span>
+<span class="c1"># :class:`CohortService`. This keeps every engine route to a single</span>
+<span class="c1"># call site and avoids 5 lines of boilerplate per handler.</span>
+
+
+<div class="viewcode-block" id="CohortEngineContext">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.CohortEngineContext">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CohortEngineContext</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pre-resolved dependencies for cohort engine routes.</span>
+
+<span class="sd">    Carrying both ``service`` and the store/graph_name lets the route</span>
+<span class="sd">    body remain a single :func:`run_blocking` call into the service</span>
+<span class="sd">    method while preserving the original parameter shape (the engine</span>
+<span class="sd">    is backend-agnostic and takes ``store`` + ``graph_name`` directly).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span>
+    <span class="n">store</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">service</span><span class="p">:</span> <span class="n">CohortService</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_engine_context">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_engine_context">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">cohort_engine_context</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CohortEngineContext</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the cohort engine context for the active domain.</span>
+
+<span class="sd">    Raises :class:`ValidationError` when the graph name is not</span>
+<span class="sd">    configured and :class:`InfrastructureError` when the graph</span>
+<span class="sd">    backend cannot be instantiated.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">graph_name</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Graph name is not configured&quot;</span><span class="p">)</span>
+    <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Graph backend is not configured&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">CohortEngineContext</span><span class="p">(</span>
+        <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span>
+        <span class="n">settings</span><span class="o">=</span><span class="n">settings</span><span class="p">,</span>
+        <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="o">=</span><span class="n">graph_name</span><span class="p">,</span>
+        <span class="n">service</span><span class="o">=</span><span class="n">CohortService</span><span class="p">(</span><span class="n">domain</span><span class="p">),</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_json_body">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_json_body">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_json_body</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode the request body as a JSON object.</span>
+
+<span class="sd">    Centralises the ``&quot;Body must be a JSON object&quot;`` guard previously</span>
+<span class="sd">    duplicated in every POST handler in this block.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Body must be a JSON object&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">data</span></div>
+
+
+
+<div class="viewcode-block" id="list_cohort_rules">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.list_cohort_rules">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/cohorts/rules&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_cohort_rules</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return all saved cohort rules for the active domain.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">rules</span> <span class="o">=</span> <span class="n">CohortService</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">list_rules</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;rules&quot;</span><span class="p">:</span> <span class="n">rules</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules</span><span class="p">)}</span></div>
+
+
+
+<div class="viewcode-block" id="upsert_cohort_rule">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.upsert_cohort_rule">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
+    <span class="s2">&quot;/cohorts/rules&quot;</span><span class="p">,</span>
+    <span class="n">dependencies</span><span class="o">=</span><span class="p">[</span><span class="n">Depends</span><span class="p">(</span><span class="n">require</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;domain&quot;</span><span class="p">))],</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">upsert_cohort_rule</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate and upsert a cohort rule into the active domain.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">rule</span> <span class="o">=</span> <span class="n">CohortService</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">save_rule</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;rule&quot;</span><span class="p">:</span> <span class="n">rule</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="delete_cohort_rule">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.delete_cohort_rule">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span>
+    <span class="s2">&quot;/cohorts/rules/</span><span class="si">{rule_id}</span><span class="s2">&quot;</span><span class="p">,</span>
+    <span class="n">dependencies</span><span class="o">=</span><span class="p">[</span><span class="n">Depends</span><span class="p">(</span><span class="n">require</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;domain&quot;</span><span class="p">))],</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_cohort_rule</span><span class="p">(</span>
+    <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete a saved cohort rule by id.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">deleted</span> <span class="o">=</span> <span class="n">CohortService</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">delete_rule</span><span class="p">(</span><span class="n">rule_id</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">deleted</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cohort rule &#39;</span><span class="si">{</span><span class="n">rule_id</span><span class="si">}</span><span class="s2">&#39; was not found&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;rule_id&quot;</span><span class="p">:</span> <span class="n">rule_id</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_dry_run">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_dry_run">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohorts/dry-run&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_dry_run</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">CohortEngineContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_engine_context</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run the cohort engine on a candidate rule without writing anything.&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">dry_run</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Cohort rule is invalid&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">))</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">result</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_materialize">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_materialize">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
+    <span class="s2">&quot;/cohorts/materialize&quot;</span><span class="p">,</span>
+    <span class="n">dependencies</span><span class="o">=</span><span class="p">[</span><span class="n">Depends</span><span class="p">(</span><span class="n">require</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;domain&quot;</span><span class="p">))],</span>
+<span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_materialize</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">CohortEngineContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_engine_context</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Re-run a saved rule and write outputs as configured (graph/UC table).&quot;&quot;&quot;</span>
+    <span class="n">rule_id</span> <span class="o">=</span> <span class="p">(</span><span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rule_id&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">rule_id</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Missing rule_id&quot;</span><span class="p">)</span>
+    <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">settings</span><span class="p">)</span>
+    <span class="n">domain_version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;current_version&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_label_resolver</span><span class="p">(</span><span class="n">uris</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">metadata</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="o">.</span><span class="n">get_entity_metadata</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">uris</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">metadata</span> <span class="ow">or</span> <span class="p">[]}</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">materialize</span><span class="p">,</span>
+            <span class="n">rule_id</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span><span class="p">,</span>
+            <span class="n">client</span><span class="p">,</span>
+            <span class="n">domain_version</span><span class="p">,</span>
+            <span class="n">_label_resolver</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="n">NotFoundError</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Cohort rule is invalid&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">))</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">result</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_class_stats">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_class_stats">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/cohorts/preview/class-stats&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_class_stats</span><span class="p">(</span>
+    <span class="n">class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">CohortEngineContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_engine_context</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Live counter — instances of *class_uri* in the graph.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">class_uri</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Missing class_uri&quot;</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">class_stats</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">out</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_edge_count">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_edge_count">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohorts/preview/edge-count&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_edge_count</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">CohortEngineContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_engine_context</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Live counter — candidate edges produced by current ``links``.&quot;&quot;&quot;</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">edge_count</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">out</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_node_count">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_node_count">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohorts/preview/node-count&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_node_count</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">CohortEngineContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_engine_context</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Live counter — surviving members after node-level compatibility.&quot;&quot;&quot;</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">node_count</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">out</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_path_trace">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_path_trace">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohorts/preview/path-trace&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_path_trace</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">CohortEngineContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_engine_context</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-hop frontier diagnostic — see exactly which hop empties the</span>
+<span class="sd">    walk for a multi-hop linkage rule.</span>
+
+<span class="sd">    Body shape mirrors the rule&#39;s relevant slice::</span>
+
+<span class="sd">        {&quot;class_uri&quot;: &quot;...&quot;, &quot;links&quot;: [...], &quot;compatibility&quot;: [...]}</span>
+
+<span class="sd">    Returns the engine&#39;s trace (see :meth:`CohortBuilder.trace_paths`)</span>
+<span class="sd">    used by the Preview tab&#39;s *Trace path* button.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">path_trace</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">out</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_sample_values">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_sample_values">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohorts/sample-values&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_sample_values</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">CohortEngineContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_engine_context</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return up to N distinct values for a property/class pair (picker).&quot;&quot;&quot;</span>
+    <span class="n">class_uri</span> <span class="o">=</span> <span class="p">(</span><span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;class_uri&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">property_uri</span> <span class="o">=</span> <span class="p">(</span><span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">limit</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;limit&quot;</span><span class="p">,</span> <span class="mi">20</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">class_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">property_uri</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;class_uri and property are required&quot;</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">sample_values</span><span class="p">,</span>
+        <span class="n">class_uri</span><span class="p">,</span>
+        <span class="n">property_uri</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">out</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_explain">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_explain">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohorts/explain&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_explain</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">CohortEngineContext</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_engine_context</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a per-stage breakdown for a single member URI (Why? / Why not?).&quot;&quot;&quot;</span>
+    <span class="n">rule</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rule&quot;</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="p">(</span><span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">target</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Missing target URI&quot;</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">explain</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">store</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">graph_name</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">out</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_uc_suggest_target">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_uc_suggest_target">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/cohorts/uc/suggest-target&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_uc_suggest_target</span><span class="p">(</span>
+    <span class="n">rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return suggested catalog/schema/table_name for the active domain.</span>
+
+<span class="sd">    The optional ``rule_name`` query parameter scopes the suggested UC</span>
+<span class="sd">    table name to the rule being configured -- the modal proposes</span>
+<span class="sd">    ``cohorts_&lt;snake_rule_name&gt;`` so the table is self-describing.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">CohortService</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">suggest_uc_target</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="n">rule_name</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">out</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="cohort_uc_probe_write">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohort_uc_probe_write">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohorts/uc/probe-write&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohort_uc_probe_write</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">cohort_json_body</span><span class="p">),</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run a 3-step read-only permission probe for a UC Delta target.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Databricks credentials not configured&quot;</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">CohortService</span><span class="o">.</span><span class="n">probe_uc_write</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">client</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">out</span><span class="p">}</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Cohort Discovery Agent (Stage 2 — NL → CohortRule)</span>
+<span class="c1"># ===========================================</span>
+
+
+<div class="viewcode-block" id="cohorts_agent">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.cohorts_agent">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohorts/agent&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cohorts_agent</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Translate a natural-language prompt into a validated CohortRule.</span>
+
+<span class="sd">    Body::</span>
+
+<span class="sd">        {</span>
+<span class="sd">            &quot;prompt&quot;:  &quot;find consultants who can be staffed together&quot;,</span>
+<span class="sd">            &quot;history&quot;: [{&quot;role&quot;: &quot;user&quot;|&quot;assistant&quot;, &quot;content&quot;: &quot;...&quot;}, ...]</span>
+<span class="sd">        }</span>
+
+<span class="sd">    Response::</span>
+
+<span class="sd">        {</span>
+<span class="sd">            &quot;success&quot;: true,</span>
+<span class="sd">            &quot;rule&quot;:  { ... validated CohortRule JSON ...} | null,</span>
+<span class="sd">            &quot;reply&quot;: &quot;...short markdown explanation...&quot;,</span>
+<span class="sd">            &quot;tools&quot;: [{&quot;name&quot;: &quot;list_classes&quot;, &quot;duration_ms&quot;: 12}, ...],</span>
+<span class="sd">            &quot;iterations&quot;: 4,</span>
+<span class="sd">            &quot;usage&quot;: {&quot;prompt_tokens&quot;: ..., &quot;completion_tokens&quot;: ...}</span>
+<span class="sd">        }</span>
+
+<span class="sd">    The proposed rule is *not* persisted -- the user reviews and saves it</span>
+<span class="sd">    via the existing ``POST /cohorts/rules`` route. If the agent could</span>
+<span class="sd">    not assemble a valid rule, ``rule`` is ``null`` and ``reply`` carries</span>
+<span class="sd">    the (likely clarifying) follow-up question.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">agents.agent_cohort</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_agent</span> <span class="k">as</span> <span class="n">run_cohort_agent</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">api.routers.internal._helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">map_route_errors</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_host_and_token</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">prompt</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prompt&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;message&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">client_history</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;history&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">prompt</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No prompt provided&quot;</span><span class="p">)</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Databricks credentials not configured&quot;</span><span class="p">)</span>
+
+    <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_endpoint&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">llm_endpoint</span><span class="p">:</span>
+        <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">_auto_discover_llm_endpoint</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">llm_endpoint</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;CohortAgent: auto-selected LLM endpoint &#39;</span><span class="si">%s</span><span class="s2">&#39; (no domain default)&quot;</span><span class="p">,</span>
+                <span class="n">llm_endpoint</span><span class="p">,</span>
+            <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">llm_endpoint</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;No LLM serving endpoint available. Please set one in Domain Settings.&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">reg</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">resolve_registry</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">registry_params</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;registry_catalog&quot;</span><span class="p">:</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;registry_schema&quot;</span><span class="p">:</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;registry_volume&quot;</span><span class="p">:</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;volume&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="n">app_port</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_APP_PORT&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PORT&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;8000&quot;</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;http://localhost:</span><span class="si">{</span><span class="n">app_port</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="n">session_cookies</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">cookies</span> <span class="ow">or</span> <span class="p">{})</span>
+    <span class="n">_FORWARDED_HEADER_PREFIXES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;x-forwarded-&quot;</span><span class="p">,</span> <span class="s2">&quot;x-real-&quot;</span><span class="p">)</span>
+    <span class="n">_FORWARDED_EXTRA_HEADERS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;x-csrf-token&quot;</span><span class="p">,</span> <span class="s2">&quot;referer&quot;</span><span class="p">}</span>
+    <span class="n">session_headers</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">k</span><span class="p">:</span> <span class="n">v</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">_FORWARDED_HEADER_PREFIXES</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="n">k</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">_FORWARDED_EXTRA_HEADERS</span>
+    <span class="p">}</span>
+
+    <span class="n">domain_name</span> <span class="o">=</span> <span class="n">_chat_resolve_domain_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;CohortAgent: prompt=</span><span class="si">%s</span><span class="s2">, domain=</span><span class="si">%s</span><span class="s2">, endpoint=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">prompt</span><span class="p">[:</span><span class="mi">80</span><span class="p">],</span>
+        <span class="n">domain_name</span><span class="p">,</span>
+        <span class="n">llm_endpoint</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">map_route_errors</span><span class="p">(</span><span class="s2">&quot;Cohort Discovery agent request failed&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="n">agent_result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">to_thread</span><span class="p">(</span>
+            <span class="n">run_cohort_agent</span><span class="p">,</span>
+            <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
+            <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
+            <span class="n">endpoint_name</span><span class="o">=</span><span class="n">llm_endpoint</span><span class="p">,</span>
+            <span class="n">base_url</span><span class="o">=</span><span class="n">base_url</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="o">=</span><span class="n">domain_name</span><span class="p">,</span>
+            <span class="n">registry_params</span><span class="o">=</span><span class="n">registry_params</span><span class="p">,</span>
+            <span class="n">session_cookies</span><span class="o">=</span><span class="n">session_cookies</span><span class="p">,</span>
+            <span class="n">session_headers</span><span class="o">=</span><span class="n">session_headers</span><span class="p">,</span>
+            <span class="n">user_message</span><span class="o">=</span><span class="n">prompt</span><span class="p">,</span>
+            <span class="n">conversation_history</span><span class="o">=</span><span class="n">client_history</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+            <span class="s2">&quot;Cohort Discovery agent failed&quot;</span><span class="p">,</span>
+            <span class="n">detail</span><span class="o">=</span><span class="n">agent_result</span><span class="o">.</span><span class="n">error</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">tool_calls</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">step</span><span class="o">.</span><span class="n">tool_name</span><span class="p">,</span>
+            <span class="s2">&quot;duration_ms&quot;</span><span class="p">:</span> <span class="n">step</span><span class="o">.</span><span class="n">duration_ms</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">steps</span>
+        <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">step_type</span> <span class="o">==</span> <span class="s2">&quot;tool_result&quot;</span>
+    <span class="p">]</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;rule&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">proposed_rule</span><span class="p">,</span>
+        <span class="s2">&quot;reply&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">reply</span><span class="p">,</span>
+        <span class="s2">&quot;tools&quot;</span><span class="p">:</span> <span class="n">tool_calls</span><span class="p">,</span>
+        <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
+        <span class="s2">&quot;usage&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">usage</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+
+
 <div class="viewcode-block" id="filter_triplestore">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.filter_triplestore">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/sync/filter&quot;</span><span class="p">)</span>
@@ -550,6 +1049,9 @@
                 <span class="n">value</span><span class="p">,</span>
             <span class="p">)</span>
 
+            <span class="c1"># Keep preview responsive: fetch one extra row to detect capping.</span>
+            <span class="n">max_preview</span> <span class="o">=</span> <span class="mi">500</span>
+            <span class="n">preview_probe_limit</span> <span class="o">=</span> <span class="n">max_preview</span> <span class="o">+</span> <span class="mi">1</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">entity_set</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">find_seed_subjects</span><span class="p">(</span>
                     <span class="n">graph_name</span><span class="p">,</span>
@@ -557,6 +1059,7 @@
                     <span class="n">field</span><span class="o">=</span><span class="n">field</span><span class="p">,</span>
                     <span class="n">match_type</span><span class="o">=</span><span class="n">match_type</span><span class="p">,</span>
                     <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span>
+                    <span class="n">limit</span><span class="o">=</span><span class="n">preview_probe_limit</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="k">except</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span><span class="p">,</span> <span class="n">NotFoundError</span><span class="p">):</span>
                 <span class="k">raise</span>
@@ -580,7 +1083,6 @@
                     <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No entities found matching the filter criteria.&quot;</span><span class="p">,</span>
                 <span class="p">}</span>
 
-            <span class="n">max_preview</span> <span class="o">=</span> <span class="mi">500</span>
             <span class="n">capped</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_set</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_preview</span>
             <span class="n">preview_uris</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">entity_set</span><span class="p">)[:</span><span class="n">max_preview</span><span class="p">]</span>
 
@@ -626,9 +1128,11 @@
             <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No entities selected for expansion.&quot;</span><span class="p">)</span>
 
         <span class="n">include_rels</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;include_rels&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-        <span class="n">depth</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;depth&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">)),</span> <span class="mi">5</span><span class="p">)</span>
+        <span class="n">max_depth_cap</span> <span class="o">=</span> <span class="mi">3</span> <span class="k">if</span> <span class="n">is_databricks_app</span><span class="p">()</span> <span class="k">else</span> <span class="mi">5</span>
+        <span class="n">depth</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;depth&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">)),</span> <span class="n">max_depth_cap</span><span class="p">)</span>
         <span class="n">client_max</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;max_entities&quot;</span><span class="p">,</span> <span class="mi">5000</span><span class="p">))</span>
-        <span class="n">max_entities</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">client_max</span><span class="p">,</span> <span class="mi">50_000</span><span class="p">))</span>
+        <span class="n">server_entity_cap</span> <span class="o">=</span> <span class="mi">3_000</span> <span class="k">if</span> <span class="n">is_databricks_app</span><span class="p">()</span> <span class="k">else</span> <span class="mi">50_000</span>
+        <span class="n">max_entities</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">client_max</span><span class="p">,</span> <span class="n">server_entity_cap</span><span class="p">))</span>
 
         <span class="n">entity_set</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">selected_uris</span><span class="p">)</span>
         <span class="n">initial_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_set</span><span class="p">)</span>
@@ -675,8 +1179,32 @@
             <span class="nb">len</span><span class="p">(</span><span class="n">entity_set</span><span class="p">)</span> <span class="o">-</span> <span class="n">initial_count</span><span class="p">,</span>
             <span class="n">capped</span><span class="p">,</span>
         <span class="p">)</span>
+        <span class="n">subject_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">entity_set</span><span class="p">)</span>
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">250</span> <span class="k">if</span> <span class="n">is_databricks_app</span><span class="p">()</span> <span class="k">else</span> <span class="mi">1000</span>
+        <span class="n">max_triples</span> <span class="o">=</span> <span class="mi">100_000</span>
+        <span class="n">max_fetch_seconds</span> <span class="o">=</span> <span class="mi">40</span> <span class="k">if</span> <span class="n">is_databricks_app</span><span class="p">()</span> <span class="k">else</span> <span class="mi">120</span>
+        <span class="n">fetch_t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+        <span class="n">timeout_capped</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">get_triples_for_subjects</span><span class="p">(</span><span class="n">graph_name</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">entity_set</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">subject_list</span><span class="p">),</span> <span class="n">batch_size</span><span class="p">):</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">fetch_t0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_fetch_seconds</span><span class="p">:</span>
+                    <span class="n">timeout_capped</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">capped</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Filter expand – capped by time budget after </span><span class="si">%d</span><span class="s2">/</span><span class="si">%d</span><span class="s2"> entities&quot;</span><span class="p">,</span>
+                        <span class="n">i</span><span class="p">,</span>
+                        <span class="nb">len</span><span class="p">(</span><span class="n">subject_list</span><span class="p">),</span>
+                    <span class="p">)</span>
+                    <span class="k">break</span>
+                <span class="n">batch_subjects</span> <span class="o">=</span> <span class="n">subject_list</span><span class="p">[</span><span class="n">i</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">]</span>
+                <span class="n">batch_rows</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">get_triples_for_subjects</span><span class="p">(</span><span class="n">graph_name</span><span class="p">,</span> <span class="n">batch_subjects</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">batch_rows</span><span class="p">:</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">batch_rows</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">max_triples</span><span class="p">:</span>
+                    <span class="n">results</span> <span class="o">=</span> <span class="n">results</span><span class="p">[:</span><span class="n">max_triples</span><span class="p">]</span>
+                    <span class="n">capped</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">break</span>
         <span class="k">except</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span><span class="p">,</span> <span class="n">NotFoundError</span><span class="p">):</span>
             <span class="k">raise</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -684,11 +1212,6 @@
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
                 <span class="s2">&quot;Error fetching triples for the filter&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
             <span class="p">)</span>
-
-        <span class="n">max_triples</span> <span class="o">=</span> <span class="mi">100_000</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_triples</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">results</span><span class="p">[:</span><span class="n">max_triples</span><span class="p">]</span>
-            <span class="n">capped</span> <span class="o">=</span> <span class="kc">True</span>
 
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -699,6 +1222,7 @@
             <span class="s2">&quot;initial_count&quot;</span><span class="p">:</span> <span class="n">initial_count</span><span class="p">,</span>
             <span class="s2">&quot;expanded_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_set</span><span class="p">),</span>
             <span class="s2">&quot;capped&quot;</span><span class="p">:</span> <span class="n">capped</span><span class="p">,</span>
+            <span class="s2">&quot;timeout_capped&quot;</span><span class="p">:</span> <span class="n">timeout_capped</span><span class="p">,</span>
         <span class="p">}</span>
 
     <span class="k">except</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span><span class="p">,</span> <span class="n">NotFoundError</span><span class="p">):</span>
@@ -875,7 +1399,10 @@
 
 <div class="viewcode-block" id="reload_graph_from_registry">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.reload_graph_from_registry">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/sync/reload-from-registry&quot;</span><span class="p">)</span>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
+    <span class="s2">&quot;/sync/reload-from-registry&quot;</span><span class="p">,</span>
+    <span class="n">dependencies</span><span class="o">=</span><span class="p">[</span><span class="n">Depends</span><span class="p">(</span><span class="n">require</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;domain&quot;</span><span class="p">))],</span>
+<span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">reload_graph_from_registry</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
@@ -883,15 +1410,6 @@
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Download the LadybugDB archive from the registry volume and extract it locally.&quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.domain</span><span class="w"> </span><span class="kn">import</span> <span class="n">Domain</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">role_level</span>
-
-    <span class="n">effective_role</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_domain_role&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span>
-        <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_role&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
-    <span class="p">)</span>
-    <span class="k">if</span> <span class="n">role_level</span><span class="p">(</span><span class="n">effective_role</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">role_level</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="n">AuthorizationError</span><span class="p">(</span>
-            <span class="s2">&quot;Only builders and admins can reload the graph from registry&quot;</span>
-        <span class="p">)</span>
 
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">uc</span> <span class="o">=</span> <span class="n">make_volume_file_service</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
@@ -911,21 +1429,16 @@
 
 <div class="viewcode-block" id="drop_snapshot">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.drop_snapshot">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/sync/drop-snapshot&quot;</span><span class="p">)</span>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
+    <span class="s2">&quot;/sync/drop-snapshot&quot;</span><span class="p">,</span>
+    <span class="n">dependencies</span><span class="o">=</span><span class="p">[</span><span class="n">Depends</span><span class="p">(</span><span class="n">require</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;domain&quot;</span><span class="p">))],</span>
+<span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">drop_snapshot</span><span class="p">(</span>
     <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop the incremental snapshot table to force a full rebuild on next build.&quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">ROLE_BUILDER</span><span class="p">,</span> <span class="n">role_level</span>
-
-    <span class="n">effective_role</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_domain_role&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span>
-        <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;user_role&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
-    <span class="p">)</span>
-    <span class="k">if</span> <span class="n">role_level</span><span class="p">(</span><span class="n">effective_role</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">role_level</span><span class="p">(</span><span class="n">ROLE_BUILDER</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="n">AuthorizationError</span><span class="p">(</span><span class="s2">&quot;Only builders and admins can drop the snapshot&quot;</span><span class="p">)</span>
-
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">snapshot_table</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">snapshot_table</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">snapshot_table</span><span class="p">:</span>
@@ -1580,6 +2093,699 @@
             <span class="s2">&quot;inferred_triples&quot;</span><span class="p">:</span> <span class="p">[],</span>
         <span class="p">},</span>
     <span class="p">}</span></div>
+
+
+
+<span class="c1"># ===========================================</span>
+<span class="c1"># Graph Chat Assistant (LLM over the knowledge graph)</span>
+<span class="c1"># ===========================================</span>
+
+
+<span class="c1"># Session key for the Graph Chat cache (history + limit).</span>
+<span class="c1"># Shape: {&quot;limit&quot;: int, &quot;history&quot;: {&lt;domain_name&gt;: [{&quot;role&quot;, &quot;content&quot;}, ...]}}</span>
+<span class="n">_CHAT_SESSION_KEY</span> <span class="o">=</span> <span class="s2">&quot;graph_chat&quot;</span>
+<span class="n">_CHAT_DEFAULT_LIMIT</span> <span class="o">=</span> <span class="mi">20</span>         <span class="c1"># number of user+assistant turns kept per domain</span>
+<span class="n">_CHAT_MIN_LIMIT</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">_CHAT_MAX_LIMIT</span> <span class="o">=</span> <span class="mi">100</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_chat_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the Graph Chat session cache, creating an empty one if absent.&quot;&quot;&quot;</span>
+    <span class="n">cache</span> <span class="o">=</span> <span class="n">session_mgr</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_CHAT_SESSION_KEY</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cache</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="n">cache</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="n">_CHAT_DEFAULT_LIMIT</span><span class="p">,</span> <span class="s2">&quot;history&quot;</span><span class="p">:</span> <span class="p">{}}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cache</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;limit&quot;</span><span class="p">,</span> <span class="n">_CHAT_DEFAULT_LIMIT</span><span class="p">)</span>
+        <span class="n">cache</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;history&quot;</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="k">return</span> <span class="n">cache</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_chat_save_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">session_mgr</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">_CHAT_SESSION_KEY</span><span class="p">,</span> <span class="n">cache</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_chat_resolve_domain_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the active domain&#39;s name, falling back through the</span>
+<span class="sd">    common locations used by :class:`DomainSession` / session payloads.</span>
+
+<span class="sd">    ``DomainSession`` does **not** expose a ``.name`` property; the name</span>
+<span class="sd">    is stored under ``domain.info[&quot;name&quot;]`` (and historically also under</span>
+<span class="sd">    ``domain.domain[&quot;name&quot;]`` / ``domain.domain_folder``).  Using a</span>
+<span class="sd">    blind ``getattr(domain, &quot;name&quot;, &quot;&quot;)`` silently returns ``&quot;&quot;`` and</span>
+<span class="sd">    then the Graph Chat agent thinks no domain is selected.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">domain</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">name</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">name</span>
+    <span class="n">folder</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;domain_folder&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">folder</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">folder</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_chat_domain_key</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">_chat_resolve_domain_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;__default__&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_chat_clamp_limit</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">_CHAT_DEFAULT_LIMIT</span>
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">_CHAT_MIN_LIMIT</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">_CHAT_MAX_LIMIT</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_chat_trim</span><span class="p">(</span><span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Keep only the last ``limit`` turns (user + assistant messages).</span>
+
+<span class="sd">    A turn is a user message optionally followed by an assistant reply,</span>
+<span class="sd">    so we keep the last ``2 * limit`` items.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">limit</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">messages</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">keep</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">limit</span>
+    <span class="k">return</span> <span class="n">messages</span><span class="p">[</span><span class="o">-</span><span class="n">keep</span><span class="p">:]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">messages</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">keep</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">messages</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_auto_discover_llm_endpoint</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Best-effort auto-selection of a serving endpoint for Graph Chat.</span>
+
+<span class="sd">    Walks the workspace&#39;s serving endpoints and returns the first one</span>
+<span class="sd">    that looks ready to serve chat completions.  Preference order:</span>
+
+<span class="sd">    1. Databricks hosted foundation models (pay-per-token), matched by</span>
+<span class="sd">       the ``databricks-`` prefix (e.g. ``databricks-meta-llama-*``).</span>
+<span class="sd">    2. Any other ``READY`` endpoint.</span>
+
+<span class="sd">    Returns an empty string if nothing usable can be found.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.sqlwizard</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQLWizardService</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">client</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">endpoints</span> <span class="o">=</span> <span class="n">SQLWizardService</span><span class="p">(</span><span class="n">client</span><span class="p">)</span><span class="o">.</span><span class="n">get_model_serving_endpoints</span><span class="p">()</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;GraphChat: auto-discover LLM failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_ready</span><span class="p">(</span><span class="n">ep</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="p">(</span><span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">state</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;READY&quot;</span><span class="p">,</span> <span class="s2">&quot;TRUE&quot;</span><span class="p">,</span> <span class="s2">&quot;UP&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">endpoints</span><span class="p">:</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;databricks-&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_is_ready</span><span class="p">(</span><span class="n">ep</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">name</span>
+    <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">endpoints</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">_is_ready</span><span class="p">(</span><span class="n">ep</span><span class="p">)</span> <span class="ow">and</span> <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">ep</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="dtwin_assistant_chat">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.dtwin_assistant_chat">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/assistant/chat&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dtwin_assistant_chat</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Process a single chat turn with the Graph Chat agent.</span>
+
+<span class="sd">    Expects JSON body::</span>
+
+<span class="sd">        {</span>
+<span class="sd">            &quot;message&quot;: &quot;List entity types&quot;,</span>
+<span class="sd">            &quot;history&quot;: [{&quot;role&quot;: &quot;user&quot;|&quot;assistant&quot;, &quot;content&quot;: &quot;...&quot;}, ...]</span>
+<span class="sd">        }</span>
+
+<span class="sd">    Returns::</span>
+
+<span class="sd">        {</span>
+<span class="sd">            &quot;success&quot;: true,</span>
+<span class="sd">            &quot;reply&quot;: &quot;...markdown...&quot;,</span>
+<span class="sd">            &quot;tools&quot;: [{&quot;name&quot;: &quot;list_entity_types&quot;, &quot;duration_ms&quot;: 123}, ...],</span>
+<span class="sd">            &quot;usage&quot;: {&quot;prompt_tokens&quot;: ..., &quot;completion_tokens&quot;: ..., ...}</span>
+<span class="sd">        }</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">api.routers.internal._helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">map_route_errors</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_host_and_token</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">agents.agent_dtwin_chat</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_agent</span> <span class="k">as</span> <span class="n">run_chat_agent</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">user_message</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;message&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">client_history</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;history&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">user_message</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No message provided&quot;</span><span class="p">)</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain_key</span> <span class="o">=</span> <span class="n">_chat_domain_key</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="n">chat_cache</span> <span class="o">=</span> <span class="n">_chat_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">limit</span> <span class="o">=</span> <span class="n">_chat_clamp_limit</span><span class="p">(</span><span class="n">chat_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;limit&quot;</span><span class="p">,</span> <span class="n">_CHAT_DEFAULT_LIMIT</span><span class="p">))</span>
+
+    <span class="c1"># Prefer the server-side persisted history (survives page navigation)</span>
+    <span class="c1"># but fall back to whatever the client sent (legacy / cache miss).</span>
+    <span class="n">saved_history</span> <span class="o">=</span> <span class="n">chat_cache</span><span class="p">[</span><span class="s2">&quot;history&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">domain_key</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">history</span> <span class="o">=</span> <span class="n">saved_history</span> <span class="k">if</span> <span class="n">saved_history</span> <span class="k">else</span> <span class="n">client_history</span>
+
+    <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Databricks credentials not configured&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Always use the domain-selected LLM when available. If the domain</span>
+    <span class="c1"># hasn&#39;t pinned one yet, fall back to auto-discovering the first</span>
+    <span class="c1"># READY serving endpoint in the workspace so Graph Chat never hard-</span>
+    <span class="c1"># fails just because &quot;llm_endpoint&quot; wasn&#39;t saved in Domain Settings.</span>
+    <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_endpoint&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">llm_endpoint</span><span class="p">:</span>
+        <span class="n">llm_endpoint</span> <span class="o">=</span> <span class="n">_auto_discover_llm_endpoint</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">llm_endpoint</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;GraphChat: auto-selected LLM endpoint &#39;</span><span class="si">%s</span><span class="s2">&#39; (no domain default)&quot;</span><span class="p">,</span>
+                <span class="n">llm_endpoint</span><span class="p">,</span>
+            <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">llm_endpoint</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;No LLM serving endpoint available. Please set one in Domain Settings.&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">reg</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">resolve_registry</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+    <span class="n">registry_params</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;registry_catalog&quot;</span><span class="p">:</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;registry_schema&quot;</span><span class="p">:</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;registry_volume&quot;</span><span class="p">:</span> <span class="n">reg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;volume&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="c1"># Build the loopback base URL used by the agent&#39;s HTTPX client to</span>
+    <span class="c1"># reach the external /api/v1/... and internal /dtwin/... routes</span>
+    <span class="c1"># running in this same FastAPI process.  On Databricks Apps the port</span>
+    <span class="c1"># is exposed as DATABRICKS_APP_PORT; locally it defaults to 8000.</span>
+    <span class="n">app_port</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;DATABRICKS_APP_PORT&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PORT&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;8000&quot;</span>
+    <span class="n">base_url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;http://localhost:</span><span class="si">{</span><span class="n">app_port</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="c1"># Forward the caller&#39;s session cookies so the loopback routes</span>
+    <span class="c1"># resolve the same user session and active domain.</span>
+    <span class="n">session_cookies</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">cookies</span> <span class="ow">or</span> <span class="p">{})</span>
+
+    <span class="c1"># Forward the Databricks-Apps identity + CSRF headers so the loopback</span>
+    <span class="c1"># call passes PermissionMiddleware (which otherwise 302-redirects the</span>
+    <span class="c1"># anonymous internal request to ``/access-denied``).</span>
+    <span class="n">_FORWARDED_HEADER_PREFIXES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;x-forwarded-&quot;</span><span class="p">,</span> <span class="s2">&quot;x-real-&quot;</span><span class="p">)</span>
+    <span class="n">_FORWARDED_EXTRA_HEADERS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;x-csrf-token&quot;</span><span class="p">,</span> <span class="s2">&quot;referer&quot;</span><span class="p">}</span>
+    <span class="n">session_headers</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">k</span><span class="p">:</span> <span class="n">v</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">_FORWARDED_HEADER_PREFIXES</span><span class="p">)</span>
+        <span class="ow">or</span> <span class="n">k</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">_FORWARDED_EXTRA_HEADERS</span>
+    <span class="p">}</span>
+
+    <span class="n">domain_name</span> <span class="o">=</span> <span class="n">_chat_resolve_domain_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;GraphChat: user_message=</span><span class="si">%s</span><span class="s2">, domain=</span><span class="si">%s</span><span class="s2">, endpoint=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">user_message</span><span class="p">[:</span><span class="mi">80</span><span class="p">],</span>
+        <span class="n">domain_name</span><span class="p">,</span>
+        <span class="n">llm_endpoint</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">map_route_errors</span><span class="p">(</span><span class="s2">&quot;Graph Chat agent request failed&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="n">agent_result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">to_thread</span><span class="p">(</span>
+            <span class="n">run_chat_agent</span><span class="p">,</span>
+            <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
+            <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
+            <span class="n">endpoint_name</span><span class="o">=</span><span class="n">llm_endpoint</span><span class="p">,</span>
+            <span class="n">base_url</span><span class="o">=</span><span class="n">base_url</span><span class="p">,</span>
+            <span class="n">domain_name</span><span class="o">=</span><span class="n">domain_name</span><span class="p">,</span>
+            <span class="n">registry_params</span><span class="o">=</span><span class="n">registry_params</span><span class="p">,</span>
+            <span class="n">session_cookies</span><span class="o">=</span><span class="n">session_cookies</span><span class="p">,</span>
+            <span class="n">session_headers</span><span class="o">=</span><span class="n">session_headers</span><span class="p">,</span>
+            <span class="n">user_message</span><span class="o">=</span><span class="n">user_message</span><span class="p">,</span>
+            <span class="n">conversation_history</span><span class="o">=</span><span class="n">history</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+            <span class="s2">&quot;Graph Chat agent failed&quot;</span><span class="p">,</span>
+            <span class="n">detail</span><span class="o">=</span><span class="n">agent_result</span><span class="o">.</span><span class="n">error</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">tool_calls</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">step</span><span class="o">.</span><span class="n">tool_name</span><span class="p">,</span>
+            <span class="s2">&quot;duration_ms&quot;</span><span class="p">:</span> <span class="n">step</span><span class="o">.</span><span class="n">duration_ms</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">steps</span>
+        <span class="k">if</span> <span class="n">step</span><span class="o">.</span><span class="n">step_type</span> <span class="o">==</span> <span class="s2">&quot;tool_result&quot;</span>
+    <span class="p">]</span>
+
+    <span class="c1"># Persist the exchange in the session cache (per-domain, trimmed to</span>
+    <span class="c1"># the configured limit) so the discussion survives page navigation.</span>
+    <span class="c1"># ``history`` is expected to hold PRIOR turns only; drop a trailing</span>
+    <span class="c1"># entry that accidentally echoes the current user_message so we</span>
+    <span class="c1"># never double-record the same question (also self-heals any pre-</span>
+    <span class="c1"># existing sessions that were written with the old contract).</span>
+    <span class="n">prior</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">history</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">prior</span> <span class="ow">and</span> <span class="n">prior</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;role&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;user&quot;</span> <span class="ow">and</span> <span class="p">(</span>
+        <span class="n">prior</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;content&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="o">==</span> <span class="n">user_message</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+        <span class="n">prior</span> <span class="o">=</span> <span class="n">prior</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">prior</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">user_message</span><span class="p">})</span>
+    <span class="n">prior</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;assistant&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">reply</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">})</span>
+    <span class="n">chat_cache</span><span class="p">[</span><span class="s2">&quot;history&quot;</span><span class="p">][</span><span class="n">domain_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">_chat_trim</span><span class="p">(</span><span class="n">prior</span><span class="p">,</span> <span class="n">limit</span><span class="p">)</span>
+    <span class="n">_chat_save_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">chat_cache</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;reply&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">reply</span><span class="p">,</span>
+        <span class="s2">&quot;tools&quot;</span><span class="p">:</span> <span class="n">tool_calls</span><span class="p">,</span>
+        <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">iterations</span><span class="p">,</span>
+        <span class="s2">&quot;usage&quot;</span><span class="p">:</span> <span class="n">agent_result</span><span class="o">.</span><span class="n">usage</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="dtwin_assistant_history_get">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.dtwin_assistant_history_get">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/assistant/history&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dtwin_assistant_history_get</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the persisted Graph Chat history for the active domain.</span>
+
+<span class="sd">    Response shape::</span>
+
+<span class="sd">        {</span>
+<span class="sd">            &quot;success&quot;: true,</span>
+<span class="sd">            &quot;domain&quot;: &quot;&lt;domain name&gt;&quot;,</span>
+<span class="sd">            &quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;|&quot;assistant&quot;, &quot;content&quot;: &quot;...&quot;}, ...],</span>
+<span class="sd">            &quot;limit&quot;: &lt;int&gt;,</span>
+<span class="sd">            &quot;min_limit&quot;: 5,</span>
+<span class="sd">            &quot;max_limit&quot;: 100</span>
+<span class="sd">        }</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain_key</span> <span class="o">=</span> <span class="n">_chat_domain_key</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="n">cache</span> <span class="o">=</span> <span class="n">_chat_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;messages&quot;</span><span class="p">:</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;history&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">domain_key</span><span class="p">,</span> <span class="p">[]),</span>
+        <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="n">_chat_clamp_limit</span><span class="p">(</span><span class="n">cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;limit&quot;</span><span class="p">,</span> <span class="n">_CHAT_DEFAULT_LIMIT</span><span class="p">)),</span>
+        <span class="s2">&quot;min_limit&quot;</span><span class="p">:</span> <span class="n">_CHAT_MIN_LIMIT</span><span class="p">,</span>
+        <span class="s2">&quot;max_limit&quot;</span><span class="p">:</span> <span class="n">_CHAT_MAX_LIMIT</span><span class="p">,</span>
+        <span class="s2">&quot;default_limit&quot;</span><span class="p">:</span> <span class="n">_CHAT_DEFAULT_LIMIT</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="dtwin_assistant_history_clear">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.dtwin_assistant_history_clear">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/assistant/history&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dtwin_assistant_history_clear</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Clear the persisted Graph Chat history for the active domain.&quot;&quot;&quot;</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">domain_key</span> <span class="o">=</span> <span class="n">_chat_domain_key</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="n">cache</span> <span class="o">=</span> <span class="n">_chat_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">domain_key</span> <span class="ow">in</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;history&quot;</span><span class="p">]:</span>
+        <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;history&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">domain_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">_chat_save_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">cache</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="dtwin_graphql_schema">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.dtwin_graphql_schema">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/graphql/schema&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dtwin_graphql_schema</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the GraphQL SDL built from the CURRENT session&#39;s domain.</span>
+
+<span class="sd">    Unlike the public ``/graphql/{domain}/schema`` route, this endpoint</span>
+<span class="sd">    does **not** require the domain to be published in the registry.</span>
+<span class="sd">    It works purely from the in-session ontology so Graph Chat can</span>
+<span class="sd">    introspect the schema even while the user is still building the</span>
+<span class="sd">    domain.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphql</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_schema_for_domain</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">strawberry.printer</span><span class="w"> </span><span class="kn">import</span> <span class="n">print_schema</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">display_name</span> <span class="o">=</span> <span class="n">_chat_resolve_domain_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">display_name</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No domain selected in the current session.&quot;</span><span class="p">)</span>
+
+    <span class="n">ontology</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">classes</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">properties_list</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">classes</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;Ontology is empty — add at least one class to generate a GraphQL schema.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">build_schema_for_domain</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">properties_list</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">display_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;Could not generate GraphQL schema from the current ontology.&quot;</span>
+        <span class="p">)</span>
+    <span class="n">schema</span><span class="p">,</span> <span class="n">_metadata</span> <span class="o">=</span> <span class="n">result</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">display_name</span><span class="p">,</span>
+        <span class="s2">&quot;sdl&quot;</span><span class="p">:</span> <span class="n">print_schema</span><span class="p">(</span><span class="n">schema</span><span class="p">),</span>
+    <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="dtwin_graphql_execute">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.dtwin_graphql_execute">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/graphql/execute&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dtwin_graphql_execute</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute a GraphQL query against the CURRENT session&#39;s domain.</span>
+
+<span class="sd">    Session-aware counterpart of ``POST /graphql/{domain}`` used by the</span>
+<span class="sd">    Graph Chat agent.  Requires a configured graph backend (LadybugDB)</span>
+<span class="sd">    to resolve the query.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphql</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_schema_for_domain</span><span class="p">,</span> <span class="n">DEFAULT_DEPTH</span><span class="p">,</span> <span class="n">MAX_DEPTH</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.triplestore</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_triplestore</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">effective_graph_name</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">display_name</span> <span class="o">=</span> <span class="n">_chat_resolve_domain_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">display_name</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No domain selected in the current session.&quot;</span><span class="p">)</span>
+
+    <span class="n">body</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">query</span> <span class="o">=</span> <span class="p">(</span><span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;query&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">query</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Missing &#39;query&#39; in request body.&quot;</span><span class="p">)</span>
+    <span class="n">variables</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;variables&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="kc">None</span>
+    <span class="n">operation_name</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;operationName&quot;</span><span class="p">)</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;depth&quot;</span><span class="p">)</span>
+
+    <span class="n">ontology</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">classes</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">properties_list</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">)</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">build_schema_for_domain</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">properties_list</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">display_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;Could not generate GraphQL schema from the current ontology.&quot;</span>
+        <span class="p">)</span>
+    <span class="n">schema</span><span class="p">,</span> <span class="n">_metadata</span> <span class="o">=</span> <span class="n">result</span>
+
+    <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+            <span class="s2">&quot;Graph backend (LadybugDB) not configured or unreachable.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="n">context</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;triplestore&quot;</span><span class="p">:</span> <span class="n">store</span><span class="p">,</span>
+        <span class="s2">&quot;table_name&quot;</span><span class="p">:</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">),</span>
+        <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">base_uri</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">depth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;depth&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">depth</span><span class="p">),</span> <span class="mi">1</span><span class="p">),</span> <span class="n">MAX_DEPTH</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+            <span class="n">context</span><span class="p">[</span><span class="s2">&quot;depth&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">DEFAULT_DEPTH</span>
+
+    <span class="n">exec_result</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">execute_sync</span><span class="p">(</span>
+        <span class="n">query</span><span class="p">,</span>
+        <span class="n">variable_values</span><span class="o">=</span><span class="n">variables</span><span class="p">,</span>
+        <span class="n">operation_name</span><span class="o">=</span><span class="n">operation_name</span><span class="p">,</span>
+        <span class="n">context_value</span><span class="o">=</span><span class="n">context</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">response</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">display_name</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">exec_result</span><span class="o">.</span><span class="n">data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">response</span><span class="p">[</span><span class="s2">&quot;data&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">exec_result</span><span class="o">.</span><span class="n">data</span>
+    <span class="k">if</span> <span class="n">exec_result</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
+        <span class="n">response</span><span class="p">[</span><span class="s2">&quot;success&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">response</span><span class="p">[</span><span class="s2">&quot;errors&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s2">&quot;path&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)}</span>
+            <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">exec_result</span><span class="o">.</span><span class="n">errors</span>
+        <span class="p">]</span>
+    <span class="k">return</span> <span class="n">response</span></div>
+
+
+
+<div class="viewcode-block" id="dtwin_triples_find">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.dtwin_triples_find">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/triples/find&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dtwin_triples_find</span><span class="p">(</span>
+    <span class="n">entity_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">search</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Session-aware search + BFS traversal over the in-session domain.</span>
+
+<span class="sd">    Mirrors ``GET /api/v1/digitaltwin/triples/find`` but resolves the</span>
+<span class="sd">    domain from the user&#39;s session instead of the registry, so the</span>
+<span class="sd">    Graph Chat agent can introspect domains that have never been</span>
+<span class="sd">    published as a version.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">sql_escape</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">entity_type</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">search</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Provide at least entity_type or search&quot;</span><span class="p">)</span>
+
+    <span class="n">depth</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">depth</span> <span class="ow">or</span> <span class="mi">1</span><span class="p">),</span> <span class="mi">10</span><span class="p">))</span>
+    <span class="n">limit</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span> <span class="ow">or</span> <span class="mi">1000</span><span class="p">),</span> <span class="mi">10000</span><span class="p">))</span>
+    <span class="n">offset</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">offset</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">))</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">table</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Graph name not configured&quot;</span><span class="p">)</span>
+
+    <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Graph backend not configured&quot;</span><span class="p">)</span>
+
+    <span class="n">rdf_type</span> <span class="o">=</span> <span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#type&quot;</span>
+    <span class="n">rdfs_label</span> <span class="o">=</span> <span class="s2">&quot;http://www.w3.org/2000/01/rdf-schema#label&quot;</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">seed_conditions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">entity_type</span><span class="p">:</span>
+            <span class="n">esc</span> <span class="o">=</span> <span class="n">sql_escape</span><span class="p">(</span><span class="n">entity_type</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="n">seed_conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;subject IN (SELECT subject FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WHERE predicate = &#39;</span><span class="si">{</span><span class="n">rdf_type</span><span class="si">}</span><span class="s2">&#39; AND &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;(LOWER(object) LIKE &#39;%#</span><span class="si">{</span><span class="n">esc</span><span class="si">}</span><span class="s2">&#39; OR LOWER(object) LIKE &#39;%/</span><span class="si">{</span><span class="n">esc</span><span class="si">}</span><span class="s2">&#39;))&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">esc</span> <span class="o">=</span> <span class="n">sql_escape</span><span class="p">(</span><span class="n">search</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="n">seed_conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;(subject IN (SELECT subject FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WHERE (predicate = &#39;</span><span class="si">{</span><span class="n">rdfs_label</span><span class="si">}</span><span class="s2">&#39; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;OR predicate LIKE &#39;%#label&#39; OR predicate LIKE &#39;%/label&#39; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;OR predicate LIKE &#39;%#name&#39; OR predicate LIKE &#39;%/name&#39;) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;AND LOWER(object) LIKE &#39;%</span><span class="si">{</span><span class="n">esc</span><span class="si">}</span><span class="s2">%&#39;) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;OR LOWER(subject) LIKE &#39;%/</span><span class="si">{</span><span class="n">esc</span><span class="si">}</span><span class="s2">%&#39; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;OR LOWER(subject) LIKE &#39;%#</span><span class="si">{</span><span class="n">esc</span><span class="si">}</span><span class="s2">%&#39;)&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">seed_where</span> <span class="o">=</span> <span class="s2">&quot; WHERE &quot;</span> <span class="o">+</span> <span class="s2">&quot; AND &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">seed_conditions</span><span class="p">)</span>
+
+        <span class="n">bfs_rows</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">bfs_traversal</span><span class="p">(</span>
+            <span class="n">table</span><span class="p">,</span>
+            <span class="n">seed_where</span><span class="p">,</span>
+            <span class="n">depth</span><span class="p">,</span>
+            <span class="n">search</span><span class="o">=</span><span class="n">search</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="n">entity_type</span><span class="o">=</span><span class="n">entity_type</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">bfs_rows</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;seed_count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="s2">&quot;depth&quot;</span><span class="p">:</span> <span class="n">depth</span><span class="p">,</span>
+                <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;No matching entities found&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;triples&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="n">limit</span><span class="p">,</span>
+                <span class="s2">&quot;offset&quot;</span><span class="p">:</span> <span class="n">offset</span><span class="p">,</span>
+                <span class="s2">&quot;entity_count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="p">}</span>
+
+        <span class="n">all_entities</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;entity&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">bfs_rows</span><span class="p">}</span>
+        <span class="n">seed_count</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">bfs_rows</span> <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;min_lvl&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">all_entities</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">expand_uri_aliases</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">all_entities</span><span class="p">)</span>
+
+        <span class="n">all_rows</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">get_triples_for_subjects</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">all_entities</span><span class="p">))</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">all_triples</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">all_rows</span><span class="p">:</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;predicate&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;object&quot;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+                <span class="n">all_triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+
+        <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_triples</span><span class="p">)</span>
+        <span class="n">page</span> <span class="o">=</span> <span class="n">all_triples</span><span class="p">[</span><span class="n">offset</span> <span class="p">:</span> <span class="n">offset</span> <span class="o">+</span> <span class="n">limit</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;seed_count&quot;</span><span class="p">:</span> <span class="n">seed_count</span><span class="p">,</span>
+            <span class="s2">&quot;depth&quot;</span><span class="p">:</span> <span class="n">depth</span><span class="p">,</span>
+            <span class="s2">&quot;triples&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                <span class="p">}</span>
+                <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">page</span>
+            <span class="p">],</span>
+            <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">page</span><span class="p">),</span>
+            <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="n">total</span><span class="p">,</span>
+            <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="n">limit</span><span class="p">,</span>
+            <span class="s2">&quot;offset&quot;</span><span class="p">:</span> <span class="n">offset</span><span class="p">,</span>
+            <span class="s2">&quot;entity_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_entities</span><span class="p">),</span>
+        <span class="p">}</span>
+    <span class="k">except</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span><span class="p">,</span> <span class="n">NotFoundError</span><span class="p">):</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;dtwin_triples_find failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Triple search failed&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
+
+
+
+<div class="viewcode-block" id="dtwin_neighbors">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.dtwin_neighbors">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/neighbors&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dtwin_neighbors</span><span class="p">(</span>
+    <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Expand *uri* by ``depth`` BFS hops and return the induced subgraph</span>
+<span class="sd">    triples.</span>
+
+<span class="sd">    Used by the graph viewer&#39;s right-click &quot;Expand neighbours&quot; action to</span>
+<span class="sd">    enrich the displayed graph with one or more hops of related entities.</span>
+<span class="sd">    Only triples whose object is a literal *or* whose object is a URI also</span>
+<span class="sd">    present in the visited set are returned, so the front-end can render</span>
+<span class="sd">    proper edges without ghost endpoints.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">uri</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Provide &#39;uri&#39;&quot;</span><span class="p">)</span>
+
+    <span class="n">depth</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">depth</span> <span class="ow">or</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">5</span><span class="p">))</span>
+    <span class="n">limit</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span> <span class="ow">or</span> <span class="mi">2000</span><span class="p">),</span> <span class="mi">20000</span><span class="p">))</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">table</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Graph name not configured&quot;</span><span class="p">)</span>
+
+    <span class="n">store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;graph&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Graph backend not configured&quot;</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">visited</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">uri</span><span class="p">}</span>
+        <span class="n">frontier</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">uri</span><span class="p">}</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">depth</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">frontier</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">next_hop</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">expand_entity_neighbors</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">frontier</span><span class="p">)</span> <span class="o">-</span> <span class="n">visited</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">next_hop</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">visited</span> <span class="o">|=</span> <span class="n">next_hop</span>
+            <span class="n">frontier</span> <span class="o">=</span> <span class="n">next_hop</span>
+
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">get_triples_for_subjects</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">visited</span><span class="p">))</span>
+
+        <span class="n">triples</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="nb">set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">o</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">o</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">is_uri_obj</span> <span class="o">=</span> <span class="n">o</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;http://&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">o</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;https://&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">is_uri_obj</span> <span class="ow">and</span> <span class="n">o</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">visited</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">s</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">p</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">o</span><span class="p">})</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">limit</span><span class="p">:</span>
+                <span class="k">break</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;seed_uri&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span>
+            <span class="s2">&quot;depth&quot;</span><span class="p">:</span> <span class="n">depth</span><span class="p">,</span>
+            <span class="s2">&quot;entity_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">visited</span><span class="p">),</span>
+            <span class="s2">&quot;columns&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;triples&quot;</span><span class="p">:</span> <span class="n">triples</span><span class="p">,</span>
+            <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span>
+        <span class="p">}</span>
+    <span class="k">except</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span><span class="p">,</span> <span class="n">NotFoundError</span><span class="p">):</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;dtwin_neighbors failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Neighbour expansion failed&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
+
+
+
+<div class="viewcode-block" id="dtwin_assistant_history_set_limit">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.dtwin_assistant_history_set_limit">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/assistant/history/limit&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">dtwin_assistant_history_set_limit</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update the maximum number of turns kept per-domain (session-scoped).</span>
+
+<span class="sd">    Body: ``{&quot;limit&quot;: &lt;int&gt;}``.  Clamped to ``[5, 100]``.  When the new</span>
+<span class="sd">    limit is smaller than the existing history, it is trimmed in place.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+    <span class="n">new_limit</span> <span class="o">=</span> <span class="n">_chat_clamp_limit</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;limit&quot;</span><span class="p">))</span>
+    <span class="n">cache</span> <span class="o">=</span> <span class="n">_chat_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;limit&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_limit</span>
+    <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;history&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">dom</span><span class="p">:</span> <span class="n">_chat_trim</span><span class="p">(</span><span class="n">msgs</span><span class="p">,</span> <span class="n">new_limit</span><span class="p">)</span> <span class="k">for</span> <span class="n">dom</span><span class="p">,</span> <span class="n">msgs</span> <span class="ow">in</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;history&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+    <span class="p">}</span>
+    <span class="n">_chat_save_cache</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">cache</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="n">new_limit</span><span class="p">}</span></div>
 
 </pre></div>
 

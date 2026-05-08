@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -125,7 +126,7 @@
 <h1><code class="docutils literal notranslate"><span class="pre">back.core.graph_analysis</span></code> – Community Detection &amp; Clustering<a class="headerlink" href="#back-core-graph-analysis-community-detection-clustering" title="Link to this heading">¶</a></h1>
 <section id="module-back.core.graph_analysis.models">
 <span id="models"></span><h2>Models<a class="headerlink" href="#module-back.core.graph_analysis.models" title="Link to this heading">¶</a></h2>
-<p>Data models for graph community detection.</p>
+<p>Data models for graph analysis: community detection and cohort discovery.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="back.core.graph_analysis.models.ClusterRequest">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">ClusterRequest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">algorithm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'louvain'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resolution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicate_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_triples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500000</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#ClusterRequest"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.ClusterRequest" title="Link to this definition">¶</a></dt>
@@ -274,6 +275,583 @@
 
 </dd></dl>
 
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortHop">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortHop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">via</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">where</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortHop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortHop" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>One hop along a multi-hop linkage path.</p>
+<p><em>via</em> — predicate URI traversed in this hop (e.g. <code class="docutils literal notranslate"><span class="pre">:assignedTo</span></code>).
+<em>target_class</em> — class URI of the hop’s target node (e.g. <code class="docutils literal notranslate"><span class="pre">:Project</span></code>).
+<em>where</em> — optional per-hop attribute filters applied to the hop’s
+target node before it’s added to the next frontier. Reuses the
+<a class="reference internal" href="#back.core.graph_analysis.models.CohortCompat" title="back.core.graph_analysis.models.CohortCompat"><code class="xref py py-class docutils literal notranslate"><span class="pre">CohortCompat</span></code></a> primitives (<code class="docutils literal notranslate"><span class="pre">value_equals</span></code> / <code class="docutils literal notranslate"><span class="pre">value_in</span></code> /
+<code class="docutils literal notranslate"><span class="pre">value_range</span></code>); <code class="docutils literal notranslate"><span class="pre">same_value</span></code> is not meaningful at hop scope and
+is ignored. Lets users say <em>“Person → Project → ComplianceType
+where complianceTypeId = ‘Individual’”</em> without misusing the
+rule-level compatibility (which filters the source class only).</p>
+<p>The hop’s <em>source class</em> is implicit: hop 0 starts at the rule’s
+<code class="docutils literal notranslate"><span class="pre">class_uri</span></code>; hop <em>i</em> starts at hop <em>i-1</em>’s <code class="docutils literal notranslate"><span class="pre">target_class</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>via</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>target_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>where</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortCompat" title="back.core.graph_analysis.models.CohortCompat"><em>CohortCompat</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortHop.via">
+<span class="sig-name descname"><span class="pre">via</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortHop.via" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortHop.target_class">
+<span class="sig-name descname"><span class="pre">target_class</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortHop.target_class" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortHop.where">
+<span class="sig-name descname"><span class="pre">where</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#back.core.graph_analysis.models.CohortCompat" title="back.core.graph_analysis.models.CohortCompat"><span class="pre">CohortCompat</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortHop.where" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortHop.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortHop.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortHop.to_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortHop.from_dict">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortHop.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortHop.from_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.graph_analysis.models.CohortHop" title="back.core.graph_analysis.models.CohortHop"><em>CohortHop</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortLink">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortLink</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shared_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">via</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortLink"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortLink" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Together-relation: two members are linked when they share an entity
+reachable by an ordered path.</p>
+<p>The canonical representation is <em>path</em> — a list of <a class="reference internal" href="#back.core.graph_analysis.models.CohortHop" title="back.core.graph_analysis.models.CohortHop"><code class="xref py py-class docutils literal notranslate"><span class="pre">CohortHop</span></code></a>
+starting from the rule’s <code class="docutils literal notranslate"><span class="pre">class_uri</span></code> and ending at the “shared
+entity” the two members must agree on.</p>
+<p><em>shared_class</em> and <em>via</em> are the legacy 1-hop fields, kept for
+backwards compatibility. When <em>path</em> is empty but those fields are
+set, <code class="docutils literal notranslate"><span class="pre">hops()</span></code> synthesises a single-hop path on the fly so the
+engine has a uniform representation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shared_class</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>via</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortHop" title="back.core.graph_analysis.models.CohortHop"><em>CohortHop</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortLink.shared_class">
+<span class="sig-name descname"><span class="pre">shared_class</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortLink.shared_class" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortLink.via">
+<span class="sig-name descname"><span class="pre">via</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortLink.via" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortLink.path">
+<span class="sig-name descname"><span class="pre">path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#back.core.graph_analysis.models.CohortHop" title="back.core.graph_analysis.models.CohortHop"><span class="pre">CohortHop</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortLink.path" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortLink.hops">
+<span class="sig-name descname"><span class="pre">hops</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortLink.hops"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortLink.hops" title="Link to this definition">¶</a></dt>
+<dd><p>Return the canonical hop list (legacy 1-hop links auto-promoted).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference internal" href="#back.core.graph_analysis.models.CohortHop" title="back.core.graph_analysis.models.CohortHop"><em>CohortHop</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortLink.terminal_class">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">terminal_class</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortLink.terminal_class" title="Link to this definition">¶</a></dt>
+<dd><p>Class URI of the shared entity at the end of the path.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortLink.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortLink.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortLink.to_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortLink.from_dict">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortLink.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortLink.from_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.graph_analysis.models.CohortLink" title="back.core.graph_analysis.models.CohortLink"><em>CohortLink</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortCompat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_missing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortCompat"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>One compatibility constraint applied to candidate cohort members.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>property</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>values</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>min</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>max</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>allow_missing</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.type">
+<span class="sig-name descname"><span class="pre">type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.type" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.property">
+<span class="sig-name descname"><span class="pre">property</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.property" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.value">
+<span class="sig-name descname"><span class="pre">value</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.value" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.values">
+<span class="sig-name descname"><span class="pre">values</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.values" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.min">
+<span class="sig-name descname"><span class="pre">min</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.min" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.max">
+<span class="sig-name descname"><span class="pre">max</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.max" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.allow_missing">
+<span class="sig-name descname"><span class="pre">allow_missing</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.allow_missing" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortCompat.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.to_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortCompat.from_dict">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortCompat.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortCompat.from_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.graph_analysis.models.CohortCompat" title="back.core.graph_analysis.models.CohortCompat"><em>CohortCompat</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortUCTarget">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortUCTarget</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">catalog</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortUCTarget"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortUCTarget" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Unity Catalog Delta table target for cohort materialisation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>catalog</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>schema</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortUCTarget.catalog">
+<span class="sig-name descname"><span class="pre">catalog</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortUCTarget.catalog" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortUCTarget.schema">
+<span class="sig-name descname"><span class="pre">schema</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortUCTarget.schema" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortUCTarget.table_name">
+<span class="sig-name descname"><span class="pre">table_name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortUCTarget.table_name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortUCTarget.fq_name">
+<span class="sig-name descname"><span class="pre">fq_name</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortUCTarget.fq_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortUCTarget.fq_name" title="Link to this definition">¶</a></dt>
+<dd><p>Return the fully-qualified <code class="docutils literal notranslate"><span class="pre">catalog.schema.table_name</span></code> identifier.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortUCTarget.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortUCTarget.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortUCTarget.to_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortUCTarget.from_dict">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortUCTarget.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortUCTarget.from_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.graph_analysis.models.CohortUCTarget" title="back.core.graph_analysis.models.CohortUCTarget"><em>CohortUCTarget</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortOutput">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortOutput</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_table</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortOutput"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortOutput" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Where cohort results should be written.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>graph</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>uc_table</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortUCTarget" title="back.core.graph_analysis.models.CohortUCTarget"><em>CohortUCTarget</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortOutput.graph">
+<span class="sig-name descname"><span class="pre">graph</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortOutput.graph" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortOutput.uc_table">
+<span class="sig-name descname"><span class="pre">uc_table</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#back.core.graph_analysis.models.CohortUCTarget" title="back.core.graph_analysis.models.CohortUCTarget"><span class="pre">CohortUCTarget</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortOutput.uc_table" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortOutput.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortOutput.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortOutput.to_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortOutput.from_dict">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortOutput.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortOutput.from_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.graph_analysis.models.CohortOutput" title="back.core.graph_analysis.models.CohortOutput"><em>CohortOutput</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortRule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">links</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">links_combine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'any'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compatibility</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'connected'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_triples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortRule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>A user-authored cohort discovery rule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>label</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>links</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortLink" title="back.core.graph_analysis.models.CohortLink"><em>CohortLink</em></a><em>]</em>)</p></li>
+<li><p><strong>links_combine</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>compatibility</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortCompat" title="back.core.graph_analysis.models.CohortCompat"><em>CohortCompat</em></a><em>]</em>)</p></li>
+<li><p><strong>group_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>min_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>max_triples</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>output</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortOutput" title="back.core.graph_analysis.models.CohortOutput"><em>CohortOutput</em></a>)</p></li>
+<li><p><strong>enabled</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>description</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.id">
+<span class="sig-name descname"><span class="pre">id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.label">
+<span class="sig-name descname"><span class="pre">label</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.label" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.class_uri">
+<span class="sig-name descname"><span class="pre">class_uri</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.class_uri" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.links">
+<span class="sig-name descname"><span class="pre">links</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#back.core.graph_analysis.models.CohortLink" title="back.core.graph_analysis.models.CohortLink"><span class="pre">CohortLink</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.links" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.links_combine">
+<span class="sig-name descname"><span class="pre">links_combine</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'any'</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.links_combine" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.compatibility">
+<span class="sig-name descname"><span class="pre">compatibility</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#back.core.graph_analysis.models.CohortCompat" title="back.core.graph_analysis.models.CohortCompat"><span class="pre">CohortCompat</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.compatibility" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.group_type">
+<span class="sig-name descname"><span class="pre">group_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'connected'</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.group_type" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.min_size">
+<span class="sig-name descname"><span class="pre">min_size</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.min_size" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.max_triples">
+<span class="sig-name descname"><span class="pre">max_triples</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">500000</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.max_triples" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.output">
+<span class="sig-name descname"><span class="pre">output</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#back.core.graph_analysis.models.CohortOutput" title="back.core.graph_analysis.models.CohortOutput"><span class="pre">CohortOutput</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.output" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.enabled">
+<span class="sig-name descname"><span class="pre">enabled</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.enabled" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.description">
+<span class="sig-name descname"><span class="pre">description</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.description" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.validate">
+<span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortRule.validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.validate" title="Link to this definition">¶</a></dt>
+<dd><p>Return a list of human-readable validation errors (empty when OK).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortRule.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.to_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortRule.from_dict">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortRule.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortRule.from_dict" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.graph_analysis.models.CohortRule" title="back.core.graph_analysis.models.CohortRule"><em>CohortRule</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortGroup">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortGroup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">idx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">members</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortGroup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortGroup" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>One detected cohort: a content-hash URI and the sorted member list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>idx</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>members</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortGroup.id">
+<span class="sig-name descname"><span class="pre">id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortGroup.id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortGroup.idx">
+<span class="sig-name descname"><span class="pre">idx</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortGroup.idx" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortGroup.size">
+<span class="sig-name descname"><span class="pre">size</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortGroup.size" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortGroup.members">
+<span class="sig-name descname"><span class="pre">members</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortGroup.members" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortStats">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortStats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_member_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">survivor_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cohort_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grouped_member_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">elapsed_ms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortStats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortStats" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Aggregate statistics from a cohort discovery run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>class_member_count</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>survivor_count</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>edge_count</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>cohort_count</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>grouped_member_count</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>elapsed_ms</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortStats.rule_id">
+<span class="sig-name descname"><span class="pre">rule_id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortStats.rule_id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortStats.class_member_count">
+<span class="sig-name descname"><span class="pre">class_member_count</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortStats.class_member_count" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortStats.survivor_count">
+<span class="sig-name descname"><span class="pre">survivor_count</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortStats.survivor_count" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortStats.edge_count">
+<span class="sig-name descname"><span class="pre">edge_count</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortStats.edge_count" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortStats.cohort_count">
+<span class="sig-name descname"><span class="pre">cohort_count</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortStats.cohort_count" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortStats.grouped_member_count">
+<span class="sig-name descname"><span class="pre">grouped_member_count</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortStats.grouped_member_count" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortStats.elapsed_ms">
+<span class="sig-name descname"><span class="pre">elapsed_ms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortStats.elapsed_ms" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortResult">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.models.</span></span><span class="sig-name descname"><span class="pre">CohortResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cohorts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stats</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/models.html#CohortResult"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.models.CohortResult" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Full result of a cohort discovery run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>cohorts</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortGroup" title="back.core.graph_analysis.models.CohortGroup"><em>CohortGroup</em></a><em>]</em>)</p></li>
+<li><p><strong>stats</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortStats" title="back.core.graph_analysis.models.CohortStats"><em>CohortStats</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortResult.rule_id">
+<span class="sig-name descname"><span class="pre">rule_id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortResult.rule_id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortResult.cohorts">
+<span class="sig-name descname"><span class="pre">cohorts</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#back.core.graph_analysis.models.CohortGroup" title="back.core.graph_analysis.models.CohortGroup"><span class="pre">CohortGroup</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortResult.cohorts" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.models.CohortResult.stats">
+<span class="sig-name descname"><span class="pre">stats</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#back.core.graph_analysis.models.CohortStats" title="back.core.graph_analysis.models.CohortStats"><span class="pre">CohortStats</span></a></span><a class="headerlink" href="#back.core.graph_analysis.models.CohortResult.stats" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
 </section>
 <section id="module-back.core.graph_analysis.CommunityDetector">
 <span id="community-detector"></span><h2>Community Detector<a class="headerlink" href="#module-back.core.graph_analysis.CommunityDetector" title="Link to this heading">¶</a></h2>
@@ -306,6 +884,475 @@ triple count exceeds <code class="docutils literal notranslate"><span class="pre
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference internal" href="#back.core.graph_analysis.models.DetectionResult" title="back.core.graph_analysis.models.DetectionResult"><em>DetectionResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.graph_analysis.CohortBuilder">
+<span id="cohort-builder"></span><h2>Cohort Builder<a class="headerlink" href="#module-back.core.graph_analysis.CohortBuilder" title="Link to this heading">¶</a></h2>
+<p>CohortBuilder — backend-agnostic cohort discovery engine.</p>
+<p>The engine pulls all triples through <code class="docutils literal notranslate"><span class="pre">store.query_triples(graph_name)</span></code>
+(the only call that works on every backend, SQL and Cypher alike), then
+applies the user-authored <code class="xref py py-class docutils literal notranslate"><span class="pre">CohortRule</span></code> in pure Python:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>List class members (subjects with <code class="docutils literal notranslate"><span class="pre">rdf:type</span> <span class="pre">=</span> <span class="pre">class_uri</span></code>).</p></li>
+<li><p>Fetch attribute values for the properties referenced by compatibility
+rows.</p></li>
+<li><p>Apply node filters (<code class="docutils literal notranslate"><span class="pre">value_equals</span></code> / <code class="docutils literal notranslate"><span class="pre">value_in</span></code> / <code class="docutils literal notranslate"><span class="pre">value_range</span></code>).</p></li>
+<li><p>Build candidate edges per <code class="xref py py-class docutils literal notranslate"><span class="pre">CohortLink</span></code> (members sharing a
+bridging entity reachable through <code class="docutils literal notranslate"><span class="pre">via</span></code>); combine via union (<code class="docutils literal notranslate"><span class="pre">any</span></code>)
+or intersection (<code class="docutils literal notranslate"><span class="pre">all</span></code>).</p></li>
+<li><p>Apply edge filters (<code class="docutils literal notranslate"><span class="pre">same_value</span></code>).</p></li>
+<li><p>Run NetworkX <code class="docutils literal notranslate"><span class="pre">connected_components</span></code> (group_type=connected) or
+<code class="docutils literal notranslate"><span class="pre">find_cliques</span></code> (group_type=strict).</p></li>
+<li><p>Filter by <code class="docutils literal notranslate"><span class="pre">min_size</span></code>, sort by size desc, hash the sorted-member list
+into a content-hash URI.</p></li>
+</ol>
+</div></blockquote>
+<dl class="simple">
+<dt>Materialisation:</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">materialize_to_graph</span></code> — delete old cohort triples for the rule
+(URI-prefix-based), then <code class="docutils literal notranslate"><span class="pre">insert_triples</span></code> the new payload.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">materialize_to_uc</span></code> — <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span> <span class="pre">IF</span> <span class="pre">NOT</span> <span class="pre">EXISTS</span></code>, <code class="docutils literal notranslate"><span class="pre">DELETE</span></code> the
+rule’s partition, then chunked <code class="docutils literal notranslate"><span class="pre">INSERT</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.CohortBuilder.</span></span><span class="sig-name descname"><span class="pre">CohortBuilder</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Backend-agnostic cohort discovery engine.</p>
+<p>Operates on a triplestore/graph-DB backend (anything that exposes
+<code class="docutils literal notranslate"><span class="pre">query_triples(graph_name)</span></code> and <code class="docutils literal notranslate"><span class="pre">insert_triples(graph_name,</span> <span class="pre">triples)</span></code>)
+plus a domain <code class="docutils literal notranslate"><span class="pre">base_uri</span></code> used to mint cohort URIs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>store</strong> (<em>Any</em>)</p></li>
+<li><p><strong>graph_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.build">
+<span class="sig-name descname"><span class="pre">build</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.build"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.build" title="Link to this definition">¶</a></dt>
+<dd><p>Run the full pipeline on <em>rule</em> and return cohorts + stats.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rule</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortRule" title="back.core.graph_analysis.models.CohortRule"><em>CohortRule</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#back.core.graph_analysis.models.CohortResult" title="back.core.graph_analysis.models.CohortResult"><em>CohortResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.count_class_members">
+<span class="sig-name descname"><span class="pre">count_class_members</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.count_class_members"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.count_class_members" title="Link to this definition">¶</a></dt>
+<dd><p>Stage 1 helper: count instances of <em>class_uri</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.count_link_edges">
+<span class="sig-name descname"><span class="pre">count_link_edges</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">links</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">combine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'any'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.count_link_edges"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.count_link_edges" title="Link to this definition">¶</a></dt>
+<dd><p>Stage 3b helper: count candidate edges produced by <em>links</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>links</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortLink" title="back.core.graph_analysis.models.CohortLink"><em>CohortLink</em></a><em>]</em>)</p></li>
+<li><p><strong>combine</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.trace_paths">
+<span class="sig-name descname"><span class="pre">trace_paths</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">links</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compatibility</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.trace_paths"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.trace_paths" title="Link to this definition">¶</a></dt>
+<dd><p>Diagnose where a multi-hop rule loses candidates.</p>
+<p>Walks every link’s path with per-hop counters so users can see
+exactly which hop empties the frontier. Honours the rule’s
+compatibility (Stage 3a) so the starting frontier matches the
+real preview.</p>
+<p>Returned shape:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+  <span class="s2">&quot;class_uri&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;class_member_count&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+  <span class="s2">&quot;survivor_count&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+  <span class="s2">&quot;links&quot;</span><span class="p">:</span> <span class="p">[</span>
+    <span class="p">{</span>
+      <span class="s2">&quot;link_idx&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+      <span class="s2">&quot;starting_frontier&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+      <span class="s2">&quot;terminal_frontier&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+      <span class="s2">&quot;edge_count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+      <span class="s2">&quot;hops&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span>
+          <span class="s2">&quot;hop_idx&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+          <span class="s2">&quot;via&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span>
+          <span class="s2">&quot;target_class&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span>
+          <span class="s2">&quot;in_frontier&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+          <span class="s2">&quot;neighbours_raw&quot;</span><span class="p">:</span> <span class="mi">12</span><span class="p">,</span>
+          <span class="s2">&quot;dropped_type&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+          <span class="s2">&quot;dropped_where&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+          <span class="s2">&quot;out_frontier&quot;</span><span class="p">:</span> <span class="mi">12</span><span class="p">,</span>
+          <span class="s2">&quot;where_count&quot;</span><span class="p">:</span> <span class="mi">0</span>
+        <span class="p">},</span>
+        <span class="o">...</span>
+      <span class="p">]</span>
+    <span class="p">},</span>
+    <span class="o">...</span>
+  <span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Counters meaning:</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">in_frontier</span></code> — distinct nodes at hop entry</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">neighbours_raw</span></code> — count of (node → predicate) edges
+traversed, before any filter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dropped_type</span></code> — neighbours rejected by <code class="docutils literal notranslate"><span class="pre">target_class</span></code>
+type filter (after the lenient fallback)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dropped_where</span></code> — neighbours rejected by hop-level
+<code class="docutils literal notranslate"><span class="pre">where</span></code> filters</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">out_frontier</span></code> — distinct surviving neighbours</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>links</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortLink" title="back.core.graph_analysis.models.CohortLink"><em>CohortLink</em></a><em>]</em>)</p></li>
+<li><p><strong>compatibility</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortCompat" title="back.core.graph_analysis.models.CohortCompat"><em>CohortCompat</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.count_matching_nodes">
+<span class="sig-name descname"><span class="pre">count_matching_nodes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compatibility</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.count_matching_nodes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.count_matching_nodes" title="Link to this definition">¶</a></dt>
+<dd><p>Stage 3a helper: return <code class="docutils literal notranslate"><span class="pre">(matching,</span> <span class="pre">total)</span></code> member counts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>compatibility</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference internal" href="#back.core.graph_analysis.models.CohortCompat" title="back.core.graph_analysis.models.CohortCompat"><em>CohortCompat</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.sample_property_values">
+<span class="sig-name descname"><span class="pre">sample_property_values</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.sample_property_values"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.sample_property_values" title="Link to this definition">¶</a></dt>
+<dd><p>Return up to <em>limit</em> distinct values of <em>property_uri</em> for instances
+of <em>class_uri</em> present in the graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>property_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.explain_membership">
+<span class="sig-name descname"><span class="pre">explain_membership</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.explain_membership"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.explain_membership" title="Link to this definition">¶</a></dt>
+<dd><p>Return a per-stage breakdown of why <em>target</em> did or did not end
+up in a cohort.  Used by the “Why?” / “Why not?” UI.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortRule" title="back.core.graph_analysis.models.CohortRule"><em>CohortRule</em></a>)</p></li>
+<li><p><strong>target</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.materialize_to_graph">
+<span class="sig-name descname"><span class="pre">materialize_to_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.materialize_to_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.materialize_to_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Delete prior cohort triples for <em>rule</em>, insert fresh ones.</p>
+<p>Returns the number of triples inserted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortRule" title="back.core.graph_analysis.models.CohortRule"><em>CohortRule</em></a>)</p></li>
+<li><p><strong>result</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortResult" title="back.core.graph_analysis.models.CohortResult"><em>CohortResult</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortBuilder.CohortBuilder.materialize_to_uc">
+<span class="sig-name descname"><span class="pre">materialize_to_uc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">result</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">member_labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortBuilder.html#CohortBuilder.materialize_to_uc"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortBuilder.CohortBuilder.materialize_to_uc" title="Link to this definition">¶</a></dt>
+<dd><p>Write cohort rows to a Unity Catalog Delta table (idempotent).</p>
+<p>Returns the number of rows inserted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortRule" title="back.core.graph_analysis.models.CohortRule"><em>CohortRule</em></a>)</p></li>
+<li><p><strong>result</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortResult" title="back.core.graph_analysis.models.CohortResult"><em>CohortResult</em></a>)</p></li>
+<li><p><strong>client</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>target</strong> (<a class="reference internal" href="#back.core.graph_analysis.models.CohortUCTarget" title="back.core.graph_analysis.models.CohortUCTarget"><em>CohortUCTarget</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>member_labels</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="cohort-vocabulary">
+<h2>Cohort Vocabulary<a class="headerlink" href="#cohort-vocabulary" title="Link to this heading">¶</a></h2>
+<p>Single class that owns every cohort-related URI fragment and predicate.
+Used by the engine, materialiser, and route layer to agree on a single
+set of cohort URIs derived from a domain <code class="docutils literal notranslate"><span class="pre">base_uri</span></code>.</p>
+<p id="module-back.core.graph_analysis.CohortVocabulary">CohortVocabulary – URI helpers for the Cohort Discovery feature.</p>
+<p>Centralises the small handful of URI fragments and predicates the
+engine, materialiser, and frontend share. Exposes them through a
+single <a class="reference internal" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary" title="back.core.graph_analysis.CohortVocabulary.CohortVocabulary"><code class="xref py py-class docutils literal notranslate"><span class="pre">CohortVocabulary</span></code></a> class with <code class="docutils literal notranslate"><span class="pre">&#64;staticmethod</span></code> helpers
+so callers can resolve a domain-specific URI from a <code class="docutils literal notranslate"><span class="pre">base_uri</span></code> and
+optional <code class="docutils literal notranslate"><span class="pre">rule_id</span></code> / <code class="docutils literal notranslate"><span class="pre">content_hash</span></code>.</p>
+<section id="vocabulary">
+<h3>Vocabulary<a class="headerlink" href="#vocabulary" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">Cohort</span></code>        – the OWL class minted under <code class="docutils literal notranslate"><span class="pre">base_uri</span></code> for every</dt><dd><p>cohort that materialises to the graph.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">inCohort&lt;RuleId&gt;</span></code> – subject predicate linking a member to its</dt><dd><p>cohort. The predicate fragment carries the rule id
+(camelCase) so multiple cohort rules co-exist in
+the same graph without sharing a predicate. Form:
+<code class="docutils literal notranslate"><span class="pre">&lt;base_uri&gt;/inCohort&lt;RuleId&gt;</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">fromRule</span></code>      – object predicate recording the rule that produced</dt><dd><p>a cohort (one rule may produce many cohorts).</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">cohortSize</span></code>    – datatype predicate carrying the cohort cardinality</dt><dd><p>so the UC table and graph stay in sync.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">cohort</span></code>        – path segment under which every cohort URI lives,</dt><dd><p>always followed by the rule id and the content
+hash (<code class="docutils literal notranslate"><span class="pre">…/cohort/&lt;rule_id&gt;/c-&lt;hash&gt;</span></code>).</p>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graph_analysis.CohortVocabulary.</span></span><span class="sig-name descname"><span class="pre">CohortVocabulary</span></span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortVocabulary.html#CohortVocabulary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Domain-aware URI builder for cohort triples.</p>
+<p>All helpers are pure: they take a <code class="docutils literal notranslate"><span class="pre">base_uri</span></code> (and optionally a
+<code class="docutils literal notranslate"><span class="pre">rule_id</span></code> / <code class="docutils literal notranslate"><span class="pre">content_hash</span></code>) and return a string. No I/O, no
+state – safe to call from the engine, materialiser, route layer,
+or unit tests.</p>
+<p>The class-level <code class="docutils literal notranslate"><span class="pre">*_FRAGMENT</span></code> constants are the canonical short
+forms; everything else is derived from them, so a future rename
+is a single-place edit.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_CLASS_FRAGMENT">
+<span class="sig-name descname"><span class="pre">COHORT_CLASS_FRAGMENT</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Final" title="(in Python v3.14)"><span class="pre">Final</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Cohort'</span></span><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_CLASS_FRAGMENT" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.IN_COHORT_FRAGMENT">
+<span class="sig-name descname"><span class="pre">IN_COHORT_FRAGMENT</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Final" title="(in Python v3.14)"><span class="pre">Final</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'inCohort'</span></span><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.IN_COHORT_FRAGMENT" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.FROM_RULE_FRAGMENT">
+<span class="sig-name descname"><span class="pre">FROM_RULE_FRAGMENT</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Final" title="(in Python v3.14)"><span class="pre">Final</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'fromRule'</span></span><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.FROM_RULE_FRAGMENT" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_SIZE_FRAGMENT">
+<span class="sig-name descname"><span class="pre">COHORT_SIZE_FRAGMENT</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Final" title="(in Python v3.14)"><span class="pre">Final</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'cohortSize'</span></span><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_SIZE_FRAGMENT" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_PATH_FRAGMENT">
+<span class="sig-name descname"><span class="pre">COHORT_PATH_FRAGMENT</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Final" title="(in Python v3.14)"><span class="pre">Final</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'cohort'</span></span><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_PATH_FRAGMENT" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.join">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">join</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fragment</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortVocabulary.html#CohortVocabulary.join"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.join" title="Link to this definition">¶</a></dt>
+<dd><p>Join <em>base</em> and a relative <em>fragment</em> with the right separator.</p>
+<p>Mirrors the convention used elsewhere in the codebase: when
+<em>base</em> already ends with <code class="docutils literal notranslate"><span class="pre">/</span></code> or <code class="docutils literal notranslate"><span class="pre">#</span></code> we trust the caller;
+otherwise we insert <code class="docutils literal notranslate"><span class="pre">/</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>fragment</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_class">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cohort_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortVocabulary.html#CohortVocabulary.cohort_class"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_class" title="Link to this definition">¶</a></dt>
+<dd><p>Return the <code class="docutils literal notranslate"><span class="pre">Cohort</span></code> class URI for a given domain.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.in_cohort">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">in_cohort</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortVocabulary.html#CohortVocabulary.in_cohort"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.in_cohort" title="Link to this definition">¶</a></dt>
+<dd><p>Return the per-rule <code class="docutils literal notranslate"><span class="pre">inCohort&lt;RuleId&gt;</span></code> predicate URI.</p>
+<p>The rule id is concatenated to the <code class="docutils literal notranslate"><span class="pre">inCohort</span></code> fragment so each
+cohort rule owns its own membership predicate. With camelCase
+rule names (form-enforced) the result reads naturally, e.g.
+<code class="docutils literal notranslate"><span class="pre">&lt;base&gt;/inCohortExemptStaffingPool</span></code>. <code class="docutils literal notranslate"><span class="pre">rule_id</span></code> is treated
+as an opaque URI segment: spaces are stripped, everything else
+is preserved so legacy ids with hyphens or underscores still
+produce valid URIs.</p>
+<p>When <em>rule_id</em> is empty the historic single-predicate form
+(<code class="docutils literal notranslate"><span class="pre">&lt;base&gt;/inCohort</span></code>) is returned – this is reserved for
+callers that legitimately need to reference the unparameterised
+predicate (docs, generic introspection); production materialise
+/ delete paths always pass a rule id.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.from_rule">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_rule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortVocabulary.html#CohortVocabulary.from_rule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.from_rule" title="Link to this definition">¶</a></dt>
+<dd><p>Return the <code class="docutils literal notranslate"><span class="pre">fromRule</span></code> predicate URI for a given domain.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_size">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cohort_size</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortVocabulary.html#CohortVocabulary.cohort_size"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_size" title="Link to this definition">¶</a></dt>
+<dd><p>Return the <code class="docutils literal notranslate"><span class="pre">cohortSize</span></code> predicate URI for a given domain.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_prefix">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cohort_prefix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_id</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortVocabulary.html#CohortVocabulary.cohort_prefix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_prefix" title="Link to this definition">¶</a></dt>
+<dd><p>Return the URI prefix every cohort produced by <em>rule_id</em> shares.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cohort</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">content_hash</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graph_analysis/CohortVocabulary.html#CohortVocabulary.cohort"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort" title="Link to this definition">¶</a></dt>
+<dd><p>Return the URI for a single cohort produced by a rule.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>content_hash</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
 </dd>
 </dl>
 </dd></dl>

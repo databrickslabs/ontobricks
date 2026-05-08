@@ -937,6 +937,255 @@ Content-Type: application/json
             </div>
         </div>
 
+        <!-- ========== Cohort ========== -->
+        <div class="mt-2 pt-4 mb-1 border-top">
+            <h5 class="fw-semibold mb-2 d-flex align-items-center gap-2">
+                <i class="bi bi-people text-primary"></i> Cohort
+            </h5>
+            <p class="text-muted small mb-2">
+                List saved cohort rules, dry-run a candidate rule against the active graph, and
+                materialise a saved rule to graph triples and/or a Unity Catalog Delta table.
+            </p>
+            <p class="small mb-0">
+                <a href="/api/docs#/Cohort" target="_blank" class="text-decoration-none">
+                    <i class="bi bi-journal-code me-1"></i>OpenAPI: Cohort
+                </a>
+            </p>
+        </div>
+
+        <!-- GET /cohorts/rules -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/cohorts/rules</code>
+                <small class="text-muted">List saved cohort rules</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2 d-none">
+                <p class="small mb-2">
+                    Returns every saved cohort rule on the active domain. Each entry includes the
+                    full rule payload (links, compatibility, output config) so callers can re-run,
+                    preview, or materialise without a second round-trip.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "rules": [
+    {
+      "id": "Staffing001",
+      "label": "Staffing — same compliance",
+      "class_uri": "http://ex.org/onto#Consultant",
+      "enabled": true,
+      "description": "Cohorts of consultants staffed on the same project with matching compliance type.",
+      "rule": {
+        "id": "Staffing001",
+        "links": [...],
+        "compatibility": [...],
+        "output": { "graph": true, "uc_table": { "catalog": "main", "schema": "ontobricks", "table_name": "cohorts_staffing001" } }
+      }
+    }
+  ],
+  "count": 1
+}</code></pre>
+                <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/digitaltwin/cohorts/rules">
+                    <i class="bi bi-play-fill"></i> Try it
+                </button>
+                <div class="ob-api-response mt-2 d-none"></div>
+            </div>
+        </div>
+
+        <!-- GET /cohorts/rules/{rule_id} -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
+                <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/cohorts/rules/{rule_id}</code>
+                <small class="text-muted">Get a saved cohort rule</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2 d-none">
+                <p class="small mb-2">
+                    Return the full payload of a single saved cohort rule. Returns <code>404</code>
+                    when the rule id is unknown.
+                </p>
+                <h6 class="small fw-semibold mb-1">Path Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>rule_id</code></td><td>string</td><td>Id of the saved cohort rule</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "rule": {
+    "id": "Staffing001",
+    "label": "Staffing — same compliance",
+    "class_uri": "http://ex.org/onto#Consultant",
+    "links": [...],
+    "compatibility": [...],
+    "group_type": "connected",
+    "min_size": 2,
+    "output": { "graph": true, "uc_table": {...} },
+    "enabled": true
+  }
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- POST /cohorts/dry-run -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
+                <span class="badge bg-primary">POST</span>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/cohorts/dry-run</code>
+                <small class="text-muted">Preview a cohort rule</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2 d-none">
+                <p class="small mb-2">
+                    Run the cohort engine on a candidate rule and return the discovered cohorts
+                    (members enriched with <code>{uri, id, label}</code>) plus engine statistics.
+                    <strong>Nothing is persisted.</strong> Use this to validate a rule before saving
+                    or materialising.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Request Body</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>rule</code></td><td>object</td><td>Yes</td><td>Candidate cohort rule (same shape as a saved rule)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Request</h6>
+<pre class="small mb-1"><code>POST /api/v1/digitaltwin/cohorts/dry-run?domain_name=consulting
+Content-Type: application/json
+
+{
+  "rule": {
+    "id": "candidate",
+    "label": "Candidate cohort",
+    "class_uri": "http://ex.org/onto#Person",
+    "links": [],
+    "compatibility": [],
+    "group_type": "connected",
+    "min_size": 2
+  }
+}</code></pre>
+
+                <h6 class="small fw-semibold mb-1 mt-2">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "rule_id": "candidate",
+  "cohorts": [
+    {
+      "id": "candidate#0",
+      "idx": 0,
+      "size": 3,
+      "members": [
+        { "uri": "http://ex.org/onto#p1", "id": "p1", "label": "Alice" },
+        { "uri": "http://ex.org/onto#p2", "id": "p2", "label": "Bob" }
+      ]
+    }
+  ],
+  "stats": {
+    "rule_id": "candidate",
+    "class_member_count": 12,
+    "survivor_count": 9,
+    "edge_count": 24,
+    "cohort_count": 3,
+    "grouped_member_count": 9,
+    "elapsed_ms": 47
+  }
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- POST /cohorts/materialize -->
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
+                <span class="badge bg-primary">POST</span>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/digitaltwin/cohorts/materialize</code>
+                <small class="text-muted">Materialise a saved rule</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2 d-none">
+                <p class="small mb-2">
+                    Re-run a saved cohort rule and persist the outputs as configured by the rule
+                    (graph triples, UC Delta table). Use <code>output_graph</code> /
+                    <code>output_uc</code> to skip a target for this run only &mdash; the saved rule
+                    is unchanged. Materialisation is idempotent: re-running replaces previous output
+                    for the same rule.
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>domain_name</code></td><td>string</td><td>&mdash;</td><td>Domain name in the registry (uses current session if omitted)</td></tr>
+                        <tr><td><code>domain_version</code></td><td>string</td><td>&mdash;</td><td>Specific version to load (uses latest if omitted)</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Request Body</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>rule_id</code></td><td>string</td><td><em>required</em></td><td>Id of the saved cohort rule to run</td></tr>
+                        <tr><td><code>output_graph</code></td><td>boolean</td><td><code>null</code></td><td>Override the rule's <code>output.graph</code> for this run only (<code>null</code> honours the saved rule)</td></tr>
+                        <tr><td><code>output_uc</code></td><td>boolean</td><td><code>null</code></td><td>Override the rule's UC-table output for this run only</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="small fw-semibold mb-1">Sample Request</h6>
+<pre class="small mb-1"><code>POST /api/v1/digitaltwin/cohorts/materialize?domain_name=consulting
+Content-Type: application/json
+
+{ "rule_id": "Staffing001", "output_uc": false }</code></pre>
+
+                <h6 class="small fw-semibold mb-1 mt-2">Sample Response</h6>
+<pre class="small mb-2"><code>{
+  "success": true,
+  "rule_id": "Staffing001",
+  "cohort_count": 4,
+  "grouped_member_count": 12,
+  "elapsed_ms": 132,
+  "materialized_triples": 28,
+  "uc_rows_written": 0,
+  "uc_table": null
+}</code></pre>
+            </div>
+        </div>
+
     </div><!-- /apiEndpointCards -->
 
     <!-- Authentication note -->

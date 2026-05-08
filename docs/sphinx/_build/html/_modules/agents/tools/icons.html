@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -116,12 +118,15 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">agents.tools.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">ToolContext</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<span class="n">_ALT_ICON_KEYS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;mapping&quot;</span><span class="p">,</span> <span class="s2">&quot;icon_map&quot;</span><span class="p">,</span> <span class="s2">&quot;assignments&quot;</span><span class="p">,</span> <span class="s2">&quot;emoji&quot;</span><span class="p">,</span> <span class="s2">&quot;emojis&quot;</span><span class="p">)</span>
 
 
 <span class="c1"># =====================================================</span>
@@ -131,11 +136,57 @@
 
 <div class="viewcode-block" id="tool_assign_icons">
 <a class="viewcode-back" href="../../../api/agents.html#agents.tools.icons.tool_assign_icons">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tool_assign_icons</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">icons</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Persist a {entity_name: emoji} mapping into the context for the caller.&quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">icons</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;tool_assign_icons: &#39;icons&#39; is not a dict (</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">icons</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;icons must be a JSON object {name: emoji}&quot;</span><span class="p">})</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_assign_icons</span><span class="p">(</span>
+    <span class="n">ctx</span><span class="p">:</span> <span class="n">ToolContext</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">icons</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">_kwargs</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Persist a {entity_name: emoji} mapping into the context for the caller.</span>
+
+<span class="sd">    Robust to common LLM deviations:</span>
+<span class="sd">      - ``icons`` missing / ``None`` because the tool-call JSON was truncated</span>
+<span class="sd">        (big-ontology case).  Returns a structured error telling the model to</span>
+<span class="sd">        retry with a smaller payload, instead of raising ``TypeError``.</span>
+<span class="sd">      - ``icons`` shipped under a different key (``mapping``, ``icon_map`` …).</span>
+<span class="sd">      - The mapping flattened as top-level kwargs</span>
+<span class="sd">        (``{&quot;Customer&quot;: &quot;🧑&quot;, &quot;Order&quot;: &quot;📋&quot;}`` instead of ``{&quot;icons&quot;: {...}}``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">icons</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">alt</span> <span class="ow">in</span> <span class="n">_ALT_ICON_KEYS</span><span class="p">:</span>
+            <span class="n">candidate</span> <span class="o">=</span> <span class="n">_kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">alt</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">candidate</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">icons</span> <span class="o">=</span> <span class="n">candidate</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_assign_icons: recovered icons from &#39;</span><span class="si">%s</span><span class="s2">&#39; key&quot;</span><span class="p">,</span> <span class="n">alt</span><span class="p">)</span>
+                <span class="k">break</span>
+
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="n">icons</span> <span class="ow">is</span> <span class="kc">None</span>
+        <span class="ow">and</span> <span class="n">_kwargs</span>
+        <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">_kwargs</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+    <span class="p">):</span>
+        <span class="n">icons</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">_kwargs</span><span class="p">)</span>
+        <span class="n">_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;tool_assign_icons: recovered icons from flattened kwargs (</span><span class="si">%d</span><span class="s2"> keys)&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">icons</span><span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">icons</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">icons</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;tool_assign_icons: &#39;icons&#39; missing/invalid (got </span><span class="si">%s</span><span class="s2">); &quot;</span>
+            <span class="s2">&quot;tool-call arguments were likely truncated by the token budget&quot;</span><span class="p">,</span>
+            <span class="nb">type</span><span class="p">(</span><span class="n">icons</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="s2">&quot;Missing or empty &#39;icons&#39; argument. Your tool-call JSON may &quot;</span>
+                    <span class="s2">&quot;have been truncated. Call assign_icons again with a JSON &quot;</span>
+                    <span class="s2">&quot;object of the form &quot;</span>
+                    <span class="s1">&#39;{&quot;icons&quot;: {&quot;Customer&quot;: &quot;🧑&quot;, &quot;Order&quot;: &quot;📋&quot;}}. If the &#39;</span>
+                    <span class="s2">&quot;ontology is large, assign entities in smaller batches &quot;</span>
+                    <span class="s2">&quot;across successive tool calls.&quot;</span>
+                <span class="p">)</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
 
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;tool_assign_icons: saving </span><span class="si">%d</span><span class="s2"> icon mapping(s)&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">icons</span><span class="p">))</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;tool_assign_icons: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">icons</span><span class="p">)</span>

@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/product.html">Product &amp; go-to-market</a></li>
@@ -120,6 +121,7 @@
  | <a href="#G"><strong>G</strong></a>
  | <a href="#H"><strong>H</strong></a>
  | <a href="#I"><strong>I</strong></a>
+ | <a href="#J"><strong>J</strong></a>
  | <a href="#L"><strong>L</strong></a>
  | <a href="#M"><strong>M</strong></a>
  | <a href="#N"><strong>N</strong></a>
@@ -153,6 +155,8 @@
         <li><a href="api/app.core.w3c.html#back.core.w3c.r2rml.R2RMLParser.R2RMLParser.__init__">(back.core.w3c.r2rml.R2RMLParser.R2RMLParser method)</a>
 </li>
         <li><a href="api/app.core.w3c.html#back.core.w3c.rdfs.RDFSParser.RDFSParser.__init__">(back.core.w3c.rdfs.RDFSParser.RDFSParser method)</a>
+</li>
+        <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.__init__">(back.objects.digitaltwin.CohortService.CohortService method)</a>
 </li>
         <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.__init__">(back.objects.domain.Domain.Domain method)</a>
 </li>
@@ -191,7 +195,7 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.mapping.add_entity_mapping">add_entity_mapping() (in module api.routers.internal.mapping)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.add_or_update_domain_entry">add_or_update_domain_entry() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.add_or_update_domain_entry">add_or_update_domain_entry() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.objects.mapping.html#back.objects.mapping.Mapping.Mapping.add_or_update_entity_mapping">add_or_update_entity_mapping() (back.objects.mapping.Mapping.Mapping method)</a>
 </li>
@@ -213,6 +217,10 @@
 
       <ul>
         <li><a href="api/agents.html#agents.agent_auto_icon_assign.engine.AgentResult">(class in agents.agent_auto_icon_assign.engine)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.AgentResult">(class in agents.agent_cohort)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.AgentResult">(class in agents.agent_cohort.engine)</a>
 </li>
         <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult">(class in agents.agent_ontology_assistant.engine)</a>
 </li>
@@ -266,6 +274,27 @@
 
       <ul>
         <li><a href="api/agents.html#module-agents.agent_auto_icon_assign.tools">module</a>
+</li>
+      </ul></li>
+      <li>
+    agents.agent_cohort
+
+      <ul>
+        <li><a href="api/agents.html#module-agents.agent_cohort">module</a>
+</li>
+      </ul></li>
+      <li>
+    agents.agent_cohort.engine
+
+      <ul>
+        <li><a href="api/agents.html#module-agents.agent_cohort.engine">module</a>
+</li>
+      </ul></li>
+      <li>
+    agents.agent_cohort.tools
+
+      <ul>
+        <li><a href="api/agents.html#module-agents.agent_cohort.tools">module</a>
 </li>
       </ul></li>
       <li>
@@ -352,6 +381,8 @@
         <li><a href="api/agents.html#module-agents.tools.metadata">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     agents.tools.ontology
 
@@ -359,8 +390,6 @@
         <li><a href="api/agents.html#module-agents.tools.ontology">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     agents.tools.sql
 
@@ -390,6 +419,8 @@
 </li>
       </ul></li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.all">all() (back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry class method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.allow_missing">allow_missing (back.core.graph_analysis.models.CohortCompat attribute)</a>
 </li>
       <li>
     api
@@ -438,6 +469,13 @@
 
       <ul>
         <li><a href="api/app.frontend.html#module-api.routers.internal.dtwin">module</a>
+</li>
+      </ul></li>
+      <li>
+    api.routers.internal.help
+
+      <ul>
+        <li><a href="api/app.frontend.html#module-api.routers.internal.help">module</a>
 </li>
       </ul></li>
       <li>
@@ -507,9 +545,11 @@
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.apply_registry_save">apply_registry_save() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
+      <li><a href="api/api_external.html#api.routers.digitaltwin.BuildRequest.archive_to_registry">archive_to_registry (api.routers.digitaltwin.BuildRequest attribute)</a>
+</li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.arity">arity (back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin attribute)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.as_dict">as_dict() (back.objects.registry.service.RegistryCfg method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.as_dict">as_dict() (back.objects.registry.RegistryService.RegistryCfg method)</a>
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.assign_icons_with_agent">assign_icons_with_agent() (back.objects.ontology.Ontology.Ontology method)</a>
 </li>
@@ -652,6 +692,20 @@
 
       <ul>
         <li><a href="api/app.core.errors.html#module-back.core.errors.ValidationError">module</a>
+</li>
+      </ul></li>
+      <li>
+    back.core.graph_analysis.CohortBuilder
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#module-back.core.graph_analysis.CohortBuilder">module</a>
+</li>
+      </ul></li>
+      <li>
+    back.core.graph_analysis.CohortVocabulary
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#module-back.core.graph_analysis.CohortVocabulary">module</a>
 </li>
       </ul></li>
       <li>
@@ -1063,6 +1117,13 @@
 </li>
       </ul></li>
       <li>
+    back.objects.digitaltwin.CohortService
+
+      <ul>
+        <li><a href="api/app.objects.digitaltwin.html#module-back.objects.digitaltwin.CohortService">module</a>
+</li>
+      </ul></li>
+      <li>
     back.objects.digitaltwin.constants
 
       <ul>
@@ -1140,10 +1201,17 @@
 </li>
       </ul></li>
       <li>
-    back.objects.registry.permissions
+    back.objects.registry.PermissionService
 
       <ul>
-        <li><a href="api/app.objects.registry.html#module-back.objects.registry.permissions">module</a>
+        <li><a href="api/app.objects.registry.html#module-back.objects.registry.PermissionService">module</a>
+</li>
+      </ul></li>
+      <li>
+    back.objects.registry.RegistryService
+
+      <ul>
+        <li><a href="api/app.objects.registry.html#module-back.objects.registry.RegistryService">module</a>
 </li>
       </ul></li>
       <li>
@@ -1151,13 +1219,6 @@
 
       <ul>
         <li><a href="api/app.objects.registry.html#module-back.objects.registry.scheduler">module</a>
-</li>
-      </ul></li>
-      <li>
-    back.objects.registry.service
-
-      <ul>
-        <li><a href="api/app.objects.registry.html#module-back.objects.registry.service">module</a>
 </li>
       </ul></li>
       <li>
@@ -1189,7 +1250,11 @@
 </li>
       </ul></li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.DataQualityRequest.backend">backend (api.routers.digitaltwin.DataQualityRequest attribute)</a>
+
+      <ul>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.backend">(back.objects.registry.RegistryService.RegistryCfg attribute)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.bfs_traversal">bfs_traversal() (back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore method)</a>
 
       <ul>
@@ -1199,6 +1264,8 @@
 </li>
       </ul></li>
       <li><a href="api/app.frontend.html#api.routers.internal.home.browse_volume">browse_volume() (in module api.routers.internal.home)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.build">build() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator.build_antecedent_count_sql">build_antecedent_count_sql() (back.core.reasoning.SWRLSQLTranslator.SWRLSQLTranslator method)</a>
 </li>
@@ -1304,7 +1371,7 @@
 <h2 id="C">C</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.cache_key">cache_key (back.objects.registry.service.RegistryService property)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.cache_key">cache_key (back.objects.registry.RegistryService.RegistryService property)</a>
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.calculate_owl_stats">calculate_owl_stats() (back.objects.ontology.Ontology.Ontology static method)</a>
 </li>
@@ -1315,6 +1382,8 @@
 </li>
       </ul></li>
       <li><a href="api/agents.html#agents.llm_utils.call_llm_with_retry">call_llm_with_retry() (in module agents.llm_utils)</a>
+</li>
+      <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.can_use_cloud_fetch">can_use_cloud_fetch() (back.core.databricks.DatabricksAuth.DatabricksAuth method)</a>
 </li>
       <li><a href="api/app.core.html#back.core.task_manager.TaskManager.cancel_task">cancel_task() (back.core.task_manager.TaskManager method)</a>
 
@@ -1329,7 +1398,9 @@
       <li><a href="api/api_external.html#api.routers.v1.UCLocationModel.catalog">catalog (api.routers.v1.UCLocationModel attribute)</a>
 
       <ul>
-        <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.catalog">(back.objects.registry.service.RegistryCfg attribute)</a>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.catalog">(back.core.graph_analysis.models.CohortUCTarget attribute)</a>
+</li>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.catalog">(back.objects.registry.RegistryService.RegistryCfg attribute)</a>
 </li>
       </ul></li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.catalog_metadata">catalog_metadata (back.objects.session.DomainSession.DomainSession property)</a>
@@ -1340,7 +1411,7 @@
         <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin.category">(back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltin attribute)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.cfg">cfg (back.objects.registry.service.RegistryService property)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.cfg">cfg (back.objects.registry.RegistryService.RegistryService property)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.domain.check_domain_name">check_domain_name() (in module api.routers.internal.domain)</a>
 </li>
@@ -1352,8 +1423,16 @@
 </li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.ClusterRequest.class_filter">class_filter (back.core.graph_analysis.models.ClusterRequest attribute)</a>
 </li>
-      <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.models.NodeTableDef.class_uri">class_uri (back.core.graphdb.ladybugdb.models.NodeTableDef attribute)</a>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats.class_member_count">class_member_count (back.core.graph_analysis.models.CohortStats attribute)</a>
 </li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.class_stats">class_stats() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.class_uri">class_uri (back.core.graph_analysis.models.CohortRule attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.models.NodeTableDef.class_uri">(back.core.graphdb.ladybugdb.models.NodeTableDef attribute)</a>
+</li>
+      </ul></li>
       <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult.classes">classes (agents.agent_ontology_assistant.engine.AgentResult attribute)</a>
 </li>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.classify_predicates">classify_predicates() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
@@ -1366,9 +1445,13 @@
       </ul></li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.clean_owl_output">clean_owl_output() (back.objects.ontology.Ontology.Ontology static method)</a>
 </li>
-      <li><a href="api/app.objects.session.html#back.objects.session.SessionManager.SessionManager.clear">clear() (back.objects.session.SessionManager.SessionManager method)</a>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache.clear">clear() (back.objects.domain.version_status.VersionStatusCache method)</a>
+
+      <ul>
+        <li><a href="api/app.objects.session.html#back.objects.session.SessionManager.SessionManager.clear">(back.objects.session.SessionManager.SessionManager method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.clear_admin_cache">clear_admin_cache() (back.objects.registry.permissions.PermissionService method)</a>
+      </ul></li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.clear_admin_cache">clear_admin_cache() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.clear_cache">clear_cache() (back.core.sqlwizard.SQLWizardService method)</a>
 
@@ -1384,7 +1467,7 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.domain.clear_domain">clear_domain() (in module api.routers.internal.domain)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.clear_domain_perm_cache">clear_domain_perm_cache() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.clear_domain_perm_cache">clear_domain_perm_cache() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.clear_generated_content">clear_generated_content() (back.objects.session.DomainSession.DomainSession method)</a>
 </li>
@@ -1398,11 +1481,11 @@
       </ul></li>
       <li><a href="api/app.frontend.html#api.routers.internal.home.clear_ontology">clear_ontology() (in module api.routers.internal.home)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.clear_principals_cache">clear_principals_cache() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.clear_principals_cache">clear_principals_cache() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.clear_uc_metadata">clear_uc_metadata() (back.objects.session.DomainSession.DomainSession method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.clear_user_groups_cache">clear_user_groups_cache() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.clear_user_groups_cache">clear_user_groups_cache() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.version_status.clear_version_status_cache">clear_version_status_cache() (in module back.objects.domain.version_status)</a>
 </li>
@@ -1414,6 +1497,8 @@
         <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugBase.LadybugBase.close">(back.core.graphdb.ladybugdb.LadybugBase.LadybugBase method)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.cloud_fetch_status">cloud_fetch_status() (back.core.databricks.DatabricksAuth.DatabricksAuth method)</a>
+</li>
       <li><a href="api/app.core.graphql.html#back.core.graphql.models.TypeInfo.cls_uri">cls_uri (back.core.graphql.models.TypeInfo attribute)</a>
 </li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.DetectionStats.cluster_count">cluster_count (back.core.graph_analysis.models.DetectionStats attribute)</a>
@@ -1424,12 +1509,116 @@
 </li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.DetectionResult.clusters">clusters (back.core.graph_analysis.models.DetectionResult attribute)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort">cohort() (back.core.graph_analysis.CohortVocabulary.CohortVocabulary class method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_class">cohort_class() (back.core.graph_analysis.CohortVocabulary.CohortVocabulary class method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_CLASS_FRAGMENT">COHORT_CLASS_FRAGMENT (back.core.graph_analysis.CohortVocabulary.CohortVocabulary attribute)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_class_stats">cohort_class_stats() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_class_stats">(in module api.routers.internal.dtwin)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats.cohort_count">cohort_count (back.core.graph_analysis.models.CohortStats attribute)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_dry_run">cohort_dry_run() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_edge_count">cohort_edge_count() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_edge_count">(in module api.routers.internal.dtwin)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_engine_context">cohort_engine_context() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_explain">cohort_explain() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_explain">(in module api.routers.internal.dtwin)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_json_body">cohort_json_body() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_materialize">cohort_materialize() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_node_count">cohort_node_count() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_node_count">(in module api.routers.internal.dtwin)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_PATH_FRAGMENT">COHORT_PATH_FRAGMENT (back.core.graph_analysis.CohortVocabulary.CohortVocabulary attribute)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_path_trace">cohort_path_trace() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_path_trace">(in module api.routers.internal.dtwin)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_prefix">cohort_prefix() (back.core.graph_analysis.CohortVocabulary.CohortVocabulary class method)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_probe_uc_write">cohort_probe_uc_write() (back.objects.digitaltwin.DigitalTwin.DigitalTwin static method)</a>
+</li>
+      <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.cohort_rules">cohort_rules (back.objects.session.DomainSession.DomainSession property)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_sample_values">cohort_sample_values() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_sample_values">(in module api.routers.internal.dtwin)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.cohort_size">cohort_size() (back.core.graph_analysis.CohortVocabulary.CohortVocabulary class method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.COHORT_SIZE_FRAGMENT">COHORT_SIZE_FRAGMENT (back.core.graph_analysis.CohortVocabulary.CohortVocabulary attribute)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_suggest_uc_target">cohort_suggest_uc_target() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_uc_probe_write">cohort_uc_probe_write() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohort_uc_suggest_target">cohort_uc_suggest_target() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder">CohortBuilder (class in back.core.graph_analysis.CohortBuilder)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat">CohortCompat (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.CohortEngineContext">CohortEngineContext (class in api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortGroup">CohortGroup (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop">CohortHop (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink">CohortLink (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortOutput">CohortOutput (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortResult">CohortResult (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule">CohortRule (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortResult.cohorts">cohorts (back.core.graph_analysis.models.CohortResult attribute)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.cohorts_agent">cohorts_agent() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService">CohortService (class in back.objects.digitaltwin.CohortService)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats">CohortStats (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget">CohortUCTarget (class in back.core.graph_analysis.models)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary">CohortVocabulary (class in back.core.graph_analysis.CohortVocabulary)</a>
+</li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CommunityDetector.CommunityDetector">CommunityDetector (class in back.core.graph_analysis.CommunityDetector)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.compatibility">compatibility (back.core.graph_analysis.models.CohortRule attribute)</a>
+</li>
+      <li><a href="api/app.core.html#back.core.task_manager.TaskManager.complete_current_step">complete_current_step() (back.core.task_manager.TaskManager method)</a>
 </li>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.complete_dq_task">complete_dq_task() (back.objects.digitaltwin.DigitalTwin.DigitalTwin static method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.core.html#back.core.task_manager.TaskManager.complete_task">complete_task() (back.core.task_manager.TaskManager method)</a>
 </li>
       <li><a href="api/app.core.html#back.core.task_manager.TaskStatus.COMPLETED">COMPLETED (back.core.task_manager.TaskStatus attribute)</a>
@@ -1456,7 +1645,7 @@
 </li>
       <li><a href="api/app.objects.mapping.html#back.objects.mapping.Mapping.Mapping.compute_mapping_gaps">compute_mapping_gaps() (back.objects.mapping.Mapping.Mapping static method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.config_file_path">config_file_path() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.config_file_path">config_file_path() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.core.errors.html#back.core.errors.ConflictError">ConflictError</a>, <a href="api/app.core.errors.html#back.core.errors.ConflictError.ConflictError">[1]</a>
 </li>
@@ -1468,7 +1657,7 @@
         <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.constraints">(back.objects.session.DomainSession.DomainSession property)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.copy_version_documents">copy_version_documents() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.copy_version_documents">copy_version_documents() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.EntityTypeStat.count">count (api.routers.digitaltwin.EntityTypeStat attribute)</a>
 
@@ -1482,7 +1671,13 @@
         <li><a href="api/api_external.html#api.routers.digitaltwin.TriplesResponse.count">(api.routers.digitaltwin.TriplesResponse attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.count_class_members">count_class_members() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
+</li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.count_documents_in_volume">count_documents_in_volume() (back.objects.domain.Domain.Domain method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.count_link_edges">count_link_edges() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.count_matching_nodes">count_matching_nodes() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.count_triples">count_triples() (back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore method)</a>
 
@@ -1640,6 +1835,18 @@
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.delete_class_by_uri">delete_class_by_uri() (back.objects.ontology.Ontology.Ontology method)</a>
 </li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.delete_cohort_rule">delete_cohort_rule() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.delete_cohort_rule">(in module api.routers.internal.dtwin)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.delete_cohort_triples">delete_cohort_triples() (back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore method)</a>
+
+      <ul>
+        <li><a href="api/app.core.triplestore.html#back.core.triplestore.TripleStoreBackend.TripleStoreBackend.delete_cohort_triples">(back.core.triplestore.TripleStoreBackend.TripleStoreBackend method)</a>
+</li>
+      </ul></li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.delete_design_view">delete_design_view() (back.objects.domain.Domain.Domain method)</a>
 
       <ul>
@@ -1650,7 +1857,7 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.domain.delete_document">delete_document() (in module api.routers.internal.domain)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.delete_domain">delete_domain() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.delete_domain">delete_domain() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.delete_domain_permission">delete_domain_permission() (in module api.routers.internal.settings)</a>
 </li>
@@ -1694,8 +1901,12 @@
         <li><a href="api/app.frontend.html#api.routers.internal.mapping.delete_relationship_mapping">(in module api.routers.internal.mapping)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.frontend.html#api.routers.internal.ontology.delete_rule">delete_rule() (in module api.routers.internal.ontology)</a>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.delete_rule">delete_rule() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.ontology.delete_rule">(in module api.routers.internal.ontology)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.delete_schedule">delete_schedule() (in module api.routers.internal.settings)</a>
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.delete_schedule_result">delete_schedule_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
@@ -1718,10 +1929,8 @@
         <li><a href="api/app.core.triplestore.html#back.core.triplestore.TripleStoreBackend.TripleStoreBackend.delete_triples">(back.core.triplestore.TripleStoreBackend.TripleStoreBackend method)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.delete_version">delete_version() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.delete_version">delete_version() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.delta">delta (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
       <li><a href="api/app.core.triplestore.html#back.core.triplestore.delta.DeltaTripleStore.DeltaTripleStore">DeltaTripleStore (class in back.core.triplestore.delta.DeltaTripleStore)</a>
@@ -1732,12 +1941,16 @@
         <li><a href="api/api_external.html#back.fastapi.graphql_routes.GraphQLRequest.depth">(back.fastapi.graphql_routes.GraphQLRequest attribute)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.core.html#back.core.task_manager.TaskStep.description">description (back.core.task_manager.TaskStep attribute)</a>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.description">description (back.core.graph_analysis.models.CohortRule attribute)</a>
 
       <ul>
+        <li><a href="api/app.core.html#back.core.task_manager.TaskStep.description">(back.core.task_manager.TaskStep attribute)</a>
+</li>
         <li><a href="api/api_external.html#back.fastapi.graphql_routes.GraphQLDomainInfo.description">(back.fastapi.graphql_routes.GraphQLDomainInfo attribute)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.design_layout">design_layout (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
       <li><a href="api/app.core.errors.html#back.core.errors.ErrorResponse.detail">detail (back.core.errors.ErrorResponse attribute)</a>
@@ -1750,8 +1963,6 @@
         <li><a href="api/app.core.errors.html#back.core.errors.OntoBricksError.OntoBricksError.detail">(back.core.errors.OntoBricksError.OntoBricksError attribute)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.fastapi.html#shared.fastapi.health.detailed_health">detailed_health() (in module shared.fastapi.health)</a>
-</li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CommunityDetector.CommunityDetector.detect">detect() (back.core.graph_analysis.CommunityDetector.CommunityDetector method)</a>
 </li>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.detect_clusters">detect_clusters() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
@@ -1784,11 +1995,15 @@
 </li>
       <li><a href="api/agents.html#agents.tools.context.ToolContext.documents">documents (agents.tools.context.ToolContext attribute)</a>
 </li>
-      <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.domain">domain (back.objects.session.DomainSession.DomainSession property)</a>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.CohortEngineContext.domain">domain (api.routers.internal.dtwin.CohortEngineContext attribute)</a>
+
+      <ul>
+        <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.domain">(back.objects.session.DomainSession.DomainSession property)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain">Domain (class in back.objects.domain.Domain)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.domain_exists">domain_exists() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.domain_exists">domain_exists() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/agents.html#agents.tools.context.ToolContext.domain_folder">domain_folder (agents.tools.context.ToolContext attribute)</a>
 
@@ -1802,7 +2017,7 @@
 </li>
       <li><a href="api/api_external.html#api.routers.v1.DomainPathModel.domain_path">domain_path (api.routers.v1.DomainPathModel attribute)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.domain_path">domain_path() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.domain_path">domain_path() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/agents.html#agents.tools.context.ToolContext.domain_version">domain_version (agents.tools.context.ToolContext attribute)</a>
 </li>
@@ -1812,7 +2027,7 @@
 </li>
       <li><a href="api/api_external.html#back.fastapi.graphql_routes.GraphQLDomainsResponse.domains">domains (back.fastapi.graphql_routes.GraphQLDomainsResponse attribute)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.domains_path">domains_path() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.domains_path">domains_path() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession">DomainSession (class in back.objects.session.DomainSession)</a>
 </li>
@@ -1838,6 +2053,10 @@
         <li><a href="api/app.core.triplestore.html#back.core.triplestore.TripleStoreBackend.TripleStoreBackend.drop_table">(back.core.triplestore.TripleStoreBackend.TripleStoreBackend method)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.dry_run">dry_run() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.dry_run_cohort">dry_run_cohort() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+</li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.dt_build">dt_build() (in module api.routers.digitaltwin)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.dt_build_progress">dt_build_progress() (in module api.routers.digitaltwin)</a>
@@ -1864,13 +2083,47 @@
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.dt_triples_find">dt_triples_find() (in module api.routers.digitaltwin)</a>
 </li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.dtwin_assistant_chat">dtwin_assistant_chat() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.dtwin_assistant_history_clear">dtwin_assistant_history_clear() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.dtwin_assistant_history_get">dtwin_assistant_history_get() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.dtwin_assistant_history_set_limit">dtwin_assistant_history_set_limit() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/agents.html#agents.tools.context.ToolContext.dtwin_base_url">dtwin_base_url (agents.tools.context.ToolContext attribute)</a>
+</li>
+      <li><a href="api/agents.html#agents.tools.context.ToolContext.dtwin_domain_name">dtwin_domain_name (agents.tools.context.ToolContext attribute)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.dtwin_graphql_execute">dtwin_graphql_execute() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.dtwin_graphql_schema">dtwin_graphql_schema() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.dtwin_neighbors">dtwin_neighbors() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/agents.html#agents.tools.context.ToolContext.dtwin_registry_params">dtwin_registry_params (agents.tools.context.ToolContext attribute)</a>
+</li>
+      <li><a href="api/agents.html#agents.tools.context.ToolContext.dtwin_session_cookies">dtwin_session_cookies (agents.tools.context.ToolContext attribute)</a>
+</li>
+      <li><a href="api/agents.html#agents.tools.context.ToolContext.dtwin_session_headers">dtwin_session_headers (agents.tools.context.ToolContext attribute)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.dtwin_triples_find">dtwin_triples_find() (in module api.routers.internal.dtwin)</a>
+</li>
+      <li><a href="api/app.core.html#back.core.task_manager.Task.duration_seconds">duration_seconds() (back.core.task_manager.Task method)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="E">E</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.DetectionStats.edge_count">edge_count (back.core.graph_analysis.models.DetectionStats attribute)</a>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats.edge_count">edge_count (back.core.graph_analysis.models.CohortStats attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.DetectionStats.edge_count">(back.core.graph_analysis.models.DetectionStats attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.edge_count">edge_count() (back.objects.digitaltwin.CohortService.CohortService method)</a>
 </li>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.effective_backend_label">effective_backend_label() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
 </li>
@@ -1896,7 +2149,13 @@
         <li><a href="api/app.core.html#back.core.helpers.effective_view_table">(in module back.core.helpers)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.DetectionStats.elapsed_ms">elapsed_ms (back.core.graph_analysis.models.DetectionStats attribute)</a>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats.elapsed_ms">elapsed_ms (back.core.graph_analysis.models.CohortStats attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.DetectionStats.elapsed_ms">(back.core.graph_analysis.models.DetectionStats attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.enabled">enabled (back.core.graph_analysis.models.CohortRule attribute)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.v1.QueryModel.engine">engine (api.routers.v1.QueryModel attribute)</a>
 </li>
@@ -1920,6 +2179,10 @@
 
       <ul>
         <li><a href="api/agents.html#agents.agent_auto_icon_assign.engine.AgentResult.error">(agents.agent_auto_icon_assign.engine.AgentResult attribute)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.AgentResult.error">(agents.agent_cohort.AgentResult attribute)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.AgentResult.error">(agents.agent_cohort.engine.AgentResult attribute)</a>
 </li>
         <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult.error">(agents.agent_ontology_assistant.engine.AgentResult attribute)</a>
 </li>
@@ -1952,6 +2215,8 @@
 </li>
       <li><a href="api/app.core.w3c.html#back.core.w3c.sparql.SparqlQueryRunner.SparqlQueryRunner.execute_local_query">execute_local_query() (back.core.w3c.sparql.SparqlQueryRunner.SparqlQueryRunner static method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.frontend.html#api.routers.internal.dtwin.execute_quality_check">execute_quality_check() (in module api.routers.internal.dtwin)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.execute_query">execute_query() (back.core.databricks.DatabricksClient.DatabricksClient method)</a>
@@ -1968,8 +2233,6 @@
         <li><a href="api/api_external.html#api.routers.v1.execute_query">(in module api.routers.v1)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine.execute_rules">execute_rules() (back.core.reasoning.AggregateRuleEngine.AggregateRuleEngine method)</a>
 
       <ul>
@@ -2003,6 +2266,10 @@
 </li>
       </ul></li>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.expand_uri_aliases">expand_uri_aliases() (back.objects.digitaltwin.DigitalTwin.DigitalTwin static method)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.explain">explain() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.explain_membership">explain_membership() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.domain.export_domain">export_domain() (in module api.routers.internal.domain)</a>
 </li>
@@ -2074,11 +2341,13 @@
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.FileSessionMiddleware.FileSessionMiddleware">FileSessionMiddleware (class in back.objects.session.FileSessionMiddleware)</a>
 </li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.filter_accessible_domains">filter_accessible_domains() (back.objects.registry.PermissionService.PermissionService method)</a>
+</li>
       <li><a href="api/app.frontend.html#api.routers.internal.dtwin.filter_triplestore">filter_triplestore() (in module api.routers.internal.dtwin)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLParser.SWRLParser.find_connected_vars">find_connected_vars() (back.core.reasoning.SWRLParser.SWRLParser static method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.find_mcp_version">find_mcp_version() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.find_mcp_version">find_mcp_version() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.find_seed_subjects">find_seed_subjects() (back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore method)</a>
 
@@ -2108,21 +2377,41 @@
         <li><a href="api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.SQLWizardService.FORBIDDEN_KEYWORDS">(back.core.sqlwizard.SQLWizardService.SQLWizardService attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.fq_name">fq_name() (back.core.graph_analysis.models.CohortUCTarget method)</a>
+</li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.from_context">from_context() (back.objects.registry.RegistryService.RegistryService class method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.from_dict">from_dict() (back.core.graph_analysis.models.CohortCompat static method)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop.from_dict">(back.core.graph_analysis.models.CohortHop static method)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.from_dict">(back.core.graph_analysis.models.CohortLink static method)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortOutput.from_dict">(back.core.graph_analysis.models.CohortOutput static method)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.from_dict">(back.core.graph_analysis.models.CohortRule static method)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.from_dict">(back.core.graph_analysis.models.CohortUCTarget static method)</a>
+</li>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.from_dict">(back.objects.registry.RegistryService.RegistryCfg class method)</a>
+</li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.from_context">from_context() (back.objects.registry.service.RegistryService class method)</a>
-</li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.from_dict">from_dict() (back.objects.registry.service.RegistryCfg class method)</a>
-</li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.from_domain">from_domain() (back.objects.registry.service.RegistryCfg class method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.from_domain">from_domain() (back.objects.registry.RegistryService.RegistryCfg class method)</a>
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.GraphSchema.GraphSchema.from_ontology">from_ontology() (back.core.graphdb.ladybugdb.GraphSchema.GraphSchema class method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.from_session">from_session() (back.objects.registry.service.RegistryCfg class method)</a>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.from_rule">from_rule() (back.core.graph_analysis.CohortVocabulary.CohortVocabulary class method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.FROM_RULE_FRAGMENT">FROM_RULE_FRAGMENT (back.core.graph_analysis.CohortVocabulary.CohortVocabulary attribute)</a>
+</li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.from_session">from_session() (back.objects.registry.RegistryService.RegistryCfg class method)</a>
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.models.RelTableDef.from_table">from_table (back.core.graphdb.ladybugdb.models.RelTableDef attribute)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.from_volume_path">from_volume_path() (back.objects.registry.service.RegistryCfg class method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.from_volume_path">from_volume_path() (back.objects.registry.RegistryService.RegistryCfg class method)</a>
 </li>
       <li>
     front.fastapi.dependencies
@@ -2241,6 +2530,8 @@
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.get">get() (back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry class method)</a>
 
       <ul>
+        <li><a href="api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache.get">(back.objects.domain.version_status.VersionStatusCache method)</a>
+</li>
         <li><a href="api/app.objects.session.html#back.objects.session.SessionManager.SessionManager.get">(back.objects.session.SessionManager.SessionManager method)</a>
 </li>
       </ul></li>
@@ -2304,6 +2595,10 @@
         <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.get_classes">(back.objects.session.DomainSession.DomainSession method)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.frontend.html#api.routers.internal.settings.get_cloud_fetch">get_cloud_fetch() (in module api.routers.internal.settings)</a>
+</li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.get_cloud_fetch_result">get_cloud_fetch_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
+</li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_connection">get_connection() (back.core.graphdb.GraphDBBackend.GraphDBBackend method)</a>
 
       <ul>
@@ -2378,6 +2673,12 @@
       </ul></li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.HomeService.HomeService.get_detailed_validation">get_detailed_validation() (back.objects.domain.HomeService.HomeService static method)</a>
 </li>
+      <li><a href="api/app.frontend.html#api.routers.internal.help.get_doc">get_doc() (in module api.routers.internal.help)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.help.get_doc_image">get_doc_image() (in module api.routers.internal.help)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.help.get_doc_screenshot">get_doc_screenshot() (in module api.routers.internal.help)</a>
+</li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.get_documents_volume_path">get_documents_volume_path() (back.objects.domain.Domain.Domain method)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.get_domain">get_domain() (in module back.objects.session.DomainSession)</a>
@@ -2396,7 +2697,7 @@
         <li><a href="api/app.objects.domain.html#back.objects.domain.payload.get_domain_info">(in module back.objects.domain.payload)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.get_domain_role">get_domain_role() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.get_domain_role">get_domain_role() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.get_domain_stats">get_domain_stats() (back.objects.domain.Domain.Domain method)</a>
 </li>
@@ -2442,7 +2743,9 @@
       </ul></li>
       <li><a href="api/app.frontend.html#api.routers.internal.dtwin.get_inferred_triples">get_inferred_triples() (in module api.routers.internal.dtwin)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.get_latest_version">get_latest_version() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.frontend.html#api.routers.internal.settings.get_lakebase_stats">get_lakebase_stats() (in module api.routers.internal.settings)</a>
+</li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.get_latest_version">get_latest_version() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.mapping.get_llm_endpoints">get_llm_endpoints() (in module api.routers.internal.mapping)</a>
 </li>
@@ -2686,7 +2989,7 @@
 </li>
       <li><a href="api/app.fastapi.html#front.fastapi.dependencies.get_user_email">get_user_email() (in module front.fastapi.dependencies)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.get_user_role">get_user_role() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.get_user_role">get_user_role() (back.objects.registry.PermissionService.PermissionService method)</a>
 
       <ul>
         <li><a href="api/app.fastapi.html#front.fastapi.dependencies.get_user_role">(in module front.fastapi.dependencies)</a>
@@ -2727,9 +3030,17 @@
       <li><a href="api/app.core.graphql.html#back.core.graphql.models.TypeInfo.gql_type">gql_type (back.core.graphql.models.TypeInfo attribute)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.InferenceRequest.graph">graph (api.routers.digitaltwin.InferenceRequest attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortOutput.graph">(back.core.graph_analysis.models.CohortOutput attribute)</a>
 </li>
+      </ul></li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.StatusResponse.graph_name">graph_name (api.routers.digitaltwin.StatusResponse attribute)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.CohortEngineContext.graph_name">(api.routers.internal.dtwin.CohortEngineContext attribute)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.graph_volume_path">graph_volume_path() (in module back.core.graphdb)</a>
 
       <ul>
@@ -2766,6 +3077,10 @@
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService">GraphSyncService (class in back.core.graphdb.ladybugdb.GraphSyncService)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.group_type">group_type (back.core.graph_analysis.models.CohortRule attribute)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats.grouped_member_count">grouped_member_count (back.core.graph_analysis.models.CohortStats attribute)</a>
+</li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.groups">groups (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
   </ul></td>
@@ -2786,13 +3101,15 @@
       </ul></li>
       <li><a href="api/app.fastapi.html#shared.fastapi.health.health_check">health_check() (in module shared.fastapi.health)</a>
 </li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.history_file_path">history_file_path() (back.objects.registry.RegistryService.RegistryService method)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.history_file_path">history_file_path() (back.objects.registry.service.RegistryService method)</a>
-</li>
       <li><a href="api/app.frontend.html#front.routes.home.home_page">home_page() (in module front.routes.home)</a>
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.HomeService.HomeService">HomeService (class in back.objects.domain.HomeService)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.hops">hops() (back.core.graph_analysis.models.CohortLink method)</a>
 </li>
       <li><a href="api/agents.html#agents.tools.context.ToolContext.host">host (agents.tools.context.ToolContext attribute)</a>
 
@@ -2815,9 +3132,15 @@
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.ClusterResult.id">id (back.core.graph_analysis.models.ClusterResult attribute)</a>
 
       <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortGroup.id">(back.core.graph_analysis.models.CohortGroup attribute)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.id">(back.core.graph_analysis.models.CohortRule attribute)</a>
+</li>
         <li><a href="api/app.core.html#back.core.task_manager.Task.id">(back.core.task_manager.Task attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortGroup.idx">idx (back.core.graph_analysis.models.CohortGroup attribute)</a>
+</li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.import_domain">import_domain() (back.objects.domain.Domain.Domain method)</a>
 
       <ul>
@@ -2835,6 +3158,10 @@
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.import_shacl">import_shacl() (in module api.routers.internal.ontology)</a>
 </li>
       <li><a href="api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.import_shapes">import_shapes() (back.core.w3c.shacl.SHACLService.SHACLService method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.in_cohort">in_cohort() (back.core.graph_analysis.CohortVocabulary.CohortVocabulary class method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.IN_COHORT_FRAGMENT">IN_COHORT_FRAGMENT (back.core.graph_analysis.CohortVocabulary.CohortVocabulary attribute)</a>
 </li>
       <li><a href="api/app.core.triplestore.html#back.core.triplestore.IncrementalBuildService.IncrementalBuildService">IncrementalBuildService (class in back.core.triplestore.IncrementalBuildService)</a>
 </li>
@@ -2858,7 +3185,7 @@
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.ingest_owl">ingest_owl() (back.objects.ontology.Ontology.Ontology method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.initialize">initialize() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.initialize">initialize() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.domain.initialize_metadata">initialize_metadata() (in module api.routers.internal.domain)</a>
 </li>
@@ -2870,6 +3197,8 @@
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.initialize_registry_result">initialize_registry_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.insert_triples">insert_triples() (back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore method)</a>
 
       <ul>
@@ -2880,8 +3209,6 @@
         <li><a href="api/app.core.triplestore.html#back.core.triplestore.TripleStoreBackend.TripleStoreBackend.insert_triples">(back.core.triplestore.TripleStoreBackend.TripleStoreBackend method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.core.html#back.core.logging.LogManager.instance">instance() (back.core.logging.LogManager class method)</a>
 </li>
       <li><a href="api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.invalidate_cache">invalidate_cache() (back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder method)</a>
@@ -2892,18 +3219,20 @@
       </ul></li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.is_active_version">is_active_version (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.is_admin">is_admin() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.is_admin">is_admin() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.is_app_mode">is_app_mode (back.core.databricks.DatabricksClient.DatabricksClient property)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.is_app_principals_forbidden">is_app_principals_forbidden() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.fastapi.html#front.fastapi.dependencies.is_app_mode">is_app_mode() (in module front.fastapi.dependencies)</a>
+</li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.is_app_principals_forbidden">is_app_principals_forbidden() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_builtin">is_builtin() (back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry class method)</a>
 </li>
       <li><a href="api/app.core.html#back.core.logging.LogManager.is_configured">is_configured (back.core.logging.LogManager property)</a>
 
       <ul>
-        <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.is_configured">(back.objects.registry.service.RegistryCfg property)</a>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.is_configured">(back.objects.registry.RegistryService.RegistryCfg property)</a>
 </li>
       </ul></li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.is_configured">is_configured() (back.core.databricks.VolumeFileService.VolumeFileService method)</a>
@@ -2914,7 +3243,7 @@
 </li>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.is_datatype_range">is_datatype_range() (back.objects.digitaltwin.DigitalTwin.DigitalTwin static method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.is_initialized">is_initialized() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.is_initialized">is_initialized() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry.is_literal">is_literal() (back.core.reasoning.SWRLBuiltinRegistry.SWRLBuiltinRegistry static method)</a>
 </li>
@@ -2941,6 +3270,10 @@
       <ul>
         <li><a href="api/agents.html#agents.agent_auto_icon_assign.engine.AgentResult.iterations">(agents.agent_auto_icon_assign.engine.AgentResult attribute)</a>
 </li>
+        <li><a href="api/agents.html#agents.agent_cohort.AgentResult.iterations">(agents.agent_cohort.AgentResult attribute)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.AgentResult.iterations">(agents.agent_cohort.engine.AgentResult attribute)</a>
+</li>
         <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult.iterations">(agents.agent_ontology_assistant.engine.AgentResult attribute)</a>
 </li>
         <li><a href="api/agents.html#agents.agent_owl_generator.engine.AgentResult.iterations">(agents.agent_owl_generator.engine.AgentResult attribute)</a>
@@ -2949,9 +3282,19 @@
   </ul></td>
 </tr></table>
 
+<h2 id="J">J</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortVocabulary.CohortVocabulary.join">join() (back.core.graph_analysis.CohortVocabulary.CohortVocabulary static method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.label">label (back.core.graph_analysis.models.CohortRule attribute)</a>
+</li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.StatsResponse.label_count">label_count (api.routers.digitaltwin.StatsResponse attribute)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.ladybug">ladybug (back.objects.session.DomainSession.DomainSession property)</a>
@@ -2967,6 +3310,20 @@
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore">LadybugFlatStore (class in back.core.graphdb.ladybugdb.LadybugFlatStore)</a>
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugGraphStore.LadybugGraphStore">LadybugGraphStore (class in back.core.graphdb.ladybugdb.LadybugGraphStore)</a>
+</li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.lakebase_database">lakebase_database (back.objects.registry.RegistryService.RegistryCfg attribute)</a>
+
+      <ul>
+        <li><a href="api/app.config.html#shared.config.settings.Settings.lakebase_database">(shared.config.settings.Settings attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.lakebase_schema">lakebase_schema (back.objects.registry.RegistryService.RegistryCfg attribute)</a>
+
+      <ul>
+        <li><a href="api/app.config.html#shared.config.settings.Settings.lakebase_schema">(shared.config.settings.Settings attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.lakebase_stats_result">lakebase_stats_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.last_app_permissions_status">last_app_permissions_status (back.core.databricks.DatabricksClient.DatabricksClient property)</a>
 
@@ -2990,7 +3347,11 @@
         <li><a href="api/api_external.html#api.routers.v1.QueryModel.limit">(api.routers.v1.QueryModel attribute)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_all_bridges">list_all_bridges() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.links">links (back.core.graph_analysis.models.CohortRule attribute)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.links_combine">links_combine (back.core.graph_analysis.models.CohortRule attribute)</a>
+</li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.list_all_bridges">list_all_bridges() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.list_app_permissions">list_app_permissions() (in module api.routers.internal.settings)</a>
 </li>
@@ -2999,7 +3360,7 @@
       <ul>
         <li><a href="api/app.core.databricks.html#back.core.databricks.WorkspaceService.WorkspaceService.list_app_principals">(back.core.databricks.WorkspaceService.WorkspaceService method)</a>
 </li>
-        <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.list_app_principals">(back.objects.registry.permissions.PermissionService method)</a>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.list_app_principals">(back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       </ul></li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.list_app_principals_result">list_app_principals_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
@@ -3010,19 +3371,27 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_bridge_domains">list_bridge_domains() (in module api.routers.internal.ontology)</a>
 </li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.list_cohort_rules">list_cohort_rules() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.dtwin.list_cohort_rules">(in module api.routers.internal.dtwin)</a>
+</li>
+      </ul></li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_constraints">list_constraints() (in module api.routers.internal.ontology)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_dashboards">list_dashboards() (in module api.routers.internal.ontology)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.list_directory">list_directory() (back.core.databricks.VolumeFileService.VolumeFileService method)</a>
 </li>
+      <li><a href="api/app.frontend.html#api.routers.internal.help.list_docs">list_docs() (in module api.routers.internal.help)</a>
+</li>
       <li><a href="api/app.frontend.html#api.routers.internal.domain.list_documents">list_documents() (in module api.routers.internal.domain)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domain_details">list_domain_details() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.list_domain_details">list_domain_details() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domain_details_cached">list_domain_details_cached() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.list_domain_details_cached">list_domain_details_cached() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.list_domain_entries">list_domain_entries() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.list_domain_entries">list_domain_entries() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.list_domain_permissions">list_domain_permissions() (in module api.routers.internal.settings)</a>
 </li>
@@ -3032,7 +3401,7 @@
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.list_domain_versions_result">list_domain_versions_result() (back.objects.domain.Domain.Domain static method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domains">list_domains() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.list_domains">list_domains() (back.objects.registry.RegistryService.RegistryService method)</a>
 
       <ul>
         <li><a href="api/app.frontend.html#api.routers.internal.domain.list_domains">(in module api.routers.internal.domain)</a>
@@ -3040,7 +3409,7 @@
         <li><a href="api/api_external.html#api.routers.v1.list_domains">(in module api.routers.v1)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_domains_cached">list_domains_cached() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.list_domains_cached">list_domains_cached() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/api_external.html#api.service.list_domains_from_uc">list_domains_from_uc() (in module api.service)</a>
 </li>
@@ -3048,10 +3417,12 @@
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.list_files">list_files() (back.core.databricks.VolumeFileService.VolumeFileService method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.core.databricks.html#back.core.databricks.WorkspaceService.WorkspaceService.list_groups">list_groups() (back.core.databricks.WorkspaceService.WorkspaceService method)</a>
 
       <ul>
-        <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.list_groups">(back.objects.registry.permissions.PermissionService method)</a>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.list_groups">(back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
         <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_groups">(in module api.routers.internal.ontology)</a>
 </li>
@@ -3062,9 +3433,11 @@
         <li><a href="api/app.frontend.html#api.routers.internal.settings.list_ladybugdb_files">(in module api.routers.internal.settings)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_mcp_domains">list_mcp_domains() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.frontend.html#api.routers.internal.settings.list_lakebase_databases">list_lakebase_databases() (in module api.routers.internal.settings)</a>
+</li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.list_lakebase_databases_result">list_lakebase_databases_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
+</li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.list_mcp_domains">list_mcp_domains() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_owl_files">list_owl_files() (in module api.routers.internal.ontology)</a>
 </li>
@@ -3080,8 +3453,12 @@
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.list_registry_domains_result">list_registry_domains_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
-      <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_rules">list_rules() (in module api.routers.internal.ontology)</a>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.list_rules">list_rules() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.ontology.list_rules">(in module api.routers.internal.ontology)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.list_schedules">list_schedules() (in module api.routers.internal.settings)</a>
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.list_schedules_result">list_schedules_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
@@ -3099,7 +3476,7 @@
       <li><a href="api/app.core.databricks.html#back.core.databricks.WorkspaceService.WorkspaceService.list_users">list_users() (back.core.databricks.WorkspaceService.WorkspaceService method)</a>
 
       <ul>
-        <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.list_users">(back.objects.registry.permissions.PermissionService method)</a>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.list_users">(back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       </ul></li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.list_version_details">list_version_details() (back.objects.domain.Domain.Domain method)</a>
@@ -3108,9 +3485,9 @@
         <li><a href="api/app.frontend.html#api.routers.internal.domain.list_version_details">(in module api.routers.internal.domain)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_versions">list_versions() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.list_versions">list_versions() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.list_versions_sorted">list_versions_sorted() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.list_versions_sorted">list_versions_sorted() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.list_volumes">list_volumes() (back.core.databricks.DatabricksClient.DatabricksClient method)</a>
 
@@ -3134,13 +3511,13 @@
         <li><a href="api/api_external.html#api.service.load_domain_from_uc">(in module api.service)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.load_domain_permissions">load_domain_permissions() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.load_domain_permissions">load_domain_permissions() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.load_latest_domain_data">load_latest_domain_data() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.load_latest_domain_data">load_latest_domain_data() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.mapping.load_mapping">load_mapping() (in module api.routers.internal.mapping)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.load_mcp_domain_data">load_mcp_domain_data() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.load_mcp_domain_data">load_mcp_domain_data() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.load_ontology">load_ontology() (in module api.routers.internal.ontology)</a>
 </li>
@@ -3190,9 +3567,13 @@
 </li>
       <li><a href="api/app.frontend.html#front.routes.mapping.mapping_page">mapping_page() (in module front.routes.mapping)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.marker_path">marker_path() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.marker_path">marker_path() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.InferenceRequest.materialize">materialize (api.routers.digitaltwin.InferenceRequest attribute)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.materialize">materialize() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.materialize_cohort">materialize_cohort() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.ReasoningService.ReasoningService.materialize_inferred">materialize_inferred() (back.core.reasoning.ReasoningService.ReasoningService method)</a>
 
@@ -3204,10 +3585,24 @@
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.ReasoningService.ReasoningService.materialize_to_delta">materialize_to_delta() (back.core.reasoning.ReasoningService.ReasoningService static method)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.materialize_to_graph">materialize_to_graph() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.materialize_to_uc">materialize_to_uc() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.max">max (back.core.graph_analysis.models.CohortCompat attribute)</a>
+</li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.ClusterRequest.max_triples">max_triples (back.core.graph_analysis.models.ClusterRequest attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.max_triples">(back.core.graph_analysis.models.CohortRule attribute)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.ClusterResult.members">members (back.core.graph_analysis.models.ClusterResult attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortGroup.members">(back.core.graph_analysis.models.CohortGroup attribute)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.models.ReasoningResult.merge">merge() (back.core.reasoning.models.ReasoningResult method)</a>
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.merge_icon_suggestions">merge_icon_suggestions() (back.objects.ontology.Ontology.Ontology static method)</a>
@@ -3256,11 +3651,19 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.migrate_constraints">migrate_constraints() (in module api.routers.internal.ontology)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.migrate_domain_layout">migrate_domain_layout() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.migrate_domain_layout">migrate_domain_layout() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.migrate_legacy_constraints">migrate_legacy_constraints() (back.core.w3c.shacl.SHACLService.SHACLService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.min_role">min_role() (in module back.objects.registry.permissions)</a>
+      <li><a href="api/app.frontend.html#api.routers.internal.settings.migrate_registry_to_lakebase">migrate_registry_to_lakebase() (in module api.routers.internal.settings)</a>
+</li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.migrate_to_lakebase_result">migrate_to_lakebase_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.min">min (back.core.graph_analysis.models.CohortCompat attribute)</a>
+</li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.min_role">min_role() (in module back.objects.registry.PermissionService)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.min_size">min_size (back.core.graph_analysis.models.CohortRule attribute)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.BuildRequest.model_config">model_config (api.routers.digitaltwin.BuildRequest attribute)</a>
 
@@ -3338,6 +3741,12 @@
 </li>
         <li><a href="api/agents.html#module-agents.agent_auto_icon_assign.tools">agents.agent_auto_icon_assign.tools</a>
 </li>
+        <li><a href="api/agents.html#module-agents.agent_cohort">agents.agent_cohort</a>
+</li>
+        <li><a href="api/agents.html#module-agents.agent_cohort.engine">agents.agent_cohort.engine</a>
+</li>
+        <li><a href="api/agents.html#module-agents.agent_cohort.tools">agents.agent_cohort.tools</a>
+</li>
         <li><a href="api/agents.html#module-agents.agent_ontology_assistant">agents.agent_ontology_assistant</a>
 </li>
         <li><a href="api/agents.html#module-agents.agent_ontology_assistant.engine">agents.agent_ontology_assistant.engine</a>
@@ -3381,6 +3790,8 @@
         <li><a href="api/app.frontend.html#module-api.routers.internal.domain">api.routers.internal.domain</a>
 </li>
         <li><a href="api/app.frontend.html#module-api.routers.internal.dtwin">api.routers.internal.dtwin</a>
+</li>
+        <li><a href="api/app.frontend.html#module-api.routers.internal.help">api.routers.internal.help</a>
 </li>
         <li><a href="api/app.frontend.html#module-api.routers.internal.home">api.routers.internal.home</a>
 </li>
@@ -3429,6 +3840,10 @@
         <li><a href="api/app.core.errors.html#module-back.core.errors.OntoBricksError">back.core.errors.OntoBricksError</a>
 </li>
         <li><a href="api/app.core.errors.html#module-back.core.errors.ValidationError">back.core.errors.ValidationError</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#module-back.core.graph_analysis.CohortBuilder">back.core.graph_analysis.CohortBuilder</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#module-back.core.graph_analysis.CohortVocabulary">back.core.graph_analysis.CohortVocabulary</a>
 </li>
         <li><a href="api/app.core.graph_analysis.html#module-back.core.graph_analysis.CommunityDetector">back.core.graph_analysis.CommunityDetector</a>
 </li>
@@ -3546,6 +3961,8 @@
 </li>
         <li><a href="api/api_external.html#module-back.fastapi.graphql_routes">back.fastapi.graphql_routes</a>
 </li>
+        <li><a href="api/app.objects.digitaltwin.html#module-back.objects.digitaltwin.CohortService">back.objects.digitaltwin.CohortService</a>
+</li>
         <li><a href="api/app.objects.digitaltwin.html#module-back.objects.digitaltwin.constants">back.objects.digitaltwin.constants</a>
 </li>
         <li><a href="api/app.objects.digitaltwin.html#module-back.objects.digitaltwin.DigitalTwin">back.objects.digitaltwin.DigitalTwin</a>
@@ -3568,11 +3985,11 @@
 </li>
         <li><a href="api/app.objects.ontology.html#module-back.objects.ontology.Ontology">back.objects.ontology.Ontology</a>
 </li>
-        <li><a href="api/app.objects.registry.html#module-back.objects.registry.permissions">back.objects.registry.permissions</a>
+        <li><a href="api/app.objects.registry.html#module-back.objects.registry.PermissionService">back.objects.registry.PermissionService</a>
+</li>
+        <li><a href="api/app.objects.registry.html#module-back.objects.registry.RegistryService">back.objects.registry.RegistryService</a>
 </li>
         <li><a href="api/app.objects.registry.html#module-back.objects.registry.scheduler">back.objects.registry.scheduler</a>
-</li>
-        <li><a href="api/app.objects.registry.html#module-back.objects.registry.service">back.objects.registry.service</a>
 </li>
         <li><a href="api/app.objects.session.html#module-back.objects.session.DomainSession">back.objects.session.DomainSession</a>
 </li>
@@ -3637,11 +4054,13 @@
 </li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.DetectionStats.node_count">node_count (back.core.graph_analysis.models.DetectionStats attribute)</a>
 </li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.node_count">node_count() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+</li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.models.NodeTableDef">NodeTableDef (class in back.core.graphdb.ladybugdb.models)</a>
 </li>
       <li><a href="api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.normalize_base">normalize_base() (back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder static method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.normalize_entity_uri">normalize_entity_uri() (back.objects.registry.service.RegistryService static method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.normalize_entity_uri">normalize_entity_uri() (back.objects.registry.RegistryService.RegistryService static method)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.normalize_host">normalize_host() (back.core.databricks.DatabricksAuth.DatabricksAuth static method)</a>
 </li>
@@ -3717,6 +4136,8 @@
       </ul></li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLParser.SWRLParser.order_connected_props">order_connected_props() (back.core.reasoning.SWRLParser.SWRLParser static method)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.output">output (back.core.graph_analysis.models.CohortRule attribute)</a>
+</li>
       <li><a href="api/agents.html#agents.agent_owl_generator.engine.AgentResult.owl_content">owl_content (agents.agent_owl_generator.engine.AgentResult attribute)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.OWLRLReasoner.OWLRLReasoner">OWLRLReasoner (class in back.core.reasoning.OWLRLReasoner)</a>
@@ -3761,6 +4182,10 @@
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLParser.SWRLParser.partition_rule_atoms">partition_rule_atoms() (back.core.reasoning.SWRLParser.SWRLParser static method)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.path">path (back.core.graph_analysis.models.CohortLink attribute)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.path_trace">path_trace() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+</li>
       <li><a href="api/app.core.html#back.core.task_manager.TaskStatus.PENDING">PENDING (back.core.task_manager.TaskStatus attribute)</a>
 </li>
       <li><a href="api/app.fastapi.html#shared.fastapi.main.PermissionMiddleware">PermissionMiddleware (class in shared.fastapi.main)</a>
@@ -3769,12 +4194,12 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.permissions_me">permissions_me() (in module api.routers.internal.settings)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService">PermissionService (class in back.objects.registry.permissions)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService">PermissionService (class in back.objects.registry.PermissionService)</a>
 </li>
       <li><a href="api/app.core.graphql.html#back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder.pluralize">pluralize() (back.core.graphql.GraphQLSchemaBuilder.GraphQLSchemaBuilder static method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.postprocess_generated_owl">postprocess_generated_owl() (back.objects.ontology.Ontology.Ontology static method)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.TripleRow.predicate">predicate (api.routers.digitaltwin.TripleRow attribute)</a>
@@ -3793,6 +4218,10 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.domain.preview_document">preview_document() (in module api.routers.internal.domain)</a>
 </li>
+      <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksAuth.DatabricksAuth.probe_cloud_fetch_capability">probe_cloud_fetch_capability() (back.core.databricks.DatabricksAuth.DatabricksAuth method)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.probe_uc_write">probe_uc_write() (back.objects.digitaltwin.CohortService.CohortService static method)</a>
+</li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.TaskProgressResponse.progress">progress (api.routers.digitaltwin.TaskProgressResponse attribute)</a>
 
       <ul>
@@ -3807,10 +4236,18 @@
         <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.models.NodeTableDef.properties">(back.core.graphdb.ladybugdb.models.NodeTableDef attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.property">property (back.core.graph_analysis.models.CohortCompat attribute)</a>
+</li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.models.RelTableDef.property_uri">property_uri (back.core.graphdb.ladybugdb.models.RelTableDef attribute)</a>
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.models.NodeTableDef.property_uris">property_uris (back.core.graphdb.ladybugdb.models.NodeTableDef attribute)</a>
 </li>
+      <li><a href="api/agents.html#agents.agent_cohort.AgentResult.proposed_rule">proposed_rule (agents.agent_cohort.AgentResult attribute)</a>
+
+      <ul>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.AgentResult.proposed_rule">(agents.agent_cohort.engine.AgentResult attribute)</a>
+</li>
+      </ul></li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.models.InferredTriple.provenance">provenance (back.core.reasoning.models.InferredTriple attribute)</a>
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.prune_mappings_to_ontology_uris">prune_mappings_to_ontology_uris() (back.objects.ontology.Ontology.Ontology method)</a>
@@ -3875,7 +4312,7 @@
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.read_file">read_file() (back.core.databricks.VolumeFileService.VolumeFileService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.read_version">read_version() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.read_version">read_version() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.home.read_volume_file">read_volume_file() (in module api.routers.internal.home)</a>
 </li>
@@ -3887,7 +4324,7 @@
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.ReasoningService.ReasoningService">ReasoningService (class in back.core.reasoning.ReasoningService)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.recursive_delete">recursive_delete() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.recursive_delete">recursive_delete() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.core.triplestore.html#back.core.triplestore.IncrementalBuildService.IncrementalBuildService.refresh_snapshot">refresh_snapshot() (back.core.triplestore.IncrementalBuildService.IncrementalBuildService method)</a>
 </li>
@@ -3903,6 +4340,8 @@
         <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.registry">(back.objects.session.DomainSession.DomainSession property)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.config.html#shared.config.settings.Settings.registry_backend">registry_backend (shared.config.settings.Settings attribute)</a>
+</li>
       <li><a href="api/app.config.html#shared.config.settings.Settings.registry_catalog">registry_catalog (shared.config.settings.Settings attribute)</a>
 </li>
       <li><a href="api/app.frontend.html#front.routes.registry.registry_page">registry_page() (in module front.routes.registry)</a>
@@ -3913,9 +4352,9 @@
 </li>
       <li><a href="api/app.config.html#shared.config.settings.Settings.registry_volume_path">registry_volume_path (shared.config.settings.Settings attribute)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg">RegistryCfg (class in back.objects.registry.service)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg">RegistryCfg (class in back.objects.registry.RegistryService)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService">RegistryService (class in back.objects.registry.service)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService">RegistryService (class in back.objects.registry.RegistryService)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.StatsResponse.relationship_count">relationship_count (api.routers.digitaltwin.StatsResponse attribute)</a>
 </li>
@@ -3937,7 +4376,7 @@
         <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugBase.LadybugBase.remote_archive_path">(back.core.graphdb.ladybugdb.LadybugBase.LadybugBase method)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.remove_domain_entry">remove_domain_entry() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.remove_domain_entry">remove_domain_entry() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.objects.registry.html#back.objects.registry.scheduler.BuildScheduler.remove_schedule">remove_schedule() (back.objects.registry.scheduler.BuildScheduler method)</a>
 </li>
@@ -3949,8 +4388,14 @@
       </ul></li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.rename_relationship_references">rename_relationship_references() (back.objects.ontology.Ontology.Ontology method)</a>
 </li>
-      <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult.reply">reply (agents.agent_ontology_assistant.engine.AgentResult attribute)</a>
+      <li><a href="api/agents.html#agents.agent_cohort.AgentResult.reply">reply (agents.agent_cohort.AgentResult attribute)</a>
+
+      <ul>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.AgentResult.reply">(agents.agent_cohort.engine.AgentResult attribute)</a>
 </li>
+        <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult.reply">(agents.agent_ontology_assistant.engine.AgentResult attribute)</a>
+</li>
+      </ul></li>
       <li><a href="api/app.core.errors.html#back.core.errors.ErrorResponse.request_id">request_id (back.core.errors.ErrorResponse attribute)</a>
 
       <ul>
@@ -3989,6 +4434,8 @@
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.GraphSchema.GraphSchema.resolve_data_property">resolve_data_property() (back.core.graphdb.ladybugdb.GraphSchema.GraphSchema method)</a>
 </li>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.resolve_default_backend">resolve_default_backend() (in module back.objects.registry.RegistryService)</a>
+</li>
       <li><a href="api/app.core.html#back.core.helpers.DatabricksHelpers.resolve_default_base_uri">resolve_default_base_uri() (back.core.helpers.DatabricksHelpers static method)</a>
 
       <ul>
@@ -3997,8 +4444,6 @@
         <li><a href="api/app.core.html#back.core.helpers.resolve_default_base_uri">(in module back.core.helpers)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.core.html#back.core.helpers.DatabricksHelpers.resolve_default_emoji">resolve_default_emoji() (back.core.helpers.DatabricksHelpers static method)</a>
 
       <ul>
@@ -4007,6 +4452,8 @@
         <li><a href="api/app.core.html#back.core.helpers.resolve_default_emoji">(in module back.core.helpers)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.resolve_domain">resolve_domain() (back.objects.digitaltwin.DigitalTwin.DigitalTwin static method)</a>
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.payload.resolve_domain_slice">resolve_domain_slice() (in module back.objects.domain.payload)</a>
@@ -4043,8 +4490,16 @@
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.SWRLParser.SWRLParser.resolve_uri">resolve_uri() (back.core.reasoning.SWRLParser.SWRLParser static method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.resolve_uri_to_domain">resolve_uri_to_domain() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.resolve_uri_to_domain">resolve_uri_to_domain() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
+      <li><a href="api/app.core.html#back.core.helpers.DatabricksHelpers.resolve_use_cloud_fetch">resolve_use_cloud_fetch() (back.core.helpers.DatabricksHelpers static method)</a>
+
+      <ul>
+        <li><a href="api/app.core.helpers.html#back.core.helpers.DatabricksHelpers.DatabricksHelpers.resolve_use_cloud_fetch">(back.core.helpers.DatabricksHelpers.DatabricksHelpers static method)</a>
+</li>
+        <li><a href="api/app.core.html#back.core.helpers.resolve_use_cloud_fetch">(in module back.core.helpers)</a>
+</li>
+      </ul></li>
       <li><a href="api/app.core.html#back.core.helpers.DatabricksHelpers.resolve_warehouse_id">resolve_warehouse_id() (back.core.helpers.DatabricksHelpers static method)</a>
 
       <ul>
@@ -4061,8 +4516,14 @@
         <li><a href="api/app.core.html#back.core.task_manager.Task.result">(back.core.task_manager.Task attribute)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.role_level">role_level() (in module back.objects.registry.permissions)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.role_level">role_level() (in module back.objects.registry.PermissionService)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortResult.rule_id">rule_id (back.core.graph_analysis.models.CohortResult attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats.rule_id">(back.core.graph_analysis.models.CohortStats attribute)</a>
+</li>
+      </ul></li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.models.InferredTriple.rule_name">rule_name (back.core.reasoning.models.InferredTriple attribute)</a>
 
       <ul>
@@ -4077,6 +4538,10 @@
 
       <ul>
         <li><a href="api/agents.html#agents.agent_auto_icon_assign.engine.run_agent">(in module agents.agent_auto_icon_assign.engine)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.run_agent">(in module agents.agent_cohort)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.run_agent">(in module agents.agent_cohort.engine)</a>
 </li>
         <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.run_agent">(in module agents.agent_ontology_assistant.engine)</a>
 </li>
@@ -4129,6 +4594,8 @@
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain._metadata_tasks.run_metadata_update_task">run_metadata_update_task() (in module back.objects.domain._metadata_tasks)</a>
 </li>
+      <li><a href="api/app.fastapi.html#shared.fastapi.health.run_readiness_checks">run_readiness_checks() (in module shared.fastapi.health)</a>
+</li>
       <li><a href="api/app.objects.mapping.html#back.objects.mapping.Mapping.Mapping.run_single_auto_assign_task">run_single_auto_assign_task() (back.objects.mapping.Mapping.Mapping method)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.ReasoningService.ReasoningService.run_sparql_rules">run_sparql_rules() (back.core.reasoning.ReasoningService.ReasoningService method)</a>
@@ -4161,6 +4628,10 @@
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugBase.LadybugBase.safe_table_id">safe_table_id() (back.core.graphdb.ladybugdb.LadybugBase.LadybugBase static method)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.sample_property_values">sample_property_values() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.sample_values">sample_values() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+</li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.sanitize_db_name">sanitize_db_name() (back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService static method)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.sanitize_domain_folder">sanitize_domain_folder() (in module back.objects.session.DomainSession)</a>
@@ -4172,6 +4643,12 @@
       <li><a href="api/app.frontend.html#api.routers.internal.settings.save_base_uri">save_base_uri() (in module api.routers.internal.settings)</a>
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.save_base_uri_result">save_base_uri_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.settings.save_cloud_fetch">save_cloud_fetch() (in module api.routers.internal.settings)</a>
+</li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.save_cloud_fetch_result">save_cloud_fetch_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
+</li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.save_cohort_rule">save_cohort_rule() (back.objects.digitaltwin.DigitalTwin.DigitalTwin method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.save_config">save_config() (in module api.routers.internal.settings)</a>
 </li>
@@ -4191,9 +4668,9 @@
         <li><a href="api/app.frontend.html#api.routers.internal.domain.save_domain_info">(in module api.routers.internal.domain)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.save_domain_permissions">save_domain_permissions() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.save_domain_permissions">save_domain_permissions() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.permissions.PermissionService.save_domain_permissions_batch">save_domain_permissions_batch() (back.objects.registry.permissions.PermissionService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.PermissionService.PermissionService.save_domain_permissions_batch">save_domain_permissions_batch() (back.objects.registry.PermissionService.PermissionService method)</a>
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.save_domain_to_uc">save_domain_to_uc() (back.objects.domain.Domain.Domain method)</a>
 
@@ -4237,8 +4714,12 @@
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.save_registry_cache_ttl_result">save_registry_cache_ttl_result() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
-      <li><a href="api/app.frontend.html#api.routers.internal.ontology.save_rule">save_rule() (in module api.routers.internal.ontology)</a>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.save_rule">save_rule() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+
+      <ul>
+        <li><a href="api/app.frontend.html#api.routers.internal.ontology.save_rule">(in module api.routers.internal.ontology)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.objects.registry.html#back.objects.registry.scheduler.BuildScheduler.save_schedule">save_schedule() (back.objects.registry.scheduler.BuildScheduler method)</a>
 
       <ul>
@@ -4257,8 +4738,12 @@
 </li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.scheduler_status_payload">scheduler_status_payload() (back.objects.domain.SettingsService.SettingsService static method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.schema">schema (back.objects.registry.service.RegistryCfg attribute)</a>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.schema">schema (back.core.graph_analysis.models.CohortUCTarget attribute)</a>
+
+      <ul>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.schema">(back.objects.registry.RegistryService.RegistryCfg attribute)</a>
 </li>
+      </ul></li>
       <li><a href="api/api_external.html#api.routers.v1.UCLocationModel.schema_name">schema_name (api.routers.v1.UCLocationModel attribute)</a>
 </li>
       <li><a href="api/app.core.sqlwizard.html#back.core.sqlwizard.SchemaContext">SchemaContext (class in back.core.sqlwizard)</a>
@@ -4295,6 +4780,8 @@
         <li><a href="api/app.frontend.html#api.routers.internal.settings.select_warehouse">(in module api.routers.internal.settings)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.CohortEngineContext.service">service (api.routers.internal.dtwin.CohortEngineContext attribute)</a>
+</li>
       <li><a href="api/app.config.html#shared.config.settings.Settings.session_dir">session_dir (shared.config.settings.Settings attribute)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.SESSION_KEY">SESSION_KEY (back.objects.session.DomainSession.DomainSession attribute)</a>
@@ -4305,8 +4792,12 @@
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.SessionManager.SessionManager">SessionManager (class in back.objects.session.SessionManager)</a>
 </li>
-      <li><a href="api/app.objects.session.html#back.objects.session.SessionManager.SessionManager.set">set() (back.objects.session.SessionManager.SessionManager method)</a>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache.set">set() (back.objects.domain.version_status.VersionStatusCache method)</a>
+
+      <ul>
+        <li><a href="api/app.objects.session.html#back.objects.session.SessionManager.SessionManager.set">(back.objects.session.SessionManager.SessionManager method)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.version_status.set_cached_version_status">set_cached_version_status() (in module back.objects.domain.version_status)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.set_default_emoji">set_default_emoji() (in module api.routers.internal.settings)</a>
@@ -4335,8 +4826,12 @@
         <li><a href="api/app.frontend.html#api.routers.internal.domain.set_version_mcp">(in module api.routers.internal.domain)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.settings">settings (back.objects.session.DomainSession.DomainSession property)</a>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.CohortEngineContext.settings">settings (api.routers.internal.dtwin.CohortEngineContext attribute)</a>
+
+      <ul>
+        <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.settings">(back.objects.session.DomainSession.DomainSession property)</a>
 </li>
+      </ul></li>
       <li><a href="api/app.config.html#shared.config.settings.Settings">Settings (class in shared.config.settings)</a>
 </li>
       <li><a href="api/app.frontend.html#front.routes.home.settings_page">settings_page() (in module front.routes.home)</a>
@@ -4389,6 +4884,8 @@
         <li><a href="api/app.fastapi.html#module-shared.fastapi.main">module</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.shared_class">shared_class (back.core.graph_analysis.models.CohortLink attribute)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.shortest_path">shortest_path() (back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore method)</a>
@@ -4404,6 +4901,14 @@
       <li><a href="api/app.frontend.html#api.routers.internal.mapping.single_auto_assign">single_auto_assign() (in module api.routers.internal.mapping)</a>
 </li>
       <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.ClusterResult.size">size (back.core.graph_analysis.models.ClusterResult attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortGroup.size">(back.core.graph_analysis.models.CohortGroup attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="api/app.core.html#back.core.task_manager.TaskManager.skip_step">skip_step() (back.core.task_manager.TaskManager method)</a>
+</li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache.snapshot">snapshot() (back.objects.domain.version_status.VersionStatusCache method)</a>
 </li>
       <li><a href="api/app.core.triplestore.html#back.core.triplestore.IncrementalBuildService.IncrementalBuildService.snapshot_exists">snapshot_exists() (back.core.triplestore.IncrementalBuildService.IncrementalBuildService method)</a>
 </li>
@@ -4478,6 +4983,8 @@
       <li><a href="api/agents.html#agents.agent_auto_assignment.engine.AgentResult.stats">stats (agents.agent_auto_assignment.engine.AgentResult attribute)</a>
 
       <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortResult.stats">(back.core.graph_analysis.models.CohortResult attribute)</a>
+</li>
         <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.DetectionResult.stats">(back.core.graph_analysis.models.DetectionResult attribute)</a>
 </li>
         <li><a href="api/app.core.reasoning.html#back.core.reasoning.models.ReasoningResult.stats">(back.core.reasoning.models.ReasoningResult attribute)</a>
@@ -4508,6 +5015,10 @@
       <ul>
         <li><a href="api/agents.html#agents.agent_auto_icon_assign.engine.AgentResult.steps">(agents.agent_auto_icon_assign.engine.AgentResult attribute)</a>
 </li>
+        <li><a href="api/agents.html#agents.agent_cohort.AgentResult.steps">(agents.agent_cohort.AgentResult attribute)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.AgentResult.steps">(agents.agent_cohort.engine.AgentResult attribute)</a>
+</li>
         <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult.steps">(agents.agent_ontology_assistant.engine.AgentResult attribute)</a>
 </li>
         <li><a href="api/agents.html#agents.agent_owl_generator.engine.AgentResult.steps">(agents.agent_owl_generator.engine.AgentResult attribute)</a>
@@ -4517,6 +5028,12 @@
       </ul></li>
       <li><a href="api/app.objects.registry.html#back.objects.registry.scheduler.BuildScheduler.stop">stop() (back.objects.registry.scheduler.BuildScheduler method)</a>
 </li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.CohortEngineContext.store">store (api.routers.internal.dtwin.CohortEngineContext attribute)</a>
+
+      <ul>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.store">(back.objects.registry.RegistryService.RegistryService property)</a>
+</li>
+      </ul></li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.TripleRow.subject">subject (api.routers.digitaltwin.TripleRow attribute)</a>
 
       <ul>
@@ -4529,6 +5046,10 @@
 
       <ul>
         <li><a href="api/agents.html#agents.agent_auto_icon_assign.engine.AgentResult.success">(agents.agent_auto_icon_assign.engine.AgentResult attribute)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.AgentResult.success">(agents.agent_cohort.AgentResult attribute)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.AgentResult.success">(agents.agent_cohort.engine.AgentResult attribute)</a>
 </li>
         <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult.success">(agents.agent_ontology_assistant.engine.AgentResult attribute)</a>
 </li>
@@ -4559,6 +5080,8 @@
       </ul></li>
       <li><a href="api/api_external.html#api.routers.v1.SuccessResponse">SuccessResponse (class in api.routers.v1)</a>
 </li>
+      <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService.suggest_uc_target">suggest_uc_target() (back.objects.digitaltwin.CohortService.CohortService method)</a>
+</li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.GraphDBBackend.GraphDBBackend.supports_cypher">supports_cypher (back.core.graphdb.GraphDBBackend.GraphDBBackend property)</a>
 
       <ul>
@@ -4571,6 +5094,8 @@
         <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugGraphStore.LadybugGraphStore.supports_graph_model">(back.core.graphdb.ladybugdb.LadybugGraphStore.LadybugGraphStore property)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortStats.survivor_count">survivor_count (back.core.graph_analysis.models.CohortStats attribute)</a>
+</li>
       <li><a href="api/app.objects.domain.html#back.objects.domain.Domain.Domain.switch_design_view">switch_design_view() (back.objects.domain.Domain.Domain method)</a>
 
       <ul>
@@ -4653,12 +5178,16 @@
         <li><a href="api/app.core.triplestore.html#back.core.triplestore.TripleStoreBackend.TripleStoreBackend.table_exists">(back.core.triplestore.TripleStoreBackend.TripleStoreBackend method)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.table_name">table_name (back.core.graph_analysis.models.CohortUCTarget attribute)</a>
+</li>
       <li><a href="api/app.core.sqlwizard.html#back.core.sqlwizard.models.SchemaContext.tables">tables (back.core.sqlwizard.models.SchemaContext attribute)</a>
 
       <ul>
         <li><a href="api/app.core.sqlwizard.html#back.core.sqlwizard.SchemaContext.tables">(back.core.sqlwizard.SchemaContext attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop.target_class">target_class (back.core.graph_analysis.models.CohortHop attribute)</a>
+</li>
       <li><a href="api/app.core.html#back.core.task_manager.Task">Task (class in back.core.task_manager)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.BuildStartedResponse.task_id">task_id (api.routers.digitaltwin.BuildStartedResponse attribute)</a>
@@ -4687,6 +5216,8 @@
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.settings.teams_save_batch">teams_save_batch() (in module api.routers.internal.settings)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.terminal_class">terminal_class (back.core.graph_analysis.models.CohortLink property)</a>
+</li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.DatabricksClient.DatabricksClient.test_connection">test_connection() (back.core.databricks.DatabricksClient.DatabricksClient method)</a>
 
       <ul>
@@ -4709,9 +5240,21 @@
         <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.models.RelTableDef.to_cypher">(back.core.graphdb.ladybugdb.models.RelTableDef method)</a>
 </li>
       </ul></li>
-      <li><a href="api/app.core.reasoning.html#back.core.reasoning.models.ReasoningResult.to_dict">to_dict() (back.core.reasoning.models.ReasoningResult method)</a>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.to_dict">to_dict() (back.core.graph_analysis.models.CohortCompat method)</a>
 
       <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop.to_dict">(back.core.graph_analysis.models.CohortHop method)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.to_dict">(back.core.graph_analysis.models.CohortLink method)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortOutput.to_dict">(back.core.graph_analysis.models.CohortOutput method)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.to_dict">(back.core.graph_analysis.models.CohortRule method)</a>
+</li>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortUCTarget.to_dict">(back.core.graph_analysis.models.CohortUCTarget method)</a>
+</li>
+        <li><a href="api/app.core.reasoning.html#back.core.reasoning.models.ReasoningResult.to_dict">(back.core.reasoning.models.ReasoningResult method)</a>
+</li>
         <li><a href="api/app.core.html#back.core.task_manager.Task.to_dict">(back.core.task_manager.Task method)</a>
 </li>
         <li><a href="api/app.core.html#back.core.task_manager.TaskStep.to_dict">(back.core.task_manager.TaskStep method)</a>
@@ -4743,12 +5286,16 @@
 </li>
       <li><a href="api/agents.html#agents.tools.icons.tool_assign_icons">tool_assign_icons() (in module agents.tools.icons)</a>
 </li>
+      <li><a href="api/agents.html#agents.agent_cohort.tools.tool_count_class_members">tool_count_class_members() (in module agents.agent_cohort.tools)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/agents.html#agents.agent_cohort.tools.tool_dry_run">tool_dry_run() (in module agents.agent_cohort.tools)</a>
+</li>
       <li><a href="api/agents.html#agents.tools.sql.tool_execute_sql">tool_execute_sql() (in module agents.tools.sql)</a>
 </li>
       <li><a href="api/agents.html#agents.tools.documents.tool_get_documents_context">tool_get_documents_context() (in module agents.tools.documents)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/agents.html#agents.tools.metadata.tool_get_metadata">tool_get_metadata() (in module agents.tools.metadata)</a>
 </li>
       <li><a href="api/agents.html#agents.tools.ontology.tool_get_ontology">tool_get_ontology() (in module agents.tools.ontology)</a>
@@ -4759,7 +5306,13 @@
 </li>
       <li><a href="api/agents.html#agents.tools.metadata.tool_get_table_detail">tool_get_table_detail() (in module agents.tools.metadata)</a>
 </li>
+      <li><a href="api/agents.html#agents.agent_cohort.tools.tool_list_classes">tool_list_classes() (in module agents.agent_cohort.tools)</a>
+</li>
       <li><a href="api/agents.html#agents.tools.documents.tool_list_documents">tool_list_documents() (in module agents.tools.documents)</a>
+</li>
+      <li><a href="api/agents.html#agents.agent_cohort.tools.tool_list_properties_of">tool_list_properties_of() (in module agents.agent_cohort.tools)</a>
+</li>
+      <li><a href="api/agents.html#agents.agent_cohort.tools.tool_propose_rule">tool_propose_rule() (in module agents.agent_cohort.tools)</a>
 </li>
       <li><a href="api/agents.html#agents.tools.documents.tool_read_document">tool_read_document() (in module agents.tools.documents)</a>
 </li>
@@ -4770,6 +5323,8 @@
       <li><a href="api/agents.html#agents.agent_ontology_assistant.tools.tool_remove_relationship">tool_remove_relationship() (in module agents.agent_ontology_assistant.tools)</a>
 </li>
       <li><a href="api/agents.html#agents.agent_ontology_assistant.tools.tool_rename_entity">tool_rename_entity() (in module agents.agent_ontology_assistant.tools)</a>
+</li>
+      <li><a href="api/agents.html#agents.agent_cohort.tools.tool_sample_values_of">tool_sample_values_of() (in module agents.agent_cohort.tools)</a>
 </li>
       <li><a href="api/agents.html#agents.agent_ontology_assistant.tools.tool_set_inheritance">tool_set_inheritance() (in module agents.agent_ontology_assistant.tools)</a>
 </li>
@@ -4798,6 +5353,8 @@
       <li><a href="api/agents.html#agents.tracing.trace_agent">trace_agent() (in module agents.tracing)</a>
 </li>
       <li><a href="api/agents.html#agents.tracing.trace_llm">trace_llm() (in module agents.tracing)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.CohortBuilder.CohortBuilder.trace_paths">trace_paths() (back.core.graph_analysis.CohortBuilder.CohortBuilder method)</a>
 </li>
       <li><a href="api/agents.html#agents.tracing.trace_tool">trace_tool() (in module agents.tracing)</a>
 </li>
@@ -4837,6 +5394,8 @@
 </li>
       <li><a href="api/app.core.triplestore.html#back.core.triplestore.TripleStoreFactory.TripleStoreFactory">TripleStoreFactory (class in back.core.triplestore.TripleStoreFactory)</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.type">type (back.core.graph_analysis.models.CohortCompat attribute)</a>
+</li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.StatsResponse.type_assertion_count">type_assertion_count (api.routers.digitaltwin.StatsResponse attribute)</a>
 </li>
       <li><a href="api/app.core.graphql.html#back.core.graphql.models.TypeInfo">TypeInfo (class in back.core.graphql.models)</a>
@@ -4847,13 +5406,15 @@
 <h2 id="U">U</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.uc">uc (back.objects.registry.service.RegistryService property)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.uc">uc (back.objects.registry.RegistryService.RegistryService property)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.uc_domain_folder">uc_domain_folder (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.uc_domain_path">uc_domain_path (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
       <li><a href="api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.uc_from_domain">uc_from_domain() (back.objects.digitaltwin.DigitalTwin.DigitalTwin static method)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortOutput.uc_table">uc_table (back.core.graph_analysis.models.CohortOutput attribute)</a>
 </li>
       <li><a href="api/app.objects.session.html#back.objects.session.DomainSession.DomainSession.uc_version_path">uc_version_path (back.objects.session.DomainSession.DomainSession property)</a>
 </li>
@@ -4887,14 +5448,14 @@
 </li>
       <li><a href="api/app.core.html#back.core.task_manager.TaskManager.update_progress">update_progress() (back.core.task_manager.TaskManager method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.update_property">update_property() (back.objects.ontology.Ontology.Ontology method)</a>
 
       <ul>
         <li><a href="api/app.frontend.html#api.routers.internal.ontology.update_property">(in module api.routers.internal.ontology)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.frontend.html#api.routers.internal.ontology.update_relationship_references">update_relationship_references() (in module api.routers.internal.ontology)</a>
 </li>
       <li><a href="api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.update_shape">update_shape() (back.core.w3c.shacl.SHACLService.SHACLService static method)</a>
@@ -4906,6 +5467,8 @@
       <li><a href="api/app.frontend.html#api.routers.internal.domain.upload_documents">upload_documents() (in module api.routers.internal.domain)</a>
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.upload_to_volume">upload_to_volume() (back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService static method)</a>
+</li>
+      <li><a href="api/app.frontend.html#api.routers.internal.dtwin.upsert_cohort_rule">upsert_cohort_rule() (in module api.routers.internal.dtwin)</a>
 </li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.EntityTypeStat.uri">uri (api.routers.digitaltwin.EntityTypeStat attribute)</a>
 
@@ -4926,6 +5489,10 @@
       <ul>
         <li><a href="api/agents.html#agents.agent_auto_icon_assign.engine.AgentResult.usage">(agents.agent_auto_icon_assign.engine.AgentResult attribute)</a>
 </li>
+        <li><a href="api/agents.html#agents.agent_cohort.AgentResult.usage">(agents.agent_cohort.AgentResult attribute)</a>
+</li>
+        <li><a href="api/agents.html#agents.agent_cohort.engine.AgentResult.usage">(agents.agent_cohort.engine.AgentResult attribute)</a>
+</li>
         <li><a href="api/agents.html#agents.agent_ontology_assistant.engine.AgentResult.usage">(agents.agent_ontology_assistant.engine.AgentResult attribute)</a>
 </li>
         <li><a href="api/agents.html#agents.agent_owl_generator.engine.AgentResult.usage">(agents.agent_owl_generator.engine.AgentResult attribute)</a>
@@ -4939,6 +5506,8 @@
 <h2 id="V">V</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortRule.validate">validate() (back.core.graph_analysis.models.CohortRule method)</a>
+</li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.validate_classes">validate_classes() (back.objects.ontology.Ontology.Ontology static method)</a>
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.validate_constraint">validate_constraint() (back.objects.ontology.Ontology.Ontology static method)</a>
@@ -4987,8 +5556,6 @@
         <li><a href="api/app.core.sqlwizard.html#back.core.sqlwizard.SQLWizardService.SQLWizardService.validate_sql_static">(back.core.sqlwizard.SQLWizardService.SQLWizardService method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.objects.domain.html#back.objects.domain.HomeService.HomeService.validate_status">validate_status() (back.objects.domain.HomeService.HomeService static method)</a>
 </li>
       <li><a href="api/app.objects.ontology.html#back.objects.ontology.Ontology.Ontology.validate_swrl_rule">validate_swrl_rule() (back.objects.ontology.Ontology.Ontology static method)</a>
@@ -4997,6 +5564,8 @@
         <li><a href="api/app.frontend.html#api.routers.internal.ontology.validate_swrl_rule">(in module api.routers.internal.ontology)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.DecisionTableEngine.DecisionTableEngine.validate_table">validate_table() (back.core.reasoning.DecisionTableEngine.DecisionTableEngine static method)</a>
 </li>
       <li><a href="api/app.core.html#back.core.helpers.SQLHelpers.validate_table_name">validate_table_name() (back.core.helpers.SQLHelpers static method)</a>
@@ -5011,12 +5580,24 @@
 </li>
       <li><a href="api/app.core.errors.html#back.core.errors.ValidationError">ValidationError</a>, <a href="api/app.core.errors.html#back.core.errors.ValidationError.ValidationError">[1]</a>
 </li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.value">value (back.core.graph_analysis.models.CohortCompat attribute)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.values">values (back.core.graph_analysis.models.CohortCompat attribute)</a>
+</li>
       <li><a href="api/api_external.html#back.fastapi.graphql_routes.GraphQLRequest.variables">variables (back.fastapi.graphql_routes.GraphQLRequest attribute)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.version_file_path">version_file_path() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.version_file_path">version_file_path() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.version_path">version_path() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.version_path">version_path() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
+      <li><a href="api/app.objects.domain.html#back.objects.domain.version_status.VersionStatusCache">VersionStatusCache (class in back.objects.domain.version_status)</a>
+</li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop.via">via (back.core.graph_analysis.models.CohortHop attribute)</a>
+
+      <ul>
+        <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortLink.via">(back.core.graph_analysis.models.CohortLink attribute)</a>
+</li>
+      </ul></li>
       <li><a href="api/api_external.html#api.routers.digitaltwin.StatusResponse.view_table">view_table (api.routers.digitaltwin.StatusResponse attribute)</a>
 </li>
       <li><a href="api/app.core.reasoning.html#back.core.reasoning.models.ReasoningResult.violations">violations (back.core.reasoning.models.ReasoningResult attribute)</a>
@@ -5026,14 +5607,14 @@
       <li><a href="api/api_external.html#api.routers.v1.UCLocationModel.volume">volume (api.routers.v1.UCLocationModel attribute)</a>
 
       <ul>
-        <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryCfg.volume">(back.objects.registry.service.RegistryCfg attribute)</a>
+        <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryCfg.volume">(back.objects.registry.RegistryService.RegistryCfg attribute)</a>
 </li>
       </ul></li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.volume_archive_path">volume_archive_path() (back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService static method)</a>
 </li>
       <li><a href="api/app.core.graphdb.html#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.volume_path">volume_path() (back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.volume_root">volume_root() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.volume_root">volume_root() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService">VolumeFileService (class in back.core.databricks.VolumeFileService)</a>
 </li>
@@ -5049,6 +5630,8 @@
         <li><a href="api/app.core.databricks.html#back.core.databricks.SQLWarehouse.SQLWarehouse.warehouse_id">(back.core.databricks.SQLWarehouse.SQLWarehouse property)</a>
 </li>
       </ul></li>
+      <li><a href="api/app.core.graph_analysis.html#back.core.graph_analysis.models.CohortHop.where">where (back.core.graph_analysis.models.CohortHop attribute)</a>
+</li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.WorkspaceService.WorkspaceService">WorkspaceService (class in back.core.databricks.WorkspaceService)</a>
 </li>
   </ul></td>
@@ -5057,7 +5640,7 @@
 </li>
       <li><a href="api/app.core.databricks.html#back.core.databricks.VolumeFileService.VolumeFileService.write_file">write_file() (back.core.databricks.VolumeFileService.VolumeFileService method)</a>
 </li>
-      <li><a href="api/app.objects.registry.html#back.objects.registry.service.RegistryService.write_version">write_version() (back.objects.registry.service.RegistryService method)</a>
+      <li><a href="api/app.objects.registry.html#back.objects.registry.RegistryService.RegistryService.write_version">write_version() (back.objects.registry.RegistryService.RegistryService method)</a>
 </li>
       <li><a href="api/app.frontend.html#api.routers.internal.home.write_volume_file">write_volume_file() (in module api.routers.internal.home)</a>
 </li>

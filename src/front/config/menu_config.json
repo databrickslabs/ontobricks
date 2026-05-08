@@ -63,7 +63,7 @@
                     "items": [
                         {
                             "id": "schedule",
-                            "label": "Schedule",
+                            "label": "Scheduler",
                             "icon": "bi-clock-history",
                             "default": false,
                             "requires": null

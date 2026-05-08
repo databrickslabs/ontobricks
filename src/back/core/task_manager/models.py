@@ -1,6 +1,6 @@
 """Task data models for the async task manager."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from enum import Enum
 from dataclasses import dataclass, field, asdict
@@ -40,7 +40,9 @@ class Task:
     message: str = ""
     result: Any = None
     error: Optional[str] = None
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     steps: List[TaskStep] = field(default_factory=list)
@@ -67,7 +69,14 @@ class Task:
             except ValueError:
                 return None
         else:
-            end = datetime.now()
+            end = datetime.now(start.tzinfo) if start.tzinfo else datetime.now()
+        # Backward compatibility: older tasks may contain naive timestamps
+        # while newer ones are offset-aware. Align tzinfo to avoid runtime
+        # TypeError on subtraction.
+        if start.tzinfo and not end.tzinfo:
+            end = end.replace(tzinfo=start.tzinfo)
+        elif end.tzinfo and not start.tzinfo:
+            start = start.replace(tzinfo=end.tzinfo)
         return max(0.0, (end - start).total_seconds())
 
     def to_dict(self) -> Dict[str, Any]:

@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -431,6 +433,52 @@
         <span class="k">pass</span></div>
 
 
+    <span class="c1"># -- Cohort idempotency override -------------------------------------</span>
+
+<div class="viewcode-block" id="LadybugFlatStore.delete_cohort_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.html#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.delete_cohort_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_cohort_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">cohort_uri_prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">in_cohort_predicate</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Cypher counterpart of the SQL default — runs two MATCH/DELETE</span>
+<span class="sd">        passes against the flat ``Triple`` node table.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cohort_uri_prefix</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">deleted</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) WHERE t.subject STARTS WITH $prefix DELETE t&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;prefix&quot;</span><span class="p">:</span> <span class="n">cohort_uri_prefix</span><span class="p">},</span>
+            <span class="p">)</span>
+            <span class="n">deleted</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>  <span class="c1"># Kùzu does not return affected-row count.</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;delete_cohort_triples (subject prefix) failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span>
+            <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $pred AND t.object STARTS WITH $prefix &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;DELETE t&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s2">&quot;pred&quot;</span><span class="p">:</span> <span class="n">in_cohort_predicate</span><span class="p">,</span>
+                    <span class="s2">&quot;prefix&quot;</span><span class="p">:</span> <span class="n">cohort_uri_prefix</span><span class="p">,</span>
+                <span class="p">},</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;delete_cohort_triples (membership) failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">deleted</span></div>
+
+
     <span class="c1"># -- Named query overrides (Cypher on flat table) --------------------</span>
 
 <div class="viewcode-block" id="LadybugFlatStore.get_aggregate_stats">
@@ -508,9 +556,11 @@
         <span class="n">field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;any&quot;</span><span class="p">,</span>
         <span class="n">match_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;contains&quot;</span><span class="p">,</span>
         <span class="n">value</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="n">node</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_node_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
         <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_connection</span><span class="p">()</span>
+        <span class="n">limit_clause</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; LIMIT </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">limit</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">_cypher_match</span><span class="p">(</span><span class="n">alias_prop</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">val</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">match_type</span> <span class="o">==</span> <span class="s2">&quot;exact&quot;</span><span class="p">:</span>
@@ -526,23 +576,16 @@
         <span class="n">search_id</span> <span class="o">=</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;any&quot;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">entity_type</span> <span class="ow">and</span> <span class="n">value</span><span class="p">:</span>
-            <span class="n">type_rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.object = $type_uri &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span><span class="p">,</span>
-                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdf_type&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="s2">&quot;type_uri&quot;</span><span class="p">:</span> <span class="n">entity_type</span><span class="p">},</span>
-            <span class="p">)</span>
-            <span class="n">typed_subjects</span> <span class="o">=</span> <span class="p">{</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">type_rows</span><span class="p">}</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">typed_subjects</span><span class="p">:</span>
-                <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
-
+            <span class="c1"># Search first, then constrain by rdf:type on the matched subset.</span>
+            <span class="c1"># This avoids building a potentially huge typed_subjects set before</span>
+            <span class="c1"># applying a selective text filter.</span>
             <span class="n">matched</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">search_label</span><span class="p">:</span>
                 <span class="n">lbl_cond</span> <span class="o">=</span> <span class="n">_cypher_match</span><span class="p">(</span><span class="s2">&quot;lbl.object&quot;</span><span class="p">,</span> <span class="n">val_lower</span><span class="p">)</span>
                 <span class="n">lbl_rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;MATCH (lbl:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
                     <span class="sa">f</span><span class="s2">&quot;WHERE lbl.predicate = $rdfs_label AND </span><span class="si">{</span><span class="n">lbl_cond</span><span class="si">}</span><span class="s2"> &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT lbl.subject AS subject&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT lbl.subject AS subject</span><span class="si">{</span><span class="n">limit_clause</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdfs_label&quot;</span><span class="p">:</span> <span class="n">RDFS_LABEL</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="n">val_lower</span><span class="p">},</span>
                 <span class="p">)</span>
                 <span class="n">matched</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">lbl_rows</span><span class="p">)</span>
@@ -551,17 +594,30 @@
                 <span class="n">id_rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
                     <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND </span><span class="si">{</span><span class="n">id_cond</span><span class="si">}</span><span class="s2"> &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject</span><span class="si">{</span><span class="n">limit_clause</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdf_type&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="n">val_lower</span><span class="p">},</span>
                 <span class="p">)</span>
                 <span class="n">matched</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">id_rows</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">typed_subjects</span> <span class="o">&amp;</span> <span class="n">matched</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">matched</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="n">typed_rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.object = $type_uri &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;AND t.subject IN $subjects &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject</span><span class="si">{</span><span class="n">limit_clause</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">parameters</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s2">&quot;rdf_type&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span>
+                    <span class="s2">&quot;type_uri&quot;</span><span class="p">:</span> <span class="n">entity_type</span><span class="p">,</span>
+                    <span class="s2">&quot;subjects&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">matched</span><span class="p">),</span>
+                <span class="p">},</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">typed_rows</span><span class="p">}</span>
 
         <span class="k">elif</span> <span class="n">entity_type</span><span class="p">:</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.object = $type_uri &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject</span><span class="si">{</span><span class="n">limit_clause</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdf_type&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="s2">&quot;type_uri&quot;</span><span class="p">:</span> <span class="n">entity_type</span><span class="p">},</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="p">{</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">result</span><span class="p">}</span>
@@ -573,7 +629,7 @@
                 <span class="n">lbl_rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
                     <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdfs_label AND </span><span class="si">{</span><span class="n">lbl_cond</span><span class="si">}</span><span class="s2"> &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject</span><span class="si">{</span><span class="n">limit_clause</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdfs_label&quot;</span><span class="p">:</span> <span class="n">RDFS_LABEL</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="n">val_lower</span><span class="p">},</span>
                 <span class="p">)</span>
                 <span class="n">matched</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">lbl_rows</span><span class="p">)</span>
@@ -582,7 +638,7 @@
                 <span class="n">id_rows</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;MATCH (t:</span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">) &quot;</span>
                     <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND </span><span class="si">{</span><span class="n">id_cond</span><span class="si">}</span><span class="s2"> &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject</span><span class="si">{</span><span class="n">limit_clause</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdf_type&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="n">val_lower</span><span class="p">},</span>
                 <span class="p">)</span>
                 <span class="n">matched</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">id_rows</span><span class="p">)</span>

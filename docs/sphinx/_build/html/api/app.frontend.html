@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -183,11 +184,14 @@ principal cannot read its own ACL yet.  Instruct the deployer to run
 <p id="module-front.routes.ontology">Frontend HTML route – Ontology page.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="front.routes.ontology.ontology_page">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">front.routes.ontology.</span></span><span class="sig-name descname"><span class="pre">ontology_page</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/front/routes/ontology.html#ontology_page"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#front.routes.ontology.ontology_page" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">front.routes.ontology.</span></span><span class="sig-name descname"><span class="pre">ontology_page</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/front/routes/ontology.html#ontology_page"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#front.routes.ontology.ontology_page" title="Link to this definition">¶</a></dt>
 <dd><p>Ontology management page.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -591,6 +595,15 @@ can immediately browse catalogs and set up the registry.</p>
 <dt class="sig sig-object py" id="api.routers.internal.settings.save_registry">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">save_registry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#save_registry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.save_registry" title="Link to this definition">¶</a></dt>
 <dd><p>Persist registry catalog / schema / volume in settings.registry.</p>
+<p>When the registry is “locked” (i.e. the Volume is supplied by a
+Databricks App resource), the bound triplet
+<code class="docutils literal notranslate"><span class="pre">catalog/schema/volume</span></code> is read-only — those fields come from
+the platform and editing them in-app would silently desync from
+the actual binding. The <strong>backend choice</strong> (Volume ↔ Lakebase)
+and the Lakebase-side knobs (<code class="docutils literal notranslate"><span class="pre">lakebase_schema</span></code>,
+<code class="docutils literal notranslate"><span class="pre">lakebase_database</span></code>) remain editable, since toggling the
+backend only changes which storage layer the registry writes
+JSON into; it does not move the bound resource around.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -617,12 +630,68 @@ can immediately browse catalogs and set up the registry.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="api.routers.internal.settings.list_registry_domains">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">list_registry_domains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#list_registry_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.list_registry_domains" title="Link to this definition">¶</a></dt>
-<dd><p>List domains in the registry with name and description.</p>
+<dt class="sig sig-object py" id="api.routers.internal.settings.list_lakebase_databases">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">list_lakebase_databases</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#list_lakebase_databases"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.list_lakebase_databases" title="Link to this definition">¶</a></dt>
+<dd><p>List Postgres databases on the bound Lakebase instance (admin only).</p>
+<p>Lets the Registry Location modal populate a “Lakebase Database”
+picker so the admin can switch the registry to a different
+database on the same instance without redeploying. <code class="docutils literal notranslate"><span class="pre">connectable</span></code>
+flags databases the service principal does not have <code class="docutils literal notranslate"><span class="pre">CONNECT</span></code>
+on, so the UI can disable them. Returns <code class="docutils literal notranslate"><span class="pre">success=False</span></code> (with a
+<code class="docutils literal notranslate"><span class="pre">message</span></code>) when Lakebase is not bound or psycopg is missing.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.settings.migrate_registry_to_lakebase">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">migrate_registry_to_lakebase</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#migrate_registry_to_lakebase"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.migrate_registry_to_lakebase" title="Link to this definition">¶</a></dt>
+<dd><p>Copy Volume registry data into Lakebase tables (admin only).</p>
+<p>Binaries (<code class="docutils literal notranslate"><span class="pre">documents/</span></code>, <code class="docutils literal notranslate"><span class="pre">*.lbug.tar.gz</span></code>) stay on the Unity
+Catalog Volume. Idempotent at the Lakebase side.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.settings.get_lakebase_stats">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">get_lakebase_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#get_lakebase_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.get_lakebase_stats" title="Link to this definition">¶</a></dt>
+<dd><p>Return per-table row counts for the Lakebase registry schema.</p>
+<p>Powers the read-only inventory grid in the Registry Location
+panel. Returns <code class="docutils literal notranslate"><span class="pre">success=False</span></code> with a human-readable
+<code class="docutils literal notranslate"><span class="pre">message</span></code> when the Lakebase resource is not bound or the
+backend is not installed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.settings.list_registry_domains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">list_registry_domains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#list_registry_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.list_registry_domains" title="Link to this definition">¶</a></dt>
+<dd><p>List domains in the registry with name and description.</p>
+<p>Non-admin users only see domains they have a role on; admins see all.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
@@ -739,6 +808,35 @@ can immediately browse catalogs and set up the registry.</p>
 <dt class="sig sig-object py" id="api.routers.internal.settings.save_base_uri">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">save_base_uri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#save_base_uri"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.save_base_uri" title="Link to this definition">¶</a></dt>
 <dd><p>Save default base URI domain (admin only, stored globally).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.settings.get_cloud_fetch">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">get_cloud_fetch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#get_cloud_fetch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.get_cloud_fetch" title="Link to this definition">¶</a></dt>
+<dd><p>Get global CloudFetch toggle (instance-global).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.settings.save_cloud_fetch">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.settings.</span></span><span class="sig-name descname"><span class="pre">save_cloud_fetch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/settings.html#save_cloud_fetch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.settings.save_cloud_fetch" title="Link to this definition">¶</a></dt>
+<dd><p>Save global CloudFetch toggle (admin only, stored globally).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1780,7 +1878,12 @@ There is no synchronous generate endpoint; this is the only LLM wizard entry poi
 <dl class="py function">
 <dt class="sig sig-object py" id="api.routers.internal.ontology.auto_assign_icons">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.ontology.</span></span><span class="sig-name descname"><span class="pre">auto_assign_icons</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/ontology.html#auto_assign_icons"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.ontology.auto_assign_icons" title="Link to this definition">¶</a></dt>
-<dd><p>Use the auto-icon-assign agent to suggest emoji icons for entity names.</p>
+<dd><p>Start the auto-icon-assign agent as a background task.</p>
+<p>Returns a <code class="docutils literal notranslate"><span class="pre">task_id</span></code> immediately; poll <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/tasks/{task_id}</span></code> for
+<code class="docutils literal notranslate"><span class="pre">result.icons</span></code> once <code class="docutils literal notranslate"><span class="pre">status</span> <span class="pre">==</span> <span class="pre">&quot;completed&quot;</span></code>. Mirrors the wizard
+ontology generator pattern (<code class="docutils literal notranslate"><span class="pre">/wizard/generate-async</span></code>) so the icon
+agent is visible in the global task tracker and survives page
+navigation.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -2087,11 +2190,18 @@ item_type: str         – ‘entity’ or ‘relationship’ (default ‘entity
 
 <dl class="py function">
 <dt class="sig sig-object py" id="api.routers.internal.mapping.run_diagnostics">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.mapping.</span></span><span class="sig-name descname"><span class="pre">run_diagnostics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/mapping.html#run_diagnostics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.mapping.run_diagnostics" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.mapping.</span></span><span class="sig-name descname"><span class="pre">run_diagnostics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/mapping.html#run_diagnostics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.mapping.run_diagnostics" title="Link to this definition">¶</a></dt>
 <dd><p>Run comprehensive validation on all entity and relationship mappings.</p>
+<p>Includes a SELECT-permission probe on every distinct source table
+when a Databricks client is configured (Databricks Apps mode or a
+PAT in local dev).  The probe runs in a thread via <code class="docutils literal notranslate"><span class="pre">run_blocking</span></code>
+so concurrent slow warehouse calls do not stall the event loop.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -2290,6 +2400,317 @@ exists or when the diff exceeds a threshold.</p></li>
 <dt class="sig sig-object py" id="api.routers.internal.dtwin.detect_clusters">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">detect_clusters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#detect_clusters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.detect_clusters" title="Link to this definition">¶</a></dt>
 <dd><p>Run community detection on the full knowledge graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.CohortEngineContext">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">CohortEngineContext</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">service</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#CohortEngineContext"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.CohortEngineContext" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Pre-resolved dependencies for cohort engine routes.</p>
+<p>Carrying both <code class="docutils literal notranslate"><span class="pre">service</span></code> and the store/graph_name lets the route
+body remain a single <code class="xref py py-func docutils literal notranslate"><span class="pre">run_blocking()</span></code> call into the service
+method while preserving the original parameter shape (the engine
+is backend-agnostic and takes <code class="docutils literal notranslate"><span class="pre">store</span></code> + <code class="docutils literal notranslate"><span class="pre">graph_name</span></code> directly).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+<li><p><strong>store</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>graph_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>service</strong> (<a class="reference internal" href="app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService" title="back.objects.digitaltwin.CohortService.CohortService"><em>CohortService</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.CohortEngineContext.domain">
+<span class="sig-name descname"><span class="pre">domain</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a></span><a class="headerlink" href="#api.routers.internal.dtwin.CohortEngineContext.domain" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.CohortEngineContext.settings">
+<span class="sig-name descname"><span class="pre">settings</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><span class="pre">Settings</span></a></span><a class="headerlink" href="#api.routers.internal.dtwin.CohortEngineContext.settings" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.CohortEngineContext.store">
+<span class="sig-name descname"><span class="pre">store</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a></span><a class="headerlink" href="#api.routers.internal.dtwin.CohortEngineContext.store" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.CohortEngineContext.graph_name">
+<span class="sig-name descname"><span class="pre">graph_name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#api.routers.internal.dtwin.CohortEngineContext.graph_name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.CohortEngineContext.service">
+<span class="sig-name descname"><span class="pre">service</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="app.objects.digitaltwin.html#back.objects.digitaltwin.CohortService.CohortService" title="back.objects.digitaltwin.CohortService.CohortService"><span class="pre">CohortService</span></a></span><a class="headerlink" href="#api.routers.internal.dtwin.CohortEngineContext.service" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_engine_context">
+<span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_engine_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_engine_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_engine_context" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve the cohort engine context for the active domain.</p>
+<p>Raises <code class="xref py py-class docutils literal notranslate"><span class="pre">ValidationError</span></code> when the graph name is not
+configured and <code class="xref py py-class docutils literal notranslate"><span class="pre">InfrastructureError</span></code> when the graph
+backend cannot be instantiated.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_json_body">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_json_body</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_json_body"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_json_body" title="Link to this definition">¶</a></dt>
+<dd><p>Decode the request body as a JSON object.</p>
+<p>Centralises the <code class="docutils literal notranslate"><span class="pre">&quot;Body</span> <span class="pre">must</span> <span class="pre">be</span> <span class="pre">a</span> <span class="pre">JSON</span> <span class="pre">object&quot;</span></code> guard previously
+duplicated in every POST handler in this block.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.list_cohort_rules">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">list_cohort_rules</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#list_cohort_rules"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.list_cohort_rules" title="Link to this definition">¶</a></dt>
+<dd><p>Return all saved cohort rules for the active domain.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.upsert_cohort_rule">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">upsert_cohort_rule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#upsert_cohort_rule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.upsert_cohort_rule" title="Link to this definition">¶</a></dt>
+<dd><p>Validate and upsert a cohort rule into the active domain.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.delete_cohort_rule">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">delete_cohort_rule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#delete_cohort_rule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.delete_cohort_rule" title="Link to this definition">¶</a></dt>
+<dd><p>Delete a saved cohort rule by id.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_dry_run">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_dry_run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_engine_context&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_dry_run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_dry_run" title="Link to this definition">¶</a></dt>
+<dd><p>Run the cohort engine on a candidate rule without writing anything.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_materialize">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_materialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_engine_context&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_materialize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_materialize" title="Link to this definition">¶</a></dt>
+<dd><p>Re-run a saved rule and write outputs as configured (graph/UC table).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_class_stats">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_class_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_engine_context&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_class_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_class_stats" title="Link to this definition">¶</a></dt>
+<dd><p>Live counter — instances of <em>class_uri</em> in the graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_edge_count">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_edge_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_engine_context&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_edge_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_edge_count" title="Link to this definition">¶</a></dt>
+<dd><p>Live counter — candidate edges produced by current <code class="docutils literal notranslate"><span class="pre">links</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_node_count">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_node_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_engine_context&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_node_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_node_count" title="Link to this definition">¶</a></dt>
+<dd><p>Live counter — surviving members after node-level compatibility.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_path_trace">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_path_trace</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_engine_context&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_path_trace"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_path_trace" title="Link to this definition">¶</a></dt>
+<dd><p>Per-hop frontier diagnostic — see exactly which hop empties the
+walk for a multi-hop linkage rule.</p>
+<p>Body shape mirrors the rule’s relevant slice:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;class_uri&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">,</span> <span class="s2">&quot;links&quot;</span><span class="p">:</span> <span class="p">[</span><span class="o">...</span><span class="p">],</span> <span class="s2">&quot;compatibility&quot;</span><span class="p">:</span> <span class="p">[</span><span class="o">...</span><span class="p">]}</span>
+</pre></div>
+</div>
+<p>Returns the engine’s trace (see <code class="xref py py-meth docutils literal notranslate"><span class="pre">CohortBuilder.trace_paths()</span></code>)
+used by the Preview tab’s <em>Trace path</em> button.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_sample_values">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_sample_values</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_engine_context&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_sample_values"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_sample_values" title="Link to this definition">¶</a></dt>
+<dd><p>Return up to N distinct values for a property/class pair (picker).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_explain">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_explain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_engine_context&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_explain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_explain" title="Link to this definition">¶</a></dt>
+<dd><p>Return a per-stage breakdown for a single member URI (Why? / Why not?).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#api.routers.internal.dtwin.CohortEngineContext" title="api.routers.internal.dtwin.CohortEngineContext"><em>CohortEngineContext</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_uc_suggest_target">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_uc_suggest_target</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rule_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_uc_suggest_target"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_uc_suggest_target" title="Link to this definition">¶</a></dt>
+<dd><p>Return suggested catalog/schema/table_name for the active domain.</p>
+<p>The optional <code class="docutils literal notranslate"><span class="pre">rule_name</span></code> query parameter scopes the suggested UC
+table name to the rule being configured – the modal proposes
+<code class="docutils literal notranslate"><span class="pre">cohorts_&lt;snake_rule_name&gt;</span></code> so the table is self-describing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rule_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohort_uc_probe_write">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohort_uc_probe_write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">body</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">cohort_json_body&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohort_uc_probe_write"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohort_uc_probe_write" title="Link to this definition">¶</a></dt>
+<dd><p>Run a 3-step read-only permission probe for a UC Delta target.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>body</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.cohorts_agent">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">cohorts_agent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#cohorts_agent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.cohorts_agent" title="Link to this definition">¶</a></dt>
+<dd><p>Translate a natural-language prompt into a validated CohortRule.</p>
+<p>Body:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;prompt&quot;</span><span class="p">:</span>  <span class="s2">&quot;find consultants who can be staffed together&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;history&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="o">|</span><span class="s2">&quot;assistant&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">},</span> <span class="o">...</span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Response:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">true</span><span class="p">,</span>
+    <span class="s2">&quot;rule&quot;</span><span class="p">:</span>  <span class="p">{</span> <span class="o">...</span> <span class="n">validated</span> <span class="n">CohortRule</span> <span class="n">JSON</span> <span class="o">...</span><span class="p">}</span> <span class="o">|</span> <span class="n">null</span><span class="p">,</span>
+    <span class="s2">&quot;reply&quot;</span><span class="p">:</span> <span class="s2">&quot;...short markdown explanation...&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;tools&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;list_classes&quot;</span><span class="p">,</span> <span class="s2">&quot;duration_ms&quot;</span><span class="p">:</span> <span class="mi">12</span><span class="p">},</span> <span class="o">...</span><span class="p">],</span>
+    <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+    <span class="s2">&quot;usage&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;prompt_tokens&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span> <span class="s2">&quot;completion_tokens&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The proposed rule is <em>not</em> persisted – the user reviews and saves it
+via the existing <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/cohorts/rules</span></code> route. If the agent could
+not assemble a valid rule, <code class="docutils literal notranslate"><span class="pre">rule</span></code> is <code class="docutils literal notranslate"><span class="pre">null</span></code> and <code class="docutils literal notranslate"><span class="pre">reply</span></code> carries
+the (likely clarifying) follow-up question.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -2546,6 +2967,169 @@ Databricks checks and caches the result.</p>
 </dl>
 </dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.dtwin_assistant_chat">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">dtwin_assistant_chat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#dtwin_assistant_chat"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.dtwin_assistant_chat" title="Link to this definition">¶</a></dt>
+<dd><p>Process a single chat turn with the Graph Chat agent.</p>
+<p>Expects JSON body:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;List entity types&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;history&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="o">|</span><span class="s2">&quot;assistant&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">},</span> <span class="o">...</span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Returns:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">true</span><span class="p">,</span>
+    <span class="s2">&quot;reply&quot;</span><span class="p">:</span> <span class="s2">&quot;...markdown...&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;tools&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;list_entity_types&quot;</span><span class="p">,</span> <span class="s2">&quot;duration_ms&quot;</span><span class="p">:</span> <span class="mi">123</span><span class="p">},</span> <span class="o">...</span><span class="p">],</span>
+    <span class="s2">&quot;usage&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;prompt_tokens&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span> <span class="s2">&quot;completion_tokens&quot;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span> <span class="o">...</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.dtwin_assistant_history_get">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">dtwin_assistant_history_get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#dtwin_assistant_history_get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.dtwin_assistant_history_get" title="Link to this definition">¶</a></dt>
+<dd><p>Return the persisted Graph Chat history for the active domain.</p>
+<p>Response shape:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">true</span><span class="p">,</span>
+    <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;domain name&gt;&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;messages&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="o">|</span><span class="s2">&quot;assistant&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">},</span> <span class="o">...</span><span class="p">],</span>
+    <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="o">&lt;</span><span class="nb">int</span><span class="o">&gt;</span><span class="p">,</span>
+    <span class="s2">&quot;min_limit&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="s2">&quot;max_limit&quot;</span><span class="p">:</span> <span class="mi">100</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.dtwin_assistant_history_clear">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">dtwin_assistant_history_clear</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#dtwin_assistant_history_clear"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.dtwin_assistant_history_clear" title="Link to this definition">¶</a></dt>
+<dd><p>Clear the persisted Graph Chat history for the active domain.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.dtwin_graphql_schema">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">dtwin_graphql_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#dtwin_graphql_schema"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.dtwin_graphql_schema" title="Link to this definition">¶</a></dt>
+<dd><p>Return the GraphQL SDL built from the CURRENT session’s domain.</p>
+<p>Unlike the public <code class="docutils literal notranslate"><span class="pre">/graphql/{domain}/schema</span></code> route, this endpoint
+does <strong>not</strong> require the domain to be published in the registry.
+It works purely from the in-session ontology so Graph Chat can
+introspect the schema even while the user is still building the
+domain.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.dtwin_graphql_execute">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">dtwin_graphql_execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#dtwin_graphql_execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.dtwin_graphql_execute" title="Link to this definition">¶</a></dt>
+<dd><p>Execute a GraphQL query against the CURRENT session’s domain.</p>
+<p>Session-aware counterpart of <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/graphql/{domain}</span></code> used by the
+Graph Chat agent.  Requires a configured graph backend (LadybugDB)
+to resolve the query.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.dtwin_triples_find">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">dtwin_triples_find</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entity_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#dtwin_triples_find"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.dtwin_triples_find" title="Link to this definition">¶</a></dt>
+<dd><p>Session-aware search + BFS traversal over the in-session domain.</p>
+<p>Mirrors <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/digitaltwin/triples/find</span></code> but resolves the
+domain from the user’s session instead of the registry, so the
+Graph Chat agent can introspect domains that have never been
+published as a version.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>entity_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>search</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.dtwin_neighbors">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">dtwin_neighbors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#dtwin_neighbors"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.dtwin_neighbors" title="Link to this definition">¶</a></dt>
+<dd><p>Expand <em>uri</em> by <code class="docutils literal notranslate"><span class="pre">depth</span></code> BFS hops and return the induced subgraph
+triples.</p>
+<p>Used by the graph viewer’s right-click “Expand neighbours” action to
+enrich the displayed graph with one or more hops of related entities.
+Only triples whose object is a literal <em>or</em> whose object is a URI also
+present in the visited set are returned, so the front-end can render
+proper edges without ghost endpoints.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.dtwin.dtwin_assistant_history_set_limit">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.dtwin.</span></span><span class="sig-name descname"><span class="pre">dtwin_assistant_history_set_limit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/dtwin.html#dtwin_assistant_history_set_limit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.dtwin.dtwin_assistant_history_set_limit" title="Link to this definition">¶</a></dt>
+<dd><p>Update the maximum number of turns kept per-domain (session-scoped).</p>
+<p>Body: <code class="docutils literal notranslate"><span class="pre">{&quot;limit&quot;:</span> <span class="pre">&lt;int&gt;}</span></code>.  Clamped to <code class="docutils literal notranslate"><span class="pre">[5,</span> <span class="pre">100]</span></code>.  When the new
+limit is smaller than the existing history, it is trimmed in place.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 <p id="module-api.routers.internal.domain">Internal API – Domain management JSON endpoints.</p>
 <p>Moved from app/frontend/project/routes.py during the front/back split.</p>
 <dl class="py function">
@@ -2672,6 +3256,9 @@ Falls back to the SCIM /Me endpoint for local / PAT mode.</p>
 <dt class="sig sig-object py" id="api.routers.internal.domain.get_session_debug">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.domain.</span></span><span class="sig-name descname"><span class="pre">get_session_debug</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/domain.html#get_session_debug"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.domain.get_session_debug" title="Link to this definition">¶</a></dt>
 <dd><p>Get full session data for debugging purposes.</p>
+<p>Returns the <code class="docutils literal notranslate"><span class="pre">domain_data</span></code> bucket (shaped by <code class="xref py py-class docutils literal notranslate"><span class="pre">DomainSession</span></code>)
+plus every other top-level key present in the raw FastAPI session
+(e.g. <code class="docutils literal notranslate"><span class="pre">graph_chat</span></code>) so callers can see non-domain buckets too.</p>
 <p>Only available when LOG_LEVEL is set to DEBUG.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -2838,11 +3425,14 @@ Catalog/schema are NOT stored – they are selected dynamically when needed.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="api.routers.internal.domain.list_domains">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.domain.</span></span><span class="sig-name descname"><span class="pre">list_domains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/domain.html#list_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.domain.list_domains" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.domain.</span></span><span class="sig-name descname"><span class="pre">list_domains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/domain.html#list_domains"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.domain.list_domains" title="Link to this definition">¶</a></dt>
 <dd><p>List domain folders under /domains/ in the registry Volume.</p>
+<p>Non-admin users only see the domains they have a role on
+(viewer / editor / builder). Admins see everything.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
@@ -2943,6 +3533,8 @@ Pass <code class="docutils literal notranslate"><span class="pre">?refresh=true<
 <dt class="sig sig-object py" id="api.routers.internal.domain.set_version_mcp">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.domain.</span></span><span class="sig-name descname"><span class="pre">set_version_mcp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;function</span> <span class="pre">get_session_manager&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/domain.html#set_version_mcp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.domain.set_version_mcp" title="Link to this definition">¶</a></dt>
 <dd><p>Toggle the API/MCP flag for a specific version (only one may be active).</p>
+<p>In the web UI, operators change this from <strong>Registry → Browse</strong>; this
+endpoint remains for integrations and tests that POST JSON directly.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -3207,6 +3799,60 @@ Text files are returned as JSON with a <code class="docutils literal notranslate
 <dt class="sig sig-object py" id="api.routers.internal.tasks.clear_completed_tasks">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.tasks.</span></span><span class="sig-name descname"><span class="pre">clear_completed_tasks</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/tasks.html#clear_completed_tasks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.tasks.clear_completed_tasks" title="Link to this definition">¶</a></dt>
 <dd><p>Clear all completed/failed/cancelled tasks.</p>
+</dd></dl>
+
+<p id="module-api.routers.internal.help">In-app Help Center documentation endpoints (internal JSON API).</p>
+<p>Serves the Markdown files from the repository’s <code class="docutils literal notranslate"><span class="pre">docs/</span></code> folder and their
+referenced images so the Help Center modal can render them client-side with
+marked.js. Markdown remains the single source of truth.</p>
+<p>Lives under <code class="xref py py-mod docutils literal notranslate"><span class="pre">api.routers.internal</span></code> because every endpoint returns
+JSON or binary — no HTML pages are rendered here.</p>
+<p>Endpoints (all read-only, JSON/binary):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/help/docs</span></code>                → list of available docs, grouped by category</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/help/docs/{slug}</span></code>         → <code class="docutils literal notranslate"><span class="pre">{slug,</span> <span class="pre">title,</span> <span class="pre">markdown}</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/help/docs/images/{name}</span></code>  → raw image file from <code class="docutils literal notranslate"><span class="pre">docs/images/</span></code></p></li>
+</ul>
+<p>Access is restricted by a hard-coded allow-list (slug → relative path + title
++ category) and a strict filename regex on image names, to prevent any path
+traversal attempt.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.help.list_docs">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.help.</span></span><span class="sig-name descname"><span class="pre">list_docs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/help.html#list_docs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.help.list_docs" title="Link to this definition">¶</a></dt>
+<dd><p>Return the catalogued list of docs grouped by category.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.help.get_doc_image">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.help.</span></span><span class="sig-name descname"><span class="pre">get_doc_image</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/help.html#get_doc_image"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.help.get_doc_image" title="Link to this definition">¶</a></dt>
+<dd><p>Serve a whitelisted image file from <code class="docutils literal notranslate"><span class="pre">docs/images/</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.help.get_doc_screenshot">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.help.</span></span><span class="sig-name descname"><span class="pre">get_doc_screenshot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/help.html#get_doc_screenshot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.help.get_doc_screenshot" title="Link to this definition">¶</a></dt>
+<dd><p>Serve a whitelisted screenshot file from <code class="docutils literal notranslate"><span class="pre">docs/screenshots/</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="api.routers.internal.help.get_doc">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">api.routers.internal.help.</span></span><span class="sig-name descname"><span class="pre">get_doc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">slug</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/api/routers/internal/help.html#get_doc"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#api.routers.internal.help.get_doc" title="Link to this definition">¶</a></dt>
+<dd><p>Return the raw Markdown text for a given doc slug.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>slug</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>

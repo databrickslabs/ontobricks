@@ -584,3 +584,31 @@
     font-family: var(--bs-font-monospace, monospace);
     word-break: break-all;
 }
+
+/* Materialise modal: wrap long predicate / FQ-table-name inside the modal
+   instead of overflowing horizontally. */
+.cohort-mat-label {
+    display: block;
+    width: 100%;
+}
+.cohort-mat-target {
+    display: block;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.35;
+}
+.cohort-mat-target code {
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    white-space: normal;
+}
+.cohort-mat-breakdown {
+    line-height: 1.5;
+}
+.cohort-mat-breakdown code {
+    font-size: 0.72rem;
+    padding: 0 4px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 3px;
+}

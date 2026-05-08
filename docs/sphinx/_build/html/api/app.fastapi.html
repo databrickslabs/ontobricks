@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -156,9 +157,11 @@ redirected to <code class="docutils literal notranslate"><span class="pre">/acce
 in the domain’s <code class="docutils literal notranslate"><span class="pre">.domain_permissions.json</span></code>.  Admins bypass this.</p></li>
 <li><p><strong>Viewer write-block</strong>: a viewer team entry allows GETs on domain
 routes but not writes.</p></li>
-<li><p><strong>Admin-only prefixes</strong> (<cite>/settings/permissions</cite>,
-<cite>/settings/domain-permissions</cite>, <cite>/settings/teams</cite>) are gated to
-admins even for app users.</p></li>
+<li><p><strong>Admin-only prefix</strong> (<cite>/settings</cite>) is gated to admins even for
+app users. A small allow-list (see
+<code class="xref py py-data docutils literal notranslate"><span class="pre">_PERM_ADMIN_ONLY_EXCEPTIONS</span></code>) keeps the read-only status
+endpoints that the regular app flow needs (warehouse/registry
+config) open to non-admins.</p></li>
 </ul>
 <p>Only active when running as a Databricks App (<code class="docutils literal notranslate"><span class="pre">DATABRICKS_APP_PORT</span></code>
 is set).  In local-dev mode every request passes through as admin.</p>
@@ -201,17 +204,67 @@ is set).  In local-dev mode every request passes through as admin.</p>
 </section>
 <section id="module-shared.fastapi.health">
 <span id="health"></span><h2>Health<a class="headerlink" href="#module-shared.fastapi.health" title="Link to this heading">¶</a></h2>
-<p>Health check endpoints.</p>
+<p>Readiness probe for OntoBricks — <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code>.</p>
+<p>This endpoint replaces the previous static dummy with a real
+end-to-end check of every external dependency the application needs
+to operate correctly:</p>
+<ul class="simple">
+<li><p>local filesystem — <code class="docutils literal notranslate"><span class="pre">/tmp</span></code>, the session directory and the log
+directory must be writable, with enough free disk space;</p></li>
+<li><p>Databricks authentication — OAuth client-credentials in Apps mode
+or PAT in local development;</p></li>
+<li><p>SQL warehouse — TCP/SQL reachability via <code class="docutils literal notranslate"><span class="pre">SELECT</span> <span class="pre">1</span></code>;</p></li>
+<li><p>CloudFetch capability — connector prerequisites and lightweight
+runtime probe for <code class="docutils literal notranslate"><span class="pre">use_cloud_fetch=True</span></code>;</p></li>
+<li><p>registry <strong>UC volume</strong> — Files-API read + write probe (a tiny
+sentinel file is written then deleted);</p></li>
+<li><p>registry <strong>catalog/schema</strong> — DDL probe via
+<code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">OR</span> <span class="pre">REPLACE</span> <span class="pre">VIEW</span> <span class="pre">&lt;fqn&gt;</span> <span class="pre">AS</span> <span class="pre">SELECT</span> <span class="pre">1</span></code> then <code class="docutils literal notranslate"><span class="pre">DROP</span> <span class="pre">VIEW</span></code> so
+view materialisation will succeed during Digital-Twin builds;</p></li>
+<li><p><strong>Lakebase</strong> — when <code class="docutils literal notranslate"><span class="pre">PG*</span></code> env vars are bound, connectivity/init
+checks plus explicit schema/table/sequence permission probes.</p></li>
+</ul>
+<p>Each probe returns <code class="docutils literal notranslate"><span class="pre">{name,</span> <span class="pre">label,</span> <span class="pre">status,</span> <span class="pre">detail,</span> <span class="pre">duration_ms}</span></code>;
+the top-level <code class="docutils literal notranslate"><span class="pre">status</span></code> is the worst severity across all probes.
+<code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health/detailed</span></code> was removed — its information is now part of
+<code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/health</span></code>.</p>
+<p>The endpoint stays anonymous: <code class="docutils literal notranslate"><span class="pre">/health</span></code> is in the bypass list of
+<code class="xref py py-class docutils literal notranslate"><span class="pre">PermissionMiddleware</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">CSRFMiddleware</span></code> and
+<code class="xref py py-class docutils literal notranslate"><span class="pre">RequestTimingMiddleware</span></code>, so external uptime probes (load
+balancer, k8s liveness/readiness, Datadog) can call it without a
+session cookie.</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="shared.fastapi.health.health_check">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">shared.fastapi.health.</span></span><span class="sig-name descname"><span class="pre">health_check</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/shared/fastapi/health.html#health_check"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#shared.fastapi.health.health_check" title="Link to this definition">¶</a></dt>
-<dd><p>Health check endpoint.</p>
+<dt class="sig sig-object py" id="shared.fastapi.health.run_readiness_checks">
+<span class="sig-prename descclassname"><span class="pre">shared.fastapi.health.</span></span><span class="sig-name descname"><span class="pre">run_readiness_checks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/shared/fastapi/health.html#run_readiness_checks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#shared.fastapi.health.run_readiness_checks" title="Link to this definition">¶</a></dt>
+<dd><p>Execute every probe sequentially and roll up the worst severity.</p>
+<p>The function is synchronous so individual probes can use blocking
+SDK calls without <code class="docutils literal notranslate"><span class="pre">await</span></code>. Wrap the whole thing in
+<code class="xref py py-func docutils literal notranslate"><span class="pre">run_blocking()</span></code> from an <code class="docutils literal notranslate"><span class="pre">async</span></code> route to keep the event
+loop free.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="shared.fastapi.health.detailed_health">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">shared.fastapi.health.</span></span><span class="sig-name descname"><span class="pre">detailed_health</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/shared/fastapi/health.html#detailed_health"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#shared.fastapi.health.detailed_health" title="Link to this definition">¶</a></dt>
-<dd><p>Detailed health check with component status.</p>
+<dt class="sig sig-object py" id="shared.fastapi.health.health_check">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">shared.fastapi.health.</span></span><span class="sig-name descname"><span class="pre">health_check</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">Depends(dependency=&lt;functools._lru_cache_wrapper</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/shared/fastapi/health.html#health_check"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#shared.fastapi.health.health_check" title="Link to this definition">¶</a></dt>
+<dd><p>Readiness probe — returns <code class="docutils literal notranslate"><span class="pre">200</span></code> even when individual checks fail.</p>
+<p>External probes / load balancers should look at the top-level
+<code class="docutils literal notranslate"><span class="pre">status</span></code> field (<code class="docutils literal notranslate"><span class="pre">ok</span></code> / <code class="docutils literal notranslate"><span class="pre">warning</span></code> / <code class="docutils literal notranslate"><span class="pre">error</span></code>) and the
+<code class="docutils literal notranslate"><span class="pre">summary.errors</span></code> count. Returning a non-200 HTTP status would
+take the app out of rotation as soon as a <em>single</em> dependency
+flickered, which is rarely what you want for an analytical app.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -300,6 +353,21 @@ is set).  In local-dev mode every request passes through as admin.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="front.fastapi.dependencies.is_app_mode">
+<span class="sig-prename descclassname"><span class="pre">front.fastapi.dependencies.</span></span><span class="sig-name descname"><span class="pre">is_app_mode</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/front/fastapi/dependencies.html#is_app_mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#front.fastapi.dependencies.is_app_mode" title="Link to this definition">¶</a></dt>
+<dd><p>Return True when the server runs as a Databricks App.</p>
+<p>Mirrors <code class="xref py py-func docutils literal notranslate"><span class="pre">back.core.databricks.is_databricks_app()</span></code> so templates
+can decide whether to render permission-aware UI gates without a
+second API round-trip.  In local-dev mode every caller is treated
+as admin, so the gates can simply turn into no-ops.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
 </dd>
 </dl>
 </dd></dl>

@@ -67,11 +67,9 @@ sync:
     - scripts/
     - Makefile
     - CHANGELOG.md
-    # docs/*.md are served by the in-app Help Center
-    # (see src/front/routes/help.py → /api/help/docs/*), so the docs/
-    # folder itself must stay in the bundle. Only strip the Sphinx
-    # build output, which is not needed at runtime.
-    - docs/sphinx/
+    # Keep deploy payload minimal for sandbox runtime: no docs/ or markdown.
+    - docs/
+    - "*.md"
 
 variables:
   warehouse_id:

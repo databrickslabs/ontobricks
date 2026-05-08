@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -94,6 +95,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#module-agents.agent_auto_icon_assign">Auto Icon Assignment Agent</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-agents.agent_ontology_assistant">Ontology Assistant Agent</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-agents.agent_owl_generator">OWL Generator Agent</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-agents.agent_cohort">Cohort Discovery Agent</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-agents.tools.context">Shared Tools</a></li>
 </ul>
 </li>
@@ -832,6 +834,370 @@ function calling the engine falls back to a direct single-shot prompt.</p>
 <p>Composes the set of tools available to this agent from the shared
 <code class="docutils literal notranslate"><span class="pre">agents.tools</span></code> package.</p>
 </section>
+<section id="module-agents.agent_cohort">
+<span id="cohort-discovery-agent"></span><h2>Cohort Discovery Agent<a class="headerlink" href="#module-agents.agent_cohort" title="Link to this heading">¶</a></h2>
+<p>Cohort Discovery Agent — translates a natural-language prompt into a
+validated <code class="xref py py-class docutils literal notranslate"><span class="pre">CohortRule</span></code> JSON via tool-calling against the active
+session’s ontology + graph.</p>
+<dl class="simple">
+<dt>Exports:</dt><dd><dl class="simple">
+<dt>run_agent / AgentResult — entry point used by</dt><dd><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/cohorts/agent</span></code> to propose a rule the user can
+review and save in the cohort form.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>Stage 2 of the Cohort Discovery feature (see
+<code class="docutils literal notranslate"><span class="pre">releasereq/cohort_design.md</span></code> §12 and <code class="docutils literal notranslate"><span class="pre">docs/cohort_discovery.md</span></code>).</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="agents.agent_cohort.run_agent">
+<span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.</span></span><span class="sig-name descname"><span class="pre">run_agent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">endpoint_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_url</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_cookies</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conversation_history</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_headers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/engine.html#run_agent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.run_agent" title="Link to this definition">¶</a></dt>
+<dd><p>Run one turn of the Cohort Discovery agent.</p>
+<p>Same boilerplate as <code class="xref py py-func docutils literal notranslate"><span class="pre">agents.agent_dtwin_chat.engine.run_agent()</span></code>
+– see that module for argument semantics. The only behavioural
+difference is that this engine surfaces the proposed CohortRule via
+<a class="reference internal" href="#agents.agent_cohort.AgentResult.proposed_rule" title="agents.agent_cohort.AgentResult.proposed_rule"><code class="xref py py-attr docutils literal notranslate"><span class="pre">AgentResult.proposed_rule</span></code></a> (captured by <code class="docutils literal notranslate"><span class="pre">propose_rule</span></code> into
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">ToolContext.metadata</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>endpoint_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>base_url</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>registry_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>session_cookies</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>user_message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>conversation_history</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>session_headers</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>on_step</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><em>None</em><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#agents.agent_cohort.engine.AgentResult" title="agents.agent_cohort.engine.AgentResult"><em>AgentResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="agents.agent_cohort.AgentResult">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.</span></span><span class="sig-name descname"><span class="pre">AgentResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">success</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">proposed_rule</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">usage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/engine.html#AgentResult"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.AgentResult" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Outcome of a single cohort-agent turn.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>success</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>reply</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>proposed_rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>steps</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><em>AgentStep</em><em>]</em>)</p></li>
+<li><p><strong>iterations</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>error</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>usage</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.AgentResult.success">
+<span class="sig-name descname"><span class="pre">success</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#agents.agent_cohort.AgentResult.success" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.AgentResult.reply">
+<span class="sig-name descname"><span class="pre">reply</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#agents.agent_cohort.AgentResult.reply" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.AgentResult.proposed_rule">
+<span class="sig-name descname"><span class="pre">proposed_rule</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#agents.agent_cohort.AgentResult.proposed_rule" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.AgentResult.steps">
+<span class="sig-name descname"><span class="pre">steps</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><span class="pre">AgentStep</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#agents.agent_cohort.AgentResult.steps" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.AgentResult.iterations">
+<span class="sig-name descname"><span class="pre">iterations</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#agents.agent_cohort.AgentResult.iterations" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.AgentResult.error">
+<span class="sig-name descname"><span class="pre">error</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#agents.agent_cohort.AgentResult.error" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.AgentResult.usage">
+<span class="sig-name descname"><span class="pre">usage</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#agents.agent_cohort.AgentResult.usage" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<p id="module-agents.agent_cohort.engine">Cohort Discovery Agent engine.</p>
+<p>One-shot agent: given a natural-language prompt and the active session’s
+ontology+graph, the LLM iteratively introspects the ontology with
+read-only tools, builds a <code class="xref py py-class docutils literal notranslate"><span class="pre">CohortRule</span></code> candidate, validates it via
+<code class="docutils literal notranslate"><span class="pre">propose_rule</span></code>, optionally calls <code class="docutils literal notranslate"><span class="pre">dry_run</span></code> once, and returns a final
+explanation. The proposed rule is captured in
+<code class="docutils literal notranslate"><span class="pre">ToolContext.metadata['proposed_rule']</span></code> so the route can return it as
+structured JSON to hydrate the cohort form.</p>
+<p>Mirrors <code class="xref py py-mod docutils literal notranslate"><span class="pre">agents.agent_dtwin_chat.engine</span></code> exactly (same retry logic,
+trace decorator, OpenAI-compatible schema). The only deltas are the
+system prompt, the tool list, and the extra <code class="docutils literal notranslate"><span class="pre">proposed_rule</span></code> field on
+<a class="reference internal" href="#agents.agent_cohort.engine.AgentResult" title="agents.agent_cohort.engine.AgentResult"><code class="xref py py-class docutils literal notranslate"><span class="pre">AgentResult</span></code></a>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.AgentResult">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.engine.</span></span><span class="sig-name descname"><span class="pre">AgentResult</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">success</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">proposed_rule</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">usage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/engine.html#AgentResult"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.engine.AgentResult" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Outcome of a single cohort-agent turn.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>success</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>reply</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>proposed_rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>steps</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><em>AgentStep</em><em>]</em>)</p></li>
+<li><p><strong>iterations</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>error</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>usage</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.AgentResult.success">
+<span class="sig-name descname"><span class="pre">success</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#agents.agent_cohort.engine.AgentResult.success" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.AgentResult.reply">
+<span class="sig-name descname"><span class="pre">reply</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#agents.agent_cohort.engine.AgentResult.reply" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.AgentResult.proposed_rule">
+<span class="sig-name descname"><span class="pre">proposed_rule</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#agents.agent_cohort.engine.AgentResult.proposed_rule" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.AgentResult.steps">
+<span class="sig-name descname"><span class="pre">steps</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><span class="pre">AgentStep</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#agents.agent_cohort.engine.AgentResult.steps" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.AgentResult.iterations">
+<span class="sig-name descname"><span class="pre">iterations</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#agents.agent_cohort.engine.AgentResult.iterations" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.AgentResult.error">
+<span class="sig-name descname"><span class="pre">error</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#agents.agent_cohort.engine.AgentResult.error" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.AgentResult.usage">
+<span class="sig-name descname"><span class="pre">usage</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#agents.agent_cohort.engine.AgentResult.usage" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="agents.agent_cohort.engine.run_agent">
+<span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.engine.</span></span><span class="sig-name descname"><span class="pre">run_agent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">endpoint_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_url</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_cookies</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conversation_history</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_headers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/engine.html#run_agent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.engine.run_agent" title="Link to this definition">¶</a></dt>
+<dd><p>Run one turn of the Cohort Discovery agent.</p>
+<p>Same boilerplate as <code class="xref py py-func docutils literal notranslate"><span class="pre">agents.agent_dtwin_chat.engine.run_agent()</span></code>
+– see that module for argument semantics. The only behavioural
+difference is that this engine surfaces the proposed CohortRule via
+<a class="reference internal" href="#agents.agent_cohort.engine.AgentResult.proposed_rule" title="agents.agent_cohort.engine.AgentResult.proposed_rule"><code class="xref py py-attr docutils literal notranslate"><span class="pre">AgentResult.proposed_rule</span></code></a> (captured by <code class="docutils literal notranslate"><span class="pre">propose_rule</span></code> into
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">ToolContext.metadata</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>endpoint_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>base_url</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>registry_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>session_cookies</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>user_message</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>conversation_history</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>session_headers</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>on_step</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><em>None</em><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#agents.agent_cohort.engine.AgentResult" title="agents.agent_cohort.engine.AgentResult"><em>AgentResult</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p id="module-agents.agent_cohort.tools">Cohort Discovery Agent – tool definitions and handlers.</p>
+<p>The cohort agent translates natural-language prompts like <em>“find people who
+can be staffed together”</em> into a validated <code class="xref py py-class docutils literal notranslate"><span class="pre">CohortRule</span></code> JSON. It
+introspects the live ontology + graph through six small, deterministic
+tools that all wrap <strong>existing</strong> Stage 1 endpoints (see <code class="docutils literal notranslate"><span class="pre">cohort_design.md</span></code>
+§12). The agent NEVER writes – saving / materialisation remain user-driven
+in the form.</p>
+<dl class="simple">
+<dt>Tools (all read-only except <code class="docutils literal notranslate"><span class="pre">propose_rule</span></code>, which only validates):</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">list_classes</span></code>         – compact ontology summary (classes only).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">list_properties_of</span></code>   – data + object properties for a class.</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">count_class_members</span></code>  – live row count for a class via the</dt><dd><p>Stage 1 <code class="docutils literal notranslate"><span class="pre">/preview/class-stats</span></code> route.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">sample_values_of</span></code>     – distinct property values via the</dt><dd><p>Stage 1 <code class="docutils literal notranslate"><span class="pre">/sample-values</span></code> route.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">propose_rule</span></code>         – pydantic-style validation against the</dt><dd><p><code class="xref py py-class docutils literal notranslate"><span class="pre">CohortRule</span></code> dataclass; on
+success, parks the rule in
+<code class="docutils literal notranslate"><span class="pre">ToolContext.metadata['proposed_rule']</span></code>
+for the engine to return.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">dry_run</span></code>              – POST /dtwin/cohorts/dry-run; returns</dt><dd><p>cluster-count + size summary only
+(truncated body to keep the prompt small).</p>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+<dl class="py function">
+<dt class="sig sig-object py" id="agents.agent_cohort.tools.tool_list_classes">
+<span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.tools.</span></span><span class="sig-name descname"><span class="pre">tool_list_classes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/tools.html#tool_list_classes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.tools.tool_list_classes" title="Link to this definition">¶</a></dt>
+<dd><p>Return a compact list of ontology classes for the active domain.</p>
+<p>The ontology already lives in the user’s session, so we hit the
+internal <code class="docutils literal notranslate"><span class="pre">/ontology/get-loaded-ontology</span></code> route – the same one the
+cohort form uses for its class picker – and shrink the payload to
+just what the LLM needs (URI + label + a hint that data properties
+exist).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ctx</strong> (<a class="reference internal" href="#agents.tools.context.ToolContext" title="agents.tools.context.ToolContext"><em>ToolContext</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="agents.agent_cohort.tools.tool_list_properties_of">
+<span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.tools.</span></span><span class="sig-name descname"><span class="pre">tool_list_properties_of</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/tools.html#tool_list_properties_of"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.tools.tool_list_properties_of" title="Link to this definition">¶</a></dt>
+<dd><p>Return data + object properties usable on instances of <em>class_uri</em>.</p>
+<p>Data properties are read off the class’s <code class="docutils literal notranslate"><span class="pre">dataProperties</span></code> block
+AND cross-referenced with the global <code class="docutils literal notranslate"><span class="pre">properties</span></code> list filtered
+by <code class="docutils literal notranslate"><span class="pre">DatatypeProperty</span></code> + permissive domain match. Object properties
+are filtered from the global <code class="docutils literal notranslate"><span class="pre">properties</span></code> list using
+<code class="xref py py-func docutils literal notranslate"><span class="pre">_domain_matches()</span></code> (full URI, local-name, or case-insensitive).</p>
+<p>Robustness: entries lacking a <code class="docutils literal notranslate"><span class="pre">uri</span></code> field have one synthesised
+from <code class="docutils literal notranslate"><span class="pre">ontology.base_uri</span> <span class="pre">+</span> <span class="pre">name</span></code> (some import flows – wizard,
+RDFS-only – omit URIs). When no object property’s domain matches
+the class we fall back to the full object-property list with
+<code class="docutils literal notranslate"><span class="pre">domain_unknown=True</span></code>, since the cohort form itself shows all
+object properties without filtering.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#agents.tools.context.ToolContext" title="agents.tools.context.ToolContext"><em>ToolContext</em></a>)</p></li>
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="agents.agent_cohort.tools.tool_count_class_members">
+<span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.tools.</span></span><span class="sig-name descname"><span class="pre">tool_count_class_members</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/tools.html#tool_count_class_members"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.tools.tool_count_class_members" title="Link to this definition">¶</a></dt>
+<dd><p>Count graph instances of <em>class_uri</em> via the live preview route.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#agents.tools.context.ToolContext" title="agents.tools.context.ToolContext"><em>ToolContext</em></a>)</p></li>
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="agents.agent_cohort.tools.tool_sample_values_of">
+<span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.tools.</span></span><span class="sig-name descname"><span class="pre">tool_sample_values_of</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/tools.html#tool_sample_values_of"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.tools.tool_sample_values_of" title="Link to this definition">¶</a></dt>
+<dd><p>Return up to <em>limit</em> distinct values for a (class, datatype-prop) pair.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#agents.tools.context.ToolContext" title="agents.tools.context.ToolContext"><em>ToolContext</em></a>)</p></li>
+<li><p><strong>class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>property_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="agents.agent_cohort.tools.tool_propose_rule">
+<span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.tools.</span></span><span class="sig-name descname"><span class="pre">tool_propose_rule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/tools.html#tool_propose_rule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.tools.tool_propose_rule" title="Link to this definition">¶</a></dt>
+<dd><p>Validate a proposed CohortRule and park it on the context.</p>
+<p>The agent calls this tool when it has assembled a complete rule. We
+run client-side validation via <code class="xref py py-class docutils literal notranslate"><span class="pre">CohortRule.from_dict</span></code> +
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">CohortRule.validate()</span></code>; on success we stash the canonical dict
+in <code class="docutils literal notranslate"><span class="pre">ctx.metadata['proposed_rule']</span></code> so the engine can return it.</p>
+<p>The LLM is encouraged (but not required) to call <code class="docutils literal notranslate"><span class="pre">dry_run</span></code> afterwards
+to surface the cluster count to the user before terminating.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#agents.tools.context.ToolContext" title="agents.tools.context.ToolContext"><em>ToolContext</em></a>)</p></li>
+<li><p><strong>rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="agents.agent_cohort.tools.tool_dry_run">
+<span class="sig-prename descclassname"><span class="pre">agents.agent_cohort.tools.</span></span><span class="sig-name descname"><span class="pre">tool_dry_run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/agent_cohort/tools.html#tool_dry_run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.agent_cohort.tools.tool_dry_run" title="Link to this definition">¶</a></dt>
+<dd><p>Run <code class="xref py py-meth docutils literal notranslate"><span class="pre">CohortBuilder.build()</span></code> and return summary stats only.</p>
+<p>Wraps the existing <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/dtwin/cohorts/dry-run</span></code> route. To keep the
+prompt small we strip the cluster member URIs and return the top-N
+cluster sizes plus aggregate stats.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ctx</strong> (<a class="reference internal" href="#agents.tools.context.ToolContext" title="agents.tools.context.ToolContext"><em>ToolContext</em></a>)</p></li>
+<li><p><strong>rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
 <section id="module-agents.tools.context">
 <span id="shared-tools"></span><h2>Shared Tools<a class="headerlink" href="#module-agents.tools.context" title="Link to this heading">¶</a></h2>
 <p>Unified ToolContext shared by all agents.</p>
@@ -839,7 +1205,7 @@ function calling the engine falls back to a direct single-shot prompt.</p>
 default values.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="agents.tools.context.ToolContext">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">agents.tools.context.</span></span><span class="sig-name descname"><span class="pre">ToolContext</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">client</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_mappings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relationships</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">documents</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">icon_results</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_properties</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_dirty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/tools/context.html#ToolContext"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.tools.context.ToolContext" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">agents.tools.context.</span></span><span class="sig-name descname"><span class="pre">ToolContext</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">host</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">registry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">client</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_mappings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relationships</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">documents</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">icon_results</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_properties</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ontology_dirty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtwin_base_url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtwin_session_cookies</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtwin_session_headers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtwin_registry_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtwin_domain_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/tools/context.html#ToolContext"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.tools.context.ToolContext" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <p>Shared runtime context injected into every tool call.</p>
 <dl class="field-list simple">
@@ -862,6 +1228,11 @@ default values.</p>
 <li><p><strong>ontology_properties</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a>)</p></li>
 <li><p><strong>ontology_base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>ontology_dirty</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
+<li><p><strong>dtwin_base_url</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>dtwin_session_cookies</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>dtwin_session_headers</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>dtwin_registry_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>dtwin_domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -950,6 +1321,31 @@ default values.</p>
 <span class="sig-name descname"><span class="pre">ontology_dirty</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="headerlink" href="#agents.tools.context.ToolContext.ontology_dirty" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.tools.context.ToolContext.dtwin_base_url">
+<span class="sig-name descname"><span class="pre">dtwin_base_url</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#agents.tools.context.ToolContext.dtwin_base_url" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.tools.context.ToolContext.dtwin_session_cookies">
+<span class="sig-name descname"><span class="pre">dtwin_session_cookies</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></span><a class="headerlink" href="#agents.tools.context.ToolContext.dtwin_session_cookies" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.tools.context.ToolContext.dtwin_session_headers">
+<span class="sig-name descname"><span class="pre">dtwin_session_headers</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></span><a class="headerlink" href="#agents.tools.context.ToolContext.dtwin_session_headers" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.tools.context.ToolContext.dtwin_registry_params">
+<span class="sig-name descname"><span class="pre">dtwin_registry_params</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></span><a class="headerlink" href="#agents.tools.context.ToolContext.dtwin_registry_params" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="agents.tools.context.ToolContext.dtwin_domain_name">
+<span class="sig-name descname"><span class="pre">dtwin_domain_name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="headerlink" href="#agents.tools.context.ToolContext.dtwin_domain_name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 <p id="module-agents.tools.documents">Document tools – used by the OWL generator agent.</p>
@@ -1006,13 +1402,24 @@ Limited to avoid context overflow when many/large documents are loaded.</p>
 caller (route) can apply them to the ontology.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="agents.tools.icons.tool_assign_icons">
-<span class="sig-prename descclassname"><span class="pre">agents.tools.icons.</span></span><span class="sig-name descname"><span class="pre">tool_assign_icons</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">icons</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/tools/icons.html#tool_assign_icons"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.tools.icons.tool_assign_icons" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">agents.tools.icons.</span></span><span class="sig-name descname"><span class="pre">tool_assign_icons</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">icons</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/agents/tools/icons.html#tool_assign_icons"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#agents.tools.icons.tool_assign_icons" title="Link to this definition">¶</a></dt>
 <dd><p>Persist a {entity_name: emoji} mapping into the context for the caller.</p>
+<dl class="simple">
+<dt>Robust to common LLM deviations:</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">icons</span></code> missing / <code class="docutils literal notranslate"><span class="pre">None</span></code> because the tool-call JSON was truncated
+(big-ontology case).  Returns a structured error telling the model to
+retry with a smaller payload, instead of raising <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">icons</span></code> shipped under a different key (<code class="docutils literal notranslate"><span class="pre">mapping</span></code>, <code class="docutils literal notranslate"><span class="pre">icon_map</span></code> …).</p></li>
+<li><p>The mapping flattened as top-level kwargs
+(<code class="docutils literal notranslate"><span class="pre">{&quot;Customer&quot;:</span> <span class="pre">&quot;🧑&quot;,</span> <span class="pre">&quot;Order&quot;:</span> <span class="pre">&quot;📋&quot;}</span></code> instead of <code class="docutils literal notranslate"><span class="pre">{&quot;icons&quot;:</span> <span class="pre">{...}}</span></code>).</p></li>
+</ul>
+</dd>
+</dl>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>ctx</strong> (<a class="reference internal" href="#agents.tools.context.ToolContext" title="agents.tools.context.ToolContext"><em>ToolContext</em></a>)</p></li>
-<li><p><strong>icons</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>)</p></li>
+<li><p><strong>icons</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a><em> | </em><em>None</em>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>

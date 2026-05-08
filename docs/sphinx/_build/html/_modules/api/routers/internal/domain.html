@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -144,6 +145,7 @@
     <span class="n">sanitize_domain_folder</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.domain</span><span class="w"> </span><span class="kn">import</span> <span class="n">Domain</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">api.routers.internal._permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">filter_visible_domains</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -367,9 +369,21 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_session_debug</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get full session data for debugging purposes.</span>
 
+<span class="sd">    Returns the ``domain_data`` bucket (shaped by :class:`DomainSession`)</span>
+<span class="sd">    plus every other top-level key present in the raw FastAPI session</span>
+<span class="sd">    (e.g. ``graph_chat``) so callers can see non-domain buckets too.</span>
+
 <span class="sd">    Only available when LOG_LEVEL is set to DEBUG.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">Domain</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">get_session_debug_response</span><span class="p">()</span></div>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">(</span><span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">))</span><span class="o">.</span><span class="n">get_session_debug_response</span><span class="p">()</span>
+    <span class="n">extras</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">k</span><span class="p">:</span> <span class="n">v</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="p">(</span><span class="n">session_mgr</span><span class="o">.</span><span class="n">data</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;domain_data&quot;</span><span class="p">,</span> <span class="s2">&quot;project_data&quot;</span><span class="p">)</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">extras</span><span class="p">:</span>
+        <span class="n">payload</span><span class="p">[</span><span class="s2">&quot;extras&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">extras</span>
+    <span class="k">return</span> <span class="n">payload</span></div>
 
 
 
@@ -568,13 +582,22 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.domain.list_domains">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/list-projects&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_domains</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List domain folders under /domains/ in the registry Volume.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List domain folders under /domains/ in the registry Volume.</span>
+
+<span class="sd">    Non-admin users only see the domains they have a role on</span>
+<span class="sd">    (viewer / editor / builder). Admins see everything.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">svc</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">build_registry_service</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">Domain</span><span class="o">.</span><span class="n">list_domains_result</span><span class="p">(</span><span class="n">svc</span><span class="p">)</span></div>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">Domain</span><span class="o">.</span><span class="n">list_domains_result</span><span class="p">(</span><span class="n">svc</span><span class="p">)</span>
+    <span class="n">result</span><span class="p">[</span><span class="s2">&quot;domains&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">filter_visible_domains</span><span class="p">(</span>
+        <span class="n">request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domains&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">result</span></div>
 
 
 
@@ -678,7 +701,11 @@
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Toggle the API/MCP flag for a specific version (only one may be active).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Toggle the API/MCP flag for a specific version (only one may be active).</span>
+
+<span class="sd">    In the web UI, operators change this from **Registry → Browse**; this</span>
+<span class="sd">    endpoint remains for integrations and tests that POST JSON directly.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
     <span class="n">version</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;version&quot;</span><span class="p">)</span>
     <span class="n">enabled</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>

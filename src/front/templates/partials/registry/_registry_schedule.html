@@ -1,11 +1,10 @@
-<!-- Registry → Schedule section -->
+<!-- Registry → Schedule section (Builds + Cohort Materialisations unified) -->
 <div class="content-section">
-    <div class="section-header d-flex justify-content-between align-items-center mb-3">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-clock-history me-2"></i>Scheduled Builds</h4>
+            <h4 class="mb-1"><i class="bi bi-clock-history me-2"></i>Scheduler</h4>
             <p class="text-muted mb-0 small">
-                Schedule automatic Digital Twin builds per domain.
-                Builds run in the background, creating the View and populating the Graph.
+                Recurring Digital Twin builds and Cohort materialisations per domain
             </p>
         </div>
         <div class="d-flex gap-2">
@@ -19,7 +18,7 @@
     </div>
 
     <div id="schedulesTableContainer">
-        <div class="text-center text-muted small py-4">
+        <div class="text-center text-muted small py-3">
             <span class="spinner-border spinner-border-sm me-1"></span> Loading schedules...
         </div>
     </div>
@@ -31,49 +30,95 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h6 class="modal-title" id="scheduleModalLabel">
-                    <i class="bi bi-clock-history me-2"></i>Schedule Build
+                    <i class="bi bi-clock-history me-2"></i>Add Schedule
                 </h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small mb-1">Type</label>
+                    <div class="btn-group w-100" role="group" aria-label="Schedule type" id="scheduleTypeGroup">
+                        <input type="radio" class="btn-check" name="scheduleType" id="scheduleTypeBuild" value="build" autocomplete="off" checked>
+                        <label class="btn btn-outline-primary btn-sm" for="scheduleTypeBuild">
+                            <i class="bi bi-diagram-3 me-1"></i> Digital Twin Build
+                        </label>
+
+                        <input type="radio" class="btn-check" name="scheduleType" id="scheduleTypeCohort" value="cohort" autocomplete="off">
+                        <label class="btn btn-outline-primary btn-sm" for="scheduleTypeCohort">
+                            <i class="bi bi-people-fill me-1"></i> Cohort Materialisation
+                        </label>
+                    </div>
+                </div>
+
                 <div class="mb-3">
                     <label class="form-label fw-semibold small mb-1">Domain</label>
                     <select class="form-select form-select-sm" id="scheduleDomain">
                         <option value="">Loading domains...</option>
                     </select>
                 </div>
+
+                <div class="mb-3 schedule-cohort-only">
+                    <label class="form-label fw-semibold small mb-1">Cohort Rule</label>
+                    <select class="form-select form-select-sm" id="scheduleCohortRule" disabled>
+                        <option value="">Select a domain first</option>
+                    </select>
+                </div>
+
+                <div class="mb-3 schedule-cohort-only">
+                    <label class="form-label fw-semibold small mb-1">Outputs</label>
+                    <div class="border rounded p-2 bg-light-subtle">
+                        <div class="form-check mb-1">
+                            <input class="form-check-input" type="checkbox" id="scheduleOutputGraph" checked>
+                            <label class="form-check-label small" for="scheduleOutputGraph">
+                                <i class="bi bi-diagram-3 me-1 text-primary"></i>
+                                <strong>Materialise to graph</strong>
+                                <span class="text-muted">— write cohort triples to the domain graph</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="scheduleOutputUc" checked>
+                            <label class="form-check-label small" for="scheduleOutputUc">
+                                <i class="bi bi-table me-1 text-primary"></i>
+                                <strong>Materialise to UC table</strong>
+                                <span class="text-muted" id="scheduleOutputUcHint"> — uses the rule's saved target</span>
+                            </label>
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        Defaults from the cohort rule. Uncheck a target to skip it for scheduled runs only — the rule itself is unchanged.
+                    </small>
+                </div>
+
                 <div class="mb-3">
                     <label class="form-label fw-semibold small mb-1">Version</label>
                     <select class="form-select form-select-sm" id="scheduleVersion">
                         <option value="latest">Latest</option>
                     </select>
-                    <small class="text-muted">Choose a specific version or <em>Latest</em> to always build the newest</small>
                 </div>
+
                 <div class="mb-3">
                     <label class="form-label fw-semibold small mb-1">Frequency</label>
                     <div class="input-group input-group-sm">
                         <span class="input-group-text">Every</span>
                         <input type="number" class="form-control" id="scheduleIntervalValue" min="1" max="999" value="1">
-                        <select class="form-select" id="scheduleIntervalUnit" style="max-width: 120px;">
+                        <select class="form-select" id="scheduleIntervalUnit" style="max-width: 110px;">
                             <option value="minutes">minute(s)</option>
                             <option value="hours" selected>hour(s)</option>
                             <option value="days">day(s)</option>
                         </select>
                     </div>
-                    <small class="text-muted">Minimum interval is 10 minutes</small>
+                    <small class="text-muted">Minimum 2 minutes</small>
                 </div>
-                <div class="mb-3">
+
+                <div class="mb-3 schedule-build-only">
                     <label class="form-label fw-semibold small mb-1">Build Mode</label>
                     <select class="form-select form-select-sm" id="scheduleBuildMode">
-                        <option value="full">Full Refresh</option>
-                        <option value="incremental">Incremental</option>
+                        <option value="full">Full Refresh — drop and rebuild</option>
+                        <option value="incremental">Incremental — apply diff only</option>
                     </select>
-                    <small class="text-muted">
-                        <strong>Full Refresh</strong> drops and rebuilds the entire graph.
-                        <strong>Incremental</strong> computes a diff and applies only additions/removals.
-                    </small>
                 </div>
-                <div class="form-check">
+
+                <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="scheduleEnabled" checked>
                     <label class="form-check-label small" for="scheduleEnabled">
                         Enabled

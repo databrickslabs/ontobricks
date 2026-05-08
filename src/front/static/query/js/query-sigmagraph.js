@@ -61,6 +61,11 @@ var SigmaGraph = (function () {
     var _collapsedClusters = new Set();
     var _clusterCollapseActive = false;
 
+    // --- Last right-click anchor for contextual info bubbles ---
+    var _lastNodeMenuX = null;
+    var _lastNodeMenuY = null;
+    var _infoBubbleTimer = null;
+
     function _clearExpandedForGroup(groupName) {
         if (_expandedInstanceMembers.size === 0) return;
         var nodes = (typeof d3NodesData !== 'undefined' && d3NodesData) ? d3NodesData : [];
@@ -1700,6 +1705,73 @@ var SigmaGraph = (function () {
         _renderSeedTable();
     }
 
+    async function _fetchWithTimeout(url, options, timeoutMs, timeoutLabel) {
+        var ms = Number(timeoutMs || 0);
+        if (!ms || ms <= 0 || typeof AbortController === 'undefined') {
+            return fetch(url, options);
+        }
+        var controller = new AbortController();
+        var timer = setTimeout(function () {
+            controller.abort();
+        }, ms);
+        try {
+            var requestOptions = Object.assign({}, options || {}, { signal: controller.signal });
+            return await fetch(url, requestOptions);
+        } catch (err) {
+            if (err && err.name === 'AbortError') {
+                throw new Error((timeoutLabel || 'Request timed out') + ' after ' + Math.round(ms / 1000) + 's');
+            }
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function _parseJsonResponse(resp, contextLabel) {
+        var raw = '';
+        try {
+            raw = await resp.text();
+        } catch (_e) {
+            raw = '';
+        }
+
+        var data = null;
+        if (raw) {
+            try {
+                data = JSON.parse(raw);
+            } catch (_e) {
+                data = null;
+            }
+        }
+
+        if (!resp.ok) {
+            if (resp.status === 502 && /graph expansion/i.test(contextLabel || '')) {
+                throw new Error('Graph expansion exceeded gateway time limit. Reduce Depth/Max entities and retry.');
+            }
+            if (data && typeof data === 'object' && data.message) {
+                throw new Error(data.message);
+            }
+            var detail = (raw || '').trim();
+            if (detail) {
+                detail = detail.replace(/\s+/g, ' ');
+                if (detail.length > 220) detail = detail.slice(0, 220) + '...';
+                throw new Error((contextLabel || 'Request failed') + ': ' + detail);
+            }
+            throw new Error((contextLabel || 'Request failed') + ' (' + resp.status + ')');
+        }
+
+        if (data === null) {
+            var nonJson = (raw || '').trim();
+            if (nonJson) {
+                nonJson = nonJson.replace(/\s+/g, ' ');
+                if (nonJson.length > 180) nonJson = nonJson.slice(0, 180) + '...';
+                throw new Error((contextLabel || 'Request failed') + ': non-JSON response (' + nonJson + ')');
+            }
+            throw new Error((contextLabel || 'Request failed') + ': empty response');
+        }
+        return data;
+    }
+
     function _getSelectedSeedUris() {
         var uris = [];
         document.querySelectorAll('#sgSeedTableBody .sg-seed-check:checked').forEach(function (c) {
@@ -1721,7 +1793,7 @@ var SigmaGraph = (function () {
         if (info && text) { info.classList.remove('d-none'); text.textContent = 'Searching...'; }
 
         try {
-            var resp = await fetch('/dtwin/sync/filter', {
+            var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1732,8 +1804,8 @@ var SigmaGraph = (function () {
                     value: searchValue,
                 }),
                 credentials: 'same-origin'
-            });
-            var data = await resp.json();
+            }, 45000, 'Search request timed out');
+            var data = await _parseJsonResponse(resp, 'Search request failed');
 
             if (!data.success) {
                 if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'Search failed.'; }
@@ -1813,7 +1885,7 @@ var SigmaGraph = (function () {
         if (loading) loading.style.display = 'flex';
         _hideEmptyState();
 
-        var resp = await fetch('/dtwin/sync/filter', {
+        var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1824,8 +1896,8 @@ var SigmaGraph = (function () {
                 max_entities: maxEntities,
             }),
             credentials: 'same-origin'
-        });
-        var data = await resp.json();
+        }, 90000, 'Graph expansion timed out');
+        var data = await _parseJsonResponse(resp, 'Graph expansion failed');
 
         if (!data.success) {
             _hideLoading();
@@ -1996,6 +2068,17 @@ var SigmaGraph = (function () {
         var meta = _resolveNodeMeta(nodeId);
         var items = '';
 
+        var nodeAttrs = _graph ? _graph.getNodeAttributes(nodeId) : null;
+        var isVirtualNode = !!(nodeAttrs && (nodeAttrs._isGroup || nodeAttrs._isClusterNode));
+        if (!isVirtualNode) {
+            var menuDepth = 1;
+            var hopLabel = menuDepth + ' hop' + (menuDepth > 1 ? 's' : '');
+            items += '<div class="ctx-header">Graph</div>';
+            items += '<div class="ctx-item" data-sg-node-action="expandHop" ' +
+                'data-uri="' + esc(nodeId) + '" data-depth="' + menuDepth + '">' +
+                '<i class="bi bi-diagram-3"></i> Expand neighbours (' + hopLabel + ')</div>';
+        }
+
         if (meta.dashboardUrl) {
             var allAttributes = {};
             if (meta.entity.attributes) Object.entries(meta.entity.attributes).forEach(function (kv) { if (kv[1]) allAttributes[kv[0]] = kv[1]; });
@@ -2010,6 +2093,7 @@ var SigmaGraph = (function () {
             });
             var dashUrl = (typeof buildDashboardUrl === 'function') ? buildDashboardUrl(meta.dashboardUrl, meta.actualIdValue, paramValues) : meta.dashboardUrl;
             var className = (meta.classInfo && meta.classInfo.name) || (meta.entityMapping && meta.entityMapping.className) || '';
+            if (items) items += '<div class="ctx-divider"></div>';
             items += '<div class="ctx-header">Dashboard</div>';
             items += '<div class="ctx-item" data-sg-node-action="dashboard" data-url="' + esc(dashUrl) + '" data-class="' + esc(className) + '" data-id="' + esc(meta.actualIdValue || '') + '">' +
                 '<i class="bi bi-speedometer2"></i> View Dashboard</div>';
@@ -2031,15 +2115,46 @@ var SigmaGraph = (function () {
         }
 
         if (!items) {
-            items = '<div class="ctx-header">No dashboards or bridges</div>';
+            items = '<div class="ctx-header">No actions available</div>';
         }
 
         nodeMenu.innerHTML = items;
         if (mouseEvent) {
             nodeMenu.style.left = mouseEvent.clientX + 'px';
             nodeMenu.style.top = mouseEvent.clientY + 'px';
+            _lastNodeMenuX = mouseEvent.clientX;
+            _lastNodeMenuY = mouseEvent.clientY;
         }
         nodeMenu.style.display = 'block';
+    }
+
+    function _showExpandInfoBubble(message) {
+        var bubble = document.getElementById('sgExpandInfoBubble');
+        if (!bubble) {
+            bubble = document.createElement('div');
+            bubble.id = 'sgExpandInfoBubble';
+            bubble.className = 'sg-info-bubble';
+            document.body.appendChild(bubble);
+        }
+        bubble.innerHTML =
+            '<i class="bi bi-info-circle me-1"></i>' +
+            '<span></span>';
+        bubble.querySelector('span').textContent = message;
+
+        var x = (_lastNodeMenuX != null) ? _lastNodeMenuX : (window.innerWidth / 2);
+        var y = (_lastNodeMenuY != null) ? _lastNodeMenuY : (window.innerHeight / 2);
+        bubble.style.left = x + 'px';
+        bubble.style.top = (y + 8) + 'px';
+        bubble.classList.add('show');
+
+        if (_infoBubbleTimer) {
+            clearTimeout(_infoBubbleTimer);
+            _infoBubbleTimer = null;
+        }
+        _infoBubbleTimer = setTimeout(function () {
+            bubble.classList.remove('show');
+            _infoBubbleTimer = null;
+        }, 4000);
     }
 
     function _hideNodeContextMenu() {
@@ -2228,7 +2343,7 @@ var SigmaGraph = (function () {
             if (info && text) { info.classList.remove('d-none'); text.textContent = 'Searching...'; }
 
             try {
-                var previewResp = await fetch('/dtwin/sync/filter', {
+                var previewResp = await _fetchWithTimeout('/dtwin/sync/filter', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2239,8 +2354,8 @@ var SigmaGraph = (function () {
                         value: localName,
                     }),
                     credentials: 'same-origin'
-                });
-                var previewData = await previewResp.json();
+                }, 45000, 'Search request timed out');
+                var previewData = await _parseJsonResponse(previewResp, 'Search request failed');
 
                 if (!previewData.success || !(previewData.seeds || []).length) {
                     if (info && text) { info.classList.remove('d-none'); text.textContent = previewData.message || 'No entities found.'; }
@@ -2468,6 +2583,168 @@ var SigmaGraph = (function () {
                 }
             });
             if (_renderer) _renderer.refresh();
+        },
+
+        // --- Right-click "Expand neighbours" (default 1 hop) ---
+        // Pulls the induced subgraph around `seedUri` from the backend,
+        // merges new triples into `lastQueryResults`, rebuilds d3 data via
+        // `buildGraph`, and refreshes the Sigma view. Newly added nodes get
+        // a transient highlight ring so the user can see what was added.
+        expandHop: async function (seedUri, depth) {
+            if (!seedUri) return;
+            if (typeof lastQueryResults === 'undefined' || !lastQueryResults || !lastQueryResults.results) {
+                if (typeof showNotification === 'function') {
+                    showNotification('No graph loaded yet — run a query first.', 'warning');
+                }
+                return;
+            }
+            // Default depth follows the right-pane "Depth" slider; falls back to 1.
+            if (depth === undefined || depth === null) {
+                var depthEl = document.getElementById('sgFilterDepth');
+                depth = parseInt(depthEl && depthEl.value, 10);
+                if (!depth || depth < 1) depth = 1;
+            }
+            var url = '/dtwin/neighbors?uri=' + encodeURIComponent(seedUri) +
+                '&depth=' + encodeURIComponent(depth) + '&limit=2000';
+            var info = document.getElementById('sgGraphFilterInfo');
+            var text = document.getElementById('sgGraphFilterInfoText');
+            if (info && text) {
+                info.classList.remove('d-none');
+                text.textContent = 'Expanding neighbours (' + depth + ' hop)...';
+            }
+
+            var spinner = document.getElementById('sgExpandSpinner');
+            var spinnerLabel = document.getElementById('sgExpandSpinnerLabel');
+            if (spinner) {
+                if (spinnerLabel) spinnerLabel.textContent = 'Expanding ' + depth + '-hop neighbours…';
+                spinner.classList.remove('d-none');
+            }
+            try {
+                var resp = await fetch(url, { credentials: 'same-origin' });
+                var data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    var msg = (data && (data.message || data.detail)) || 'Neighbour expansion failed.';
+                    if (info && text) {
+                        info.classList.remove('d-none');
+                        text.textContent = msg;
+                    }
+                    if (typeof showNotification === 'function') showNotification(msg, 'danger');
+                    return;
+                }
+
+                var fetched = data.triples || [];
+                if (fetched.length === 0) {
+                    var emptyMsg = 'No related entities found at ' + depth + ' hop.';
+                    if (info && text) {
+                        info.classList.remove('d-none');
+                        text.textContent = emptyMsg + ' The node may have no typed neighbours in the graph DB.';
+                    }
+                    _showExpandInfoBubble(emptyMsg);
+                    if (typeof showNotification === 'function') {
+                        showNotification(emptyMsg, 'info');
+                    }
+                    return;
+                }
+
+                // Snapshot existing node IDs to detect what is *new*.
+                var prevNodeIds = new Set();
+                if (typeof d3NodesData !== 'undefined' && d3NodesData) {
+                    d3NodesData.forEach(function (n) { if (n && n.id) prevNodeIds.add(n.id); });
+                }
+
+                // Reconcile column casing — the existing query may have used
+                // 'subject'/'predicate'/'object' or shorter aliases. We push
+                // rows using whatever the existing dataset uses.
+                var cols = lastQueryResults.columns || ['subject', 'predicate', 'object'];
+                var subjectCol = cols.find(function (c) { return c.toLowerCase() === 'subject' || c.toLowerCase() === 's'; }) || 'subject';
+                var predicateCol = cols.find(function (c) { return c.toLowerCase() === 'predicate' || c.toLowerCase() === 'p'; }) || 'predicate';
+                var objectCol = cols.find(function (c) { return c.toLowerCase() === 'object' || c.toLowerCase() === 'o'; }) || 'object';
+
+                // Build a de-dup key set from existing rows.
+                var existing = new Set();
+                lastQueryResults.results.forEach(function (row) {
+                    var s = row[subjectCol] || '';
+                    var p = row[predicateCol] || '';
+                    var o = row[objectCol] || '';
+                    existing.add(s + '\u0001' + p + '\u0001' + o);
+                });
+
+                var addedTriples = 0;
+                fetched.forEach(function (t) {
+                    var key = (t.subject || '') + '\u0001' + (t.predicate || '') + '\u0001' + (t.object || '');
+                    if (existing.has(key)) return;
+                    existing.add(key);
+                    var newRow = {};
+                    newRow[subjectCol] = t.subject;
+                    newRow[predicateCol] = t.predicate;
+                    newRow[objectCol] = t.object;
+                    lastQueryResults.results.push(newRow);
+                    addedTriples++;
+                });
+
+                if (addedTriples === 0) {
+                    var dupMsg = 'Neighbours already on the graph.';
+                    var dupDetail = 'All ' + fetched.length + ' triple' +
+                        (fetched.length > 1 ? 's are' : ' is') +
+                        ' already loaded (depth ' + depth + ').';
+                    if (info && text) {
+                        info.classList.remove('d-none');
+                        text.textContent = dupDetail;
+                    }
+                    _showExpandInfoBubble(dupMsg);
+                    if (typeof showNotification === 'function') {
+                        showNotification(dupDetail, 'info');
+                    }
+                    return;
+                }
+
+                if (typeof d3NodesData !== 'undefined') d3NodesData = [];
+                if (typeof d3LinksData !== 'undefined') d3LinksData = [];
+                if (typeof buildGraph === 'function') {
+                    await buildGraph(lastQueryResults.results, lastQueryResults.columns);
+                }
+
+                // Highlight newly added nodes for a few seconds.
+                var newNodeIds = new Set();
+                if (typeof d3NodesData !== 'undefined' && d3NodesData) {
+                    d3NodesData.forEach(function (n) {
+                        if (n && n.id && !prevNodeIds.has(n.id)) newNodeIds.add(n.id);
+                    });
+                }
+                if (newNodeIds.size > 0) _highlightedSeeds = newNodeIds;
+
+                SigmaGraph.refresh(true);
+
+                if (newNodeIds.size > 0) {
+                    setTimeout(function () {
+                        try { _focusCameraOnNodes(newNodeIds); } catch (_) {}
+                    }, 300);
+                    setTimeout(function () { SigmaGraph.clearHighlight(); }, 6000);
+                }
+
+                if (typeof showNotification === 'function') {
+                    var addedNodes = newNodeIds.size;
+                    showNotification(
+                        'Added ' + addedNodes + ' entities and ' + addedTriples + ' triples.',
+                        'success'
+                    );
+                }
+                if (info && text) {
+                    info.classList.remove('d-none');
+                    text.textContent = 'Expanded: +' + newNodeIds.size + ' entities, +' + addedTriples + ' triples.';
+                }
+            } catch (e) {
+                console.error('[SigmaGraph] expandHop error:', e);
+                if (info && text) {
+                    info.classList.remove('d-none');
+                    text.textContent = 'Neighbour expansion failed: ' + (e && e.message ? e.message : e);
+                }
+                if (typeof showNotification === 'function') {
+                    showNotification('Neighbour expansion failed: ' + (e && e.message ? e.message : e), 'danger');
+                }
+            } finally {
+                if (spinner) spinner.classList.add('d-none');
+            }
         },
 
         // --- Group expand / collapse ---
@@ -2872,7 +3149,16 @@ document.addEventListener('DOMContentLoaded', function () {
             var nodeMenu = document.getElementById('sgNodeContextMenu');
             if (nodeMenu) nodeMenu.style.display = 'none';
             var action = nodeItem.getAttribute('data-sg-node-action');
-            if (action === 'dashboard') {
+            if (action === 'expandHop') {
+                var seedUri = nodeItem.getAttribute('data-uri');
+                var depth = parseInt(nodeItem.getAttribute('data-depth') || '1', 10);
+                if (!depth || depth < 1) depth = 1;
+                if (seedUri && typeof SigmaGraph !== 'undefined' && typeof SigmaGraph.expandHop === 'function') {
+                    SigmaGraph.expandHop(seedUri, depth);
+                } else if (typeof showNotification === 'function') {
+                    showNotification('No graph entity selected for expansion.', 'warning');
+                }
+            } else if (action === 'dashboard') {
                 var url = nodeItem.getAttribute('data-url');
                 var cls = nodeItem.getAttribute('data-class');
                 var id = nodeItem.getAttribute('data-id');

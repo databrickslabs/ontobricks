@@ -324,12 +324,14 @@ class TripleStoreBackend(ABC):
         field: str = "any",
         match_type: str = "contains",
         value: str = "",
+        limit: int = 0,
     ) -> Set[str]:
         """Return distinct subjects matching type and/or value criteria.
 
         *field* is ``"label"`` (match on ``rdfs:label``) or ``"id"`` (match on
         the subject URI itself).  *match_type* is ``"contains"``, ``"exact"``,
-        ``"starts"``, or ``"ends"``.
+        ``"starts"``, or ``"ends"``. ``limit`` (when > 0) caps returned
+        subjects for responsive preview queries.
         """
         esc_type = self._sql_escape(entity_type) if entity_type else ""
         safe_val = self._sql_escape(value.lower()) if value else ""

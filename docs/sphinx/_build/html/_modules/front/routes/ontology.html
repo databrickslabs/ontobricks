@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -110,9 +112,10 @@
   <h1>Source code for front.routes.ontology</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Frontend HTML route -- Ontology page.&quot;&quot;&quot;</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Request</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">Request</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">HTMLResponse</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_session_manager</span><span class="p">,</span> <span class="n">get_domain</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">front.fastapi.dependencies</span><span class="w"> </span><span class="kn">import</span> <span class="n">templates</span>
 
 <span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/ontology&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Ontology&quot;</span><span class="p">])</span>
@@ -121,9 +124,27 @@
 <div class="viewcode-block" id="ontology_page">
 <a class="viewcode-back" href="../../../api/app.frontend.html#front.routes.ontology.ontology_page">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="n">response_class</span><span class="o">=</span><span class="n">HTMLResponse</span><span class="p">,</span> <span class="n">include_in_schema</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ontology_page</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">):</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ontology_page</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+<span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Ontology management page.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">templates</span><span class="o">.</span><span class="n">TemplateResponse</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;ontology.html&quot;</span><span class="p">)</span></div>
+    <span class="n">domain_session</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">ont</span> <span class="o">=</span> <span class="n">domain_session</span><span class="o">.</span><span class="n">ontology</span> <span class="ow">or</span> <span class="p">{}</span>
+
+    <span class="n">reasoning_ctx</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;cohort_rules_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">ont</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cohort_rules&quot;</span><span class="p">,</span> <span class="p">[])),</span>
+    <span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">templates</span><span class="o">.</span><span class="n">TemplateResponse</span><span class="p">(</span>
+        <span class="n">request</span><span class="p">,</span>
+        <span class="s2">&quot;ontology.html&quot;</span><span class="p">,</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;reasoning_ctx&quot;</span><span class="p">:</span> <span class="n">reasoning_ctx</span><span class="p">,</span>
+            <span class="s2">&quot;domain_name&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">domain_session</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;NewDomain&quot;</span><span class="p">),</span>
+            <span class="s2">&quot;current_version&quot;</span><span class="p">:</span> <span class="n">domain_session</span><span class="o">.</span><span class="n">current_version</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">)</span></div>
 
 </pre></div>
 

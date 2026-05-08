@@ -9,13 +9,15 @@ to operate correctly:
 * Databricks authentication — OAuth client-credentials in Apps mode
   or PAT in local development;
 * SQL warehouse — TCP/SQL reachability via ``SELECT 1``;
+* CloudFetch capability — connector prerequisites and lightweight
+  runtime probe for ``use_cloud_fetch=True``;
 * registry **UC volume** — Files-API read + write probe (a tiny
   sentinel file is written then deleted);
 * registry **catalog/schema** — DDL probe via
   ``CREATE OR REPLACE VIEW <fqn> AS SELECT 1`` then ``DROP VIEW`` so
   view materialisation will succeed during Digital-Twin builds;
-* **Lakebase** — when ``PG*`` env vars are bound, ``USAGE`` on the
-  registry schema plus the presence of the ``registries`` table.
+* **Lakebase** — when ``PG*`` env vars are bound, connectivity/init
+  checks plus explicit schema/table/sequence permission probes.
 
 Each probe returns ``{name, label, status, detail, duration_ms}``;
 the top-level ``status`` is the worst severity across all probes.
@@ -186,7 +188,7 @@ def _check_databricks_auth() -> Tuple[str, str]:
     return _OK, f"Personal Access Token configured (host={auth.host})"
 
 
-def _build_health_client():
+def _build_health_client(settings: Optional[Settings] = None):
     """Instantiate a ``DatabricksClient`` with no domain/session.
 
     ``get_databricks_client`` already supports a ``None`` domain via
@@ -195,17 +197,37 @@ def _build_health_client():
     """
     from back.core.helpers import get_databricks_client
 
-    return get_databricks_client(None, get_settings())
+    return get_databricks_client(None, settings or get_settings())
 
 
-def _check_warehouse() -> Tuple[str, str]:
-    client = _build_health_client()
+def _check_warehouse(settings: Optional[Settings] = None) -> Tuple[str, str]:
+    client = _build_health_client(settings)
     if client is None:
         return _WARNING, "No Databricks credentials available — warehouse not probed"
     if not getattr(client, "warehouse_id", ""):
         return _WARNING, "DATABRICKS_SQL_WAREHOUSE_ID is not configured"
     ok, msg = client.test_connection()
     return (_OK if ok else _ERROR), msg
+
+
+def _check_cloud_fetch(settings: Optional[Settings] = None) -> Tuple[str, str]:
+    """Report CloudFetch capability via the real runtime probe.
+
+    Always calls :meth:`DatabricksAuth.probe_cloud_fetch_capability`,
+    which issues a tiny ``SELECT 1`` with ``use_cloud_fetch=True`` and
+    surfaces the actual outcome. Result is cached on the auth instance
+    so SQL connections share the same verdict.
+    """
+    client = _build_health_client(settings)
+    if client is None:
+        return _WARNING, "Databricks credentials unavailable — CloudFetch not probed"
+    if not getattr(client, "warehouse_id", ""):
+        return _WARNING, "SQL warehouse not configured — CloudFetch not probed"
+
+    capable, reason = client.auth.probe_cloud_fetch_capability()
+    if capable:
+        return _OK, f"CloudFetch enabled — {reason}"
+    return _WARNING, f"CloudFetch unavailable — {reason}"
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +377,121 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
     return _ERROR, str(err)
 
 
+def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
+    """Verify Lakebase registry privileges expected by OntoBricks runtime."""
+    from back.core.databricks.LakebaseAuth import get_lakebase_auth
+
+    auth = get_lakebase_auth()
+    if not auth.is_available:
+        return (
+            _OK,
+            "Lakebase not bound (PG* env vars unset) — permission checks skipped",
+        )
+
+    cfg = _resolve_registry_cfg(settings)
+    from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
+
+    store = LakebaseRegistryStore(
+        registry_cfg=cfg,
+        schema=cfg.lakebase_schema or "ontobricks_registry",
+        database=cfg.lakebase_database or "",
+    )
+    status_dict = store.init_status()
+    reason = status_dict.get("reason", "unknown")
+    err = status_dict.get("error") or status_dict.get("reason")
+    if reason == "no_usage":
+        return _ERROR, str(err)
+    if reason in ("no_registries_table", "no_registry_row"):
+        return _WARNING, f"Lakebase not initialized ({reason}) — permission probe partial: {err}"
+    if reason != "ok":
+        return _ERROR, f"Lakebase probe unavailable ({reason}): {err}"
+
+    try:
+        with store._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT current_database(), current_user, "
+                "       has_schema_privilege(current_user, %s, 'USAGE'), "
+                "       has_schema_privilege(current_user, %s, 'CREATE')",
+                (store.schema, store.schema),
+            )
+            row = cur.fetchone() or ("?", "?", False, False)
+            cur_db, cur_user, has_usage, has_create = row
+
+            cur.execute(
+                "SELECT "
+                "COALESCE(bool_and(has_table_privilege("
+                "current_user, format('%%I.%%I', table_schema, table_name), 'SELECT')), true), "
+                "COALESCE(bool_and(has_table_privilege("
+                "current_user, format('%%I.%%I', table_schema, table_name), 'INSERT')), true), "
+                "COALESCE(bool_and(has_table_privilege("
+                "current_user, format('%%I.%%I', table_schema, table_name), 'UPDATE')), true), "
+                "COALESCE(bool_and(has_table_privilege("
+                "current_user, format('%%I.%%I', table_schema, table_name), 'DELETE')), true), "
+                "COUNT(*) "
+                "FROM information_schema.tables "
+                "WHERE table_schema = %s AND table_type='BASE TABLE'",
+                (store.schema,),
+            )
+            tbl_sel, tbl_ins, tbl_upd, tbl_del, tbl_count = cur.fetchone() or (
+                True,
+                True,
+                True,
+                True,
+                0,
+            )
+
+            cur.execute(
+                "SELECT "
+                "COALESCE(bool_and(has_sequence_privilege("
+                "current_user, format('%%I.%%I', sequence_schema, sequence_name), 'USAGE')), true), "
+                "COALESCE(bool_and(has_sequence_privilege("
+                "current_user, format('%%I.%%I', sequence_schema, sequence_name), 'SELECT')), true), "
+                "COALESCE(bool_and(has_sequence_privilege("
+                "current_user, format('%%I.%%I', sequence_schema, sequence_name), 'UPDATE')), true), "
+                "COUNT(*) "
+                "FROM information_schema.sequences "
+                "WHERE sequence_schema = %s",
+                (store.schema,),
+            )
+            seq_use, seq_sel, seq_upd, seq_count = cur.fetchone() or (True, True, True, 0)
+    except Exception as exc:  # noqa: BLE001
+        return _ERROR, f"Lakebase permission probe failed: {exc}"
+
+    missing: List[str] = []
+    if not has_usage:
+        missing.append("schema USAGE")
+    if not has_create:
+        missing.append("schema CREATE")
+    if not tbl_sel:
+        missing.append("table SELECT")
+    if not tbl_ins:
+        missing.append("table INSERT")
+    if not tbl_upd:
+        missing.append("table UPDATE")
+    if not tbl_del:
+        missing.append("table DELETE")
+    if not seq_use:
+        missing.append("sequence USAGE")
+    if not seq_sel:
+        missing.append("sequence SELECT")
+    if not seq_upd:
+        missing.append("sequence UPDATE")
+
+    if missing:
+        return (
+            _ERROR,
+            "Missing Lakebase grants for role "
+            f"'{cur_user}' on {cur_db}.{store.schema}: {', '.join(missing)}. "
+            "Run scripts/bootstrap-lakebase-perms.sh.",
+        )
+
+    return (
+        _OK,
+        f"Lakebase permissions OK ({cur_db}.{store.schema}; "
+        f"tables={int(tbl_count)}, sequences={int(seq_count)})",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Aggregator
 # ---------------------------------------------------------------------------
@@ -396,7 +533,18 @@ def run_readiness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
         _safely_run("databricks.auth", "Databricks authentication", _check_databricks_auth)
     )
     checks.append(
-        _safely_run("databricks.warehouse", "SQL warehouse reachable", _check_warehouse)
+        _safely_run(
+            "databricks.warehouse",
+            "SQL warehouse reachable",
+            lambda: _check_warehouse(settings),
+        )
+    )
+    checks.append(
+        _safely_run(
+            "databricks.cloudfetch",
+            "CloudFetch capability",
+            lambda: _check_cloud_fetch(settings),
+        )
     )
     checks.append(
         _safely_run(
@@ -431,6 +579,13 @@ def run_readiness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
             "lakebase",
             "Lakebase Postgres",
             lambda: _check_lakebase(settings),
+        )
+    )
+    checks.append(
+        _safely_run(
+            "lakebase.permissions",
+            "Lakebase permissions",
+            lambda: _check_lakebase_permissions(settings),
         )
     )
 

@@ -145,6 +145,33 @@ class GlobalConfigService:
         """Return the globally configured default class icon."""
         return self.get(host, token, registry_cfg, "default_emoji")
 
+    def get_navbar_logo(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> str:
+        """Return the globally configured navbar logo as a ``data:`` URL.
+
+        Empty string means "no custom logo" — the UI falls back to the
+        bundled default (``static/global/img/favicon.svg``).
+        """
+        return self.get(host, token, registry_cfg, "navbar_logo")
+
+    def get_use_cloud_fetch(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> bool:
+        """Return whether CloudFetch is globally enabled.
+
+        Defaults to ``True`` when the key is absent so existing deployments
+        keep CloudFetch enabled unless an admin explicitly disables it.
+        """
+        raw = self.load(host, token, registry_cfg).get("use_cloud_fetch", True)
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, (int, float)):
+            return bool(raw)
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"1", "true", "yes", "on"}
+        return True
+
     # ------------------------------------------------------------------
     # Write
     # ------------------------------------------------------------------
@@ -217,6 +244,26 @@ class GlobalConfigService:
     ) -> Tuple[bool, str]:
         """Persist a new default class icon in the global config file."""
         return self._save(host, token, registry_cfg, {"default_emoji": emoji})
+
+    def set_use_cloud_fetch(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        enabled: bool,
+    ) -> Tuple[bool, str]:
+        """Persist global CloudFetch on/off toggle in the global config file."""
+        return self._save(host, token, registry_cfg, {"use_cloud_fetch": bool(enabled)})
+
+    def set_navbar_logo(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        data_url: str,
+    ) -> Tuple[bool, str]:
+        """Persist the navbar logo as a ``data:`` URL (empty string clears it)."""
+        return self._save(host, token, registry_cfg, {"navbar_logo": data_url or ""})
 
     ALLOWED_GRAPH_ENGINES = ("ladybug",)
 
@@ -297,6 +344,8 @@ class GlobalConfigService:
             "warehouse_id": "",
             "default_base_uri": "",
             "default_emoji": "",
+            "navbar_logo": "",
+            "use_cloud_fetch": True,
             "registry_cache_ttl": 300,
             "graph_engine": "ladybug",
             "graph_engine_config": {},

@@ -5,6 +5,7 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 """
 
 from dataclasses import dataclass
+import time
 from typing import Any
 
 from fastapi import APIRouter, Request, Depends
@@ -172,6 +173,7 @@ async def start_triplestore_sync(
     data = await request.json()
     build_mode = data.get("build_mode", "incremental")
     force_full = build_mode == "full" or data.get("drop_existing", False)
+    archive_to_registry = bool(data.get("archive_to_registry", True))
 
     domain = get_domain(session_mgr)
 
@@ -281,6 +283,7 @@ async def start_triplestore_sync(
             config_changed=config_changed,
             snapshot_version=getattr(domain, "current_version", "1") or "1",
             build_kind="session",
+            archive_to_registry=archive_to_registry,
         )
 
     thread = threading.Thread(target=run_sync, daemon=True)
@@ -863,6 +866,9 @@ async def filter_triplestore(
                 value,
             )
 
+            # Keep preview responsive: fetch one extra row to detect capping.
+            max_preview = 500
+            preview_probe_limit = max_preview + 1
             try:
                 entity_set = store.find_seed_subjects(
                     graph_name,
@@ -870,6 +876,7 @@ async def filter_triplestore(
                     field=field,
                     match_type=match_type,
                     value=value,
+                    limit=preview_probe_limit,
                 )
             except (ValidationError, InfrastructureError, NotFoundError):
                 raise
@@ -893,7 +900,6 @@ async def filter_triplestore(
                     "message": "No entities found matching the filter criteria.",
                 }
 
-            max_preview = 500
             capped = len(entity_set) > max_preview
             preview_uris = list(entity_set)[:max_preview]
 
@@ -939,9 +945,11 @@ async def filter_triplestore(
             raise ValidationError("No entities selected for expansion.")
 
         include_rels = data.get("include_rels", True)
-        depth = min(int(data.get("depth", 3)), 5)
+        max_depth_cap = 3 if is_databricks_app() else 5
+        depth = min(int(data.get("depth", 3)), max_depth_cap)
         client_max = int(data.get("max_entities", 5000))
-        max_entities = max(100, min(client_max, 50_000))
+        server_entity_cap = 3_000 if is_databricks_app() else 50_000
+        max_entities = max(100, min(client_max, server_entity_cap))
 
         entity_set: set = set(selected_uris)
         initial_count = len(entity_set)
@@ -988,8 +996,32 @@ async def filter_triplestore(
             len(entity_set) - initial_count,
             capped,
         )
+        subject_list = list(entity_set)
+        batch_size = 250 if is_databricks_app() else 1000
+        max_triples = 100_000
+        max_fetch_seconds = 40 if is_databricks_app() else 120
+        fetch_t0 = time.monotonic()
+        timeout_capped = False
+        results = []
         try:
-            results = store.get_triples_for_subjects(graph_name, list(entity_set))
+            for i in range(0, len(subject_list), batch_size):
+                if (time.monotonic() - fetch_t0) > max_fetch_seconds:
+                    timeout_capped = True
+                    capped = True
+                    logger.warning(
+                        "Filter expand – capped by time budget after %d/%d entities",
+                        i,
+                        len(subject_list),
+                    )
+                    break
+                batch_subjects = subject_list[i : i + batch_size]
+                batch_rows = store.get_triples_for_subjects(graph_name, batch_subjects)
+                if batch_rows:
+                    results.extend(batch_rows)
+                if len(results) >= max_triples:
+                    results = results[:max_triples]
+                    capped = True
+                    break
         except (ValidationError, InfrastructureError, NotFoundError):
             raise
         except Exception as e:
@@ -997,11 +1029,6 @@ async def filter_triplestore(
             raise InfrastructureError(
                 "Error fetching triples for the filter", detail=str(e)
             )
-
-        max_triples = 100_000
-        if len(results) > max_triples:
-            results = results[:max_triples]
-            capped = True
 
         return {
             "success": True,
@@ -1012,6 +1039,7 @@ async def filter_triplestore(
             "initial_count": initial_count,
             "expanded_count": len(entity_set),
             "capped": capped,
+            "timeout_capped": timeout_capped,
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -2409,6 +2437,85 @@ async def dtwin_triples_find(
     except Exception as e:
         logger.exception("dtwin_triples_find failed: %s", e)
         raise InfrastructureError("Triple search failed", detail=str(e)) from e
+
+
+@router.get("/neighbors")
+async def dtwin_neighbors(
+    uri: str,
+    depth: int = 2,
+    limit: int = 2000,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Expand *uri* by ``depth`` BFS hops and return the induced subgraph
+    triples.
+
+    Used by the graph viewer's right-click "Expand neighbours" action to
+    enrich the displayed graph with one or more hops of related entities.
+    Only triples whose object is a literal *or* whose object is a URI also
+    present in the visited set are returned, so the front-end can render
+    proper edges without ghost endpoints.
+    """
+    if not uri:
+        raise ValidationError("Provide 'uri'")
+
+    depth = max(1, min(int(depth or 2), 5))
+    limit = max(1, min(int(limit or 2000), 20000))
+
+    domain = get_domain(session_mgr)
+    table = effective_graph_name(domain)
+    if not table:
+        raise ValidationError("Graph name not configured")
+
+    store = get_triplestore(domain, settings, backend="graph")
+    if not store:
+        raise ValidationError("Graph backend not configured")
+
+    try:
+        visited: set[str] = {uri}
+        frontier: set[str] = {uri}
+        for _ in range(depth):
+            if not frontier:
+                break
+            next_hop = store.expand_entity_neighbors(table, frontier) - visited
+            if not next_hop:
+                break
+            visited |= next_hop
+            frontier = next_hop
+
+        rows = store.get_triples_for_subjects(table, list(visited))
+
+        triples: list[dict[str, str]] = []
+        seen: set = set()
+        for r in rows:
+            s = r.get("subject", "") or ""
+            p = r.get("predicate", "") or ""
+            o = r.get("object", "") or ""
+            key = (s, p, o)
+            if key in seen:
+                continue
+            is_uri_obj = o.startswith("http://") or o.startswith("https://")
+            if is_uri_obj and o not in visited:
+                continue
+            seen.add(key)
+            triples.append({"subject": s, "predicate": p, "object": o})
+            if len(triples) >= limit:
+                break
+
+        return {
+            "success": True,
+            "seed_uri": uri,
+            "depth": depth,
+            "entity_count": len(visited),
+            "columns": ["subject", "predicate", "object"],
+            "triples": triples,
+            "count": len(triples),
+        }
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("dtwin_neighbors failed: %s", e)
+        raise InfrastructureError("Neighbour expansion failed", detail=str(e)) from e
 
 
 @router.post("/assistant/history/limit")

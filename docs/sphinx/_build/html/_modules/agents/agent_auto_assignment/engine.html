@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -230,6 +232,9 @@
 <span class="s2">• Process ALL entities and ALL relationships — do not skip any.</span>
 <span class="s2">• If execute_sql fails, read the error and fix the SQL.</span>
 <span class="s2">• You may batch multiple independent tool calls in a single response.</span>
+<span class="s2">• Only ever pass row-returning queries (SELECT / WITH …) to execute_sql. </span><span class="se">\</span>
+<span class="s2">Never pass DESCRIBE, SHOW, EXPLAIN or other metadata statements — </span><span class="se">\</span>
+<span class="s2">use get_metadata for schema introspection instead.</span>
 <span class="s2">• After submitting all mappings, output ONLY a brief text summary of what was mapped.&quot;&quot;&quot;</span>
 
 

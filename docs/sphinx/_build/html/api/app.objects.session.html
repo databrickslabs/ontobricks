@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -566,6 +567,11 @@ rather than on every request.</p>
 <dd></dd></dl>
 
 <dl class="py property">
+<dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.cohort_rules">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cohort_rules</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.cohort_rules" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
 <dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.axioms">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">axioms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.axioms" title="Link to this definition">¶</a></dt>
 <dd><p>equivalentClass, disjointWith, etc.).</p>
@@ -621,10 +627,22 @@ rather than on every request.</p>
 <dt class="sig sig-object py" id="back.objects.session.DomainSession.DomainSession.delta">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">delta</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#back.objects.session.DomainSession.DomainSession.delta" title="Link to this definition">¶</a></dt>
 <dd><p>Derived Delta triplestore location (catalog, schema, table_name).</p>
-<p>The Delta VIEW always lives in the same Unity Catalog catalog.schema
-as the domain registry, and the view name is computed from the
-domain name and current version.  Returns a fresh dict on every
-access; mutations are not persisted.</p>
+<p>The Delta VIEW always lives in the same Unity Catalog
+catalog.schema as the domain registry, and the view name is
+computed from the domain name and current version. Returns a
+fresh dict on every access; mutations are not persisted.</p>
+<p>catalog/schema are resolved via <code class="xref py py-class docutils literal notranslate"><span class="pre">RegistryCfg.from_domain</span></code>
+so the same precedence applies here as for <code class="docutils literal notranslate"><span class="pre">uc_domain_path</span></code>,
+<code class="docutils literal notranslate"><span class="pre">uc_version_path</span></code> and the rest of the registry-aware code:
+UI override for backend/Lakebase knobs → Lakebase <code class="docutils literal notranslate"><span class="pre">registries</span></code>
+row merged with bound Volume path (when <code class="docutils literal notranslate"><span class="pre">REGISTRY_VOLUME_PATH</span></code>
+parses) → bound path alone → env vars → raw
+<code class="docutils literal notranslate"><span class="pre">settings[&quot;registry&quot;]</span></code>. Without this delegation the Build
+page resolved <code class="docutils literal notranslate"><span class="pre">effective_view_table</span></code> against whatever
+catalog/schema happened to be persisted in the session, even
+when the active backend pointed at a <em>different</em> triplet — so
+the Triple-Store badge went red against the wrong catalog
+while <code class="docutils literal notranslate"><span class="pre">uc_version_path</span></code> looked at the right one.</p>
 </dd></dl>
 
 <dl class="py property">

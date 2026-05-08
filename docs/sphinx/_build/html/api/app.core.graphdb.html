@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -442,13 +443,14 @@ admin in Settings &gt; Graph DB.</p></li>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.graphdb.ladybugdb.sync_to_volume">
-<span class="sig-prename descclassname"><span class="pre">back.core.graphdb.ladybugdb.</span></span><span class="sig-name descname"><span class="pre">sync_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.graphdb.ladybugdb.sync_to_volume" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">back.core.graphdb.ladybugdb.</span></span><span class="sig-name descname"><span class="pre">sync_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compresslevel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.graphdb.ladybugdb.sync_to_volume" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>local_base</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>compresslevel</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -827,6 +829,25 @@ optimization (e.g. Delta OPTIMIZE) should override this.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.delete_cohort_triples">
+<span class="sig-name descname"><span class="pre">delete_cohort_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cohort_uri_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_cohort_predicate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/ladybugdb/LadybugFlatStore.html#LadybugFlatStore.delete_cohort_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.delete_cohort_triples" title="Link to this definition">¶</a></dt>
+<dd><p>Cypher counterpart of the SQL default — runs two MATCH/DELETE
+passes against the flat <code class="docutils literal notranslate"><span class="pre">Triple</span></code> node table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>cohort_uri_prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>in_cohort_predicate</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.get_aggregate_stats">
 <span class="sig-name descname"><span class="pre">get_aggregate_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/ladybugdb/LadybugFlatStore.html#LadybugFlatStore.get_aggregate_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.get_aggregate_stats" title="Link to this definition">¶</a></dt>
 <dd><p>Return aggregate triple-store statistics in a single query.</p>
@@ -874,11 +895,12 @@ optimization (e.g. Delta OPTIMIZE) should override this.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.find_seed_subjects">
-<span class="sig-name descname"><span class="pre">find_seed_subjects</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'any'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'contains'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/ladybugdb/LadybugFlatStore.html#LadybugFlatStore.find_seed_subjects"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.find_seed_subjects" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">find_seed_subjects</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'any'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'contains'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/ladybugdb/LadybugFlatStore.html#LadybugFlatStore.find_seed_subjects"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.ladybugdb.LadybugFlatStore.LadybugFlatStore.find_seed_subjects" title="Link to this definition">¶</a></dt>
 <dd><p>Return distinct subjects matching type and/or value criteria.</p>
 <p><em>field</em> is <code class="docutils literal notranslate"><span class="pre">&quot;label&quot;</span></code> (match on <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code>) or <code class="docutils literal notranslate"><span class="pre">&quot;id&quot;</span></code> (match on
 the subject URI itself).  <em>match_type</em> is <code class="docutils literal notranslate"><span class="pre">&quot;contains&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;exact&quot;</span></code>,
-<code class="docutils literal notranslate"><span class="pre">&quot;starts&quot;</span></code>, or <code class="docutils literal notranslate"><span class="pre">&quot;ends&quot;</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">&quot;starts&quot;</span></code>, or <code class="docutils literal notranslate"><span class="pre">&quot;ends&quot;</span></code>. <code class="docutils literal notranslate"><span class="pre">limit</span></code> (when &gt; 0) caps returned
+subjects for responsive preview queries.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -887,6 +909,7 @@ the subject URI itself).  <em>match_type</em> is <code class="docutils literal n
 <li><p><strong>field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>match_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -1714,11 +1737,20 @@ that the previous free functions required on every call.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.sync_to_volume">
-<span class="sig-name descname"><span class="pre">sync_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/ladybugdb/GraphSyncService.html#GraphSyncService.sync_to_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.sync_to_volume" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">sync_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compresslevel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/ladybugdb/GraphSyncService.html#GraphSyncService.sync_to_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.sync_to_volume" title="Link to this definition">¶</a></dt>
 <dd><p>Archive the local <code class="docutils literal notranslate"><span class="pre">.lbug</span></code> directory and upload it to the registry.</p>
+<p><code class="docutils literal notranslate"><span class="pre">compresslevel</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">1</span></code> (fastest gzip).  The default
+<code class="docutils literal notranslate"><span class="pre">9</span></code> was unbearably slow on large graphs (~1–2 GB <code class="docutils literal notranslate"><span class="pre">.lbug</span></code>
+files): pure-Python zlib at level 9 is single-threaded and runs
+~3–5× slower than level 1 for ~10–15% better compression — a
+bad trade-off for a workspace Volume where storage is cheap and
+the wait is paid by the user.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>compresslevel</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
@@ -1776,13 +1808,14 @@ that the previous free functions required on every call.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.upload_to_volume">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">upload_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/ladybugdb/GraphSyncService.html#GraphSyncService.upload_to_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.upload_to_volume" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">upload_to_volume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_service</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/tmp/ontobricks'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compresslevel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/ladybugdb/GraphSyncService.html#GraphSyncService.upload_to_volume"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.ladybugdb.GraphSyncService.GraphSyncService.upload_to_volume" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>local_base</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>compresslevel</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>

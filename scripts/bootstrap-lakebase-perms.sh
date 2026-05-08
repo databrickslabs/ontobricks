@@ -31,19 +31,19 @@ set -euo pipefail
 # ``mcp-ontobricks``. If your instance still uses the shared default DB
 # ``databricks_postgres`` with a registry **schema** named
 # ``ontobricks_registry`` inside it, pass ``-d databricks_postgres``.
-# Pass ``-i`` / ``-d`` / ``-s`` / ``-a`` to retarget any of those when
+# Pass ``-i`` / ``-b`` / ``-d`` / ``-s`` / ``-a`` to retarget any of those when
 # you migrate to a different project, database, schema, or app.
-# Defaults can also be set via env (``INSTANCE`` / ``DATABASE`` /
-# ``SCHEMA``) — ``scripts/deploy.sh`` does this from
+# Defaults can also be set via env (``INSTANCE`` / ``BRANCH`` /
+# ``DATABASE`` / ``SCHEMA``) — ``scripts/deploy.sh`` does this from
 # ``scripts/deploy.config.sh``.
 #
 # Usage:
 #   scripts/bootstrap-lakebase-perms.sh                # default: dev sandbox
 #                                                       (ontobricks-app → ontobricks_registry DB → ontobricks_registry schema → apps)
 #   scripts/bootstrap-lakebase-perms.sh -a ontobricks  # production app on the same instance
-#   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -d databricks_postgres -s ontobricks_registry \
+#   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -b production -d databricks_postgres -s ontobricks_registry \
 #                                       -a ontobricks-030   # shared default Postgres database
-#   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -d ontobricks_registry -s ontobricks_registry \
+#   scripts/bootstrap-lakebase-perms.sh -i ontobricks-app -b production -d ontobricks_registry -s ontobricks_registry \
 #                                       -a ontobricks -a ontobricks-dev  # legacy multi-grantee layout
 #
 # Prerequisites:
@@ -55,6 +55,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 INSTANCE="${INSTANCE:-ontobricks-app}"
+BRANCH="${BRANCH:-${LAKEBASE_BRANCH:-production}}"
 DATABASE="${DATABASE:-ontobricks_registry}"
 SCHEMA="${SCHEMA:-ontobricks_registry}"
 APPS=()
@@ -62,6 +63,7 @@ APPS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -i|--instance) INSTANCE="$2"; shift 2 ;;
+        -b|--branch)   BRANCH="$2"; shift 2 ;;
         -d|--database) DATABASE="$2"; shift 2 ;;
         -s|--schema)   SCHEMA="$2"; shift 2 ;;
         -a|--app)      APPS+=("$2"); shift 2 ;;
@@ -108,13 +110,15 @@ fi
 # Resolve the project's primary endpoint via the Postgres API.
 # OntoBricks targets Lakebase Autoscaling exclusively — the legacy
 # ``/api/2.0/database/instances/<name>`` endpoint 404s on Autoscaling-
-# only projects, so we walk projects → branches → endpoints and pick
-# the first endpoint whose ``status.hosts.host`` is populated.
+# only projects, so we resolve the endpoint from the configured
+# project+branch pair.
 INSTANCE_NAME="$INSTANCE"
-ENDPOINT_INFO="$(INSTANCE_NAME="$INSTANCE_NAME" python3 - <<'PY'
+BRANCH_NAME="$BRANCH"
+ENDPOINT_INFO="$(INSTANCE_NAME="$INSTANCE_NAME" BRANCH_NAME="$BRANCH_NAME" python3 - <<'PY'
 import json, os, subprocess, sys
 
 instance = os.environ["INSTANCE_NAME"]
+branch = os.environ["BRANCH_NAME"]
 
 
 def api_get(path):
@@ -131,31 +135,25 @@ def api_get(path):
         return None
 
 
-branches = (
-    api_get(f"/api/2.0/postgres/projects/{instance}/branches") or {}
-).get("branches") or []
-for branch in branches:
-    branch_path = branch.get("name") or ""
-    if not branch_path:
-        continue
-    endpoints = (
-        api_get(f"/api/2.0/postgres/{branch_path}/endpoints") or {}
-    ).get("endpoints") or []
-    for ep in endpoints:
-        hosts = (ep.get("status") or {}).get("hosts") or {}
-        host = (hosts.get("host") or "").strip()
-        endpoint_path = ep.get("name") or ""
-        if host and endpoint_path:
-            print(host)
-            print(endpoint_path)
-            sys.exit(0)
+branch_path = f"projects/{instance}/branches/{branch}"
+endpoints = (
+    api_get(f"/api/2.0/postgres/{branch_path}/endpoints") or {}
+).get("endpoints") or []
+for ep in endpoints:
+    hosts = (ep.get("status") or {}).get("hosts") or {}
+    host = (hosts.get("host") or "").strip()
+    endpoint_path = ep.get("name") or ""
+    if host and endpoint_path:
+        print(host)
+        print(endpoint_path)
+        sys.exit(0)
 sys.exit(1)
 PY
 )"
 if [[ -z "$ENDPOINT_INFO" ]]; then
-    echo "ERROR: Could not resolve a primary endpoint for Lakebase Autoscaling project '${INSTANCE}'." >&2
-    echo "       Check 'databricks api get /api/2.0/postgres/projects/${INSTANCE}/branches'" >&2
-    echo "       and confirm the project name (it must be the Autoscaling project_id)." >&2
+    echo "ERROR: Could not resolve a primary endpoint for Lakebase Autoscaling project '${INSTANCE}' on branch '${BRANCH}'." >&2
+    echo "       Check 'databricks api get /api/2.0/postgres/projects/${INSTANCE}/branches/${BRANCH}/endpoints'" >&2
+    echo "       and confirm project/branch values match the app postgres resource binding." >&2
     exit 1
 fi
 PGHOST="$(printf '%s\n' "$ENDPOINT_INFO" | sed -n 1p)"
@@ -163,6 +161,7 @@ ENDPOINT_PATH="$(printf '%s\n' "$ENDPOINT_INFO" | sed -n 2p)"
 
 echo "=== OntoBricks — Lakebase Schema Permission Bootstrap ==="
 echo "Project  : ${INSTANCE} (${PGHOST})"
+echo "Branch   : ${BRANCH}"
 echo "Endpoint : ${ENDPOINT_PATH}"
 echo "Database : ${DATABASE}"
 echo "Schema   : ${SCHEMA}"

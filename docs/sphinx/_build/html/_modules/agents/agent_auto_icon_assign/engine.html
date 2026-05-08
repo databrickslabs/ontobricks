@@ -55,7 +55,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -148,6 +150,32 @@
 <span class="n">LLM_TIMEOUT</span> <span class="o">=</span> <span class="mi">120</span>
 
 <span class="n">_TRACE_NAME</span> <span class="o">=</span> <span class="s2">&quot;auto_icon_assign&quot;</span>
+
+<span class="n">_BASE_MAX_TOKENS</span> <span class="o">=</span> <span class="mi">1024</span>
+<span class="n">_PER_ENTITY_MAX_TOKENS</span> <span class="o">=</span> <span class="mi">80</span>
+<span class="c1"># Databricks-hosted Claude endpoints (e.g. databricks-claude-opus-4-7) reject</span>
+<span class="c1"># requests whose ``max_tokens`` exceeds the model&#39;s output cap (~8192). Going</span>
+<span class="c1"># higher returns an opaque 400 Bad Request. When the ontology is too large to</span>
+<span class="c1"># fit in one round, the agent naturally batches via the &quot;retry with smaller</span>
+<span class="c1"># subset&quot; tool-error feedback loop.</span>
+<span class="n">_ABSOLUTE_MAX_TOKENS</span> <span class="o">=</span> <span class="mi">8192</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_compute_max_tokens</span><span class="p">(</span><span class="n">n_entities</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Budget enough tokens to emit the full tool-call JSON for N entities.</span>
+
+<span class="sd">    The ``assign_icons`` tool-call argument is a JSON object whose size grows</span>
+<span class="sd">    roughly linearly with the number of entities (name length + emoji + JSON</span>
+<span class="sd">    punctuation). At the default 2048-token budget, ontologies with ~40+</span>
+<span class="sd">    entities get the tool-call JSON truncated, which propagates as a</span>
+<span class="sd">    ``JSONDecodeError`` → empty ``arguments`` → ``tool_assign_icons()``</span>
+<span class="sd">    raising ``TypeError``. We scale with entity count but never exceed the</span>
+<span class="sd">    endpoint&#39;s documented output cap.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">min</span><span class="p">(</span>
+        <span class="n">_ABSOLUTE_MAX_TOKENS</span><span class="p">,</span>
+        <span class="n">_BASE_MAX_TOKENS</span> <span class="o">+</span> <span class="n">_PER_ENTITY_MAX_TOKENS</span> <span class="o">*</span> <span class="nb">max</span><span class="p">(</span><span class="n">n_entities</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span>
 
 
 <span class="c1"># =====================================================</span>
@@ -279,6 +307,10 @@
 
     <span class="n">total_usage</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;prompt_tokens&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;completion_tokens&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
     <span class="n">tools_supported</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">max_tokens</span> <span class="o">=</span> <span class="n">_compute_max_tokens</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">))</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Icon Agent: max_tokens=</span><span class="si">%d</span><span class="s2"> for </span><span class="si">%d</span><span class="s2"> entities&quot;</span><span class="p">,</span> <span class="n">max_tokens</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_names</span><span class="p">)</span>
+    <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">notify</span><span class="p">(</span><span class="n">msg</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">on_step</span><span class="p">:</span>
@@ -306,6 +338,7 @@
                 <span class="n">messages</span><span class="p">,</span>
                 <span class="n">tools</span><span class="o">=</span><span class="n">send_tools</span><span class="p">,</span>
                 <span class="n">temperature</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+                <span class="n">max_tokens</span><span class="o">=</span><span class="n">max_tokens</span><span class="p">,</span>
                 <span class="n">timeout</span><span class="o">=</span><span class="n">LLM_TIMEOUT</span><span class="p">,</span>
                 <span class="n">trace_name</span><span class="o">=</span><span class="n">_TRACE_NAME</span><span class="p">,</span>
             <span class="p">)</span>
@@ -325,6 +358,7 @@
                         <span class="n">messages</span><span class="p">,</span>
                         <span class="n">tools</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                         <span class="n">temperature</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+                        <span class="n">max_tokens</span><span class="o">=</span><span class="n">max_tokens</span><span class="p">,</span>
                         <span class="n">timeout</span><span class="o">=</span><span class="n">LLM_TIMEOUT</span><span class="p">,</span>
                         <span class="n">trace_name</span><span class="o">=</span><span class="n">_TRACE_NAME</span><span class="p">,</span>
                     <span class="p">)</span>
@@ -370,10 +404,65 @@
                 <span class="n">raw_args</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;arguments&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">)</span>
                 <span class="n">tool_id</span> <span class="o">=</span> <span class="n">tc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
 
+                <span class="n">finish_reason</span> <span class="o">=</span> <span class="n">choice</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;finish_reason&quot;</span><span class="p">)</span>
+                <span class="n">truncated</span> <span class="o">=</span> <span class="n">finish_reason</span> <span class="o">==</span> <span class="s2">&quot;length&quot;</span>
+
                 <span class="k">try</span><span class="p">:</span>
                     <span class="n">arguments</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">raw_args</span><span class="p">)</span>
-                <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
-                    <span class="n">arguments</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span> <span class="k">as</span> <span class="n">json_exc</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Icon Agent: tool_call &#39;</span><span class="si">%s</span><span class="s2">&#39; arguments are not valid JSON &quot;</span>
+                        <span class="s2">&quot;(</span><span class="si">%d</span><span class="s2"> chars, finish_reason=</span><span class="si">%s</span><span class="s2">) — almost certainly truncated. &quot;</span>
+                        <span class="s2">&quot;Error: </span><span class="si">%s</span><span class="s2">. First 200: </span><span class="si">%r</span><span class="s2">  Last 200: </span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">tool_name</span><span class="p">,</span>
+                        <span class="nb">len</span><span class="p">(</span><span class="n">raw_args</span><span class="p">),</span>
+                        <span class="n">finish_reason</span><span class="p">,</span>
+                        <span class="n">json_exc</span><span class="p">,</span>
+                        <span class="n">raw_args</span><span class="p">[:</span><span class="mi">200</span><span class="p">],</span>
+                        <span class="n">raw_args</span><span class="p">[</span><span class="o">-</span><span class="mi">200</span><span class="p">:],</span>
+                    <span class="p">)</span>
+                    <span class="n">notify</span><span class="p">(</span><span class="s2">&quot;Tool arguments were truncated — asking agent to retry…&quot;</span><span class="p">)</span>
+                    <span class="n">tool_result</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+                        <span class="p">{</span>
+                            <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="p">(</span>
+                                <span class="s2">&quot;Your tool-call arguments were truncated by the &quot;</span>
+                                <span class="s2">&quot;token budget and could not be parsed as JSON. &quot;</span>
+                                <span class="s2">&quot;Retry assign_icons with a smaller payload: &quot;</span>
+                                <span class="s2">&quot;return icons for only a subset of entities, then &quot;</span>
+                                <span class="s2">&quot;call assign_icons again for the rest. Prefer &quot;</span>
+                                <span class="s2">&quot;short keys (exact entity names) and single &quot;</span>
+                                <span class="s2">&quot;emoji values.&quot;</span>
+                            <span class="p">)</span>
+                        <span class="p">}</span>
+                    <span class="p">)</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">steps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="n">AgentStep</span><span class="p">(</span>
+                            <span class="n">step_type</span><span class="o">=</span><span class="s2">&quot;tool_call&quot;</span><span class="p">,</span>
+                            <span class="n">content</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&lt;truncated, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">raw_args</span><span class="p">)</span><span class="si">}</span><span class="s2"> chars&gt;&quot;</span><span class="p">,</span>
+                            <span class="n">tool_name</span><span class="o">=</span><span class="n">tool_name</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+                    <span class="n">result</span><span class="o">.</span><span class="n">steps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="n">AgentStep</span><span class="p">(</span>
+                            <span class="n">step_type</span><span class="o">=</span><span class="s2">&quot;tool_result&quot;</span><span class="p">,</span>
+                            <span class="n">content</span><span class="o">=</span><span class="n">tool_result</span><span class="p">[:</span><span class="mi">300</span><span class="p">],</span>
+                            <span class="n">tool_name</span><span class="o">=</span><span class="n">tool_name</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+                    <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span>
+                            <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;tool&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;tool_call_id&quot;</span><span class="p">:</span> <span class="n">tool_id</span><span class="p">,</span>
+                            <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">tool_result</span><span class="p">,</span>
+                        <span class="p">}</span>
+                    <span class="p">)</span>
+                    <span class="k">continue</span>
+
+                <span class="k">if</span> <span class="n">truncated</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Icon Agent: LLM stopped on &#39;length&#39; but tool args &quot;</span>
+                        <span class="s2">&quot;parsed — output may still be incomplete&quot;</span>
+                    <span class="p">)</span>
 
                 <span class="n">notify</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Calling </span><span class="si">{</span><span class="n">tool_name</span><span class="si">}</span><span class="s2">…&quot;</span><span class="p">)</span>
                 <span class="n">result</span><span class="o">.</span><span class="n">steps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>

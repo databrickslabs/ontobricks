@@ -492,6 +492,15 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology â
 
 **Note**: Empty entities (type URIs without data) are automatically filtered out.
 
+**Right-click on a node (Expand neighbours):**
+
+Right-click any entity node and pick **Expand neighbours (N hops)** to enrich the displayed graph in place â€” without re-running a full SPARQL query.
+
+- The hop count follows the **Depth** slider in the right-pane filter panel (default `2`).
+- A small spinner appears in the top-right corner of the canvas while the request is running; the rest of the UI stays interactive.
+- Newly added entities are merged with the existing graph, briefly ringed with a highlight, and the camera zooms to frame them.
+- The same context menu still exposes the existing **View Dashboard** and **Bridges** entries when configured for the entity's class.
+
 **Data Clusters:**
 
 The Knowledge Graph includes a **Data Clusters** panel (in the View tab) for detecting communities in the graph:

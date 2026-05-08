@@ -65,7 +65,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#ontoviz-component-architecture">OntoViz Component Architecture</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#user-interface-architecture">User Interface Architecture</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#data-flow">Data Flow</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#unity-catalog-versioning">Unity Catalog Versioning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#registry-storage-backends">Registry Storage Backends</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triple-store-backends">Triple Store Backends</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#reasoning-engine">Reasoning Engine</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#graph-analysis-community-detection">Graph Analysis — Community Detection</a></li>
@@ -85,6 +85,7 @@
 <li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
@@ -1040,31 +1041,108 @@ tests/                                  # Test suite (at project root)
 </section>
 </section>
 <hr class="docutils" />
-<section id="unity-catalog-versioning">
-<h2>Unity Catalog Versioning<a class="headerlink" href="#unity-catalog-versioning" title="Link to this heading">¶</a></h2>
-<p>OntoBricks uses Unity Catalog Volumes for domain storage with built-in version control.</p>
-<section id="storage-structure">
-<h3>Storage Structure<a class="headerlink" href="#storage-structure" title="Link to this heading">¶</a></h3>
+<section id="registry-storage-backends">
+<h2>Registry Storage Backends<a class="headerlink" href="#registry-storage-backends" title="Link to this heading">¶</a></h2>
+<p>OntoBricks supports two backends for the domain registry, selected
+instance-wide by an admin in <strong>Settings → Registry / Registry
+Location</strong>. Both backends co-exist behind a single
+:class:<code class="docutils literal notranslate"><span class="pre">RegistryStore</span></code> abstraction so route handlers and services are
+agnostic to which one is active.</p>
+<section id="backend-matrix">
+<h3>Backend matrix<a class="headerlink" href="#backend-matrix" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Identifier</p></th>
+<th class="head"><p>What lives in it</p></th>
+<th class="head"><p>Binaries (<code class="docutils literal notranslate"><span class="pre">documents/</span></code>, <code class="docutils literal notranslate"><span class="pre">*.lbug.tar.gz</span></code>)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Unity Catalog Volume <em>(default)</em></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">volume</span></code></p></td>
+<td><p>Domain JSON, permissions, schedules, history, global config — all serialised as JSON files on the Volume</p></td>
+<td><p>Same Volume</p></td>
+</tr>
+<tr class="row-odd"><td><p>Databricks Lakebase (Postgres)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lakebase</span></code></p></td>
+<td><p>Same data, normalised into Postgres tables (with JSONB columns for the larger blobs)</p></td>
+<td><p><strong>Still on the Volume</strong> — Lakebase is registry-data only</p></td>
+</tr>
+</tbody>
+</table>
+<p>Switching backend is a runtime setting; it does not migrate data on
+its own. A one-shot <strong>Migrate to Lakebase</strong> button in the admin UI
+copies every JSON-shaped artefact from the Volume into Lakebase
+(<code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/settings/registry/migrate-to-lakebase</span></code> →
+<code class="docutils literal notranslate"><span class="pre">back/objects/registry/store/migration.py</span></code>). Binary artefacts stay on
+the Volume in both modes.</p>
+</section>
+<section id="volume-layout-default">
+<h3>Volume layout (default)<a class="headerlink" href="#volume-layout-default" title="Link to this heading">¶</a></h3>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Unity Catalog
 └── catalog (e.g., main)
     └── schema (e.g., ontobricks)
         └── volume (e.g., OntoBricksRegistry)
+            ├── .registry                      # marker
+            ├── .global_config.json            # warehouse, schedules, emoji, …
             └── domains/
                 └── {domain_name}/
+                    ├── .domain_permissions.json
+                    ├── .schedule_history.json
                     ├── V1/
-                    │   ├── V1.json                                # Version 1 payload
-                    │   ├── documents/                             # Version-scoped documents
-                    │   └── ontobricks_{name}_V1.lbug.tar.gz       # LadybugDB archive
-                    ├── V2/
-                    │   ├── V2.json                                # Version 2 payload
+                    │   ├── V1.json
                     │   ├── documents/
-                    │   └── ontobricks_{name}_V2.lbug.tar.gz
-                    └── V3/
-                        ├── V3.json                                # Version 3 payload
-                        ├── documents/
-                        └── ontobricks_{name}_V3.lbug.tar.gz
+                    │   └── ontobricks_{name}_V1.lbug.tar.gz
+                    ├── V2/…
+                    └── V3/…
 </pre></div>
 </div>
+</section>
+<section id="lakebase-layout-opt-in">
+<h3>Lakebase layout (opt-in)<a class="headerlink" href="#lakebase-layout-opt-in" title="Link to this heading">¶</a></h3>
+<p>The Postgres schema (default <code class="docutils literal notranslate"><span class="pre">ontobricks_registry</span></code>) holds seven
+relational tables:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Table</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">registries</span></code></p></td>
+<td><p>One row per <code class="docutils literal notranslate"><span class="pre">(catalog,</span> <span class="pre">schema,</span> <span class="pre">volume)</span></code> triplet — scopes everything else</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">global_config</span></code></p></td>
+<td><p>Instance-wide settings (warehouse, emoji, base URI, …) as JSONB</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">domains</span></code></p></td>
+<td><p>Stable per-domain identity (UUID, name, base URI, description)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">domain_versions</span></code></p></td>
+<td><p>Per-version JSONB document; mirrors what <code class="docutils literal notranslate"><span class="pre">V{N}.json</span></code> used to hold</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">domain_permissions</span></code></p></td>
+<td><p>Per-domain ACL (replaces <code class="docutils literal notranslate"><span class="pre">.domain_permissions.json</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">schedules</span></code></p></td>
+<td><p>Active scheduled-build configuration</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">schedule_runs</span></code></p></td>
+<td><p>Ring-buffered run history per domain</p></td>
+</tr>
+</tbody>
+</table>
+<p>Authentication is fully app-managed: the Databricks Apps runtime
+injects <code class="docutils literal notranslate"><span class="pre">PGHOST</span></code>/<code class="docutils literal notranslate"><span class="pre">PGPORT</span></code>/<code class="docutils literal notranslate"><span class="pre">PGDATABASE</span></code>/<code class="docutils literal notranslate"><span class="pre">PGUSER</span></code> and OntoBricks mints a
+short-lived OAuth token via <code class="docutils literal notranslate"><span class="pre">WorkspaceClient().config.authenticate()</span></code>
+(<code class="docutils literal notranslate"><span class="pre">back/core/databricks/LakebaseAuth.py</span></code>). No user secrets are stored.
+OntoBricks targets <strong>Lakebase Autoscaling</strong> exclusively (the default
+tier since 2026-03-12); Provisioned instances are not supported. The
+connection layer retries on <code class="docutils literal notranslate"><span class="pre">SQLSTATE</span> <span class="pre">57P03</span></code> to absorb scale-from-zero
+cold-starts.</p>
+<p>Binary artefacts (<code class="docutils literal notranslate"><span class="pre">documents/</span></code>, <code class="docutils literal notranslate"><span class="pre">*.lbug.tar.gz</span></code>) keep the Volume
+layout above regardless of which backend is selected.</p>
 </section>
 <section id="export-format-versioned">
 <h3>Export Format (Versioned)<a class="headerlink" href="#export-format-versioned" title="Link to this heading">¶</a></h3>

@@ -30,6 +30,11 @@ def setup_test_env(monkeypatch):
     monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
     monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
     monkeypatch.delenv("DATABRICKS_CLIENT_SECRET", raising=False)
+    # Force CloudFetch off in tests so probes that build SQL connection
+    # params do not trigger live ``databricks.sql.connect`` calls with
+    # ``use_cloud_fetch=True`` against the unreachable test host.
+    monkeypatch.setenv("DATABRICKS_DISABLE_CLOUD_FETCH", "1")
+    monkeypatch.delenv("DATABRICKS_FORCE_CLOUD_FETCH", raising=False)
     monkeypatch.setenv("CSRF_DISABLED", "1")
 
 

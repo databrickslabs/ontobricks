@@ -57,6 +57,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
@@ -251,6 +252,38 @@
 
 <span class="sd">        Returns an enriched error string suitable for user-facing task messages.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># --- Permission errors (UC MANAGE / SELECT / USAGE missing) -----------</span>
+        <span class="n">perm_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s2">&quot;PERMISSION_DENIED:\s*([^\n]+)&quot;</span><span class="p">,</span> <span class="n">error_msg</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">perm_match</span><span class="p">:</span>
+            <span class="n">perm_detail</span> <span class="o">=</span> <span class="n">perm_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Permission denied while creating the VIEW.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;  Detail: </span><span class="si">{</span><span class="n">perm_detail</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;  Fix: Grant the required privilege to the Databricks App service &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;principal (typically MANAGE on the target object or its parent &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;schema, and SELECT on all source tables). &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;If an object with the target name already exists as a TABLE, drop &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;it first — CREATE OR REPLACE VIEW cannot overwrite a TABLE.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># --- Missing source table / view -------------------------------------</span>
+        <span class="n">tbl_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s2">&quot;TABLE_OR_VIEW_NOT_FOUND[^`&#39;]*&quot;</span>
+            <span class="sa">r</span><span class="s2">&quot;((?:`[^`]+`|&#39;[^&#39;]+&#39;)&quot;</span>
+            <span class="sa">r</span><span class="s2">&quot;(?:\.(?:`[^`]+`|&#39;[^&#39;]+&#39;)){0,2})&quot;</span><span class="p">,</span>
+            <span class="n">error_msg</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">tbl_match</span><span class="p">:</span>
+            <span class="n">missing</span> <span class="o">=</span> <span class="n">tbl_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Source table or view not found: </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2">.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;  Fix: Verify the catalog/schema/table exists and the app service &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;principal has SELECT on it.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># --- Column-resolution errors ----------------------------------------</span>
         <span class="n">col_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;name `([^`]+)` cannot be resolved&quot;</span><span class="p">,</span> <span class="n">error_msg</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">col_match</span><span class="p">:</span>
             <span class="n">col_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
@@ -261,9 +294,14 @@
                 <span class="s2">&quot;diagnose_view_error: unrecognized database error format: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="n">error_msg</span><span class="p">,</span>
             <span class="p">)</span>
+            <span class="n">truncated</span> <span class="o">=</span> <span class="n">error_msg</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">truncated</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">500</span><span class="p">:</span>
+                <span class="n">truncated</span> <span class="o">=</span> <span class="n">truncated</span><span class="p">[:</span><span class="mi">500</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot; …&quot;</span>
             <span class="k">return</span> <span class="p">(</span>
-                <span class="s2">&quot;The database reported an error that does not match a known column-resolution pattern. &quot;</span>
-                <span class="s2">&quot;Verify your source tables and column mappings.&quot;</span>
+                <span class="s2">&quot;VIEW creation failed with an unrecognized database error.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;  Detail: </span><span class="si">{</span><span class="n">truncated</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="s2">&quot;  Fix: Check source tables, column mappings and warehouse &quot;</span>
+                <span class="s2">&quot;permissions. Full traceback is available in the server logs.&quot;</span>
             <span class="p">)</span>
 
         <span class="n">bad_column</span> <span class="o">=</span> <span class="n">col_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
@@ -987,7 +1025,7 @@
 
         <span class="n">result</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">&quot;view_exists&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
-            <span class="s2">&quot;local_lbug_exists&quot;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">local_path</span><span class="p">),</span>
+            <span class="s2">&quot;local_lbug_exists&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">last_built</span><span class="p">)</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">local_path</span><span class="p">),</span>
             <span class="s2">&quot;registry_lbug_exists&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
             <span class="s2">&quot;view_table&quot;</span><span class="p">:</span> <span class="n">view_table</span><span class="p">,</span>
             <span class="s2">&quot;graph_name&quot;</span><span class="p">:</span> <span class="n">graph_name</span><span class="p">,</span>
@@ -997,60 +1035,100 @@
             <span class="s2">&quot;last_built&quot;</span><span class="p">:</span> <span class="n">last_built</span><span class="p">,</span>
             <span class="s2">&quot;snapshot_table&quot;</span><span class="p">:</span> <span class="n">snapshot_table</span><span class="p">,</span>
             <span class="s2">&quot;snapshot_exists&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;view_check_error&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;snapshot_check_error&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;registry_check_error&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
         <span class="p">}</span>
 
-        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_check_view</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">view_table</span> <span class="ow">and</span> <span class="s2">&quot;.&quot;</span> <span class="ow">in</span> <span class="n">view_table</span><span class="p">):</span>
-                <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_check_view</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">view_table</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;No view name resolved (domain.delta.catalog/schema/name missing)&quot;</span>
+            <span class="k">if</span> <span class="s2">&quot;.&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">view_table</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Resolved view name is not fully qualified: </span><span class="si">{</span><span class="n">view_table</span><span class="si">}</span><span class="s2">&quot;</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">view_store</span> <span class="o">=</span> <span class="n">get_triplestore</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">view_store</span><span class="p">:</span>
-                    <span class="k">return</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">view_store</span><span class="o">.</span><span class="n">table_exists</span><span class="p">,</span> <span class="n">view_table</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">view_store</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
+                        <span class="s2">&quot;No SQL warehouse available &quot;</span>
+                        <span class="s2">&quot;(set domain.databricks.sql_warehouse_id or settings.databricks_warehouse_id)&quot;</span>
+                    <span class="p">)</span>
+                <span class="n">exists</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">view_store</span><span class="o">.</span><span class="n">table_exists</span><span class="p">,</span> <span class="n">view_table</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;DT existence: VIEW </span><span class="si">%s</span><span class="s2"> -&gt; exists=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">exists</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="n">exists</span><span class="p">,</span> <span class="kc">None</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;VIEW existence check failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">None</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;DT existence: VIEW </span><span class="si">%s</span><span class="s2"> check failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">view_table</span><span class="p">,</span> <span class="n">e</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;View check failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
 
-        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_check_snapshot</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]:</span>
+        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_check_snapshot</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">snapshot_table</span> <span class="ow">and</span> <span class="s2">&quot;.&quot;</span> <span class="ow">in</span> <span class="n">snapshot_table</span><span class="p">):</span>
-                <span class="k">return</span> <span class="kc">None</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">wh_id</span><span class="p">:</span>
-                    <span class="n">client</span> <span class="o">=</span> <span class="n">DatabricksClient</span><span class="p">(</span>
-                        <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">wh_id</span>
-                    <span class="p">)</span>
-                    <span class="n">incr_svc</span> <span class="o">=</span> <span class="n">IncrementalBuildService</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
-                    <span class="k">return</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">incr_svc</span><span class="o">.</span><span class="n">snapshot_exists</span><span class="p">,</span> <span class="n">snapshot_table</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">host</span> <span class="ow">and</span> <span class="n">wh_id</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;No SQL warehouse / host configured&quot;</span>
+                <span class="n">client</span> <span class="o">=</span> <span class="n">DatabricksClient</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span> <span class="n">warehouse_id</span><span class="o">=</span><span class="n">wh_id</span><span class="p">)</span>
+                <span class="n">incr_svc</span> <span class="o">=</span> <span class="n">IncrementalBuildService</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+                <span class="n">exists</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">incr_svc</span><span class="o">.</span><span class="n">snapshot_exists</span><span class="p">,</span> <span class="n">snapshot_table</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;DT existence: snapshot </span><span class="si">%s</span><span class="s2"> -&gt; exists=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">snapshot_table</span><span class="p">,</span> <span class="n">exists</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="n">exists</span><span class="p">,</span> <span class="kc">None</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Snapshot existence check failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">None</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;DT existence: snapshot </span><span class="si">%s</span><span class="s2"> check failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">snapshot_table</span><span class="p">,</span> <span class="n">e</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Snapshot check failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
 
-        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_check_registry</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">uc_path</span> <span class="ow">and</span> <span class="n">registry_lbug_path</span><span class="p">):</span>
-                <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_check_registry</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">uc_path</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Domain has no UC volume version path (uc_version_path/uc_domain_path)&quot;</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">registry_lbug_path</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Could not derive registry archive path from uc_path/db_name&quot;</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">host</span> <span class="ow">and</span> <span class="n">token</span><span class="p">:</span>
-                    <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
-                    <span class="n">parent_dir</span> <span class="o">=</span> <span class="n">registry_lbug_path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-                    <span class="n">archive_name</span> <span class="o">=</span> <span class="n">registry_lbug_path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
-                    <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
-                        <span class="n">uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">,</span> <span class="n">parent_dir</span><span class="p">,</span> <span class="n">extensions</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;.tar.gz&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">host</span> <span class="ow">and</span> <span class="n">token</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;No Databricks host/token available for UC Files API&quot;</span>
+                <span class="n">uc</span> <span class="o">=</span> <span class="n">VolumeFileService</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">)</span>
+                <span class="n">parent_dir</span> <span class="o">=</span> <span class="n">registry_lbug_path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">archive_name</span> <span class="o">=</span> <span class="n">registry_lbug_path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">ok</span><span class="p">,</span> <span class="n">items</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span>
+                    <span class="n">uc</span><span class="o">.</span><span class="n">list_directory</span><span class="p">,</span> <span class="n">parent_dir</span><span class="p">,</span> <span class="n">extensions</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;.tar.gz&quot;</span><span class="p">]</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">&quot;DT existence: registry archive parent </span><span class="si">%s</span><span class="s2"> not listable (</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
+                        <span class="n">parent_dir</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span>
                     <span class="p">)</span>
-                    <span class="k">if</span> <span class="n">ok</span> <span class="ow">and</span> <span class="n">items</span><span class="p">:</span>
-                        <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">archive_name</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">items</span><span class="p">)</span>
-                    <span class="k">return</span> <span class="kc">False</span>
+                    <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Cannot list </span><span class="si">{</span><span class="n">parent_dir</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">msg</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="n">exists</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">archive_name</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="p">(</span><span class="n">items</span> <span class="ow">or</span> <span class="p">[]))</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;DT existence: archive </span><span class="si">%s</span><span class="s2"> -&gt; exists=</span><span class="si">%s</span><span class="s2"> (</span><span class="si">%d</span><span class="s2"> candidates)&quot;</span><span class="p">,</span>
+                    <span class="n">registry_lbug_path</span><span class="p">,</span> <span class="n">exists</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">items</span> <span class="ow">or</span> <span class="p">[]),</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="n">exists</span><span class="p">,</span> <span class="kc">None</span>
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Registry .lbug existence check failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">None</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;DT existence: registry archive </span><span class="si">%s</span><span class="s2"> check failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">registry_lbug_path</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Registry archive check failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span>
 
-        <span class="n">view_ok</span><span class="p">,</span> <span class="n">snap_ok</span><span class="p">,</span> <span class="n">reg_ok</span> <span class="o">=</span> <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span>
-            <span class="n">_check_view</span><span class="p">(),</span>
-            <span class="n">_check_snapshot</span><span class="p">(),</span>
-            <span class="n">_check_registry</span><span class="p">(),</span>
+        <span class="p">(</span><span class="n">view_ok</span><span class="p">,</span> <span class="n">view_err</span><span class="p">),</span> <span class="p">(</span><span class="n">snap_ok</span><span class="p">,</span> <span class="n">snap_err</span><span class="p">),</span> <span class="p">(</span><span class="n">reg_ok</span><span class="p">,</span> <span class="n">reg_err</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span>
+                <span class="n">_check_view</span><span class="p">(),</span>
+                <span class="n">_check_snapshot</span><span class="p">(),</span>
+                <span class="n">_check_registry</span><span class="p">(),</span>
+            <span class="p">)</span>
         <span class="p">)</span>
 
         <span class="n">result</span><span class="p">[</span><span class="s2">&quot;view_exists&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">view_ok</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;view_check_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">view_err</span>
         <span class="n">result</span><span class="p">[</span><span class="s2">&quot;snapshot_exists&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">snap_ok</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;snapshot_check_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">snap_err</span>
         <span class="n">result</span><span class="p">[</span><span class="s2">&quot;registry_lbug_exists&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">reg_ok</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;registry_check_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">reg_err</span>
 
         <span class="k">return</span> <span class="n">result</span></div>
 
@@ -2438,6 +2516,7 @@
         <span class="n">config_changed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">snapshot_version</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">build_kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;session&quot;</span><span class="p">,</span>
+        <span class="n">archive_to_registry</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Execute Digital Twin build/sync in a worker thread (TaskManager progress).</span>
 
@@ -2445,8 +2524,16 @@
 <span class="sd">          * ``&quot;session&quot;`` — UI/internal build (config-change full rebuild, diagnostics,</span>
 <span class="sd">            progress callbacks, session cache, volume archive, phase timings).</span>
 <span class="sd">          * ``&quot;api&quot;`` — external REST build (matches legacy ``digitaltwin.dt_build``).</span>
+
+<span class="sd">        ``archive_to_registry`` (session only): when ``True`` (default), after the</span>
+<span class="sd">        graph is written locally the ``.lbug`` archive upload to the registry</span>
+<span class="sd">        Volume runs in a **background daemon thread** so ``complete_task`` is</span>
+<span class="sd">        not blocked by gzip + HTTP upload.  When ``False``, the archive step is</span>
+<span class="sd">        skipped entirely (local graph under ``/tmp/ontobricks`` is still up to</span>
+<span class="sd">        date).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_GRAPH_NAME</span>
@@ -2579,6 +2666,8 @@
 
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">is_api</span><span class="p">:</span>
                     <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="s2">&quot;Source changes detected&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">tm</span><span class="o">.</span><span class="n">skip_step</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="s2">&quot;Full rebuild requested — skipping change check&quot;</span><span class="p">)</span>
 
             <span class="n">t_phase</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Creating VIEW </span><span class="si">{</span><span class="n">view_table</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
@@ -2673,12 +2762,16 @@
                         <span class="s2">&quot;No snapshot table — first build will be full + create snapshot&quot;</span>
                     <span class="p">)</span>
                 <span class="n">actual_mode</span> <span class="o">=</span> <span class="s2">&quot;full&quot;</span>
+                <span class="n">tm</span><span class="o">.</span><span class="n">skip_step</span><span class="p">(</span>
+                    <span class="n">task_id</span><span class="p">,</span>
+                    <span class="s2">&quot;No previous snapshot — full rebuild instead&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
 
             <span class="n">t_phase</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
             <span class="n">apply_msg</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="s2">&quot;Applying changes to graph...&quot;</span>
                 <span class="k">if</span> <span class="n">is_api</span>
-                <span class="k">else</span> <span class="s2">&quot;Applying changes to LadybugDB graph...&quot;</span>
+                <span class="k">else</span> <span class="s2">&quot;Applying changes to the knowledge graph...&quot;</span>
             <span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="n">apply_msg</span><span class="p">)</span>
 
@@ -2902,27 +2995,88 @@
                     <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not populate DT session cache: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
                 <span class="n">t_phase</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-                <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="s2">&quot;Archiving graph to registry...&quot;</span><span class="p">)</span>
-                <span class="k">try</span><span class="p">:</span>
-                    <span class="n">uc_svc</span> <span class="o">=</span> <span class="n">make_volume_file_service</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-                    <span class="n">archive_warning</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">sync_ladybug_to_volume</span><span class="p">(</span><span class="n">uc_svc</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">archive_warning</span><span class="p">:</span>
-                        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                            <span class="s2">&quot;Post-build graph archive warning: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">archive_warning</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">archive_to_registry</span><span class="p">:</span>
+                    <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span>
+                        <span class="n">task_id</span><span class="p">,</span>
+                        <span class="s2">&quot;Skipping registry backup…&quot;</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">tm</span><span class="o">.</span><span class="n">skip_step</span><span class="p">(</span>
+                        <span class="n">task_id</span><span class="p">,</span>
+                        <span class="s2">&quot;You turned off the archive option for this build&quot;</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">_log_phase</span><span class="p">(</span><span class="s2">&quot;archive&quot;</span><span class="p">,</span> <span class="n">t_phase</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">archive_task</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span>
+                        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Registry Graph Backup&quot;</span><span class="p">,</span>
+                        <span class="n">task_type</span><span class="o">=</span><span class="s2">&quot;registry_archive&quot;</span><span class="p">,</span>
+                        <span class="n">steps</span><span class="o">=</span><span class="p">[</span>
+                            <span class="p">{</span>
+                                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;archive&quot;</span><span class="p">,</span>
+                                <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Compressing and uploading LadybugDB archive&quot;</span><span class="p">,</span>
+                            <span class="p">}</span>
+                        <span class="p">],</span>
+                    <span class="p">)</span>
+                    <span class="n">archive_task_id</span> <span class="o">=</span> <span class="n">archive_task</span><span class="o">.</span><span class="n">id</span>
+
+                    <span class="k">def</span><span class="w"> </span><span class="nf">_bg_archive</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span>
+                            <span class="n">archive_task_id</span><span class="p">,</span>
+                            <span class="s2">&quot;Compressing and uploading graph archive…&quot;</span><span class="p">,</span>
                         <span class="p">)</span>
-                    <span class="k">else</span><span class="p">:</span>
-                        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Post-build graph archived to registry&quot;</span><span class="p">)</span>
                         <span class="k">try</span><span class="p">:</span>
-                            <span class="n">dt_obj</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
-                            <span class="n">ex</span> <span class="o">=</span> <span class="n">dt_obj</span><span class="o">.</span><span class="n">get_ts_cache</span><span class="p">(</span><span class="s2">&quot;dt_existence&quot;</span><span class="p">)</span>
-                            <span class="k">if</span> <span class="n">ex</span><span class="p">:</span>
-                                <span class="n">ex</span><span class="p">[</span><span class="s2">&quot;registry_lbug_exists&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
-                                <span class="n">dt_obj</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s2">&quot;dt_existence&quot;</span><span class="p">,</span> <span class="n">ex</span><span class="p">)</span>
-                        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-                            <span class="k">pass</span>
-                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Post-build graph archive failed (non-fatal): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-                <span class="n">_log_phase</span><span class="p">(</span><span class="s2">&quot;archive&quot;</span><span class="p">,</span> <span class="n">t_phase</span><span class="p">)</span>
+                            <span class="n">uc_svc</span> <span class="o">=</span> <span class="n">make_volume_file_service</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+                            <span class="n">warn</span> <span class="o">=</span> <span class="n">Domain</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">sync_ladybug_to_volume</span><span class="p">(</span><span class="n">uc_svc</span><span class="p">)</span>
+                            <span class="k">if</span> <span class="n">warn</span><span class="p">:</span>
+                                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                                    <span class="s2">&quot;Background graph archive warning: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">warn</span>
+                                <span class="p">)</span>
+                                <span class="n">tm</span><span class="o">.</span><span class="n">complete_task</span><span class="p">(</span>
+                                    <span class="n">archive_task_id</span><span class="p">,</span>
+                                    <span class="n">result</span><span class="o">=</span><span class="p">{</span>
+                                        <span class="s2">&quot;warning&quot;</span><span class="p">:</span> <span class="n">warn</span><span class="p">,</span>
+                                        <span class="s2">&quot;parent_task_id&quot;</span><span class="p">:</span> <span class="n">task_id</span><span class="p">,</span>
+                                    <span class="p">},</span>
+                                    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Registry backup completed with warning&quot;</span><span class="p">,</span>
+                                <span class="p">)</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                                    <span class="s2">&quot;Background graph archive finished successfully&quot;</span>
+                                <span class="p">)</span>
+                                <span class="n">tm</span><span class="o">.</span><span class="n">complete_task</span><span class="p">(</span>
+                                    <span class="n">archive_task_id</span><span class="p">,</span>
+                                    <span class="n">result</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;parent_task_id&quot;</span><span class="p">:</span> <span class="n">task_id</span><span class="p">},</span>
+                                    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Registry backup completed&quot;</span><span class="p">,</span>
+                                <span class="p">)</span>
+                                <span class="k">try</span><span class="p">:</span>
+                                    <span class="n">dt_obj</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+                                    <span class="n">ex</span> <span class="o">=</span> <span class="n">dt_obj</span><span class="o">.</span><span class="n">get_ts_cache</span><span class="p">(</span><span class="s2">&quot;dt_existence&quot;</span><span class="p">)</span>
+                                    <span class="k">if</span> <span class="n">ex</span><span class="p">:</span>
+                                        <span class="n">ex</span><span class="p">[</span><span class="s2">&quot;registry_lbug_exists&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                                        <span class="n">dt_obj</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s2">&quot;dt_existence&quot;</span><span class="p">,</span> <span class="n">ex</span><span class="p">)</span>
+                                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                                    <span class="k">pass</span>
+                        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                            <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">archive_task_id</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">))</span>
+                            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                                <span class="s2">&quot;Background graph archive failed (non-fatal): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                                <span class="n">exc</span><span class="p">,</span>
+                            <span class="p">)</span>
+
+                    <span class="n">tm</span><span class="o">.</span><span class="n">advance_step</span><span class="p">(</span>
+                        <span class="n">task_id</span><span class="p">,</span>
+                        <span class="s2">&quot;Backing up the graph to the registry in the background…&quot;</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span>
+                        <span class="n">target</span><span class="o">=</span><span class="n">_bg_archive</span><span class="p">,</span>
+                        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;ob-ladybug-archive-</span><span class="si">{</span><span class="n">task_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="p">)</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+                    <span class="n">tm</span><span class="o">.</span><span class="n">complete_current_step</span><span class="p">(</span>
+                        <span class="n">task_id</span><span class="p">,</span>
+                        <span class="s2">&quot;Build finished — registry backup continues in the background &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;(task </span><span class="si">{</span><span class="n">archive_task_id</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">_log_phase</span><span class="p">(</span><span class="s2">&quot;archive&quot;</span><span class="p">,</span> <span class="n">t_phase</span><span class="p">)</span>
 
             <span class="n">duration</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">is_api</span><span class="p">:</span>
@@ -2942,6 +3096,12 @@
             <span class="p">}</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">is_api</span><span class="p">:</span>
                 <span class="n">result_data</span><span class="p">[</span><span class="s2">&quot;phase_times&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">phase_times</span>
+                <span class="n">result_data</span><span class="p">[</span><span class="s2">&quot;archive_to_registry&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">archive_to_registry</span>
+                <span class="k">if</span> <span class="n">archive_to_registry</span><span class="p">:</span>
+                    <span class="n">result_data</span><span class="p">[</span><span class="s2">&quot;archive_background&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">result_data</span><span class="p">[</span><span class="s2">&quot;archive_task_id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">archive_task_id</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">result_data</span><span class="p">[</span><span class="s2">&quot;archive_skipped&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">if</span> <span class="n">actual_mode</span> <span class="o">==</span> <span class="s2">&quot;incremental&quot;</span><span class="p">:</span>
                 <span class="n">result_data</span><span class="p">[</span><span class="s2">&quot;diff&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;added&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_add</span><span class="p">),</span> <span class="s2">&quot;removed&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">to_remove</span><span class="p">)}</span>
                 <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
@@ -2951,6 +3111,9 @@
                 <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Full rebuild: </span><span class="si">{</span><span class="n">total_triple_count</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">triple_count</span><span class="si">}</span><span class="s2"> triples in </span><span class="si">{</span><span class="n">duration</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">s&quot;</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">is_api</span> <span class="ow">and</span> <span class="n">archive_to_registry</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">+=</span> <span class="s2">&quot; Registry backup continues in the background.&quot;</span>
 
             <span class="n">tm</span><span class="o">.</span><span class="n">complete_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="n">result</span><span class="o">=</span><span class="n">result_data</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">msg</span><span class="p">)</span>
 
@@ -3648,6 +3811,176 @@
             <span class="k">else</span> <span class="s2">&quot;Digital Twin partially available&quot;</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;indicator&quot;</span><span class="p">:</span> <span class="s2">&quot;orange&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="n">title</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">count</span><span class="p">,</span> <span class="s2">&quot;pending&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">}</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Cohort discovery -- thin delegations to CohortService</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1">#</span>
+    <span class="c1"># The actual logic lives in</span>
+    <span class="c1"># :class:`back.objects.digitaltwin.CohortService.CohortService`</span>
+    <span class="c1"># (Extract Class refactor).  These wrappers preserve the public</span>
+    <span class="c1"># surface that routes and tests have been calling so far.</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_cohort_service</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin.CohortService</span><span class="w"> </span><span class="kn">import</span> <span class="n">CohortService</span>
+
+        <span class="k">return</span> <span class="n">CohortService</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DigitalTwin.list_cohort_rules">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.list_cohort_rules">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_cohort_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return all saved cohort rules for the active domain.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">list_rules</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.save_cohort_rule">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.save_cohort_rule">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save_cohort_rule</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Validate and upsert *rule_dict* into ``domain.cohort_rules``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">save_rule</span><span class="p">(</span><span class="n">rule_dict</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.delete_cohort_rule">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.delete_cohort_rule">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_cohort_rule</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove a cohort rule by id; returns ``True`` when something was deleted.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">delete_rule</span><span class="p">(</span><span class="n">rule_id</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.dry_run_cohort">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.dry_run_cohort">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dry_run_cohort</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">rule_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run the cohort engine on *rule_dict* without writing anything.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">dry_run</span><span class="p">(</span><span class="n">rule_dict</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.materialize_cohort">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.materialize_cohort">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">materialize_cohort</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">client</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">domain_version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">member_label_resolver</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Re-run the engine for a saved rule and write outputs as configured.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">materialize</span><span class="p">(</span>
+            <span class="n">rule_id</span><span class="p">,</span>
+            <span class="n">store</span><span class="p">,</span>
+            <span class="n">graph_name</span><span class="p">,</span>
+            <span class="n">client</span><span class="o">=</span><span class="n">client</span><span class="p">,</span>
+            <span class="n">domain_version</span><span class="o">=</span><span class="n">domain_version</span><span class="p">,</span>
+            <span class="n">member_label_resolver</span><span class="o">=</span><span class="n">member_label_resolver</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.cohort_class_stats">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_class_stats">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_class_stats</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return ``{instance_count}`` for *class_uri* in the live graph.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">class_stats</span><span class="p">(</span><span class="n">class_uri</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.cohort_edge_count">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_edge_count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_edge_count</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">rule_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">edge_count</span><span class="p">(</span><span class="n">rule_dict</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.cohort_node_count">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_node_count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_node_count</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">rule_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">node_count</span><span class="p">(</span><span class="n">rule_dict</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.cohort_path_trace">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_path_trace">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_path_trace</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">rule_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Per-hop frontier diagnostic for the rule&#39;s ``links``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">path_trace</span><span class="p">(</span><span class="n">rule_dict</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.cohort_sample_values">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_sample_values">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_sample_values</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">property_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">sample_values</span><span class="p">(</span>
+            <span class="n">class_uri</span><span class="p">,</span> <span class="n">property_uri</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.cohort_explain">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_explain">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_explain</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">rule_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">target</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">store</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">explain</span><span class="p">(</span>
+            <span class="n">rule_dict</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">store</span><span class="p">,</span> <span class="n">graph_name</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.cohort_suggest_uc_target">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_suggest_uc_target">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_suggest_uc_target</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a suggested UC Delta target for the active domain.</span>
+
+<span class="sd">        When *rule_name* is provided, the suggested ``table_name`` is</span>
+<span class="sd">        ``cohorts_&lt;snake_rule_name&gt;`` so the UC table reads naturally</span>
+<span class="sd">        and stays scoped to the rule the user is editing.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cohort_service</span><span class="p">()</span><span class="o">.</span><span class="n">suggest_uc_target</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="n">rule_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DigitalTwin.cohort_probe_uc_write">
+<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.cohort_probe_uc_write">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cohort_probe_uc_write</span><span class="p">(</span>
+        <span class="n">target_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">client</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run a 3-step read-only permission probe for a UC Delta target.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin.CohortService</span><span class="w"> </span><span class="kn">import</span> <span class="n">CohortService</span>
+
+        <span class="k">return</span> <span class="n">CohortService</span><span class="o">.</span><span class="n">probe_uc_write</span><span class="p">(</span><span class="n">target_dict</span><span class="p">,</span> <span class="n">client</span><span class="p">)</span></div>
 </div>
 
 </pre></div>

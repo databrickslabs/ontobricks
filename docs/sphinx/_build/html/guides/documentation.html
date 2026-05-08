@@ -64,7 +64,9 @@
 <li class="toctree-l1"><a class="reference internal" href="deployment.html">OntoBricks Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">OntoBricks Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="product.html">Product &amp; go-to-market</a></li>
@@ -137,7 +139,7 @@
 </tr>
 <tr class="row-odd"><td><p><strong>User Guide</strong></p></td>
 <td><p><a class="reference internal" href="user-guide.html"><span class="std std-doc">user-guide.md</span></a></p></td>
-<td><p>Day-to-day usage — ontology design, data mapping, triple-store pipeline, quality checks, reasoning, import (OWL, FIBO, CDISC, IOF)</p></td>
+<td><p>Day-to-day usage — domain cockpit &amp; versions (MCP-active vs loaded), ontology <strong>Designer</strong>, data mapping, triple-store pipeline, quality checks, reasoning, import (OWL, FIBO, CDISC, IOF)</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Examples</strong></p></td>
 <td><p><a class="reference internal" href="examples.html"><span class="std std-doc">examples.md</span></a></p></td>
@@ -145,7 +147,7 @@
 </tr>
 <tr class="row-odd"><td><p><strong>Deployment</strong></p></td>
 <td><p><a class="reference internal" href="deployment.html"><span class="std std-doc">deployment.md</span></a></p></td>
-<td><p>Local dev, Databricks Apps, <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> resources, permissions, MCP deploy</p></td>
+<td><p>Local dev, Databricks Apps, <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> resources, Unity Catalog grants for the app SP, in-app permissions, MCP deploy</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Architecture</strong></p></td>
 <td><p><a class="reference internal" href="architecture.html"><span class="std std-doc">architecture.md</span></a></p></td>
@@ -155,19 +157,23 @@
 <td><p><a class="reference internal" href="api.html"><span class="std std-doc">api.md</span></a></p></td>
 <td><p>External (stateless) REST &amp; GraphQL, plus internal REST reference</p></td>
 </tr>
-<tr class="row-even"><td><p><strong>MCP</strong></p></td>
+<tr class="row-even"><td><p><strong>Data Access</strong></p></td>
+<td><p><a class="reference internal" href="data-access.html"><span class="std std-doc">data-access.md</span></a></p></td>
+<td><p>Engine map — which wrapper (REST / GraphQL / SPARQL / Spark SQL / Cypher) every UI / MCP / Chat feature actually uses</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>MCP</strong></p></td>
 <td><p><a class="reference internal" href="mcp.html"><span class="std std-doc">mcp.md</span></a></p></td>
 <td><p>MCP server, Databricks Playground integration, client configuration</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>Development</strong></p></td>
+<tr class="row-even"><td><p><strong>Development</strong></p></td>
 <td><p><a class="reference internal" href="development.html"><span class="std std-doc">development.md</span></a></p></td>
 <td><p>Dependencies, test suite, permission / SDK notes</p></td>
 </tr>
-<tr class="row-even"><td><p><strong>Code Map</strong></p></td>
+<tr class="row-odd"><td><p><strong>Code Map</strong></p></td>
 <td><p><a class="reference internal" href="#code_organization.md"><span class="xref myst">code_organization.md</span></a></p></td>
 <td><p>UI routes &amp; templates, API surfaces, agents, MCP wiring</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>Product</strong></p></td>
+<tr class="row-even"><td><p><strong>Product</strong></p></td>
 <td><p><a class="reference internal" href="product.html"><span class="std std-doc">product.md</span></a></p></td>
 <td><p>Value proposition, slide-ready material, competitive landscape</p></td>
 </tr>

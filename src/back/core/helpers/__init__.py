@@ -32,6 +32,7 @@ run_blocking = DatabricksHelpers.run_blocking
 resolve_warehouse_id = DatabricksHelpers.resolve_warehouse_id
 resolve_default_base_uri = DatabricksHelpers.resolve_default_base_uri
 resolve_default_emoji = DatabricksHelpers.resolve_default_emoji
+resolve_use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch
 get_databricks_client = DatabricksHelpers.get_databricks_client
 get_databricks_credentials = DatabricksHelpers.get_databricks_credentials
 get_databricks_host_and_token = DatabricksHelpers.get_databricks_host_and_token
@@ -45,6 +46,7 @@ __all__ = [
     "resolve_warehouse_id",
     "resolve_default_base_uri",
     "resolve_default_emoji",
+    "resolve_use_cloud_fetch",
     "get_databricks_client",
     "get_databricks_credentials",
     "get_databricks_host_and_token",

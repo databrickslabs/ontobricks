@@ -48,6 +48,7 @@ logger = get_logger(__name__)
 _SCHEDULES_KEY = "schedules"
 _MAX_HISTORY = 50
 _JOB_PREFIX = "scheduled_build_"
+_COHORT_JOB_PREFIX = "scheduled_cohort_"
 
 _scheduler_instance: Optional[BuildScheduler] = None
 _lock = threading.Lock()
@@ -295,6 +296,268 @@ class BuildScheduler:
         return True, f"Schedule for '{domain_name}' removed"
 
     # ------------------------------------------------------------------
+    # Cohort schedule CRUD
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _cohort_key(domain_name: str, rule_id: str) -> str:
+        """Composite key used to store cohort schedules in a single dict."""
+        return f"{domain_name}::{rule_id}"
+
+    def get_all_cohort_schedules(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+    ) -> List[Dict[str, Any]]:
+        """Return every cohort schedule enriched with next-run info.
+
+        Lazily registers APScheduler jobs for enabled schedules that
+        are missing (e.g. after an app restart when env-var credentials
+        were not available at startup). Mirrors :meth:`get_all_schedules`.
+        """
+        schedules = self._load_cohort_schedules(host, token, registry_cfg)
+        result = []
+        for key, cfg in schedules.items():
+            domain_name = cfg.get("domain_name") or ""
+            rule_id = cfg.get("rule_id") or ""
+            if not domain_name or not rule_id:
+                continue
+            job_id = self._cohort_job_id(domain_name, rule_id)
+            job = self._sched.get_job(job_id)
+            if not job and cfg.get("enabled") and self._started:
+                self._add_or_update_cohort_job(
+                    self._settings,
+                    domain_name,
+                    rule_id,
+                    cfg.get("interval_minutes", 60),
+                    registry_cfg,
+                    cfg.get("version", "latest"),
+                    output_graph=bool(cfg.get("output_graph", True)),
+                    output_uc=bool(cfg.get("output_uc", True)),
+                )
+                job = self._sched.get_job(job_id)
+                logger.info(
+                    "Lazily registered missing cohort APScheduler job for '%s'",
+                    key,
+                )
+
+            entry = {"key": key, **cfg}
+            if job and job.next_run_time:
+                entry["next_run"] = job.next_run_time.isoformat()
+            else:
+                entry["next_run"] = None
+            result.append(entry)
+        return result
+
+    def get_cohort_schedule_history(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_name: str,
+        rule_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Return run history for a single cohort schedule (newest first)."""
+        entries = self._load_cohort_history(
+            host, token, registry_cfg, self._cohort_key(domain_name, rule_id)
+        )
+        return list(reversed(entries))
+
+    def save_cohort_schedule(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        settings,
+        domain_name: str,
+        rule_id: str,
+        interval_minutes: int,
+        enabled: bool = True,
+        version: str = "latest",
+        output_graph: bool = True,
+        output_uc: bool = True,
+    ) -> Tuple[bool, str]:
+        """Create or update a cohort materialisation schedule.
+
+        ``output_graph`` / ``output_uc`` decide which targets the
+        scheduled run writes. They override the rule's own ``output``
+        config for this schedule only — the saved rule is not mutated.
+        """
+        if interval_minutes < 2:
+            return False, "Minimum interval is 2 minutes"
+        if not domain_name:
+            return False, "Domain name is required"
+        if not rule_id:
+            return False, "Cohort rule id is required"
+
+        schedules = self._load_cohort_schedules(host, token, registry_cfg)
+        key = self._cohort_key(domain_name, rule_id)
+        prev = schedules.get(key) or {}
+        schedules[key] = {
+            "domain_name": domain_name,
+            "rule_id": rule_id,
+            "interval_minutes": interval_minutes,
+            "enabled": enabled,
+            "version": version or "latest",
+            "output_graph": bool(output_graph),
+            "output_uc": bool(output_uc),
+            "last_run": prev.get("last_run"),
+            "last_status": prev.get("last_status"),
+            "last_message": prev.get("last_message"),
+            "last_count": prev.get("last_count"),
+        }
+
+        ok, msg = self._persist_cohort_schedules(host, token, registry_cfg, schedules)
+        if not ok:
+            return False, msg
+
+        if enabled and self._started:
+            self._add_or_update_cohort_job(
+                settings,
+                domain_name,
+                rule_id,
+                interval_minutes,
+                registry_cfg,
+                version,
+                output_graph=bool(output_graph),
+                output_uc=bool(output_uc),
+            )
+        else:
+            self._remove_cohort_job(domain_name, rule_id)
+
+        logger.info(
+            "Cohort schedule saved for '%s/%s': every %d min, version=%s, enabled=%s",
+            domain_name,
+            rule_id,
+            interval_minutes,
+            version,
+            enabled,
+        )
+        return True, f"Cohort schedule for '{domain_name}/{rule_id}' saved"
+
+    def remove_cohort_schedule(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        domain_name: str,
+        rule_id: str,
+    ) -> Tuple[bool, str]:
+        """Delete a cohort schedule for *(domain_name, rule_id)*."""
+        schedules = self._load_cohort_schedules(host, token, registry_cfg)
+        key = self._cohort_key(domain_name, rule_id)
+        if key not in schedules:
+            return False, f"No cohort schedule found for '{domain_name}/{rule_id}'"
+
+        del schedules[key]
+        ok, msg = self._persist_cohort_schedules(host, token, registry_cfg, schedules)
+        if not ok:
+            return False, msg
+
+        self._remove_cohort_job(domain_name, rule_id)
+        logger.info("Cohort schedule removed for '%s/%s'", domain_name, rule_id)
+        return True, f"Cohort schedule for '{domain_name}/{rule_id}' removed"
+
+    # ------------------------------------------------------------------
+    # Manual trigger ("Run now")
+    #
+    # Both helpers schedule a one-shot APScheduler ``DateTrigger`` job
+    # for ``now`` so the materialise / build runs in the same worker
+    # thread pool as the recurring schedule (no FastAPI request thread
+    # blocked, status / history / TaskManager all updated by the
+    # existing ``_run_scheduled_*`` helpers). The persisted schedule is
+    # untouched — the next periodic run still fires on its own clock.
+    # ------------------------------------------------------------------
+
+    def run_schedule_now(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        settings,
+        domain_name: str,
+    ) -> Tuple[bool, str]:
+        """Fire the build schedule for *domain_name* immediately."""
+        from apscheduler.triggers.date import DateTrigger
+
+        schedules = self._load_schedules(host, token, registry_cfg)
+        cfg = schedules.get(domain_name)
+        if not cfg:
+            return False, f"No schedule found for domain '{domain_name}'"
+
+        if not self._started:
+            return False, "Scheduler is not running"
+
+        run_id = f"manual_build_{domain_name}_{int(time.time() * 1000)}"
+        self._sched.add_job(
+            _run_scheduled_build,
+            trigger=DateTrigger(run_date=datetime.now(timezone.utc)),
+            id=run_id,
+            name=f"Manual build {domain_name}",
+            kwargs={
+                "domain_name": domain_name,
+                "drop_existing": bool(cfg.get("drop_existing", True)),
+                "settings": settings,
+                "registry_cfg": registry_cfg,
+                "version": cfg.get("version", "latest"),
+            },
+            misfire_grace_time=self._MISFIRE_GRACE,
+            coalesce=True,
+            max_instances=1,
+        )
+        logger.info("Manual build trigger queued for '%s' (run_id=%s)", domain_name, run_id)
+        return True, f"Build for '{domain_name}' queued"
+
+    def run_cohort_schedule_now(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        settings,
+        domain_name: str,
+        rule_id: str,
+    ) -> Tuple[bool, str]:
+        """Fire the cohort materialisation schedule for *(domain, rule)* immediately."""
+        from apscheduler.triggers.date import DateTrigger
+
+        schedules = self._load_cohort_schedules(host, token, registry_cfg)
+        key = self._cohort_key(domain_name, rule_id)
+        cfg = schedules.get(key)
+        if not cfg:
+            return False, f"No cohort schedule found for '{domain_name}/{rule_id}'"
+
+        if not self._started:
+            return False, "Scheduler is not running"
+
+        run_id = f"manual_cohort_{domain_name}__{rule_id}_{int(time.time() * 1000)}"
+        self._sched.add_job(
+            _run_scheduled_cohort_materialize,
+            trigger=DateTrigger(run_date=datetime.now(timezone.utc)),
+            id=run_id,
+            name=f"Manual cohort {domain_name}/{rule_id}",
+            kwargs={
+                "domain_name": domain_name,
+                "rule_id": rule_id,
+                "settings": settings,
+                "registry_cfg": registry_cfg,
+                "version": cfg.get("version", "latest"),
+                "output_graph": bool(cfg.get("output_graph", True)),
+                "output_uc": bool(cfg.get("output_uc", True)),
+            },
+            misfire_grace_time=self._MISFIRE_GRACE,
+            coalesce=True,
+            max_instances=1,
+        )
+        logger.info(
+            "Manual cohort trigger queued for '%s/%s' (run_id=%s)",
+            domain_name,
+            rule_id,
+            run_id,
+        )
+        return True, f"Cohort materialisation for '{domain_name}/{rule_id}' queued"
+
+    # ------------------------------------------------------------------
     # Persistence helpers
     # ------------------------------------------------------------------
 
@@ -372,6 +635,74 @@ class BuildScheduler:
             )
         except Exception as e:
             logger.warning("Could not save history for '%s': %s", domain_name, e)
+
+    def _load_cohort_schedules(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> Dict[str, Any]:
+        if not host or not registry_cfg.get("catalog"):
+            return {}
+        try:
+            store = self._store_for(host, token, registry_cfg)
+            return dict(store.load_cohort_schedules() or {})
+        except Exception as e:
+            logger.debug("Could not load cohort schedules: %s", e)
+            return {}
+
+    def _persist_cohort_schedules(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        schedules: Dict,
+    ) -> Tuple[bool, str]:
+        if not host or not registry_cfg.get("catalog"):
+            return False, "Databricks credentials or registry not configured"
+        try:
+            store = self._store_for(host, token, registry_cfg)
+            ok, msg = store.save_cohort_schedules(schedules)
+            if ok:
+                from back.objects.session.global_config import (
+                    global_config_service,
+                )
+
+                global_config_service._cache = None
+                global_config_service._cache_ts = 0.0
+            return ok, msg
+        except Exception as e:
+            logger.exception("Could not persist cohort schedules: %s", e)
+            return False, str(e)
+
+    def _load_cohort_history(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        key: str,
+    ) -> List[Dict[str, Any]]:
+        if not host or not registry_cfg.get("catalog"):
+            return []
+        try:
+            store = self._store_for(host, token, registry_cfg)
+            return list(store.load_cohort_schedule_history(key))
+        except Exception as e:
+            logger.debug("Could not load cohort history for '%s': %s", key, e)
+            return []
+
+    def _append_cohort_history(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        key: str,
+        entry: Dict[str, Any],
+    ) -> None:
+        try:
+            store = self._store_for(host, token, registry_cfg)
+            store.append_cohort_schedule_history(
+                key, entry, max_entries=_MAX_HISTORY
+            )
+        except Exception as e:
+            logger.warning("Could not save cohort history for '%s': %s", key, e)
 
     @staticmethod
     def _resolve_creds(settings):
@@ -484,6 +815,58 @@ class BuildScheduler:
             self._sched.remove_job(job_id)
             logger.info("APScheduler job removed: %s", job_id)
 
+    def _cohort_job_id(self, domain_name: str, rule_id: str) -> str:
+        return f"{_COHORT_JOB_PREFIX}{domain_name}__{rule_id}"
+
+    def _add_or_update_cohort_job(
+        self,
+        settings,
+        domain_name: str,
+        rule_id: str,
+        interval_minutes: int,
+        registry_cfg: Optional[Dict[str, str]] = None,
+        version: str = "latest",
+        output_graph: bool = True,
+        output_uc: bool = True,
+    ):
+        job_id = self._cohort_job_id(domain_name, rule_id)
+        if self._sched.get_job(job_id):
+            self._sched.remove_job(job_id)
+
+        trigger = IntervalTrigger(minutes=interval_minutes)
+        job = self._sched.add_job(
+            _run_scheduled_cohort_materialize,
+            trigger=trigger,
+            id=job_id,
+            name=f"Cohort {domain_name}/{rule_id}",
+            kwargs={
+                "domain_name": domain_name,
+                "rule_id": rule_id,
+                "settings": settings,
+                "registry_cfg": registry_cfg,
+                "version": version,
+                "output_graph": bool(output_graph),
+                "output_uc": bool(output_uc),
+            },
+            replace_existing=True,
+            misfire_grace_time=self._MISFIRE_GRACE,
+            coalesce=True,
+            max_instances=1,
+        )
+        next_run = job.next_run_time.isoformat() if job.next_run_time else "unknown"
+        logger.info(
+            "Cohort APScheduler job added/updated: %s (every %d min, next_run=%s)",
+            job_id,
+            interval_minutes,
+            next_run,
+        )
+
+    def _remove_cohort_job(self, domain_name: str, rule_id: str):
+        job_id = self._cohort_job_id(domain_name, rule_id)
+        if self._sched.get_job(job_id):
+            self._sched.remove_job(job_id)
+            logger.info("Cohort APScheduler job removed: %s", job_id)
+
     def _restore_jobs(self, settings):
         """Re-register APScheduler jobs for all enabled schedules on startup."""
         host, token, reg = self._resolve_creds(settings)
@@ -507,6 +890,29 @@ class BuildScheduler:
                 )
                 count += 1
         logger.info("Restored %d scheduled build job(s)", count)
+
+        cohort_schedules = self._load_cohort_schedules(host, token, reg)
+        c_count = 0
+        for _key, cfg in cohort_schedules.items():
+            if not cfg.get("enabled"):
+                continue
+            domain_name = cfg.get("domain_name") or ""
+            rule_id = cfg.get("rule_id") or ""
+            if not domain_name or not rule_id:
+                continue
+            self._add_or_update_cohort_job(
+                settings,
+                domain_name,
+                rule_id,
+                cfg.get("interval_minutes", 60),
+                reg,
+                cfg.get("version", "latest"),
+                output_graph=bool(cfg.get("output_graph", True)),
+                output_uc=bool(cfg.get("output_uc", True)),
+            )
+            c_count += 1
+        if c_count:
+            logger.info("Restored %d scheduled cohort job(s)", c_count)
 
 
 # ======================================================================
@@ -971,6 +1377,271 @@ def _run_scheduled_build(
             domain_name,
             status,
             duration,
+        )
+
+
+def _run_scheduled_cohort_materialize(
+    domain_name: str,
+    rule_id: str,
+    settings,
+    registry_cfg: Optional[Dict[str, str]] = None,
+    version: str = "latest",
+    output_graph: bool = True,
+    output_uc: bool = True,
+) -> None:
+    """Run a cohort materialisation for *(domain_name, rule_id)*.
+
+    Loads the domain headlessly from the registry, resolves the graph
+    backend + Databricks client, then delegates to
+    :meth:`CohortService.materialize`. Status / history / TaskManager
+    are updated on every run, mirroring :func:`_run_scheduled_build`.
+    """
+    logger.info(
+        "Scheduled cohort materialise FIRED for '%s/%s' version=%s (thread=%s)",
+        domain_name,
+        rule_id,
+        version,
+        threading.current_thread().name,
+    )
+    start = time.time()
+    run_ts = datetime.now(timezone.utc).isoformat()
+
+    tm = None
+    task = None
+    host: str = ""
+    token: str = ""
+    reg: Dict[str, str] = {}
+    status = "error"
+    message = ""
+    materialized_triples = 0
+    uc_rows_written = 0
+
+    try:
+        scheduler = get_scheduler()
+        from back.core.task_manager import get_task_manager
+
+        tm = get_task_manager()
+        task = tm.create_task(
+            name=f"Scheduled Cohort — {domain_name}/{rule_id}",
+            task_type="scheduled_cohort",
+            steps=[
+                {"name": "prepare", "description": "Loading domain and rule"},
+                {"name": "engine", "description": "Running cohort engine"},
+                {"name": "write", "description": "Writing cohort outputs"},
+            ],
+        )
+        tm.start_task(task.id, f"Starting cohort materialise for {rule_id}...")
+
+        host, token, env_reg = scheduler._resolve_creds(settings)
+        reg = registry_cfg or env_reg
+
+        if not host or not token:
+            raise InfrastructureError("Databricks host/token not available")
+
+        from back.objects.registry.RegistryService import RegistryCfg, RegistryService
+
+        cfg = RegistryCfg.from_dict(reg)
+        if not cfg.catalog or not cfg.schema:
+            raise ValidationError("Registry not configured")
+
+        from back.core.databricks.DatabricksClient import DatabricksClient
+        from back.core.databricks.VolumeFileService import VolumeFileService
+        from back.core.helpers import resolve_warehouse_id
+        from back.core.triplestore import get_triplestore
+        from back.objects.digitaltwin import CohortService
+        from back.objects.digitaltwin.models import DomainSnapshot
+
+        tm.update_progress(task.id, 5, "Loading domain from registry...")
+
+        uc = VolumeFileService(host=host, token=token)
+        svc = RegistryService(cfg, uc)
+        domain, loaded_version, _domain_path, _latest = _load_domain_for_build(
+            svc,
+            domain_name,
+            version,
+            host,
+            token,
+            reg,
+        )
+
+        warehouse_id = resolve_warehouse_id(domain, settings)
+        if not warehouse_id:
+            raise InfrastructureError("No SQL warehouse configured")
+
+        rules = list(getattr(domain, "cohort_rules", []) or [])
+        if not any((r.get("id") == rule_id) for r in rules):
+            raise NotFoundError(
+                f"Cohort rule '{rule_id}' not found in domain '{domain_name}'"
+            )
+
+        snap = DomainSnapshot(domain, host=host, token=token)
+        store = get_triplestore(snap, settings, backend="graph")
+        if not store:
+            raise InfrastructureError("Could not initialize graph backend")
+
+        graph_name = (
+            f"{(domain.info or {}).get('name', DEFAULT_GRAPH_NAME)}"
+            f"_V{getattr(domain, 'current_version', loaded_version) or '1'}"
+        )
+
+        tm.advance_step(task.id, "Running cohort engine...")
+        client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+
+        def _label_resolver(uris):
+            try:
+                metadata = store.get_entity_metadata(graph_name, list(uris))
+            except Exception:
+                return {}
+            return {
+                row.get("uri", ""): row.get("label", "")
+                for row in metadata or []
+            }
+
+        cohort_svc = CohortService(domain)
+
+        tm.advance_step(task.id, "Writing cohort outputs...")
+        result = cohort_svc.materialize(
+            rule_id,
+            store,
+            graph_name,
+            client=client,
+            domain_version=str(loaded_version or ""),
+            member_label_resolver=_label_resolver,
+            output_graph=bool(output_graph),
+            output_uc=bool(output_uc),
+        )
+
+        materialized_triples = int(result.get("materialized_triples") or 0)
+        uc_rows_written = int(result.get("uc_rows_written") or 0)
+        status = "success"
+        bits: List[str] = []
+        if materialized_triples:
+            bits.append(f"{materialized_triples} triples")
+        if uc_rows_written:
+            bits.append(f"{uc_rows_written} UC rows")
+        if not bits:
+            bits.append("0 outputs (rule produced no cohorts)")
+        message = (
+            f"Materialised {' / '.join(bits)} in {time.time() - start:.1f}s"
+        )
+        graph_err = result.get("materialize_graph_error")
+        uc_err = result.get("materialize_uc_error")
+        if graph_err or uc_err:
+            status = "error"
+            message = (graph_err or uc_err) or message
+
+    except Exception as exc:
+        status = "error"
+        message = str(exc)
+        logger.exception(
+            "Scheduled cohort [%s/%s] failed after %.1fs: %s",
+            domain_name,
+            rule_id,
+            time.time() - start,
+            exc,
+        )
+
+    finally:
+        duration = time.time() - start
+        try:
+            if tm and task:
+                if status == "success":
+                    tm.complete_task(
+                        task.id,
+                        result={
+                            "materialized_triples": materialized_triples,
+                            "uc_rows_written": uc_rows_written,
+                            "duration_seconds": duration,
+                        },
+                        message=message,
+                    )
+                else:
+                    tm.fail_task(task.id, message)
+        except Exception as tm_exc:
+            logger.error(
+                "Scheduled cohort [%s/%s]: task-manager update failed: %s",
+                domain_name,
+                rule_id,
+                tm_exc,
+            )
+
+        if host and reg.get("catalog"):
+            try:
+                _update_cohort_schedule_status(
+                    host,
+                    token,
+                    reg,
+                    domain_name,
+                    rule_id,
+                    status,
+                    message,
+                    duration_s=duration,
+                    materialized_triples=materialized_triples,
+                    uc_rows_written=uc_rows_written,
+                    run_ts=run_ts,
+                )
+            except Exception as status_exc:
+                logger.error(
+                    "Scheduled cohort [%s/%s]: failed to update status: %s",
+                    domain_name,
+                    rule_id,
+                    status_exc,
+                )
+        logger.info(
+            "Scheduled cohort [%s/%s]: finished with status=%s in %.1fs",
+            domain_name,
+            rule_id,
+            status,
+            duration,
+        )
+
+
+def _update_cohort_schedule_status(
+    host: str,
+    token: str,
+    registry_cfg: Dict[str, str],
+    domain_name: str,
+    rule_id: str,
+    status: str,
+    message: str,
+    duration_s: float = 0.0,
+    materialized_triples: int = 0,
+    uc_rows_written: int = 0,
+    run_ts: str = "",
+):
+    """Update last_run / last_status / last_message and append to history."""
+    try:
+        ts = run_ts or datetime.now(timezone.utc).isoformat()
+        scheduler = get_scheduler()
+        key = scheduler._cohort_key(domain_name, rule_id)
+
+        schedules = scheduler._load_cohort_schedules(host, token, registry_cfg)
+        total_count = int(materialized_triples) + int(uc_rows_written)
+        if key in schedules:
+            schedules[key]["last_run"] = ts
+            schedules[key]["last_status"] = status
+            schedules[key]["last_message"] = message
+            schedules[key]["last_count"] = total_count
+            scheduler._persist_cohort_schedules(host, token, registry_cfg, schedules)
+
+        history_entry = {
+            "timestamp": ts,
+            "status": status,
+            "message": message,
+            "duration_s": round(duration_s, 1),
+            "materialized_triples": int(materialized_triples),
+            "uc_rows_written": int(uc_rows_written),
+            "triple_count": total_count,
+        }
+        scheduler._append_cohort_history(
+            host, token, registry_cfg, key, history_entry
+        )
+    except Exception as e:
+        logger.warning(
+            "Could not update cohort schedule status for '%s/%s': %s",
+            domain_name,
+            rule_id,
+            e,
         )
 
 

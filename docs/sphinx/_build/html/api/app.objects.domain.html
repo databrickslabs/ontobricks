@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -289,7 +290,7 @@ ObjectProperties only, matching the Mapping Summary logic.</p>
 <dd><p>Build a RegistryService from the current domain session.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="app.objects.registry.html#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a></p>
+<dd class="field-odd"><p><a class="reference internal" href="app.objects.registry.html#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -354,7 +355,7 @@ domain server-side; the redirect omits <code class="docutils literal notranslate
 <dd><p>List domain folders in the registry Volume.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a>)</p>
+<dd class="field-odd"><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
@@ -369,7 +370,7 @@ domain server-side; the redirect omits <code class="docutils literal notranslate
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a>)</p></li>
+<li><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a>)</p></li>
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
@@ -386,7 +387,7 @@ domain server-side; the redirect omits <code class="docutils literal notranslate
 <p>Reads each version JSON from the registry to extract per-version metadata.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a>)</p>
+<dd class="field-odd"><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
@@ -404,7 +405,7 @@ is updated to <code class="docutils literal notranslate"><span class="pre">False
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a>)</p></li>
+<li><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a>)</p></li>
 <li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>enabled</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
 </ul>
@@ -421,7 +422,7 @@ is updated to <code class="docutils literal notranslate"><span class="pre">False
 <dd><p>Save domain into the registry Volume under /domains/&lt;name&gt;/V{ver}/V{ver}.json.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a>)</p>
+<dd class="field-odd"><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
@@ -439,7 +440,7 @@ version exists.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a>)</p></li>
+<li><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a>)</p></li>
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 </ul>
@@ -458,7 +459,7 @@ version exists.</p>
 new version directory.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.service.RegistryService" title="back.objects.registry.service.RegistryService"><em>RegistryService</em></a>)</p>
+<dd class="field-odd"><p><strong>svc</strong> (<a class="reference internal" href="app.objects.registry.html#back.objects.registry.RegistryService.RegistryService" title="back.objects.registry.RegistryService.RegistryService"><em>RegistryService</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
@@ -785,6 +786,77 @@ Returns <code class="docutils literal notranslate"><span class="pre">None</span>
 <section id="module-back.objects.domain.version_status">
 <span id="version-status-cache"></span><h2>Version status cache<a class="headerlink" href="#module-back.objects.domain.version_status" title="Link to this heading">¶</a></h2>
 <p>TTL cache for registry-backed version status (shared across Domain instances).</p>
+<p>The cache is encapsulated in <a class="reference internal" href="#back.objects.domain.version_status.VersionStatusCache" title="back.objects.domain.version_status.VersionStatusCache"><code class="xref py py-class docutils literal notranslate"><span class="pre">VersionStatusCache</span></code></a>; a module-level
+singleton is exposed via free-function accessors to preserve the previous
+public surface (see <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code>).</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.objects.domain.version_status.VersionStatusCache">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.objects.domain.version_status.</span></span><span class="sig-name descname"><span class="pre">VersionStatusCache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ttl_seconds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/version_status.html#VersionStatusCache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.version_status.VersionStatusCache" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Process-wide TTL cache for per-domain version status entries.</p>
+<p>Each entry is keyed by an opaque <code class="docutils literal notranslate"><span class="pre">cache_key</span></code> (catalog/schema/domain
+tuple) and is considered fresh for <code class="xref py py-attr docutils literal notranslate"><span class="pre">ttl_seconds</span></code> seconds after
+it is written.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ttl_seconds</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.version_status.VersionStatusCache.clear">
+<span class="sig-name descname"><span class="pre">clear</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/version_status.html#VersionStatusCache.clear"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.version_status.VersionStatusCache.clear" title="Link to this definition">¶</a></dt>
+<dd><p>Invalidate the whole cache (after UC save/load).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.version_status.VersionStatusCache.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache_key</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/version_status.html#VersionStatusCache.get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.version_status.VersionStatusCache.get" title="Link to this definition">¶</a></dt>
+<dd><p>Return the cached value if present and fresh, else <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>cache_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.version_status.VersionStatusCache.set">
+<span class="sig-name descname"><span class="pre">set</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache_key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/version_status.html#VersionStatusCache.set"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.version_status.VersionStatusCache.set" title="Link to this definition">¶</a></dt>
+<dd><p>Store <code class="docutils literal notranslate"><span class="pre">data</span></code> against <code class="docutils literal notranslate"><span class="pre">cache_key</span></code> with the current timestamp.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cache_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.version_status.VersionStatusCache.snapshot">
+<span class="sig-name descname"><span class="pre">snapshot</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/version_status.html#VersionStatusCache.snapshot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.version_status.VersionStatusCache.snapshot" title="Link to this definition">¶</a></dt>
+<dd><p>Return a serialisable snapshot of the cache state for debugging.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="back.objects.domain.version_status.clear_version_status_cache">
 <span class="sig-prename descclassname"><span class="pre">back.objects.domain.version_status.</span></span><span class="sig-name descname"><span class="pre">clear_version_status_cache</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/version_status.html#clear_version_status_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.version_status.clear_version_status_cache" title="Link to this definition">¶</a></dt>
@@ -799,7 +871,8 @@ Returns <code class="docutils literal notranslate"><span class="pre">None</span>
 <dl class="py function">
 <dt class="sig sig-object py" id="back.objects.domain.version_status.get_cached_version_status">
 <span class="sig-prename descclassname"><span class="pre">back.objects.domain.version_status.</span></span><span class="sig-name descname"><span class="pre">get_cached_version_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache_key</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/version_status.html#get_cached_version_status"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.version_status.get_cached_version_status" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Return the cached value for <code class="docutils literal notranslate"><span class="pre">cache_key</span></code> if still fresh.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>cache_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -812,7 +885,8 @@ Returns <code class="docutils literal notranslate"><span class="pre">None</span>
 <dl class="py function">
 <dt class="sig sig-object py" id="back.objects.domain.version_status.set_cached_version_status">
 <span class="sig-prename descclassname"><span class="pre">back.objects.domain.version_status.</span></span><span class="sig-name descname"><span class="pre">set_cached_version_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache_key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/version_status.html#set_cached_version_status"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.version_status.set_cached_version_status" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Store <code class="docutils literal notranslate"><span class="pre">data</span></code> in the version-status cache under <code class="docutils literal notranslate"><span class="pre">cache_key</span></code>.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>cache_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -1227,6 +1301,74 @@ page (<code class="docutils literal notranslate"><span class="pre">/dtwin/sync/i
 <dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.build_registry_get_payload">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">build_registry_get_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.build_registry_get_payload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.build_registry_get_payload" title="Link to this definition">¶</a></dt>
 <dd><p>Payload for GET /settings/registry.</p>
+<p>Includes the registry triplet (catalog/schema/volume), the
+active <code class="docutils literal notranslate"><span class="pre">backend</span></code> (<code class="docutils literal notranslate"><span class="pre">volume</span></code> or <code class="docutils literal notranslate"><span class="pre">lakebase</span></code>), the configured
+<code class="docutils literal notranslate"><span class="pre">lakebase_schema</span></code>, and a read-only <code class="docutils literal notranslate"><span class="pre">lakebase</span></code> block that
+surfaces the runtime-injected Postgres connection parameters
+(<code class="docutils literal notranslate"><span class="pre">PGHOST</span></code>/<code class="docutils literal notranslate"><span class="pre">PGPORT</span></code>/<code class="docutils literal notranslate"><span class="pre">PGDATABASE</span></code>/<code class="docutils literal notranslate"><span class="pre">PGUSER</span></code>) plus
+availability/health for the admin UI.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.list_lakebase_databases_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_lakebase_databases_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.list_lakebase_databases_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.list_lakebase_databases_result" title="Link to this definition">¶</a></dt>
+<dd><p>List Postgres databases on the bound Lakebase instance.</p>
+<p>Used by the admin Registry Location modal so the admin can pick
+a database different from the one auto-injected via the Apps
+<code class="docutils literal notranslate"><span class="pre">database</span></code> resource binding (the bound <code class="docutils literal notranslate"><span class="pre">PGDATABASE</span></code>). The
+Lakebase JWT scope is per-instance, so the cached token can
+connect to every database the SP is allowed on.</p>
+<p>Returns a JSON-friendly payload:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+  <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">true</span><span class="p">,</span>
+  <span class="s2">&quot;bound_database&quot;</span><span class="p">:</span> <span class="s2">&quot;ontobricks_registry&quot;</span><span class="p">,</span>  <span class="c1"># PGDATABASE</span>
+  <span class="s2">&quot;selected_database&quot;</span><span class="p">:</span> <span class="s2">&quot;ontobricks_other&quot;</span><span class="p">,</span>  <span class="c1"># registry config override</span>
+  <span class="s2">&quot;databases&quot;</span><span class="p">:</span> <span class="p">[</span>
+    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;ontobricks_registry&quot;</span><span class="p">,</span> <span class="s2">&quot;connectable&quot;</span><span class="p">:</span> <span class="n">true</span><span class="p">,</span>
+     <span class="s2">&quot;is_bound&quot;</span><span class="p">:</span> <span class="n">true</span><span class="p">,</span> <span class="s2">&quot;is_selected&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">},</span>
+    <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;ontobricks_other&quot;</span><span class="p">,</span>    <span class="s2">&quot;connectable&quot;</span><span class="p">:</span> <span class="n">true</span><span class="p">,</span>
+     <span class="s2">&quot;is_bound&quot;</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span> <span class="s2">&quot;is_selected&quot;</span><span class="p">:</span> <span class="n">true</span><span class="p">},</span>
+    <span class="o">...</span>
+  <span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">connectable</span></code> reflects <code class="docutils literal notranslate"><span class="pre">has_database_privilege(current_user,</span>
+<span class="pre">datname,</span> <span class="pre">'CONNECT')</span></code> so the UI can disable databases the SP
+is not authorised on. Template / system databases are filtered
+out. The query runs against the <em>bound</em> database so it works
+even if the configured override has been revoked.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.lakebase_stats_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">lakebase_stats_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.lakebase_stats_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.lakebase_stats_result" title="Link to this definition">¶</a></dt>
+<dd><p>Return per-table row counts for the Lakebase registry schema.</p>
+<p>Used by the admin Registry Location panel to give a quick at-a-
+glance inventory of what currently lives in Lakebase. Never
+raises — surfaces failures via <code class="docutils literal notranslate"><span class="pre">success=False</span></code> + <code class="docutils literal notranslate"><span class="pre">message</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1243,12 +1385,44 @@ page (<code class="docutils literal notranslate"><span class="pre">/dtwin/sync/i
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.apply_registry_save">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">apply_registry_save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.apply_registry_save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.apply_registry_save" title="Link to this definition">¶</a></dt>
-<dd><p>Persist registry catalog/schema/volume from request body.</p>
+<dd><p>Persist registry triplet, backend choice, and lakebase schema.</p>
+<p>Expected payload (all optional, partial updates allowed):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">catalog</span></code> / <code class="docutils literal notranslate"><span class="pre">schema</span></code> / <code class="docutils literal notranslate"><span class="pre">volume</span></code>: Unity Catalog triplet.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">backend</span></code>: <code class="docutils literal notranslate"><span class="pre">&quot;volume&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;lakebase&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lakebase_schema</span></code>: Postgres schema for registry tables.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lakebase_database</span></code>: optional Postgres database override.
+Empty string clears the override (falls back to the bound
+<code class="docutils literal notranslate"><span class="pre">PGDATABASE</span></code>); the key must be present in the payload to
+opt into the change so a partial save never wipes it out.</p></li>
+</ul>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.migrate_to_lakebase_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">migrate_to_lakebase_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.migrate_to_lakebase_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.migrate_to_lakebase_result" title="Link to this definition">¶</a></dt>
+<dd><p>Copy Volume registry data into Lakebase tables.</p>
+<p>Builds a <code class="xref py py-class docutils literal notranslate"><span class="pre">VolumeRegistryStore</span></code> from the active session
+configuration and a <code class="xref py py-class docutils literal notranslate"><span class="pre">LakebaseRegistryStore</span></code> using the
+injected <code class="docutils literal notranslate"><span class="pre">PG*</span></code> env vars and the configured Lakebase schema.
+Binary artefacts (<code class="docutils literal notranslate"><span class="pre">documents/</span></code>, <code class="docutils literal notranslate"><span class="pre">*.lbug.tar.gz</span></code>) are not
+moved — they always live on the Volume.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -1390,6 +1564,41 @@ active; enabling one automatically disables the others.</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>base_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>user_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.get_cloud_fetch_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_cloud_fetch_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.get_cloud_fetch_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.get_cloud_fetch_result" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.save_cloud_fetch_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">save_cloud_fetch_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enabled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">email</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.save_cloud_fetch_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.save_cloud_fetch_result" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>enabled</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
 <li><p><strong>email</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>user_token</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>

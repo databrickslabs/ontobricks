@@ -60,6 +60,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export (CLI)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
@@ -394,7 +395,7 @@ rows.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>metadata</strong> (<a class="reference internal" href="#back.core.graphql.SchemaMetadata.SchemaMetadata" title="back.core.graphql.SchemaMetadata.SchemaMetadata"><em>SchemaMetadata</em></a>)</p></li>
 <li><p><strong>type_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>gql_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><em>type</em></a>)</p></li>
+<li><p><strong>gql_type</strong> (<a class="reference internal" href="app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.type" title="back.core.graph_analysis.models.CohortCompat.type"><em>type</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -412,7 +413,7 @@ rows.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>metadata</strong> (<a class="reference internal" href="#back.core.graphql.SchemaMetadata.SchemaMetadata" title="back.core.graphql.SchemaMetadata.SchemaMetadata"><em>SchemaMetadata</em></a>)</p></li>
 <li><p><strong>type_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>gql_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><em>type</em></a>)</p></li>
+<li><p><strong>gql_type</strong> (<a class="reference internal" href="app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.type" title="back.core.graph_analysis.models.CohortCompat.type"><em>type</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -434,7 +435,7 @@ rows.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>cls_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>gql_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><em>type</em></a>)</p></li>
+<li><p><strong>gql_type</strong> (<a class="reference internal" href="app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.type" title="back.core.graph_analysis.models.CohortCompat.type"><em>type</em></a>)</p></li>
 <li><p><strong>predicate_to_field</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
 <li><p><strong>field_to_predicate</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
 <li><p><strong>relationships</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>)</p></li>
@@ -453,7 +454,7 @@ rows.</p>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="back.core.graphql.models.TypeInfo.gql_type">
-<span class="sig-name descname"><span class="pre">gql_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.14)"><span class="pre">type</span></a></span><a class="headerlink" href="#back.core.graphql.models.TypeInfo.gql_type" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">gql_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="app.core.graph_analysis.html#back.core.graph_analysis.models.CohortCompat.type" title="back.core.graph_analysis.models.CohortCompat.type"><span class="pre">type</span></a></span><a class="headerlink" href="#back.core.graphql.models.TypeInfo.gql_type" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
