@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from types import SimpleNamespace
@@ -1307,6 +1308,42 @@ class DigitalTwin:
         return shape
 
     @staticmethod
+    def _stream_graph_triples(store, graph_name: str) -> list:
+        """Load every triple from *store* via streaming pages.
+
+        SHACL graph-mode evaluation needs the whole graph in memory
+        (per-shape ``targetClass`` scoping, cardinality, recursive
+        constraints), but we still page through ``iter_triples`` so the
+        Python process never holds two copies (one in the cursor's
+        receive buffer, one in the result list) at peak.
+
+        A configurable hard cap (``DTWIN_MAX_GRAPH_DQ_TRIPLES``,
+        default ``2_000_000``) prevents accidental OOM on very large
+        graphs — set to ``0`` to disable.
+        """
+        cap_raw = os.getenv("DTWIN_MAX_GRAPH_DQ_TRIPLES", "2000000").strip()
+        try:
+            cap = max(0, int(cap_raw))
+        except ValueError:
+            cap = 2_000_000
+
+        if not hasattr(type(store), "iter_triples"):
+            return store.query_triples(graph_name)
+
+        collected: list = []
+        for batch in store.iter_triples(graph_name, batch_size=10_000):
+            if not batch:
+                continue
+            collected.extend(batch)
+            if cap and len(collected) > cap:
+                raise ValueError(
+                    f"Graph DQ aborted — graph has more than {cap} triples. "
+                    "Use SQL-backed quality checks or raise "
+                    "DTWIN_MAX_GRAPH_DQ_TRIPLES."
+                )
+        return collected
+
+    @staticmethod
     def _count_class_population_graph(
         triples: list, class_uri: str, cache: dict = None
     ) -> Optional[int]:
@@ -1831,7 +1868,7 @@ class DigitalTwin:
 
         tm.update_progress(task.id, 5, "Loading triples from graph...")
         try:
-            triples = store.query_triples(graph_name)
+            triples = DigitalTwin._stream_graph_triples(store, graph_name)
         except Exception as exc:
             err = str(exc)
             if "does not exist" in err.lower():

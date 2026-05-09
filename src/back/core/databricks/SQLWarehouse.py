@@ -5,12 +5,13 @@ through a SQL Warehouse endpoint.  Connections are pooled so that
 repeated queries reuse existing TCP/TLS sessions.
 """
 
+import os
 import queue
 import threading
 import time
 from contextlib import contextmanager
 from databricks import sql
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
@@ -22,6 +23,22 @@ logger = get_logger(__name__)
 
 _POOL_MAX_SIZE = 8
 _POOL_MAX_IDLE_SECS = 300
+
+_DEFAULT_STREAM_BATCH_SIZE = 10_000
+
+
+def _max_fetchall_rows() -> int:
+    """Soft cap above which ``execute_query`` logs a warning.
+
+    Set ``DATABRICKS_MAX_FETCHALL_ROWS=0`` to disable the warning entirely.
+    Defaults to 100k rows; callers expecting larger result sets should
+    use :meth:`SQLWarehouse.execute_query_iter` instead.
+    """
+    raw = os.getenv("DATABRICKS_MAX_FETCHALL_ROWS", "100000").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 100_000
 
 
 class _PooledConnection:
@@ -133,16 +150,63 @@ class SQLWarehouse:
             return False, f"Connection failed: {exc}"
 
     def execute_query(self, query: str) -> List[Dict[str, Any]]:
-        """Execute *query* and return rows as a list of dicts."""
+        """Execute *query* and return rows as a list of dicts.
+
+        Materialises the entire result set in memory. Prefer
+        :meth:`execute_query_iter` for large result sets — when the row
+        count exceeds ``DATABRICKS_MAX_FETCHALL_ROWS`` (default 100k) a
+        warning is logged.
+        """
         self._require_warehouse()
         try:
             with self._borrow() as conn:
                 with conn.cursor() as cur:
                     cur.execute(query)
                     columns = [desc[0] for desc in cur.description]
-                    return [dict(zip(columns, row)) for row in cur.fetchall()]
+                    rows = cur.fetchall()
+                    cap = _max_fetchall_rows()
+                    if cap and len(rows) > cap:
+                        logger.warning(
+                            "execute_query returned %d rows (> %d soft cap); "
+                            "consider using execute_query_iter for streaming.",
+                            len(rows),
+                            cap,
+                        )
+                    return [dict(zip(columns, row)) for row in rows]
         except Exception as exc:
             logger.exception("Error executing query: %s", exc)
+            raise
+
+    def execute_query_iter(
+        self,
+        query: str,
+        batch_size: int = _DEFAULT_STREAM_BATCH_SIZE,
+    ) -> Iterator[List[Dict[str, Any]]]:
+        """Execute *query* and yield rows in batches of ``batch_size`` dicts.
+
+        Memory stays at ``O(batch_size)`` regardless of total row count
+        because rows are fetched via ``cursor.fetchmany`` instead of
+        ``fetchall``. Combine with CloudFetch (already enabled in
+        :class:`DatabricksAuth`) for streaming Arrow ingestion.
+
+        The generator owns the connection/cursor lifetime — exhaust it
+        or call ``close()`` on it to release resources.
+        """
+        self._require_warehouse()
+        if batch_size <= 0:
+            raise ValidationError("batch_size must be positive")
+        try:
+            with self._borrow() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query)
+                    columns = [desc[0] for desc in cur.description]
+                    while True:
+                        rows = cur.fetchmany(batch_size)
+                        if not rows:
+                            return
+                        yield [dict(zip(columns, row)) for row in rows]
+        except Exception as exc:
+            logger.exception("Error streaming query: %s", exc)
             raise
 
     def execute_statement(self, statement: str) -> bool:

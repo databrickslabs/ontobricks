@@ -105,8 +105,10 @@ class _BuildPipeline:
         self.relationship_mappings: list = []
         self.spark_sql: str = ""
         self.new_source_versions: Dict[str, Any] = {}
-        self.to_add: list = []
-        self.to_remove: list = []
+        self.diff_added_count: int = 0
+        self.diff_removed_count: int = 0
+        self.diff_add_table: str = ""
+        self.diff_remove_table: str = ""
         self.total_triple_count: int = 0
         self.triple_count: int = 0
         self.archive_task_id: Optional[str] = None
@@ -473,50 +475,65 @@ class _BuildPipeline:
             )
 
     def _compute_diff_or_fall_through(self) -> None:
-        """If snapshot exists, compute diff; otherwise force full rebuild."""
+        """If snapshot exists, materialize diff tables; otherwise force full rebuild.
+
+        Diff rows are NOT pulled into the FastAPI process here — only
+        counts and table names are. Streaming happens later in
+        :meth:`_apply_incremental_changes` via ``iter_diff``.
+        """
         if self.actual_mode == "incremental" and self.incr_svc.snapshot_exists(
             self.snapshot_table
         ):
             self.tm.advance_step(self.task_id, "Computing incremental diff...")
             logger.info(
-                "[DT-BUILD %s] computing incremental diff (view=%s, "
+                "[DT-BUILD %s] materializing incremental diff (view=%s, "
                 "snapshot=%s)",
                 self.task_id,
                 self.view_table,
                 self.snapshot_table,
             )
             try:
-                self.to_add, self.to_remove = self.incr_svc.compute_diff(
+                diff_info = self.incr_svc.compute_diff_materialized(
                     self.view_table, self.snapshot_table
                 )
+                self.diff_added_count = diff_info["added_count"]
+                self.diff_removed_count = diff_info["removed_count"]
+                self.diff_add_table = diff_info["added_table"]
+                self.diff_remove_table = diff_info["removed_table"]
                 self.total_triple_count = self.incr_svc.count_view_triples(
                     self.view_table
                 )
                 logger.info(
                     "[DT-BUILD %s] diff result: +%d / -%d on %d total triples",
                     self.task_id,
-                    len(self.to_add),
-                    len(self.to_remove),
+                    self.diff_added_count,
+                    self.diff_removed_count,
                     self.total_triple_count,
                 )
 
                 if self.incr_svc.should_fallback_to_full(
-                    len(self.to_add), len(self.to_remove), self.total_triple_count
+                    self.diff_added_count,
+                    self.diff_removed_count,
+                    self.total_triple_count,
                 ):
                     logger.warning(
                         "[DT-BUILD %s] diff too large — falling back to "
                         "full rebuild (+%d/-%d on %d total)",
                         self.task_id,
-                        len(self.to_add),
-                        len(self.to_remove),
+                        self.diff_added_count,
+                        self.diff_removed_count,
                         self.total_triple_count,
                     )
+                    self.incr_svc.drop_diff_tables(self.snapshot_table)
+                    self.diff_add_table = ""
+                    self.diff_remove_table = ""
                     self.actual_mode = "full"
                 elif not self.is_api:
                     self.tm.update_progress(
                         self.task_id,
                         40,
-                        f"Diff: +{len(self.to_add)} / -{len(self.to_remove)} triples",
+                        f"Diff: +{self.diff_added_count} / "
+                        f"-{self.diff_removed_count} triples",
                     )
             except Exception as exc:  # noqa: BLE001
                 logger.exception(
@@ -525,6 +542,12 @@ class _BuildPipeline:
                     self.task_id,
                     exc,
                 )
+                try:
+                    self.incr_svc.drop_diff_tables(self.snapshot_table)
+                except Exception:  # noqa: BLE001 - cleanup is advisory
+                    pass
+                self.diff_add_table = ""
+                self.diff_remove_table = ""
                 self.actual_mode = "full"
         else:
             if self.actual_mode == "incremental":
@@ -564,39 +587,34 @@ class _BuildPipeline:
             return False
         return True
 
+    _FULL_REBUILD_BATCH_SIZE = 10_000
+
     def _apply_full_rebuild(self) -> bool:
-        """Drop, recreate, and bulk-insert all triples."""
-        t_fetch = time.time()
-        logger.info(
-            "[DT-BUILD %s] full rebuild: reading all triples from VIEW %s",
-            self.task_id,
-            self.view_table,
-        )
+        """Drop, recreate, and stream-insert all triples from the VIEW.
+
+        Reads the VIEW via batched cursor fetches (``execute_query_iter``)
+        and feeds the graph store either through the streaming
+        ``bulk_insert_iter`` API (Ladybug, single COPY FROM) or
+        re-batched ``insert_triples`` calls. The Python process never
+        materialises the full triple list — memory stays at
+        ``O(batch_size)`` regardless of graph size.
+        """
         if not self.is_api:
-            self.tm.update_progress(self.task_id, 40, "Reading all triples from VIEW...")
-        try:
-            triples = self.source_client.execute_query(
-                f"SELECT * FROM {self.view_table}"
+            self.tm.update_progress(
+                self.task_id, 40, "Counting triples in VIEW..."
             )
-        except Exception as exc:  # noqa: BLE001
-            logger.exception(
-                "[DT-BUILD %s] failed to read from VIEW %s: %s",
+        try:
+            expected_total = self.incr_svc.count_view_triples(self.view_table)
+        except Exception as exc:  # noqa: BLE001 - count is advisory
+            logger.warning(
+                "[DT-BUILD %s] could not count VIEW %s before fetch: %s",
                 self.task_id,
                 self.view_table,
                 exc,
             )
-            self.tm.fail_task(self.task_id, "Query execution on VIEW failed")
-            return False
-        self._log_phase("fetch_triples", t_fetch)
+            expected_total = 0
 
-        triple_count = len(triples)
-        self.triple_count = triple_count
-        logger.info(
-            "[DT-BUILD %s] fetched %d triples from VIEW",
-            self.task_id,
-            triple_count,
-        )
-        if triple_count == 0:
+        if expected_total == 0:
             logger.warning(
                 "[DT-BUILD %s] VIEW %s returned 0 triples — check that "
                 "your R2RML mappings match real data in the source "
@@ -622,10 +640,21 @@ class _BuildPipeline:
             )
             return False
 
+        logger.info(
+            "[DT-BUILD %s] full rebuild: streaming %d triples from VIEW %s "
+            "(batch_size=%d)",
+            self.task_id,
+            expected_total,
+            self.view_table,
+            self._FULL_REBUILD_BATCH_SIZE,
+        )
+
         t_insert = time.time()
         if not self.is_api:
             self.tm.update_progress(
-                self.task_id, 50, f"Full rebuild: writing {triple_count} triples..."
+                self.task_id,
+                50,
+                f"Full rebuild: streaming {expected_total} triples...",
             )
         logger.info(
             "[DT-BUILD %s] dropping & recreating graph table %s",
@@ -640,28 +669,77 @@ class _BuildPipeline:
         task_id_local = self.task_id
 
         def _on_progress_full(written: int, total: int) -> None:
-            progress = 50 + int(written / total * 40)
+            denom = total if total > 0 else max(written, 1)
+            progress = 50 + int(written / denom * 40)
             if is_api_local:
                 tm_local.update_progress(
-                    task_id_local, progress, f"Written {written}/{total}..."
+                    task_id_local, progress, f"Written {written}/{denom}..."
                 )
             else:
                 tm_local.update_progress(
                     task_id_local,
                     min(progress, 90),
-                    f"Written {written}/{total} triples...",
+                    f"Written {written}/{denom} triples...",
                 )
 
+        try:
+            batch_iter = self.source_client.execute_query_iter(
+                f"SELECT * FROM {self.view_table}",
+                batch_size=self._FULL_REBUILD_BATCH_SIZE,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "[DT-BUILD %s] failed to start streaming from VIEW %s: %s",
+                self.task_id,
+                self.view_table,
+                exc,
+            )
+            self.tm.fail_task(self.task_id, "Query execution on VIEW failed")
+            return False
+
+        try:
+            triple_count = self._stream_into_store(
+                batch_iter,
+                expected_total=expected_total,
+                on_progress=_on_progress_full,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "[DT-BUILD %s] failed to stream triples into %s: %s",
+                self.task_id,
+                self.graph_name,
+                exc,
+            )
+            self.tm.fail_task(self.task_id, "Streaming triples into graph failed")
+            return False
+
+        self.triple_count = triple_count
         logger.info(
-            "[DT-BUILD %s] inserting %d triples into %s "
-            "(batch_size=500)",
+            "[DT-BUILD %s] streamed %d triples into %s",
             self.task_id,
             triple_count,
             self.graph_name,
         )
-        self.store.insert_triples(
-            self.graph_name, triples, batch_size=500, on_progress=_on_progress_full
-        )
+
+        if triple_count == 0:
+            empty_msg = (
+                "VIEW created but no triples generated (check your mappings)"
+                if not self.is_api
+                else "VIEW created but no triples generated"
+            )
+            self.tm.complete_task(
+                self.task_id,
+                result={
+                    "triple_count": 0,
+                    "view_table": self.view_table,
+                    "graph_name": self.graph_name,
+                    "build_mode": "full",
+                    "duration_seconds": time.time() - self.start_time,
+                },
+                message=empty_msg,
+            )
+            return False
+
         logger.info(
             "[DT-BUILD %s] optimizing graph table %s",
             self.task_id,
@@ -672,17 +750,64 @@ class _BuildPipeline:
         self.total_triple_count = triple_count
         return True
 
+    def _stream_into_store(
+        self,
+        batch_iter,
+        *,
+        expected_total: int,
+        on_progress,
+    ) -> int:
+        """Feed the graph store from a batch iterator.
+
+        Prefers ``bulk_insert_iter`` (Ladybug streaming COPY FROM) when
+        available, otherwise falls back to repeated ``insert_triples``
+        calls — both keep peak memory at ``O(batch_size)``.
+        """
+        if hasattr(self.store, "bulk_insert_iter"):
+            return self.store.bulk_insert_iter(
+                self.graph_name,
+                batch_iter,
+                on_progress=on_progress,
+                expected_total=expected_total,
+            )
+
+        total = 0
+        for batch in batch_iter:
+            if not batch:
+                continue
+            self.store.insert_triples(
+                self.graph_name,
+                batch,
+                batch_size=len(batch),
+            )
+            total += len(batch)
+            if on_progress:
+                on_progress(total, expected_total or total)
+        return total
+
+    _DIFF_STREAM_BATCH_SIZE = 5_000
+
     def _apply_incremental_changes(self) -> bool:
-        """Apply ``to_add``/``to_remove`` to the graph store."""
-        triple_count = len(self.to_add) + len(self.to_remove)
+        """Stream the materialised diff tables into the graph store.
+
+        Diff rows live in two Delta tables (``_diff_add`` /
+        ``_diff_remove``) created by :meth:`_compute_diff_or_fall_through`.
+        We page them via ``iter_diff`` so peak memory stays at
+        ``O(batch_size)`` regardless of diff size.
+        """
+        added = self.diff_added_count
+        removed = self.diff_removed_count
+        triple_count = added + removed
         self.triple_count = triple_count
         logger.info(
             "[DT-BUILD %s] applying incremental changes to %s: "
-            "+%d / -%d",
+            "+%d / -%d (streaming from %s, %s)",
             self.task_id,
             self.graph_name,
-            len(self.to_add),
-            len(self.to_remove),
+            added,
+            removed,
+            self.diff_add_table or "<none>",
+            self.diff_remove_table or "<none>",
         )
         if triple_count == 0 and not self.is_api:
             duration = time.time() - self.start_time
@@ -696,8 +821,12 @@ class _BuildPipeline:
                     "diff": {"added": 0, "removed": 0},
                     "duration_seconds": duration,
                 },
-                message=f"No changes to apply ({self.total_triple_count} triples unchanged)",
+                message=(
+                    f"No changes to apply ({self.total_triple_count} "
+                    "triples unchanged)"
+                ),
             )
+            self._cleanup_diff_tables()
             return False
 
         progress_base = 45
@@ -705,53 +834,56 @@ class _BuildPipeline:
         tm_local = self.tm
         task_id_local = self.task_id
 
-        if self.to_remove:
-            def _on_del_progress(done: int, total: int) -> None:
-                if is_api_local:
-                    return
-                p = progress_base + int(done / total * 20)
-                tm_local.update_progress(
-                    task_id_local,
-                    min(p, progress_base + 20),
-                    f"Removed {done}/{total} triples...",
+        try:
+            if removed and self.diff_remove_table:
+                def _on_del_progress(done: int, total: int) -> None:
+                    if is_api_local:
+                        return
+                    denom = total if total > 0 else max(done, 1)
+                    p = progress_base + int(done / denom * 20)
+                    tm_local.update_progress(
+                        task_id_local,
+                        min(p, progress_base + 20),
+                        f"Removed {done}/{denom} triples...",
+                    )
+
+                if not self.is_api:
+                    self.tm.update_progress(
+                        self.task_id,
+                        progress_base,
+                        f"Removing {removed} triples...",
+                    )
+                self._stream_delete_diff(
+                    self.diff_remove_table,
+                    expected_total=removed,
+                    on_progress=None if self.is_api else _on_del_progress,
                 )
 
-            if not self.is_api:
-                self.tm.update_progress(
-                    self.task_id,
-                    progress_base,
-                    f"Removing {len(self.to_remove)} triples...",
-                )
-            self.store.delete_triples(
-                self.graph_name,
-                self.to_remove,
-                batch_size=500,
-                on_progress=None if self.is_api else _on_del_progress,
-            )
+            if added and self.diff_add_table:
+                add_base = progress_base + 25
 
-        if self.to_add:
-            add_base = progress_base + 25
+                def _on_add_progress(done: int, total: int) -> None:
+                    if is_api_local:
+                        return
+                    denom = total if total > 0 else max(done, 1)
+                    p = add_base + int(done / denom * 20)
+                    tm_local.update_progress(
+                        task_id_local,
+                        min(p, add_base + 20),
+                        f"Inserted {done}/{denom} triples...",
+                    )
 
-            def _on_add_progress(done: int, total: int) -> None:
-                if is_api_local:
-                    return
-                p = add_base + int(done / total * 20)
-                tm_local.update_progress(
-                    task_id_local,
-                    min(p, add_base + 20),
-                    f"Inserted {done}/{total} triples...",
+                if not self.is_api:
+                    self.tm.update_progress(
+                        self.task_id, add_base, f"Inserting {added} triples..."
+                    )
+                self._stream_insert_diff(
+                    self.diff_add_table,
+                    expected_total=added,
+                    on_progress=None if self.is_api else _on_add_progress,
                 )
-
-            if not self.is_api:
-                self.tm.update_progress(
-                    self.task_id, add_base, f"Inserting {len(self.to_add)} triples..."
-                )
-            self.store.insert_triples(
-                self.graph_name,
-                self.to_add,
-                batch_size=500,
-                on_progress=None if self.is_api else _on_add_progress,
-            )
+        finally:
+            self._cleanup_diff_tables()
 
         if self.is_api:
             if triple_count > 0:
@@ -759,6 +891,75 @@ class _BuildPipeline:
         else:
             self.store.optimize_table(self.graph_name)
         return True
+
+    def _stream_insert_diff(
+        self,
+        diff_table: str,
+        *,
+        expected_total: int,
+        on_progress,
+    ) -> None:
+        batch_iter = self.incr_svc.iter_diff(
+            diff_table, batch_size=self._DIFF_STREAM_BATCH_SIZE
+        )
+        if hasattr(self.store, "bulk_insert_iter"):
+            self.store.bulk_insert_iter(
+                self.graph_name,
+                batch_iter,
+                on_progress=on_progress,
+                expected_total=expected_total,
+            )
+            return
+
+        applied = 0
+        for batch in batch_iter:
+            if not batch:
+                continue
+            self.store.insert_triples(
+                self.graph_name,
+                batch,
+                batch_size=len(batch),
+            )
+            applied += len(batch)
+            if on_progress:
+                on_progress(applied, expected_total)
+
+    def _stream_delete_diff(
+        self,
+        diff_table: str,
+        *,
+        expected_total: int,
+        on_progress,
+    ) -> None:
+        batch_iter = self.incr_svc.iter_diff(
+            diff_table, batch_size=self._DIFF_STREAM_BATCH_SIZE
+        )
+        deleted = 0
+        for batch in batch_iter:
+            if not batch:
+                continue
+            self.store.delete_triples(
+                self.graph_name,
+                batch,
+                batch_size=len(batch),
+            )
+            deleted += len(batch)
+            if on_progress:
+                on_progress(deleted, expected_total)
+
+    def _cleanup_diff_tables(self) -> None:
+        if not (self.diff_add_table or self.diff_remove_table):
+            return
+        try:
+            self.incr_svc.drop_diff_tables(self.snapshot_table)
+        except Exception as exc:  # noqa: BLE001 - cleanup is advisory
+            logger.debug(
+                "[DT-BUILD %s] could not drop diff tables: %s",
+                self.task_id,
+                exc,
+            )
+        self.diff_add_table = ""
+        self.diff_remove_table = ""
 
     def _refresh_snapshot(self) -> None:
         t_phase = time.time()
@@ -940,6 +1141,8 @@ class _BuildPipeline:
 
     def _complete_task(self) -> None:
         duration = time.time() - self.start_time
+        added = self.diff_added_count
+        removed = self.diff_removed_count
         logger.info(
             "[DT-BUILD %s] DONE kind=%s domain=%s mode=%s triples=%d "
             "(+%d/-%d) duration=%.2fs phases={%s}",
@@ -948,8 +1151,8 @@ class _BuildPipeline:
             self.domain_name,
             self.actual_mode,
             self.total_triple_count or self.triple_count,
-            len(self.to_add),
-            len(self.to_remove),
+            added,
+            removed,
             duration,
             ", ".join(f"{k}={v:.2f}s" for k, v in self.phase_times.items())
             or "n/a",
@@ -972,17 +1175,17 @@ class _BuildPipeline:
             else:
                 result_data["archive_skipped"] = True
         if self.actual_mode == "incremental":
-            result_data["diff"] = {
-                "added": len(self.to_add),
-                "removed": len(self.to_remove),
-            }
+            result_data["diff"] = {"added": added, "removed": removed}
             msg = (
-                f"Incremental: +{len(self.to_add)} / -{len(self.to_remove)} triples in {duration:.1f}s"
+                f"Incremental: +{added} / -{removed} triples in {duration:.1f}s"
                 if not self.is_api
-                else f"Incremental: +{len(self.to_add)} / -{len(self.to_remove)} in {duration:.1f}s"
+                else f"Incremental: +{added} / -{removed} in {duration:.1f}s"
             )
         else:
-            msg = f"Full rebuild: {self.total_triple_count or self.triple_count} triples in {duration:.1f}s"
+            msg = (
+                f"Full rebuild: {self.total_triple_count or self.triple_count} "
+                f"triples in {duration:.1f}s"
+            )
 
         if not self.is_api and self.archive_to_registry:
             msg += " Registry backup continues in the background."

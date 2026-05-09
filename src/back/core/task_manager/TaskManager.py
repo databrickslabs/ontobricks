@@ -1,5 +1,7 @@
 """Async Task Manager — in-memory task tracking for long-running operations."""
 
+import json
+import os
 import uuid
 import threading
 from datetime import datetime, timezone
@@ -9,6 +11,109 @@ from back.core.logging import get_logger
 from back.core.task_manager.models import Task, TaskStatus, TaskStep
 
 logger = get_logger(__name__)
+
+_DEFAULT_RESULT_INLINE_BYTES = 1_048_576  # 1 MiB
+_DEFAULT_RESULT_LIST_HEAD = 200
+_HEAVY_RESULT_KEYS = (
+    "violations",
+    "inferred_triples",
+    "to_add",
+    "to_remove",
+    "rows",
+    "results",
+    "items",
+    "members",
+    "clusters",
+    "triples",
+)
+
+
+def _result_inline_cap() -> int:
+    """Soft cap (in bytes) for inline ``task.result`` JSON payloads.
+
+    Above this size, list-valued fields commonly returned by DQ /
+    inference / cohort tasks are truncated to a head sample with a
+    ``_truncated`` marker so the UI keeps fast progress polling while
+    the full artifact can be fetched out-of-band.
+
+    Set ``TASK_RESULT_INLINE_BYTES=0`` to disable trimming entirely.
+    """
+    raw = os.getenv("TASK_RESULT_INLINE_BYTES", str(_DEFAULT_RESULT_INLINE_BYTES))
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return _DEFAULT_RESULT_INLINE_BYTES
+
+
+def _result_list_head() -> int:
+    """How many items of a heavy list to keep when trimming."""
+    raw = os.getenv("TASK_RESULT_LIST_HEAD", str(_DEFAULT_RESULT_LIST_HEAD))
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return _DEFAULT_RESULT_LIST_HEAD
+
+
+def _approx_json_size(value: Any) -> int:
+    try:
+        return len(json.dumps(value, default=str))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _trim_heavy_lists(value: Any, head: int) -> Any:
+    """Walk *value* and replace heavy lists with a head-only sample.
+
+    Only descends into ``dict`` / ``list`` containers so the in-place
+    truncation is bounded. Each truncated list is replaced with a
+    ``{"_truncated": true, "total_count": N, "preview": [...]}`` dict
+    keeping the first *head* items.
+    """
+    if isinstance(value, dict):
+        new: Dict[str, Any] = {}
+        for k, v in value.items():
+            if isinstance(v, list) and k in _HEAVY_RESULT_KEYS and len(v) > head:
+                new[k] = {
+                    "_truncated": True,
+                    "total_count": len(v),
+                    "preview": v[:head],
+                }
+            else:
+                new[k] = _trim_heavy_lists(v, head)
+        return new
+    if isinstance(value, list):
+        return [_trim_heavy_lists(item, head) for item in value]
+    return value
+
+
+def _maybe_trim_task_result(result: Any) -> Any:
+    """Return *result*, trimming heavy lists if it exceeds the cap."""
+    if result is None:
+        return None
+    cap = _result_inline_cap()
+    if cap == 0:
+        return result
+    size = _approx_json_size(result)
+    if size <= cap:
+        return result
+    head = _result_list_head()
+    trimmed = _trim_heavy_lists(result, head)
+    if isinstance(trimmed, dict):
+        trimmed.setdefault(
+            "_truncation_note",
+            (
+                f"Large lists trimmed to first {head} items "
+                f"(payload was ~{size} bytes, cap {cap})."
+            ),
+        )
+    new_size = _approx_json_size(trimmed)
+    logger.info(
+        "Trimmed oversized task result: %d → %d bytes (head=%d)",
+        size,
+        new_size,
+        head,
+    )
+    return trimmed
 
 
 def _now_iso() -> str:
@@ -226,7 +331,7 @@ class TaskManager:
         task.completed_at = _now_iso()
         task.progress = 100
         task.message = message
-        task.result = result
+        task.result = _maybe_trim_task_result(result)
         for step in task.steps:
             if step.status not in ("completed", "skipped"):
                 step.status = "completed"

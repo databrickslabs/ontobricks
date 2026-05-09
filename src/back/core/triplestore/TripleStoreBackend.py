@@ -1,7 +1,7 @@
 """Abstract base class for triple store backends."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set
 
 from back.core.logging import get_logger
 from back.core.helpers import sql_escape as _shared_sql_escape
@@ -58,6 +58,23 @@ class TripleStoreBackend(ABC):
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
         """SELECT all triples."""
         ...
+
+    def iter_triples(
+        self, table_name: str, batch_size: int = 10_000
+    ) -> Iterator[List[Dict[str, str]]]:
+        """Stream triples in bounded batches.
+
+        Default implementation reads everything via :meth:`query_triples`
+        and re-chunks in Python — backends that can do server-side paging
+        (Delta keyset pagination, Ladybug ``SKIP/LIMIT``) override this.
+        """
+        triples = self.query_triples(table_name)
+        if not triples:
+            return iter(())
+        return (
+            triples[i : i + batch_size]
+            for i in range(0, len(triples), max(1, batch_size))
+        )
 
     @abstractmethod
     def count_triples(self, table_name: str) -> int:

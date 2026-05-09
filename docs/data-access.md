@@ -338,3 +338,94 @@ Wrappers in play: REST → (SPARQL → **Spark SQL**) **or** **Cypher**, dependi
 - Reasoning — `src/back/core/reasoning/{OWLRLReasoner,SWRLSQLTranslator,SWRLCypherTranslator,SWRLFlatCypherTranslator,SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
 - MCP server — `src/mcp-server/server/app.py`, `src/mcp-server/mcp_server.py`
 - Graph Chat — `src/agents/agent_dtwin_chat/{engine,tools}.py`
+
+---
+
+## 12. Wire-level optimisations (data plane ↔ control plane)
+
+Two design principles drive the build/sync hot paths:
+
+1. **Push computation into Databricks.** Aggregations, diffs and transient
+   materialisations run inside the SQL Warehouse; the FastAPI process never
+   pulls intermediate row sets it does not need.
+2. **Stream — don't materialise — when crossing the wire.** Reads use
+   `cursor.fetchmany` (CloudFetch + Arrow) so peak Python heap is `O(batch)`
+   instead of `O(graph)`.
+
+### 12.1 Streaming reads — `execute_query_iter`
+
+`SQLWarehouse.execute_query_iter(query, batch_size=10_000)` returns an
+`Iterator[List[Dict]]` backed by `cursor.fetchmany`. The legacy
+`execute_query` is preserved for small result sets and now logs a warning
+when it returns more than `DATABRICKS_MAX_FETCHALL_ROWS` rows.
+
+Hot callers that already use the streaming API:
+
+- Full Digital Twin rebuild — `_BuildPipeline._apply_full_rebuild`
+  pages the whole VIEW into the graph store via streaming COPY FROM.
+- Scheduled background builds — `_run_scheduled_build` /
+  `_write_graph_triples` use the same streaming path.
+- Materialised diff streaming — see §12.2.
+
+### 12.2 Materialised incremental diffs
+
+`IncrementalBuildService.compute_diff_materialized(view_table, snapshot_table)`
+runs two `CREATE OR REPLACE TABLE … AS SELECT … EXCEPT …` statements on
+the warehouse and returns *only* counts and table names. Diff rows never
+cross the wire as part of the diff computation; they are streamed out
+later via `iter_diff(diff_table, batch_size=10_000)` and ingested
+batch-by-batch into the graph store. The diff tables are dropped at the
+end of the build (or on fallback to full rebuild).
+
+### 12.3 LadybugDB streaming bulk load
+
+`LadybugFlatStore.bulk_insert_iter(graph_name, batches, …)` consumes an
+iterator of triple batches, appends each batch to a single temporary CSV,
+then issues one `COPY FROM` into Kùzu. Combined with `execute_query_iter`,
+the full-rebuild path keeps Python memory at `O(batch_size)` regardless of
+graph size.
+
+`LadybugFlatStore.iter_triples(graph_name, batch_size)` and
+`DeltaTripleStore.iter_triples(...)` page through the store with
+`SKIP/LIMIT` (Kùzu) or `execute_query_iter` (Delta). Community detection,
+cohort building, SHACL graph mode and `/sync/load` use this iterator with
+hard caps to avoid OOM on very large graphs.
+
+### 12.4 Viewport-required `/sync/load`
+
+`POST /dtwin/sync/load` now accepts `{ "limit": int, "offset": int }` and
+refuses to reload an entire graph that exceeds `DTWIN_MAX_VIZ_TRIPLES`
+(default 500_000) unless the caller provides an explicit `limit` smaller
+than the cap. UI clients should drive viewport / seed-node expansion via
+`/triples/find` / `/neighbors` instead of full-graph reloads.
+
+### 12.5 Task result trimming
+
+`TaskManager.complete_task` automatically trims oversized
+`task.result` payloads — large lists under well-known keys
+(`violations`, `inferred_triples`, `to_add`, `rows`, …) are replaced
+with `{ _truncated, total_count, preview }` once the JSON-encoded
+payload exceeds `TASK_RESULT_INLINE_BYTES` (default 1 MiB). The
+preview length is configurable via `TASK_RESULT_LIST_HEAD`
+(default 200). Set the cap to `0` to disable trimming.
+
+### 12.6 Tunables
+
+| Env var | Default | Effect |
+|---|---|---|
+| `DATABRICKS_MAX_FETCHALL_ROWS` | `100000` | Soft cap; warns when `execute_query` returns more rows. `0` disables the warning. |
+| `DTWIN_MAX_GRAPH_DQ_TRIPLES` | `2000000` | Hard cap on graph-mode SHACL DQ load. `0` disables. |
+| `DTWIN_MAX_VIZ_TRIPLES` | `500000` | Hard cap on `/dtwin/sync/load` full-graph reload. |
+| `TASK_RESULT_INLINE_BYTES` | `1048576` | Threshold above which task results get trimmed. `0` disables. |
+| `TASK_RESULT_LIST_HEAD` | `200` | Items kept per heavy list when trimming. |
+
+### 12.7 Delta layout recommendations
+
+- The `snapshot_triples_*` and `_diff_add` / `_diff_remove` tables created
+  by `IncrementalBuildService` benefit from **Liquid Clustering** on
+  `(predicate, subject)` (already configured in
+  `DeltaTripleStore.create_table`).
+- Consider running `OPTIMIZE` on snapshot tables after large rebuilds so
+  Z-ORDER files stay compact for the next `EXCEPT`-based diff.
+- The diff CTAS statements honour Liquid Clustering of the source view —
+  no extra hints required.

@@ -229,6 +229,34 @@ class TestTaskLifecycle:
     def test_complete_nonexistent(self, mgr):
         assert mgr.complete_task("nope") is False
 
+    def test_complete_trims_oversized_result_lists(self, mgr, monkeypatch):
+        monkeypatch.setenv("TASK_RESULT_INLINE_BYTES", "1000")
+        monkeypatch.setenv("TASK_RESULT_LIST_HEAD", "5")
+        task = mgr.create_task("T", "t")
+        mgr.start_task(task.id)
+        big_result = {
+            "summary": "ok",
+            "violations": [
+                {"row": i, "msg": "x" * 50} for i in range(500)
+            ],
+        }
+        mgr.complete_task(task.id, result=big_result)
+        assert isinstance(task.result, dict)
+        assert task.result["summary"] == "ok"
+        violations = task.result["violations"]
+        assert violations["_truncated"] is True
+        assert violations["total_count"] == 500
+        assert len(violations["preview"]) == 5
+        assert "_truncation_note" in task.result
+
+    def test_complete_does_not_trim_small_results(self, mgr, monkeypatch):
+        monkeypatch.setenv("TASK_RESULT_INLINE_BYTES", "1048576")
+        task = mgr.create_task("T", "t")
+        mgr.start_task(task.id)
+        result = {"violations": [{"row": 1}, {"row": 2}]}
+        mgr.complete_task(task.id, result=result)
+        assert task.result == result
+
     def test_fail(self, mgr):
         task = mgr.create_task("T", "t")
         mgr.start_task(task.id)

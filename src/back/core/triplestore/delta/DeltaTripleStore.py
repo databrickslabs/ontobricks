@@ -1,6 +1,6 @@
 """Delta (Databricks SQL Warehouse) triple store backend."""
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from back.core.logging import get_logger
 from back.core.triplestore.TripleStoreBackend import TripleStoreBackend
@@ -87,6 +87,24 @@ class DeltaTripleStore(TripleStoreBackend):
         validate_table_name(table_name)
         query = f"SELECT subject, predicate, object FROM {table_name}"
         return self.client.execute_query(query)
+
+    def iter_triples(
+        self, table_name: str, batch_size: int = 10_000
+    ) -> Iterator[List[Dict[str, str]]]:
+        """Stream triples in batches via the SQL Warehouse cursor.
+
+        Uses :meth:`DatabricksClient.execute_query_iter` so memory stays
+        at ``O(batch_size)`` regardless of the row count. Falls back to
+        the default re-chunked ``query_triples`` if the client does not
+        expose a streaming method.
+        """
+        validate_table_name(table_name)
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        query = f"SELECT subject, predicate, object FROM {table_name}"
+        if hasattr(self.client, "execute_query_iter"):
+            return self.client.execute_query_iter(query, batch_size=batch_size)
+        return super().iter_triples(table_name, batch_size=batch_size)
 
     def count_triples(self, table_name: str) -> int:
         """Count triples."""

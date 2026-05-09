@@ -5,8 +5,9 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 """
 
 from dataclasses import dataclass
+import os
 import time
-from typing import Any
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Request, Depends
 from back.core.logging import get_logger
@@ -292,14 +293,56 @@ async def start_triplestore_sync(
     return {"success": True, "task_id": task.id, "message": "Sync started"}
 
 
+_SYNC_LOAD_DEFAULT_LIMIT = 50_000
+_SYNC_LOAD_HARD_CAP = 500_000
+
+
+def _sync_load_max_triples() -> int:
+    """Hard cap above which ``/sync/load`` refuses an unbounded request.
+
+    Tunable via ``DTWIN_MAX_VIZ_TRIPLES`` so power users can raise it on
+    workstations with enough RAM. Default 500k.
+    """
+    raw = os.getenv("DTWIN_MAX_VIZ_TRIPLES", str(_SYNC_LOAD_HARD_CAP)).strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return _SYNC_LOAD_HARD_CAP
+
+
 @router.post("/sync/load")
 async def load_triplestore(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Load triples from the graph database and return them as query results."""
+    """Load triples from the graph database for visualization.
+
+    Wire-level guard: paginated and bounded. The endpoint accepts an
+    optional JSON body with ``limit`` (default 50_000) and ``offset``
+    (default 0). When the underlying graph has more triples than the
+    configured cap (``DTWIN_MAX_VIZ_TRIPLES``, default 500_000) the
+    request is rejected unless the caller passed an explicit ``limit``
+    smaller than the cap — clients should drive viewport / seed-node
+    expansion via ``/triples/find`` and ``/neighbors`` instead of
+    re-loading the entire graph for visualization.
+    """
     try:
+        body: Dict[str, Any] = {}
+        if request.method == "POST":
+            try:
+                body = await request.json()
+            except Exception:  # noqa: BLE001 - empty body is OK
+                body = {}
+
+        try:
+            limit = int(body.get("limit", _SYNC_LOAD_DEFAULT_LIMIT))
+            offset = int(body.get("offset", 0))
+        except (TypeError, ValueError):
+            raise ValidationError("limit/offset must be integers")
+        if limit <= 0 or offset < 0:
+            raise ValidationError("limit must be > 0 and offset must be >= 0")
+
         domain = get_domain(session_mgr)
         graph_name = effective_graph_name(domain)
 
@@ -307,8 +350,25 @@ async def load_triplestore(
         if not store:
             raise InfrastructureError("Graph backend is not configured")
 
+        cap = _sync_load_max_triples()
         try:
-            results = store.query_triples(graph_name)
+            total_count = store.count_triples(graph_name)
+        except Exception:  # noqa: BLE001 - count is advisory, fall through
+            total_count = 0
+
+        if total_count and total_count > cap and limit >= cap:
+            raise ValidationError(
+                "Graph is too large for /sync/load",
+                detail=(
+                    f"Graph has {total_count} triples (cap {cap}). "
+                    "Pass an explicit `limit` smaller than the cap or use "
+                    "`/triples/find` / `/neighbors` for viewport-driven "
+                    "loading."
+                ),
+            )
+
+        try:
+            results = _load_triples_page(store, graph_name, limit, offset)
         except (ValidationError, InfrastructureError, NotFoundError):
             raise
         except Exception as e:
@@ -328,6 +388,14 @@ async def load_triplestore(
             "results": results,
             "columns": ["subject", "predicate", "object"],
             "count": len(results),
+            "total_count": total_count,
+            "offset": offset,
+            "limit": limit,
+            "has_more": (
+                bool(results)
+                and len(results) >= limit
+                and (not total_count or offset + len(results) < total_count)
+            ),
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -337,6 +405,37 @@ async def load_triplestore(
         raise InfrastructureError(
             "Error loading graph from the triple store", detail=str(e)
         )
+
+
+def _load_triples_page(
+    store, graph_name: str, limit: int, offset: int
+) -> List[Dict[str, str]]:
+    """Return one page of triples using server-side paging when available."""
+    if hasattr(type(store), "paginated_triples"):
+        try:
+            return store.paginated_triples(graph_name, [], limit, offset) or []
+        except Exception as exc:  # noqa: BLE001 - fall through to iter_triples
+            logger.debug("paginated_triples unavailable, using iter_triples: %s", exc)
+
+    if hasattr(type(store), "iter_triples"):
+        collected: List[Dict[str, str]] = []
+        skipped = 0
+        for batch in store.iter_triples(graph_name, batch_size=10_000):
+            if not batch:
+                continue
+            if skipped + len(batch) <= offset:
+                skipped += len(batch)
+                continue
+            start = max(0, offset - skipped)
+            for row in batch[start:]:
+                collected.append(row)
+                if len(collected) >= limit:
+                    return collected
+            skipped += len(batch)
+        return collected
+
+    rows = store.query_triples(graph_name) or []
+    return rows[offset : offset + limit]
 
 
 # ===========================================

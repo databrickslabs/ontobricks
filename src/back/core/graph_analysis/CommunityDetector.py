@@ -102,12 +102,34 @@ class CommunityDetector:
     # ------------------------------------------------------------------
 
     def _load_triples(self, request: ClusterRequest) -> List[Dict[str, str]]:
-        """Query triples from the store with a max_triples guard."""
+        """Stream triples from the store with a max_triples guard.
+
+        Uses :meth:`TripleStoreBackend.iter_triples` when available so
+        peak memory equals the page size — the guard short-circuits
+        before the whole graph is materialised.
+        """
+        cap = request.max_triples
+        if hasattr(type(self._store), "iter_triples"):
+            collected: List[Dict[str, str]] = []
+            for batch in self._store.iter_triples(
+                self._graph_name, batch_size=10_000
+            ):
+                if not batch:
+                    continue
+                collected.extend(batch)
+                if len(collected) > cap:
+                    raise ValueError(
+                        f"Triple count (>{cap}) exceeds max_triples ({cap}). "
+                        "Use a predicate or class filter, or increase "
+                        "max_triples."
+                    )
+            return collected
+
         triples = self._store.query_triples(self._graph_name)
-        if len(triples) > request.max_triples:
+        if len(triples) > cap:
             raise ValueError(
                 f"Triple count ({len(triples)}) exceeds max_triples "
-                f"({request.max_triples}). Use a predicate or class filter, "
+                f"({cap}). Use a predicate or class filter, "
                 f"or increase max_triples."
             )
         return triples

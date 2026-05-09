@@ -8,7 +8,7 @@ object STRING)``.  All query methods are implemented in Cypher.
 import csv
 import os
 import tempfile
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set
 
 from back.core.logging import get_logger
 from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
@@ -77,6 +77,78 @@ class LadybugFlatStore(LadybugBase):
                 )
 
         return self._row_insert_triples(table_name, triples, batch_size, on_progress)
+
+    def bulk_insert_iter(
+        self,
+        table_name: str,
+        batches: Iterable[List[Dict[str, str]]],
+        on_progress: Optional[Callable[[int, int], None]] = None,
+        expected_total: Optional[int] = None,
+    ) -> int:
+        """Insert triples from an iterable of batches via streaming COPY FROM.
+
+        Memory stays at ``O(batch_size)`` because each batch is appended
+        to a single temporary CSV before one ``COPY FROM`` ingests it
+        into Kùzu. ``expected_total`` is used for progress reporting; if
+        omitted, progress callbacks receive the running count as both
+        ``done`` and ``total``.
+        """
+        import time
+
+        validate_table_name(table_name)
+        node = self._node_table(table_name)
+        conn = self._get_connection()
+
+        try:
+            result = conn.execute(f"MATCH (t:{node}) RETURN MAX(t.id) AS max_id")
+            row = result.get_next() if result.has_next() else None
+            if row and row[0] is not None:
+                self._next_id = max(self._next_id, int(row[0]) + 1)
+        except Exception:
+            pass
+
+        start_id = self._next_id
+        total = 0
+        t0 = time.monotonic()
+        csv_path = tempfile.mktemp(suffix=".csv", prefix="ob_flat_iter_")
+        try:
+            with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                for batch in batches:
+                    if not batch:
+                        continue
+                    for t in batch:
+                        writer.writerow(
+                            [
+                                start_id + total,
+                                t.get("subject", "") or "",
+                                t.get("predicate", "") or "",
+                                t.get("object", "") or "",
+                            ]
+                        )
+                        total += 1
+                    if on_progress:
+                        on_progress(total, expected_total or total)
+
+            if total == 0:
+                return 0
+
+            conn.execute(f'COPY {node} FROM "{csv_path}" (header=false)')
+            self._next_id = start_id + total
+
+            elapsed = time.monotonic() - t0
+            logger.info(
+                "Streamed %d triples into %s via COPY FROM in %.1fs",
+                total,
+                node,
+                elapsed,
+            )
+            return total
+        finally:
+            try:
+                os.unlink(csv_path)
+            except OSError:
+                pass
 
     def _bulk_insert_triples(
         self,
@@ -255,6 +327,38 @@ class LadybugFlatStore(LadybugBase):
         return [
             {"subject": row[0], "predicate": row[1], "object": row[2]} for row in result
         ]
+
+    def iter_triples(
+        self, table_name: str, batch_size: int = 10_000
+    ) -> Iterator[List[Dict[str, str]]]:
+        """Stream triples in batches via Cypher ``SKIP/LIMIT``.
+
+        Memory stays at ``O(batch_size)``. Use this in place of
+        :meth:`query_triples` for any operation that processes the full
+        graph (SHACL graph mode, community detection, sync/load preview).
+        """
+        validate_table_name(table_name)
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        node = self._node_table(table_name)
+        conn = self._get_connection()
+        skip = 0
+        while True:
+            result = conn.execute(
+                f"MATCH (t:{node}) RETURN t.subject AS subject, "
+                f"t.predicate AS predicate, t.object AS object "
+                f"ORDER BY t.id SKIP {int(skip)} LIMIT {int(batch_size)}"
+            )
+            rows = [
+                {"subject": row[0], "predicate": row[1], "object": row[2]}
+                for row in result
+            ]
+            if not rows:
+                return
+            yield rows
+            if len(rows) < batch_size:
+                return
+            skip += batch_size
 
     def count_triples(self, table_name: str) -> int:
         validate_table_name(table_name)

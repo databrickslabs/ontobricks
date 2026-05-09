@@ -159,6 +159,53 @@ class TestExecuteQuery:
             sw.execute_query("BAD SQL")
 
 
+class TestExecuteQueryIter:
+    def test_yields_batches_until_exhausted(self, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_cursor = MagicMock()
+        mock_cursor.description = [("subject",), ("predicate",), ("object",)]
+        mock_cursor.fetchmany.side_effect = [
+            [("a", "p", "1"), ("b", "p", "2")],
+            [("c", "p", "3")],
+            [],
+        ]
+
+        mock_conn = MagicMock()
+        mock_conn.__enter__ = Mock(return_value=mock_conn)
+        mock_conn.__exit__ = Mock(return_value=False)
+        mock_conn.cursor.return_value.__enter__ = Mock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = Mock(return_value=False)
+
+        with patch("databricks.sql.connect", return_value=mock_conn):
+            auth = DatabricksAuth(
+                host="https://h.databricks.com",
+                token="tok",
+                warehouse_id="wh-1",
+            )
+            sw = SQLWarehouse(auth)
+            batches = list(sw.execute_query_iter("SELECT * FROM v", batch_size=2))
+
+        assert batches == [
+            [
+                {"subject": "a", "predicate": "p", "object": "1"},
+                {"subject": "b", "predicate": "p", "object": "2"},
+            ],
+            [{"subject": "c", "predicate": "p", "object": "3"}],
+        ]
+        assert mock_cursor.fetchmany.call_count == 3
+
+    def test_rejects_non_positive_batch_size(self, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-1",
+        )
+        sw = SQLWarehouse(auth)
+        with pytest.raises(ValidationError):
+            list(sw.execute_query_iter("SELECT 1", batch_size=0))
+
+
 class TestExecuteStatement:
     def test_raises_value_error_if_no_warehouse_id(self, monkeypatch):
         monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)

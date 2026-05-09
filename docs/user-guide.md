@@ -1551,3 +1551,22 @@ After import you can:
 - **Network access**: Industry-standard imports require outbound internet access to fetch modules from their public repositories. If running in Databricks Apps with restricted egress, download the files manually and use the OWL file import instead.
 - **Incremental import**: Each import replaces the current ontology. If you need to combine multiple standards, export after each import and merge the OWL files externally.
 - **Layout reset**: After importing a large ontology, use **Auto-Layout** in the **Ontology Designer** view to arrange entities automatically.
+
+---
+
+## Performance Tunables
+
+The build/sync hot paths stream data between Databricks and the FastAPI process so peak Python memory stays at `O(batch)` regardless of graph size. Knobs below are environment variables read at request time — set them in `app.yaml`, your Databricks App config, or the local `.env`.
+
+| Env var | Default | What it caps | When to change |
+|---|---|---|---|
+| `DATABRICKS_MAX_FETCHALL_ROWS` | `100000` | Soft warning when `execute_query` returns more rows than this — callers should switch to `execute_query_iter`. Set `0` to silence. | Triage code paths still using `fetchall()` on large queries. |
+| `DTWIN_MAX_GRAPH_DQ_TRIPLES` | `2000000` | Hard cap on graph-mode SHACL DQ load (the only path that *must* materialise the whole graph). Set `0` to disable. | Increase on a large box; lower it to fail fast. |
+| `DTWIN_MAX_VIZ_TRIPLES` | `500000` | Hard cap above which `/dtwin/sync/load` refuses unbounded graph reload from the Knowledge Graph viz. | Drop it to push the UI toward viewport / seed-node loading earlier. |
+| `TASK_RESULT_INLINE_BYTES` | `1048576` | JSON-encoded task `result` size above which heavy lists (`violations`, `inferred_triples`, `to_add`, …) are trimmed to a head sample. Set `0` to disable. | Increase if your UI consumes the full payload synchronously. |
+| `TASK_RESULT_LIST_HEAD` | `200` | Number of items kept in the `preview` field after trimming. | Tune for your viewport / pagination size. |
+
+### Delta layout recommendations
+
+- The triple snapshot tables (`_ob_snapshot_*`) and diff tables (`_diff_add` / `_diff_remove`) are created with **Liquid Clustering** on `(predicate, subject)`. Run `OPTIMIZE` on the snapshot table after a large rebuild so the next `EXCEPT`-based diff stays fast.
+- Both diff tables are `CREATE OR REPLACE TABLE … AS SELECT` from the live VIEW; they are dropped at the end of a successful build (or on fallback to full rebuild).

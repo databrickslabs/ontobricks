@@ -73,6 +73,10 @@ class DatabricksClient:
     def execute_query(self, query):
         return self.sql.execute_query(query)
 
+    def execute_query_iter(self, query, batch_size: int = 10_000):
+        """Stream rows in batches; see :meth:`SQLWarehouse.execute_query_iter`."""
+        return self.sql.execute_query_iter(query, batch_size=batch_size)
+
     def execute_statement(self, statement):
         return self.sql.execute_statement(statement)
 

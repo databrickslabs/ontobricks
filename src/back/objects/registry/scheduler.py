@@ -1021,30 +1021,84 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
     return res["sql"], view_table, graph_name, base_uri, ent, rels
 
 
+_SCHEDULED_BATCH_SIZE = 10_000
+
+
+def _stream_full_into_store(store, src, graph_name: str, view_table: str) -> int:
+    """Stream the entire VIEW into the graph store in bounded batches."""
+    batch_iter = src.execute_query_iter(
+        f"SELECT * FROM {view_table}",
+        batch_size=_SCHEDULED_BATCH_SIZE,
+    )
+    if hasattr(store, "bulk_insert_iter"):
+        return store.bulk_insert_iter(graph_name, batch_iter)
+
+    total = 0
+    for batch in batch_iter:
+        if not batch:
+            continue
+        store.insert_triples(graph_name, batch, batch_size=len(batch))
+        total += len(batch)
+    return total
+
+
+def _stream_diff_into_store(
+    store,
+    incr_svc,
+    graph_name: str,
+    diff_table: str,
+    *,
+    apply: str,
+) -> int:
+    """Stream a materialised diff table into ``insert`` or ``delete`` ops."""
+    if not diff_table:
+        return 0
+    batch_iter = incr_svc.iter_diff(
+        diff_table, batch_size=_SCHEDULED_BATCH_SIZE
+    )
+    if apply == "insert" and hasattr(store, "bulk_insert_iter"):
+        return store.bulk_insert_iter(graph_name, batch_iter)
+
+    total = 0
+    for batch in batch_iter:
+        if not batch:
+            continue
+        if apply == "insert":
+            store.insert_triples(graph_name, batch, batch_size=len(batch))
+        else:
+            store.delete_triples(graph_name, batch, batch_size=len(batch))
+        total += len(batch)
+    return total
+
+
 def _write_graph_triples(
     store,
     src,
     graph_name: str,
     view_table: str,
     actual_mode: str,
-    to_add: list,
-    to_remove: list,
+    diff_info: Optional[Dict[str, Any]],
     incr_svc,
     domain_name: str,
 ) -> int:
-    """Write triples to the graph store. Returns the triple count."""
-    if actual_mode == "full":
-        logger.info("Scheduled build [%s]: reading triples from VIEW", domain_name)
-        triples = src.execute_query(f"SELECT * FROM {view_table}")
-        triple_count = len(triples)
-        logger.info(
-            "Scheduled build [%s]: %d triples from VIEW", domain_name, triple_count
-        )
+    """Write triples to the graph store. Returns the triple count.
 
+    For full rebuilds, streams the VIEW via batched cursor fetches. For
+    incremental, expects ``diff_info`` to point at the materialised
+    ``_diff_add`` / ``_diff_remove`` Delta tables produced by
+    :meth:`IncrementalBuildService.compute_diff_materialized`.
+    """
+    if actual_mode == "full":
+        logger.info(
+            "Scheduled build [%s]: streaming triples from VIEW",
+            domain_name,
+        )
+        store.drop_table(graph_name)
+        store.create_table(graph_name)
+        triple_count = _stream_full_into_store(
+            store, src, graph_name, view_table
+        )
         if triple_count > 0:
-            store.drop_table(graph_name)
-            store.create_table(graph_name)
-            store.insert_triples(graph_name, triples, batch_size=500)
             store.optimize_table(graph_name)
             logger.info(
                 "Scheduled build [%s]: graph '%s' populated with %d triples",
@@ -1052,19 +1106,35 @@ def _write_graph_triples(
                 graph_name,
                 triple_count,
             )
-    else:
-        triple_count = incr_svc.count_view_triples(view_table)
-        if to_remove:
-            store.delete_triples(graph_name, to_remove, batch_size=500)
-            logger.info(
-                "Scheduled build [%s]: removed %d triples", domain_name, len(to_remove)
-            )
-        if to_add:
-            store.insert_triples(graph_name, to_add, batch_size=500)
-            logger.info(
-                "Scheduled build [%s]: added %d triples", domain_name, len(to_add)
-            )
-        store.optimize_table(graph_name)
+        return triple_count
+
+    info = diff_info or {}
+    triple_count = incr_svc.count_view_triples(view_table)
+    removed_total = info.get("removed_count", 0)
+    added_total = info.get("added_count", 0)
+    if removed_total:
+        _stream_diff_into_store(
+            store,
+            incr_svc,
+            graph_name,
+            info.get("removed_table", ""),
+            apply="delete",
+        )
+        logger.info(
+            "Scheduled build [%s]: removed %d triples", domain_name, removed_total
+        )
+    if added_total:
+        _stream_diff_into_store(
+            store,
+            incr_svc,
+            graph_name,
+            info.get("added_table", ""),
+            apply="insert",
+        )
+        logger.info(
+            "Scheduled build [%s]: added %d triples", domain_name, added_total
+        )
+    store.optimize_table(graph_name)
     return triple_count
 
 
@@ -1235,19 +1305,26 @@ def _run_scheduled_build(
         )
 
         actual_mode = "full" if drop_existing else "incremental"
-        to_add: list = []
-        to_remove: list = []
+        diff_info: Optional[Dict[str, Any]] = None
 
         if actual_mode == "incremental" and incr_svc.snapshot_exists(snapshot_table):
-            logger.info("Scheduled build [%s]: computing incremental diff", domain_name)
+            logger.info(
+                "Scheduled build [%s]: materializing incremental diff", domain_name
+            )
             try:
-                to_add, to_remove = incr_svc.compute_diff(view_table, snapshot_table)
+                diff_info = incr_svc.compute_diff_materialized(
+                    view_table, snapshot_table
+                )
+                added = diff_info["added_count"]
+                removed = diff_info["removed_count"]
                 view_count = incr_svc.count_view_triples(view_table)
-                if incr_svc.should_fallback_to_full(
-                    len(to_add), len(to_remove), view_count
-                ):
+                if incr_svc.should_fallback_to_full(added, removed, view_count):
+                    incr_svc.drop_diff_tables(snapshot_table)
+                    diff_info = None
                     actual_mode = "full"
-                elif len(to_add) == 0 and len(to_remove) == 0:
+                elif added == 0 and removed == 0:
+                    incr_svc.drop_diff_tables(snapshot_table)
+                    diff_info = None
                     triple_count = view_count
                     logger.info(
                         "Scheduled build [%s]: no changes, skipping graph write",
@@ -1274,6 +1351,11 @@ def _run_scheduled_build(
                     domain_name,
                     e,
                 )
+                try:
+                    incr_svc.drop_diff_tables(snapshot_table)
+                except Exception:  # noqa: BLE001 - cleanup is advisory
+                    pass
+                diff_info = None
                 actual_mode = "full"
         else:
             actual_mode = "full"
@@ -1289,17 +1371,23 @@ def _run_scheduled_build(
         if not store:
             raise InfrastructureError("Could not initialize LadybugDB backend")
 
-        triple_count = _write_graph_triples(
-            store,
-            src,
-            graph_name,
-            view_table,
-            actual_mode,
-            to_add,
-            to_remove,
-            incr_svc,
-            domain_name,
-        )
+        try:
+            triple_count = _write_graph_triples(
+                store,
+                src,
+                graph_name,
+                view_table,
+                actual_mode,
+                diff_info,
+                incr_svc,
+                domain_name,
+            )
+        finally:
+            if diff_info is not None:
+                try:
+                    incr_svc.drop_diff_tables(snapshot_table)
+                except Exception:  # noqa: BLE001 - cleanup is advisory
+                    pass
 
         try:
             incr_svc.refresh_snapshot(view_table, snapshot_table)

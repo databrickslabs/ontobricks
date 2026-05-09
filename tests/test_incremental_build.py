@@ -192,6 +192,75 @@ class TestComputeDiff:
         assert to_remove == []
 
 
+class TestComputeDiffMaterialized:
+    def test_creates_diff_tables_and_returns_counts(self):
+        client = MagicMock()
+        client.create_or_replace_table_from_query.return_value = (True, "ok")
+        # Two CTAS calls then two COUNT(*) calls.
+        client.execute_query.side_effect = [
+            [{"cnt": 12}],
+            [{"cnt": 3}],
+        ]
+        svc = IncrementalBuildService(client)
+        info = svc.compute_diff_materialized(
+            "cat.sch.view", "cat.sch._ob_snapshot_d_v1"
+        )
+        assert info["added_count"] == 12
+        assert info["removed_count"] == 3
+        assert info["added_table"] == "cat.sch._ob_snapshot_d_v1_diff_add"
+        assert info["removed_table"] == "cat.sch._ob_snapshot_d_v1_diff_remove"
+        assert client.create_or_replace_table_from_query.call_count == 2
+
+    def test_raises_when_ctas_fails(self):
+        client = MagicMock()
+        client.create_or_replace_table_from_query.return_value = (False, "boom")
+        svc = IncrementalBuildService(client)
+        with pytest.raises(Exception, match="Failed to materialize diff table"):
+            svc.compute_diff_materialized("cat.sch.view", "cat.sch.snap")
+
+    def test_diff_table_names_are_derived(self):
+        add_tbl, rem_tbl = IncrementalBuildService.diff_table_names(
+            "cat.sch.snap"
+        )
+        assert add_tbl.endswith("_diff_add")
+        assert rem_tbl.endswith("_diff_remove")
+
+    def test_iter_diff_uses_streaming_when_available(self):
+        client = MagicMock()
+        client.execute_query_iter.return_value = iter(
+            [[{"subject": "A", "predicate": "p", "object": "1"}]]
+        )
+        svc = IncrementalBuildService(client)
+        batches = list(svc.iter_diff("cat.sch.diff", batch_size=100))
+        client.execute_query_iter.assert_called_once()
+        assert batches == [[{"subject": "A", "predicate": "p", "object": "1"}]]
+
+    def test_iter_diff_falls_back_to_execute_query(self):
+        client = MagicMock(spec=["execute_query"])
+        client.execute_query.return_value = [
+            {"subject": "A", "predicate": "p", "object": "1"},
+            {"subject": "B", "predicate": "p", "object": "2"},
+            {"subject": "C", "predicate": "p", "object": "3"},
+        ]
+        svc = IncrementalBuildService(client)
+        batches = list(svc.iter_diff("cat.sch.diff", batch_size=2))
+        assert batches == [
+            [
+                {"subject": "A", "predicate": "p", "object": "1"},
+                {"subject": "B", "predicate": "p", "object": "2"},
+            ],
+            [{"subject": "C", "predicate": "p", "object": "3"}],
+        ]
+
+    def test_drop_diff_tables_runs_drop_for_both(self):
+        client = MagicMock()
+        svc = IncrementalBuildService(client)
+        svc.drop_diff_tables("cat.sch.snap")
+        assert client.execute_statement.call_count == 2
+        for args, _ in client.execute_statement.call_args_list:
+            assert args[0].startswith("DROP TABLE IF EXISTS")
+
+
 class TestShouldFallbackToFull:
     def test_zero_total(self):
         svc = IncrementalBuildService(MagicMock())

@@ -8,7 +8,7 @@ graph on every sync.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError, InfrastructureError
@@ -27,6 +27,8 @@ class IncrementalBuildService:
     """
 
     _SNAPSHOT_PREFIX = "_ob_snapshot_"
+    _DIFF_ADD_SUFFIX = "_diff_add"
+    _DIFF_REMOVE_SUFFIX = "_diff_remove"
     _DIFF_THRESHOLD_PCT = 80
 
     def __init__(self, client: Any) -> None:
@@ -165,6 +167,12 @@ class IncrementalBuildService:
 
         Returns ``(to_add, to_remove)`` where each is a list of
         ``{"subject": ..., "predicate": ..., "object": ...}`` dicts.
+
+        .. deprecated:: Wire-level optimisation
+            Materialises both diff sets in the FastAPI process, which
+            is O(|diff|) memory. Prefer :meth:`compute_diff_materialized`
+            + :meth:`iter_diff` to keep peak memory bounded for large
+            diffs.
         """
         to_add = self._client.execute_query(
             f"SELECT subject, predicate, object FROM {view_table} "
@@ -182,6 +190,115 @@ class IncrementalBuildService:
             len(to_remove),
         )
         return to_add or [], to_remove or []
+
+    @staticmethod
+    def diff_table_names(snapshot_table: str) -> Tuple[str, str]:
+        """Return ``(diff_add_table, diff_remove_table)`` derived from snapshot."""
+        return (
+            f"{snapshot_table}{IncrementalBuildService._DIFF_ADD_SUFFIX}",
+            f"{snapshot_table}{IncrementalBuildService._DIFF_REMOVE_SUFFIX}",
+        )
+
+    def compute_diff_materialized(
+        self,
+        view_table: str,
+        snapshot_table: str,
+    ) -> Dict[str, Any]:
+        """Materialise add/remove diffs as Delta tables and return counts.
+
+        Runs two CTAS statements (``_diff_add`` / ``_diff_remove``) on
+        the warehouse, then a single ``SELECT COUNT(*)`` per side. The
+        FastAPI process never holds the diff rows in memory — call
+        :meth:`iter_diff` to stream them in batches when applying to a
+        graph store.
+
+        Returns ``{"added_count", "removed_count", "added_table",
+        "removed_table"}``.
+        """
+        add_tbl, rem_tbl = self.diff_table_names(snapshot_table)
+
+        for diff_tbl, primary, other in (
+            (add_tbl, view_table, snapshot_table),
+            (rem_tbl, snapshot_table, view_table),
+        ):
+            parts = diff_tbl.split(".")
+            if len(parts) != 3:
+                raise ValidationError(
+                    f"Diff table must be fully qualified: {diff_tbl}"
+                )
+            cat, sch, tbl = parts
+            select_sql = (
+                f"SELECT subject, predicate, object FROM {primary} "
+                f"EXCEPT "
+                f"SELECT subject, predicate, object FROM {other}"
+            )
+            ok, msg = self._client.create_or_replace_table_from_query(
+                cat, sch, tbl, select_sql
+            )
+            if not ok:
+                raise InfrastructureError(
+                    f"Failed to materialize diff table {diff_tbl}: {msg}"
+                )
+
+        added_count = self._count_table(add_tbl)
+        removed_count = self._count_table(rem_tbl)
+        logger.info(
+            "Incremental diff (materialized): +%d / -%d (tables=%s, %s)",
+            added_count,
+            removed_count,
+            add_tbl,
+            rem_tbl,
+        )
+        return {
+            "added_count": added_count,
+            "removed_count": removed_count,
+            "added_table": add_tbl,
+            "removed_table": rem_tbl,
+        }
+
+    def iter_diff(
+        self,
+        diff_table: str,
+        batch_size: int = 10_000,
+    ) -> Iterator[List[Dict[str, str]]]:
+        """Stream rows from a materialised diff table in batches."""
+        if hasattr(self._client, "execute_query_iter"):
+            return self._client.execute_query_iter(
+                f"SELECT subject, predicate, object FROM {diff_table}",
+                batch_size=batch_size,
+            )
+
+        rows = (
+            self._client.execute_query(
+                f"SELECT subject, predicate, object FROM {diff_table}"
+            )
+            or []
+        )
+
+        def _chunked() -> Iterator[List[Dict[str, str]]]:
+            for i in range(0, len(rows), max(1, batch_size)):
+                yield rows[i : i + batch_size]
+
+        return _chunked()
+
+    def drop_diff_tables(self, snapshot_table: str) -> None:
+        """Best-effort cleanup of the materialised diff tables."""
+        add_tbl, rem_tbl = self.diff_table_names(snapshot_table)
+        for tbl in (add_tbl, rem_tbl):
+            try:
+                self._client.execute_statement(f"DROP TABLE IF EXISTS {tbl}")
+            except Exception as exc:  # noqa: BLE001 - cleanup is advisory
+                logger.debug("Could not drop diff table %s: %s", tbl, exc)
+
+    def _count_table(self, table: str) -> int:
+        try:
+            rows = self._client.execute_query(
+                f"SELECT COUNT(*) AS cnt FROM {table}"
+            )
+            return int(rows[0]["cnt"]) if rows else 0
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not count rows in %s: %s", table, exc)
+            return 0
 
     def should_fallback_to_full(
         self,

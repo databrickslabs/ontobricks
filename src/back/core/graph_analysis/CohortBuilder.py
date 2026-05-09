@@ -1162,7 +1162,7 @@ class CohortBuilder:
     ) -> List[Dict[str, str]]:
         cached = self._cache.get("triples")
         if cached is None:
-            cached = self._store.query_triples(self._graph_name) if self._store else []
+            cached = self._stream_triples(max_triples, allow_overflow)
             self._cache["triples"] = cached
         if max_triples is not None and len(cached) > max_triples:
             if allow_overflow:
@@ -1179,6 +1179,42 @@ class CohortBuilder:
                 f"a filter constraint."
             )
         return cached
+
+    def _stream_triples(
+        self,
+        max_triples: Optional[int],
+        allow_overflow: bool,
+    ) -> List[Dict[str, str]]:
+        """Page through ``iter_triples`` so peak memory stays bounded.
+
+        Honours ``max_triples`` early when ``allow_overflow=False`` to
+        avoid materialising graphs that exceed the cap. Falls back to
+        ``query_triples`` for stores that do not advertise ``iter_triples``
+        (the abstract ``TripleStoreBackend`` declares it on the class,
+        so MagicMock-based test stubs without the method correctly hit
+        the fallback).
+        """
+        if not self._store:
+            return []
+        if not hasattr(type(self._store), "iter_triples"):
+            return self._store.query_triples(self._graph_name) or []
+
+        collected: List[Dict[str, str]] = []
+        for batch in self._store.iter_triples(self._graph_name, batch_size=10_000):
+            if not batch:
+                continue
+            collected.extend(batch)
+            if (
+                max_triples is not None
+                and not allow_overflow
+                and len(collected) > max_triples
+            ):
+                raise ValueError(
+                    f"Triple count (>{max_triples}) exceeds max_triples "
+                    f"({max_triples}). Pick a more specific class or add "
+                    f"a filter constraint."
+                )
+        return collected
 
 
 # ---------------------------------------------------------------------------
