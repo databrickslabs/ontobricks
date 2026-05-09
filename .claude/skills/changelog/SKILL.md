@@ -16,7 +16,7 @@ specifies *what* must be present but not the exact layout.
 3. **Write the section** in the layout below.
 4. **Run tests** — `uv run pytest -q`. Paste the final summary line into `Tests:`.
 5. If tests fail: do **not** mark the change complete. Fix and re-run, or surface the failures explicitly.
-6. **Sphinx** — see `.cursor/08-testing-and-deployment §Sphinx API Documentation` if you added/removed/renamed public Python symbols.
+6. **Sphinx** — if you added/removed/renamed public Python symbols, update the matching `.rst` in `docs/sphinx/api/` (the HTML site is no longer built automatically; running `scripts/build_docs.sh` is optional, see `.cursor/08-testing-and-deployment §Sphinx API Documentation`).
 7. **README / docs** — update if user-visible behaviour changed.
 
 ## Section layout

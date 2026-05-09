@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from back.core.errors import OntoBricksError
 from back.core.logging import get_logger
@@ -588,6 +588,44 @@ class _BuildPipeline:
         return True
 
     _FULL_REBUILD_BATCH_SIZE = 10_000
+    _LOG_PROGRESS_EVERY_ROWS = 50_000
+
+    def _make_progress_logger(
+        self,
+        phase: str,
+        ui_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> Callable[[int, int], None]:
+        """Wrap ``ui_callback`` with a throttled progress log line.
+
+        The returned callback first delegates to ``ui_callback`` (so the
+        build page keeps updating exactly as before), then emits a log
+        line every ``_LOG_PROGRESS_EVERY_ROWS`` rows and on the final
+        call. ``phase`` is the human-readable label that appears in the
+        log (e.g. ``"full rebuild"``, ``"insert diff"``).
+        """
+        last_logged = {"rows": 0}
+        stride = self._LOG_PROGRESS_EVERY_ROWS
+
+        def _on_progress(done: int, total: int) -> None:
+            if ui_callback is not None:
+                ui_callback(done, total)
+            crossed = done // stride > last_logged["rows"] // stride
+            done_now = total > 0 and done >= total
+            if not (crossed or done_now):
+                return
+            last_logged["rows"] = done
+            denom = total if total > 0 else max(done, 1)
+            pct = done / denom * 100
+            logger.info(
+                "[DT-BUILD %s] %s: %d/%d triples (%.1f%%)",
+                self.task_id,
+                phase,
+                done,
+                denom,
+                pct,
+            )
+
+        return _on_progress
 
     def _apply_full_rebuild(self) -> bool:
         """Drop, recreate, and stream-insert all triples from the VIEW.
@@ -668,7 +706,7 @@ class _BuildPipeline:
         tm_local = self.tm
         task_id_local = self.task_id
 
-        def _on_progress_full(written: int, total: int) -> None:
+        def _on_ui_progress_full(written: int, total: int) -> None:
             denom = total if total > 0 else max(written, 1)
             progress = 50 + int(written / denom * 40)
             if is_api_local:
@@ -681,6 +719,10 @@ class _BuildPipeline:
                     min(progress, 90),
                     f"Written {written}/{denom} triples...",
                 )
+
+        _on_progress_full = self._make_progress_logger(
+            "full rebuild", _on_ui_progress_full
+        )
 
         try:
             batch_iter = self.source_client.execute_query_iter(
@@ -836,7 +878,7 @@ class _BuildPipeline:
 
         try:
             if removed and self.diff_remove_table:
-                def _on_del_progress(done: int, total: int) -> None:
+                def _on_ui_del_progress(done: int, total: int) -> None:
                     if is_api_local:
                         return
                     denom = total if total > 0 else max(done, 1)
@@ -847,6 +889,11 @@ class _BuildPipeline:
                         f"Removed {done}/{denom} triples...",
                     )
 
+                _on_del_progress = self._make_progress_logger(
+                    "delete diff",
+                    None if self.is_api else _on_ui_del_progress,
+                )
+
                 if not self.is_api:
                     self.tm.update_progress(
                         self.task_id,
@@ -856,13 +903,13 @@ class _BuildPipeline:
                 self._stream_delete_diff(
                     self.diff_remove_table,
                     expected_total=removed,
-                    on_progress=None if self.is_api else _on_del_progress,
+                    on_progress=_on_del_progress,
                 )
 
             if added and self.diff_add_table:
                 add_base = progress_base + 25
 
-                def _on_add_progress(done: int, total: int) -> None:
+                def _on_ui_add_progress(done: int, total: int) -> None:
                     if is_api_local:
                         return
                     denom = total if total > 0 else max(done, 1)
@@ -873,6 +920,11 @@ class _BuildPipeline:
                         f"Inserted {done}/{denom} triples...",
                     )
 
+                _on_add_progress = self._make_progress_logger(
+                    "insert diff",
+                    None if self.is_api else _on_ui_add_progress,
+                )
+
                 if not self.is_api:
                     self.tm.update_progress(
                         self.task_id, add_base, f"Inserting {added} triples..."
@@ -880,7 +932,7 @@ class _BuildPipeline:
                 self._stream_insert_diff(
                     self.diff_add_table,
                     expected_total=added,
-                    on_progress=None if self.is_api else _on_add_progress,
+                    on_progress=_on_add_progress,
                 )
         finally:
             self._cleanup_diff_tables()

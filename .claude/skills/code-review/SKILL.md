@@ -27,7 +27,7 @@ Create a TodoWrite with one item per `.cursorrules` review step, in order:
    and any other session storage. For each field output `field | used? |
    derivable? | recommendation`.
 5. **Tests** — `uv run pytest -q`. Report PASS/FAIL counts.
-6. **Documentation** — Sphinx + README per `.cursor/08-testing-and-deployment §Documentation Rules`.
+6. **Documentation** — README + topic guides in `/docs` per `.cursor/08-testing-and-deployment §Documentation Rules`. Sphinx `.rst` files should be updated when public Python symbols change, but the HTML build is no longer mandatory (no CI job; run `scripts/build_docs.sh` locally if you want to preview).
 
 End with a summary block:
 

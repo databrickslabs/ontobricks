@@ -265,7 +265,7 @@ Create `tests/test_kuzu_store.py` following the patterns in
 
 - Update this file if the architecture changes.
 - Add an entry to `docs/development.md` in the Dependencies section.
-- Add a Sphinx `.rst` file under `docs/sphinx/api/` for the new subpackage.
+- Add a Sphinx `.rst` file under `docs/sphinx/api/` for the new subpackage (the HTML site is built locally on demand via `scripts/build_docs.sh` — there is no CI build).
 - Update the changelog.
 
 ---

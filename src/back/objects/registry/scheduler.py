@@ -1022,16 +1022,65 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
 
 
 _SCHEDULED_BATCH_SIZE = 10_000
+_SCHEDULED_LOG_PROGRESS_EVERY_ROWS = 50_000
 
 
-def _stream_full_into_store(store, src, graph_name: str, view_table: str) -> int:
+def _make_scheduled_progress_logger(domain_name: str, phase: str):
+    """Throttled progress logger for scheduled builds.
+
+    Returns an ``on_progress(done, total)`` callable that emits a log
+    line every ``_SCHEDULED_LOG_PROGRESS_EVERY_ROWS`` rows and on the
+    final call. Mirrors :meth:`_BuildPipeline._make_progress_logger`
+    but without a UI callback (scheduled builds have no task page).
+    """
+    last_logged = {"rows": 0}
+    stride = _SCHEDULED_LOG_PROGRESS_EVERY_ROWS
+
+    def _on_progress(done: int, total: int) -> None:
+        crossed = done // stride > last_logged["rows"] // stride
+        done_now = total > 0 and done >= total
+        if not (crossed or done_now):
+            return
+        last_logged["rows"] = done
+        denom = total if total > 0 else max(done, 1)
+        pct = done / denom * 100
+        logger.info(
+            "Scheduled build [%s]: %s %d/%d triples (%.1f%%)",
+            domain_name,
+            phase,
+            done,
+            denom,
+            pct,
+        )
+
+    return _on_progress
+
+
+def _stream_full_into_store(
+    store,
+    src,
+    graph_name: str,
+    view_table: str,
+    domain_name: str = "",
+    expected_total: int = 0,
+) -> int:
     """Stream the entire VIEW into the graph store in bounded batches."""
     batch_iter = src.execute_query_iter(
         f"SELECT * FROM {view_table}",
         batch_size=_SCHEDULED_BATCH_SIZE,
     )
+    on_progress = (
+        _make_scheduled_progress_logger(domain_name, "full rebuild")
+        if domain_name
+        else None
+    )
     if hasattr(store, "bulk_insert_iter"):
-        return store.bulk_insert_iter(graph_name, batch_iter)
+        return store.bulk_insert_iter(
+            graph_name,
+            batch_iter,
+            on_progress=on_progress,
+            expected_total=expected_total or None,
+        )
 
     total = 0
     for batch in batch_iter:
@@ -1039,6 +1088,8 @@ def _stream_full_into_store(store, src, graph_name: str, view_table: str) -> int
             continue
         store.insert_triples(graph_name, batch, batch_size=len(batch))
         total += len(batch)
+        if on_progress:
+            on_progress(total, expected_total or total)
     return total
 
 
@@ -1049,6 +1100,8 @@ def _stream_diff_into_store(
     diff_table: str,
     *,
     apply: str,
+    domain_name: str = "",
+    expected_total: int = 0,
 ) -> int:
     """Stream a materialised diff table into ``insert`` or ``delete`` ops."""
     if not diff_table:
@@ -1056,8 +1109,19 @@ def _stream_diff_into_store(
     batch_iter = incr_svc.iter_diff(
         diff_table, batch_size=_SCHEDULED_BATCH_SIZE
     )
+    phase = "insert diff" if apply == "insert" else "delete diff"
+    on_progress = (
+        _make_scheduled_progress_logger(domain_name, phase)
+        if domain_name
+        else None
+    )
     if apply == "insert" and hasattr(store, "bulk_insert_iter"):
-        return store.bulk_insert_iter(graph_name, batch_iter)
+        return store.bulk_insert_iter(
+            graph_name,
+            batch_iter,
+            on_progress=on_progress,
+            expected_total=expected_total or None,
+        )
 
     total = 0
     for batch in batch_iter:
@@ -1068,6 +1132,8 @@ def _stream_diff_into_store(
         else:
             store.delete_triples(graph_name, batch, batch_size=len(batch))
         total += len(batch)
+        if on_progress:
+            on_progress(total, expected_total or total)
     return total
 
 
@@ -1089,14 +1155,31 @@ def _write_graph_triples(
     :meth:`IncrementalBuildService.compute_diff_materialized`.
     """
     if actual_mode == "full":
+        try:
+            expected_total = incr_svc.count_view_triples(view_table)
+        except Exception as exc:  # noqa: BLE001 - count is advisory
+            logger.warning(
+                "Scheduled build [%s]: could not count VIEW %s before fetch: %s",
+                domain_name,
+                view_table,
+                exc,
+            )
+            expected_total = 0
         logger.info(
-            "Scheduled build [%s]: streaming triples from VIEW",
+            "Scheduled build [%s]: streaming %d triples from VIEW (batch_size=%d)",
             domain_name,
+            expected_total,
+            _SCHEDULED_BATCH_SIZE,
         )
         store.drop_table(graph_name)
         store.create_table(graph_name)
         triple_count = _stream_full_into_store(
-            store, src, graph_name, view_table
+            store,
+            src,
+            graph_name,
+            view_table,
+            domain_name=domain_name,
+            expected_total=expected_total,
         )
         if triple_count > 0:
             store.optimize_table(graph_name)
@@ -1113,23 +1196,39 @@ def _write_graph_triples(
     removed_total = info.get("removed_count", 0)
     added_total = info.get("added_count", 0)
     if removed_total:
+        logger.info(
+            "Scheduled build [%s]: removing %d triples (batch_size=%d)",
+            domain_name,
+            removed_total,
+            _SCHEDULED_BATCH_SIZE,
+        )
         _stream_diff_into_store(
             store,
             incr_svc,
             graph_name,
             info.get("removed_table", ""),
             apply="delete",
+            domain_name=domain_name,
+            expected_total=removed_total,
         )
         logger.info(
             "Scheduled build [%s]: removed %d triples", domain_name, removed_total
         )
     if added_total:
+        logger.info(
+            "Scheduled build [%s]: inserting %d triples (batch_size=%d)",
+            domain_name,
+            added_total,
+            _SCHEDULED_BATCH_SIZE,
+        )
         _stream_diff_into_store(
             store,
             incr_svc,
             graph_name,
             info.get("added_table", ""),
             apply="insert",
+            domain_name=domain_name,
+            expected_total=added_total,
         )
         logger.info(
             "Scheduled build [%s]: added %d triples", domain_name, added_total

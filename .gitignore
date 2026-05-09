@@ -77,3 +77,7 @@ src/.coding_rules.md
 # Cookie jars / curl session dumps (may contain live session + CSRF tokens)
 cookies*.txt
 *.cookiejar
+
+# Sphinx build output — built locally on demand via scripts/build_docs.sh,
+# never in CI. Do not commit the rendered HTML.
+docs/sphinx/_build/

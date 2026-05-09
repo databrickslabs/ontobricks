@@ -485,12 +485,12 @@ All logging goes through `back/core/logging/LogManager`.
 ### 11.2 Sphinx API documentation
 
 - Source files in `/docs/sphinx` (config in `conf.py`, module `.rst` files in `api/`).
+- The HTML site is **not built automatically** (no CI job, build artifacts gitignored). Anyone who wants the rendered API reference builds it locally with `scripts/build_docs.sh`.
 - After any change that adds, removes, or renames a Python module, class, or public function:
-  1. Update or create the corresponding `.rst` file under `/docs/sphinx/api/`.
-  2. Re-build by running `scripts/build_docs.sh` from the project root.
-  3. Verify no new Sphinx warnings about missing or renamed symbols.
+  1. Update or create the corresponding `.rst` file under `/docs/sphinx/api/` so the source stays accurate.
+  2. *(Optional)* Run `scripts/build_docs.sh` locally if you want to preview the HTML and check for warnings.
 - When adding a **new subpackage** to `back/core`, `back/objects`, or `agents`, add a new `.rst` file and reference it from the parent `.rst` toctree.
-- All public classes and functions must have **docstrings** (Google or NumPy style) so `autodoc` renders them properly.
+- All public classes and functions must have **docstrings** (Google or NumPy style) so `autodoc` renders them properly when the site is built.
 
 ### 11.3 Adding a new subpackage checklist
 
