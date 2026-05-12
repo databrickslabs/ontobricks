@@ -733,6 +733,159 @@ class TestOntologyDataNamespaceDrift:
         # Without base_uri, the rewrite is skipped → exact-match miss.
         assert result.stats.edge_count == 0
 
+    # --- data loaded with ontology-namespace (# form) predicates -----
+    #
+    # Reproduces the "ElectricitySuspended / hasClaim returns nothing"
+    # production bug: data was not loaded via R2RML but inserted with
+    # ontology-namespace predicates (``…#hasClaim`` instead of
+    # ``…/hasClaim``).  _normalized_links already converts the *rule*
+    # predicate to data form; _outgoing_edge_index must normalise the
+    # *triple* predicate to the same form or the lookup silently misses.
+
+    def _graph_with_ontology_form_predicates(self) -> List[Dict[str, str]]:
+        """Person --#PhasProject--> Project triples where the predicate
+        is in the ontology namespace (``#``), not the data namespace
+        (``/``).  This happens when data is inserted outside the R2RML
+        pipeline, e.g. direct graph insert or W3C OWL round-trip.
+        """
+        return [
+            {"subject": "Alice", "predicate": RDF_TYPE,
+             "object": self.BASE_HASH + "Person"},
+            {"subject": "Bob",   "predicate": RDF_TYPE,
+             "object": self.BASE_HASH + "Person"},
+            {"subject": "Carol", "predicate": RDF_TYPE,
+             "object": self.BASE_HASH + "Person"},
+            {"subject": "P1", "predicate": RDF_TYPE,
+             "object": self.BASE_HASH + "Project"},
+            {"subject": "P2", "predicate": RDF_TYPE,
+             "object": self.BASE_HASH + "Project"},
+            # Predicate in ONTOLOGY (# form) — the new bug scenario.
+            {"subject": "Alice", "predicate": self.BASE_HASH + "PhasProject",
+             "object": "P1"},
+            {"subject": "Bob",   "predicate": self.BASE_HASH + "PhasProject",
+             "object": "P1"},
+            {"subject": "Carol", "predicate": self.BASE_HASH + "PhasProject",
+             "object": "P2"},
+        ]
+
+    def test_via_from_foreign_namespace_resolved_by_local_name(self):
+        """Regression for the ElectricitySuspended / hasClaim production bug.
+
+        The domain's base_uri is ``https://databricks-ontology.com/Cust360Auto#``
+        but ALL object property URIs in the ontology use a shared/default
+        namespace ``https://ontobricks.com/ontology#``.  The data triples use
+        the domain's data namespace as expected.
+
+        ``_to_data_uri`` cannot bridge two completely different namespaces, so
+        ``_resolve_predicate`` must fall back to local-name matching against
+        the triples actually in the graph.
+        """
+        domain_base = "https://databricks-ontology.com/Cust360Auto#"
+        domain_data = "https://databricks-ontology.com/Cust360Auto/"
+        prop_ns = "https://ontobricks.com/ontology#"   # foreign namespace
+        triples = [
+            {"subject": "Alice", "predicate": RDF_TYPE,
+             "object": domain_base + "Customer"},
+            {"subject": "Bob",   "predicate": RDF_TYPE,
+             "object": domain_base + "Customer"},
+            {"subject": "Carol", "predicate": RDF_TYPE,
+             "object": domain_base + "Customer"},
+            {"subject": "Claim1", "predicate": RDF_TYPE,
+             "object": domain_base + "Claim"},
+            {"subject": "Claim1", "predicate": RDF_TYPE,
+             "object": domain_base + "Claim"},
+            {"subject": "Claim2", "predicate": RDF_TYPE,
+             "object": domain_base + "Claim"},
+            # Data triples use the domain data namespace.
+            {"subject": "Alice", "predicate": domain_data + "hasclaim",
+             "object": "Claim1"},
+            {"subject": "Bob",   "predicate": domain_data + "hasclaim",
+             "object": "Claim1"},
+            {"subject": "Carol", "predicate": domain_data + "hasclaim",
+             "object": "Claim2"},
+        ]
+        b = CohortBuilder(
+            store=_store_with(triples), graph_name="g", base_uri=domain_base
+        )
+        rule = CohortRule(
+            id="electricity-suspended",
+            label="Electricity suspended",
+            class_uri=domain_base + "Customer",
+            links=[CohortLink(path=[
+                CohortHop(
+                    via=prop_ns + "hasclaim",     # foreign namespace — the bug
+                    target_class=domain_base + "Claim",
+                ),
+            ])],
+            min_size=2,
+        )
+        result = b.build(rule)
+        assert result.stats.edge_count == 1, (
+            "Expected 1 edge (Alice↔Bob via Claim1). "
+            "neighbours_raw=0 means _resolve_predicate failed to match "
+            "the foreign-namespace 'hasclaim' to the domain data predicate."
+        )
+        assert result.stats.cohort_count == 1
+        cohort_members = {m for c in result.cohorts for m in c.members}
+        assert cohort_members == {"Alice", "Bob"}
+
+    def test_data_with_ontology_form_predicate_is_indexed_correctly(self):
+        """Regression for 'hasClaim returns nothing': data triples carry
+        the ontology-namespace (``#``) predicate form instead of the
+        data-namespace (``/``) form.  The engine must normalise triple
+        predicates when building the outgoing-edge index so the lookup
+        (which uses the data form after ``_normalized_links``) succeeds."""
+        b = self._builder_with_base_uri(
+            self._graph_with_ontology_form_predicates()
+        )
+        rule = CohortRule(
+            id="cohort",
+            label="Cohort",
+            class_uri=self.BASE_HASH + "Person",
+            links=[CohortLink(path=[
+                CohortHop(
+                    via=self.BASE_HASH + "PhasProject",
+                    target_class=self.BASE_HASH + "Project",
+                ),
+            ])],
+            min_size=2,
+        )
+        result = b.build(rule)
+        # Alice + Bob share P1 → cohort {Alice, Bob}; Carol is alone on P2.
+        assert result.stats.edge_count == 1, (
+            "Expected 1 edge — Alice↔Bob via P1. "
+            "neighbours_raw=0 means _outgoing_edge_index failed to "
+            "normalise the ontology-form predicate."
+        )
+        assert result.stats.cohort_count == 1
+        cohort_members = {m for c in result.cohorts for m in c.members}
+        assert cohort_members == {"Alice", "Bob"}
+
+    def test_trace_shows_nonzero_raw_for_ontology_form_predicate(self):
+        """trace_paths must also show neighbours_raw > 0 for the same
+        scenario — the 'no neighbours found via this predicate' message
+        must NOT be shown when the data simply uses ontology-form URIs."""
+        b = self._builder_with_base_uri(
+            self._graph_with_ontology_form_predicates()
+        )
+        out = b.trace_paths(
+            self.BASE_HASH + "Person",
+            [CohortLink(path=[
+                CohortHop(
+                    via=self.BASE_HASH + "PhasProject",
+                    target_class=self.BASE_HASH + "Project",
+                ),
+            ])],
+        )
+        h0 = out["links"][0]["hops"][0]
+        assert h0["in_frontier"] == 3, "all 3 persons should be in frontier"
+        assert h0["neighbours_raw"] == 3, (
+            "must see all 3 ontology-form PhasProject triples after "
+            "normalisation — failing here is the root cause of the "
+            "ElectricitySuspended / hasClaim diagnosis bug"
+        )
+        assert h0["out_frontier"] == 2   # P1, P2
+
     # --- class-URI drift on rdf:type triples -------------------------
     #
     # Reproduces the production "explain says not an instance" bug:

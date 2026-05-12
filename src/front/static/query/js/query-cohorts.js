@@ -110,6 +110,17 @@ const CohortModule = {
         return matched.length ? matched : (this.objectProperties || []);
     },
 
+    _dataPropsForClass(classUri) {
+        const allData = (this.properties || []).filter(p =>
+            !(p.type || p.kind || '').toLowerCase().includes('object')
+        );
+        if (!classUri) return allData;
+        const className = this._classNameByUri(classUri);
+        if (!className) return allData;
+        const matched = allData.filter(p => !p.domain || p.domain === className);
+        return matched.length ? matched : allData;
+    },
+
     _compatibleViaProperties(sourceUri, targetUri) {
         const props = this._objectPropsForSource(sourceUri);
         if (!targetUri) return props;
@@ -861,7 +872,7 @@ const CohortModule = {
     _renderHopWhereRow(linkIdx, hopIdx, whereIdx, w, targetClassUri) {
         const row = document.createElement('div');
         row.className = 'cohort-row cohort-hop-where-row';
-        const propOptions = (this.properties || []).map(p => {
+        const propOptions = this._dataPropsForClass(targetClassUri).map(p => {
             const uri = p.uri || p.iri || p.id || '';
             const lbl = p.label || p.name || uri;
             return `<option value="${this._esc(uri)}" ${uri === w.property ? 'selected' : ''}>${this._esc(lbl)}</option>`;
@@ -968,7 +979,7 @@ const CohortModule = {
             const propSelect = `
                 <select class="form-select form-select-sm cohort-input cohort-compat-prop" data-idx="${i}">
                     <option value="">— property —</option>
-                    ${(this.properties || []).map(p => {
+                    ${this._dataPropsForClass(this.rule.class_uri).map(p => {
                         const uri = p.uri || p.iri || p.id || '';
                         const lbl = p.label || p.name || uri;
                         return `<option value="${this._esc(uri)}" ${uri === cc.property ? 'selected' : ''}>${this._esc(lbl)}</option>`;
@@ -1733,7 +1744,9 @@ const CohortModule = {
                 Path collapses at hop ${collapsedAt + 1}
                 (<code>${this._esc(this._localName(hops[collapsedAt].via) || '?')}</code>
                 → <code>${this._esc(this._localName(hops[collapsedAt].target_class) || '?')}</code>):
-                ${hops[collapsedAt].neighbours_raw === 0
+                ${hops[collapsedAt].in_frontier === 0
+                    ? 'the starting frontier for this hop is empty — all members were eliminated before reaching it. Check the compatibility (Stage 3a) filters or the previous hop\'s <code>target_class</code>.'
+                    : hops[collapsedAt].neighbours_raw === 0
                     ? 'no neighbours found via this predicate. Check the predicate URI and whether your data actually uses it.'
                     : (hops[collapsedAt].dropped_type === hops[collapsedAt].neighbours_raw
                         ? "every neighbour was rejected by <code>target_class</code>. The hop's target entity URI probably doesn't match the URIs used in <code>rdf:type</code> triples."

@@ -138,6 +138,67 @@ class CohortBuilder:
             return data_ns + uri[len(self._base_uri):]
         return uri
 
+    def _predicate_alias_map(self) -> Dict[str, str]:
+        """Return ``local_name → canonical_data_namespace_predicate`` built
+        from the triples already loaded into the cache.
+
+        Provides a last-resort fallback for predicate URIs that live in a
+        foreign namespace (e.g. ``https://ontobricks.com/ontology#hasclaim``
+        when the domain's ``base_uri`` is
+        ``https://databricks-ontology.com/Cust360Auto#``).  In that case
+        :meth:`_to_data_uri` cannot bridge the two namespaces, but the local
+        name ``hasclaim`` is the same in both — this map connects them.
+
+        The map is built once and stored in ``self._cache["predicate_alias"]``
+        so subsequent calls are free.  It is empty when no triples are cached
+        yet (callers must invoke :meth:`_load_triples` first).
+        """
+        if "predicate_alias" in self._cache:
+            return self._cache["predicate_alias"]
+        triples: List[Dict[str, str]] = self._cache.get("triples") or []
+        data_ns = self._data_namespace()
+        alias: Dict[str, str] = {}
+        for t in triples:
+            pred = t.get("predicate", "")
+            if not pred or pred == RDF_TYPE:
+                continue
+            norm = self._to_data_uri(pred)
+            local = extract_local_name(norm)
+            if not local:
+                continue
+            # Prefer the data-namespace form when multiple predicates share
+            # the same local name (e.g. if an ontology- and a data-form
+            # triple both exist in the graph).
+            if local not in alias or (data_ns and norm.startswith(data_ns)):
+                alias[local] = norm
+        self._cache["predicate_alias"] = alias
+        return alias
+
+    def _resolve_predicate(self, uri: str) -> str:
+        """Normalise a predicate URI for rule/hop lookup.
+
+        Extends :meth:`_to_data_uri` with a local-name fallback for
+        predicates that belong to a completely different namespace than
+        the domain's ``base_uri``.  This handles the common situation
+        where an ontology's properties were created under a shared /
+        default namespace (``https://ontobricks.com/ontology#name``)
+        while the data triples use the domain-specific data namespace
+        (``https://my-domain.com/Ontology/name``).
+        """
+        result = self._to_data_uri(uri)
+        if result != uri:
+            return result  # successfully normalised by _to_data_uri
+        # _to_data_uri left the URI unchanged — it may be from a foreign
+        # namespace.  Try the local-name alias built from the loaded triples.
+        if uri:
+            local = extract_local_name(uri)
+            if local:
+                alias = self._predicate_alias_map()
+                resolved = alias.get(local)
+                if resolved:
+                    return resolved
+        return result
+
     def _to_ontology_uri(self, uri: str) -> str:
         """Inverse of :meth:`_to_data_uri` — rewrite a data-namespace URI
         back to ontology form (``base_uri`` + ``#`` + local).
@@ -179,6 +240,11 @@ class CohortBuilder:
         ``where[*].property`` rewritten to the data namespace.
         ``target_class`` is left alone — class URIs use the ontology
         form on both sides.
+
+        Uses :meth:`_resolve_predicate` instead of :meth:`_to_data_uri`
+        so that predicates from a foreign namespace (e.g. the shared
+        OntoBricks vocabulary namespace) are resolved via local-name
+        alias against the triples actually present in the graph.
         """
         if not self._base_uri:
             return list(links)
@@ -190,7 +256,7 @@ class CohortBuilder:
                 for w in h.where or []:
                     new_w = CohortCompat(
                         type=w.type,
-                        property=self._to_data_uri(w.property),
+                        property=self._resolve_predicate(w.property),
                         value=w.value,
                         values=w.values,
                         min=w.min,
@@ -200,7 +266,7 @@ class CohortBuilder:
                     new_where.append(new_w)
                 new_path.append(
                     CohortHop(
-                        via=self._to_data_uri(h.via),
+                        via=self._resolve_predicate(h.via),
                         target_class=h.target_class,
                         where=new_where,
                     )
@@ -216,7 +282,7 @@ class CohortBuilder:
         return [
             CohortCompat(
                 type=c.type,
-                property=self._to_data_uri(c.property),
+                property=self._resolve_predicate(c.property),
                 value=c.value,
                 values=c.values,
                 min=c.min,
@@ -744,11 +810,20 @@ class CohortBuilder:
             edges |= s
         return edges
 
-    @staticmethod
     def _outgoing_edge_index(
+        self,
         triples: List[Dict[str, str]],
     ) -> Dict[Tuple[str, str], List[str]]:
-        """Index ``(subject, predicate) -> [object, …]`` for path walking."""
+        """Index ``(subject, predicate) -> [object, …]`` for path walking.
+
+        Predicates are normalised to the data-namespace form via
+        :meth:`_to_data_uri` so that lookups using the normalised ``via``
+        predicate (from :meth:`_normalized_links`) always resolve correctly,
+        regardless of which namespace form the triple store uses.  This
+        matters when data was loaded outside the R2RML pipeline (e.g. direct
+        insert, W3C OWL import) where ontology-namespace predicates (``…#name``)
+        can appear instead of the expected data-namespace form (``…/name``).
+        """
         idx: Dict[Tuple[str, str], List[str]] = {}
         for t in triples:
             subj = t.get("subject")
@@ -758,7 +833,8 @@ class CohortBuilder:
             obj = t.get("object")
             if obj is None:
                 continue
-            idx.setdefault((subj, pred), []).append(obj)
+            norm_pred = self._to_data_uri(pred)
+            idx.setdefault((subj, norm_pred), []).append(obj)
         return idx
 
     def _type_index_for_links(
@@ -1164,6 +1240,8 @@ class CohortBuilder:
         if cached is None:
             cached = self._store.query_triples(self._graph_name) if self._store else []
             self._cache["triples"] = cached
+            # Invalidate predicate alias so it's rebuilt from the fresh triples.
+            self._cache.pop("predicate_alias", None)
         if max_triples is not None and len(cached) > max_triples:
             if allow_overflow:
                 logger.debug(

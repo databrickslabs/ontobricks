@@ -1,6 +1,6 @@
 [project]
 name = "ontobricks"
-version = "0.3.0"
+version = "0.3.1"
 description = "Ontology Management Tool for Databricks"
 requires-python = ">=3.10"
 dependencies = [
@@ -8,7 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.27.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
-    "python-multipart>=0.0.26",
+    "python-multipart>=0.0.27",
     "starlette>=0.35.0",
     "itsdangerous>=2.1.0",
     "jinja2>=3.1.0",
@@ -56,12 +56,21 @@ packages = ["src/back", "src/front", "src/shared", "src/agents", "src/api"]
 
 [tool.uv]
 constraint-dependencies = [
-    "mako>=1.3.11",
+    # CVE-2026-44307: path traversal via backslash URI on Windows in TemplateLookup
+    "mako>=1.3.12",
     "pygments>=2.20.0",
-    # GHSA-rpm5-65cw-6hj4 / SNYK-PYTHON-GITPYTHON-16298057:
-    # command injection via upload_pack / receive_pack kwargs. Pulled in
-    # transitively by mlflow-skinny; force a patched build.
-    "gitpython>=3.1.47",
+    # GHSA-rpm5-65cw-6hj4: command injection via upload_pack/receive_pack kwargs
+    # CVE-2026-44243: path traversal in reference APIs (fixed in 3.1.48)
+    # CVE-2026-44244: newline injection in config_writer().set_value() (fixed in 3.1.49)
+    # GHSA-mv93-w799-cj2w: section param newline bypass → RCE (fixed in 3.1.50, #26)
+    # NOTE: proxy (pypi-proxy.dev.databricks.com) tops out at 3.1.49; bump to
+    # >=3.1.50 once the proxy is updated to close #26 fully.
+    "gitpython>=3.1.49",
+    # GHSA-qccp-gfcp-xxvc / CVE-2026-????: sensitive headers forwarded in proxied
+    # low-level redirects — fixed in urllib3 2.7.0, but the internal proxy
+    # (pypi-proxy.dev.databricks.com) does not carry that version yet.
+    # Re-enable this constraint once the proxy is updated.
+    # "urllib3>=2.7.0",
 ]
 
 [tool.pytest.ini_options]
