@@ -110,6 +110,17 @@ const CohortModule = {
         return matched.length ? matched : (this.objectProperties || []);
     },
 
+    _dataPropsForClass(classUri) {
+        const allData = (this.properties || []).filter(p =>
+            !(p.type || p.kind || '').toLowerCase().includes('object')
+        );
+        if (!classUri) return allData;
+        const className = this._classNameByUri(classUri);
+        if (!className) return allData;
+        const matched = allData.filter(p => !p.domain || p.domain === className);
+        return matched.length ? matched : allData;
+    },
+
     _compatibleViaProperties(sourceUri, targetUri) {
         const props = this._objectPropsForSource(sourceUri);
         if (!targetUri) return props;
@@ -861,7 +872,7 @@ const CohortModule = {
     _renderHopWhereRow(linkIdx, hopIdx, whereIdx, w, targetClassUri) {
         const row = document.createElement('div');
         row.className = 'cohort-row cohort-hop-where-row';
-        const propOptions = (this.properties || []).map(p => {
+        const propOptions = this._dataPropsForClass(targetClassUri).map(p => {
             const uri = p.uri || p.iri || p.id || '';
             const lbl = p.label || p.name || uri;
             return `<option value="${this._esc(uri)}" ${uri === w.property ? 'selected' : ''}>${this._esc(lbl)}</option>`;
@@ -968,7 +979,7 @@ const CohortModule = {
             const propSelect = `
                 <select class="form-select form-select-sm cohort-input cohort-compat-prop" data-idx="${i}">
                     <option value="">— property —</option>
-                    ${(this.properties || []).map(p => {
+                    ${this._dataPropsForClass(this.rule.class_uri).map(p => {
                         const uri = p.uri || p.iri || p.id || '';
                         const lbl = p.label || p.name || uri;
                         return `<option value="${this._esc(uri)}" ${uri === cc.property ? 'selected' : ''}>${this._esc(lbl)}</option>`;
