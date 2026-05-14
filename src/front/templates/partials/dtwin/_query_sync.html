@@ -130,65 +130,70 @@
                         <div id="tripleStoreStatusArea" class="d-none"></div>
                     </div>
 
-                    <!-- Two-column layout: Triple-Store | Graph DB -->
+                    <!-- Architecture diagram: Triple Store → Sync → Graph DB (Lakebase) -->
                     <div id="dtColumnsArea" class="d-none">
-                        <div class="row g-3">
-                            <!-- Triple-Store Digital Twin -->
-                            <div class="col-md-6">
-                                <div class="border rounded p-3 h-100" id="dtZeroCopyCard">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <i class="bi bi-eye fs-5 me-2 text-primary"></i>
-                                        <strong>Triple-Store Digital Twin</strong>
-                                        <span id="dtExistView" class="ms-auto"></span>
-                                    </div>
-                                    <div class="small">
-                                        <div class="text-muted mb-1">Unity Catalog VIEW</div>
-                                        <code id="dtViewName" class="d-block text-break">N/A</code>
-                                    </div>
+                        <div class="dt-arch-diagram">
+
+                            <!-- Card 1: Triple Store (Unity Catalog VIEW) -->
+                            <div class="dt-arch-node" id="dtZeroCopyCard">
+                                <div class="dt-arch-header">
+                                    <i class="bi bi-database fs-4 dt-arch-icon-triplestore flex-shrink-0"></i>
+                                    <span class="dt-arch-title">Triple Store</span>
+                                    <span class="dt-arch-badge" id="dtExistView"></span>
                                 </div>
+                                <code class="dt-arch-name" id="dtViewName">N/A</code>
                             </div>
-                            <!-- Graph DB Digital Twin -->
-                            <div class="col-md-6">
-                                <div class="border rounded p-3 h-100" id="dtGraphCard">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <i class="bi bi-diagram-3-fill fs-5 me-2 text-primary"></i>
-                                        <strong id="dtGraphBackendTitle">Graph DB Digital Twin</strong>
-                                        <span id="dtExistLocal" class="ms-auto"></span>
-                                    </div>
-                                    <div class="small">
-                                        <div class="text-muted mb-1" id="dtGraphStorageSubtitle">Local graph database</div>
-                                        <div class="mb-1" id="dtGraphPrimaryRow">
-                                            <code id="dtLocalPath" class="d-block text-break ob-code-tiny"></code>
-                                        </div>
-                                        <!-- Lakebase: connection + UC details -->
-                                        <div id="dtLakebaseDetails" class="d-none">
-                                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                                <span class="text-muted">Database</span>
-                                                <code id="dtLakebaseDatabase" class="text-break ob-code-tiny text-muted"></code>
-                                            </div>
-                                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                                <span class="text-muted">Schema</span>
-                                                <code id="dtLakebaseSchema" class="text-break ob-code-tiny text-muted"></code>
-                                            </div>
-                                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                                <span class="text-muted">Table</span>
-                                                <code id="dtLakebaseTable" class="text-break ob-code-tiny text-muted"></code>
-                                                <span id="dtLakebaseTableExists" class="ms-1"></span>
-                                            </div>
-                                            <div class="d-flex justify-content-between align-items-center d-none" id="dtLakebaseSyncedUcRow">
-                                                <span class="text-muted">UC sync object</span>
-                                                <code id="dtLakebaseSyncedUc" class="text-break ob-code-tiny text-muted"></code>
-                                                <span id="dtLakebaseSyncedUcExists" class="ms-1"></span>
-                                            </div>
-                                            <div class="mt-2 small text-muted" id="dtLakebaseBuildNote" style="display:none;">
-                                                <i class="bi bi-info-circle me-1"></i>
-                                                Build writes graph triples to Lakebase
-                                                (<code id="fnLkDatabase2">…</code>.<code id="fnLkSchema2">…</code>.<code id="fnLkTable2">…</code>)<span id="fnLkSyncNote" class="d-none"> and registers a Lakeflow synced table as <code id="fnLkSyncedUc2"></code></span>.
-                                            </div>
-                                        </div>
-                                    </div>
+
+                            <!-- Lakebase section: arrow + Sync + arrow + Graph DB -->
+                            <div id="dtLakebaseDetails" class="d-none dt-arch-lakebase-section">
+
+                                <!-- Arrow: Triple Store → Sync -->
+                                <div class="dt-arch-connector">
+                                    <i class="bi bi-arrow-right"></i>
                                 </div>
+
+                                <!-- Card 2: UC Sync Object -->
+                                <div class="dt-arch-node" id="dtLakebaseSyncedUcRow">
+                                    <div class="dt-arch-header">
+                                        <i class="bi bi-arrow-repeat fs-4 dt-arch-icon-sync-lg flex-shrink-0"></i>
+                                        <span class="dt-arch-title">Sync</span>
+                                        <span class="dt-arch-badge" id="dtLakebaseSyncedUcExists"></span>
+                                    </div>
+                                    <code class="dt-arch-name" id="dtLakebaseSyncedUc">—</code>
+                                </div>
+
+                                <!-- Arrow: Sync → Graph DB -->
+                                <div class="dt-arch-connector">
+                                    <i class="bi bi-arrow-right"></i>
+                                </div>
+
+                                <!-- Card 3: Graph DB (Lakebase) -->
+                                <div class="dt-arch-node" id="dtGraphCard">
+                                    <div class="dt-arch-header">
+                                        <img src="/static/global/img/lakebase-icon.svg" class="dt-arch-icon-lakebase-img flex-shrink-0" alt="Lakebase">
+                                        <span class="dt-arch-title" id="dtGraphBackendTitle">Graph DB (Lakebase)</span>
+                                        <span class="dt-arch-badge" id="dtLakebaseTableExists"></span>
+                                    </div>
+                                    <code class="dt-arch-name" id="dtLakebaseFullName">—</code>
+                                </div>
+
+                                <!-- Build note (below cards) -->
+                                <div class="dt-arch-build-note w-100 d-none" id="dtLakebaseBuildNote">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Build writes graph triples to Lakebase
+                                    (<code id="fnLkDatabase2">…</code>.<code id="fnLkSchema2">…</code>.<code id="fnLkTable2">…</code>)<span id="fnLkSyncNote" class="d-none"> and registers a Lakeflow synced table as <code id="fnLkSyncedUc2"></code></span>.
+                                </div>
+
                             </div>
+
+                            <!-- Hidden: individual fields + compat elements -->
+                            <code id="dtLakebaseDatabase" class="d-none"></code>
+                            <code id="dtLakebaseSchema" class="d-none"></code>
+                            <code id="dtLakebaseTable" class="d-none"></code>
+                            <span class="d-none" id="dtExistLocal"></span>
+                            <span class="d-none" id="dtGraphStorageSubtitle"></span>
+                            <span class="d-none" id="dtGraphPrimaryRow"><code id="dtLocalPath"></code></span>
+
                         </div>
                     </div>
 

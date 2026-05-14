@@ -174,9 +174,12 @@ function _applyBuildGraphEngineUi(dtExist) {
         if (lkDb)  lkDb.textContent  = dt.lakebase_database || '—';
         if (lkSch) lkSch.textContent = dt.lakebase_schema   || '—';
         if (lkTbl) lkTbl.textContent = dt.lakebase_table    || '—';
-        var hasUc = !!(dt.lakebase_synced_uc);
-        // Always show the UC sync row for managed_synced; hide only when truly absent
-        if (lkUcRow) lkUcRow.classList.toggle('d-none', !hasUc);
+        var lkFullName = document.getElementById('dtLakebaseFullName');
+        if (lkFullName) {
+            var db = dt.lakebase_database || '', sch = dt.lakebase_schema || '', tbl = dt.lakebase_table || '';
+            lkFullName.textContent = (db && sch && tbl) ? db + '.' + sch + '.' + tbl : (db || sch || tbl || '—');
+        }
+        var hasUcName = !!(dt.lakebase_synced_uc);
         if (lkUc) lkUc.textContent = dt.lakebase_synced_uc || '—';
 
         // existence badges for table and UC sync
@@ -196,10 +199,17 @@ function _applyBuildGraphEngineUi(dtExist) {
             }
         }
         var ucExistsEl = document.getElementById('dtLakebaseSyncedUcExists');
-        if (ucExistsEl && hasUc) {
-            ucExistsEl.innerHTML = '<span class="badge bg-info bg-opacity-10 text-info border border-info" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Registered</span>';
-        } else if (ucExistsEl) {
-            ucExistsEl.innerHTML = '';
+        if (ucExistsEl) {
+            if (dt.lakebase_synced_uc_exists === true) {
+                ucExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+            } else if (dt.lakebase_synced_uc_exists === false) {
+                ucExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+            } else if (hasUcName) {
+                // name is configured but existence probe didn't return yet / failed
+                ucExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+            } else {
+                ucExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+            }
         }
 
         // in-card build note (replaces footnote below the card)
@@ -213,8 +223,8 @@ function _applyBuildGraphEngineUi(dtExist) {
             if (fn2Db)  fn2Db.textContent  = dt.lakebase_database || '…';
             if (fn2Sch) fn2Sch.textContent = dt.lakebase_schema   || '…';
             if (fn2Tbl) fn2Tbl.textContent = dt.lakebase_table    || '…';
-            if (fn2Sync) fn2Sync.classList.toggle('d-none', !hasUc);
-            if (fn2Uc && hasUc) fn2Uc.textContent = dt.lakebase_synced_uc;
+            if (fn2Sync) fn2Sync.classList.toggle('d-none', !hasUcName);
+            if (fn2Uc && hasUcName) fn2Uc.textContent = dt.lakebase_synced_uc;
             buildNote.style.display = '';
         }
     }
@@ -222,11 +232,12 @@ function _applyBuildGraphEngineUi(dtExist) {
 
 function _applyDtExistence(data) {
     function _badge(flag, okText, failText, unknownText) {
+        var s = 'style="font-size:.65rem;"';
         if (flag === true)
-            return '<span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
+            return '<span class="badge bg-success bg-opacity-10 text-success border border-success" ' + s + '><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
         if (flag === false)
-            return '<span class="badge bg-danger text-white border border-danger"><i class="bi bi-x-circle-fill me-1"></i>' + failText + '</span>';
-        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border"><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
+            return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
+        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
     }
 
     var viewEl = document.getElementById('dtExistView');
@@ -239,29 +250,16 @@ function _applyDtExistence(data) {
 
     var zcCard = document.getElementById('dtZeroCopyCard');
     if (zcCard) {
-        if (data.view_exists === true)
-            zcCard.className = 'border rounded p-3 h-100 border-success';
-        else if (data.view_exists === false)
-            zcCard.className = 'border rounded p-3 h-100 border-danger';
-        else
-            zcCard.className = 'border rounded p-3 h-100';
+        zcCard.classList.remove('border-success', 'border-danger');
+        if (data.view_exists === true) zcCard.classList.add('border-success');
+        else if (data.view_exists === false) zcCard.classList.add('border-danger');
     }
-
-    // Graph DB card: status badges, local path + card border
-    var localEl = document.getElementById('dtExistLocal');
-    if (localEl) localEl.innerHTML = _badge(data.local_lbug_exists, 'Loaded', 'Not loaded', 'N/A');
-
-    var localPathEl = document.getElementById('dtLocalPath');
-    if (localPathEl) localPathEl.textContent = data.local_lbug_path || '';
 
     var graphCard = document.getElementById('dtGraphCard');
     if (graphCard) {
-        if (data.local_lbug_exists === true)
-            graphCard.className = 'border rounded p-3 h-100 border-success';
-        else if (data.local_lbug_exists === false)
-            graphCard.className = 'border rounded p-3 h-100 border-danger';
-        else
-            graphCard.className = 'border rounded p-3 h-100';
+        graphCard.classList.remove('border-success', 'border-danger');
+        if (data.lakebase_table_exists === true) graphCard.classList.add('border-success');
+        else if (data.lakebase_table_exists === false) graphCard.classList.add('border-danger');
     }
 
     // Global info: last update & last built

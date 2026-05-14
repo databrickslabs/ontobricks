@@ -353,11 +353,12 @@ function updateMappingCard(data) {
 
 /** Reusable existence badge (same pattern as query-sync.js _badge) */
 function _dtBadge(flag, okText, failText, unknownText) {
+    var s = 'style="font-size:.65rem;"';
     if (flag === true)
-        return '<span class="badge bg-success bg-opacity-10 text-success border border-success"><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
+        return '<span class="badge bg-success bg-opacity-10 text-success border border-success" ' + s + '><i class="bi bi-check-circle-fill me-1"></i>' + okText + '</span>';
     if (flag === false)
-        return '<span class="badge bg-danger text-white border border-danger"><i class="bi bi-x-circle-fill me-1"></i>' + failText + '</span>';
-    return '<span class="badge bg-secondary bg-opacity-10 text-secondary border"><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
+        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + failText + '</span>';
+    return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
 }
 
 function _formatTimestamp(iso) {
@@ -430,9 +431,9 @@ function updateDtwinCard(data) {
 
     var zcCard = document.getElementById('psDtZeroCopyCard');
     if (zcCard) {
-        if (dt.view_exists === true) zcCard.className = 'border rounded p-3 h-100 border-success';
-        else if (dt.view_exists === false) zcCard.className = 'border rounded p-3 h-100 border-danger';
-        else zcCard.className = 'border rounded p-3 h-100';
+        zcCard.classList.remove('border-success', 'border-danger');
+        if (dt.view_exists === true) zcCard.classList.add('border-success');
+        else if (dt.view_exists === false) zcCard.classList.add('border-danger');
     }
 
     var viewNameEl = document.getElementById('psDtViewName');
@@ -454,14 +455,11 @@ function updateDtwinCard(data) {
     var titleGraph = document.getElementById('psDtGraphBackendTitle');
     if (titleGraph) titleGraph.textContent = 'Graph DB (Lakebase)';
 
-    var localEl = document.getElementById('psDtExistLocal');
-    if (localEl) localEl.innerHTML = _dtBadge(dt.local_lbug_exists, 'Loaded', 'Not loaded', 'N/A');
-
     var graphCard = document.getElementById('psDtGraphCard');
     if (graphCard) {
-        if (dt.local_lbug_exists === true) graphCard.className = 'border rounded p-3 h-100 border-success';
-        else if (dt.local_lbug_exists === false) graphCard.className = 'border rounded p-3 h-100 border-danger';
-        else graphCard.className = 'border rounded p-3 h-100';
+        graphCard.classList.remove('border-success', 'border-danger');
+        if (dt.lakebase_table_exists === true) graphCard.classList.add('border-success');
+        else if (dt.lakebase_table_exists === false) graphCard.classList.add('border-danger');
     }
 
     var lkDetails = document.getElementById('psDtLakebaseDetails');
@@ -476,8 +474,12 @@ function updateDtwinCard(data) {
         if (psDb)  psDb.textContent  = dt.lakebase_database || '—';
         if (psSch) psSch.textContent = dt.lakebase_schema   || '—';
         if (psTbl) psTbl.textContent = dt.lakebase_table    || '—';
-        var hasUc = !!(dt.lakebase_synced_uc);
-        if (psUcRow) psUcRow.classList.toggle('d-none', !hasUc);
+        var psFullName = document.getElementById('psDtLakebaseFullName');
+        if (psFullName) {
+            var db = dt.lakebase_database || '', sch = dt.lakebase_schema || '', tbl = dt.lakebase_table || '';
+            psFullName.textContent = (db && sch && tbl) ? db + '.' + sch + '.' + tbl : (db || sch || tbl || '—');
+        }
+        var hasUcName = !!(dt.lakebase_synced_uc);
         if (psUc) psUc.textContent = dt.lakebase_synced_uc || '—';
 
         // existence badges
@@ -497,10 +499,17 @@ function updateDtwinCard(data) {
             }
         }
         var psUcExistsEl = document.getElementById('psDtLakebaseSyncedUcExists');
-        if (psUcExistsEl && hasUc) {
-            psUcExistsEl.innerHTML = '<span class="badge bg-info bg-opacity-10 text-info border border-info" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Registered</span>';
-        } else if (psUcExistsEl) {
-            psUcExistsEl.innerHTML = '';
+        if (psUcExistsEl) {
+            if (dt.lakebase_synced_uc_exists === true) {
+                psUcExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
+            } else if (dt.lakebase_synced_uc_exists === false) {
+                psUcExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+            } else if (hasUcName) {
+                // name is configured but existence probe didn't return yet / failed
+                psUcExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+            } else {
+                psUcExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+            }
         }
     }
 

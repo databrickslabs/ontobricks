@@ -888,6 +888,7 @@ class DigitalTwin:
             "graph_engine": graph_engine,
             "local_lbug_exists": None,
             "lakebase_table_exists": None,
+            "lakebase_synced_uc_exists": None,
             "lakebase_check_error": None,
             "view_table": view_table,
             "graph_name": graph_name,
@@ -1019,6 +1020,22 @@ class DigitalTwin:
         result["lakebase_table"] = lk_table
         result["lakebase_sync_mode"] = lk_sync_mode
         result["lakebase_synced_uc"] = lk_synced_uc
+
+        # Check whether the UC synced table actually exists in Unity Catalog
+        if lk_synced_uc:
+            try:
+                view_store_uc = get_triplestore(domain, settings, backend="view")
+                if view_store_uc:
+                    uc_exists = await run_blocking(view_store_uc.table_exists, lk_synced_uc)
+                    result["lakebase_synced_uc_exists"] = uc_exists
+                    logger.info(
+                        "DT existence: synced UC table %s -> exists=%s",
+                        lk_synced_uc, uc_exists,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "DT existence: synced UC table %s check failed: %s", lk_synced_uc, e
+                )
 
         return result
 

@@ -227,60 +227,65 @@
                 </div>
             </div>
 
-            <!-- Two-column layout: Triple-Store | Graph DB (same as DT page) -->
-            <div class="row g-3">
-                <!-- Triple-Store Digital Twin -->
-                <div class="col-md-6">
-                    <div class="border rounded p-3 h-100" id="psDtZeroCopyCard">
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="bi bi-eye fs-5 me-2 text-primary"></i>
-                            <strong>Triple-Store Digital Twin</strong>
-                            <span id="psDtExistView" class="ms-auto"></span>
+            <!-- Architecture diagram: Triple Store → Sync → Graph DB (Lakebase) -->
+            <div class="dt-arch-diagram">
+
+                <!-- Card 1: Triple Store (Unity Catalog VIEW) -->
+                <div class="dt-arch-node" id="psDtZeroCopyCard">
+                    <div class="dt-arch-header">
+                        <i class="bi bi-database fs-4 dt-arch-icon-triplestore flex-shrink-0"></i>
+                        <span class="dt-arch-title">Triple Store</span>
+                        <span class="dt-arch-badge" id="psDtExistView"></span>
+                    </div>
+                    <code class="dt-arch-name" id="psDtViewName">N/A</code>
+                    <div id="psDtViewReason" class="text-danger dt-arch-reason" style="display:none;"></div>
+                </div>
+
+                <!-- Lakebase section: arrow + Sync + arrow + Graph DB -->
+                <div id="psDtLakebaseDetails" class="d-none dt-arch-lakebase-section">
+
+                    <!-- Arrow: Triple Store → Sync -->
+                    <div class="dt-arch-connector">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+
+                    <!-- Card 2: UC Sync Object -->
+                    <div class="dt-arch-node" id="psDtLakebaseSyncedUcRow">
+                        <div class="dt-arch-header">
+                            <i class="bi bi-arrow-repeat fs-4 dt-arch-icon-sync-lg flex-shrink-0"></i>
+                            <span class="dt-arch-title">Sync</span>
+                            <span class="dt-arch-badge" id="psDtLakebaseSyncedUcExists"></span>
                         </div>
-                        <div class="small">
-                            <div class="text-muted mb-1">Unity Catalog VIEW</div>
-                            <code id="psDtViewName" class="d-block text-break">N/A</code>
-                            <div id="psDtViewReason" class="text-danger small mt-1" style="display:none;"></div>
+                        <code class="dt-arch-name" id="psDtLakebaseSyncedUc">—</code>
+                    </div>
+
+                    <!-- Arrow: Sync → Graph DB -->
+                    <div class="dt-arch-connector">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+
+                    <!-- Card 3: Graph DB (Lakebase) -->
+                    <div class="dt-arch-node" id="psDtGraphCard">
+                        <div class="dt-arch-header">
+                            <img src="/static/global/img/lakebase-icon.svg" class="dt-arch-icon-lakebase-img flex-shrink-0" alt="Lakebase">
+                            <span class="dt-arch-title" id="psDtGraphBackendTitle">Graph DB (Lakebase)</span>
+                            <span class="dt-arch-badge" id="psDtLakebaseTableExists"></span>
+                        </div>
+                        <code class="dt-arch-name" id="psDtLakebaseFullName">—</code>
+                        <div class="dt-arch-triple-count text-muted mt-1" id="psDtTripleArea" style="display:none;">
+                            <i class="bi bi-database me-1"></i><span id="psDtTripleValue">0</span> triples
                         </div>
                     </div>
+
                 </div>
-                <!-- Graph DB Digital Twin -->
-                <div class="col-md-6">
-                    <div class="border rounded p-3 h-100" id="psDtGraphCard">
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="bi bi-diagram-3-fill fs-5 me-2 text-primary"></i>
-                            <strong id="psDtGraphBackendTitle">Graph DB (Lakebase)</strong>
-                            <span id="psDtExistLocal" class="ms-auto"></span>
-                        </div>
-                        <div class="small">
-                            <div class="text-muted mb-1 d-none" id="psDtGraphStorageSubtitle">Local graph database</div>
-                            <div id="psDtLakebaseDetails" class="d-none">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="text-muted">Database</span>
-                                    <code id="psDtLakebaseDatabase" class="text-break ob-code-tiny text-muted"></code>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="text-muted">Schema</span>
-                                    <code id="psDtLakebaseSchema" class="text-break ob-code-tiny text-muted"></code>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="text-muted">Table</span>
-                                    <code id="psDtLakebaseTable" class="text-break ob-code-tiny text-muted"></code>
-                                    <span id="psDtLakebaseTableExists" class="ms-1"></span>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center d-none" id="psDtLakebaseSyncedUcRow">
-                                    <span class="text-muted">UC sync object</span>
-                                    <code id="psDtLakebaseSyncedUc" class="text-break ob-code-tiny text-muted"></code>
-                                    <span id="psDtLakebaseSyncedUcExists" class="ms-1"></span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="small mt-2" id="psDtTripleArea" style="display:none;">
-                            <i class="bi bi-database me-1 text-muted"></i>
-                            <span id="psDtTripleValue">0</span> triples
-                        </div>
-                    </div>
-                </div>
+
+                <!-- Hidden: individual fields + compat elements -->
+                <code id="psDtLakebaseDatabase" class="d-none"></code>
+                <code id="psDtLakebaseSchema" class="d-none"></code>
+                <code id="psDtLakebaseTable" class="d-none"></code>
+                <span class="d-none" id="psDtExistLocal"></span>
+                <span class="d-none" id="psDtGraphStorageSubtitle"></span>
+
             </div>
         </div>
     </div>

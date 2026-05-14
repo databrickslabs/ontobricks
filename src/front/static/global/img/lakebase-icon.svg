@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Lakebase icon: PostgreSQL elephant (Slonik) -->
+  <!-- Left ear (dark blue crescent) -->
+  <path d="M7 4 C4 4 2 6.5 2 9.5 C2 12.5 4 14.5 7 14.5 C5.5 12.5 5 11 5 9.5 C5 7.5 5.8 5.5 7 4Z" fill="#336791"/>
+  <!-- Inner ear (lighter blue) -->
+  <path d="M6.5 5.5 C4.8 6 3.8 7.5 3.8 9.5 C3.8 11 4.5 12.5 6 13.5 C5 12 4.5 10.5 4.8 9 C5 7 5.8 6 6.5 5.5Z" fill="#5a8db5"/>
+  <!-- Head -->
+  <path d="M7 3 C9 1.5 14 1.5 17.5 4 C20.5 6.5 21 10.5 19.5 14 C18 17 15.5 18.5 12.5 18.5 C9.5 18.5 7 17 6 15 C5 13 5 10 6.5 7.5 C6.5 5.5 7 4 7 3Z" fill="#336791"/>
+  <!-- Trunk -->
+  <path d="M19.5 8.5 C22 8.5 23 10.5 23 13 C23 15.5 22 17 19.5 17 C19 17 18.5 16.5 18.5 16" fill="none" stroke="#336791" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Eye white -->
+  <circle cx="11.5" cy="8.5" r="2" fill="#f0f0f0"/>
+  <!-- Eye pupil -->
+  <circle cx="12" cy="9" r="1" fill="#1a3a5c"/>
+  <!-- Tusk -->
+  <path d="M15.5 15 Q17 18 15 19.5" fill="none" stroke="#f5f0e0" stroke-width="1.4" stroke-linecap="round"/>
+  <!-- Body -->
+  <ellipse cx="13" cy="21" rx="5.5" ry="2.5" fill="#336791"/>
+</svg>
