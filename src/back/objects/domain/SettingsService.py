@@ -390,7 +390,7 @@ class SettingsService:
                 _, host, token, registry_cfg = SettingsService._resolve_context(
                     session_mgr, settings
                 )
-                global_config_service.load(host, token, registry_cfg, force=True)
+                global_config_service.load(host, token, registry_cfg)
                 graph_engine = global_config_service.get_graph_engine(
                     host, token, registry_cfg
                 )

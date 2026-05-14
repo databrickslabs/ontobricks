@@ -10,7 +10,7 @@ from shared.config.settings import get_settings, Settings
 from shared.config.constants import DEFAULT_BASE_URI
 from back.core.errors import ValidationError
 from back.objects.session import SessionManager, get_session_manager
-from back.core.helpers import resolve_default_base_uri, resolve_default_emoji
+from back.core.helpers import resolve_default_base_uri, resolve_default_emoji, run_blocking
 from back.objects.session import get_domain
 from back.objects.registry import ROLE_ADMIN, require
 
@@ -194,7 +194,7 @@ async def get_registry(
     settings: Settings = Depends(get_settings),
 ):
     """Return current domain-registry configuration and initialization status."""
-    return config_service.build_registry_get_payload(session_mgr, settings)
+    return await run_blocking(config_service.build_registry_get_payload, session_mgr, settings)
 
 
 @router.post("/registry/initialize")
