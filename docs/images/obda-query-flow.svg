@@ -106,24 +106,12 @@
     <text x="610" y="320" text-anchor="middle" font-size="12" font-weight="bold" fill="white">7. Triple Store</text>
     <text x="610" y="335" text-anchor="middle" font-size="11" fill="rgba(255,255,255,0.9)">Backend Dispatch</text>
     <rect x="510" y="348" width="200" height="36" rx="3" fill="white" fill-opacity="0.15"/>
-    <text x="610" y="367" text-anchor="middle" font-size="9" fill="white">Delta: SQL Warehouse execution</text>
+    <text x="610" y="361" text-anchor="middle" font-size="9" fill="white">Delta: SQL Warehouse execution</text>
+    <text x="610" y="374" text-anchor="middle" font-size="9" fill="white">Lakebase: Managed Postgres</text>
   </g>
-  
-  <!-- LadybugDB alternate path -->
-  <g filter="url(#shadow)">
-    <rect x="500" y="410" width="220" height="65" rx="6" fill="#16A085"/>
-    <text x="610" y="432" text-anchor="middle" font-size="11" font-weight="bold" fill="white">7b. LadybugDB Path</text>
-    <rect x="510" y="440" width="200" height="28" rx="3" fill="white" fill-opacity="0.15"/>
-    <text x="610" y="455" text-anchor="middle" font-size="9" fill="white">Native Cypher (no SQL translation)</text>
-    <text x="610" y="468" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.8)">Graph model from ontology schema</text>
-  </g>
-  
-  <!-- Arrow from R2RML to LadybugDB -->
-  <path d="M720 265 L720 435 L725 435" stroke="#16A085" stroke-width="1.5" fill="none" stroke-dasharray="5,3"/>
-  <text x="728" y="355" font-size="8" fill="#16A085" transform="rotate(90, 728, 355)">direct schema</text>
   
   <!-- Arrow down from backends -->
-  <path d="M610 475 L610 500" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <path d="M610 390 L610 500" stroke="#3498DB" stroke-width="2" marker-end="url(#arrowBlue)"/>
   
   <!-- Step 8: Results -->
   <g filter="url(#shadow)">

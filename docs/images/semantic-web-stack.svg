@@ -174,11 +174,11 @@
     <text x="202" y="852" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Spark SQL · Delta table</text>
     <text x="202" y="865" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">UC-governed</text>
     
-    <!-- LadybugDB -->
+    <!-- Lakebase -->
     <rect x="355" y="800" width="275" height="85" rx="4" fill="white" fill-opacity="0.15"/>
-    <text x="492" y="820" text-anchor="middle" font-size="11" font-weight="600" fill="white">LadybugDB</text>
-    <text x="492" y="838" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Embedded Graph DB</text>
-    <text x="492" y="852" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Cypher · Local /tmp disk</text>
-    <text x="492" y="865" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Sync to UC Volume</text>
+    <text x="492" y="820" text-anchor="middle" font-size="11" font-weight="600" fill="white">Lakebase</text>
+    <text x="492" y="838" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Managed Postgres</text>
+    <text x="492" y="852" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">SQL · App- or Lakeflow-managed</text>
+    <text x="492" y="865" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">UC-governed</text>
   </g>
 </svg>

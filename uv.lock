@@ -2439,7 +2439,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "rdflib" },
-    { name = "real-ladybug" },
     { name = "requests" },
     { name = "starlette" },
     { name = "strawberry-graphql", extra = ["fastapi"] },
@@ -2490,7 +2489,6 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.27" },
     { name = "rdflib", specifier = ">=7.6.0" },
-    { name = "real-ladybug", specifier = ">=0.1.0" },
     { name = "requests", specifier = ">=2.33.0" },
     { name = "starlette", specifier = ">=0.35.0" },
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.312.3" },
@@ -3581,49 +3579,6 @@ wheels = [
 [package.optional-dependencies]
 html = [
     { name = "html5rdf" },
-]
-
-[[package]]
-name = "real-ladybug"
-version = "0.15.2"
-source = { registry = "https://pypi-proxy.dev.databricks.com/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b3/f7/ccac519b83a2726955aecb6b8ca434b0828633d63996592be2717ac712dd/real_ladybug-0.15.2.tar.gz", hash = "sha256:677803a5116051b2b3a3d1939904f803c8e39cb95fd94ec7341641349d65446a", size = 9940961, upload-time = "2026-03-19T00:15:31.417Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/04/ba/4b83b896fdc51a73473d3755ed96c21fe214d7fdd41c81626be0bd9260c6/real_ladybug-0.15.2-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:7903a2b189e24bb384f490d2309b231d6a66b4f842778bc56197a8547e562549", size = 4017390, upload-time = "2026-03-19T00:14:31.999Z" },
-    { url = "https://files.pythonhosted.org/packages/62/16/31a0294a0c56b4204d16f0630145e2c5ca606491579af79faa85aed7e25a/real_ladybug-0.15.2-cp310-cp310-macosx_13_0_x86_64.whl", hash = "sha256:2811e00578cb64c61564b9fbab843791078803c3765fe959408c7b8a789c8115", size = 4480090, upload-time = "2026-03-19T00:14:34.135Z" },
-    { url = "https://files.pythonhosted.org/packages/7f/af/cade44e42214d0c40915a6fce14d23f5fac877cd350c4360409c026590a7/real_ladybug-0.15.2-cp310-cp310-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:05f32a3aef7a712422747c408eef132587308701ea5c446b7ac695d2624988fa", size = 6871503, upload-time = "2026-03-19T00:14:35.738Z" },
-    { url = "https://files.pythonhosted.org/packages/9a/05/34ed2672dc4d013449bb01cf4ab975c31c980f0ca1e8f73cf0ed9246ad52/real_ladybug-0.15.2-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:5d7a818d00d88294623ba8680df27252f9d50ae621999fdf5971f9df23a1f9d0", size = 7774136, upload-time = "2026-03-19T00:14:37.608Z" },
-    { url = "https://files.pythonhosted.org/packages/e6/14/5ff6329c44994fa1fae923c6e653a7ebf0606cfb66ed54ad0c18b54c98f4/real_ladybug-0.15.2-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:4e9837f3975c0950252b9cd8d641948aa8fdd3a1e3b5842caea2cbf678c1ad93", size = 8040068, upload-time = "2026-03-19T00:14:39.178Z" },
-    { url = "https://files.pythonhosted.org/packages/9a/71/f052bbc115ca4e341c69f0bd2b45de690132f0ae62b6980883536bcbc1c4/real_ladybug-0.15.2-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:9e4a24a2c5665a2e75fd8a14efa7699e9a93156a0cfb91f304d418eb30c93eb2", size = 8789307, upload-time = "2026-03-19T00:14:40.851Z" },
-    { url = "https://files.pythonhosted.org/packages/e5/ec/201e21490ca0bad630ae4d4f7a15d795042361d4e9751b2be74cccbdaed1/real_ladybug-0.15.2-cp310-cp310-win_amd64.whl", hash = "sha256:e3d366b7a27a239e06ac25515ad0bbd5a1ef3e99d54641d0645013233fb2b5aa", size = 5078536, upload-time = "2026-03-19T00:14:42.793Z" },
-    { url = "https://files.pythonhosted.org/packages/4f/99/702da27f2a400cfc2e9c49771aa044df7ce65767f1c2ff82a430e4c2aac7/real_ladybug-0.15.2-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:d2adb60803464760d216fff9ba7e0db5633ac57877f19ac90b26ecd8f51033ec", size = 4018906, upload-time = "2026-03-19T00:14:44.436Z" },
-    { url = "https://files.pythonhosted.org/packages/7d/9a/27b7756f52ffc46dff7be6a00933fdbcda8c36d1be2e067deede1376a52a/real_ladybug-0.15.2-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:43ee721730f15236d94e21341882e46b47d6c83e6225e22dd314dc4d0d185f6b", size = 4482424, upload-time = "2026-03-19T00:14:45.832Z" },
-    { url = "https://files.pythonhosted.org/packages/d8/2f/0c3e3e2d72807930fc75049b77d9d3f8de2fb33d49c514ce84b2fb67cafb/real_ladybug-0.15.2-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:6b8180e05ca50916cc60bef4f4195ec4aa35de53a664fd92b9c4b8f5b21765dc", size = 6872725, upload-time = "2026-03-19T00:14:47.378Z" },
-    { url = "https://files.pythonhosted.org/packages/c6/1b/3157017de4ce53f27ef8591ee68c90859362b6bd374ae655ad504cfb51f1/real_ladybug-0.15.2-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3003b738a030680746782d5e6ff772606281eb62dcffa130b591076d807b73b9", size = 7774929, upload-time = "2026-03-19T00:14:48.881Z" },
-    { url = "https://files.pythonhosted.org/packages/b0/fb/dd5554153f80e96fee041be8c88283ab499299ad6f243f64c435ea9d7cf4/real_ladybug-0.15.2-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:178c39b7837b7857b8d7a342d767180752faea0519b7a54259bdedd178968898", size = 8041887, upload-time = "2026-03-19T00:14:50.705Z" },
-    { url = "https://files.pythonhosted.org/packages/63/dd/3dffde3492799353bef4487ee67f9e888b27c31b9a13365692637b8448c2/real_ladybug-0.15.2-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:6301a4fe06de9eee22120bed5e070d8c65c4671c66d1b0eb633a6fd0e9ca7498", size = 8789767, upload-time = "2026-03-19T00:14:52.434Z" },
-    { url = "https://files.pythonhosted.org/packages/15/3c/61f19d04eafae7a7a73a54281bb880fbbdd7920dbd7725d13652f4c85900/real_ladybug-0.15.2-cp311-cp311-win_amd64.whl", hash = "sha256:6feec22e6aedec9b9463391f5154edd6f677f0a72f98b0f6f0eb1a9d1cc48f60", size = 5079124, upload-time = "2026-03-19T00:14:54.213Z" },
-    { url = "https://files.pythonhosted.org/packages/e6/90/e325451fa0b381e6b14a182a505ff1682b3126d190d6cbc927afad71f98c/real_ladybug-0.15.2-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:a6e833db756b37b7838b017777e12ef81a1a6d3be9d0feeeccee5ee405cad4fa", size = 4018058, upload-time = "2026-03-19T00:14:55.948Z" },
-    { url = "https://files.pythonhosted.org/packages/b0/3d/c2b6a1f5f04961dc25b40b1acd7317ded9afa62ae029f3e484244f005da4/real_ladybug-0.15.2-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:8eaff4cbda5b5df1c0ca50ff3941829420e6149e15a0ec16bbc21d3b546ce685", size = 4484656, upload-time = "2026-03-19T00:14:57.524Z" },
-    { url = "https://files.pythonhosted.org/packages/14/cb/288de11be62bf2f74db0a6eb2a0ed00c99114741c393a2b6a5cea20b5fdb/real_ladybug-0.15.2-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:729b0e877f641774ba5061e7307b32fa09832da495e920b92c032a8f4b42b562", size = 6869410, upload-time = "2026-03-19T00:14:59.013Z" },
-    { url = "https://files.pythonhosted.org/packages/60/b9/2eea91f39927d6873e852cbdb36f1e386ac81da30c32f181b9e3177cdc4b/real_ladybug-0.15.2-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:5749d6fb6897aabd4e18be42d9fafec58405e6b2e9f82ac7c9ce8aaba24be685", size = 7773009, upload-time = "2026-03-19T00:15:00.712Z" },
-    { url = "https://files.pythonhosted.org/packages/d8/8a/4719aeb29bfb07c55a7ed25dad3e661694af2c1c452dba5ce054506e11c2/real_ladybug-0.15.2-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:e20c0f6a585a950a98c66f3707354855396594ae10bf78254d6a07ab05f3708a", size = 8037303, upload-time = "2026-03-19T00:15:02.195Z" },
-    { url = "https://files.pythonhosted.org/packages/c2/94/99318e7f10e375cb28259f7185e84dde0e7f622db66363f4d49fbf01880e/real_ladybug-0.15.2-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:6ce79e27c213131dc7ffec3cb3d69a038c0935d55f959a0352ed17bf900f9ea3", size = 8788323, upload-time = "2026-03-19T00:15:04.282Z" },
-    { url = "https://files.pythonhosted.org/packages/f8/93/ca9608473351f989b3a52215deaad88874f8932d39635cb030fd29813dfb/real_ladybug-0.15.2-cp312-cp312-win_amd64.whl", hash = "sha256:a2ddcd7db9a52182f8e0e86784f2cbdcb1e4cf331bcabec5678ded0557e1d70d", size = 5080645, upload-time = "2026-03-19T00:15:06.441Z" },
-    { url = "https://files.pythonhosted.org/packages/be/65/5397f6d4d5af391eae62a4f42f6e3b95be25de404a25a44b83a79553b4b4/real_ladybug-0.15.2-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:ce889f480d6d46430d21b62396d8ca433816899d647c283b76fe1dc36dad7035", size = 4018126, upload-time = "2026-03-19T00:15:07.91Z" },
-    { url = "https://files.pythonhosted.org/packages/e3/fd/282315342a7552fbc3a51248e78021f46c88dd44fe94799acf48882205fb/real_ladybug-0.15.2-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:7993cb7156f97601e049057eadf49be64f82676dfb03aeb4a2127558d8dd3bdf", size = 4484730, upload-time = "2026-03-19T00:15:09.397Z" },
-    { url = "https://files.pythonhosted.org/packages/cb/ff/931dbd3b864a21d9c6cc6c949cd085c4507fced00fc605266bcb755fd1ea/real_ladybug-0.15.2-cp313-cp313-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:8867e658f046d3ca4768286c64e3e4d5ef17caec58feb0577688ceef1907682a", size = 6869647, upload-time = "2026-03-19T00:15:11.02Z" },
-    { url = "https://files.pythonhosted.org/packages/1d/28/bfa7b2349c9c2d2d16f1383d762f43cc398cc8f13a581496d66e97e8276e/real_ladybug-0.15.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1ae032cf075b84833c179351b690cbcdb6321b1fe4c54b6d86d2496ac42a2f02", size = 7773108, upload-time = "2026-03-19T00:15:12.917Z" },
-    { url = "https://files.pythonhosted.org/packages/db/23/f68167233b539d5f81a9cddbb32d4da176c5171e244571832365b095051f/real_ladybug-0.15.2-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:b3f7eec884457c7ea22f1b314139846abb016e523a8d9153ed37705a815442b5", size = 8037623, upload-time = "2026-03-19T00:15:14.829Z" },
-    { url = "https://files.pythonhosted.org/packages/12/18/45044e189331e1328f1cafa809cc9972026839b75fa4f6fd47f2a71389f7/real_ladybug-0.15.2-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:19a5b64b5938edf023f9a57030d49ec7d16156c58ce28e5346c415dd3bb1ffa8", size = 8787890, upload-time = "2026-03-19T00:15:16.62Z" },
-    { url = "https://files.pythonhosted.org/packages/61/50/e1b508c76e2502a7dcdac13c17343dda47ced35e92b8194a789941398989/real_ladybug-0.15.2-cp313-cp313-win_amd64.whl", hash = "sha256:bad64e7cf48d36bb0208fdaeb774bf08960911923fc0e3cfeba4c7e1f21b6973", size = 5080720, upload-time = "2026-03-19T00:15:18.813Z" },
-    { url = "https://files.pythonhosted.org/packages/89/6d/066aaedc5adeb03c3fc6e98b8c448c2df8d43a2a7f9e852aa2b9271f6a24/real_ladybug-0.15.2-cp314-cp314-macosx_13_0_arm64.whl", hash = "sha256:2041c19e1197af6e61f0fac75dac382c2c9174b487ee2e7674694f61642d9c2a", size = 4018837, upload-time = "2026-03-19T00:15:20.318Z" },
-    { url = "https://files.pythonhosted.org/packages/a3/77/666540182ba2c54b24a5f48f9e83f28b84ea59986a9c6de70c2e731e2f97/real_ladybug-0.15.2-cp314-cp314-macosx_13_0_x86_64.whl", hash = "sha256:6bffc911c78a9d2cadf01496d0378b95715271470d682368e5b9fce0473094eb", size = 4484799, upload-time = "2026-03-19T00:15:21.856Z" },
-    { url = "https://files.pythonhosted.org/packages/00/24/5325cb662dc0850cf372fad58b21832e416acf208138e6fa341dca7c70a4/real_ladybug-0.15.2-cp314-cp314-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:a0b7ebca459bb5f03e29ac4b43c6a2706a358927bc57d4e60437f507ab295c53", size = 6870657, upload-time = "2026-03-19T00:15:23.275Z" },
-    { url = "https://files.pythonhosted.org/packages/66/a3/c9fe077213185bcbd7777c4751bd0d15832d554d969409e643be481e1dd0/real_ladybug-0.15.2-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d8b1814030e1b5b6b06084f54d58df607242b9dcb2edc837eaa125c84c6db889", size = 7772626, upload-time = "2026-03-19T00:15:24.828Z" },
-    { url = "https://files.pythonhosted.org/packages/55/08/5bebc6ca5b3d0bda1bcd4aa18b68fd96d2c6c720004d2181a6b3739cf92a/real_ladybug-0.15.2-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:325a3804e2ca3858e96537c27d4b2399e2c5f31e26884681df03f2531d753088", size = 8037665, upload-time = "2026-03-19T00:15:26.276Z" },
-    { url = "https://files.pythonhosted.org/packages/ac/ae/4777ce989a14dee00562fc9b9da0a77746fa28662e6d4a81faf5d8b136f7/real_ladybug-0.15.2-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:14b323efddfe8291d82391e2de7fc47ceca2eb9fed98f2b0a806e8500b195911", size = 8788214, upload-time = "2026-03-19T00:15:27.868Z" },
-    { url = "https://files.pythonhosted.org/packages/06/2f/0c762acc20626ff6d6d2eb496d2902e104f5ba9164eaa19093dad6ccda67/real_ladybug-0.15.2-cp314-cp314-win_amd64.whl", hash = "sha256:9b8f128eb04dafe6d147630967c5839a9ff94c23c9f41b2bcd3269068d8c26bb", size = 5236560, upload-time = "2026-03-19T00:15:29.584Z" },
 ]
 
 [[package]]

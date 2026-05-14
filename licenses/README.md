@@ -40,7 +40,6 @@ This folder contains the license files for all external libraries used by OntoBr
 | pySHACL | >=0.26.0 | Apache-2.0 | [python/pyshacl-LICENSE.txt](python/pyshacl-LICENSE.txt) |
 | python-dotenv | >=1.0.0 | BSD-3-Clause | [python/python-dotenv-LICENSE.txt](python/python-dotenv-LICENSE.txt) |
 | python-multipart | >=0.0.6 | Apache-2.0 | [python/python-multipart-LICENSE.txt](python/python-multipart-LICENSE.txt) |
-| real_ladybug (LadybugDB) | >=0.1.0 | MIT | [python/real-ladybug-LICENSE.txt](python/real-ladybug-LICENSE.txt) |
 | RDFLib | >=7.0.0 | BSD-3-Clause | [python/rdflib-LICENSE.txt](python/rdflib-LICENSE.txt) |
 | Requests | >=2.31.0 | Apache-2.0 | [python/requests-LICENSE.txt](python/requests-LICENSE.txt) |
 | Starlette | >=0.35.0 | BSD-3-Clause | [python/starlette-LICENSE.txt](python/starlette-LICENSE.txt) |
@@ -68,7 +67,7 @@ This folder contains the license files for all external libraries used by OntoBr
 
 | License Type | Libraries |
 |-------------|-----------|
-| **MIT** | Bootstrap, Bootstrap Icons, Chart.js, GraphiQL, Graphology, Graphology Library, Grid.js, Marked, React/ReactDOM, Sigma.js, APScheduler, FastAPI, Pydantic, Pydantic Settings, real_ladybug, Strawberry GraphQL |
+| **MIT** | Bootstrap, Bootstrap Icons, Chart.js, GraphiQL, Graphology, Graphology Library, Grid.js, Marked, React/ReactDOM, Sigma.js, APScheduler, FastAPI, Pydantic, Pydantic Settings, Strawberry GraphQL |
 | **ISC** | D3.js |
 | **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, NetworkX, python-dotenv, RDFLib, Starlette, Uvicorn |
 | **Apache-2.0** | aiofiles, Databricks SDK, databricks-sql-connector, FastMCP, MLflow, PyArrow, pySHACL, python-multipart, Requests |

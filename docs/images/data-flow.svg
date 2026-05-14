@@ -173,12 +173,12 @@
     <text x="245" y="665" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Databricks SQL Connector</text>
     <text x="245" y="678" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">UC-governed Delta table</text>
     
-    <!-- LadybugDB -->
+    <!-- Lakebase -->
     <rect x="440" y="615" width="390" height="70" rx="4" fill="white" fill-opacity="0.15"/>
-    <text x="635" y="635" text-anchor="middle" font-size="11" font-weight="600" fill="white">LadybugDB</text>
-    <text x="635" y="650" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Embedded graph (Cypher)</text>
-    <text x="635" y="665" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Local /tmp disk + tar.gz sync to UC Volume</text>
-    <text x="635" y="678" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">Graph schema from ontology (node + rel tables)</text>
+    <text x="635" y="635" text-anchor="middle" font-size="11" font-weight="600" fill="white">Lakebase</text>
+    <text x="635" y="650" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Managed Postgres (SQL)</text>
+    <text x="635" y="665" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">App-managed or Lakeflow-synced tables</text>
+    <text x="635" y="678" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">UC-governed; per-graph version tables</text>
   </g>
   
   <!-- Arrow Sync to Backends -->

@@ -119,7 +119,7 @@ The scope provides additional context. Common scopes include:
 - `mapping` - Entity/relationship mapping feature
 - `dtwin` - Digital Twin / knowledge graph feature
 - `domain` - Domain management (UC save/load, metadata)
-- `graphdb` - Graph database engine (LadybugDB)
+- `graphdb` - Graph database engine (Lakebase)
 - `triplestore` - Triple store / Delta views
 - `reasoning` - OWL 2 RL, SWRL, SHACL reasoning
 - `agents` - LLM agent engines
