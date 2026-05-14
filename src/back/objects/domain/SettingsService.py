@@ -52,9 +52,18 @@ class SettingsService:
 
     @staticmethod
     def is_registry_locked(settings: Settings) -> bool:
-        """True when the registry is supplied by a Databricks App Volume resource."""
-        return is_databricks_app() and bool(
+        """True when registry params are injected by Apps (not editable via .env).
+
+        Covers two binding styles:
+        - Volume backend: Apps injects REGISTRY_VOLUME_PATH.
+        - Lakebase backend: Apps injects PGHOST from the database resource.
+        """
+        if not is_databricks_app():
+            return False
+        import os
+        return bool(
             getattr(settings, "registry_volume_path", "")
+            or os.environ.get("PGHOST", "")
         )
 
     @staticmethod
@@ -476,6 +485,12 @@ class SettingsService:
         #     red *Re-sync* with a hard warning popup when Lakebase
         #     already holds data from a previous migration.
         status = SettingsService._lakebase_schema_status(rcfg)
+        instance = SettingsService._lakebase_instance_metadata(host, bound_db)
+        # When LAKEBASE_BRANCH is not set (e.g. deployed app where the
+        # branch is injected implicitly via PGHOST), derive from the
+        # instance metadata so the UI shows the correct connected branch.
+        if not branch and instance:
+            branch = instance.get("branch", "")
         return {
             "host": host,
             "port": os.environ.get("PGPORT", "5432"),
@@ -488,9 +503,7 @@ class SettingsService:
             "bound": True,
             "initialized": status["initialized"],
             "populated": status["populated"],
-            "instance": SettingsService._lakebase_instance_metadata(
-                host, bound_db
-            ),
+            "instance": instance,
         }
 
     @staticmethod
@@ -594,16 +607,9 @@ class SettingsService:
                     host,
                 )
                 return None
-            project_id, primary_host, ro_host = match
+            project_id, branch_path, primary_host, ro_host = match
             payload: Dict[str, Any] = {
                 "name": project_id,
-                # ``uid``, ``state``, ``creator``, ``creation_time`` are
-                # not surfaced on the project list endpoint; the admin
-                # UI shows ``—`` placeholders when they're empty. We
-                # could fetch them via ``GET /api/2.0/postgres/projects/<id>``
-                # but ``_lakebase_branch_info`` already does that and
-                # cares only about branch + autoscaling CU range, so
-                # we stay cheap here.
                 "uid": "",
                 "state": "",
                 "stopped": False,
@@ -615,14 +621,14 @@ class SettingsService:
                 "creation_time": "",
                 "endpoint": primary_host,
                 "read_only_endpoint": ro_host,
-                "branch": "",
-                "branch_resource": "",
+                "branch": branch_path.rsplit("/", 1)[-1] if branch_path else "",
+                "branch_resource": branch_path,
                 "autoscaling_min_cu": None,
                 "autoscaling_max_cu": None,
             }
             payload.update(
                 SettingsService._lakebase_branch_info(
-                    w, project_id, bound_database
+                    w, project_id, bound_database, known_branch_path=branch_path
                 )
             )
             return payload
@@ -633,13 +639,13 @@ class SettingsService:
     @staticmethod
     def _find_autoscaling_endpoint_for_host(
         w: Any, host: str
-    ) -> Optional[Tuple[str, str, str]]:
+    ) -> Optional[Tuple[str, str, str, str]]:
         """Walk Lakebase Autoscaling projects/branches/endpoints for ``host``.
 
-        Returns ``(project_id, primary_host, read_only_host)`` on match,
-        ``None`` otherwise. Mirrors the resolution path used at runtime
-        by :class:`back.core.databricks.LakebaseAuth.LakebaseAuth` so the
-        admin UI sees the same project the auth helper authenticates
+        Returns ``(project_id, branch_path, primary_host, read_only_host)``
+        on match, ``None`` otherwise. Mirrors the resolution path used at
+        runtime by :class:`back.core.databricks.LakebaseAuth.LakebaseAuth`
+        so the admin UI sees the same project the auth helper authenticates
         against.
         """
         api = getattr(w, "api_client", None)
@@ -670,6 +676,7 @@ class SettingsService:
                     if host in (primary.lower(), ro.lower()):
                         return (
                             project_path.rsplit("/", 1)[-1],
+                            branch_path,
                             primary,
                             ro,
                         )
@@ -677,17 +684,19 @@ class SettingsService:
 
     @staticmethod
     def _lakebase_branch_info(
-        w: Any, instance_name: str, bound_database: str
+        w: Any, instance_name: str, bound_database: str,
+        known_branch_path: str = "",
     ) -> Dict[str, Any]:
         """Look up the active branch + autoscaling CU range for an instance.
 
         Hits ``GET /api/2.0/postgres/projects/<name>`` to read the
         Autoscaling project metadata: default branch path and the
-        project's autoscaling CU min/max settings. Then walks
-        ``/projects/<name>/branches/*/databases`` to identify which
-        branch actually hosts the bound ``PGDATABASE``; falls back to
-        the project's ``default_branch`` if the database name is empty
-        or unmatched.
+        project's autoscaling CU min/max settings.
+
+        When ``known_branch_path`` is provided (derived from the endpoint
+        host match), it is used directly and the database-name walk is
+        skipped — this avoids returning the wrong branch when the same
+        database name exists on multiple branches.
 
         Always returns a dict; on any failure the dict is empty so
         callers can merge it on top of the base payload without losing
@@ -720,12 +729,15 @@ class SettingsService:
             "autoscaling_min_cu": endpoint_settings.get("autoscaling_limit_min_cu"),
             "autoscaling_max_cu": endpoint_settings.get("autoscaling_limit_max_cu"),
         }
-        active_branch = SettingsService._lakebase_active_branch(
+        # Use the exact branch from the endpoint match when available;
+        # otherwise fall back to the database-name walk (may pick the
+        # wrong branch if the same db name exists on multiple branches).
+        resolved = known_branch_path or SettingsService._lakebase_active_branch(
             w, instance_name, bound_database, default_branch_path
         )
-        if active_branch:
-            out["branch"] = active_branch.rsplit("/", 1)[-1]
-            out["branch_resource"] = active_branch
+        if resolved:
+            out["branch"] = resolved.rsplit("/", 1)[-1]
+            out["branch_resource"] = resolved
         return out
 
     @staticmethod
