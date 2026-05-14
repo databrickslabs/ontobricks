@@ -182,12 +182,18 @@ function _applyBuildGraphEngineUi(dtExist) {
         // existence badges for table and UC sync
         var tblExistsEl = document.getElementById('dtLakebaseTableExists');
         if (tblExistsEl) {
-            if (dt.lakebase_table_exists === true)
+            if (dt.lakebase_table_exists === true) {
                 tblExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
-            else if (dt.lakebase_table_exists === false)
+            } else if (dt.lakebase_table_exists === false) {
                 tblExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
-            else
-                tblExistsEl.innerHTML = '';
+            } else {
+                // null/undefined → live probe could not reach Lakebase
+                tblExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                var sp = tblExistsEl.querySelector('span');
+                if (sp) sp.title = dt.lakebase_check_error
+                    ? String(dt.lakebase_check_error)
+                    : 'Could not reach Lakebase Postgres to verify the triple table.';
+            }
         }
         var ucExistsEl = document.getElementById('dtLakebaseSyncedUcExists');
         if (ucExistsEl && hasUc) {

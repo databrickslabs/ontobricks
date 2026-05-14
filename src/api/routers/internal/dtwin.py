@@ -821,7 +821,9 @@ async def sync_info(
 
     async def _dt_exist():
         t_s = _t.monotonic()
-        out = await dt.get_or_fetch_dt_existence(settings)
+        # Build section must reflect the live state of Lakebase: never serve a
+        # stale `lakebase_table_exists=False` left behind by a previous timeout.
+        out = await dt.get_or_fetch_dt_existence(settings, force_refresh=True)
         logger.debug(
             "sync_info: dt existence took %.0fms", (_t.monotonic() - t_s) * 1000
         )
@@ -868,13 +870,14 @@ async def dt_existence(
 ):
     """Check existence of each Digital Twin artefact.
 
-    Returns session-cached results when available; falls back to live
-    Databricks checks and caches the result.
+    Always probes Databricks/Lakebase live so the result reflects the current
+    state (the session cache can carry a stale ``False`` from a transient
+    Postgres timeout).
     """
     domain = get_domain(session_mgr)
     dt = DigitalTwin(domain)
     await run_blocking(dt.sync_last_build_from_schedule, settings)
-    return await dt.get_or_fetch_dt_existence(settings)
+    return await dt.get_or_fetch_dt_existence(settings, force_refresh=True)
 
 
 # ===========================================

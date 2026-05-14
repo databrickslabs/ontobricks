@@ -719,19 +719,41 @@ class DigitalTwin:
         self.set_ts_cache("status", result)
         return result
 
-    async def get_or_fetch_dt_existence(self, settings) -> Dict[str, Any]:
-        """Return DT artefact existence from session cache, or fetch live and cache."""
-        cached = self.get_ts_cache("dt_existence")
-        if cached:
-            if cached.get("registry_lbug_exists") is None and cached.get(
-                "registry_lbug_path"
-            ):
-                await self._backfill_registry_lbug(cached, settings)
-            logger.debug("get_or_fetch_dt_existence: serving from cache")
-            return cached
-        logger.debug("get_or_fetch_dt_existence: cache miss — fetching live")
+    async def get_or_fetch_dt_existence(
+        self, settings, force_refresh: bool = False
+    ) -> Dict[str, Any]:
+        """Return DT artefact existence from session cache, or fetch live and cache.
+
+        ``force_refresh=True`` bypasses the session cache. Pages that must show
+        the *current* state of Lakebase (Build, Cockpit) pass this so a stale
+        ``lakebase_table_exists=False`` poisoned by a transient Postgres
+        timeout does not survive across navigations.
+
+        Unknown results (``lakebase_table_exists is None`` — probe failed) are
+        never cached: caching a transient failure as if it were a confirmed
+        absence is the bug this whole pathway exists to prevent.
+        """
+        if not force_refresh:
+            cached = self.get_ts_cache("dt_existence")
+            if cached:
+                if cached.get("registry_lbug_exists") is None and cached.get(
+                    "registry_lbug_path"
+                ):
+                    await self._backfill_registry_lbug(cached, settings)
+                logger.debug("get_or_fetch_dt_existence: serving from cache")
+                return cached
+            logger.debug("get_or_fetch_dt_existence: cache miss — fetching live")
+        else:
+            logger.debug("get_or_fetch_dt_existence: force_refresh — fetching live")
+
         result = await self.fetch_digital_twin_existence(settings)
-        self.set_ts_cache("dt_existence", result)
+        if result.get("lakebase_table_exists") is not None:
+            self.set_ts_cache("dt_existence", result)
+        else:
+            logger.debug(
+                "get_or_fetch_dt_existence: probe inconclusive (%s) — not caching",
+                result.get("lakebase_check_error") or "unknown",
+            )
         return result
 
     async def _backfill_registry_lbug(self, cached: dict, settings) -> None:
@@ -899,7 +921,9 @@ class DigitalTwin:
             "view_exists": None,
             "graph_engine": graph_engine,
             "registry_archive_applicable": False,
-            "local_lbug_exists": False,
+            "local_lbug_exists": None,
+            "lakebase_table_exists": None,
+            "lakebase_check_error": None,
             "registry_lbug_exists": None,
             "view_table": view_table,
             "graph_name": graph_name,
@@ -942,7 +966,7 @@ class DigitalTwin:
         result["registry_lbug_exists"] = None
         result["registry_check_error"] = None
 
-        exists_tbl = False
+        exists_tbl: Optional[bool] = None
         cnt = 0
         display = ""
         lk_database = ""
@@ -950,6 +974,7 @@ class DigitalTwin:
         lk_table = ""
         lk_sync_mode = "app_managed"
         lk_synced_uc = ""
+        lk_check_error: Optional[str] = None
 
         # --- Resolve config without needing a Postgres connection ---
         try:
@@ -1018,9 +1043,16 @@ class DigitalTwin:
                     display = " · ".join(parts) if parts else lk_table
         except Exception as e:
             logger.warning("DT existence: lakebase graph check failed: %s", e)
+            lk_check_error = str(e)
         result["triple_count"] = cnt
-        result["local_lbug_exists"] = bool(exists_tbl and cnt > 0)
-        result["lakebase_table_exists"] = bool(exists_tbl)
+        # Preserve the tri-state: True=present, False=absent, None=unknown
+        # (probe failed/timed out). Caller must NOT cache unknown results.
+        if exists_tbl is None:
+            result["local_lbug_exists"] = None
+        else:
+            result["local_lbug_exists"] = bool(exists_tbl and cnt > 0)
+        result["lakebase_table_exists"] = exists_tbl
+        result["lakebase_check_error"] = lk_check_error
         result["local_lbug_path"] = display or ""
         result["lakebase_database"] = lk_database
         result["lakebase_schema"] = lk_schema

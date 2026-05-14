@@ -269,7 +269,10 @@ class HomeService:
         await run_blocking(dt.sync_last_build_from_schedule, settings)
         ts_status, dt_exist, document_count = await asyncio.gather(
             dt.get_or_fetch_graph_status(settings),
-            dt.get_or_fetch_dt_existence(settings),
+            # Cockpit must show the live Lakebase state — bypass the session
+            # cache to avoid replaying a stale failure ("table not found")
+            # across page loads.
+            dt.get_or_fetch_dt_existence(settings, force_refresh=True),
             run_blocking(Domain(domain).count_documents_in_volume, settings),
         )
 
@@ -363,6 +366,7 @@ class HomeService:
             "local_lbug_exists": dt_existence.get("local_lbug_exists", False),
             "local_lbug_path": dt_existence.get("local_lbug_path", ""),
             "lakebase_table_exists": dt_existence.get("lakebase_table_exists"),
+            "lakebase_check_error": dt_existence.get("lakebase_check_error"),
             "lakebase_database": dt_existence.get("lakebase_database", ""),
             "lakebase_schema": dt_existence.get("lakebase_schema", ""),
             "lakebase_table": dt_existence.get("lakebase_table", ""),
