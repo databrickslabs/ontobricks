@@ -299,7 +299,7 @@ class TestCheckLakebase:
             status, detail = health._check_lakebase(MagicMock())
         assert status == "warning"
         assert "not bound" in detail
-        assert "PGHOST" in detail
+        assert "DATABASE_INSTANCE_NAME" in detail
 
     def test_initialized_returns_ok(self):
         auth = MagicMock(is_available=True)
