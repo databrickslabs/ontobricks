@@ -415,35 +415,43 @@ class SettingsService:
 
     @staticmethod
     def _lakebase_runtime_info(rcfg: RegistryCfg) -> Dict[str, Any]:
-        """Surface the read-only PG* connection params for the UI.
+        """Surface the read-only Lakebase connection params for the UI.
 
         Returns an empty block when the Lakebase resource is not bound.
         Never raises and never includes the OAuth token.
 
-        When PG* env vars are present, also tries to enrich the payload
-        with Databricks metadata about the bound instance (name, tier,
-        state, pg_version, node_count). The lookup is best-effort and
+        Accepts two binding styles:
+        - Apps runtime: ``PGHOST``/``PGPORT``/``PGDATABASE``/``PGUSER``
+          auto-injected by the platform.
+        - Local dev: ``DATABASE_INSTANCE_NAME`` + ``LAKEBASE_BRANCH``
+          + ``LAKEBASE_DATABASE`` + ``PGUSER`` — endpoint resolved via
+          the Postgres API by :class:`LakebaseAuth`.
+
+        When bound, also tries to enrich the payload with Databricks
+        metadata about the bound instance (name, tier, state,
+        pg_version, node_count). The lookup is best-effort and
         degrades silently on failure.
 
-        ``database`` is the bound ``PGDATABASE``. ``database_override``
-        is the (optional) admin-selected override stored in the
-        registry config. ``effective_database`` is whichever of the
-        two the store actually connects to — the override wins when
-        set, otherwise the bound database is used.
+        ``database`` is the bound ``PGDATABASE`` / ``LAKEBASE_DATABASE``.
+        ``database_override`` is the (optional) admin-selected override
+        stored in the registry config. ``effective_database`` is
+        whichever of the two the store actually connects to — the
+        override wins when set, otherwise the bound database is used.
         """
         import os
+        from back.core.databricks import get_lakebase_auth
 
-        host = os.environ.get("PGHOST", "")
-        bound_db = os.environ.get("PGDATABASE", "")
+        auth = get_lakebase_auth()
         override_db = getattr(rcfg, "lakebase_database", "") or ""
-        effective_db = override_db or bound_db
-        if not host:
+
+        if not auth.is_available:
             return {
                 "host": "",
                 "port": "",
+                "branch": "",
                 "database": "",
                 "database_override": override_db,
-                "effective_database": effective_db,
+                "effective_database": override_db,
                 "user": "",
                 "schema": rcfg.lakebase_schema,
                 "bound": False,
@@ -451,6 +459,12 @@ class SettingsService:
                 "populated": False,
                 "instance": None,
             }
+
+        host = os.environ.get("PGHOST", "")
+        bound_db = os.environ.get("PGDATABASE", "") or os.environ.get("LAKEBASE_DATABASE", "")
+        branch = os.environ.get("LAKEBASE_BRANCH", "")
+        effective_db = override_db or bound_db
+
         # Single probe: returns ``{initialized, populated}``. ``populated``
         # is true when the schema has the registry tables AND any of the
         # canonical data tables (domains, permission_sets, scheduled_*)
@@ -465,6 +479,7 @@ class SettingsService:
         return {
             "host": host,
             "port": os.environ.get("PGPORT", "5432"),
+            "branch": branch,
             "database": bound_db,
             "database_override": override_db,
             "effective_database": effective_db,
@@ -1403,7 +1418,8 @@ class SettingsService:
             "success": False,
             "reason": "",
             "message": "",
-            "host": os.environ.get("PGHOST", ""),
+            "host": os.environ.get("PGHOST", "") or os.environ.get("DATABASE_INSTANCE_NAME", "")
+                    + ("/" + os.environ.get("LAKEBASE_BRANCH", "") if os.environ.get("LAKEBASE_BRANCH") else ""),
             "port": port,
             "bound_database": bound_db or "",
             "effective_database": "",
@@ -1415,8 +1431,8 @@ class SettingsService:
         if not auth.is_available:
             out["reason"] = "no_binding"
             out["message"] = (
-                "Lakebase Postgres binding missing — set PGHOST and PGUSER "
-                "(Databricks App postgres resource)."
+                "Lakebase not available — set DATABASE_INSTANCE_NAME + LAKEBASE_BRANCH + PGUSER "
+                "in .env (local), or bind a Databricks App postgres resource (deployed)."
             )
             return out
 
@@ -1684,7 +1700,7 @@ class SettingsService:
 
             auth = get_lakebase_auth()
             if not auth.is_available:
-                out["message"] = "Lakebase resource not bound (PGHOST/PGUSER missing)"
+                out["message"] = "Lakebase resource not bound (DATABASE_INSTANCE_NAME/LAKEBASE_BRANCH/PGUSER missing)"
                 return out
             psycopg, _ = _require_psycopg()
             kwargs = auth.kwargs(application_name="ontobricks-schema-list")

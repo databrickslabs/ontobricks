@@ -63,6 +63,22 @@ class LakebaseAuth:
     workspace client is created lazily on the first ``password()``
     call so that volume-only environments never need the Databricks
     SDK to be importable.
+
+    **Host resolution order** (first non-empty wins):
+
+    1. ``PGHOST`` — auto-injected by Databricks Apps at runtime; or
+       set directly in ``.env`` if you already know the endpoint URL.
+    2. ``DATABASE_INSTANCE_NAME`` + ``LAKEBASE_BRANCH`` — resolved via
+       the Postgres API (``/api/2.0/postgres/projects/<name>/branches``
+       → endpoints). Use these in local ``.env`` to select a branch
+       without looking up the endpoint hostname manually.
+
+    **Database resolution order** (first non-empty wins):
+
+    1. ``PGDATABASE`` — auto-injected by Databricks Apps.
+    2. ``LAKEBASE_DATABASE`` — explicit override for local dev or
+       when you want to point at a database that differs from the
+       bound default.
     """
 
     def __init__(self) -> None:
@@ -77,6 +93,9 @@ class LakebaseAuth:
         # — populated alongside ``_instance_name`` and required by
         # :meth:`password` to mint a JWT scoped to that endpoint.
         self._endpoint_resource: Optional[str] = None
+        # Resolved host cache — avoids re-walking the API on every access
+        # when PGHOST is absent and we resolved via branch resolution.
+        self._cached_host: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Connection parameters (read directly from environment)
@@ -86,9 +105,12 @@ class LakebaseAuth:
     def host(self) -> str:
         host = os.environ.get("PGHOST", "")
         if not host:
+            host = self._cached_host or self._resolve_host_from_project_branch() or ""
+        if not host:
             raise ValidationError(
-                "PGHOST is not set — bind a Lakebase 'database' resource "
-                "to the Databricks App. Lakebase is required since v0.4.0."
+                "Cannot determine Lakebase host: set PGHOST (or both "
+                "DATABASE_INSTANCE_NAME and LAKEBASE_BRANCH) in .env, "
+                "or bind a Lakebase 'database' resource to the Databricks App."
             )
         return host
 
@@ -98,7 +120,11 @@ class LakebaseAuth:
 
     @property
     def database(self) -> str:
-        return os.environ.get("PGDATABASE", "") or "ontobricks_registry"
+        return (
+            os.environ.get("PGDATABASE")
+            or os.environ.get("LAKEBASE_DATABASE")
+            or "ontobricks_registry"
+        )
 
     @property
     def user(self) -> str:
@@ -112,12 +138,21 @@ class LakebaseAuth:
 
     @property
     def is_available(self) -> bool:
-        """Return True when PG* env vars are populated.
+        """Return True when the Lakebase connection can be established.
 
-        Used by the settings UI to display whether Lakebase can be
-        selected on this deployment.
+        Accepts either:
+        - ``PGHOST`` + ``PGUSER`` (auto-injected by Databricks Apps, or set
+          directly in ``.env`` with the raw endpoint URL), or
+        - ``DATABASE_INSTANCE_NAME`` + ``LAKEBASE_BRANCH`` + ``PGUSER``
+          (local dev with branch-based host resolution).
         """
-        return bool(os.environ.get("PGHOST") and os.environ.get("PGUSER"))
+        has_user = bool(os.environ.get("PGUSER"))
+        has_host = bool(os.environ.get("PGHOST"))
+        has_branch_coords = bool(
+            os.environ.get("DATABASE_INSTANCE_NAME")
+            and os.environ.get("LAKEBASE_BRANCH")
+        )
+        return has_user and (has_host or has_branch_coords)
 
     # ------------------------------------------------------------------
     # Token (Postgres password)
@@ -170,6 +205,74 @@ class LakebaseAuth:
             host,
         )
         return self._instance_name
+
+    def _resolve_host_from_project_branch(self) -> Optional[str]:
+        """Resolve the Lakebase endpoint hostname from project + branch name.
+
+        Reads ``DATABASE_INSTANCE_NAME`` (project) and ``LAKEBASE_BRANCH``
+        (branch) from the environment, then walks
+        ``GET /api/2.0/postgres/projects/<project>/branches`` →
+        ``GET /api/2.0/postgres/<branch_path>/endpoints`` to find the
+        primary endpoint host for that branch.
+
+        On success also populates ``_instance_name`` and
+        ``_endpoint_resource`` so subsequent :meth:`password` calls do
+        not need to re-walk the API. Returns ``None`` (never raises) on
+        any configuration gap or API error — the caller falls back to a
+        descriptive ``ValidationError``.
+        """
+        project = os.environ.get("DATABASE_INSTANCE_NAME", "").strip()
+        branch_name = os.environ.get("LAKEBASE_BRANCH", "").strip()
+        if not project or not branch_name:
+            return None
+        try:
+            self._ensure_workspace()
+            api = getattr(self._w, "api_client", None)
+            if api is None or not hasattr(api, "do"):
+                return None
+            branches = (
+                api.do(
+                    "GET",
+                    f"/api/2.0/postgres/projects/{project}/branches",
+                )
+                or {}
+            ).get("branches") or []
+            for branch in branches:
+                branch_path = branch.get("name") or ""
+                if not branch_path:
+                    continue
+                if branch_path.rsplit("/", 1)[-1] != branch_name:
+                    continue
+                endpoints = (
+                    api.do("GET", f"/api/2.0/postgres/{branch_path}/endpoints")
+                    or {}
+                ).get("endpoints") or []
+                for endpoint in endpoints:
+                    hosts = (endpoint.get("status") or {}).get("hosts") or {}
+                    host = (hosts.get("host") or "").strip()
+                    if not host:
+                        continue
+                    endpoint_path = endpoint.get("name") or ""
+                    if endpoint_path:
+                        self._endpoint_resource = endpoint_path
+                    self._instance_name = project
+                    self._cached_host = host
+                    logger.info(
+                        "Resolved Lakebase host %r from project=%r branch=%r",
+                        host,
+                        project,
+                        branch_name,
+                    )
+                    return host
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "Branch-based Lakebase host resolution failed "
+                "(project=%r branch=%r): %s",
+                project,
+                branch_name,
+                exc,
+            )
+        return None
 
     def _lookup_via_postgres_api(self, host: str) -> Optional[str]:
         """Match ``host`` against Lakebase Autoscaling endpoints.

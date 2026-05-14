@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     # re-mint is needed.
     lakebase_database: str = ""
 
+    # Lakebase: branch within the project to connect to.
+    # In production the Apps runtime resolves the branch implicitly via
+    # the ``database`` resource binding (PGHOST already encodes the
+    # branch endpoint). In local dev, set this together with
+    # ``DATABASE_INSTANCE_NAME`` so ``LakebaseAuth`` can resolve the
+    # endpoint hostname without requiring the raw URL.
+    lakebase_branch: str = "main"
+
     # Databricks App name (for permission management).
     # Reads ``ONTOBRICKS_APP_NAME`` first (explicit override, e.g. via .env
     # for local dev), then falls back to ``DATABRICKS_APP_NAME`` which the

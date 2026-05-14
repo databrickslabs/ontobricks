@@ -473,7 +473,7 @@ async function showDomainSaveDialog() {
         const reg = await regResp.json();
         const infoDiv = document.getElementById('saveRegistryInfo');
         if (reg.configured) {
-            infoDiv.innerHTML = `<div class="alert alert-success small mb-0"><i class="bi bi-archive me-1"></i> Registry: <strong>${reg.catalog}.${reg.schema}.${reg.volume}</strong></div>`;
+            infoDiv.innerHTML = '<div class="alert alert-success small mb-0"><i class="bi bi-check-circle-fill text-success me-1"></i> Registry</div>';
             document.getElementById('btnConfirmSave').disabled = false;
         } else {
             infoDiv.innerHTML = '<div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. <a href="/settings">Go to Settings</a></div>';
@@ -664,7 +664,7 @@ async function loadDomainsFromRegistry() {
             infoDiv.innerHTML = '<div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. <a href="/settings">Go to Settings</a></div>';
             return;
         }
-        infoDiv.innerHTML = `<div class="alert alert-success small mb-0"><i class="bi bi-archive me-1"></i> Registry: <strong>${reg.catalog}.${reg.schema}.${reg.volume}</strong></div>`;
+        infoDiv.innerHTML = '<div class="alert alert-success small mb-0"><i class="bi bi-check-circle-fill text-success me-1"></i> Registry</div>';
 
         domainSelect.innerHTML = '<option value="">Loading domains...</option>';
         const domainListResp = await fetch('/domain/list-projects', { credentials: 'same-origin' });

@@ -426,7 +426,7 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
         return (
             _WARNING,
             "Lakebase not bound (PG* env vars unset) — registry is unavailable; "
-            "set PGHOST/PGPORT/PGUSER/PGDATABASE in .env (local) or bind a database "
+            "set DATABASE_INSTANCE_NAME + LAKEBASE_BRANCH + PGUSER in .env (local) or bind a database "
             "resource in app.yaml (deployed)",
         )
 

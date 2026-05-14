@@ -72,26 +72,24 @@
                 <i class="bi bi-plug me-1"></i> Connection
             </div>
             <div class="row g-2 small">
-                <div class="col-md-6">
-                    <label class="form-label small text-muted mb-0">Host (PGHOST)</label>
-                    <div class="font-monospace" id="lakebaseHost">—</div>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted mb-0">Port</label>
-                    <div class="font-monospace" id="lakebasePort">—</div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted mb-0">Branch</label>
+                    <div class="font-monospace" id="lbRegistryBranch">—</div>
+                    <div class="small text-muted" id="lbRegistryBranchHint" style="display:none;"></div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small text-muted mb-0">Database (effective)</label>
-                    <div class="font-monospace" id="lakebaseDatabase">—</div>
-                    <div class="small text-muted" id="lakebaseDatabaseHint" style="display:none;"></div>
+                    <div class="font-monospace" id="lbRegistryDatabase">—</div>
+                    <div class="small text-muted" id="lbRegistryDatabaseHint" style="display:none;"></div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted mb-0">Schema</label>
+                    <div class="font-monospace" id="lbRegistrySchema">ontobricks_registry</div>
+                    <div class="small text-muted" id="lbRegistrySchemaHint" style="display:none;"></div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small text-muted mb-0">User (Service Principal)</label>
-                    <div class="font-monospace" id="lakebaseUser">—</div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small text-muted mb-0">Schema</label>
-                    <div class="font-monospace" id="lakebaseSchema">ontobricks_registry</div>
+                    <div class="font-monospace" id="lbRegistryUser">—</div>
                 </div>
             </div>
 

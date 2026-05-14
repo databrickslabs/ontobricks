@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', function () {
         volume: 'OntoBricksRegistry',
         lakebase_schema: 'ontobricks_registry',
         configured: false,
-        lakebase: { bound: false, host: '', port: '', database: '', user: '', schema: 'ontobricks_registry' }
+        lakebase: { bound: false, branch: '', database: '', user: '', schema: 'ontobricks_registry' }
     };
     let registryLocked = false;
 
@@ -78,11 +78,21 @@ document.addEventListener('DOMContentLoaded', function () {
             const el = document.getElementById(id);
             if (el) el.textContent = val || '—';
         };
-        set('lakebaseHost', lb.host);
-        set('lakebasePort', lb.port);
+        set('lbRegistryBranch', lb.branch);
+        const branchHint = document.getElementById('lbRegistryBranchHint');
+        if (branchHint) {
+            if (lb.branch) {
+                branchHint.style.display = '';
+                branchHint.innerHTML = lb.host
+                    ? '<i class="bi bi-link-45deg me-1"></i>from app resource binding'
+                    : '<i class="bi bi-link-45deg me-1"></i>from LAKEBASE_BRANCH';
+            } else {
+                branchHint.style.display = 'none';
+            }
+        }
         const effectiveDb = lb.effective_database || lb.database;
-        set('lakebaseDatabase', effectiveDb);
-        const dbHint = document.getElementById('lakebaseDatabaseHint');
+        set('lbRegistryDatabase', effectiveDb);
+        const dbHint = document.getElementById('lbRegistryDatabaseHint');
         if (dbHint) {
             if (lb.database_override && lb.database_override !== lb.database) {
                 dbHint.style.display = '';
@@ -90,14 +100,27 @@ document.addEventListener('DOMContentLoaded', function () {
                     + 'override (bound: <code>' + escapeHtml(lb.database || '—') + '</code>)';
             } else if (lb.database) {
                 dbHint.style.display = '';
-                dbHint.innerHTML = '<i class="bi bi-link-45deg me-1"></i>from app resource binding';
+                dbHint.innerHTML = lb.host
+                    ? '<i class="bi bi-link-45deg me-1"></i>from app resource binding'
+                    : '<i class="bi bi-link-45deg me-1"></i>from LAKEBASE_DATABASE';
             } else {
                 dbHint.style.display = 'none';
                 dbHint.textContent = '';
             }
         }
-        set('lakebaseUser', lb.user);
-        set('lakebaseSchema', lb.schema || registryCfg.lakebase_schema);
+        set('lbRegistryUser', lb.user);
+        set('lbRegistrySchema', lb.schema || registryCfg.lakebase_schema);
+        const schemaHint = document.getElementById('lbRegistrySchemaHint');
+        if (schemaHint) {
+            if (lb.schema) {
+                schemaHint.style.display = '';
+                schemaHint.innerHTML = lb.host
+                    ? '<i class="bi bi-link-45deg me-1"></i>from app resource binding'
+                    : '<i class="bi bi-link-45deg me-1"></i>from LAKEBASE_SCHEMA';
+            } else {
+                schemaHint.style.display = 'none';
+            }
+        }
 
         const badge = document.getElementById('lakebaseStatusBadge');
         if (badge) {
