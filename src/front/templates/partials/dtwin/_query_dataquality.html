@@ -107,7 +107,14 @@
                             <i class="bi bi-check2-all rt-icon text-info"></i>
                             <span class="rt-title">Completeness</span>
                             <span class="rt-desc">Required properties present</span>
+                            <button type="button" class="dq-rules-toggle d-none" data-dq-expand="completeness"
+                                    onclick="event.preventDefault();event.stopPropagation();DQExecModule._toggleRuleList('completeness')"
+                                    title="Show/hide individual rules">
+                                <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                <span class="dq-rules-count"></span>
+                            </button>
                         </label>
+                        <div class="dq-rule-list d-none" data-dq-rulelist="completeness"></div>
                     </div>
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimCardinality">
@@ -116,7 +123,14 @@
                             <i class="bi bi-123 rt-icon text-primary"></i>
                             <span class="rt-title">Cardinality</span>
                             <span class="rt-desc">Min / max value counts</span>
+                            <button type="button" class="dq-rules-toggle d-none" data-dq-expand="cardinality"
+                                    onclick="event.preventDefault();event.stopPropagation();DQExecModule._toggleRuleList('cardinality')"
+                                    title="Show/hide individual rules">
+                                <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                <span class="dq-rules-count"></span>
+                            </button>
                         </label>
+                        <div class="dq-rule-list d-none" data-dq-rulelist="cardinality"></div>
                     </div>
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimUniqueness">
@@ -125,7 +139,14 @@
                             <i class="bi bi-fingerprint rt-icon text-warning"></i>
                             <span class="rt-title">Uniqueness</span>
                             <span class="rt-desc">No duplicate values</span>
+                            <button type="button" class="dq-rules-toggle d-none" data-dq-expand="uniqueness"
+                                    onclick="event.preventDefault();event.stopPropagation();DQExecModule._toggleRuleList('uniqueness')"
+                                    title="Show/hide individual rules">
+                                <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                <span class="dq-rules-count"></span>
+                            </button>
                         </label>
+                        <div class="dq-rule-list d-none" data-dq-rulelist="uniqueness"></div>
                     </div>
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimConsistency">
@@ -134,7 +155,14 @@
                             <i class="bi bi-link-45deg rt-icon text-success"></i>
                             <span class="rt-title">Consistency</span>
                             <span class="rt-desc">Cross-property constraints</span>
+                            <button type="button" class="dq-rules-toggle d-none" data-dq-expand="consistency"
+                                    onclick="event.preventDefault();event.stopPropagation();DQExecModule._toggleRuleList('consistency')"
+                                    title="Show/hide individual rules">
+                                <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                <span class="dq-rules-count"></span>
+                            </button>
                         </label>
+                        <div class="dq-rule-list d-none" data-dq-rulelist="consistency"></div>
                     </div>
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimConformance">
@@ -143,7 +171,14 @@
                             <i class="bi bi-regex rt-icon text-danger"></i>
                             <span class="rt-title">Conformance</span>
                             <span class="rt-desc">Pattern &amp; type validation</span>
+                            <button type="button" class="dq-rules-toggle d-none" data-dq-expand="conformance"
+                                    onclick="event.preventDefault();event.stopPropagation();DQExecModule._toggleRuleList('conformance')"
+                                    title="Show/hide individual rules">
+                                <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                <span class="dq-rules-count"></span>
+                            </button>
                         </label>
+                        <div class="dq-rule-list d-none" data-dq-rulelist="conformance"></div>
                     </div>
                     <div class="col-4">
                         <label class="reasoning-tile active w-100" for="dqDimStructural">
@@ -152,7 +187,14 @@
                             <i class="bi bi-diagram-3 rt-icon text-dark"></i>
                             <span class="rt-title">Structural</span>
                             <span class="rt-desc">Transitive &amp; reflexive integrity</span>
+                            <button type="button" class="dq-rules-toggle d-none" data-dq-expand="structural"
+                                    onclick="event.preventDefault();event.stopPropagation();DQExecModule._toggleRuleList('structural')"
+                                    title="Show/hide individual rules">
+                                <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                <span class="dq-rules-count"></span>
+                            </button>
                         </label>
+                        <div class="dq-rule-list d-none" data-dq-rulelist="structural"></div>
                     </div>
                 </div>
             </div>

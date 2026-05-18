@@ -117,16 +117,23 @@ class ReasoningService:
         mat = opts.get("materialize", False)
         inf_limit = opts.get("inference_limit") or None
 
+        # Per-rule name filters (None = run all rules in that phase)
+        swrl_names = opts.get("swrl_rule_names") or None
+        dt_names = opts.get("decision_table_names") or None
+        sparql_names = opts.get("sparql_rule_names") or None
+        agg_names = opts.get("aggregate_rule_names") or None
+
         phases = [
             ("tbox", "tbox", True, lambda: self.run_tbox_reasoning(), True, {}),
             (
                 "swrl",
                 "swrl",
                 True,
-                lambda: self.run_swrl_rules(
+                lambda rn=swrl_names: self.run_swrl_rules(
                     materialize=mat,
                     inference_limit=inf_limit,
                     progress_callback=progress_callback,
+                    rule_names=rn,
                 ),
                 True,
                 {"rules_count": "swrl_rules_count"},
@@ -136,7 +143,7 @@ class ReasoningService:
                 "decision_tables",
                 "decision_tables",
                 False,
-                lambda: self.run_decision_tables(materialize=mat),
+                lambda rn=dt_names: self.run_decision_tables(materialize=mat, rule_names=rn),
                 False,
                 {"tables_count": "decision_tables_count"},
             ),
@@ -144,7 +151,7 @@ class ReasoningService:
                 "sparql_rules",
                 "sparql_rules",
                 False,
-                lambda: self.run_sparql_rules(materialize=mat),
+                lambda rn=sparql_names: self.run_sparql_rules(materialize=mat, rule_names=rn),
                 True,
                 {"rules_count": "sparql_rules_count"},
             ),
@@ -152,7 +159,7 @@ class ReasoningService:
                 "aggregate_rules",
                 "aggregate_rules",
                 False,
-                lambda: self.run_aggregate_rules(materialize=mat),
+                lambda rn=agg_names: self.run_aggregate_rules(materialize=mat, rule_names=rn),
                 False,
                 {"rules_count": "aggregate_rules_count"},
             ),
@@ -216,9 +223,12 @@ class ReasoningService:
         materialize: bool = False,
         inference_limit: Optional[int] = None,
         progress_callback: Optional[Any] = None,
+        rule_names: Optional[set] = None,
     ) -> ReasoningResult:
         """Execute SWRL rules against the triple store."""
         rules = self._get_swrl_rules()
+        if rule_names:
+            rules = [r for r in rules if r.get("name") in rule_names]
         if not rules:
             return ReasoningResult(
                 stats={
@@ -375,10 +385,14 @@ class ReasoningService:
             }
         )
 
-    def run_decision_tables(self, materialize: bool = False) -> ReasoningResult:
+    def run_decision_tables(
+        self, materialize: bool = False, rule_names: Optional[set] = None
+    ) -> ReasoningResult:
         """Execute decision tables against the triple store."""
         ontology = self._get_ontology_dict()
         tables = ontology.get("decision_tables", [])
+        if rule_names:
+            tables = [t for t in tables if t.get("name") in rule_names]
         if not tables:
             return ReasoningResult(
                 stats={
@@ -408,10 +422,14 @@ class ReasoningService:
             materialize=materialize,
         )
 
-    def run_sparql_rules(self, materialize: bool = False) -> ReasoningResult:
+    def run_sparql_rules(
+        self, materialize: bool = False, rule_names: Optional[set] = None
+    ) -> ReasoningResult:
         """Execute SPARQL CONSTRUCT rules against the triple store."""
         ontology = self._get_ontology_dict()
         rules = ontology.get("sparql_rules", [])
+        if rule_names:
+            rules = [r for r in rules if r.get("name") in rule_names]
         if not rules:
             return ReasoningResult(
                 stats={
@@ -441,10 +459,14 @@ class ReasoningService:
             materialize=materialize,
         )
 
-    def run_aggregate_rules(self, materialize: bool = False) -> ReasoningResult:
+    def run_aggregate_rules(
+        self, materialize: bool = False, rule_names: Optional[set] = None
+    ) -> ReasoningResult:
         """Execute aggregate rules against the triple store."""
         ontology = self._get_ontology_dict()
         rules = ontology.get("aggregate_rules", [])
+        if rule_names:
+            rules = [r for r in rules if r.get("name") in rule_names]
         if not rules:
             return ReasoningResult(
                 stats={

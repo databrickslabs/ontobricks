@@ -6,6 +6,8 @@ window.DQExecModule = {
     results: [],
     _pollTimer: null,
     _templateUiBound: false,
+    _shapesCache: null,
+    _shapesLoaded: false,
 
     CATEGORIES: [
         'completeness', 'cardinality', 'uniqueness',
@@ -16,6 +18,7 @@ window.DQExecModule = {
         this._initBackendToggle();
         this._updateTripleStoreLabel();
         this._bindTemplateUiOnce();
+        this._loadShapes();
     },
 
     _bindTemplateUiOnce() {
@@ -63,26 +66,133 @@ window.DQExecModule = {
         });
     },
 
+    // ── Per-rule shape loading ───────────────────────────────────
+
+    async _loadShapes() {
+        if (this._shapesLoaded) return;
+        this._shapesLoaded = true;
+        try {
+            const resp = await fetch('/ontology/dataquality/list', { credentials: 'same-origin' });
+            const data = await resp.json();
+            if (!data.success) return;
+            this._shapesCache = data.shapes || [];
+            this._renderShapeCheckboxes();
+        } catch (e) {
+            console.error('[DQExec] Failed to load shapes:', e);
+        }
+    },
+
+    _renderShapeCheckboxes() {
+        const shapes = this._shapesCache || [];
+        this.CATEGORIES.forEach(cat => {
+            const container = document.querySelector(`[data-dq-rulelist="${cat}"]`);
+            const toggleBtn = document.querySelector(`[data-dq-expand="${cat}"]`);
+            if (!container) return;
+            const catShapes = shapes.filter(s => s.category === cat && s.enabled !== false);
+            if (!catShapes.length) return;
+
+            if (toggleBtn) {
+                const countSpan = toggleBtn.querySelector('.dq-rules-count');
+                if (countSpan) countSpan.textContent = `${catShapes.length} rule${catShapes.length !== 1 ? 's' : ''}`;
+                toggleBtn.classList.remove('d-none');
+            }
+
+            container.innerHTML = catShapes.map((s, i) => `
+                <div class="dq-rule-item">
+                    <input type="checkbox" class="form-check-input dq-rule-cb"
+                           id="dqRule_${cat}_${i}"
+                           data-dq-rule-id="${this._escAttr(s.id)}"
+                           data-dq-rule-dim="${cat}"
+                           checked>
+                    <label class="form-check-label small" for="dqRule_${cat}_${i}"
+                           title="${this._escAttr(s.id)}">
+                        ${this._escHtml(s.label || s.id)}
+                    </label>
+                </div>
+            `).join('');
+
+            container.querySelectorAll('.dq-rule-cb').forEach(cb => {
+                cb.addEventListener('change', () => this._onRuleCheckChange(cat));
+            });
+        });
+    },
+
+    _toggleRuleList(dim) {
+        const container = document.querySelector(`[data-dq-rulelist="${dim}"]`);
+        const btn = document.querySelector(`[data-dq-expand="${dim}"]`);
+        if (!container) return;
+        const isHidden = container.classList.contains('d-none');
+        container.classList.toggle('d-none', !isHidden);
+        if (btn) {
+            const icon = btn.querySelector('.dq-expand-chevron');
+            if (icon) icon.classList.toggle('dq-chevron-open', isHidden);
+        }
+    },
+
+    _onRuleCheckChange(dim) {
+        const dimCb = document.querySelector(`input[data-dimension="${dim}"]`);
+        const container = document.querySelector(`[data-dq-rulelist="${dim}"]`);
+        if (!dimCb || !container) return;
+        const ruleCbs = [...container.querySelectorAll('.dq-rule-cb')];
+        if (!ruleCbs.length) return;
+        const checkedCount = ruleCbs.filter(cb => cb.checked).length;
+        if (checkedCount === ruleCbs.length) {
+            dimCb.checked = true;
+            dimCb.indeterminate = false;
+        } else if (checkedCount === 0) {
+            dimCb.checked = false;
+            dimCb.indeterminate = false;
+        } else {
+            dimCb.checked = false;
+            dimCb.indeterminate = true;
+        }
+        const tile = dimCb.closest('.reasoning-tile');
+        if (tile) tile.classList.toggle('active', dimCb.checked || dimCb.indeterminate);
+    },
+
     _syncTile(checkbox) {
         const tile = checkbox.closest('.reasoning-tile');
         if (tile) tile.classList.toggle('active', checkbox.checked);
+        const dim = checkbox.dataset.dimension;
+        if (!dim) return;
+        checkbox.indeterminate = false;
+        const container = document.querySelector(`[data-dq-rulelist="${dim}"]`);
+        if (container) {
+            container.querySelectorAll('.dq-rule-cb').forEach(cb => {
+                cb.checked = checkbox.checked;
+            });
+        }
     },
 
     toggleAllDimensions(checked) {
         document.querySelectorAll('#dqDimCompleteness, #dqDimCardinality, #dqDimUniqueness, #dqDimConsistency, #dqDimConformance, #dqDimStructural')
-            .forEach(el => { el.checked = checked; this._syncTile(el); });
+            .forEach(el => {
+                el.checked = checked;
+                el.indeterminate = false;
+                this._syncTile(el);
+            });
     },
 
     _getSelectedDimensions() {
         const dims = [];
         document.querySelectorAll('[data-dimension]').forEach(el => {
-            if (el.checked) dims.push(el.dataset.dimension);
+            if (el.checked || el.indeterminate) dims.push(el.dataset.dimension);
         });
         return dims;
     },
 
+    _getSelectedShapeIds() {
+        const ids = [];
+        document.querySelectorAll('.dq-rule-cb:checked').forEach(cb => {
+            if (cb.dataset.dqRuleId) ids.push(cb.dataset.dqRuleId);
+        });
+        return ids;
+    },
+
     _setDimensionsDisabled(disabled) {
         document.querySelectorAll('[data-dimension]').forEach(el => { el.disabled = disabled; });
+        document.querySelectorAll('.dq-rule-cb').forEach(el => { el.disabled = disabled; });
+        document.querySelectorAll('.dq-rules-toggle').forEach(el => { el.disabled = disabled; });
     },
 
     _initBackendToggle() {
@@ -152,8 +262,15 @@ window.DQExecModule = {
             return;
         }
 
+        const shapeIds = this._getSelectedShapeIds();
         const dimensions = this._getSelectedDimensions();
-        if (!dimensions.length) {
+
+        if (this._shapesLoaded && this._shapesCache && this._shapesCache.length > 0) {
+            if (!shapeIds.length) {
+                showNotification('Select at least one rule to run.', 'warning');
+                return;
+            }
+        } else if (!dimensions.length) {
             showNotification('Select at least one data quality dimension to run.', 'warning');
             return;
         }
@@ -167,17 +284,23 @@ window.DQExecModule = {
         document.getElementById('dqExecProgressBar').textContent = '0%';
         document.getElementById('dqExecProgressStep').textContent = 'Starting data quality checks...';
 
+        const payload = {
+            triplestore_table: table,
+            backend,
+            violation_limit: parseInt(document.getElementById('dqViolationLimit')?.value || '10'),
+        };
+        if (shapeIds.length > 0) {
+            payload.shape_ids = shapeIds;
+        } else {
+            payload.dimensions = dimensions;
+        }
+
         try {
             const resp = await fetch('/dtwin/dataquality/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({
-                    triplestore_table: table,
-                    backend: backend,
-                    dimensions: dimensions,
-                    violation_limit: parseInt(document.getElementById('dqViolationLimit')?.value || '10'),
-                }),
+                body: JSON.stringify(payload),
             });
             const data = await resp.json();
             if (data.success && data.task_id) {

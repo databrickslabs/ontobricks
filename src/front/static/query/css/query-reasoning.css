@@ -93,3 +93,73 @@
 .reasoning-report-th-duration {
     width: 15%;
 }
+
+/* ── Per-rule expand toggle ──────────────────────────────── */
+
+.dq-rules-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    background: none;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .375rem;
+    padding: .15rem .45rem;
+    font-size: .65rem;
+    color: var(--bs-secondary-color);
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+    margin-top: .25rem;
+}
+
+.dq-rules-toggle:hover {
+    border-color: var(--bs-primary);
+    color: var(--bs-primary);
+}
+
+.dq-rules-toggle:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.dq-expand-chevron {
+    font-size: .6rem;
+    transition: transform .2s ease;
+}
+
+.dq-expand-chevron.dq-chevron-open {
+    transform: rotate(180deg);
+}
+
+/* ── Per-rule list container ─────────────────────────────── */
+
+.dq-rule-list {
+    border: 1px solid var(--bs-border-color);
+    border-top: none;
+    border-radius: 0 0 .5rem .5rem;
+    padding: .4rem .5rem;
+    background: var(--bs-body-bg);
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.dq-rule-item {
+    display: flex;
+    align-items: baseline;
+    gap: .4rem;
+    padding: .1rem 0;
+    font-size: .72rem;
+}
+
+.dq-rule-item .form-check-input {
+    flex-shrink: 0;
+    margin-top: .15rem;
+}
+
+.dq-rule-item .form-check-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - 1.4rem);
+    cursor: pointer;
+    color: var(--bs-body-color);
+}

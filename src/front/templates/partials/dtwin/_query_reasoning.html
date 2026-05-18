@@ -128,7 +128,14 @@
                                 <span class="badge bg-secondary rt-badge">no rules</span>
                                 {% endif %}
                                 <span class="rt-desc">IF-THEN business rules &rarr; Inferred triples</span>
+                                <button type="button" class="dq-rules-toggle d-none" data-r-expand="swrl"
+                                        onclick="event.preventDefault();event.stopPropagation();ReasoningModule._toggleRuleList('swrl')"
+                                        title="Show/hide individual rules">
+                                    <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                    <span class="dq-rules-count"></span>
+                                </button>
                             </label>
+                            <div class="dq-rule-list d-none" data-r-rulelist="swrl"></div>
                         </div>
 
                         <!-- Graph Inference -->
@@ -156,7 +163,14 @@
                                 <span class="badge bg-secondary rt-badge">no tables</span>
                                 {% endif %}
                                 <span class="rt-desc">DMN-style tabular rules &rarr; Inferred triples</span>
+                                <button type="button" class="dq-rules-toggle d-none" data-r-expand="decision_tables"
+                                        onclick="event.preventDefault();event.stopPropagation();ReasoningModule._toggleRuleList('decision_tables')"
+                                        title="Show/hide individual rules">
+                                    <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                    <span class="dq-rules-count"></span>
+                                </button>
                             </label>
+                            <div class="dq-rule-list d-none" data-r-rulelist="decision_tables"></div>
                         </div>
 
                         <!-- SPARQL CONSTRUCT Rules -->
@@ -172,7 +186,14 @@
                                 <span class="badge bg-secondary rt-badge">no rules</span>
                                 {% endif %}
                                 <span class="rt-desc">CONSTRUCT queries &rarr; Inferred triples</span>
+                                <button type="button" class="dq-rules-toggle d-none" data-r-expand="sparql_rules"
+                                        onclick="event.preventDefault();event.stopPropagation();ReasoningModule._toggleRuleList('sparql_rules')"
+                                        title="Show/hide individual rules">
+                                    <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                    <span class="dq-rules-count"></span>
+                                </button>
                             </label>
+                            <div class="dq-rule-list d-none" data-r-rulelist="sparql_rules"></div>
                         </div>
 
                         <!-- Aggregate Rules -->
@@ -188,7 +209,14 @@
                                 <span class="badge bg-secondary rt-badge">no rules</span>
                                 {% endif %}
                                 <span class="rt-desc">GROUP BY / HAVING stats &rarr; Inferred triples</span>
+                                <button type="button" class="dq-rules-toggle d-none" data-r-expand="aggregate_rules"
+                                        onclick="event.preventDefault();event.stopPropagation();ReasoningModule._toggleRuleList('aggregate_rules')"
+                                        title="Show/hide individual rules">
+                                    <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                    <span class="dq-rules-count"></span>
+                                </button>
                             </label>
+                            <div class="dq-rule-list d-none" data-r-rulelist="aggregate_rules"></div>
                         </div>
 
                     </div>

@@ -1049,6 +1049,7 @@ async def start_dataquality_checks(
 
     data = await request.json()
     dimensions = data.get("dimensions") or []
+    shape_ids = data.get("shape_ids") or []
     requested_backend = data.get("backend", "").strip() or "view"
     violation_limit = int(data.get("violation_limit", 10))
     if violation_limit <= 0:
@@ -1063,7 +1064,10 @@ async def start_dataquality_checks(
     if not triplestore_table:
         raise ValidationError("Triple store table is not specified.")
     shapes = domain.shacl_shapes
-    if dimensions:
+    if shape_ids:
+        shape_ids_set = set(shape_ids)
+        shapes = [s for s in shapes if s.get("id") in shape_ids_set]
+    elif dimensions:
         shapes = [s for s in shapes if s.get("category") in dimensions]
     shapes = [s for s in shapes if s.get("enabled", True)]
 
@@ -1144,6 +1148,11 @@ async def start_reasoning(
         "sparql_rules": data.get("sparql_rules", False),
         "aggregate_rules": data.get("aggregate_rules", False),
     }
+    # Per-rule name filters (optional; empty set = run all rules in that phase)
+    for key in ("swrl_rule_names", "decision_table_names", "sparql_rule_names", "aggregate_rule_names"):
+        names = data.get(key)
+        if names:
+            options[key] = set(names)
 
     domain = get_domain(session_mgr)
     domain.ensure_generated_content()
