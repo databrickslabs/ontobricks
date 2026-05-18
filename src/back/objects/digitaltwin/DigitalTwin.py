@@ -886,13 +886,13 @@ class DigitalTwin:
         result: Dict[str, Any] = {
             "view_exists": None,
             "graph_engine": graph_engine,
-            "local_lbug_exists": None,
+            "graph_has_data": None,
             "lakebase_table_exists": None,
             "lakebase_synced_uc_exists": None,
             "lakebase_check_error": None,
             "view_table": view_table,
             "graph_name": graph_name,
-            "local_lbug_path": "",
+            "graph_display": "",
             "last_update": last_update,
             "last_built": last_built,
             "view_check_error": None,
@@ -1009,12 +1009,12 @@ class DigitalTwin:
         # Preserve the tri-state: True=present, False=absent, None=unknown
         # (probe failed/timed out). Caller must NOT cache unknown results.
         if exists_tbl is None:
-            result["local_lbug_exists"] = None
+            result["graph_has_data"] = None
         else:
-            result["local_lbug_exists"] = bool(exists_tbl and cnt > 0)
+            result["graph_has_data"] = bool(exists_tbl and cnt > 0)
         result["lakebase_table_exists"] = exists_tbl
         result["lakebase_check_error"] = lk_check_error
-        result["local_lbug_path"] = display or ""
+        result["graph_display"] = display or ""
         result["lakebase_database"] = lk_database
         result["lakebase_schema"] = lk_schema
         result["lakebase_table"] = lk_table

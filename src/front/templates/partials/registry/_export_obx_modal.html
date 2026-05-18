@@ -1,0 +1,48 @@
+<div class="modal fade" id="exportObxModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-box-arrow-up me-2"></i>Export domains to .obx</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-3">
+          Pick which domains to export and which versions to include. The
+          resulting <code>.obx</code> file is plain JSON and can be re-imported
+          on any OntoBricks instance.
+        </p>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle" id="exportObxTable">
+            <thead>
+              <tr>
+                <th style="width:2.5rem;" class="text-center">
+                  <input type="checkbox" class="form-check-input" id="exportObxSelectAll" checked>
+                </th>
+                <th>Domain</th>
+                <th style="width:5rem;" class="text-center">Versions</th>
+                <th style="width:14rem;">Mode</th>
+                <th>Pick versions</th>
+              </tr>
+            </thead>
+            <tbody id="exportObxTableBody">
+              <tr><td colspan="5" class="text-center text-muted small py-3">
+                <span class="spinner-border spinner-border-sm me-1"></span> Loading…
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="small text-muted mt-2">
+          <i class="bi bi-info-circle me-1"></i>
+          Volume documents are not included in this iteration — only the
+          registry JSON payloads.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnExportObxConfirm">
+          <i class="bi bi-download me-1"></i> Export
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

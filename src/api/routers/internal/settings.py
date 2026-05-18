@@ -4,6 +4,8 @@ Internal API -- Settings / configuration JSON endpoints.
 Moved from app/frontend/settings/routes.py during the front/back split.
 """
 
+import json
+
 from fastapi import APIRouter, Request, Depends
 
 from shared.config.settings import get_settings, Settings
@@ -295,6 +297,130 @@ async def set_registry_version_active(
         enabled,
         session_mgr,
         settings,
+    )
+
+
+# ===========================================
+# Registry OBX export / import
+# ===========================================
+
+
+@router.post("/registry/export")
+async def export_registry_obx(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Export one or several registry domains as a `.obx` (JSON) file.
+
+    Body shape::
+
+        {
+            "domains": [
+                {"name": "claims", "mode": "all" | "active" | "latest" | "selected",
+                 "versions": ["1", "2"]}
+            ]
+        }
+
+    The response is a streamed JSON body with a ``Content-Disposition``
+    attachment header so the browser saves it as ``ontobricks-YYYY-MM-DD.obx``.
+    Domains the caller cannot see (per :func:`filter_visible_domains`) are
+    silently dropped before the export runs.
+    """
+    from fastapi.responses import StreamingResponse
+    import io
+
+    spec = await request.json()
+    requested = spec.get("domains") or []
+    if requested:
+        visible = filter_visible_domains(
+            request, session_mgr, settings, requested
+        )
+        visible_names = {
+            (e.get("name") if isinstance(e, dict) else str(e)) for e in visible
+        }
+        spec = {
+            **spec,
+            "domains": [d for d in requested if d.get("name") in visible_names],
+        }
+
+    email, _, _, _, _ = _settings_request_identity(request)
+    result = config_service.export_registry_obx_result(
+        spec, session_mgr, settings, exported_by=email
+    )
+
+    envelope = result["envelope"]
+    body = json.dumps(envelope, indent=2).encode("utf-8")
+    headers = {
+        "Content-Disposition": f'attachment; filename="{result["filename"]}"',
+        "X-OBX-Format-Version": str(envelope.get("format_version", "")),
+        "X-OBX-Ontobricks-Version": envelope.get("ontobricks_version", ""),
+        "X-OBX-Domain-Count": str(result.get("domain_count", 0)),
+    }
+    return StreamingResponse(
+        io.BytesIO(body), media_type="application/json", headers=headers
+    )
+
+
+@router.post("/registry/import/preview")
+async def preview_registry_obx_import(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Inspect an uploaded `.obx` file and report per-domain conflicts.
+
+    Accepts multipart/form-data with a ``file`` field. Returns the envelope
+    metadata (``format_version``, ``ontobricks_version``, …) plus a list of
+    incoming domains annotated with ``exists``, ``conflicting_versions``,
+    and a ``suggested_new_name`` for the rename action.
+    """
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None:
+        raise ValidationError("No file provided")
+    file_bytes = await upload.read()
+    return config_service.preview_obx_import_result(
+        file_bytes, session_mgr, settings
+    )
+
+
+@router.post(
+    "/registry/import",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def import_registry_obx(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Import a `.obx` file into the registry (admin only).
+
+    Multipart fields:
+
+    * ``file`` -- the uploaded `.obx` JSON body.
+    * ``decisions`` -- JSON string ``[{"name": <folder>,
+      "action": "skip"|"overwrite"|"rename", "new_name": <str>}]``.
+      Missing entries default to ``"skip"``.
+    """
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None:
+        raise ValidationError("No file provided")
+    file_bytes = await upload.read()
+
+    decisions_raw = form.get("decisions") or "[]"
+    try:
+        decisions = json.loads(decisions_raw)
+    except json.JSONDecodeError as exc:
+        raise ValidationError(
+            f"Invalid 'decisions' field: not valid JSON ({exc})"
+        ) from exc
+    if not isinstance(decisions, list):
+        raise ValidationError("'decisions' must be a JSON array")
+
+    return config_service.import_registry_obx_result(
+        file_bytes, decisions, session_mgr, settings
     )
 
 

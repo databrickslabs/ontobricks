@@ -1018,8 +1018,7 @@ class _BuildPipeline:
                 )
                 graph_engine = "lakebase"
 
-            local_lbug_exists = final_count > 0
-            local_path = ""
+            graph_has_data = final_count > 0
 
             dt = DigitalTwin(self.domain)
 
@@ -1028,9 +1027,9 @@ class _BuildPipeline:
                 "view_table": self.view_table,
                 "graph_name": self.graph_name,
                 "graph_engine": graph_engine,
-                "local_lbug_exists": local_lbug_exists,
-                "lakebase_table_exists": local_lbug_exists,
-                "local_lbug_path": local_path,
+                "graph_has_data": graph_has_data,
+                "lakebase_table_exists": graph_has_data,
+                "graph_display": "",
                 "last_built": self.domain.last_build,
                 "last_update": self.domain.last_update,
             }
@@ -1043,7 +1042,7 @@ class _BuildPipeline:
                 self.task_id,
                 final_count,
                 graph_engine,
-                local_lbug_exists,
+                graph_has_data,
                 self.graph_name,
             )
         except Exception as exc:  # noqa: BLE001

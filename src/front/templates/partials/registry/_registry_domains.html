@@ -8,6 +8,12 @@
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshDomains" title="Refresh domain list">
                 <i class="bi bi-arrow-clockwise"></i>
             </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnExportDomains" title="Export domains to a .obx file">
+                <i class="bi bi-box-arrow-up me-1"></i> Export
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnImportDomains" data-requires-app="admin" title="Import a .obx file into the registry">
+                <i class="bi bi-box-arrow-in-down me-1"></i> Import
+            </button>
             <button type="button" class="btn btn-sm btn-primary" onclick="domainNew()">
                 <i class="bi bi-file-earmark-plus me-1"></i> New Domain
             </button>
@@ -27,3 +33,6 @@
         </div>
     </div>
 </div>
+
+{% include 'partials/registry/_export_obx_modal.html' %}
+{% include 'partials/registry/_import_obx_modal.html' %}

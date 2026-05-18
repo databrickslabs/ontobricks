@@ -639,6 +639,313 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btnRefreshDomains')?.addEventListener('click', () => loadRegistryDomains());
 
     // =====================================================================
+    //  OBX EXPORT / IMPORT
+    // =====================================================================
+
+    document.getElementById('btnExportDomains')?.addEventListener('click', openExportObxModal);
+    document.getElementById('btnImportDomains')?.addEventListener('click', openImportObxModal);
+
+    async function openExportObxModal() {
+        const tbody = document.getElementById('exportObxTableBody');
+        const modalEl = document.getElementById('exportObxModal');
+        if (!tbody || !modalEl) return;
+
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3">' +
+            '<span class="spinner-border spinner-border-sm me-1"></span> Loading…</td></tr>';
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+
+        try {
+            const resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
+            const data = await resp.json();
+            if (!data.success) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-danger small py-3">' +
+                    escapeHtml(data.message || 'Could not load domains') + '</td></tr>';
+                return;
+            }
+            const rows = data.domains || [];
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-muted small py-3 text-center">' +
+                    'No domains in registry yet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map((d, idx) => {
+                const versions = (d.versions || []).map(v => typeof v === 'object' ? v.version : v);
+                const verBadges = versions.length
+                    ? versions.slice(0, 4).map(v => '<span class="badge bg-secondary me-1">v' + escapeHtml(v) + '</span>').join('')
+                        + (versions.length > 4 ? '<span class="text-muted small">+' + (versions.length - 4) + '</span>' : '')
+                    : '<span class="text-muted small fst-italic">none</span>';
+                const versionCheckboxes = versions.map(v =>
+                    '<label class="form-check form-check-inline">' +
+                        '<input type="checkbox" class="form-check-input export-obx-version" data-version="' + escapeHtml(v) + '">' +
+                        '<span class="form-check-label small">v' + escapeHtml(v) + '</span>' +
+                    '</label>'
+                ).join('');
+                return '<tr class="export-obx-row" data-domain="' + escapeHtml(d.name) + '">' +
+                    '<td class="text-center"><input type="checkbox" class="form-check-input export-obx-pick" checked></td>' +
+                    '<td class="fw-semibold"><i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(d.name) + '</td>' +
+                    '<td class="text-center">' + verBadges + '</td>' +
+                    '<td>' +
+                        '<select class="form-select form-select-sm export-obx-mode">' +
+                            '<option value="latest" selected>Latest only</option>' +
+                            '<option value="active">Active (MCP)</option>' +
+                            '<option value="all">All versions</option>' +
+                            '<option value="selected">Choose…</option>' +
+                        '</select>' +
+                    '</td>' +
+                    '<td class="export-obx-versions-cell" style="display:none;">' + versionCheckboxes + '</td>' +
+                '</tr>';
+            }).join('');
+
+            tbody.querySelectorAll('.export-obx-mode').forEach(sel => {
+                sel.addEventListener('change', () => {
+                    const cell = sel.closest('tr')?.querySelector('.export-obx-versions-cell');
+                    if (cell) cell.style.display = sel.value === 'selected' ? '' : 'none';
+                });
+            });
+
+            const selectAll = document.getElementById('exportObxSelectAll');
+            if (selectAll) {
+                selectAll.checked = true;
+                selectAll.onchange = () => {
+                    tbody.querySelectorAll('.export-obx-pick').forEach(cb => { cb.checked = selectAll.checked; });
+                };
+            }
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-danger small py-3">' +
+                escapeHtml(e.message || 'Network error') + '</td></tr>';
+        }
+    }
+
+    document.getElementById('btnExportObxConfirm')?.addEventListener('click', async () => {
+        const tbody = document.getElementById('exportObxTableBody');
+        if (!tbody) return;
+        const rows = Array.from(tbody.querySelectorAll('.export-obx-row'));
+        const selected = [];
+        rows.forEach(row => {
+            const pick = row.querySelector('.export-obx-pick');
+            if (!pick || !pick.checked) return;
+            const name = row.dataset.domain;
+            const mode = row.querySelector('.export-obx-mode')?.value || 'latest';
+            const entry = { name, mode };
+            if (mode === 'selected') {
+                entry.versions = Array.from(row.querySelectorAll('.export-obx-version'))
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.dataset.version);
+                if (!entry.versions.length) return;
+            }
+            selected.push(entry);
+        });
+
+        if (!selected.length) {
+            showNotification('Pick at least one domain to export', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('btnExportObxConfirm');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Exporting…';
+
+        try {
+            const resp = await fetch('/settings/registry/export', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domains: selected })
+            });
+            if (!resp.ok) {
+                let msg = 'Export failed (' + resp.status + ')';
+                try { const j = await resp.json(); msg = j.message || msg; } catch (_) {}
+                showNotification(msg, 'error');
+                return;
+            }
+            const blob = await resp.blob();
+            const dispo = resp.headers.get('Content-Disposition') || '';
+            const m = dispo.match(/filename="([^"]+)"/);
+            const filename = m ? m[1] : ('ontobricks-' + new Date().toISOString().slice(0, 10) + '.obx');
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            showNotification('Exported ' + selected.length + ' domain(s) to ' + filename, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('exportObxModal'))?.hide();
+        } catch (e) {
+            showNotification('Export error: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    });
+
+    function openImportObxModal() {
+        const modalEl = document.getElementById('importObxModal');
+        if (!modalEl) return;
+        document.getElementById('importObxStep1').style.display = '';
+        document.getElementById('importObxStep2').style.display = 'none';
+        document.getElementById('importObxFile').value = '';
+        document.getElementById('importObxPreviewError').style.display = 'none';
+        document.getElementById('btnImportObxConfirm').style.display = 'none';
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    document.getElementById('importObxFile')?.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        const errEl = document.getElementById('importObxPreviewError');
+        if (!file) return;
+        errEl.style.display = 'none';
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            const resp = await fetch('/settings/registry/import/preview', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: form
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                errEl.textContent = data.message || 'Could not read the .obx file';
+                errEl.style.display = '';
+                return;
+            }
+            renderImportObxPreview(data);
+        } catch (err) {
+            errEl.textContent = 'Network error: ' + err.message;
+            errEl.style.display = '';
+        }
+    });
+
+    function renderImportObxPreview(data) {
+        document.getElementById('importObxStep1').style.display = 'none';
+        document.getElementById('importObxStep2').style.display = '';
+        document.getElementById('btnImportObxConfirm').style.display = '';
+
+        const meta = document.getElementById('importObxMeta');
+        meta.innerHTML =
+            '<i class="bi bi-info-circle me-1"></i> ' +
+            'Format version: <strong>' + escapeHtml(String(data.format_version || '?')) + '</strong> · ' +
+            'Produced by OntoBricks <strong>' + escapeHtml(data.ontobricks_version || '?') + '</strong>' +
+            (data.exported_at ? ' · Exported ' + escapeHtml(data.exported_at) : '') +
+            (data.exported_by ? ' by <code>' + escapeHtml(data.exported_by) + '</code>' : '');
+
+        const tbody = document.getElementById('importObxTableBody');
+        tbody.innerHTML = (data.domains || []).map((d, idx) => {
+            const versionBadges = (d.incoming_versions || []).map(v => {
+                const conflict = (d.conflicting_versions || []).includes(v);
+                return '<span class="badge ' + (conflict ? 'bg-warning text-dark' : 'bg-secondary') + ' me-1">v' + escapeHtml(v) + '</span>';
+            }).join('');
+            const statusBadge = d.exists
+                ? '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Exists</span>'
+                : '<span class="badge bg-success-subtle text-success border-success">New</span>';
+            const defaultAction = d.exists ? 'skip' : 'overwrite';
+            return '<tr class="import-obx-row" data-name="' + escapeHtml(d.name) + '" data-suggested="' + escapeHtml(d.suggested_new_name || '') + '">' +
+                '<td><i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(d.name) +
+                    (d.original_name && d.original_name !== d.name
+                        ? '<div class="small text-muted">from <code>' + escapeHtml(d.original_name) + '</code></div>'
+                        : '') +
+                '</td>' +
+                '<td>' + versionBadges + '</td>' +
+                '<td>' + statusBadge + '</td>' +
+                '<td>' +
+                    '<div class="d-flex flex-column gap-1">' +
+                        '<div class="btn-group btn-group-sm" role="group">' +
+                            actionRadio(idx, 'skip', 'Skip', defaultAction === 'skip', !d.exists) +
+                            actionRadio(idx, 'overwrite', 'Overwrite', defaultAction === 'overwrite', false) +
+                            actionRadio(idx, 'rename', 'Rename', false, !d.exists) +
+                        '</div>' +
+                        '<input type="text" class="form-control form-control-sm import-obx-rename" ' +
+                            'value="' + escapeHtml(d.suggested_new_name || '') + '" ' +
+                            'placeholder="new name" style="display:none;">' +
+                    '</div>' +
+                '</td>' +
+            '</tr>';
+        }).join('');
+
+        tbody.querySelectorAll('.import-obx-row').forEach(row => {
+            const rename = row.querySelector('.import-obx-rename');
+            row.querySelectorAll('input[type="radio"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (rename) rename.style.display = radio.value === 'rename' && radio.checked ? '' : (
+                        row.querySelector('input[type="radio"]:checked')?.value === 'rename' ? '' : 'none'
+                    );
+                });
+            });
+        });
+    }
+
+    function actionRadio(rowIdx, value, label, checked, disabled) {
+        const id = 'obx-action-' + rowIdx + '-' + value;
+        return '<input type="radio" class="btn-check" name="obx-action-' + rowIdx + '" ' +
+                    'id="' + id + '" value="' + value + '" ' +
+                    (checked ? 'checked' : '') + ' ' + (disabled ? 'disabled' : '') + '>' +
+                '<label class="btn btn-outline-' + (value === 'overwrite' ? 'warning' : value === 'rename' ? 'primary' : 'secondary') +
+                    '" for="' + id + '">' + escapeHtml(label) + '</label>';
+    }
+
+    document.getElementById('btnImportObxConfirm')?.addEventListener('click', async () => {
+        const file = document.getElementById('importObxFile')?.files?.[0];
+        if (!file) { showNotification('Pick a .obx file first', 'warning'); return; }
+
+        const decisions = [];
+        document.querySelectorAll('#importObxTableBody .import-obx-row').forEach(row => {
+            const action = row.querySelector('input[type="radio"]:checked')?.value || 'skip';
+            const decision = { name: row.dataset.name, action };
+            if (action === 'rename') {
+                decision.new_name = row.querySelector('.import-obx-rename')?.value?.trim() || row.dataset.suggested;
+            }
+            decisions.push(decision);
+        });
+
+        const overwrites = decisions.filter(d => d.action === 'overwrite').length;
+        if (overwrites > 0) {
+            const ok = await showConfirmDialog({
+                title: 'Confirm overwrite',
+                message: 'You are about to overwrite ' + overwrites + ' existing domain(s). This cannot be undone.',
+                confirmText: 'Import & overwrite',
+                confirmClass: 'btn-warning',
+                icon: 'exclamation-triangle'
+            });
+            if (!ok) return;
+        }
+
+        const btn = document.getElementById('btnImportObxConfirm');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importing…';
+
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            form.append('decisions', JSON.stringify(decisions));
+            const resp = await fetch('/settings/registry/import', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: form
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                showNotification(data.message || 'Import failed', 'error');
+                return;
+            }
+            showNotification(data.message || 'Import complete', 'success');
+            if (data.errors && data.errors.length) {
+                console.warn('OBX import warnings:', data.errors);
+            }
+            bootstrap.Modal.getInstance(document.getElementById('importObxModal'))?.hide();
+            loadRegistryDomains();
+        } catch (e) {
+            showNotification('Import error: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    });
+
+    // =====================================================================
     //  BRIDGES
     // =====================================================================
 

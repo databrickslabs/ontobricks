@@ -38,18 +38,17 @@ async function loadSyncInfo() {
         renderTripleStoreStatus(tsStatus);
 
         // Guard against cache-staleness inconsistency: the shared cache timestamp
-        // can make an old dt_existence entry (local_lbug_exists=true) appear fresh
+        // can make an old dt_existence entry (graph_has_data=true) appear fresh
         // even after a new status write sets has_data=false.  When the two signals
-        // disagree for Lakebase (both ultimately check the same Postgres table),
-        // trust the triplestore_status — it is a more targeted, recent check.
+        // disagree (both ultimately check the same Postgres table), trust the
+        // triplestore_status — it is a more targeted, recent check.
         if (!tripleStoreHasData && payload.dt_existence) {
-            var eng = (payload.dt_existence.graph_engine || '').toLowerCase();
-            if (eng === 'lakebase' && payload.dt_existence.local_lbug_exists) {
+            if (payload.dt_existence.graph_has_data) {
                 console.warn(
                     '[Sync] dt_existence says Loaded but triplestore_status says no data ' +
-                    '(cache staleness). Overriding local_lbug_exists to false.'
+                    '(cache staleness). Overriding graph_has_data to false.'
                 );
-                payload.dt_existence.local_lbug_exists = false;
+                payload.dt_existence.graph_has_data = false;
             }
         }
 

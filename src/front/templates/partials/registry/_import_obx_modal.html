@@ -1,0 +1,40 @@
+<div class="modal fade" id="importObxModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-box-arrow-in-down me-2"></i>Import .obx file</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="importObxStep1">
+          <p class="small text-muted">Select a <code>.obx</code> file to inspect before writing anything to the registry.</p>
+          <input type="file" class="form-control" id="importObxFile" accept=".obx,.json,application/json">
+          <div id="importObxPreviewError" class="small text-danger mt-2" style="display:none;"></div>
+        </div>
+
+        <div id="importObxStep2" style="display:none;">
+          <div class="alert alert-info py-2 small mb-3" id="importObxMeta"></div>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Domain</th>
+                  <th style="width:8rem;">Versions</th>
+                  <th style="width:9rem;">Status</th>
+                  <th style="width:22rem;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="importObxTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnImportObxConfirm" style="display:none;">
+          <i class="bi bi-cloud-upload me-1"></i> Import
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
