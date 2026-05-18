@@ -207,9 +207,13 @@ class TestDomainVersions:
         response = client.get("/api/v1/domain/versions")
         assert response.status_code == 422
 
-    @patch("api.routers.domains.DigitalTwin.resolve_registry")
-    def test_versions_registry_not_configured(self, mock_resolve, client):
-        mock_resolve.return_value = {"catalog": "", "schema": "", "volume": ""}
+    @patch("api.routers.domains.RegistryCfg.from_session")
+    def test_versions_registry_not_configured(self, mock_from_session, client):
+        from back.objects.registry import RegistryCfg
+
+        mock_from_session.return_value = RegistryCfg(
+            catalog="", schema="", volume=""
+        )
         response = client.get("/api/v1/domain/versions?domain_name=test")
         assert response.status_code == 400
 

@@ -145,10 +145,14 @@ async def list_registry_domains(
     settings: Settings = Depends(get_settings),
 ):
     domain = get_domain(session_mgr)
-    reg = DigitalTwin.resolve_registry(
-        session_mgr, settings, registry_catalog, registry_schema, registry_volume
+    base_cfg = RegistryCfg.from_session(session_mgr, settings)
+    cfg = RegistryCfg(
+        catalog=registry_catalog or base_cfg.catalog,
+        schema=registry_schema or base_cfg.schema,
+        volume=registry_volume or base_cfg.volume,
+        lakebase_schema=base_cfg.lakebase_schema,
+        lakebase_database=base_cfg.lakebase_database,
     )
-    cfg = RegistryCfg.from_dict(reg)
     if not cfg.is_configured:
         raise ValidationError("Registry not configured")
 
@@ -194,10 +198,14 @@ async def list_domain_versions(
     settings: Settings = Depends(get_settings),
 ):
     sess_domain = get_domain(session_mgr)
-    reg = DigitalTwin.resolve_registry(
-        session_mgr, settings, registry_catalog, registry_schema, registry_volume
+    base_cfg = RegistryCfg.from_session(session_mgr, settings)
+    cfg = RegistryCfg(
+        catalog=registry_catalog or base_cfg.catalog,
+        schema=registry_schema or base_cfg.schema,
+        volume=registry_volume or base_cfg.volume,
+        lakebase_schema=base_cfg.lakebase_schema,
+        lakebase_database=base_cfg.lakebase_database,
     )
-    cfg = RegistryCfg.from_dict(reg)
     if not cfg.is_configured:
         raise ValidationError("Registry not configured")
 

@@ -2837,7 +2837,13 @@ class DigitalTwin:
         registry_schema=None,
         registry_volume=None,
     ):
-        """Resolve registry location: explicit query params -> session -> env."""
+        """Resolve registry location: explicit query params -> session -> env.
+
+        Always carries ``lakebase_schema`` / ``lakebase_database`` from the
+        session/env so callers that pass the dict straight to
+        ``RegistryCfg.from_dict`` get the correct Lakebase schema rather than
+        the hardcoded ``"ontobricks_registry"`` default.
+        """
         from back.objects.registry import RegistryCfg
 
         base = RegistryCfg.from_session(session_mgr, settings)
@@ -2845,6 +2851,8 @@ class DigitalTwin:
             "catalog": registry_catalog or base.catalog,
             "schema": registry_schema or base.schema,
             "volume": registry_volume or base.volume,
+            "lakebase_schema": base.lakebase_schema,
+            "lakebase_database": base.lakebase_database,
         }
 
     @staticmethod
