@@ -1007,7 +1007,7 @@ function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
     panelBody.innerHTML = `
         <input type="hidden" id="panelEntityClass" value="${classUri}" />
         
-        <ul class="nav nav-tabs" id="entityPanelTabs" role="tablist" style="gap: 2px;">
+        <ul class="nav nav-tabs ob-tabs" id="entityPanelTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="ep-status-tab" data-bs-toggle="tab" data-bs-target="#ep-status-pane" type="button">
                     <i class="bi bi-clipboard-check"></i> Status
@@ -1191,7 +1191,7 @@ function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) 
             <span class="badge bg-success small">${targetName}</span>
         </div>
         
-        <ul class="nav nav-tabs" id="relPanelTabs" role="tablist" style="gap: 2px;">
+        <ul class="nav nav-tabs ob-tabs" id="relPanelTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="rp-status-tab" data-bs-toggle="tab" data-bs-target="#rp-status-pane" type="button">
                     <i class="bi bi-clipboard-check"></i> Status
