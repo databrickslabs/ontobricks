@@ -275,6 +275,7 @@ body.full-width-layout {
     display: block;
 }
 
+
 /* Sections that use .content-section wrappers: stretch to fill the parent */
 .sidebar-section > .content-section {
     flex: 1;

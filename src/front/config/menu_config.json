@@ -312,6 +312,13 @@
                             "icon": "bi-diagram-2",
                             "default": false,
                             "requires": null
+                        },
+                        {
+                            "id": "pitfalls",
+                            "label": "Pitfalls",
+                            "icon": "bi-bug",
+                            "default": false,
+                            "requires": "domain_saved"
                         }
                     ]
                 },

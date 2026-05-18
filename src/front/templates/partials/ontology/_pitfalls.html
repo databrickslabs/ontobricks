@@ -1,0 +1,110 @@
+<!-- Ontology Pitfalls Section -->
+<!-- JS: /static/ontology/js/ontology-pitfalls.js -->
+<style>
+  .pitfall-tooltip .tooltip-inner { max-width: 320px; text-align: left; font-size: .8rem; }
+  #pitfalls-results-pane { overflow-y: auto; max-height: calc(100vh - 280px); }
+</style>
+
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-bug me-2"></i>Pitfalls</h4>
+        <p class="text-muted mb-0 small">Detect structural, logical, and semantic issues in your ontology (P1.1–P4.7)</p>
+    </div>
+    <button class="btn btn-sm btn-primary" id="pitfallsRunBtn" onclick="PitfallsModule.run()">
+        <i class="bi bi-play-fill me-1"></i>Run Analysis
+    </button>
+</div>
+
+<div class="card h-100">
+    <div class="card-body p-0">
+
+        <!-- Tab strip -->
+        <ul class="nav nav-tabs ob-tabs" id="pitfallsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="pitfalls-patterns-tab"
+                        data-bs-toggle="tab" data-bs-target="#pitfalls-patterns-pane"
+                        type="button" role="tab">
+                    <i class="bi bi-sliders me-1"></i>Patterns
+                    <span class="badge bg-secondary ms-1" id="pitfallsSelectedCount">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pitfalls-results-tab"
+                        data-bs-toggle="tab" data-bs-target="#pitfalls-results-pane"
+                        type="button" role="tab">
+                    <i class="bi bi-list-check me-1"></i>Results
+                    <span class="badge bg-secondary ms-1 d-none" id="pitfallsResultsBadge">0</span>
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab panes -->
+        <div class="tab-content p-3" id="pitfallsTabContent">
+
+            <!-- ── Patterns pane ──────────────────────────────────────── -->
+            <div class="tab-pane fade show active" id="pitfalls-patterns-pane" role="tabpanel">
+
+                <!-- Toolbar -->
+                <div class="d-flex gap-2 align-items-center mb-3">
+                    <button class="btn btn-sm btn-outline-secondary" id="pitfallsSelectAllBtn"
+                            onclick="PitfallsModule.selectAll()" title="Select all patterns">
+                        <i class="bi bi-check2-all me-1"></i>All
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" id="pitfallsFastBtn"
+                            onclick="PitfallsModule.selectFast()" title="Fast only (no ML)">
+                        <i class="bi bi-lightning me-1"></i>Fast only
+                    </button>
+                </div>
+
+                <!-- Pattern checkboxes -->
+                <div id="pitfallsPatternBody">
+                    <div class="text-muted small py-3 text-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                        Loading taxonomy…
+                    </div>
+                </div>
+
+                <!-- Progress (stays in Patterns tab while running) -->
+                <div id="pitfallsProgress" class="d-none mt-3">
+                    <div class="card border-primary">
+                        <div class="card-body py-3">
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                <span class="small fw-semibold" id="pitfallsProgressMsg">Starting analysis…</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                     id="pitfallsProgressBar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Results pane ───────────────────────────────────────── -->
+            <div class="tab-pane fade" id="pitfalls-results-pane" role="tabpanel">
+
+                <!-- Empty state -->
+                <div id="pitfallsEmpty" class="text-center py-5 text-muted">
+                    <i class="bi bi-bug display-6 mb-3 d-block opacity-50"></i>
+                    <p class="mb-1 fw-semibold">No analysis run yet</p>
+                    <p class="small">Go to the <strong>Patterns</strong> tab and click <strong>Run Analysis</strong>.</p>
+                </div>
+
+                <!-- Results -->
+                <div id="pitfallsResults" class="d-none">
+                    <div class="alert d-flex align-items-center gap-3 mb-3" id="pitfallsSummaryBanner">
+                        <i class="bi fs-4" id="pitfallsSummaryIcon"></i>
+                        <div>
+                            <div class="fw-semibold" id="pitfallsSummaryTitle"></div>
+                            <div class="small text-muted" id="pitfallsSummaryDetail"></div>
+                        </div>
+                    </div>
+                    <div class="accordion" id="pitfallsAccordion"></div>
+                </div>
+
+            </div>
+        </div><!-- /tab-content -->
+
+    </div><!-- /card-body -->
+</div><!-- /card -->

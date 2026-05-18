@@ -99,6 +99,11 @@
             <div id="owl-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_owl_content.html" %}
             </div>
+
+            <!-- Pitfalls Section (D2KLab ontology quality checks) -->
+            <div id="pitfalls-section" class="sidebar-section">
+                {% include "partials/ontology/_pitfalls.html" %}
+            </div>
             
             <!-- Shared Edit Panels (Entity & Relationship) - positioned within sidebar-content -->
             {% include "partials/ontology/_ontology_shared_panels.html" %}
@@ -131,6 +136,8 @@
 <!-- Markdown rendering for assistant chat -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-assistant.js') }}?v={{ asset_version }}"></script>
+
+<script src="{{ url_for('static', filename='ontology/js/ontology-pitfalls.js') }}?v={{ asset_version }}"></script>
 
 <!-- Ontology page initialization (extracted from template) -->
 <script src="{{ url_for('static', filename='ontology/js/ontology-init.js') }}?v={{ asset_version }}"></script>

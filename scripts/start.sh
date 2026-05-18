@@ -48,8 +48,8 @@ fi
 
 echo "Using virtual environment Python..."
 
-# Ensure all dependencies (including lakebase extras) are up to date
-uv sync --extra lakebase --quiet 2>/dev/null || true
+# Ensure all dependencies (including lakebase and pitfalls extras) are up to date
+uv sync --extra lakebase --extra pitfalls --quiet 2>/dev/null || true
 
 # Check if .env file exists
 if [ ! -f ".env" ]; then

@@ -35,6 +35,16 @@ lakebase = [
     "psycopg-pool>=3.2.0",
 ]
 
+# Ontology pitfall detection (D2KLab Ontology-Pitfalls-Detector).
+# Install with: ``pip install .[pitfalls]``
+# Heavy ML deps; downloaded on first use (SentenceTransformer model weights).
+pitfalls = [
+    "sentence-transformers>=3.0.0",
+    "scikit-learn>=1.3.0",
+    "nltk>=3.8.0",
+    "scipy>=1.11.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
