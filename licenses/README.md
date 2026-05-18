@@ -46,6 +46,19 @@ This folder contains the license files for all external libraries used by OntoBr
 | Strawberry GraphQL | >=0.220.0 | MIT | [python/strawberry-graphql-LICENSE.txt](python/strawberry-graphql-LICENSE.txt) |
 | Uvicorn | >=0.27.0 | BSD-3-Clause | [python/uvicorn-LICENSE.txt](python/uvicorn-LICENSE.txt) |
 
+## Python Libraries (Optional — Pitfalls Detection)
+
+> Install with `uv sync --extra pitfalls`. Heavy ML dependencies; not required for core operation.
+> The detector logic (`runner.py`, `utils.py`) is vendored from [D2KLab/Ontology-Pitfalls-Detector](https://github.com/D2KLab/Ontology-Pitfalls-Detector) (Apache-2.0) and modified for OntoBricks.
+
+| Library | Version | License | File |
+|---------|---------|---------|------|
+| D2KLab Ontology-Pitfalls-Detector (vendored) | 2023 | Apache-2.0 | [python/d2klab-ontology-pitfalls-detector-LICENSE.txt](python/d2klab-ontology-pitfalls-detector-LICENSE.txt) |
+| NLTK | >=3.8.0 | Apache-2.0 | [python/nltk-LICENSE.txt](python/nltk-LICENSE.txt) |
+| scikit-learn | >=1.3.0 | BSD-3-Clause | [python/scikit-learn-LICENSE.txt](python/scikit-learn-LICENSE.txt) |
+| SciPy | >=1.11.0 | BSD-3-Clause | [python/scipy-LICENSE.txt](python/scipy-LICENSE.txt) |
+| sentence-transformers | >=3.0.0 | Apache-2.0 | [python/sentence-transformers-LICENSE.txt](python/sentence-transformers-LICENSE.txt) |
+
 ## Python Libraries (MCP Server)
 
 | Library | Version | License | File |
@@ -69,8 +82,8 @@ This folder contains the license files for all external libraries used by OntoBr
 |-------------|-----------|
 | **MIT** | Bootstrap, Bootstrap Icons, Chart.js, GraphiQL, Graphology, Graphology Library, Grid.js, Marked, React/ReactDOM, Sigma.js, APScheduler, FastAPI, Pydantic, Pydantic Settings, Strawberry GraphQL |
 | **ISC** | D3.js |
-| **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, NetworkX, python-dotenv, RDFLib, Starlette, Uvicorn |
-| **Apache-2.0** | aiofiles, Databricks SDK, databricks-sql-connector, FastMCP, MLflow, PyArrow, pySHACL, python-multipart, Requests |
+| **BSD-3-Clause** | HTTPX, ItsDangerous, Jinja2, NetworkX, python-dotenv, RDFLib, scikit-learn, SciPy, Starlette, Uvicorn |
+| **Apache-2.0** | aiofiles, D2KLab Ontology-Pitfalls-Detector (vendored), Databricks SDK, databricks-sql-connector, FastMCP, MLflow, NLTK, PyArrow, pySHACL, python-multipart, Requests, sentence-transformers |
 | **W3C Software License** | OWL-RL |
 | **SIL OFL 1.1** | JetBrains Mono, Outfit (Google Fonts) |
 

@@ -3,4 +3,4 @@
 # all runtime dependencies from pyproject.toml at build time.
 # See: https://docs.databricks.com/aws/en/generative-ai/mcp/custom-mcp
 uv
--e ".[lakebase]"
+-e ".[lakebase,pitfalls]"
