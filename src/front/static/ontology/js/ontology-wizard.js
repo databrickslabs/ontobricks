@@ -293,8 +293,8 @@ async function showWizardResults(result) {
         if (typeof loadOntologyFromSession === 'function') {
             await loadOntologyFromSession();
         }
-        if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.goTo === 'function') {
-            SidebarNav.goTo('map');
+        if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.switchTo === 'function') {
+            SidebarNav.switchTo('map');
         }
         showNotification('Ontology created successfully!', 'success');
     } else {
@@ -744,8 +744,8 @@ async function applyWizardOntology() {
             }
             
             // Navigate to Map view to see the result
-            if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.goTo === 'function') {
-                SidebarNav.goTo('map');
+            if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.switchTo === 'function') {
+                SidebarNav.switchTo('map');
             }
         } else {
             showNotification('Error applying ontology: ' + result.message, 'error');
