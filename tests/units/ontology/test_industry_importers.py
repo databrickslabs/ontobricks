@@ -405,3 +405,243 @@ class TestFhirImportService:
 
         with pytest.raises(ValidationError):
             FhirImportService.fetch_and_parse_fhir([])
+
+    # ------------------------------------------------------------------
+    # Version support
+    # ------------------------------------------------------------------
+
+    def test_get_fhir_versions_returns_list(self):
+        versions = FhirImportService.get_fhir_versions()
+        assert isinstance(versions, list)
+        assert len(versions) == len(FhirImportService.FHIR_VERSIONS)
+
+    def test_get_fhir_versions_entry_fields(self):
+        for v in FhirImportService.get_fhir_versions():
+            assert "key" in v
+            assert "label" in v
+            assert "default" in v
+
+    def test_get_fhir_versions_has_r4_r4b_r5(self):
+        keys = {v["key"] for v in FhirImportService.get_fhir_versions()}
+        assert {"R4", "R4B", "R5"} <= keys
+
+    def test_get_fhir_versions_exactly_one_default(self):
+        defaults = [v for v in FhirImportService.get_fhir_versions() if v["default"]]
+        assert len(defaults) == 1
+        assert defaults[0]["key"] == FhirImportService.DEFAULT_VERSION
+
+    @patch("requests.get")
+    def test_fetch_fhir_ttl_uses_correct_url_for_r4(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_resp.text = "@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_get.return_value = mock_resp
+
+        FhirImportService._fetch_fhir_ttl("R4")
+
+        called_url = mock_get.call_args[0][0]
+        assert "R4" in called_url
+        assert "fhir.ttl" in called_url
+        assert "R5" not in called_url
+
+    @patch("requests.get")
+    def test_fetch_fhir_ttl_uses_correct_url_for_r4b(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_resp.text = "@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_get.return_value = mock_resp
+
+        FhirImportService._fetch_fhir_ttl("R4B")
+
+        called_url = mock_get.call_args[0][0]
+        assert "R4B" in called_url
+        assert "fhir.ttl" in called_url
+
+    @patch("requests.get")
+    def test_fetch_fhir_ttl_uses_correct_url_for_r5(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_resp.text = "@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_get.return_value = mock_resp
+
+        FhirImportService._fetch_fhir_ttl("R5")
+
+        called_url = mock_get.call_args[0][0]
+        assert "R5" in called_url
+        assert "fhir.ttl" in called_url
+
+    def test_fetch_fhir_ttl_unknown_version_raises(self):
+        from back.core.errors import ValidationError
+
+        with pytest.raises(ValidationError, match="Unknown FHIR version"):
+            FhirImportService._fetch_fhir_ttl("R99")
+
+    def test_fetch_and_parse_unknown_version_raises(self):
+        from back.core.errors import ValidationError
+
+        with pytest.raises(ValidationError):
+            FhirImportService.fetch_and_parse_fhir(["FOUNDATION"], version="R99")
+
+    def test_transform_ontology_info_contains_version(self):
+        from rdflib import Graph
+
+        for ver in ("R4", "R4B", "R5"):
+            result = FhirImportService._transform_fhir_to_ontobricks(
+                Graph(), ["FOUNDATION"], version=ver
+            )
+            info = result["ontology_info"]
+            assert info["version"] == ver
+            assert ver in info["name"]
+            assert ver in info["description"]
+
+    def test_transform_ontology_info_url_matches_version(self):
+        """ontology_info.description must reference the correct HL7 base URL."""
+        from rdflib import Graph
+
+        for ver in ("R4", "R4B", "R5"):
+            result = FhirImportService._transform_fhir_to_ontobricks(
+                Graph(), ["FOUNDATION"], version=ver
+            )
+            desc = result["ontology_info"]["description"]
+            expected_base = FhirImportService.FHIR_VERSIONS[ver]["base_url"]
+            assert expected_base in desc
+
+    # ------------------------------------------------------------------
+    # Property extraction — object properties
+    # ------------------------------------------------------------------
+
+    def test_transform_extracts_object_properties_from_restrictions(self):
+        """Object properties (range = non-primitive class) appear in top-level properties list."""
+        from rdflib import Graph, RDF, OWL, RDFS, URIRef, Literal, BNode
+
+        graph = Graph()
+        fhir_ns = "http://hl7.org/fhir/"
+
+        patient_uri = URIRef(f"{fhir_ns}Patient")
+        name_prop = URIRef(f"{fhir_ns}name")
+        human_name_type = URIRef(f"{fhir_ns}HumanName")
+
+        graph.add((patient_uri, RDF.type, OWL.Class))
+        graph.add((patient_uri, RDFS.label, Literal("Patient")))
+
+        graph.add((name_prop, RDF.type, OWL.ObjectProperty))
+        graph.add((name_prop, RDFS.label, Literal("name")))
+
+        restriction = BNode()
+        graph.add((restriction, RDF.type, OWL.Restriction))
+        graph.add((restriction, OWL.onProperty, name_prop))
+        graph.add((restriction, OWL.allValuesFrom, human_name_type))
+        graph.add((patient_uri, RDFS.subClassOf, restriction))
+
+        result = FhirImportService._transform_fhir_to_ontobricks(graph, ["CLINICAL"])
+        prop_names = {p["name"] for p in result["properties"]}
+        assert "name" in prop_names
+
+        name_prop_entry = next(p for p in result["properties"] if p["name"] == "name")
+        assert name_prop_entry["domain"] == "Patient"
+        assert name_prop_entry["range"] == "HumanName"
+
+    # ------------------------------------------------------------------
+    # Multi-domain union
+    # ------------------------------------------------------------------
+
+    def test_build_allowed_resources_multi_domain_union(self):
+        allowed = FhirImportService._build_allowed_resources(["CLINICAL", "FINANCIAL"])
+        # CLINICAL resources
+        assert "Patient" in allowed
+        assert "Encounter" in allowed
+        # FINANCIAL resources
+        assert "Claim" in allowed
+        assert "Coverage" in allowed
+        # FOUNDATION always present
+        assert "Resource" in allowed
+
+    def test_transform_multi_domain_includes_all_classes(self):
+        """Selecting multiple domains returns classes from each."""
+        from rdflib import Graph, RDF, OWL, RDFS, URIRef, Literal
+
+        graph = Graph()
+        fhir_ns = "http://hl7.org/fhir/"
+
+        for local_name in ("Patient", "Claim", "Observation"):
+            uri = URIRef(f"{fhir_ns}{local_name}")
+            graph.add((uri, RDF.type, OWL.Class))
+            graph.add((uri, RDFS.label, Literal(local_name)))
+
+        result = FhirImportService._transform_fhir_to_ontobricks(
+            graph, ["CLINICAL", "FINANCIAL", "DIAGNOSTICS"]
+        )
+        class_names = {c["name"] for c in result["classes"]}
+        assert "Patient" in class_names
+        assert "Claim" in class_names
+        assert "Observation" in class_names
+
+    # ------------------------------------------------------------------
+    # fetch_and_parse_fhir end-to-end (mocked HTTP)
+    # ------------------------------------------------------------------
+
+    @patch("requests.get")
+    def test_fetch_and_parse_default_version_is_r5(self, mock_get):
+        """When version is omitted the R5 URL is used."""
+        minimal_ttl = "@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = minimal_ttl.encode()
+        mock_resp.text = minimal_ttl
+        mock_get.return_value = mock_resp
+
+        result = FhirImportService.fetch_and_parse_fhir(["FOUNDATION"])
+
+        called_url = mock_get.call_args[0][0]
+        assert "R5" in called_url
+        assert result["success"] is True
+
+    @patch("requests.get")
+    def test_fetch_and_parse_r4_uses_r4_url(self, mock_get):
+        minimal_ttl = "@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = minimal_ttl.encode()
+        mock_resp.text = minimal_ttl
+        mock_get.return_value = mock_resp
+
+        result = FhirImportService.fetch_and_parse_fhir(["FOUNDATION"], version="R4")
+
+        called_url = mock_get.call_args[0][0]
+        assert "R4" in called_url
+        assert "R5" not in called_url
+        assert result["success"] is True
+        assert result["ontology_info"]["version"] == "R4"
+
+    @patch("requests.get")
+    def test_fetch_and_parse_version_case_insensitive(self, mock_get):
+        """Lower-case 'r5' should be normalised and work."""
+        minimal_ttl = "@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = minimal_ttl.encode()
+        mock_resp.text = minimal_ttl
+        mock_get.return_value = mock_resp
+
+        result = FhirImportService.fetch_and_parse_fhir(["FOUNDATION"], version="r5")
+        assert result["success"] is True
+        assert result["ontology_info"]["version"] == "R5"
+
+    @patch("requests.get")
+    def test_fetch_and_parse_auto_includes_foundation(self, mock_get):
+        """FOUNDATION is injected even when not explicitly listed."""
+        minimal_ttl = "@prefix fhir: <http://hl7.org/fhir/> ."
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = minimal_ttl.encode()
+        mock_resp.text = minimal_ttl
+        mock_get.return_value = mock_resp
+
+        result = FhirImportService.fetch_and_parse_fhir(["CLINICAL"])
+        class_names = {c["name"] for c in result["classes"]}
+        # Base types always injected
+        assert "Resource" in class_names
+        assert "DomainResource" in class_names
