@@ -45,6 +45,225 @@ Deployment uses **Databricks Asset Bundles (DAB)** — a declarative, repeatable
 
 ---
 
+## Architecture
+
+This section provides detailed diagrams covering the OntoBricks component topology, Lakebase Postgres schema layout, data-flow through the Digital Twin build pipeline, network ports, and all permission layers required for a production deployment.
+
+### A. Component Architecture
+
+```
+                    ┌──────────────────────────────────────────────────────────────────────────┐
+                    │                         Databricks Workspace                               │
+                    │                                                                             │
+  Browser users ──► │  ┌───────────────────────────────────────────────────────────────────┐    │
+                    │  │           ontobricks-XXX   (Databricks App)                        │    │
+                    │  │           FastAPI + Uvicorn · port: $DATABRICKS_APP_PORT           │    │
+                    │  │                                                                     │    │
+                    │  │   ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────┐ │    │
+                    │  │   │    Web UI         │  │   REST API       │  │   GraphQL       │ │    │
+                    │  │   │  (Jinja2 + JS)    │  │   /api/v1/*      │  │   /graphql      │ │    │
+                    │  │   └──────────────────┘  └──────────────────┘  └─────────────────┘ │    │
+                    │  │                                                                     │    │
+                    │  │   LLM Agents  (Databricks Model Serving / Foundation Models):      │    │
+                    │  │   OWL Generator · Auto-Assignment · Ontology Assistant             │    │
+                    │  │   Digital-Twin Chat · Cohort Generator · Auto-Icon Assign          │    │
+                    │  └────────────────────────┬────────────────────────────────────────── ┘    │
+                    │                           │  REST /api/v1/*  (OAuth M2M)                   │
+  Playground ──────►│  ┌────────────────────────▼──────────────────────────────────────┐         │
+  Cursor / Claude   │  │       mcp-ontobricks  (Databricks App)                        │         │
+  (MCP protocol)    │  │       FastMCP · Uvicorn · port: $DATABRICKS_APP_PORT           │         │
+                    │  └───────────────────────────────────────────────────────────────┘         │
+                    │                                                                             │
+                    │  ═══════════════════════ Bound Resources ═══════════════════════════════   │
+                    │                                                                             │
+                    │  ┌──────────────────┐  ┌─────────────────────────┐  ┌─────────────────┐  │
+                    │  │  SQL Warehouse    │  │       UC Volume          │  │ Lakebase        │  │
+                    │  │  CAN_USE          │  │  WRITE_VOLUME            │  │ Postgres        │  │
+                    │  │                   │  │  /Volumes/<c>/<s>/<vol>  │  │ CAN_CONNECT     │  │
+                    │  │ · SPARQL → SQL    │  │                          │  │ _AND_CREATE     │  │
+                    │  │ · Delta VIEWs     │  │ · OWL / R2RML artefacts  │  │ (dev-lakebase)  │  │
+                    │  │ · UC metadata     │  │ · Domain files           │  │                 │  │
+                    │  │ · Lakeflow sync   │  │ · History / audit logs   │  │ · Registry      │  │
+                    │  └──────────────────┘  └─────────────────────────┘  │   tables        │  │
+                    │                                                       │ · Graph triple  │  │
+                    │  ┌────────────────────────┐  ┌──────────────────┐   │   store         │  │
+                    │  │  Model Serving / FMs    │  │ MLflow Tracking  │   └─────────────────┘  │
+                    │  │  (LLM endpoints, SQL    │  │ /Shared/onto…    │                        │
+                    │  │   Wizard)               │  │ (agent traces)   │                        │
+                    │  └────────────────────────┘  └──────────────────┘                        │
+                    └──────────────────────────────────────────────────────────────────────────┘
+```
+
+### B. Lakebase as Graph DB — Schema Layout
+
+OntoBricks uses Lakebase Postgres (Autoscaling) as **both** its registry store (structured metadata) and its Graph DB (triple store). Three schemas live inside the same Postgres database; each is bootstrapped at a different stage of the deployment lifecycle.
+
+```
+╔══════════════════════════════════════════════════════════════════════════════════════════╗
+║          Lakebase Postgres — Autoscaling project, bound via app.yaml resource           ║
+║          Database (datname): ontobricks_registry  (or databricks_postgres in legacy)    ║
+╠═══════════════════════════════════════╦════════════════════════════════════════════════╣
+║  Schema: ontobricks_registry          ║  Schema: ontobricks_graph                      ║
+║  Created by: Settings → Initialize    ║  Created by: first Digital Twin Build          ║
+║  Granted by: make bootstrap-lakebase  ║  Granted by: make bootstrap-lakebase           ║
+╠═══════════════════════════════════════╣════════════════════════════════════════════════╣
+║  registries                           ║  Per-domain, per-version triple tables:        ║
+║   └ one row per OntoBricks instance   ║                                                ║
+║  global_config  (JSONB settings)      ║  g_<domain>_v<n>_sync                          ║
+║  domains        (folder tree)         ║   ← triples bulk-loaded by:                   ║
+║  domain_versions (full documents)     ║     · app_managed: COPY FROM STDIN             ║
+║  domain_permissions (roles / ACL)     ║     · managed_synced: Lakeflow snapshot        ║
+║  schedules      (build definitions)   ║                                                ║
+║  schedule_runs  (build run history)   ║  g_<domain>_v<n>__app                          ║
+║                                       ║   ← reasoning results / cohort writes          ║
+║                                       ║                                                ║
+║                                       ║  g_<domain>_v<n>  (UNION VIEW — read only)    ║
+║                                       ║   ← target of SPARQL queries                  ║
+║                                       ║   SELECT … FROM _sync UNION ALL __app         ║
+║                                       ║                                                ║
+║                                       ║  Columns: subject · predicate · object        ║
+║                                       ║           datatype · lang                     ║
+╠═══════════════════════════════════════╩════════════════════════════════════════════════╣
+║  Schema: ontobricks   (optional — managed_synced sync mode only)                       ║
+║  Lakeflow synced tables — Lakebase mirror of the UC Delta triplestore VIEW              ║
+║  Created by: first Lakeflow snapshot on a managed_synced domain                        ║
+║  Granted by: make bootstrap-lakebase  (set LAKEBASE_SYNC_SCHEMA in deploy.config.sh)   ║
+╚══════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+### C. Digital Twin Build — Data Flow
+
+```
+  UC Source Tables         SQL Warehouse               Lakebase Postgres
+  ─────────────────────    ──────────────────────────  ──────────────────────────────────
+
+  catalog.schema.A ──┐                                 ┌─ app_managed (default) ─────────┐
+  catalog.schema.B ──┼──► R2RML engine                 │  fetchmany() batches             │
+  catalog.schema.N ──┘    (rr:sqlQuery + joins)         │  COPY FROM STDIN                 │
+                          converts rows → triples        │  INSERT ON CONFLICT DO NOTHING   │
+                                   │                    └────────────────────────────────┬─┘
+                                   │ triple stream ─────────────────────────────────────►
+                                   │                                                      g_<dom>_v<n>_sync
+                                   ▼                    ┌─ managed_synced (optional) ─────┐
+                        CREATE OR REPLACE VIEW           │  Lakeflow orchestrates           │
+                        triplestore_<domain>_Vn          │  Postgres Synced Table API       │
+                        (persisted in Unity Catalog)     └────────────────────────────────┬─┘
+                                                                                           │
+                                                         reasoning / cohort writes ────────►  g_<dom>_v<n>__app
+                                                                                           │
+                                                         ┌──────────────────────────────────────────────────┐
+                                                         │  g_<domain>_v<n>  (UNION VIEW — reader-facing)   │
+                                                         │  SELECT * FROM g_<dom>_v<n>_sync                 │
+                                                         │  UNION ALL                                        │
+                                                         │  SELECT * FROM g_<dom>_v<n>__app                 │
+                                                         └─────────────────────┬────────────────────────────┘
+                                                                               │
+                    SPARQL query ──► SPARQL→SQL translator ──► SQL Warehouse ──┘  (or direct Lakebase path)
+```
+
+### D. Network Ports
+
+**Local development** (`scripts/start.sh` / `uv run python run.py`):
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Service                   Port    Transport   Notes                       │
+│  ─────────────────────     ──────  ──────────  ──────────────────────────  │
+│  OntoBricks (FastAPI)       8000   HTTP        http://localhost:8000        │
+│  MCP server (HTTP mode)     9100   HTTP        --http flag, dev/test only   │
+│  MCP server (stdio)           —    stdio       Cursor / Claude Desktop      │
+│  Lakebase Postgres           5432   TLS         PGHOST/PGPORT from .env     │
+│  SQL Warehouse                443   HTTPS       Databricks connector / SDK  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Deployed on Databricks Apps** (all outbound — no inbound ports need to be opened):
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────────┐
+│  Service              Port                   Exposure                  Auth                  │
+│  ─────────────────    ─────────────────────  ────────────────────────  ──────────────────── │
+│  ontobricks-XXX       $DATABRICKS_APP_PORT   https://<ws>/apps/…       Databricks SSO        │
+│  mcp-ontobricks       $DATABRICKS_APP_PORT   https://<ws>/apps/…       Databricks SSO        │
+│  Lakebase Postgres    5432 (TLS)             PGHOST injected by Apps   OAuth JWT (no passwd)  │
+│  SQL Warehouse         443 (HTTPS)           internal via SDK           OAuth (SP token)      │
+│  Model Serving / FMs   443 (HTTPS)           internal via SDK           OAuth (SP token)      │
+│  MLflow Tracking        443 (HTTPS)           internal via SDK           OAuth (SP token)      │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+> Lakebase password authentication is **not used** — `LakebaseAuth` mints a short-lived JWT via `POST /api/2.0/postgres/credentials` on every connection. No `PGPASSWORD` is required or stored.
+
+### E. Permission Layers
+
+All four layers must be satisfied before the application is fully functional. They are independent and must each be configured separately.
+
+```
+╔══════════════ Layer 1 — Databricks App-Level (CAN_MANAGE / CAN_USE) ══════════════════╗
+║                                                                                         ║
+║  Principal            App                 Level          Set by                         ║
+║  ─────────────────── ─────────────────── ────────────── ──────────────────────────── ║
+║  Deploying user       ontobricks-XXX      CAN_MANAGE     databricks.yml > permissions   ║
+║  group: users         ontobricks-XXX      CAN_USE        databricks.yml > permissions   ║
+║  Main app SP          ontobricks-XXX      CAN_MANAGE     bootstrap-app-permissions.sh   ║
+║  MCP app SP           mcp-ontobricks      CAN_MANAGE     bootstrap-app-permissions.sh   ║
+║  MCP app SP           ontobricks-XXX      CAN_USE        bootstrap-app-permissions.sh   ║
+║                                                                                         ║
+║  ► make bootstrap-perms  (idempotent; auto-called by make deploy)                       ║
+╚═════════════════════════════════════════════════════════════════════════════════════════╝
+
+╔══════════════ Layer 2 — Unity Catalog Data-Plane Grants ═══════════════════════════════╗
+║                                                                                         ║
+║  Object                              Privilege                        Required for       ║
+║  ─────────────────────────────────── ──────────────────────────────── ────────────────  ║
+║  CATALOG  <registry_catalog>         USE CATALOG                      all operations     ║
+║  SCHEMA   <registry_catalog>.<sch>   USE SCHEMA                       all operations     ║
+║                                      CREATE TABLE                     triplestore        ║
+║                                      CREATE VIEW                      Digital Twin Sync  ║
+║  VOLUME   <cat>.<sch>.<vol>           READ VOLUME + WRITE VOLUME       artefact storage   ║
+║  CATALOG  <source_catalog>            USE CATALOG                      Data Source picker ║
+║  SCHEMA   <src_cat>.<src_sch>         USE SCHEMA                       R2RML builds       ║
+║  TABLE    <src_cat>.<src_sch>.<tbl>   SELECT                           per mapping entry  ║
+║                                                                                         ║
+║  ► Grant once as UC admin (see §3 for full SQL snippets)                                ║
+╚═════════════════════════════════════════════════════════════════════════════════════════╝
+
+╔══════════════ Layer 3 — Lakebase Postgres (control + data plane) ══════════════════════╗
+║                                                                                         ║
+║  Resource                             Grant              Timing                          ║
+║  ─────────────────────────────────── ────────────────── ───────────────────────────── ║
+║  Lakebase project (control-plane)     CAN_USE            before first deploy             ║
+║  Schema: ontobricks_registry          USAGE + CREATE +   after Settings → Initialize     ║
+║                                       DML on tables      (schema created by the app)     ║
+║  Schema: ontobricks_graph             USAGE + CREATE +   after first Digital Twin Build  ║
+║                                       DML on tables                                      ║
+║  Schema: ontobricks  (sync, optional) USAGE + CREATE +   after first Lakeflow snapshot   ║
+║                                       DML on tables                                      ║
+║                                                                                         ║
+║  DML = SELECT + INSERT + UPDATE + DELETE on tables                                      ║
+║      + USAGE + SELECT + UPDATE on sequences (bigserial PKs)                             ║
+║      + ALTER DEFAULT PRIVILEGES  ← covers all future tables automatically               ║
+║                                                                                         ║
+║  ► make bootstrap-lakebase  (idempotent; auto-called by make deploy for dev-lakebase)   ║
+╚═════════════════════════════════════════════════════════════════════════════════════════╝
+
+╔══════════════ Layer 4 — In-App OntoBricks Roles ═══════════════════════════════════════╗
+║                                                                                         ║
+║  Role     Source                          Access                                         ║
+║  ──────── ─────────────────────────────── ──────────────────────────────────────────── ║
+║  Admin    CAN_MANAGE on Databricks App    Full access + manage permission list           ║
+║  Editor   domain_permissions table        Full read + write on all features              ║
+║  Viewer   domain_permissions table        Read-only (no create / edit / delete)          ║
+║  (none)   not in list                     Access Denied — redirected to error page       ║
+║                                                                                         ║
+║  ► Settings → Permissions (only visible to Admins)                                      ║
+╚═════════════════════════════════════════════════════════════════════════════════════════╝
+```
+
+> **Deployment order matters.** Layer 1 bootstrap must run before the first user logs in. Layer 2 grants must be in place before any build or sync. Layer 3 grants for `ontobricks_registry` must be applied after the registry schema is initialized (step 14 in the Full Deployment Checklist). Layer 3 grants for `ontobricks_graph` must be applied after the first Digital Twin build creates that schema.
+
+---
+
 ## 1. Local Development Setup
 
 ### Prerequisites

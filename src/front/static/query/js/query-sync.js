@@ -1156,11 +1156,13 @@ async function loadTripleStore(options = {}) {
     const loadingHtml = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...';
     if (syncBtn) { syncBtn.disabled = true; syncBtn.innerHTML = loadingHtml; }
 
+    const includeInferred = document.getElementById('sgShowInferred')?.checked !== false;
+
     try {
         const response = await fetch('/dtwin/sync/load', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ include_inferred: includeInferred }),
             credentials: 'same-origin'
         });
 

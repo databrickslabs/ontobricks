@@ -54,6 +54,16 @@ class TripleStoreBackend(ABC):
             f"{type(self).__name__} does not support delete_triples"
         )
 
+    def synced_table_name(self, table_name: str) -> str:
+        """Return the table name that contains only synced (non-materialized) triples.
+
+        For backends that separate synced bulk data from app-written/inferred data
+        (e.g. LakebaseFlatStore with its ``_sync`` / ``__app`` companion layout),
+        this returns the synced-only side so callers can query without materialised
+        triples.  The default returns *table_name* unchanged (no distinction).
+        """
+        return table_name
+
     @abstractmethod
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
         """SELECT all triples."""

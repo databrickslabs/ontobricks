@@ -7,6 +7,29 @@ window.PitfallsModule = (function () {
     // Pitfall IDs that do NOT require ML / SentenceTransformer (fast, graph-only)
     const FAST_PATTERNS = ['P1.1', 'P1.2', 'P1.3', 'P2.1', 'P2.2', 'P2.4', 'P2.5', 'P3.1', 'P3.2', 'P3.3', 'P4.7'];
 
+    // Static taxonomy — mirrors PITFALL_TAXONOMY in runner.py (no server round-trip needed)
+    const STATIC_TAXONOMY = [
+        { category: 'Logical Issues',              pitfall_id: 'P1.1', title: 'Parent disjoint with children',                      description: 'A class is declared disjoint from one of its own subclasses. This is a contradiction: no individual can simultaneously belong to both a class and its subclass if they are disjoint, making the subclass unsatisfiable (always empty).' },
+        { category: 'Logical Issues',              pitfall_id: 'P1.2', title: 'Entity as subclass of both parent and grandparent',   description: 'A class is explicitly declared as a direct subclass of both a parent class and one of that parent\'s ancestors. The declaration to the ancestor is redundant because subclass transitivity already implies it, and it can mislead reasoners.' },
+        { category: 'Logical Issues',              pitfall_id: 'P1.3', title: 'Logical inconsistencies',                             description: 'Axioms in the ontology produce unsatisfiable classes — e.g., a class is simultaneously defined as a subclass of two disjoint classes, or a restriction forces contradictory types. An OWL reasoner would flag these classes as equivalent to owl:Nothing.' },
+        { category: 'Structural Issues',           pitfall_id: 'P2.1', title: 'Not connected hierarchies',                           description: 'The ontology contains isolated class trees with no common root other than owl:Thing. Disconnected hierarchies often indicate that separate sub-ontologies were merged without alignment, or that top-level grouping concepts are missing.' },
+        { category: 'Structural Issues',           pitfall_id: 'P2.2', title: 'Single subclass parent',                              description: 'A class has exactly one direct subclass. This is often a sign of unnecessary intermediate nodes: if a parent has only one child, the hierarchy could usually be flattened without loss of semantics, unless the parent is used in axioms independently.' },
+        { category: 'Structural Issues',           pitfall_id: 'P2.3', title: 'Superfluous disjointness',                            description: 'Two classes are declared disjoint when one is already a subclass of the other, or when disjointness is already implied by the hierarchy. The explicit disjointness assertion is redundant and may create unintended logical side-effects.' },
+        { category: 'Structural Issues',           pitfall_id: 'P2.4', title: 'Single subproperty parent',                           description: 'A property has exactly one direct sub-property. Mirrors P2.2 for properties: if a property hierarchy node has only one child, it may be a superfluous intermediate that adds no modelling value.' },
+        { category: 'Structural Issues',           pitfall_id: 'P2.5', title: 'Range/Domain expansion',                              description: 'A sub-property declares a domain or range that is broader than its parent property\'s domain/range. This violates the inheritance contract: a sub-property should restrict (narrow) rather than expand the domain/range it inherits.' },
+        { category: 'Structural Issues',           pitfall_id: 'P2.6', title: 'Possible hierarchy among properties',                 description: 'Two or more properties have names so similar that one may be a specialisation of the other, yet no rdfs:subPropertyOf link is declared between them. This check flags candidate pairs worth reviewing for a missing sub-property relationship.' },
+        { category: 'Redundancy / Naming Issues',  pitfall_id: 'P3.1', title: 'Properties replicating standard RDF ones',            description: 'The ontology defines custom properties that duplicate well-known RDF/RDFS/OWL vocabulary (e.g., a custom \'hasLabel\' property when rdfs:label already exists). Using standard vocabulary improves interoperability and avoids redundant machinery.' },
+        { category: 'Redundancy / Naming Issues',  pitfall_id: 'P3.2', title: 'Range in property title',                             description: 'A property name encodes its range type (e.g., \'hasPersonName\', \'containsEvent\'). Embedding the range in the label couples naming to structure: renaming or changing the range requires renaming the property, and it conflates two distinct modelling concerns.' },
+        { category: 'Redundancy / Naming Issues',  pitfall_id: 'P3.3', title: 'Possible hierarchy among classes',                    description: 'Two or more class names are so similar that a subclass relationship may exist but is not declared. This check flags candidate pairs for human review to determine whether a missing rdfs:subClassOf should be added.' },
+        { category: 'Semantic Issues',             pitfall_id: 'P4.1', title: 'Symmetric property not declared symmetric',           description: 'A property appears to be used symmetrically in the data (whenever A→B exists, B→A also exists) but is not declared owl:SymmetricProperty. Declaring it symmetric allows reasoners to infer the reverse direction automatically.' },
+        { category: 'Semantic Issues',             pitfall_id: 'P4.2', title: 'Inverse property pairs not declared inverse',         description: 'Two properties appear to be mutual inverses in usage (A prop1 B and B prop2 A), but owl:inverseOf is not declared between them. Declaring the inverse relationship enables reasoners to infer one direction from the other.' },
+        { category: 'Semantic Issues',             pitfall_id: 'P4.3', title: 'Transitive property not declared transitive',         description: 'A property shows transitive usage patterns (A→B, B→C implies A→C) but is not declared owl:TransitiveProperty. Adding the declaration lets reasoners close the transitive chain automatically.' },
+        { category: 'Semantic Issues',             pitfall_id: 'P4.4', title: 'Missing domain or range',                             description: 'An object property or datatype property has no rdfs:domain or rdfs:range declaration. Without these constraints, reasoners cannot infer the types of subjects or objects, reducing the expressiveness and validation power of the ontology.' },
+        { category: 'Semantic Issues',             pitfall_id: 'P4.5', title: 'Unconnected classes (no usage)',                      description: 'One or more classes are never used as domain, range, or type in any property assertion or restriction. Such orphan classes add vocabulary without contributing to the ontology\'s modelling or reasoning.' },
+        { category: 'Semantic Issues',             pitfall_id: 'P4.6', title: 'Semantically equivalent labels',                      description: 'Two or more classes or properties carry labels that are semantically similar or synonymous (detected via sentence-embedding cosine similarity). These may be duplicates or candidates for merging, equivalence declarations, or at least a clarifying note.' },
+        { category: 'Semantic Issues',             pitfall_id: 'P4.7', title: 'Missing labels',                                      description: 'One or more classes or properties have no rdfs:label. Labels are essential for human-readable documentation, UI display, and tool interoperability. Every named entity in a published ontology should carry at least one label.' },
+    ];
+
     const CATEGORY_META = {
         'Logical Issues':           { icon: 'bi-exclamation-triangle', badge: 'bg-danger' },
         'Structural Issues':        { icon: 'bi-diagram-3',            badge: 'bg-warning text-dark' },
@@ -27,25 +50,10 @@ window.PitfallsModule = (function () {
         document.getElementById('pitfallsRunBtn')?.addEventListener('click', run);
         document.getElementById('pitfallsSelectAllBtn')?.addEventListener('click', selectAll);
         document.getElementById('pitfallsFastBtn')?.addEventListener('click', selectFast);
-        _loadTaxonomy();
-    }
-
-    function _loadTaxonomy() {
-        fetch('/ontology/pitfalls/taxonomy')
-            .then(r => r.json())
-            .then(data => {
-                if (!data.success) {
-                    _showDepsWarning(data.error || 'Optional dependencies not installed.');
-                    return;
-                }
-                _taxonomy = data.taxonomy || [];
-                _renderPatternSelector();
-                selectAll();
-            })
-            .catch(err => {
-                console.error('PitfallsModule: taxonomy load failed', err);
-                _showDepsWarning('Could not load pitfall taxonomy.');
-            });
+        // Taxonomy is static — render immediately, no server round-trip needed
+        _taxonomy = STATIC_TAXONOMY;
+        _renderPatternSelector();
+        selectAll();
     }
 
     // ── Pattern selector ──────────────────────────────────────────────────────

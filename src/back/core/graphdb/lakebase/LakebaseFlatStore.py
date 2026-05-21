@@ -131,6 +131,10 @@ class LakebaseFlatStore(LakebaseBase):
         # union view name (which equals the legacy table name).
         return self.physical_table_id(name)
 
+    def synced_table_name(self, table_name: str) -> str:
+        """Return the ``_sync`` table name so callers can query without materialised triples."""
+        return _companion_ddl.synced_phy(table_name)
+
     def synced_phy(self, name: str) -> str:
         """Postgres table name for the read-only synced side (managed_synced only)."""
         return _companion_ddl.synced_phy(name)

@@ -1812,6 +1812,7 @@ var SigmaGraph = (function () {
         var text = document.getElementById('sgGraphFilterInfoText');
         if (info && text) { info.classList.remove('d-none'); text.textContent = 'Searching...'; }
 
+        var includeInferredPreview = document.getElementById('sgShowInferred')?.checked !== false;
         try {
             var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
                 method: 'POST',
@@ -1822,6 +1823,7 @@ var SigmaGraph = (function () {
                     field: 'any',
                     match_type: matchType,
                     value: searchValue,
+                    include_inferred: includeInferredPreview,
                 }),
                 credentials: 'same-origin'
             }, 45000, 'Search request timed out');
@@ -1906,6 +1908,7 @@ var SigmaGraph = (function () {
         if (loading) loading.style.display = 'flex';
         _hideEmptyState();
 
+        var includeInferred = document.getElementById('sgShowInferred')?.checked !== false;
         var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1915,6 +1918,7 @@ var SigmaGraph = (function () {
                 include_rels: true,
                 depth: maxDepth,
                 max_entities: maxEntities,
+                include_inferred: includeInferred,
             }),
             credentials: 'same-origin'
         }, 90000, 'Graph expansion timed out');
@@ -2377,6 +2381,7 @@ var SigmaGraph = (function () {
                         field: 'any',
                         match_type: 'contains',
                         value: localName,
+                        include_inferred: document.getElementById('sgShowInferred')?.checked !== false,
                     }),
                     credentials: 'same-origin'
                 }, 45000, 'Search request timed out');
@@ -2599,15 +2604,16 @@ var SigmaGraph = (function () {
             } catch (e) { console.error('loadInferredTriples error:', e); }
         },
 
-        toggleInferred: function () {
-            if (!_graph) return;
-            var show = document.getElementById('sgShowInferred')?.checked !== false;
-            _graph.forEachEdge(function (edge, attrs) {
-                if (attrs._inferred) {
-                    _graph.setEdgeAttribute(edge, 'hidden', !show);
+        toggleInferred: async function () {
+            // Re-fetch from the appropriate table (union view or _sync only) so
+            // the graph reflects the real data state rather than client-side hiding.
+            if (_graphFilterActive && _lastExpandedSeedUris && _lastExpandedSeedUris.length) {
+                await _expandAndRenderGraph(_lastExpandedSeedUris);
+            } else if (_hasData()) {
+                if (typeof loadTripleStore === 'function') {
+                    await loadTripleStore({ silent: true, navigate: false });
                 }
-            });
-            if (_renderer) _renderer.refresh();
+            }
         },
 
         // --- Right-click "Expand neighbours" (default 1 hop) ---
@@ -2629,8 +2635,10 @@ var SigmaGraph = (function () {
                 depth = parseInt(depthEl && depthEl.value, 10);
                 if (!depth || depth < 1) depth = 1;
             }
+            var includeInferredHop = document.getElementById('sgShowInferred')?.checked !== false;
             var url = '/dtwin/neighbors?uri=' + encodeURIComponent(seedUri) +
-                '&depth=' + encodeURIComponent(depth) + '&limit=2000';
+                '&depth=' + encodeURIComponent(depth) + '&limit=2000' +
+                '&include_inferred=' + includeInferredHop;
             var info = document.getElementById('sgGraphFilterInfo');
             var text = document.getElementById('sgGraphFilterInfoText');
             if (info && text) {

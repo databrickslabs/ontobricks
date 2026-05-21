@@ -58,7 +58,7 @@ class AgentResult:
 # System prompt
 # =====================================================
 
-_PITFALL_RULES_PATH = Path(__file__).parent.parent / "PITFALL_RULES.txt"
+_PITFALL_RULES_PATH = Path(__file__).parent.parent / "PITFALL_RULES.md"
 
 
 def _load_pitfall_rules() -> str:

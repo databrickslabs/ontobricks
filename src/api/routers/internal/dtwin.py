@@ -289,13 +289,21 @@ async def load_triplestore(
 ):
     """Load triples from the graph database and return them as query results."""
     try:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        include_inferred = body.get("include_inferred", True)
+
         domain = get_domain(session_mgr)
         graph_name = effective_graph_name(domain)
 
         store = _require_graph_store(domain, settings)
 
+        query_table = graph_name if include_inferred else store.synced_table_name(graph_name)
+
         try:
-            results = store.query_triples(graph_name)
+            results = store.query_triples(query_table)
         except (ValidationError, InfrastructureError, NotFoundError):
             raise
         except Exception as e:
@@ -698,6 +706,7 @@ async def filter_triplestore(
     try:
         data = await request.json()
         phase = data.get("phase", "preview")
+        include_inferred = data.get("include_inferred", True)
 
         domain = get_domain(session_mgr)
         graph_name = effective_graph_name(domain)
@@ -705,6 +714,8 @@ async def filter_triplestore(
             raise ValidationError("Graph name is not configured")
 
         store = _require_graph_store(domain, settings)
+
+        query_table = graph_name if include_inferred else store.synced_table_name(graph_name)
 
         if phase == "preview":
             entity_type = (data.get("entity_type") or "").strip()
@@ -719,7 +730,7 @@ async def filter_triplestore(
             )
             payload = await run_blocking(
                 DigitalTwin.filter_preview,
-                store, graph_name, entity_type, field, match_type, value,
+                store, query_table, entity_type, field, match_type, value,
             )
         else:
             selected_uris = data.get("selected_uris", [])
@@ -735,7 +746,7 @@ async def filter_triplestore(
             max_fetch_seconds = 40.0 if is_databricks_app() else 120.0
             payload = await run_blocking(
                 DigitalTwin.filter_expand,
-                store, graph_name, selected_uris,
+                store, query_table, selected_uris,
                 include_rels, depth, max_entities,
                 batch_size, 100_000, max_fetch_seconds,
             )
@@ -1858,6 +1869,7 @@ async def dtwin_neighbors(
     uri: str,
     depth: int = 2,
     limit: int = 2000,
+    include_inferred: bool = True,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -1883,19 +1895,21 @@ async def dtwin_neighbors(
 
     store = _require_graph_store(domain, settings)
 
+    query_table = table if include_inferred else store.synced_table_name(table)
+
     try:
         visited: set[str] = {uri}
         frontier: set[str] = {uri}
         for _ in range(depth):
             if not frontier:
                 break
-            next_hop = store.expand_entity_neighbors(table, frontier) - visited
+            next_hop = store.expand_entity_neighbors(query_table, frontier) - visited
             if not next_hop:
                 break
             visited |= next_hop
             frontier = next_hop
 
-        rows = store.get_triples_for_subjects(table, list(visited))
+        rows = store.get_triples_for_subjects(query_table, list(visited))
 
         triples: list[dict[str, str]] = []
         seen: set = set()
