@@ -288,7 +288,7 @@ Examples under `src/agents/`:
 - **`agent_ontology_assistant`** — conversational edits to the loaded ontology (exposed via e.g. `ontology_assistant_chat` in `front/routes/ontology.py`).
 - **`agent_owl_generator`** — generates OWL from natural language (async task wrapper in ontology routes).
 - **`agent_auto_icon_assign`** — suggests emoji icons for entities.
-- **`agent_auto_assignment`** — automated mapping or assignment workflows (see package for details).
+- **`agent_mapping_pge`** — Mapping PGE pipeline (Planner → Generators → Evaluator) that maps ontology entities and relationships to Spark SQL. Composed of `planner.py`, `generators/{entity,relationship}.py`, and `evaluator/{deterministic,critic}.py`, orchestrated by `engine.py::run_agent`.
 
 Shared utilities include **`agents.engine_base`** (shared `AgentStep` data class, `call_serving_endpoint` for LLM calls, `dispatch_tool` for tool execution, `extract_message_content` for response parsing, and `accumulate_usage` for token tracking), **`agents.llm_utils`** (retry/backoff logic), **`agents.tools.context`** (`ToolContext` for domain/session-aware tool execution), and **`agents.tracing`** (initialized from app `lifespan` in `src/shared/fastapi/main.py` via `setup_tracing()`).
 
