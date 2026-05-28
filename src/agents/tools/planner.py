@@ -16,7 +16,8 @@ and stringify scalar values for the LLM-facing surface.
 """
 
 import json
-from typing import Any, Callable, Dict, List, Optional
+import re
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from agents.tools.context import ToolContext
@@ -29,53 +30,101 @@ _SAMPLE_TABLE_MAX_N = 100
 _SAMPLE_TABLE_DEFAULT_N = 20
 
 
+# Permissive but injection-safe SQL identifier shape. We allow dots (for
+# fully-qualified ``catalog.schema.table``) and backticks (for quoted
+# identifiers), plus the usual alphanumerics + underscore. Anything else
+# — semicolons, whitespace, quotes, comment markers — is rejected.
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_.`]+$")
+
+
+def _validate_identifier(name: str, *, role: str) -> Optional[str]:
+    """Return None if ``name`` is a valid SQL identifier; else an error message.
+
+    Used to gate identifiers that get interpolated into SQL via f-strings.
+    Even though today's callers are LLMs (not untrusted users), a hallucinated
+    identifier like ``t; DROP TABLE x`` or ``nhs FROM secrets--`` would
+    otherwise execute.
+    """
+    if not isinstance(name, str) or not _IDENTIFIER_RE.fullmatch(name):
+        return f"invalid {role}: {name!r}"
+    return None
+
+
+def _run_query(
+    ctx: ToolContext,
+    sql: str,
+    *,
+    tool_name: str,
+) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    """Execute the SQL via the client. Returns ``(rows, None)`` on success,
+    ``(None, error_str)`` on failure. On failure the SQL is logged at ERROR
+    level alongside the exception (previously only at DEBUG).
+    """
+    try:
+        result = ctx.client.execute_query(sql)
+        return result, None
+    except Exception as exc:
+        logger.error(
+            "%s: query failed: %s\nSQL: %s", tool_name, exc, sql, exc_info=True
+        )
+        return None, str(exc)
+
+
 # =====================================================
 # Tool implementations
 # =====================================================
 
 
 def tool_sample_table(
-    ctx: ToolContext, *, full_name: str = "", n: int = _SAMPLE_TABLE_DEFAULT_N, **_kwargs
+    ctx: ToolContext, *, full_name: str = "", n: Any = _SAMPLE_TABLE_DEFAULT_N, **_kwargs
 ) -> str:
     """Return N random sample rows from ``full_name`` so the agent can see
     real values (not just column types). ``n`` is capped at 100.
     """
-    logger.info("tool_sample_table: full_name=%s, n=%d", full_name, n)
+    logger.info("tool_sample_table: full_name=%s, n=%s", full_name, n)
     if not full_name:
         return json.dumps({"success": False, "error": "full_name is required"})
 
+    err = _validate_identifier(full_name, role="full_name")
+    if err is not None:
+        return json.dumps({"success": False, "error": err})
+
+    # Strict ``n`` parsing: a malformed value is a tool-call error, not a
+    # silent fallback. The default (when ``n`` is omitted) is already the int
+    # ``_SAMPLE_TABLE_DEFAULT_N``, so ``int(n)`` is a no-op in that case.
     try:
-        capped_n = max(1, min(int(n), _SAMPLE_TABLE_MAX_N))
+        n_int = int(n)
     except (TypeError, ValueError):
-        capped_n = _SAMPLE_TABLE_DEFAULT_N
+        return json.dumps({"success": False, "error": f"invalid n: {n!r}"})
+    capped_n = max(1, min(n_int, _SAMPLE_TABLE_MAX_N))
 
     sql = f"SELECT * FROM {full_name} ORDER BY RAND() LIMIT {capped_n}"
     logger.debug("tool_sample_table: SQL=%s", sql)
 
-    try:
-        rows = ctx.client.execute_query(sql)
-        columns: List[str] = list(rows[0].keys()) if rows else []
-        stringified_rows: List[List[Optional[str]]] = []
-        for row in rows:
-            stringified_rows.append(
-                [str(row[c]) if row.get(c) is not None else None for c in columns]
-            )
-        logger.info(
-            "tool_sample_table: %d row(s) × %d column(s)",
-            len(stringified_rows),
-            len(columns),
+    rows, err = _run_query(ctx, sql, tool_name="tool_sample_table")
+    if err is not None:
+        return json.dumps({"success": False, "error": err})
+
+    rows = rows or []
+    columns: List[str] = list(rows[0].keys()) if rows else []
+    stringified_rows: List[List[Optional[str]]] = []
+    for row in rows:
+        stringified_rows.append(
+            [str(row[c]) if row.get(c) is not None else None for c in columns]
         )
-        return json.dumps(
-            {
-                "success": True,
-                "columns": columns,
-                "rows": stringified_rows,
-                "row_count": len(stringified_rows),
-            }
-        )
-    except Exception as exc:
-        logger.error("tool_sample_table: query failed: %s", exc, exc_info=True)
-        return json.dumps({"success": False, "error": str(exc)})
+    logger.info(
+        "tool_sample_table: %d row(s) × %d column(s)",
+        len(stringified_rows),
+        len(columns),
+    )
+    return json.dumps(
+        {
+            "success": True,
+            "columns": columns,
+            "rows": stringified_rows,
+            "row_count": len(stringified_rows),
+        }
+    )
 
 
 def tool_column_value_overlap(
@@ -108,6 +157,16 @@ def tool_column_value_overlap(
             }
         )
 
+    for value, role in (
+        (from_table, "from_table"),
+        (from_column, "from_column"),
+        (to_table, "to_table"),
+        (to_column, "to_column"),
+    ):
+        err = _validate_identifier(value, role=role)
+        if err is not None:
+            return json.dumps({"success": False, "error": err})
+
     sql = (
         "WITH from_distinct AS ("
         f"  SELECT DISTINCT {from_column} AS v FROM {from_table} "
@@ -126,47 +185,49 @@ def tool_column_value_overlap(
     )
     logger.debug("tool_column_value_overlap: SQL=%s", sql)
 
-    try:
-        rows = ctx.client.execute_query(sql)
-        if not rows:
-            return json.dumps(
-                {"success": False, "error": "overlap query returned no rows"}
-            )
-        row = rows[0]
-        from_distinct = int(row.get("from_distinct_count", 0) or 0)
-        to_distinct = int(row.get("to_distinct_count", 0) or 0)
-        intersection = int(row.get("intersection_count", 0) or 0)
-
-        if from_distinct == 0:
-            result: Dict[str, Any] = {
-                "success": True,
-                "overlap_pct": 0.0,
-                "from_distinct_count": 0,
-                "to_distinct_count": to_distinct,
-                "intersection_count": 0,
-                "note": (
-                    f"{from_table}.{from_column} has zero distinct non-null values; "
-                    "overlap_pct defaulted to 0.0 (no division by zero)."
-                ),
-            }
-        else:
-            result = {
-                "success": True,
-                "overlap_pct": intersection / from_distinct,
-                "from_distinct_count": from_distinct,
-                "to_distinct_count": to_distinct,
-                "intersection_count": intersection,
-            }
-        logger.info(
-            "tool_column_value_overlap: overlap_pct=%.4f (%d/%d)",
-            result["overlap_pct"],
-            intersection,
-            from_distinct,
+    rows, err = _run_query(ctx, sql, tool_name="tool_column_value_overlap")
+    if err is not None:
+        return json.dumps({"success": False, "error": err})
+    if not rows:
+        return json.dumps(
+            {"success": False, "error": "overlap query returned no rows"}
         )
-        return json.dumps(result)
-    except Exception as exc:
-        logger.error("tool_column_value_overlap: query failed: %s", exc, exc_info=True)
-        return json.dumps({"success": False, "error": str(exc)})
+
+    row = rows[0]
+    from_distinct = int(row.get("from_distinct_count", 0) or 0)
+    to_distinct = int(row.get("to_distinct_count", 0) or 0)
+    intersection = int(row.get("intersection_count", 0) or 0)
+
+    if from_distinct == 0:
+        result: Dict[str, Any] = {
+            "success": True,
+            "overlap_pct": 0.0,
+            "from_distinct_count": 0,
+            "to_distinct_count": to_distinct,
+            "intersection_count": 0,
+            "note": (
+                f"{from_table}.{from_column} has zero distinct non-null values; "
+                "overlap_pct defaulted to 0.0 (no division by zero)."
+            ),
+        }
+    else:
+        result = {
+            "success": True,
+            "overlap_pct": intersection / from_distinct,
+            "from_distinct_count": from_distinct,
+            "to_distinct_count": to_distinct,
+            "intersection_count": intersection,
+            # Symmetric shape with the zero-denom branch: downstream consumers
+            # can read ``note`` unconditionally.
+            "note": "",
+        }
+    logger.info(
+        "tool_column_value_overlap: overlap_pct=%.4f (%d/%d)",
+        result["overlap_pct"],
+        intersection,
+        from_distinct,
+    )
+    return json.dumps(result)
 
 
 def tool_distinct_count(
@@ -185,6 +246,11 @@ def tool_distinct_count(
             {"success": False, "error": "full_name and column are required"}
         )
 
+    for value, role in ((full_name, "full_name"), (column, "column")):
+        err = _validate_identifier(value, role=role)
+        if err is not None:
+            return json.dumps({"success": False, "error": err})
+
     sql = (
         f"SELECT COUNT(*) AS row_count, "
         f"       COUNT(DISTINCT {column}) AS distinct_count, "
@@ -193,38 +259,37 @@ def tool_distinct_count(
     )
     logger.debug("tool_distinct_count: SQL=%s", sql)
 
-    try:
-        rows = ctx.client.execute_query(sql)
-        if not rows:
-            return json.dumps(
-                {"success": False, "error": "distinct_count query returned no rows"}
-            )
-        row = rows[0]
-        row_count = int(row.get("row_count", 0) or 0)
-        distinct_count = int(row.get("distinct_count", 0) or 0)
-        null_count = int(row.get("null_count", 0) or 0)
-        non_null_rows = row_count - null_count
-
-        result = {
-            "success": True,
-            "row_count": row_count,
-            "distinct_count": distinct_count,
-            "null_count": null_count,
-            "is_unique": distinct_count == non_null_rows,
-            "is_complete": null_count == 0,
-        }
-        logger.info(
-            "tool_distinct_count: rows=%d, distinct=%d, nulls=%d, unique=%s, complete=%s",
-            row_count,
-            distinct_count,
-            null_count,
-            result["is_unique"],
-            result["is_complete"],
+    rows, err = _run_query(ctx, sql, tool_name="tool_distinct_count")
+    if err is not None:
+        return json.dumps({"success": False, "error": err})
+    if not rows:
+        return json.dumps(
+            {"success": False, "error": "distinct_count query returned no rows"}
         )
-        return json.dumps(result)
-    except Exception as exc:
-        logger.error("tool_distinct_count: query failed: %s", exc, exc_info=True)
-        return json.dumps({"success": False, "error": str(exc)})
+
+    row = rows[0]
+    row_count = int(row.get("row_count", 0) or 0)
+    distinct_count = int(row.get("distinct_count", 0) or 0)
+    null_count = int(row.get("null_count", 0) or 0)
+    non_null_rows = row_count - null_count
+
+    result = {
+        "success": True,
+        "row_count": row_count,
+        "distinct_count": distinct_count,
+        "null_count": null_count,
+        "is_unique": distinct_count == non_null_rows,
+        "is_complete": null_count == 0,
+    }
+    logger.info(
+        "tool_distinct_count: rows=%d, distinct=%d, nulls=%d, unique=%s, complete=%s",
+        row_count,
+        distinct_count,
+        null_count,
+        result["is_unique"],
+        result["is_complete"],
+    )
+    return json.dumps(result)
 
 
 def tool_submit_source_model(

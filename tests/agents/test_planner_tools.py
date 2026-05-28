@@ -121,6 +121,37 @@ class TestSampleTable:
         assert out["success"] is False
         assert "table not found" in out["error"]
 
+    def test_sample_table_rejects_invalid_full_name(self):
+        """Identifier validator must catch SQL-injection-shaped names
+        *before* any SQL is composed or executed.
+        """
+
+        def handler(sql: str):  # pragma: no cover — must not be called
+            raise AssertionError("execute_query should not have been called")
+
+        ctx = _ctx(handler)
+        out = json.loads(tool_sample_table(ctx, full_name="t; DROP TABLE x"))
+
+        assert out["success"] is False
+        assert "invalid full_name" in out["error"]
+        # Confirm no SQL ever reached the client.
+        assert ctx.client.calls == []
+
+    def test_sample_table_returns_error_on_non_integer_n(self):
+        """Strict ``n`` parsing — a non-coercible value is a tool-call error,
+        not a silent fallback to the default.
+        """
+
+        def handler(sql: str):  # pragma: no cover — must not be called
+            raise AssertionError("execute_query should not have been called")
+
+        ctx = _ctx(handler)
+        out = json.loads(tool_sample_table(ctx, full_name="cat.sch.t", n="abc"))
+
+        assert out["success"] is False
+        assert "invalid n" in out["error"]
+        assert ctx.client.calls == []
+
 
 # =====================================================
 # column_value_overlap
@@ -155,6 +186,9 @@ class TestColumnValueOverlap:
         assert out["to_distinct_count"] == 80
         assert out["intersection_count"] == 60
         assert out["overlap_pct"] == pytest.approx(0.6)
+        # Symmetric shape with the zero-denom branch: ``note`` is always
+        # present so downstream consumers can read it unconditionally.
+        assert "note" in out and out["note"] == ""
 
     def test_zero_from_distinct_no_division_by_zero(self):
         def handler(sql: str):
@@ -200,6 +234,29 @@ class TestColumnValueOverlap:
 
         assert out["success"] is False
         assert "permission denied" in out["error"]
+
+    def test_column_value_overlap_rejects_invalid_from_column(self):
+        """Injection-shaped identifier on any of the four args short-circuits
+        before SQL is composed.
+        """
+
+        def handler(sql: str):  # pragma: no cover — must not be called
+            raise AssertionError("execute_query should not have been called")
+
+        ctx = _ctx(handler)
+        out = json.loads(
+            tool_column_value_overlap(
+                ctx,
+                from_table="cat.sch.a",
+                from_column="nhs FROM secrets--",
+                to_table="cat.sch.b",
+                to_column="y",
+            )
+        )
+
+        assert out["success"] is False
+        assert "invalid from_column" in out["error"]
+        assert ctx.client.calls == []
 
 
 # =====================================================
@@ -265,6 +322,23 @@ class TestDistinctCount:
 
         assert out["success"] is False
         assert "column does not exist" in out["error"]
+
+    def test_distinct_count_rejects_invalid_column(self):
+        """Injection-shaped column name short-circuits before SQL runs."""
+
+        def handler(sql: str):  # pragma: no cover — must not be called
+            raise AssertionError("execute_query should not have been called")
+
+        ctx = _ctx(handler)
+        out = json.loads(
+            tool_distinct_count(
+                ctx, full_name="cat.sch.t", column="nhs; DROP TABLE x"
+            )
+        )
+
+        assert out["success"] is False
+        assert "invalid column" in out["error"]
+        assert ctx.client.calls == []
 
 
 # =====================================================
