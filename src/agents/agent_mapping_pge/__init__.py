@@ -27,8 +27,15 @@ from agents.agent_mapping_pge.contracts import (
     TableRole,
     TableRoleCandidate,
 )
+from agents.agent_mapping_pge.engine import (
+    AgentResult,
+    AgentStep,
+    run_agent,
+)
 
 __all__ = [
+    "AgentResult",
+    "AgentStep",
     "CanonicalId",
     "EvalFailure",
     "EvalReport",
@@ -39,4 +46,5 @@ __all__ = [
     "SourceModel",
     "TableRole",
     "TableRoleCandidate",
+    "run_agent",
 ]
