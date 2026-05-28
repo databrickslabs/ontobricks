@@ -11,7 +11,7 @@ distinct_count) plus the shared tools (get_metadata, get_ontology,
 get_documents_context, execute_sql), and emits a validated
 :class:`SourceModel` via the ``submit_source_model`` terminal tool.
 
-The loop semantics mirror :mod:`agents.agent_auto_assignment.engine` — same
+The loop semantics mirror the prior single-loop mapping agent — same
 ``call_serving_endpoint`` + ``dispatch_tool`` ReAct cycle, same 3-second
 inter-iteration delay, same accumulated usage tracking, same MLflow trace
 decorator — with two key differences:
@@ -337,7 +337,7 @@ def run_planner(
     # Agent loop
     # ------------------------------------------------------------------
     for iteration in range(iteration_limit):
-        # Rate-limit mitigation — same 3s delay as agent_auto_assignment.
+        # Rate-limit mitigation — same 3s delay as the legacy mapping agent.
         if iteration > 0:
             logger.debug(
                 "Iteration %d: waiting %ds before LLM call (rate limit mitigation)",
@@ -489,7 +489,7 @@ def run_planner(
             )
 
             # Human-readable progress messages per tool — same pattern as
-            # agent_auto_assignment for UI consistency.
+            # the legacy mapping agent for UI consistency.
             if tool_name == "submit_source_model":
                 notify("Submitting source model…", pct=pct)
             elif tool_name == "get_metadata":

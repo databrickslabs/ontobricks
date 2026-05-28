@@ -140,11 +140,11 @@ class RelationshipGenResult:
 # System prompt
 # =====================================================
 #
-# The RELATIONSHIP SQL RULES section is lifted from
-# ``agents.agent_auto_assignment.engine`` (the section starting "SQL RULES
-# FOR RELATIONSHIPS" around line 105). To those rules we add the Sprint 5
-# constraints: the source and target ID columns are GIVEN by the already-
-# produced entity mappings; the LLM may not pick different endpoint columns.
+# The RELATIONSHIP SQL RULES section is lifted verbatim from the legacy
+# in-house mapping agent (the section starting "SQL RULES FOR
+# RELATIONSHIPS"). To those rules we add the Sprint 5 constraints: the
+# source and target ID columns are GIVEN by the already-produced entity
+# mappings; the LLM may not pick different endpoint columns.
 
 SYSTEM_PROMPT = """\
 You are a senior data engineer. Your job is to map ONE ontology property \

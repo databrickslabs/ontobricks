@@ -1,7 +1,7 @@
 """Planner -> Generator -> Evaluator (PGE) mapping agent.
 
-This package replaces the single-loop ReAct ``agent_auto_assignment`` with a
-three-stage pipeline:
+Three-stage mapping pipeline that replaces the prior single-loop ReAct
+mapping agent:
 
 * **Planner** — proposes a :class:`SourceModel` (table roles, canonical IDs,
   join keys, ordered mapping plan).

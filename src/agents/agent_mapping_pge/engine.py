@@ -1,13 +1,13 @@
 """
 OntoBricks Mapping-PGE Orchestrator.
 
-Sprint 7 of the Planner-Generator-Evaluator (PGE) redesign — wires the
-Planner, the Entity/Relationship Generators, and the two-stage Evaluator
-(deterministic + semantic critic) into a single ``run_agent`` entry point.
+Wires the Planner, the Entity/Relationship Generators, and the two-stage
+Evaluator (deterministic + semantic critic) into a single ``run_agent``
+entry point.
 
-The public signature mirrors ``agents.agent_auto_assignment.engine.run_agent``
-exactly so Sprint 8 can swap implementations with a one-line import change in
-``back/objects/mapping/Mapping.py``.
+The public ``run_agent`` signature and :class:`AgentResult` shape match the
+prior in-house single-loop mapping agent so ``back/objects/mapping/Mapping.py``
+can call this engine without other changes.
 
 Control flow per item (entity or relationship)
 ==============================================
@@ -62,7 +62,7 @@ _PLANNER_REINVOCATION_BUDGET = 2
 
 
 # =====================================================
-# Public dataclasses — mirror agent_auto_assignment shapes
+# Public dataclasses — mirror the prior mapping agent's shapes
 # =====================================================
 
 
@@ -89,11 +89,10 @@ class AgentStep:
 class AgentResult:
     """Outcome of a full PGE orchestration run.
 
-    The first eight fields mirror
-    :class:`agents.agent_auto_assignment.engine.AgentResult` exactly so
-    callers can swap engines without touching their downstream code. The
-    last three are PGE-specific extras the caller (Sprint 8) can choose to
-    persist.
+    The first eight fields mirror the prior in-house mapping-agent's result
+    dataclass exactly so callers can swap engines without touching their
+    downstream code. The last three are PGE-specific extras the caller
+    can choose to persist.
     """
 
     success: bool
@@ -305,7 +304,8 @@ def run_agent(
 ) -> AgentResult:
     """Run the PGE mapping orchestrator.
 
-    Drop-in replacement for :func:`agents.agent_auto_assignment.engine.run_agent`.
+    Drop-in replacement for the prior in-house single-loop mapping agent —
+    same positional/keyword signature, same :class:`AgentResult` shape.
 
     Args:
         host: Databricks workspace URL.

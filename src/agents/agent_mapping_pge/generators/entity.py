@@ -143,11 +143,10 @@ class EntityGenResult:
 # System prompt
 # =====================================================
 #
-# The ENTITY SQL RULES section is lifted from
-# ``agents.agent_auto_assignment.engine`` (the section starting "SQL RULES
-# FOR ENTITIES" around line 93) because those rules are correct and load-
-# bearing — every mapping query must follow them or downstream SPARQL
-# translation breaks.
+# The ENTITY SQL RULES section is lifted verbatim from the legacy in-house
+# mapping agent (the section starting "SQL RULES FOR ENTITIES") because
+# those rules are correct and load-bearing — every mapping query must
+# follow them or downstream SPARQL translation breaks.
 #
 # The PGE-specific additions are the slice-consumption rules: pick the
 # best candidate table from the slice, use the canonical ID exactly as
