@@ -6,7 +6,10 @@ default values.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from agents.agent_mapping_pge.contracts import SourceModel
 
 
 @dataclass
@@ -49,3 +52,8 @@ class ToolContext:
     dtwin_registry_params: dict = field(default_factory=dict)
     dtwin_domain_name: str = ""
     dtwin_ontology_labels: dict = field(default_factory=dict)  # uri/name → display label
+
+    # Mapping PGE planner output (``agent_mapping_pge``) – populated by the
+    # ``submit_source_model`` terminal tool. Forward-ref string typing avoids a
+    # circular import between ``agents.tools`` and ``agents.agent_mapping_pge``.
+    source_model: Optional["SourceModel"] = None
