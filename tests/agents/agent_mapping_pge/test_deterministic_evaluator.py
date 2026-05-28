@@ -15,13 +15,16 @@ This is the full result set — not the 3-row sample emitted by
 responsible for wiring a runner that yields full rows.
 """
 
+from typing import Dict, List
+
 import pytest
 
-from agents.agent_mapping_pge.contracts import EvalReport
+from agents.agent_mapping_pge.contracts import EvalFailure, EvalReport
 from agents.agent_mapping_pge.evaluator.deterministic import (
     evaluate_entity_mapping,
     evaluate_relationship_mapping,
 )
+from agents.agent_mapping_pge.evaluator.report import build_report
 
 
 # =====================================================
@@ -514,7 +517,7 @@ class TestEvaluateRelationshipMapping:
         check_names = [f.check for f in report.failures]
         assert "total_edges" in check_names
 
-    def test_cross_source_band_pass_inside(self):
+    def test_cross_source_band_fail_when_outside(self):
         rel = _mother_to_baby_relationship()
         # 100 edges, all source ids in mother universe.
         edge_rows = [
@@ -667,6 +670,62 @@ class TestEvaluateRelationshipMapping:
         # No catastrophic row because dangling is not strictly > 0.5.
         assert "dangling_target_pct_catastrophic" not in check_names
 
+    def test_relationship_evaluator_uses_id_universe_cache(self):
+        """Sharing a cache across calls avoids re-running the entity SQLs."""
+        rel = _mother_to_baby_relationship()
+        base_fn = _make_sql_fn(
+            {
+                "source_id": {
+                    "columns": ["source_id", "target_id"],
+                    "rows": [
+                        {"source_id": "NHS-001", "target_id": "B-1"},
+                        {"source_id": "NHS-002", "target_id": "B-2"},
+                    ],
+                },
+                "mothers": _entity_rows(["NHS-001", "NHS-002", "NHS-003"]),
+                "babies": _entity_rows(["B-1", "B-2", "B-3"]),
+            }
+        )
+
+        calls: List[str] = []
+
+        def counting_fn(sql: str) -> dict:
+            calls.append(sql)
+            return base_fn(sql)
+
+        cache: Dict[str, set] = {}
+
+        # First call: source + target entity SQLs + relationship SQL = 3 calls.
+        evaluate_relationship_mapping(
+            mapping=rel,
+            source_entity_mapping=_mother_mapping(),
+            target_entity_mapping=_baby_mapping(),
+            execute_sql_fn=counting_fn,
+            id_universe_cache=cache,
+        )
+        first_call_count = len(calls)
+        assert first_call_count == 3
+
+        mother_sql = _mother_mapping()["sql_query"]
+        baby_sql = _baby_mapping()["sql_query"]
+        assert mother_sql in cache
+        assert baby_sql in cache
+
+        # Second call with same cache: only the relationship SQL should be
+        # re-executed; both entity universes are served from cache.
+        evaluate_relationship_mapping(
+            mapping=rel,
+            source_entity_mapping=_mother_mapping(),
+            target_entity_mapping=_baby_mapping(),
+            execute_sql_fn=counting_fn,
+            id_universe_cache=cache,
+        )
+
+        delta = calls[first_call_count:]
+        assert len(delta) == 1
+        assert mother_sql not in delta
+        assert baby_sql not in delta
+
     def test_band_absent_catastrophic_target_dangling_bubbles(self):
         """No band supplied + dangling_target > 0.5 → strict check fires and bubbles."""
         rel = _mother_to_baby_relationship()
@@ -702,3 +761,66 @@ class TestEvaluateRelationshipMapping:
         assert report.metrics["dangling_target_pct"] == pytest.approx(0.8)
         check_names = [f.check for f in report.failures]
         assert "dangling_target_pct" in check_names
+
+
+# =====================================================
+# build_report — bubble demotion warning
+# =====================================================
+
+
+def test_build_report_warns_when_bubble_demoted(caplog):
+    """``bubble_to_planner=True`` with no failures (status PASS) should
+    emit a warning, AND silently-PASSing reports should not warn.
+    """
+    import logging
+
+    # PASS + bubble_to_planner=True → warning expected, bubble demoted.
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        passing = build_report(
+            stage="deterministic",
+            metrics={"row_count": 1},
+            failures=[],
+            bubble_to_planner=True,
+        )
+    assert passing.status == "PASS"
+    assert passing.bubble_to_planner is False
+    assert any(
+        "bubble_to_planner=True" in rec.message and rec.levelname == "WARNING"
+        for rec in caplog.records
+    )
+
+    # PASS + bubble_to_planner=False → no warning.
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        build_report(
+            stage="deterministic",
+            metrics={"row_count": 1},
+            failures=[],
+            bubble_to_planner=False,
+        )
+    assert not any(
+        "bubble_to_planner=True" in rec.message for rec in caplog.records
+    )
+
+    # FAIL + bubble_to_planner=True → no demotion, no warning.
+    caplog.clear()
+    failure = EvalFailure(
+        kind="structural",
+        check="row_count",
+        expected="> 0",
+        observed="0",
+        hint="",
+    )
+    with caplog.at_level(logging.WARNING):
+        failing = build_report(
+            stage="deterministic",
+            metrics={"row_count": 0},
+            failures=[failure],
+            bubble_to_planner=True,
+        )
+    assert failing.status == "FAIL"
+    assert failing.bubble_to_planner is True
+    assert not any(
+        "bubble_to_planner=True" in rec.message for rec in caplog.records
+    )

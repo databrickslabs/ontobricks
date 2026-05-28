@@ -8,7 +8,10 @@ and (future) semantic evaluators stay short.
 
 from typing import Any, Dict, List
 
+from back.core.logging import get_logger
 from agents.agent_mapping_pge.contracts import EvalFailure, EvalReport
+
+logger = get_logger(__name__)
 
 
 def build_report(
@@ -20,6 +23,11 @@ def build_report(
 ) -> EvalReport:
     """Assemble an :class:`EvalReport`; status is derived from ``failures``."""
     status = "PASS" if not failures else "FAIL"
+    if bubble_to_planner and status == "PASS":
+        logger.warning(
+            "build_report: bubble_to_planner=True but no failures → demoted "
+            "to False; check caller logic"
+        )
     return EvalReport(
         status=status,
         stage=stage,

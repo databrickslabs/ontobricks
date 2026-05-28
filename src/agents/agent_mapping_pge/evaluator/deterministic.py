@@ -219,14 +219,26 @@ def evaluate_entity_mapping(
 
 
 def _distinct_id_set(
-    entity_mapping: dict, execute_sql_fn: SqlFn
+    entity_mapping: dict,
+    execute_sql_fn: SqlFn,
+    id_universe_cache: Optional[Dict[str, set]] = None,
 ) -> set:
-    """Materialise the set of valid ids for a given entity mapping."""
+    """Materialise the set of valid ids for a given entity mapping.
+
+    When ``id_universe_cache`` is provided it is consulted/populated keyed
+    by the entity mapping's SQL string, avoiding redundant SQL execution
+    across repeated calls that share endpoint entities.
+    """
     sql = entity_mapping.get("sql_query", "")
     id_col = _resolve_id_col(entity_mapping)
+    if id_universe_cache is not None and sql in id_universe_cache:
+        return id_universe_cache[sql]
     result = execute_sql_fn(sql)
     rows = result.get("rows", []) or []
-    return {r.get(id_col) for r in rows if r.get(id_col) is not None}
+    ids = {r.get(id_col) for r in rows if r.get(id_col) is not None}
+    if id_universe_cache is not None:
+        id_universe_cache[sql] = ids
+    return ids
 
 
 def _resolve_edge_columns(mapping: dict) -> Tuple[str, str]:
@@ -244,6 +256,7 @@ def evaluate_relationship_mapping(
     target_entity_mapping: dict,
     execute_sql_fn: SqlFn,
     expected_cross_source_overlap_band: Optional[Tuple[float, float]] = None,
+    id_universe_cache: Optional[Dict[str, set]] = None,
 ) -> EvalReport:
     """Run stage-1 deterministic checks on a relationship mapping.
 
@@ -263,6 +276,15 @@ def evaluate_relationship_mapping(
     Planner predicted (either no band was supplied, or the band check
     itself failed).  These cases typically indicate the relationship was
     built off the wrong join key.
+
+    Args:
+        id_universe_cache: Optional caller-managed dict mapping an entity
+            mapping's ``sql_query`` string to its materialised set of ids.
+            When provided, repeated calls across relationships that share
+            endpoint entities reuse cached id universes instead of
+            re-running the entity SQL via ``execute_sql_fn``.  When
+            ``None`` (default) behaviour is unchanged — fetch fresh each
+            call.  No module-level state is involved.
     """
     name = mapping.get("property_name") or mapping.get("property") or "?"
     sql = mapping.get("sql_query", "")
@@ -278,8 +300,12 @@ def evaluate_relationship_mapping(
     edge_rows = edges_result.get("rows", []) or []
     total_edges = len(edge_rows)
 
-    source_universe = _distinct_id_set(source_entity_mapping, execute_sql_fn)
-    target_universe = _distinct_id_set(target_entity_mapping, execute_sql_fn)
+    source_universe = _distinct_id_set(
+        source_entity_mapping, execute_sql_fn, id_universe_cache
+    )
+    target_universe = _distinct_id_set(
+        target_entity_mapping, execute_sql_fn, id_universe_cache
+    )
 
     src_values = [r.get(src_col) for r in edge_rows]
     tgt_values = [r.get(tgt_col) for r in edge_rows]
