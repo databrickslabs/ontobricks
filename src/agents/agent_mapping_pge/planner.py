@@ -191,6 +191,49 @@ mapping_plan.skip[] with a short reason.
 call returns success=true when the model is structurally valid; if it \
 returns success=false, fix the indicated problem and call it again.
 
+SOURCEMODEL JSON SCHEMA (these key names are LOAD-BEARING — do not improvise)
+The `model` argument to submit_source_model has exactly this shape:
+
+{
+  "table_roles": [
+    {
+      "table": "<catalog.schema.table>",                       // STRING — required key is "table"
+      "ontology_class_candidates": [
+        {"uri": "<class URI>", "confidence": 0.0, "reason": "<one sentence>"}
+      ]
+    }
+  ],
+  "canonical_ids": [
+    {
+      "ontology_class": "<class URI>",                          // STRING — required key is "ontology_class"
+      "canonical_column_per_table": {"<catalog.schema.table>": "<column>"},
+      "format_note": "<e.g. dotted NHS-preg-N>"
+    }
+  ],
+  "join_keys": [
+    {
+      "from_ref": "<table>.<col>",                              // STRING — required key is "from_ref"
+      "to_ref":   "<table>.<col>",                              // STRING — required key is "to_ref"
+      "confidence": 0.0,
+      "overlap_pct": 0.0,
+      "kind": "same_trust_fk"                                   // or "cross_source_value_match"
+    }
+  ],
+  "mapping_plan": {
+    "entity_order":       ["<class URI>", "..."],
+    "relationship_order": ["<property URI>", "..."],
+    "skip": [
+      {"item": "<class or property URI, or 'all'>", "reason": "<short reason>"}   // required keys: "item", "reason"
+    ]
+  }
+}
+
+Key-name traps to avoid:
+• Use "table" (not "name", "table_name", "uri") in each table_roles[] entry.
+• Use "ontology_class" (not "class", "uri") in each canonical_ids[] entry.
+• Use "from_ref" / "to_ref" (not "from" / "to" / "source" / "target") in each join_keys[] entry.
+• Use "item" (not "uri", "property") in each mapping_plan.skip[] entry.
+
 INVARIANTS (the orchestrator will enforce these)
 • Every URI in entity_order MUST exist in the ontology AND have at least one \
 candidate in table_roles[].ontology_class_candidates.
