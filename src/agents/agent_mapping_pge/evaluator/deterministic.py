@@ -123,7 +123,15 @@ def evaluate_entity_mapping(
     null_id_count = sum(1 for v in id_values if v is None)
     distinct_id_count = len({v for v in id_values if v is not None})
 
-    declared_unmapped = set(mapping.get("unmapped_attributes") or [])
+    raw_unmapped = mapping.get("unmapped_attributes") or []
+    declared_unmapped: set = set()
+    for item in raw_unmapped:
+        if isinstance(item, dict):
+            name = item.get("name")
+            if name:
+                declared_unmapped.add(str(name))
+        elif item is not None:
+            declared_unmapped.add(str(item))
     declared_mapped = set((mapping.get("attribute_mappings") or {}).keys())
     all_attrs = _attribute_names(ontology_class)
     unmapped_attrs = [

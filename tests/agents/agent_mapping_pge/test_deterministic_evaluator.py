@@ -321,6 +321,44 @@ class TestEvaluateEntityMapping:
         assert report.status == "PASS"
         assert report.metrics["unmapped_attribute_pct"] == 0.0
 
+    def test_pass_when_unmapped_attribute_is_declared_as_dict(self):
+        """The Generator may emit unmapped_attributes as [{name, reason}, ...].
+        Hashing dicts would crash the evaluator — names must be extracted."""
+        mapping = _mother_mapping(
+            attribute_mappings={
+                "firstName": "first_name",
+                "nhsNumber": "nhs_number",
+            },
+            unmapped_attributes=[
+                {"name": "lastName", "reason": "no source column"}
+            ],
+        )
+        sql_fn = _make_sql_fn(
+            {
+                "mothers": {
+                    "columns": ["ID", "Label", "first_name", "last_name", "nhs_number"],
+                    "rows": [
+                        {
+                            "ID": "NHS-001",
+                            "Label": "Alice",
+                            "first_name": "Alice",
+                            "last_name": "Smith",
+                            "nhs_number": "NHS-001",
+                        },
+                    ],
+                }
+            }
+        )
+
+        report = evaluate_entity_mapping(
+            mapping=mapping,
+            ontology_class=MOTHER_CLASS,
+            execute_sql_fn=sql_fn,
+        )
+
+        assert report.status == "PASS"
+        assert report.metrics["unmapped_attribute_pct"] == 0.0
+
     def test_report_is_json_serialisable(self):
         mapping = _mother_mapping()
         sql_fn = _make_sql_fn(
