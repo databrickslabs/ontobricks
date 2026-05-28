@@ -123,12 +123,21 @@ def tool_submit_evaluation(
         eval_failures.append(
             EvalFailure(
                 kind="semantic",
-                check=str(f.get("check", "")),
-                expected=str(f.get("expected", "")),
-                observed=str(f.get("observed", "")),
-                hint=str(f.get("hint", "")),
+                check=str(f.get("check") or ""),
+                expected=str(f.get("expected") or ""),
+                observed=str(f.get("observed") or ""),
+                hint=str(f.get("hint") or ""),
             )
         )
+
+    # status=PASS <=> failures empty. If the LLM submitted both, clamp the
+    # failures list and warn — keeping a passing report internally coherent.
+    if status == "PASS" and eval_failures:
+        logger.warning(
+            "tool_submit_evaluation: status=PASS with %d failures — clamping to []",
+            len(eval_failures),
+        )
+        eval_failures = []
 
     # If status=FAIL but no failures, synthesise a generic one so the report
     # is coherent (status=FAIL <=> failures non-empty).

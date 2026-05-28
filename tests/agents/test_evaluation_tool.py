@@ -82,6 +82,38 @@ class TestSubmitEvaluation:
         assert f.observed == "booking date"
         assert "delivery_dttm" in f.hint
 
+    def test_pass_with_failures_is_clamped(self):
+        """status=PASS with non-empty failures[] → failures clamped to []."""
+        ctx = _ctx()
+        payload = tool_submit_evaluation(
+            ctx,
+            status="PASS",
+            failures=[
+                {"check": "x", "expected": "y", "observed": "z", "hint": "h"}
+            ],
+        )
+        body = json.loads(payload)
+        assert body["success"] is True
+        assert body["failures"] == 0
+        assert ctx.semantic_eval_report.failures == []
+
+    def test_none_fields_coerce_to_empty_string(self):
+        """If the LLM passes a failure with None fields, they coerce to ''
+        (not the literal string 'None')."""
+        ctx = _ctx()
+        tool_submit_evaluation(
+            ctx,
+            status="FAIL",
+            failures=[
+                {"check": None, "expected": None, "observed": None, "hint": None}
+            ],
+        )
+        f = ctx.semantic_eval_report.failures[0]
+        assert f.check == ""
+        assert f.expected == ""
+        assert f.observed == ""
+        assert f.hint == ""
+
     def test_invalid_status_rejected_no_report_stored(self):
         """status not in {PASS,FAIL} → handler returns success=False, no
         report is stamped on ctx."""
