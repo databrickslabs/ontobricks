@@ -257,9 +257,12 @@ def evaluate_relationship_mapping(
       ``overlap_pct`` (fraction of edges whose target id appears in the
       target entity universe) must fall inside the band.
 
-    ``bubble_to_planner`` is set when ``total_edges == 0`` or either
-    dangling fraction exceeds ``0.5`` — these typically indicate the
-    relationship was built off the wrong join key.
+    ``bubble_to_planner`` is set when ``total_edges == 0``, when the source
+    dangling fraction exceeds ``0.5``, or when the target dangling fraction
+    exceeds ``0.5`` *and* the realised overlap is materially worse than the
+    Planner predicted (either no band was supplied, or the band check
+    itself failed).  These cases typically indicate the relationship was
+    built off the wrong join key.
     """
     name = mapping.get("property_name") or mapping.get("property") or "?"
     sql = mapping.get("sql_query", "")
@@ -343,7 +346,10 @@ def evaluate_relationship_mapping(
     # When an explicit cross-source overlap band is provided the relationship
     # is *expected* to be partial (e.g. trust_a-only IDs vs the cross-trust
     # canonical universe).  In that case we trust the band check and skip
-    # the dangling_target_pct strictness — the partiality is the point.
+    # the standard ``dangling_target_pct`` strictness — the partiality is
+    # the point.  The catastrophic-dangling bubble below still fires, but
+    # only when the band itself ALSO fails (i.e. the realised overlap is
+    # materially worse than the Planner predicted).
     if (
         total_edges > 0
         and dangling_tgt_pct >= _DANGLING_FK_FAIL_THRESHOLD
@@ -362,12 +368,12 @@ def evaluate_relationship_mapping(
                 ),
             )
         )
-        if dangling_tgt_pct > _DANGLING_FK_BUBBLE_THRESHOLD:
-            bubble = True
 
+    band_failed = False
     if expected_cross_source_overlap_band is not None:
         lo, hi = expected_cross_source_overlap_band
         if not (lo <= overlap_pct <= hi):
+            band_failed = True
             failures.append(
                 _fail(
                     check="cross_source_overlap_pct",
@@ -377,6 +383,37 @@ def evaluate_relationship_mapping(
                         f"Cross-source overlap for '{name}' is {overlap_pct:.1%}, "
                         f"outside the expected band [{lo:.1%}, {hi:.1%}]. "
                         "Check the join key and the source/target trust assignments."
+                    ),
+                )
+            )
+
+    # Bubble-to-planner on catastrophic target-dangling, with a band-aware gate.
+    #
+    # * Band absent + dangling > 0.5: the strict dangling_target_pct failure
+    #   above already fired; we just flip the bubble flag (no new row needed).
+    # * Band present + band PASSED: the Planner predicted this overlap and
+    #   was right — do NOT bubble, even if dangling > 0.5 (the partiality
+    #   was expected).
+    # * Band present + band FAILED + dangling > 0.5: the realised overlap
+    #   is materially worse than predicted.  Bubble, and emit a dedicated
+    #   ``dangling_target_pct_catastrophic`` failure so the FAIL report has
+    #   a concrete structural row alongside the band-check failure.
+    if total_edges > 0 and dangling_tgt_pct > _DANGLING_FK_BUBBLE_THRESHOLD:
+        if expected_cross_source_overlap_band is None:
+            bubble = True
+        elif band_failed:
+            bubble = True
+            failures.append(
+                _fail(
+                    check="dangling_target_pct_catastrophic",
+                    expected=f"<= {_DANGLING_FK_BUBBLE_THRESHOLD}",
+                    observed=f"{dangling_tgt_pct:.3f}",
+                    hint=(
+                        f"{dangling_tgt_pct:.1%} of target_id values in "
+                        f"relationship '{name}' are absent from the mapped "
+                        "target entity AND the realised overlap is outside "
+                        "the predicted band.  Re-plan the join key and the "
+                        "source/target trust assignments."
                     ),
                 )
             )

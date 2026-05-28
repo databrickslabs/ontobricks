@@ -576,3 +576,129 @@ class TestEvaluateRelationshipMapping:
         # overlap = 30/100 = 0.3, inside band.
         assert report.status == "PASS"
         assert report.metrics["cross_source_overlap_pct"] == pytest.approx(0.3)
+
+    def test_band_present_overlap_outside_band_with_catastrophic_dangling_bubbles(self):
+        """Band FAILS (overlap 0.05 << lo=0.25) AND dangling > 0.5 → bubble.
+
+        The realised overlap is materially worse than the Planner predicted,
+        so the catastrophic-dangling structural failure fires alongside the
+        band-check failure, and ``bubble_to_planner`` flips True.
+        """
+        rel = _mother_to_baby_relationship()
+        # 100 edges, only the first 5 target_ids land in the babies universe
+        # → overlap = 0.05, dangling_target = 0.95.
+        edge_rows = []
+        for i in range(1, 101):
+            edge_rows.append(
+                {
+                    "source_id": f"NHS-{i:03d}",
+                    "target_id": f"B-{i}" if i <= 5 else f"X-{i}",
+                }
+            )
+        sql_fn = _make_sql_fn(
+            {
+                "source_id": {
+                    "columns": ["source_id", "target_id"],
+                    "rows": edge_rows,
+                },
+                "mothers": _entity_rows([f"NHS-{i:03d}" for i in range(1, 101)]),
+                "babies": _entity_rows([f"B-{i}" for i in range(1, 101)]),
+            }
+        )
+
+        report = evaluate_relationship_mapping(
+            mapping=rel,
+            source_entity_mapping=_mother_mapping(),
+            target_entity_mapping=_baby_mapping(),
+            execute_sql_fn=sql_fn,
+            expected_cross_source_overlap_band=(0.25, 0.4),
+        )
+
+        assert report.status == "FAIL"
+        assert report.bubble_to_planner is True
+        assert report.metrics["dangling_target_pct"] == pytest.approx(0.95)
+        check_names = [f.check for f in report.failures]
+        # Both the band failure AND the catastrophic-dangling row must surface.
+        assert "cross_source_overlap_pct" in check_names
+        assert "dangling_target_pct_catastrophic" in check_names
+        # The strict 0.05 dangling_target_pct row is gated behind "band is None"
+        # — it must NOT appear here.
+        assert "dangling_target_pct" not in check_names
+
+    def test_band_present_overlap_outside_band_with_mild_dangling_does_not_bubble(self):
+        """Band FAILS but dangling is exactly at the bubble threshold (not > 0.5)
+        → status FAIL on the band row but ``bubble_to_planner`` stays False.
+        """
+        rel = _mother_to_baby_relationship()
+        # 100 edges, 50 land in target universe → overlap = 0.50, dangling = 0.50.
+        # Band is (0.6, 0.8) so band check fails (0.50 < 0.6); dangling NOT > 0.5.
+        edge_rows = []
+        for i in range(1, 101):
+            edge_rows.append(
+                {
+                    "source_id": f"NHS-{i:03d}",
+                    "target_id": f"B-{i}" if i <= 50 else f"X-{i}",
+                }
+            )
+        sql_fn = _make_sql_fn(
+            {
+                "source_id": {
+                    "columns": ["source_id", "target_id"],
+                    "rows": edge_rows,
+                },
+                "mothers": _entity_rows([f"NHS-{i:03d}" for i in range(1, 101)]),
+                "babies": _entity_rows([f"B-{i}" for i in range(1, 101)]),
+            }
+        )
+
+        report = evaluate_relationship_mapping(
+            mapping=rel,
+            source_entity_mapping=_mother_mapping(),
+            target_entity_mapping=_baby_mapping(),
+            execute_sql_fn=sql_fn,
+            expected_cross_source_overlap_band=(0.6, 0.8),
+        )
+
+        assert report.status == "FAIL"
+        assert report.bubble_to_planner is False
+        assert report.metrics["dangling_target_pct"] == pytest.approx(0.5)
+        check_names = [f.check for f in report.failures]
+        assert "cross_source_overlap_pct" in check_names
+        # No catastrophic row because dangling is not strictly > 0.5.
+        assert "dangling_target_pct_catastrophic" not in check_names
+
+    def test_band_absent_catastrophic_target_dangling_bubbles(self):
+        """No band supplied + dangling_target > 0.5 → strict check fires and bubbles."""
+        rel = _mother_to_baby_relationship()
+        # 100 edges, only 20 target_ids land in babies universe → dangling = 0.80.
+        edge_rows = []
+        for i in range(1, 101):
+            edge_rows.append(
+                {
+                    "source_id": f"NHS-{i:03d}",
+                    "target_id": f"B-{i}" if i <= 20 else f"X-{i}",
+                }
+            )
+        sql_fn = _make_sql_fn(
+            {
+                "source_id": {
+                    "columns": ["source_id", "target_id"],
+                    "rows": edge_rows,
+                },
+                "mothers": _entity_rows([f"NHS-{i:03d}" for i in range(1, 101)]),
+                "babies": _entity_rows([f"B-{i}" for i in range(1, 101)]),
+            }
+        )
+
+        report = evaluate_relationship_mapping(
+            mapping=rel,
+            source_entity_mapping=_mother_mapping(),
+            target_entity_mapping=_baby_mapping(),
+            execute_sql_fn=sql_fn,
+        )
+
+        assert report.status == "FAIL"
+        assert report.bubble_to_planner is True
+        assert report.metrics["dangling_target_pct"] == pytest.approx(0.8)
+        check_names = [f.check for f in report.failures]
+        assert "dangling_target_pct" in check_names
