@@ -26,9 +26,12 @@ decorator — with two key differences:
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import requests
+
+if TYPE_CHECKING:
+    from agents.agent_mapping_pge.contracts import SourceModel
 
 from back.core.logging import get_logger
 from agents.engine_base import (
@@ -124,7 +127,7 @@ class PlannerResult:
     """
 
     success: bool
-    source_model: Optional[Any] = None  # SourceModel; ``Any`` avoids cycles
+    source_model: Optional["SourceModel"] = None
     steps: List[PlannerStep] = field(default_factory=list)
     iterations: int = 0
     error: str = ""
