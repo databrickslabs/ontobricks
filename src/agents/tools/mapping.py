@@ -372,3 +372,10 @@ MAPPING_TOOL_HANDLERS: Dict[str, Callable] = {
     "submit_entity_mapping": tool_submit_entity_mapping,
     "submit_relationship_mapping": tool_submit_relationship_mapping,
 }
+
+# Name-indexed view of MAPPING_TOOL_DEFINITIONS so callers needing a single
+# definition (e.g. the EntityGenerator, which only exposes the entity submit
+# tool) can look it up by name without re-scanning the list.
+MAPPING_TOOL_DEFINITIONS_BY_NAME: Dict[str, dict] = {
+    d["function"]["name"]: d for d in MAPPING_TOOL_DEFINITIONS
+}

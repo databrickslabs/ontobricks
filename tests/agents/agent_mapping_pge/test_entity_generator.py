@@ -475,6 +475,74 @@ def test_retry_hint_surfaces_in_user_prompt(monkeypatch, no_sleep):
 # =====================================================
 
 
+def test_wrong_class_uri_submission_does_not_terminate(monkeypatch, no_sleep):
+    """A submit_entity_mapping call with a class_uri that doesn't match the
+    requested one must NOT terminate the loop. The Generator must keep going
+    so a follow-up submit (with the correct URI) can succeed, and the LLM
+    must see a corrective tool message describing the mismatch.
+    """
+    requested_uri = _CLASS_URI
+    other_uri = "http://ex.org/maternity#Baby"
+
+    wrong_args = _valid_submit_args()
+    wrong_args["class_uri"] = other_uri
+    wrong_args["class_name"] = "Baby"
+
+    fake = FakeLLM(
+        [
+            # Turn 1: submit with the WRONG class_uri — must NOT terminate.
+            _llm_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "submit_entity_mapping", wrong_args, tc_id="wrong"
+                    )
+                ]
+            ),
+            # Turn 2: submit with the correct class_uri — should terminate.
+            _llm_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "submit_entity_mapping",
+                        _valid_submit_args(),
+                        tc_id="right",
+                    )
+                ]
+            ),
+        ]
+    )
+    _patch_llm(monkeypatch, fake)
+
+    result = run_entity_generator(
+        host="https://x",
+        token="t",
+        endpoint_name="ep",
+        client=None,
+        ontology_class=_ontology_class(),
+        source_model_slice=_source_model_slice(),
+    )
+
+    assert result.success is True
+    assert result.iterations == 2
+    assert result.mapping is not None
+    assert result.mapping["ontology_class"] == requested_uri
+
+    # The LLM's second call must have seen a corrective tool message
+    # describing the mismatch, surfaced through ``messages``.
+    assert fake.last_messages is not None
+    tool_messages = [m for m in fake.last_messages if m.get("role") == "tool"]
+    assert tool_messages, "expected at least one tool message on the 2nd call"
+    corrective = tool_messages[-1]
+    corrective_content = corrective.get("content", "")
+    assert other_uri in corrective_content
+    assert requested_uri in corrective_content
+    assert "does not match" in corrective_content
+    # Sanity: the corrective payload is a JSON error (not the original
+    # success=True response).
+    parsed = json.loads(corrective_content)
+    assert parsed.get("success") is False
+    assert "error" in parsed
+
+
 def test_records_steps(monkeypatch, no_sleep):
     """Every tool-calling iteration produces exactly one ``tool_call`` step
     immediately followed by one ``tool_result`` step with the same tool_name.

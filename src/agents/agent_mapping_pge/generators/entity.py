@@ -45,7 +45,7 @@ from agents.engine_base import (
 )
 from agents.tools.context import ToolContext
 from agents.tools.mapping import (
-    MAPPING_TOOL_DEFINITIONS,
+    MAPPING_TOOL_DEFINITIONS_BY_NAME,
     MAPPING_TOOL_HANDLERS,
 )
 from agents.tools.planner import (
@@ -85,13 +85,10 @@ _TRACE_NAME = "mapping_pge_entity_generator"
 #   * submit_relationship_mapping / submit_source_model — wrong stage.
 
 # Filter MAPPING_TOOL_DEFINITIONS down to just submit_entity_mapping. We
-# parse the existing list rather than importing a per-tool constant because
-# ``mapping.py`` does not export individual ``*_DEF`` constants (unlike
-# ``planner.py``).
-_SUBMIT_ENTITY_DEF: dict = next(
-    d for d in MAPPING_TOOL_DEFINITIONS
-    if d.get("function", {}).get("name") == "submit_entity_mapping"
-)
+# look up by name from the by-name index in ``mapping.py`` rather than
+# scanning the list inline. Sprint 5 will reuse the same pattern for
+# ``submit_relationship_mapping``.
+_SUBMIT_ENTITY_DEF: dict = MAPPING_TOOL_DEFINITIONS_BY_NAME["submit_entity_mapping"]
 
 TOOL_DEFINITIONS: List[dict] = (
     SQL_TOOL_DEFINITIONS
@@ -655,21 +652,20 @@ def run_entity_generator(
             )
 
             # Detect terminal success: submit_entity_mapping returned
-            # success=True *and* the context grew or now carries this class.
-            # The handler upserts by class_uri, so we accept either "count
-            # went up" OR "an entry for this class_uri is present".
+            # success=True AND a mapping for THIS class_uri is present in
+            # ctx.entity_mappings. A submit with a mismatched class_uri (the
+            # LLM mapped a different class than requested) is NOT terminal —
+            # we coach the LLM via a corrective tool message and let the loop
+            # continue so it can resubmit with the right URI.
             if tool_name == "submit_entity_mapping":
                 try:
                     parsed = json.loads(tool_result)
                 except json.JSONDecodeError:
                     parsed = {}
                 if parsed.get("success") is True:
-                    matched = (
-                        len(ctx.entity_mappings) > pre_run_mapping_count
-                        or any(
-                            m.get("ontology_class") == class_uri
-                            for m in ctx.entity_mappings
-                        )
+                    matched = any(
+                        m.get("ontology_class") == class_uri
+                        for m in ctx.entity_mappings
                     )
                     if matched:
                         terminal_success = True
@@ -677,19 +673,68 @@ def run_entity_generator(
                             "EntityGenerator iteration %d: submit_entity_mapping succeeded — terminating",
                             current_iteration,
                         )
+                    else:
+                        submitted_uri = arguments.get("class_uri", "")
+                        mismatch_msg = (
+                            f"submitted class_uri '{submitted_uri}' does not "
+                            f"match requested class_uri '{class_uri}'; "
+                            f"resubmit with class_uri='{class_uri}'"
+                        )
+                        logger.warning(
+                            "EntityGenerator iteration %d: submit_entity_mapping "
+                            "class_uri mismatch — submitted=%s, requested=%s",
+                            current_iteration,
+                            submitted_uri,
+                            class_uri,
+                        )
+                        corrective_payload = json.dumps(
+                            {"success": False, "error": mismatch_msg}
+                        )
+                        # Replace the recorded tool_result step's content so
+                        # the UI / trace reflects the corrective signal
+                        # rather than the original (misleading) success
+                        # response.
+                        result.steps[-1] = EntityGenStep(
+                            step_type="tool_result",
+                            content=corrective_payload,
+                            tool_name=tool_name,
+                            duration_ms=result.steps[-1].duration_ms,
+                        )
+                        # Replace the tool message just appended to
+                        # ``messages`` so the LLM sees the corrective
+                        # payload on the next turn (one tool message per
+                        # tool_call_id — keep the protocol clean).
+                        messages[-1] = {
+                            "role": "tool",
+                            "tool_call_id": tool_id,
+                            "content": corrective_payload,
+                        }
 
         if terminal_success:
-            # Pull the mapping for this class — the handler upserts by
-            # class_uri, so the entry we want is the one with the matching URI
-            # (or, lacking a URI in the slice, the last one appended).
+            # Pull the mapping for this class by strict URI match. The
+            # terminal-success guard above already verified an entry with
+            # this URI exists; if we somehow can't find one here that's an
+            # internal invariant violation, not a recoverable failure.
             submitted = next(
                 (
                     m
                     for m in reversed(ctx.entity_mappings)
                     if m.get("ontology_class") == class_uri
                 ),
-                ctx.entity_mappings[-1] if ctx.entity_mappings else None,
+                None,
             )
+            if submitted is None:
+                result.error = (
+                    "internal: submit succeeded but mapping not found for class_uri"
+                )
+                result.iterations = current_iteration
+                result.usage = total_usage
+                logger.error(
+                    "===== ENTITY GENERATOR FAILED ===== %s (class=%s)",
+                    result.error,
+                    class_uri,
+                )
+                return result
             result.success = True
             result.mapping = submitted
             result.iterations = current_iteration
