@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from agents.agent_mapping_pge.contracts import SourceModel
+    from agents.agent_mapping_pge.contracts import EvalReport, SourceModel
 
 
 @dataclass
@@ -57,3 +57,8 @@ class ToolContext:
     # ``submit_source_model`` terminal tool. Forward-ref string typing avoids a
     # circular import between ``agents.tools`` and ``agents.agent_mapping_pge``.
     source_model: Optional["SourceModel"] = None
+
+    # Mapping PGE semantic critic output (``agent_mapping_pge``) – populated by
+    # the ``submit_evaluation`` terminal tool of the Sprint 6 Critic agent.
+    # Same forward-ref pattern as ``source_model`` to avoid a circular import.
+    semantic_eval_report: Optional["EvalReport"] = None
