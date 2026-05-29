@@ -68,6 +68,13 @@ MAX_ITERATIONS = 50
 LLM_TIMEOUT = 180
 _ITERATION_DELAY_SEC = 3
 
+# The submit_source_model JSON for a real-world ontology can run several KB
+# (17 classes × multiple candidates + canonical_ids + join_keys + plan).
+# A 2048-token ceiling silently truncates the call and the dataclass
+# validation fails with no clue to the LLM as to why. 8192 leaves headroom
+# for the largest production ontologies without blowing latency.
+_MAX_TOKENS = 8192
+
 _TRACE_NAME = "mapping_pge_planner"
 
 
@@ -408,7 +415,7 @@ def run_planner(
                 endpoint_name,
                 messages,
                 tools=TOOL_DEFINITIONS,
-                max_tokens=2048,
+                max_tokens=_MAX_TOKENS,
                 temperature=0.1,
                 timeout=LLM_TIMEOUT,
                 trace_name=_TRACE_NAME,
@@ -477,6 +484,15 @@ def run_planner(
             len(tool_calls),
             has_content,
         )
+        # A tool call truncated by the max_tokens ceiling produces malformed
+        # arguments and the tool can't recover. Flag it loudly so future runs
+        # don't silently waste iterations resubmitting the same broken JSON.
+        if finish_reason == "length" and tool_calls:
+            logger.error(
+                "Planner iteration %d: finish_reason=length on a tool call — "
+                "arguments were likely truncated. Consider bumping max_tokens.",
+                current_iteration,
+            )
 
         if not tool_calls:
             # The Planner must end with submit_source_model, not free text.
