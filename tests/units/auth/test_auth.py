@@ -241,8 +241,11 @@ class TestCloudFetchCapability:
             assert ok is False
             assert "pyarrow" in reason.lower()
 
+    @patch("socket.create_connection")
     @patch("databricks.sql.connect")
-    def test_probe_cloud_fetch_capability_success(self, mock_connect, monkeypatch):
+    def test_probe_cloud_fetch_capability_success(
+        self, mock_connect, mock_socket, monkeypatch
+    ):
         _clear_databricks_env(monkeypatch)
         self._reset_cache()
         auth = DatabricksAuth(
@@ -251,6 +254,10 @@ class TestCloudFetchCapability:
             warehouse_id="wh-1",
         )
 
+        # Stage-1 TCP egress check: every probed host accepts the connect.
+        mock_socket.return_value.__enter__.return_value = MagicMock()
+
+        # Stage-2 SQL load-test.
         conn_cm = MagicMock()
         cur_cm = MagicMock()
         mock_connect.return_value.__enter__.return_value = conn_cm
@@ -268,13 +275,37 @@ class TestCloudFetchCapability:
         # blocked-egress path (regression: the previous SELECT 1 probe
         # falsely reported "ok" on Databricks Apps that block storage egress).
         executed_sql = cur_cm.execute.call_args.args[0]
-        assert "range(100000)" in executed_sql
+        assert "range(5000000)" in executed_sql
         cur_cm.fetchmany.assert_called_once_with(1)
 
         # Cached result drives can_use_cloud_fetch with no extra connect.
         mock_connect.reset_mock()
         assert auth.can_use_cloud_fetch() is True
         mock_connect.assert_not_called()
+
+    @patch("databricks.sql.connect")
+    @patch("socket.create_connection", side_effect=ConnectionRefusedError("blocked"))
+    def test_probe_cloud_fetch_tcp_egress_blocked(
+        self, _mock_socket, mock_connect, monkeypatch
+    ):
+        """The fast TCP probe to the CloudFetch storage host must catch
+        the Databricks Apps egress block BEFORE running an expensive
+        SQL load-test. Regression for the case where Apps egress is
+        blocked at L3/L4 — no point burning a 40 MB SQL query."""
+        _clear_databricks_env(monkeypatch)
+        self._reset_cache()
+        auth = DatabricksAuth(
+            host="https://ws.cloud.databricks.com",
+            token="sql-pat",
+            warehouse_id="wh-1",
+        )
+        ok, reason = auth.probe_cloud_fetch_capability()
+        assert ok is False
+        assert "storage.cloud.databricks.com" in reason
+        assert "TCP egress blocked" in reason
+        # SQL load-test must NOT run if the cheap TCP probe already failed.
+        mock_connect.assert_not_called()
+        assert auth.can_use_cloud_fetch() is False
 
     @patch("databricks.sql.connect", side_effect=RuntimeError("blocked"))
     def test_probe_cloud_fetch_capability_failure(self, _mock_connect, monkeypatch):
@@ -291,15 +322,15 @@ class TestCloudFetchCapability:
 
         assert auth.can_use_cloud_fetch() is False
 
+    @patch("socket.create_connection")
     @patch("databricks.sql.connect")
     def test_probe_cloud_fetch_blocked_egress_caught_at_fetchmany(
-        self, mock_connect, monkeypatch
+        self, mock_connect, mock_socket, monkeypatch
     ):
-        """Connect + execute succeed, but the first chunk download fails
-        with a connection-refused to the storage host (the Databricks-Apps
-        egress block). The probe must catch this at fetchmany and report
-        not-capable so that subsequent SQL falls back to inline transport.
-        """
+        """Backstop case: TCP probe passes (e.g. an Apps env that opens
+        port 443 to the storage host but blocks the actual HTTP download
+        at L7), then the SQL load-test catches the failure during
+        fetchmany when the connector tries to download the first chunk."""
         _clear_databricks_env(monkeypatch)
         self._reset_cache()
         auth = DatabricksAuth(
@@ -308,12 +339,15 @@ class TestCloudFetchCapability:
             warehouse_id="wh-1",
         )
 
+        # TCP probe passes.
+        mock_socket.return_value.__enter__.return_value = MagicMock()
+
+        # SQL load-test: connect + execute work, fetchmany raises during
+        # the first CloudFetch chunk download.
         conn_cm = MagicMock()
         cur_cm = MagicMock()
         mock_connect.return_value.__enter__.return_value = conn_cm
         conn_cm.cursor.return_value.__enter__.return_value = cur_cm
-        # Mirror the real-world stack: connection + execute work, fetchmany
-        # raises when it tries to download the first CloudFetch chunk.
         cur_cm.fetchmany.side_effect = ConnectionError(
             "HTTPSConnectionPool(host='us-east-1.storage.cloud.databricks.com', "
             "port=443): Connection refused"
