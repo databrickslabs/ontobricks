@@ -258,7 +258,17 @@ class DatabricksAuth:
         return True
 
     def probe_cloud_fetch_capability(self) -> Tuple[bool, str]:
-        """Issue a tiny ``SELECT 1`` with ``use_cloud_fetch=True`` and cache the outcome.
+        """Probe whether the runtime can actually download CloudFetch result
+        blobs from the storage host, and cache the outcome.
+
+        The query must produce enough rows that the SQL warehouse switches
+        from inline Thrift transport to CloudFetch presigned-URL downloads —
+        otherwise the probe passes trivially without ever touching the
+        ``*.storage.cloud.databricks.com`` host that Databricks Apps blocks
+        on egress. ``SELECT id FROM range(100000)`` yields ~800 KB of
+        BIGINT rows, comfortably over typical inline thresholds, and
+        ``fetchmany(1)`` triggers the first chunk download which is where
+        the egress block surfaces as a connection-refused.
 
         Returns ``(capable, reason)``. The result is cached at the class
         level for ``_CLOUD_FETCH_PROBE_TTL_SECONDS`` so subsequent SQL
@@ -292,16 +302,25 @@ class DatabricksAuth:
             elif self.token:
                 probe_params["access_token"] = self.token
 
+            probe_sql = "SELECT id FROM range(100000)"
             with sql.connect(**probe_params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-                    cur.fetchall()
-            msg = "Probe SELECT 1 succeeded with use_cloud_fetch=True"
+                    cur.execute(probe_sql)
+                    # fetchmany(1) is enough to trigger the first chunk
+                    # download; a blocked storage host raises here.
+                    cur.fetchmany(1)
+            msg = (
+                "Probe SELECT id FROM range(100000) succeeded "
+                "with use_cloud_fetch=True (storage egress reachable)"
+            )
             self._record_cloud_fetch(True, msg)
             logger.info("CloudFetch probe: capable (%s)", msg)
             return True, msg
         except Exception as exc:  # noqa: BLE001 - vendor/network surface
-            msg = f"Probe SELECT 1 failed with use_cloud_fetch=True: {exc}"
+            msg = (
+                "Probe SELECT id FROM range(100000) failed with "
+                f"use_cloud_fetch=True: {exc}"
+            )
             self._record_cloud_fetch(False, msg)
             logger.info("CloudFetch probe: not capable (%s)", msg)
             return False, msg
