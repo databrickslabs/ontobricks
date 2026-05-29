@@ -69,11 +69,12 @@ LLM_TIMEOUT = 180
 _ITERATION_DELAY_SEC = 3
 
 # The submit_source_model JSON for a real-world ontology can run several KB
-# (17 classes × multiple candidates + canonical_ids + join_keys + plan).
-# A 2048-token ceiling silently truncates the call and the dataclass
-# validation fails with no clue to the LLM as to why. 8192 leaves headroom
-# for the largest production ontologies without blowing latency.
-_MAX_TOKENS = 8192
+# (17+ classes × multiple candidates + canonical_ids + join_keys + plan).
+# A small ceiling silently truncates the call (finish_reason=length) and the
+# dataclass validation fails with no clue to the LLM as to why. 100k removes
+# the practical ceiling for any ontology size; you only pay for tokens
+# actually generated, so the cost stays bounded by output complexity.
+_MAX_TOKENS = 100_000
 
 _TRACE_NAME = "mapping_pge_planner"
 

@@ -63,6 +63,9 @@ logger = get_logger(__name__)
 MAX_ITERATIONS = 12
 LLM_TIMEOUT = 180
 _ITERATION_DELAY_SEC = 3
+# See planner._MAX_TOKENS comment — same rationale for the Generator's
+# submit_entity_mapping JSON (SQL + attribute_mappings can be large).
+_MAX_TOKENS = 100_000
 
 _TRACE_NAME = "mapping_pge_entity_generator"
 
@@ -467,7 +470,7 @@ def run_entity_generator(
                 endpoint_name,
                 messages,
                 tools=TOOL_DEFINITIONS,
-                max_tokens=2048,
+                max_tokens=_MAX_TOKENS,
                 temperature=0.1,
                 timeout=LLM_TIMEOUT,
                 trace_name=_TRACE_NAME,

@@ -70,6 +70,8 @@ logger = get_logger(__name__)
 MAX_ITERATIONS = 6
 LLM_TIMEOUT = 180
 _ITERATION_DELAY_SEC = 3
+# See planner._MAX_TOKENS comment — same rationale for submit_evaluation.
+_MAX_TOKENS = 100_000
 
 _TRACE_NAME = "mapping_pge_critic"
 
@@ -513,7 +515,7 @@ def run_critic(
                 endpoint_name,
                 messages,
                 tools=TOOL_DEFINITIONS,
-                max_tokens=2048,
+                max_tokens=_MAX_TOKENS,
                 temperature=0.1,
                 timeout=LLM_TIMEOUT,
                 trace_name=_TRACE_NAME,
