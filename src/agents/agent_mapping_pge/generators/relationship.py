@@ -209,15 +209,33 @@ the source.id_column and target.id_column — those are your endpoints.
 2. Compose the two-column SELECT following the SQL RULES above. Use a \
 join-key from relevant_joins. The source_id MUST come from (or join to) \
 the source entity's id_column; same for target_id.
-3. Call execute_sql to validate. If it fails, READ the error and fix the \
-SQL (typo'd column, wrong full_name, ambiguous reference). Retry as needed. \
+3. Call execute_sql to validate the SHAPE of the query (it parses, returns \
+two columns, returns rows). If it fails, READ the error and fix the SQL. \
 Never submit an un-validated query.
-4. Once execute_sql succeeds, call submit_relationship_mapping EXACTLY \
+4. SELF-VERIFY THE VALUES BEFORE SUBMITTING (CRITICAL — the #1 cause of \
+relationship failures). Name-similarity is not enough: a column called \
+`infant_id` may hold trust-local keys that do NOT match the Baby entity's \
+NHS-derived IDs. Run a dangling-edge probe via execute_sql:
+
+  WITH rel AS (<your two-column SELECT>),
+       src AS (<source entity's SQL>),
+       tgt AS (<target entity's SQL>)
+  SELECT
+    (SELECT COUNT(*) FROM rel) AS edges,
+    (SELECT COUNT(*) FROM rel r WHERE r.source_id NOT IN (SELECT ID FROM src)) AS dangling_src,
+    (SELECT COUNT(*) FROM rel r WHERE r.target_id NOT IN (SELECT ID FROM tgt)) AS dangling_tgt
+
+  If dangling_src or dangling_tgt is high relative to edges, your endpoint \
+columns are wrong — STOP and pick different columns or join keys. Repeat \
+steps 2–4 until both dangling counts are 0 or a small fraction of edges. \
+The evaluator will reject any mapping with >5% dangling on either side \
+(unless a cross-source band was explicitly predicted by the Planner).
+5. Once self-verify is clean, call submit_relationship_mapping EXACTLY \
 ONCE with: property_uri, property_name, sql_query (no LIMIT), \
 source_id_column, target_id_column, domain, range_class. The \
 source_id_column / target_id_column values you submit MUST match the \
 id_column on the corresponding entity mapping.
-5. That's the terminal step. Do not emit any free text after submitting.
+6. That's the terminal step. Do not emit any free text after submitting.
 
 GENERAL RULES
 • Only ever pass row-returning queries (SELECT / WITH …) to execute_sql.
@@ -305,7 +323,15 @@ def _build_user_prompt(
     parts: List[str] = []
 
     if retry_hint:
-        parts.append(f"RETRY HINT (authoritative):\n{retry_hint}\n")
+        parts.append("RETRY HINT (authoritative — your previous attempt FAILED):")
+        parts.append(retry_hint)
+        parts.append(
+            "DO NOT repeat the same column choice. If the hint mentions "
+            "'dangling' or 'canonical id': sample BOTH the candidate endpoint "
+            "column AND the entity's id_column, compare actual values, and "
+            "pick the column whose values overlap. Run the dangling-edge "
+            "probe (step 4 of WORKFLOW) BEFORE submitting this time.\n"
+        )
 
     prop_uri = ontology_property.get("uri", "")
     prop_label = (

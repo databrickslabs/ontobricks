@@ -424,6 +424,47 @@ def test_retry_hint_surfaces_in_user_prompt(monkeypatch, no_sleep):
     user_content = fake.first_messages[1]["content"]
     assert "Use mother_nhs_number, not patient_id." in user_content
     assert "RETRY HINT" in user_content
+    # Retry-hint corrective workflow surfaces the dangling-edge probe.
+    assert "dangling-edge probe" in user_content
+    assert "DO NOT repeat the same column choice" in user_content
+
+
+def test_system_prompt_mandates_dangling_edge_self_check(monkeypatch, no_sleep):
+    """The system prompt must instruct the model to run a dangling-edge
+    probe with execute_sql BEFORE submitting — name-similarity alone is
+    insufficient and was the root cause of the live smoke failure on
+    hasapgarscore."""
+    fake = FakeLLM(
+        [
+            _llm_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "submit_relationship_mapping", _valid_submit_args()
+                    )
+                ]
+            )
+        ]
+    )
+    _patch_llm(monkeypatch, fake)
+
+    run_relationship_generator(
+        host="https://x",
+        token="t",
+        endpoint_name="ep",
+        client=None,
+        ontology_property=_ontology_property(),
+        source_entity_mapping=_source_entity_mapping(),
+        target_entity_mapping=_target_entity_mapping(),
+        source_model_slice=_source_model_slice(),
+    )
+
+    system_content = fake.first_messages[0]["content"]
+    assert "SELF-VERIFY THE VALUES BEFORE SUBMITTING" in system_content
+    assert "dangling_src" in system_content
+    assert "dangling_tgt" in system_content
+    # The probe must reference both endpoint universes via the entity SQLs.
+    assert "source entity's SQL" in system_content
+    assert "target entity's SQL" in system_content
 
 
 # =====================================================
