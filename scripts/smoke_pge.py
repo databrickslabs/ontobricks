@@ -16,6 +16,7 @@ Usage from repo root with env vars set:
 
 import argparse
 import json
+import logging
 import os
 import sys
 import time
@@ -24,6 +25,14 @@ from pathlib import Path
 # Make ``src/`` importable without a packaged install.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
+
+# Route the OntoBricks loggers (which use back.core.logging.get_logger) to
+# stdout at INFO so per-iteration agent traces appear in the smoke output.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-5s %(name)s | %(message)s",
+    stream=sys.stdout,
+)
 
 from agents.agent_mapping_pge.engine import run_agent  # noqa: E402
 from back.core.databricks.DatabricksClient import DatabricksClient  # noqa: E402

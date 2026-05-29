@@ -64,7 +64,7 @@ from agents.tracing import trace_agent
 
 logger = get_logger(__name__)
 
-MAX_ITERATIONS = 25
+MAX_ITERATIONS = 50
 LLM_TIMEOUT = 180
 _ITERATION_DELAY_SEC = 3
 
