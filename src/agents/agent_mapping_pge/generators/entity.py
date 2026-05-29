@@ -165,16 +165,41 @@ YOU WILL BE GIVEN
 • source_model_slice: a small JSON object the Planner already curated for \
 this class:
   - candidate_tables[]: {table, confidence, reason} — the tables that could \
-realise this class. Pick the one with the highest confidence whose reason \
-fits the class semantics. Tie-break with sample_table if two are equally \
-plausible.
+realise this class.
   - canonical_id.canonical_column_per_table[<table>]: the column that MUST \
-be aliased AS ID for the chosen table. Do NOT pick a different ID column.
+be aliased AS ID for each table. Do NOT pick a different ID column.
   - canonical_id.format_note: a one-sentence note about the canonical-ID \
 format (may be empty).
-  - relevant_joins[]: optional — any joins the Planner thinks may apply. \
-Usually entity mappings do not need joins; consult these only if the class \
-naturally spans tables.
+  - relevant_joins[]: optional — any joins the Planner thinks may apply.
+
+SINGLE-SOURCE vs CROSS-SOURCE (CRITICAL — read carefully)
+The number of entries in canonical_id.canonical_column_per_table is the \
+authoritative signal for how to shape your SELECT:
+
+  • If canonical_column_per_table has EXACTLY ONE table → single-source \
+class. Write a flat SELECT from that one table. Pick it from the matching \
+candidate_tables entry.
+
+  • If canonical_column_per_table has TWO OR MORE tables → CROSS-SOURCE \
+class (e.g. the same patient or pregnancy realised across multiple trusts). \
+You MUST emit a UNION ALL across ALL listed tables, NOT pick one. Each \
+branch uses that table's canonical-ID column AS ID. Picking just one would \
+produce a Mother (or Pregnancy, etc.) entity that's missing 60–70% of its \
+real instances, and every relationship pointing at it would then dangle. \
+This is the #1 failure mode the orchestrator catches — do not produce it.
+
+  UNION shape (use exactly this pattern):
+    SELECT <table_A_canonical_col> AS ID, <label_col_A> AS Label, \
+<attr cols from A> FROM <table_A> WHERE <canonical_col_A> IS NOT NULL
+    UNION ALL
+    SELECT <table_B_canonical_col> AS ID, <label_col_B> AS Label, \
+<attr cols from B> FROM <table_B> WHERE <canonical_col_B> IS NOT NULL
+    UNION ALL
+    ...
+
+  All branches must return the SAME columns in the SAME order. If a branch \
+lacks a column another branch has, project a NULL of the right type with \
+a matching alias (e.g. ``CAST(NULL AS STRING) AS MOTHER_HOSPITAL_NO``).
 
 TOOLS
 You have three tools:
@@ -221,15 +246,17 @@ say so in the reason.
 
 WORKFLOW
 1. Read the ontology class and the source_model_slice carefully.
-2. Pick the candidate table — highest confidence whose reason fits the \
-class. If tied, call sample_table on the contenders (one tool call each) \
-and pick based on actual values.
-3. Compose the SELECT following the SQL RULES above. The canonical-ID column \
-to alias AS ID comes from canonical_column_per_table[<chosen_table>] in \
-the slice — use it.
+2. COUNT the entries in canonical_id.canonical_column_per_table:
+   - one → single-source: pick that table, compose a flat SELECT.
+   - two or more → cross-source: compose a UNION ALL across ALL of them \
+(see the SINGLE-SOURCE vs CROSS-SOURCE block above). Do NOT pick one.
+3. Compose the SELECT (or UNION ALL) following the SQL RULES above. For \
+each branch, the canonical-ID column to alias AS ID comes from \
+canonical_column_per_table[<that_table>] — use it exactly.
 4. Call execute_sql to validate the SELECT. If it fails, READ the error and \
-fix the SQL (typically a typo'd column name or wrong full_name). Retry as \
-needed. Never submit an un-validated query.
+fix the SQL (typically a typo'd column name, mismatched column lists in a \
+UNION, or wrong full_name). Retry as needed. Never submit an un-validated \
+query.
 5. Once execute_sql succeeds, call submit_entity_mapping EXACTLY ONCE with:
      class_uri, class_name, sql_query (no LIMIT), id_column, label_column, \
 attribute_mappings, unmapped_attributes.

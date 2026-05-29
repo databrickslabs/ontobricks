@@ -470,6 +470,39 @@ def test_retry_hint_surfaces_in_user_prompt(monkeypatch, no_sleep):
     assert "RETRY HINT" in user_content
 
 
+def test_system_prompt_mandates_union_for_cross_source(monkeypatch, no_sleep):
+    """When canonical_id.canonical_column_per_table lists 2+ tables, the
+    Generator MUST UNION across all of them. Single-trust selection on a
+    cross-source class makes relationship dangling 100% — the failure mode
+    surfaced by the live V1.1 smoke."""
+    fake = FakeLLM(
+        [
+            _llm_response(
+                tool_calls=[
+                    _make_tool_call("submit_entity_mapping", _valid_submit_args())
+                ]
+            )
+        ]
+    )
+    _patch_llm(monkeypatch, fake)
+
+    run_entity_generator(
+        host="https://x",
+        token="t",
+        endpoint_name="ep",
+        client=None,
+        ontology_class=_ontology_class(),
+        source_model_slice=_source_model_slice(),
+    )
+
+    system_content = fake.first_messages[0]["content"]
+    assert "SINGLE-SOURCE vs CROSS-SOURCE" in system_content
+    assert "UNION ALL" in system_content
+    assert "TWO OR MORE tables" in system_content
+    # Anti-pattern: picking one trust is called out by name.
+    assert "Picking just one" in system_content or "missing" in system_content
+
+
 # =====================================================
 # 7. Step recording invariants
 # =====================================================
