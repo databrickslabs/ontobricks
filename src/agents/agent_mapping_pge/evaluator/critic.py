@@ -71,7 +71,7 @@ MAX_ITERATIONS = 6
 LLM_TIMEOUT = 180
 _ITERATION_DELAY_SEC = 3
 # See planner._MAX_TOKENS comment — same rationale for submit_evaluation.
-_MAX_TOKENS = 100_000
+_MAX_TOKENS = 50000
 
 _TRACE_NAME = "mapping_pge_critic"
 

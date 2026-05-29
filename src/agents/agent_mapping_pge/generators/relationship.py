@@ -63,7 +63,7 @@ LLM_TIMEOUT = 180
 _ITERATION_DELAY_SEC = 3
 # See planner._MAX_TOKENS comment — large UNION ALL queries for cross-source
 # relationships can exceed a small ceiling.
-_MAX_TOKENS = 100_000
+_MAX_TOKENS = 50000
 
 _TRACE_NAME = "mapping_pge_relationship_generator"
 

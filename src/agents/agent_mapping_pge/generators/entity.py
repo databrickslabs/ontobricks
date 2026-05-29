@@ -65,7 +65,7 @@ LLM_TIMEOUT = 180
 _ITERATION_DELAY_SEC = 3
 # See planner._MAX_TOKENS comment — same rationale for the Generator's
 # submit_entity_mapping JSON (SQL + attribute_mappings can be large).
-_MAX_TOKENS = 100_000
+_MAX_TOKENS = 50000
 
 _TRACE_NAME = "mapping_pge_entity_generator"
 

@@ -74,7 +74,7 @@ _ITERATION_DELAY_SEC = 3
 # dataclass validation fails with no clue to the LLM as to why. 100k removes
 # the practical ceiling for any ontology size; you only pay for tokens
 # actually generated, so the cost stays bounded by output complexity.
-_MAX_TOKENS = 100_000
+_MAX_TOKENS = 50000
 
 _TRACE_NAME = "mapping_pge_planner"
 
