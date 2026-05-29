@@ -199,6 +199,42 @@ mapping_plan.skip[] with a short reason.
 call returns success=true when the model is structurally valid; if it \
 returns success=false, fix the indicated problem and call it again.
 
+CANONICAL-KEY NORMALIZATION (CRITICAL — this is the #1 cause of relationship dangling)
+For any class whose canonical_id lists MORE THAN ONE table, you MUST verify \
+the values across those tables are in the SAME format. Pick any two listed \
+columns and call column_value_overlap on them:
+
+  • If overlap_pct > 0 → values are in compatible formats. Record bare \
+column names in canonical_column_per_table (e.g. ``"MOTHER_NHS_NO"``). \
+A UNION across the tables will produce a coherent ID universe.
+
+  • If overlap_pct == 0 → values are TRUST-LOCAL identifiers in DIFFERENT \
+formats. A naive UNION would produce a set-disjoint ID universe and every \
+relationship pointing at this class would 100% dangle. You MUST emit a \
+SQL EXPRESSION per table that extracts/synthesises a canonical key in a \
+common format. Common patterns:
+
+    - Embed a stable external identifier: extract the NHS number plus an \
+ordinal/local id to build a canonical key like ``<NHS>-preg-<ordinal>``.
+      Example for pregnancy across trusts where one trust stores PREGNANCY_ID \
+in the canonical format already and another stores a raw UUID:
+          trust_a.maternity_episode: "PREGNANCY_ID"
+          trust_b.pregnancy: "regexp_extract(pregnancy_id, '([a-f0-9-]+-preg-\\\\d+)')"
+      (sample the columns with sample_table first to confirm the regex \
+matches the actual values; if a table cannot expose the canonical pattern \
+at all, do NOT include it under canonical_column_per_table.)
+
+    - Use a deterministic concatenation when an extractable canonical key \
+isn't available:  ``CONCAT(<nhs_col>, '-preg-', <ordinal_col>)``.
+
+  • Whatever expression you emit, the EntityGenerator will drop it verbatim \
+into the SELECT aliased AS ID. Bare column names and SQL expressions are \
+both valid here.
+
+  • Always update format_note to one sentence describing what the canonical \
+key looks like (e.g. ``"<NHS-number>-preg-<ordinal> derived from local \
+pregnancy IDs"``). Downstream agents read this.
+
 SOURCEMODEL JSON SCHEMA (these key names are LOAD-BEARING — do not improvise)
 The `model` argument to submit_source_model has exactly this shape:
 
@@ -214,8 +250,12 @@ The `model` argument to submit_source_model has exactly this shape:
   "canonical_ids": [
     {
       "ontology_class": "<class URI>",                          // STRING — required key is "ontology_class"
-      "canonical_column_per_table": {"<catalog.schema.table>": "<column>"},
-      "format_note": "<e.g. dotted NHS-preg-N>"
+      // VALUES may be either a bare column name OR a SQL expression that
+      // produces the canonical key for that table. Use a SQL expression
+      // when raw column values across the listed tables are in different
+      // formats (see CANONICAL-KEY NORMALIZATION below).
+      "canonical_column_per_table": {"<catalog.schema.table>": "<column or SQL expression>"},
+      "format_note": "<one-sentence description of the canonical-key format>"
     }
   ],
   "join_keys": [

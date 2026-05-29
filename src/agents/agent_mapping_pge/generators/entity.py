@@ -166,10 +166,16 @@ YOU WILL BE GIVEN
 this class:
   - candidate_tables[]: {table, confidence, reason} — the tables that could \
 realise this class.
-  - canonical_id.canonical_column_per_table[<table>]: the column that MUST \
-be aliased AS ID for each table. Do NOT pick a different ID column.
-  - canonical_id.format_note: a one-sentence note about the canonical-ID \
-format (may be empty).
+  - canonical_id.canonical_column_per_table[<table>]: the expression that \
+MUST be aliased AS ID for each table. THIS VALUE MAY BE A BARE COLUMN \
+NAME ("MOTHER_NHS_NO") OR A FULL SQL EXPRESSION \
+("regexp_extract(pregnancy_id, '([a-f0-9-]+-preg-\\\\d+)')"). Drop it \
+verbatim into the SELECT and alias it AS ID — do NOT rewrite it, do NOT \
+pick a different column, do NOT strip the function call. The Planner emits \
+SQL expressions when raw column values across trusts are in different \
+formats and need to be normalized to a common canonical key.
+  - canonical_id.format_note: a one-sentence note describing the canonical \
+key (may be empty). Read it to understand what each row's ID represents.
   - relevant_joins[]: optional — any joins the Planner thinks may apply.
 
 SINGLE-SOURCE vs CROSS-SOURCE (CRITICAL — read carefully)
@@ -188,12 +194,14 @@ produce a Mother (or Pregnancy, etc.) entity that's missing 60–70% of its \
 real instances, and every relationship pointing at it would then dangle. \
 This is the #1 failure mode the orchestrator catches — do not produce it.
 
-  UNION shape (use exactly this pattern):
-    SELECT <table_A_canonical_col> AS ID, <label_col_A> AS Label, \
-<attr cols from A> FROM <table_A> WHERE <canonical_col_A> IS NOT NULL
+  UNION shape (use exactly this pattern — substitute the canonical-ID \
+EXPRESSION exactly as the Planner specified it for that table; do NOT \
+rewrite it):
+    SELECT <canonical_expr_A> AS ID, <label_col_A> AS Label, \
+<attr cols from A> FROM <table_A> WHERE <canonical_expr_A> IS NOT NULL
     UNION ALL
-    SELECT <table_B_canonical_col> AS ID, <label_col_B> AS Label, \
-<attr cols from B> FROM <table_B> WHERE <canonical_col_B> IS NOT NULL
+    SELECT <canonical_expr_B> AS ID, <label_col_B> AS Label, \
+<attr cols from B> FROM <table_B> WHERE <canonical_expr_B> IS NOT NULL
     UNION ALL
     ...
 
@@ -251,8 +259,9 @@ WORKFLOW
    - two or more → cross-source: compose a UNION ALL across ALL of them \
 (see the SINGLE-SOURCE vs CROSS-SOURCE block above). Do NOT pick one.
 3. Compose the SELECT (or UNION ALL) following the SQL RULES above. For \
-each branch, the canonical-ID column to alias AS ID comes from \
-canonical_column_per_table[<that_table>] — use it exactly.
+each branch, the value of canonical_column_per_table[<that_table>] is what \
+gets aliased AS ID — drop it in verbatim. It may already be a SQL \
+expression (e.g. ``regexp_extract(...)``); do not rewrite it.
 4. Call execute_sql to validate the SELECT. If it fails, READ the error and \
 fix the SQL (typically a typo'd column name, mismatched column lists in a \
 UNION, or wrong full_name). Retry as needed. Never submit an un-validated \

@@ -470,6 +470,39 @@ def test_retry_hint_surfaces_in_user_prompt(monkeypatch, no_sleep):
     assert "RETRY HINT" in user_content
 
 
+def test_system_prompt_treats_canonical_value_as_sql_expression(monkeypatch, no_sleep):
+    """canonical_column_per_table values may be SQL expressions (e.g.
+    ``regexp_extract(...)``) not just bare columns. The Generator must drop
+    them verbatim. Live V1.1 smoke surfaced 100% dangling on cross-trust
+    entities whose canonical IDs needed regex normalization to a common
+    format."""
+    fake = FakeLLM(
+        [
+            _llm_response(
+                tool_calls=[
+                    _make_tool_call("submit_entity_mapping", _valid_submit_args())
+                ]
+            )
+        ]
+    )
+    _patch_llm(monkeypatch, fake)
+
+    run_entity_generator(
+        host="https://x",
+        token="t",
+        endpoint_name="ep",
+        client=None,
+        ontology_class=_ontology_class(),
+        source_model_slice=_source_model_slice(),
+    )
+
+    system_content = fake.first_messages[0]["content"]
+    assert "SQL EXPRESSION" in system_content
+    assert "regexp_extract" in system_content
+    assert "verbatim" in system_content
+    assert "do NOT rewrite" in system_content
+
+
 def test_system_prompt_mandates_union_for_cross_source(monkeypatch, no_sleep):
     """When canonical_id.canonical_column_per_table lists 2+ tables, the
     Generator MUST UNION across all of them. Single-trust selection on a
