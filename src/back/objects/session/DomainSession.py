@@ -177,7 +177,17 @@ class DomainSession:
         self._migrate_design_layout(data)
         self._drop_legacy_reasoning(data)
         self._migrate_root_metadata(data)
+        self._finalize_ontology_classes(data)
         return data
+
+    @staticmethod
+    def _finalize_ontology_classes(data: Dict) -> None:
+        """Normalize class datatype attributes after load/migration."""
+        from back.objects.ontology.Ontology import Ontology
+
+        ontology = data.get("ontology")
+        if isinstance(ontology, dict):
+            Ontology.finalize_class_attributes(ontology)
 
     @staticmethod
     def _migrate_top_level_renames(data: Dict, empty: Dict) -> None:
@@ -1450,7 +1460,7 @@ class DomainSession:
 
         # Ensure inherited dataProperties are propagated for saved domains
         # whose classes may have been stored before inheritance resolution.
-        self._ensure_inherited_properties()
+        self._finalize_ontology_classes(self._data)
 
         # A freshly loaded project has no unsaved changes
         self.clear_change_flags()

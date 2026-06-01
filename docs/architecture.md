@@ -20,7 +20,7 @@ Under the hood, SPARQL translates ontology mappings into Spark SQL — users nev
 | **User Interface** | Bootstrap 5.3 + OntoViz visual editor + Sigma.js / D3.js graph views |
 | **MCP Server** | Separate Databricks App (`mcp-ontobricks`) exposing knowledge-graph tools to LLM clients (Cursor, Claude Desktop, Playground) |
 | **FastAPI Application** | Routes → Domain Objects → Core layered architecture with GlobalConfigService, PermissionService, and BuildScheduler |
-| **LLM Agents** | MLflow-traced agentic loops for ontology generation, auto-mapping, icon mapping, and conversational assistance |
+| **LLM Agents** | MLflow-traced agentic loops for ontology generation, mapping (Planner/Generator/Evaluator), icon mapping, and conversational assistance |
 | **Reasoning Engine** | OWL 2 RL deductive closure, SWRL rules (compiled to SQL), graph reasoning, and constraint validation |
 | **Triple Store Backends** | Delta-backed view in Unity Catalog plus a pluggable Graph DB engine (currently Lakebase Postgres) via the `GraphDBFactory` pattern, with BFS, shortest path, and transitive closure built in |
 | **Databricks Platform** | Unity Catalog (metadata & governance), SQL Warehouse (query execution), UC Volumes (shared storage) |
@@ -448,7 +448,7 @@ src/
 │   ├── tracing.py                      # MLflow tracing setup & decorators
 │   ├── tools/                          # Shared agent tools (ontology, mapping, metadata, SQL, etc.)
 │   ├── agent_owl_generator/            # OWL ontology generation agent
-│   ├── agent_auto_assignment/          # Entity/relationship → SQL mapping agent
+│   ├── agent_mapping_pge/              # Mapping PGE pipeline (Planner → Generator → Evaluator)
 │   ├── agent_auto_icon_assign/         # Emoji icon mapping agent
 │   └── agent_ontology_assistant/       # Conversational assistant + ResponsesAgent wrapper
 │
@@ -1501,36 +1501,41 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 
 ---
 
-#### 2. Auto-Mapping Agent (`agent_auto_assignment`)
+#### 2. Mapping PGE Pipeline (`agent_mapping_pge`)
 
-**Purpose**: Autonomously map ontology entities and relationships to SQL queries against the domain's Databricks tables. The agent writes SQL, validates it by executing queries, and submits the finalized mappings.
+**Purpose**: Autonomously map ontology entities and relationships to SQL queries against the domain's Databricks tables. The pipeline replaces the legacy single-loop agent with a Planner → Generator → Evaluator (PGE) decomposition: a global planner produces a typed `SourceModel`, narrow per-item generators emit SQL against that plan, and a two-stage evaluator gates every mapping with deterministic checks plus a semantic critic.
 
-| Parameter | Value |
-|-----------|-------|
-| Max iterations | 60 (batch) / 15 (single-item) |
-| LLM timeout | 180s |
-| Max tokens | 2048 |
-| Temperature | 0.1 |
-| Iteration delay | 3s between LLM calls |
-| Chunk size | 5 items per agent run (`AUTO_ASSIGN_CHUNK_SIZE`) |
-| Chunk cooldown | 15s between chunks (`AUTO_ASSIGN_CHUNK_COOLDOWN`) |
+**Components**:
 
-**Workflow**:
-1. Calls `get_ontology` to see entities, relationships, and their attributes
-2. Calls `get_metadata` to understand available tables and columns
-3. For each entity/relationship:
-   - Writes a SQL query using `execute_sql` to validate it
-   - Iterates on SQL errors until the query succeeds
-   - Calls `submit_entity_mapping` or `submit_relationship_mapping` to finalize
-4. Repeats until all items are mapped or iteration limit is reached
+| Component | Module | Role |
+|-----------|--------|------|
+| **Planner** | `agent_mapping_pge/planner.py::run_planner` | Single-invocation agent. Consumes ontology + table metadata + imported documents, probes data with `sample_table` / `column_value_overlap` / `distinct_count`, and emits a validated `SourceModel` (per-table role candidates, canonical-ID map, intra-trust and cross-source join keys, ordered mapping plan). |
+| **EntityGenerator** | `agent_mapping_pge/generators/entity.py::run_entity_generator` | Narrow agent that maps ONE ontology class given a filtered `SourceModel` slice. Emits SQL with `AS ID` aliasing the canonical ID column; populates `attribute_mappings` or explicit `unmapped_attributes` (no silent drops). |
+| **RelationshipGenerator** | `agent_mapping_pge/generators/relationship.py::run_relationship_generator` | Sibling generator for ontology properties. Constrains endpoint columns to the IDs the source/target entities were already mapped on. |
+| **Deterministic Evaluator** | `agent_mapping_pge/evaluator/deterministic.py` | Pure-Python Stage 1 checks: `row_count`, distinct IDs, null IDs, dangling source/target percentages, cross-source overlap band. Fast and reproducible — gates Stage 2. |
+| **Semantic Critic** | `agent_mapping_pge/evaluator/critic.py` | LLM agent that runs ONLY when Stage 1 passes. Audits semantic correctness with `sample_table`, `execute_sql`, `get_documents_context`. Submits a verdict via the `submit_evaluation` terminal tool. |
+| **Orchestrator** | `agent_mapping_pge/engine.py::run_agent` | Drop-in replacement for the legacy `run_agent`. Persists the `SourceModel`, per-item `EvalReport`s, and a `mapping_run_log` on the session via `Mapping.save_mappings_to_session`. |
+| **Contracts** | `agent_mapping_pge/contracts.py` | Pydantic models: `SourceModel`, `EntityMappingDraft`, `RelationshipMappingDraft`, `EvalReport`. |
 
-**Tools used**: `get_ontology`, `get_metadata`, `execute_sql`, `submit_entity_mapping`, `submit_relationship_mapping`
+**Per-item loop**:
+1. Generator emits a draft mapping against the Planner's slice for the target class/property.
+2. Deterministic Evaluator runs Stage 1 checks. On failure → return hints to the Generator.
+3. If Stage 1 passes, Semantic Critic audits the draft and returns a verdict via `submit_evaluation`.
+4. Up to 3 Generator → Evaluator attempts per item with hint-driven retry.
+5. Persistent semantic or structural failure → bubble up to Planner; the orchestrator triggers a global replan (max 2 replans across the run).
+
+**Tools used**:
+- Planner: `sample_table`, `column_value_overlap`, `distinct_count`, `submit_source_model`, `get_metadata`, `get_documents_context`
+- Generators: `get_ontology`, `get_metadata`, `execute_sql`, `submit_entity_mapping`, `submit_relationship_mapping`
+- Critic: `sample_table`, `execute_sql`, `get_documents_context`, `submit_evaluation`
 
 **Invoked by**:
-- **Batch**: `POST /mapping/auto-assign/start` → background thread → TaskManager. Large jobs are split into chunks of `AUTO_ASSIGN_CHUNK_SIZE` items; each chunk runs its own agent loop with a `AUTO_ASSIGN_CHUNK_COOLDOWN` pause between chunks to avoid LLM rate limits (429 errors). Partial results accumulate across chunks.
-- **Single-item**: `POST /mapping/auto-assign/single` → background thread → TaskManager (processes one entity or relationship)
+- **Batch**: `POST /mapping/auto-assign/start` → background thread → TaskManager.
+- **Single-item**: `POST /mapping/auto-assign/single` → background thread → TaskManager (processes one entity or relationship).
 
-**Single-item mode**: The same agent engine is used with `max_iterations=15`. The ontology payload is scoped to the single target item. The frontend fires the request, polls `/tasks/{id}`, and saves the result directly to `MappingState.config` by URI — enabling concurrent auto-maps on different items.
+The public `Mapping.auto_assign_with_agent` API and the `on_step(msg, pct)` progress callback are unchanged — this is a transparent under-the-hood swap. New persisted artifacts (`source_model`, `mapping_evaluations`, `mapping_run_log`) are written to the session but not yet surfaced in the UI.
+
+**Single-item mode**: The orchestrator scopes the Planner's `SourceModel` to the target class/property and runs the same Generator → Evaluator loop. The frontend fires the request, polls `/tasks/{id}`, and saves the result directly to `MappingState.config` by URI — enabling concurrent maps on different items.
 
 ---
 
@@ -1597,10 +1602,15 @@ All tools live in `src/agents/tools/` and follow a consistent pattern:
 | `get_table_detail` | `metadata.py` | Returns detailed schema for a specific table | OWL Generator |
 | `list_documents` | `documents.py` | Lists uploaded domain documents from Unity Catalog | OWL Generator |
 | `read_document` | `documents.py` | Reads content of a specific document | OWL Generator |
-| `get_ontology` | `ontology.py` | Returns current ontology (entities, relationships, attributes) | Auto-Mapping, Icon Mapping, Ontology Assistant |
-| `execute_sql` | `sql.py` | Executes a SQL query via Databricks SQL Warehouse | Auto-Mapping |
-| `submit_entity_mapping` | `mapping.py` | Saves a validated entity → SQL mapping | Auto-Mapping |
-| `submit_relationship_mapping` | `mapping.py` | Saves a validated relationship → SQL mapping | Auto-Mapping |
+| `get_ontology` | `ontology.py` | Returns current ontology (entities, relationships, attributes) | Mapping PGE (Generators), Icon Mapping, Ontology Assistant |
+| `execute_sql` | `sql.py` | Executes a SQL query via Databricks SQL Warehouse | Mapping PGE (Generators, Critic) |
+| `submit_entity_mapping` | `mapping.py` | Saves a validated entity → SQL mapping | Mapping PGE (EntityGenerator) |
+| `submit_relationship_mapping` | `mapping.py` | Saves a validated relationship → SQL mapping | Mapping PGE (RelationshipGenerator) |
+| `sample_table` | `planner.py` | Returns N sample rows from a table | Mapping PGE (Planner, Critic) |
+| `column_value_overlap` | `planner.py` | Reports value overlap between two columns (cross-source join probe) | Mapping PGE (Planner) |
+| `distinct_count` | `planner.py` | Returns the distinct-value count for a column | Mapping PGE (Planner) |
+| `submit_source_model` | `planner.py` | Terminal tool — submits the Planner's validated `SourceModel` | Mapping PGE (Planner) |
+| `submit_evaluation` | `evaluation.py` | Terminal tool — submits the Critic's `EvalReport` verdict | Mapping PGE (Critic) |
 | `assign_icons` | `icons.py` | Saves entity → emoji icon mapping | Icon Mapping |
 
 #### ToolContext
@@ -1618,11 +1628,12 @@ class ToolContext:
     # OWL Generator
     uc_location: dict        # Unity Catalog file location
 
-    # Auto-Mapping
+    # Mapping PGE (Planner, Generators, Critic)
     client: Any              # DatabricksClient for SQL execution
     ontology: dict           # Current ontology data
     entity_mappings: list    # Accumulated entity mapping results
     relationship_mappings: list  # Accumulated relationship mapping results
+    source_model: Any        # Planner-emitted SourceModel (set after planning)
 
     # Icon Assign
     icon_results: dict       # Accumulated icon assignments
@@ -1634,7 +1645,7 @@ Each agent populates only the fields it needs; unused fields remain at their def
 
 ### Agent Engine Pattern
 
-All three agents share the same engine structure (defined independently in each `engine.py`):
+Each agent (OWL Generator, Icon Assign, Ontology Assistant, and the Planner, Generators, and Critic inside the Mapping PGE pipeline) shares the same ReAct-style engine structure (defined independently in each `engine.py`):
 
 #### Core Loop
 
@@ -1663,7 +1674,7 @@ All three agents share the same engine structure (defined independently in each 
 
 #### Fallback Mode
 
-If the LLM endpoint returns HTTP 400/422 (indicating it doesn't support the `tools` parameter), the OWL Generator and Icon Assign agents automatically retry without tools, falling back to single-shot generation. The Auto-Mapping agent does not fall back because its workflow fundamentally requires tool calls (SQL execution, mapping submission).
+If the LLM endpoint returns HTTP 400/422 (indicating it doesn't support the `tools` parameter), the OWL Generator and Icon Assign agents automatically retry without tools, falling back to single-shot generation. The Mapping PGE pipeline does not fall back because every stage (Planner, Generators, Critic) fundamentally requires tool calls (data probing, SQL execution, terminal submission tools).
 
 #### Task Integration
 

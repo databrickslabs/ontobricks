@@ -264,7 +264,25 @@ class DatabricksAuth:
         return True
 
     def probe_cloud_fetch_capability(self) -> Tuple[bool, str]:
-        """Issue a tiny ``SELECT 1`` with ``use_cloud_fetch=True`` and cache the outcome.
+        """Probe whether the runtime can actually download CloudFetch result
+        blobs from the storage host, and cache the outcome.
+
+        Two-stage probe so a blocked-egress Apps sandbox is caught quickly
+        without burning 40 MB of bandwidth on every cache miss:
+
+        1. **TCP reachability** to known AWS CloudFetch storage hosts. The
+           Databricks Apps egress firewall blocks the whole
+           ``*.storage.cloud.databricks.com`` family at L3/L4, so a plain
+           TCP connect with a short timeout returns connection-refused
+           almost instantly. This is the fast, accurate path on AWS.
+
+        2. **SQL load-test** as a backstop: ``SELECT id FROM range(N)`` with
+           N large enough that the warehouse returns presigned-URL
+           CloudFetch links instead of inline Thrift rows. Has to be on
+           the order of millions of BIGINTs to clear the typical 10-20 MB
+           inline threshold — smaller queries get returned inline and the
+           probe never touches storage at all (this was the
+           original-probe bug, where ``SELECT 1`` always reported "ok").
 
         Returns ``(capable, reason)``. The result is cached at the class
         level for ``_CLOUD_FETCH_PROBE_TTL_SECONDS`` so subsequent SQL
@@ -282,6 +300,14 @@ class DatabricksAuth:
             self._record_cloud_fetch(False, prereq_msg)
             return False, prereq_msg
 
+        # ── Stage 1: direct TCP egress check ────────────────────────────
+        tcp_ok, tcp_reason = self._probe_cloud_fetch_storage_egress()
+        if not tcp_ok:
+            self._record_cloud_fetch(False, tcp_reason)
+            logger.info("CloudFetch probe: not capable (%s)", tcp_reason)
+            return False, tcp_reason
+
+        # ── Stage 2: SQL load-test (large enough to force CloudFetch) ──
         try:
             from databricks import sql
 
@@ -298,19 +324,65 @@ class DatabricksAuth:
             elif self.token:
                 probe_params["access_token"] = self.token
 
+            # 5M BIGINTs ≈ 40 MB raw, ~10-20 MB Arrow-compressed — over the
+            # typical warehouse inline threshold, so the warehouse returns
+            # CloudFetch presigned URLs which the connector downloads
+            # during ``fetchmany``. A blocked storage host raises there.
+            probe_sql = "SELECT id FROM range(5000000)"
             with sql.connect(**probe_params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-                    cur.fetchall()
-            msg = "Probe SELECT 1 succeeded with use_cloud_fetch=True"
+                    cur.execute(probe_sql)
+                    cur.fetchmany(1)
+            msg = (
+                "Probe SELECT id FROM range(5000000) succeeded "
+                "with use_cloud_fetch=True (TCP egress + CloudFetch reachable)"
+            )
             self._record_cloud_fetch(True, msg)
             logger.info("CloudFetch probe: capable (%s)", msg)
             return True, msg
         except Exception as exc:  # noqa: BLE001 - vendor/network surface
-            msg = f"Probe SELECT 1 failed with use_cloud_fetch=True: {exc}"
+            msg = (
+                "Probe SELECT id FROM range(5000000) failed with "
+                f"use_cloud_fetch=True: {exc}"
+            )
             self._record_cloud_fetch(False, msg)
             logger.info("CloudFetch probe: not capable (%s)", msg)
             return False, msg
+
+    # AWS CloudFetch presigned-URL storage hosts. Databricks Apps blocks
+    # the whole family at the L3/L4 egress firewall, so a TCP connect with
+    # a short timeout returns connection-refused almost instantly. We
+    # probe two common regions; if either is blocked we treat egress as
+    # blocked everywhere (Apps doesn't selectively allow some regions).
+    _CLOUD_FETCH_STORAGE_HOSTS = (
+        "us-east-1.storage.cloud.databricks.com",
+        "us-west-2.storage.cloud.databricks.com",
+    )
+
+    def _probe_cloud_fetch_storage_egress(self) -> Tuple[bool, str]:
+        """TCP-connect to known CloudFetch storage hosts with a short
+        timeout. Returns ``(True, msg)`` only if every probe host is
+        reachable; the first failure is enough to declare egress blocked.
+        """
+        import socket
+
+        # Only applies to AWS workspaces; Azure CloudFetch uses a
+        # different storage host pattern. For non-AWS hosts, skip the
+        # TCP check and rely solely on the SQL load-test below.
+        if "cloud.databricks.com" not in self.host:
+            return True, "Workspace is not AWS — skipping TCP egress probe"
+
+        for host in self._CLOUD_FETCH_STORAGE_HOSTS:
+            try:
+                with socket.create_connection((host, 443), timeout=3):
+                    pass
+            except (OSError, socket.timeout) as exc:
+                return (
+                    False,
+                    f"CloudFetch storage host {host} unreachable "
+                    f"(TCP egress blocked): {exc}",
+                )
+        return True, "TCP egress to CloudFetch storage hosts is reachable"
 
     def _record_cloud_fetch(self, capable: bool, reason: str) -> None:
         DatabricksAuth._cloud_fetch_cache[(self.host, self.warehouse_id)] = (

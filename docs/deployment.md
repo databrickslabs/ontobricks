@@ -1307,7 +1307,7 @@ OntoBricks agents are instrumented with MLflow tracing. When deployed to Databri
 
 - `MLFLOW_TRACKING_URI=databricks` is set in `app.yaml`
 - Application startup in `src/shared/fastapi/main.py` calls `setup_tracing()`, which creates the `/Shared/ontobricks-agents` experiment
-- Every agent call (OWL Generator, Auto-Mapping, Auto Icon Assign, Ontology Assistant) produces a span tree:
+- Every agent call (OWL Generator, Mapping PGE pipeline — Planner, Generators, Critic — Auto Icon Assign, Ontology Assistant) produces a span tree:
 
 ```
 AGENT (run_agent)

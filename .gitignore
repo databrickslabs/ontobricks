@@ -77,3 +77,6 @@ src/.coding_rules.md
 # Cookie jars / curl session dumps (may contain live session + CSRF tokens)
 cookies*.txt
 *.cookiejar
+
+# Local git worktrees for isolated feature work
+.worktrees/

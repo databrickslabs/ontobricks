@@ -1,0 +1,371 @@
+# 2026-05-28 — v0.3.1
+
+## feat(mapping-pge): Sprint 1 — scaffolding + contracts + deterministic evaluator
+
+Context: First sprint of the Planner -> Generator -> Evaluator (PGE)
+redesign that will replace the single-loop ReAct
+`agents/agent_auto_assignment`. This sprint is foundation-only: no LLM
+code, nothing wired into Mapping.py, the old agent untouched.
+
+Changes:
+1. `src/agents/agent_mapping_pge/__init__.py` — package marker re-exporting
+   all contract dataclasses.
+2. `src/agents/agent_mapping_pge/contracts.py` — typed dataclasses
+   (`TableRoleCandidate`, `TableRole`, `CanonicalId`, `JoinKey`, `SkipItem`,
+   `MappingPlan`, `SourceModel`, `EvalFailure`, `EvalReport`, `RetryState`)
+   with `to_dict` / `from_dict` JSON round-trip.
+3. `src/agents/agent_mapping_pge/evaluator/__init__.py` — re-exports the
+   two public evaluator entry points.
+4. `src/agents/agent_mapping_pge/evaluator/report.py` — `build_report`
+   helper that derives `status` from the failure list.
+5. `src/agents/agent_mapping_pge/evaluator/deterministic.py` — pure-Python
+   stage-1 evaluator: `evaluate_entity_mapping` and
+   `evaluate_relationship_mapping`. Caller injects an `execute_sql_fn`
+   returning `{"columns": [...], "rows": [...]}` so the evaluator is
+   trivially testable without a Databricks connection.
+6. `tests/agents/agent_mapping_pge/test_deterministic_evaluator.py` — 14
+   tests covering entity PASS/FAIL paths (row_count zero, duplicate ids,
+   null ids, unmapped attribute, declared-as-unmapped) and relationship
+   PASS/FAIL paths (3% and 47% dangling source, >50% bubbling, zero edges,
+   cross-source overlap band inside/outside).
+7. `tests/agents/agent_mapping_pge/test_contracts.py` — 3 round-trip
+   smoke tests for `SourceModel`, `EvalReport`, `RetryState`.
+
+Modified files:
+- src/agents/agent_mapping_pge/__init__.py (new)
+- src/agents/agent_mapping_pge/contracts.py (new)
+- src/agents/agent_mapping_pge/evaluator/__init__.py (new)
+- src/agents/agent_mapping_pge/evaluator/report.py (new)
+- src/agents/agent_mapping_pge/evaluator/deterministic.py (new)
+- tests/agents/__init__.py (new)
+- tests/agents/agent_mapping_pge/__init__.py (new)
+- tests/agents/agent_mapping_pge/test_deterministic_evaluator.py (new)
+- tests/agents/agent_mapping_pge/test_contracts.py (new)
+- changelogs/v0.3.1/2026-05-28.log (this file)
+
+Test result: 17/17 new tests pass. Full suite: 2075 passed, 3 pre-existing
+failures in `test_settings_lakebase_status.py` (unrelated to this change,
+already failing on master).
+
+Deviation from spec: when an explicit
+`expected_cross_source_overlap_band` is supplied to
+`evaluate_relationship_mapping`, the `dangling_target_pct < 0.05` check
+is skipped. Rationale: cross-source FKs are *expected* to be partial
+(that is the wedge), so a band check is the correct semantic and the
+strict dangling check would always fail. Bubble-on-source-dangling and
+edge-count checks still apply.
+
+
+## chore(mapping-pge): cache seam + bubble-demotion warning + test rename
+
+Context: Three targeted code-quality fixes on Sprint 1 ahead of the
+Sprint 7 orchestrator. Scope is narrow — no contract / dataclass
+changes, no behavioural changes beyond logging.
+
+Changes:
+1. `src/agents/agent_mapping_pge/evaluator/deterministic.py` — added an
+   opt-in `id_universe_cache: Optional[Dict[str, set]] = None` kwarg to
+   `evaluate_relationship_mapping` (and to the private `_distinct_id_set`
+   helper). When provided, source/target id universes are looked up by
+   the entity mapping's SQL string and stored on miss. When `None`,
+   behaviour is unchanged. Cache is caller-managed; no module-level
+   state. Lets the Sprint 7 orchestrator avoid N×2 redundant entity
+   universe re-fetches when many relationships share endpoint classes.
+2. `src/agents/agent_mapping_pge/evaluator/report.py` — `build_report`
+   now emits a `logger.warning` when the caller passed
+   `bubble_to_planner=True` but `status` resolves to PASS. The silent
+   demotion behaviour itself is unchanged.
+3. `tests/agents/agent_mapping_pge/test_deterministic_evaluator.py` —
+   renamed misnamed `test_cross_source_band_pass_inside` (which actually
+   asserted FAIL on overlap outside the band) to
+   `test_cross_source_band_fail_when_outside`; assertions unchanged.
+   Added `test_relationship_evaluator_uses_id_universe_cache` proving
+   the cache short-circuits entity-SQL execution by counting wrapped
+   SQL calls. Added `test_build_report_warns_when_bubble_demoted`
+   asserting the warning fires under PASS+bubble demotion and stays
+   silent otherwise (PASS+no-bubble, FAIL+bubble).
+
+Modified files:
+- src/agents/agent_mapping_pge/evaluator/deterministic.py
+- src/agents/agent_mapping_pge/evaluator/report.py
+- tests/agents/agent_mapping_pge/test_deterministic_evaluator.py
+- changelogs/v0.3.1/2026-05-28.log (this file)
+
+Test result: 22/22 pass in `tests/agents/agent_mapping_pge/` (net +2 vs
+prior 20: cache test, warning test).
+
+
+## feat(mapping-pge): Sprint 2 — planner tools
+
+Context: Second sprint of the Planner -> Generator -> Evaluator (PGE)
+redesign. Adds the Planner's tool surface: four OpenAI function-calling
+tools the Planner LLM (Sprint 3) will use to probe source tables and
+submit a validated `SourceModel`. No LLM code in this sprint either —
+just the tool defs + handlers + a new context slot.
+
+Changes:
+1. `src/agents/tools/planner.py` (new) — four tools matching the
+   `mapping.py` / `sql.py` convention:
+   * `sample_table(full_name, n=20)` — `SELECT * ORDER BY RAND() LIMIT n`,
+     n capped at 100. Stringifies values for the LLM-facing surface.
+   * `column_value_overlap(from_table, from_column, to_table, to_column)` —
+     one-sided overlap `|distinct(from) ∩ distinct(to)| / |distinct(from)|`
+     in a single CTE-based query; returns 0.0 with a note when the
+     denominator is zero.
+   * `distinct_count(full_name, column)` — row/distinct/null counts with
+     `is_unique` and `is_complete` flags derived in Python.
+   * `submit_source_model(model)` — terminal tool: round-trips `model`
+     through `SourceModel.from_dict` and stores the dataclass on
+     `ctx.source_model`. Catches `KeyError` / `TypeError` / `ValueError`
+     and returns `success: False` with the error message — never raises.
+   Module exports `PLANNER_TOOL_DEFINITIONS` and `PLANNER_TOOL_HANDLERS`
+   matching the `MAPPING_TOOL_*` shape.
+2. `src/agents/tools/context.py` — added a single optional field
+   `source_model: Optional["SourceModel"] = None` with a string-forward-ref
+   and a `TYPE_CHECKING` import to avoid a circular import between
+   `agents.tools` and `agents.agent_mapping_pge`.
+3. `tests/agents/test_planner_tools.py` (new) — 16 tests against a
+   `FakeClient` whose `execute_query` is a per-test closure. Covers each
+   tool's happy path, error path, and the boundary cases called out in
+   the Sprint 2 spec (n-cap at 100, division-by-zero guard, structural
+   validation only on submit).
+
+Modified files:
+- src/agents/tools/planner.py (new)
+- src/agents/tools/context.py
+- tests/agents/test_planner_tools.py (new)
+- changelogs/v0.3.1/2026-05-28.log (this file)
+
+Test result: 38/38 pass in `tests/agents/` (22 Sprint 1 + 16 new). Full
+suite unaffected — same 3 pre-existing failures in
+`test_settings_lakebase_status.py` as before.
+
+## feat(mapping-pge): Sprint 3 — planner agent
+
+Context: Third sprint of the PGE redesign. The Planner is the first LLM-
+backed stage: a single-invocation ReAct-style agent that consumes the
+ontology + table metadata + imported documents, probes the source data via
+the Sprint 2 tools (sample_table, column_value_overlap, distinct_count),
+and emits a validated `SourceModel` via the terminal `submit_source_model`
+tool. Re-invocations are driven by the orchestrator in Sprint 7 — the
+Planner itself has no internal retry loop. The auto_assignment agent and
+all Sprint 1 / Sprint 2 modules are untouched.
+
+Changes:
+1. `src/agents/agent_mapping_pge/planner.py` (new) — `run_planner()`
+   entry point + `PlannerResult` / `PlannerStep` dataclasses. ReAct loop
+   mirrors `agents/agent_auto_assignment/engine.py` (same
+   `call_serving_endpoint` + `dispatch_tool` cycle, same 3-second
+   inter-iteration delay, same usage accumulation, same `@trace_agent`
+   decorator). Differences vs auto_assignment: smaller default
+   `max_iterations=25`; NO single-shot fallback on 400/422 (the Planner
+   needs tools); terminates immediately after a successful
+   `submit_source_model` (no chatty wrap-up turn). The system prompt
+   frames the role as "senior data architect", enumerates each tool's
+   purpose, lays out the canonical SourceModel workflow, and pins the
+   invariants the orchestrator depends on (URI existence, ordering
+   constraint on relationship_order, confidence range, `kind` enum).
+2. `tests/agents/agent_mapping_pge/test_planner.py` (new) — 6 tests
+   exercising the four termination conditions (single-shot submit,
+   multi-step ReAct then submit, submit-failure-then-retry, free-text
+   without terminal, iteration budget exhaustion) and the step-recording
+   invariants. Uses a `FakeLLM` / `CyclingFakeLLM` stub injected via
+   `monkeypatch.setattr(planner_mod, "call_serving_endpoint", ...)` —
+   no real HTTP, no Databricks, no MLflow.
+
+Modified files:
+- src/agents/agent_mapping_pge/planner.py (new)
+- tests/agents/agent_mapping_pge/test_planner.py (new)
+- changelogs/v0.3.1/2026-05-28.log (this file)
+
+Test result: 48/48 pass in `tests/agents/` (42 Sprint 1+2 baseline + 6
+new Sprint 3 tests). No edits to out-of-scope files (engine_base.py,
+tracing.py, llm_utils.py, contracts.py, evaluator/, tools/planner.py,
+or agent_auto_assignment/). Same pre-existing failures elsewhere in the
+full suite as before.
+
+## feat(mapping-pge): Sprint 4 — EntityGenerator agent + unmapped_attributes
+
+Context: Sprint 4 of the PGE redesign. The EntityGenerator is a narrow,
+focused LLM agent that maps ONE ontology class at a time. The orchestrator
+(Sprint 7) calls it per item with a filtered SourceModel slice. It does
+NOT see the full ontology or full metadata — only what's relevant to the
+class being mapped. Same loop machinery as the Planner (Sprint 3) with a
+smaller default budget (12 vs 25) and a narrower tool set.
+
+Changes:
+1. `src/agents/agent_mapping_pge/generators/__init__.py` (new) — empty
+   package marker for the Generator submodule.
+2. `src/agents/agent_mapping_pge/generators/entity.py` (new) — the
+   `run_entity_generator` agent. Builds a 3-tool surface (`execute_sql`,
+   `sample_table`, `submit_entity_mapping`), a per-class user prompt
+   carrying the ontology class + source-model slice + optional retry hint,
+   and a ReAct loop terminated by `submit_entity_mapping`. The system
+   prompt lifts the SQL RULES FOR ENTITIES section from
+   `agent_auto_assignment/engine.py` and adds the slice-consumption rules
+   plus the NO SILENT DROPS invariant.
+3. `src/agents/tools/mapping.py` — added `unmapped_attributes` kwarg to
+   `tool_submit_entity_mapping` and to its OpenAI function definition.
+   The field accepts either `[{"name", "reason"}]` dicts (preferred) or
+   bare strings (fallback); it persists on the mapping dict under the
+   same key. ~30 lines added; no behaviour change to existing callers.
+4. `tests/agents/agent_mapping_pge/test_entity_generator.py` (new) —
+   7 tests covering the four termination conditions
+   (`test_terminates_on_submit`, `test_text_without_terminal_fails`,
+   `test_exhausts_iteration_budget`), the multi-step ReAct trajectory
+   (`test_validates_sql_then_submits`), the new field round-trip
+   (`test_unmapped_attributes_round_trip` — both dict and string forms),
+   the retry-hint surfacing (`test_retry_hint_surfaces_in_user_prompt`),
+   and step-recording invariants (`test_records_steps`). Uses the same
+   `FakeLLM` / `CyclingFakeLLM` stub pattern as `test_planner.py`.
+5. `tests/agents/test_mapping_tools.py` (new) — 3 minimal tests directly
+   covering `tool_submit_entity_mapping`: dict-form unmapped_attributes
+   round-trips, string-form round-trips, default value is an empty list.
+   These are the first direct tests for `agents.tools.mapping`; previously
+   it was exercised only indirectly via the auto-mapping agent.
+
+Modified files:
+- src/agents/agent_mapping_pge/generators/__init__.py (new)
+- src/agents/agent_mapping_pge/generators/entity.py (new)
+- src/agents/tools/mapping.py (added unmapped_attributes plumbing)
+- tests/agents/agent_mapping_pge/test_entity_generator.py (new)
+- tests/agents/test_mapping_tools.py (new)
+- changelogs/v0.3.1/2026-05-28.log (this file)
+
+Test result: 58/58 pass in `tests/agents/` (48 Sprint 1+2+3 baseline +
+7 new Sprint 4 generator tests + 3 new direct tool tests). No edits to
+out-of-scope files (engine_base.py, tracing.py, llm_utils.py,
+contracts.py, evaluator/, planner.py, agent_auto_assignment/,
+tools/sql.py, tools/metadata.py, tools/documents.py, tools/ontology.py,
+tools/context.py, tools/planner.py). Same pre-existing failures
+elsewhere in the full suite as before (3 lakebase tests, 80 e2e errors,
+all unrelated and present on baseline).
+
+
+====================================================================
+Sprint 6 — Semantic Critic + submit_evaluation tool
+====================================================================
+
+Context: Sprint 6 of the mapping-PGE redesign — the Semantic Critic
+(Evaluator stage 2). Sibling of the deterministic evaluator: runs only
+when stage 1 PASSES and audits ONE submitted mapping for semantic
+correctness. Bubble-to-planner signal sharpens around the wrong-table
+vs wrong-column distinction: wrong column = Generator retry, wrong
+table = Planner re-invocation.
+
+Changes:
+1. `src/agents/tools/evaluation.py` (new) — `tool_submit_evaluation`
+   terminal handler + `SUBMIT_EVALUATION_DEF` OpenAI function definition.
+   Validates `status` in {"PASS", "FAIL"} (invalid → success=False,
+   loop continues), synthesises a generic `semantic_audit` failure when
+   status=FAIL with empty failures[] so the report stays coherent, and
+   demotes `bubble_to_planner=True` when status=PASS (mirrors
+   `evaluator.report.build_report`). Stamps the resulting `EvalReport`
+   (stage="semantic") onto `ctx.semantic_eval_report`. Exports
+   `EVALUATION_TOOL_DEFINITIONS` / `EVALUATION_TOOL_HANDLERS` aggregates.
+2. `src/agents/tools/context.py` — added `semantic_eval_report:
+   Optional["EvalReport"] = None` using the same `TYPE_CHECKING`
+   forward-ref pattern already used for `source_model`. 5-line touch.
+3. `src/agents/agent_mapping_pge/evaluator/critic.py` (new) — the
+   `run_critic` agent. 4-tool surface (`sample_table`,
+   `get_documents_context`, `execute_sql`, `submit_evaluation`), under-3KB
+   system prompt with PASS / FAIL(no-bubble) / FAIL(bubble) rubric,
+   default `max_iterations=6`, 3-second inter-iteration sleep, MLflow
+   `@trace_agent` decorator, no single-shot fallback. The user prompt
+   surfaces AUDIT TARGET (kind/uri/label/comment; attributes for
+   entities, domain/range for relationships), SUBMITTED MAPPING,
+   PLANNER'S PREDICTION, STRUCTURAL CHECK METRICS (PASSED), and a
+   YOUR TASK reminder.
+4. `tests/agents/test_evaluation_tool.py` (new) — 5 direct tests
+   for `tool_submit_evaluation`: valid PASS round-trip, valid FAIL with
+   failures round-trip, invalid status rejection (no report stamped),
+   plus 2 export-aggregate sanity checks.
+5. `tests/agents/agent_mapping_pge/test_critic.py` (new) — 11 tests
+   covering the full Critic loop with a FakeLLM stub: PASS verdict,
+   FAIL-column (no bubble), FAIL-table (bubbles), PASS+bubble demotion,
+   FAIL with no failures synthesises one, invalid-status non-termination
+   then valid retry, text-only failure, iteration-budget exhaustion,
+   user prompt surfaces stage1 metrics, user prompt distinguishes
+   entity vs relationship (domain/range lines), and step-recording
+   invariants.
+
+Modified files:
+- src/agents/tools/evaluation.py (new)
+- src/agents/tools/context.py (added semantic_eval_report field)
+- src/agents/agent_mapping_pge/evaluator/critic.py (new)
+- tests/agents/test_evaluation_tool.py (new)
+- tests/agents/agent_mapping_pge/test_critic.py (new)
+- changelogs/v0.3.1/2026-05-28.log (this entry)
+
+Test result: 83/83 pass in `tests/agents/` (67 Sprint 1–5 baseline +
+11 new Critic tests + 5 new evaluation-tool tests). No edits to
+out-of-scope files: contracts.py, evaluator/{deterministic,report}.py,
+generators/, planner.py, engine_base.py, tracing.py, llm_utils.py,
+tools/{sql,metadata,documents,ontology,mapping,planner}.py,
+agent_auto_assignment/.
+
+## feat(mapping-pge): Sprint 8 — wire PGE engine into Mapping.py + remove legacy agent
+
+Context: Final sprint of the Planner -> Generator -> Evaluator redesign.
+Sprints 1-7 built `agents/agent_mapping_pge/` with a drop-in `run_agent`
+matching the legacy `agent_auto_assignment` signature. This sprint flips
+the switch: `Mapping.py` and `AgentClient.py` now import from the new
+engine, the PGE-specific extras (`source_model`, `mapping_evaluations`,
+`mapping_run_log`) are persisted on the session, and the legacy package
+is deleted.
+
+Changes:
+1. `src/back/objects/mapping/Mapping.py` — switched the
+   `auto_assign_with_agent` import to `agents.agent_mapping_pge`. Updated
+   the TYPE_CHECKING alias likewise. Accumulated the new PGE-extra
+   fields across chunks in `run_auto_assign_task` and passed them
+   through `save_mappings_to_session` (single-item flow does the same
+   in `run_single_auto_assign_task`).
+2. `src/back/objects/mapping/Mapping.py::save_mappings_to_session` —
+   extended the signature with three optional kwargs (`source_model`,
+   `mapping_evaluations`, `mapping_run_log`) and persisted them as
+   siblings of `entities`/`relationships` under the session
+   `assignment` bucket. `mapping_evaluations` merges by item key,
+   `mapping_run_log` appends; both stay backwards-compatible (None ->
+   no-op) so existing callers (and the R2RML parser) are unaffected.
+3. `src/back/core/agents/AgentClient.py` — switched
+   `run_auto_assignment` to import the new engine; updated the
+   TYPE_CHECKING alias and docstring.
+4. `src/agents/agent_auto_assignment/` — deleted (`__init__.py`,
+   `engine.py`, `tools.py`). The PGE pipeline is now the only mapping
+   agent in the repo.
+5. Scrubbed stale "agent_auto_assignment" mentions from `agent_mapping_pge`
+   docstrings/comments (engine.py, planner.py, generators/entity.py,
+   generators/relationship.py, __init__.py) so `grep -rn
+   "agent_auto_assignment" src/ tests/` returns zero hits.
+
+Modified files:
+- src/back/objects/mapping/Mapping.py (import swap + PGE-extras persistence)
+- src/back/core/agents/AgentClient.py (import swap)
+- src/agents/agent_mapping_pge/__init__.py (docstring scrub)
+- src/agents/agent_mapping_pge/engine.py (docstring scrub)
+- src/agents/agent_mapping_pge/planner.py (docstring + comment scrub)
+- src/agents/agent_mapping_pge/generators/entity.py (comment scrub)
+- src/agents/agent_mapping_pge/generators/relationship.py (comment scrub)
+- src/agents/agent_auto_assignment/__init__.py (deleted)
+- src/agents/agent_auto_assignment/engine.py (deleted)
+- src/agents/agent_auto_assignment/tools.py (deleted)
+- changelogs/v0.3.1/2026-05-28.log (this entry)
+
+Test result: 99/99 pass in `tests/agents/` (PGE-agent suite intact).
+40/40 pass in `tests/test_mapping_service.py` +
+`tests/test_workflow_mapping.py`. Full suite: 2157 passed; the 3
+pre-existing `test_settings_lakebase_status.py` failures and the
+Playwright `tests/e2e/` collection errors are unrelated to this
+change (also failing on the prior Sprint 1-7 commits per earlier
+changelog entries).
+
+Acceptance:
+- `grep -rn "agent_auto_assignment" src/ tests/` returns zero hits.
+- `from agents.agent_mapping_pge.engine import run_agent` is the new
+  import in `Mapping.py`.
+- Three PGE extras reach the session via `assignment.source_model`,
+  `assignment.mapping_evaluations`, `assignment.mapping_run_log`
+  (durable through `session_path.write_text`).
+- Public `Mapping.auto_assign_with_agent` signature unchanged.
+

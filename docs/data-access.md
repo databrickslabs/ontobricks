@@ -213,7 +213,7 @@ These agents do not query the triple store at runtime; they operate on the
 | Agent | Purpose | Tools call | Wrapper | Engine |
 |---|---|---|---|---|
 | `agent_owl_generator` | Build an OWL ontology from metadata + documents | `metadata.list_tables`, `metadata.preview_table`, `documents.read`, `ontology.write_owl` | REST + Spark SQL (samples) | `databricks-sql-connector` against UC tables, plus rdflib write |
-| `agent_auto_assignment` | Map ontology entities to Spark SQL queries | `tables.list`, `tables.sample`, `mapping.write` | REST + Spark SQL (samples) | Same as above; output stored as R2RML |
+| `agent_mapping_pge` | Map ontology entities and relationships to Spark SQL queries via a Planner → Generator → Evaluator pipeline | `tables.list`, `tables.sample`, `column_value_overlap`, `distinct_count`, `execute_sql`, `mapping.write`, `submit_evaluation` | REST + Spark SQL (samples + validation) | Same as above; output stored as R2RML |
 | `agent_auto_icon_assign` | Pick emojis for entities | Inspects ontology + metadata | REST | None — generation only |
 | `agent_ontology_assistant` | Conversational ontology editing | Dozens of tools mutating the in-session ontology | REST | Python ontology object model |
 | `agent_dtwin_chat` | Conversational graph querying | See §6 | REST + **GraphQL** + **SPARQL** | **Spark SQL** + **Cypher** (engine-side) |

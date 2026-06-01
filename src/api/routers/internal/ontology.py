@@ -237,11 +237,19 @@ async def export_owl(session_mgr: SessionManager = Depends(get_session_manager))
 async def get_loaded_ontology(
     session_mgr: SessionManager = Depends(get_session_manager),
 ):
-    """Get currently loaded ontology from session."""
+    """Get currently loaded ontology from session.
+
+    Returns ``success: false`` (HTTP 200) when no ontology is loaded rather
+    than a 404 — "no ontology yet" is a normal empty state on pages that load
+    before a domain is selected (e.g. landing on Digital Twin / Graph Chat in
+    a fresh session). All callers branch on ``data.success``, so a 200
+    empty-state is handled identically while avoiding noisy 404s in the
+    browser console and server logs.
+    """
     domain = get_domain(session_mgr)
     if domain.get_classes():
         return {"success": True, "ontology": domain.ontology}
-    raise NotFoundError("No ontology loaded")
+    return {"success": False, "ontology": None, "message": "No ontology loaded"}
 
 
 @router.post("/parse-owl")

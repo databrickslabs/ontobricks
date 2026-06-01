@@ -100,6 +100,35 @@ TURTLE_WITH_AXIOMS = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
 :Individual owl:disjointWith :Company .
 """
 
+TURTLE_RESTRICTION_DATAPROPS = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix : <http://test.org/ontology#> .
+
+<http://test.org/ontology> a owl:Ontology .
+
+:RadioCell a owl:Class ;
+    rdfs:label "Radio Cell" ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty :cellId ;
+        owl:someValuesFrom xsd:string
+    ], [
+        a owl:Restriction ;
+        owl:onProperty :cellName ;
+        owl:someValuesFrom xsd:string
+    ] .
+
+:cellId a owl:DatatypeProperty ;
+    rdfs:label "cellId" ;
+    rdfs:range xsd:string .
+
+:cellName a owl:DatatypeProperty ;
+    rdfs:label "cellName" ;
+    rdfs:range xsd:string .
+"""
+
 
 class TestOntologyParserInit:
     def test_parse_turtle(self):
@@ -164,6 +193,13 @@ class TestGetClasses:
         dp_names = [dp["name"] for dp in classes["Customer"]["dataProperties"]]
         assert "firstName" in dp_names
         assert "lastName" in dp_names
+
+    def test_data_properties_from_restrictions_without_domain(self):
+        parser = OntologyParser(TURTLE_RESTRICTION_DATAPROPS)
+        classes = {c["name"]: c for c in parser.get_classes()}
+        dp_names = [dp["name"] for dp in classes["RadioCell"]["dataProperties"]]
+        assert "cellId" in dp_names
+        assert "cellName" in dp_names
 
     def test_sorted_by_name(self):
         parser = OntologyParser(SAMPLE_TURTLE)

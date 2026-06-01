@@ -22,24 +22,59 @@ Tracing
    :undoc-members:
    :show-inheritance:
 
-Auto Assignment Agent
----------------------
+Mapping PGE Pipeline
+--------------------
 
-.. automodule:: agents.agent_auto_assignment
+The Mapping PGE pipeline replaces the legacy single-loop auto-assignment agent
+with a Planner → Generator → Evaluator decomposition: a global planner emits a
+typed ``SourceModel``, narrow per-item generators produce SQL against that
+plan, and a two-stage evaluator (deterministic checks + semantic critic) gates
+every mapping.
+
+.. automodule:: agents.agent_mapping_pge
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: agents.agent_auto_assignment.engine
+.. automodule:: agents.agent_mapping_pge.engine
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: agents.agent_auto_assignment.tools
+.. automodule:: agents.agent_mapping_pge.planner
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: ToolContext
+
+.. automodule:: agents.agent_mapping_pge.contracts
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.agent_mapping_pge.generators.entity
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.agent_mapping_pge.generators.relationship
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.agent_mapping_pge.evaluator.deterministic
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.agent_mapping_pge.evaluator.critic
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.agent_mapping_pge.evaluator.report
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Auto Icon Assignment Agent
 --------------------------
@@ -164,6 +199,16 @@ Shared Tools
    :show-inheritance:
 
 .. automodule:: agents.tools.ontology
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.tools.planner
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.tools.evaluation
    :members:
    :undoc-members:
    :show-inheritance:

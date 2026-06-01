@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 if TYPE_CHECKING:
     from agents.agent_owl_generator.engine import AgentResult
-    from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
+    from agents.agent_mapping_pge.engine import AgentResult as AutoAssignAgentResult
     from agents.agent_auto_icon_assign.engine import (
         AgentResult as IconAssignAgentResult,
     )
@@ -109,13 +109,13 @@ class AgentClient:
             max_iterations: Upper bound on agent refinement iterations.
 
         Returns:
-            Structured result from ``agents.agent_auto_assignment`` describing
+            Structured result from ``agents.agent_mapping_pge`` describing
             proposed mappings and per-item status.
 
         Raises:
             Exception: Propagates any failure raised by ``run_agent``.
         """
-        from agents.agent_auto_assignment import run_agent
+        from agents.agent_mapping_pge import run_agent
 
         return run_agent(
             host=host,

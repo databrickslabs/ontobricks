@@ -353,14 +353,32 @@ async function parseAndLoadOwl(content, filename) {
             OntologyState.config.base_uri = onto.info.namespace || onto.info.uri || OntologyState.baseUriDomain + '/LoadedOntology#';
             
             // Build classes with their attributes
-            OntologyState.config.classes = onto.classes.map(cls => ({
-                name: cls.name,
-                label: cls.label || cls.name,
-                description: cls.comment || '',
-                parent: cls.parent || '',
-                emoji: cls.emoji || OntologyState.defaultClassEmoji,
-                dataProperties: classAttributesMap[cls.name] || []
-            }));
+            OntologyState.config.classes = onto.classes.map(cls => {
+                const fromDomain = classAttributesMap[cls.name] || [];
+                const fromParser = cls.dataProperties || [];
+                const merged = [];
+                const seen = new Set();
+                for (const attr of [...fromParser, ...fromDomain]) {
+                    const name = attr.name || attr.localName;
+                    if (!name || seen.has(name)) continue;
+                    seen.add(name);
+                    merged.push({
+                        name,
+                        localName: attr.localName || name,
+                        label: attr.label || name,
+                        description: attr.description || attr.comment || '',
+                        range: attr.range || 'string'
+                    });
+                }
+                return {
+                    name: cls.name,
+                    label: cls.label || cls.name,
+                    description: cls.comment || '',
+                    parent: cls.parent || '',
+                    emoji: cls.emoji || OntologyState.defaultClassEmoji,
+                    dataProperties: merged
+                };
+            });
             
             // Only store ObjectProperties as relationships
             OntologyState.config.properties = objectProperties.map(prop => ({
@@ -707,14 +725,32 @@ async function parseAndLoadRdfs(content, filename) {
             OntologyState.config.base_uri = onto.info.namespace || onto.info.uri || OntologyState.baseUriDomain + '/LoadedVocabulary#';
             
             // Build classes with their attributes
-            OntologyState.config.classes = onto.classes.map(cls => ({
-                name: cls.name,
-                label: cls.label || cls.name,
-                description: cls.description || cls.comment || '',
-                parent: cls.parent || '',
-                emoji: cls.emoji || OntologyState.defaultClassEmoji,
-                dataProperties: classAttributesMap[cls.name] || []
-            }));
+            OntologyState.config.classes = onto.classes.map(cls => {
+                const fromDomain = classAttributesMap[cls.name] || [];
+                const fromParser = cls.dataProperties || [];
+                const merged = [];
+                const seen = new Set();
+                for (const attr of [...fromParser, ...fromDomain]) {
+                    const name = attr.name || attr.localName;
+                    if (!name || seen.has(name)) continue;
+                    seen.add(name);
+                    merged.push({
+                        name,
+                        localName: attr.localName || name,
+                        label: attr.label || name,
+                        description: attr.description || attr.comment || '',
+                        range: attr.range || 'string'
+                    });
+                }
+                return {
+                    name: cls.name,
+                    label: cls.label || cls.name,
+                    description: cls.description || cls.comment || '',
+                    parent: cls.parent || '',
+                    emoji: cls.emoji || OntologyState.defaultClassEmoji,
+                    dataProperties: merged
+                };
+            });
             
             // Only store ObjectProperties as relationships
             OntologyState.config.properties = objectProperties.map(prop => ({

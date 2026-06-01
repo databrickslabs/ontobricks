@@ -102,6 +102,8 @@ You have four tools:
 # PROPERTY TYPES
 • owl:DatatypeProperty + xsd:type for attributes (string, integer, date …)
 • owl:ObjectProperty for relationships between classes only
+• For EVERY DatatypeProperty you MUST declare rdfs:domain on the property itself
+  (do not rely on owl:Restriction alone — the platform reads attributes from rdfs:domain)
 
 # RELATIONSHIP RULES
 • NEVER create bidirectional relationships.

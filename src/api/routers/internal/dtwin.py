@@ -1410,10 +1410,34 @@ def _auto_discover_llm_endpoint(domain, settings) -> str:
         state = (ep.get("state") or "").upper()
         return state in ("READY", "TRUE", "UP")
 
+    def _is_tool_incompatible(name: str) -> bool:
+        """Reasoning-first models that reject function tools via the standard
+        /v1/chat/completions path (they require /v1/responses) — picking one
+        breaks Graph Chat, which is a tool-calling agent. Skip them in
+        auto-discovery. e.g. ``databricks-gpt-5-5`` returns HTTP 400
+        "Function tools with reasoning_effort are not supported ... use
+        /v1/responses instead".
+        """
+        n = (name or "").lower()
+        markers = ("gpt-5", "gpt5", "-o1", "-o3", "-o4-", "reasoning")
+        return any(m in n for m in markers)
+
+    # Preferred: a tool-capable Databricks foundation model.
     for ep in endpoints:
         name = ep.get("name") or ""
-        if name.startswith("databricks-") and _is_ready(ep):
+        if (
+            name.startswith("databricks-")
+            and _is_ready(ep)
+            and not _is_tool_incompatible(name)
+        ):
             return name
+    # Next: any ready endpoint that isn't a known tool-incompatible model.
+    for ep in endpoints:
+        name = ep.get("name") or ""
+        if name and _is_ready(ep) and not _is_tool_incompatible(name):
+            return name
+    # Last resort: a ready endpoint even if it may be tool-incompatible
+    # (better to try than to return nothing).
     for ep in endpoints:
         if _is_ready(ep) and ep.get("name"):
             return ep["name"]
@@ -1585,6 +1609,202 @@ async def dtwin_assistant_chat(
     }
 
 
+@router.post("/assistant/chat/stream")
+async def dtwin_assistant_chat_stream(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Stream a single Graph Chat turn using Server-Sent Events.
+
+    Sends one SSE event per agent step as it happens, then a final
+    ``done`` event with the complete reply.  The session cache is
+    updated server-side after the stream closes, identical to the
+    blocking ``POST /assistant/chat`` endpoint.
+
+    Event shapes::
+
+        data: {"type": "step",  "step_type": "tool_call",   "tool_name": "...", "content": "..."}
+        data: {"type": "step",  "step_type": "tool_result", "tool_name": "...", "duration_ms": 123}
+        data: {"type": "done",  "reply": "...",  "tools": [...], "usage": {...}, "iterations": N}
+        data: {"type": "error", "message": "..."}
+    """
+    import asyncio
+    import json as _json
+    import os
+
+    from fastapi.responses import StreamingResponse
+    from api.routers.internal._helpers import map_route_errors
+    from back.core.helpers import get_databricks_host_and_token
+    from agents.agent_dtwin_chat import run_agent as run_chat_agent
+    from agents.engine_base import AgentStep
+
+    data = await request.json()
+    user_message = (data.get("message") or "").strip()
+    client_history = data.get("history") or []
+    describe_depth = max(1, min(int(data.get("depth") or 1), 5))
+
+    if not user_message:
+        raise ValidationError("No message provided")
+
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    chat_cache = _chat_cache(session_mgr)
+    limit = _chat_clamp_limit(chat_cache.get("limit", _CHAT_DEFAULT_LIMIT))
+
+    saved_history = chat_cache["history"].get(domain_key) or []
+    history = saved_history if saved_history else client_history
+
+    host, token = get_databricks_host_and_token(domain, settings)
+    if not host or not token:
+        raise ValidationError("Databricks credentials not configured")
+
+    llm_endpoint = (domain.info or {}).get("llm_endpoint", "") or ""
+    if not llm_endpoint:
+        llm_endpoint = _auto_discover_llm_endpoint(domain, settings)
+    if not llm_endpoint:
+        raise ValidationError(
+            "No LLM serving endpoint available. Please set one in Domain Settings.",
+        )
+
+    reg = DigitalTwin.resolve_registry(session_mgr, settings)
+    registry_params = {
+        "registry_catalog": reg.get("catalog") or "",
+        "registry_schema": reg.get("schema") or "",
+        "registry_volume": reg.get("volume") or "",
+    }
+
+    app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+    base_url = f"http://localhost:{app_port}"
+    session_cookies = dict(request.cookies or {})
+
+    _FORWARDED_HEADER_PREFIXES = ("x-forwarded-", "x-real-")
+    _FORWARDED_EXTRA_HEADERS = {"x-csrf-token", "referer"}
+    session_headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower().startswith(_FORWARDED_HEADER_PREFIXES)
+        or k.lower() in _FORWARDED_EXTRA_HEADERS
+    }
+
+    domain_name = _chat_resolve_domain_name(domain)
+
+    logger.info(
+        "GraphChat/stream: user_message=%s, domain=%s, endpoint=%s",
+        user_message[:80],
+        domain_name,
+        llm_endpoint,
+    )
+
+    loop = asyncio.get_event_loop()
+    event_queue: asyncio.Queue = asyncio.Queue()
+
+    def _on_event(step: AgentStep) -> None:
+        """Forward an AgentStep from the sync thread to the async generator.
+
+        Best-effort: step events drive the live progress UI only — the final
+        reply is delivered separately via the ``done`` event. If the async
+        consumer is slow (slow SSE client, long-running tool), enqueueing must
+        NOT raise, or the timeout would crash the whole agent turn. Drop the
+        progress event instead and let the agent keep running.
+        """
+        try:
+            asyncio.run_coroutine_threadsafe(
+                event_queue.put(step), loop
+            ).result(timeout=10)
+        except Exception as exc:  # noqa: BLE001 — progress delivery is non-critical
+            logger.debug("GraphChat/stream: dropped progress event: %s", exc)
+
+    async def _run_agent_task() -> None:
+        try:
+            with map_route_errors("Graph Chat stream agent failed", logger):
+                result = await asyncio.to_thread(
+                    run_chat_agent,
+                    host=host,
+                    token=token,
+                    endpoint_name=llm_endpoint,
+                    base_url=base_url,
+                    domain_name=domain_name,
+                    registry_params=registry_params,
+                    session_cookies=session_cookies,
+                    session_headers=session_headers,
+                    user_message=user_message,
+                    conversation_history=history,
+                    describe_depth=describe_depth,
+                    on_event=_on_event,
+                )
+            await event_queue.put(("done", result))
+        except Exception as exc:
+            await event_queue.put(("error", str(exc)))
+
+    agent_task = asyncio.create_task(_run_agent_task())
+
+    async def _generate():
+        try:
+            while True:
+                item = await event_queue.get()
+
+                if isinstance(item, tuple):
+                    kind, payload = item
+                    if kind == "done":
+                        agent_result = payload
+                        # Update session cache exactly like the blocking endpoint
+                        prior = list(history)
+                        if prior and prior[-1].get("role") == "user" and (
+                            prior[-1].get("content") or ""
+                        ).strip() == user_message.strip():
+                            prior = prior[:-1]
+                        prior.append({"role": "user", "content": user_message})
+                        prior.append({"role": "assistant", "content": agent_result.reply or ""})
+                        chat_cache["history"][domain_key] = _chat_trim(prior, limit)
+                        _chat_save_cache(session_mgr, chat_cache)
+
+                        tool_calls = [
+                            {"name": s.tool_name, "duration_ms": s.duration_ms}
+                            for s in agent_result.steps
+                            if s.step_type == "tool_result"
+                        ]
+                        yield "data: " + _json.dumps({
+                            "type": "done",
+                            "reply": agent_result.reply or "",
+                            "tools": tool_calls,
+                            "iterations": agent_result.iterations,
+                            "usage": agent_result.usage,
+                            "success": agent_result.success,
+                        }) + "\n\n"
+                        break
+
+                    else:  # error
+                        yield "data: " + _json.dumps({
+                            "type": "error",
+                            "message": payload,
+                        }) + "\n\n"
+                        break
+
+                elif isinstance(item, AgentStep):
+                    yield "data: " + _json.dumps({
+                        "type": "step",
+                        "step_type": item.step_type,
+                        "tool_name": item.tool_name,
+                        "content": item.content,
+                        "duration_ms": item.duration_ms,
+                    }) + "\n\n"
+
+        finally:
+            if not agent_task.done():
+                agent_task.cancel()
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @router.get("/assistant/history")
 async def dtwin_assistant_history_get(
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1754,6 +1974,7 @@ async def dtwin_triples_find(
     depth: int = 1,
     limit: int = 1000,
     offset: int = 0,
+    seed_limit: int = 0,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -1772,6 +1993,10 @@ async def dtwin_triples_find(
     depth = max(1, min(int(depth or 1), 10))
     limit = max(1, min(int(limit or 1000), 10000))
     offset = max(0, int(offset or 0))
+    # 0 = unbounded (back-compat for callers that paginate over all matches);
+    # >0 caps BFS seeds so a broad search ("mother") can't seed hundreds of
+    # subjects and blow up the recursive traversal.
+    seed_limit = max(0, min(int(seed_limit or 0), 1000))
 
     domain = get_domain(session_mgr)
     table = effective_graph_name(domain)
@@ -1812,6 +2037,7 @@ async def dtwin_triples_find(
             depth,
             search=search or "",
             entity_type=entity_type or "",
+            seed_limit=seed_limit,
         )
 
         if not bfs_rows:

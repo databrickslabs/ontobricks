@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.4.0</h1>
+<h1 align="center">OntoBricks 0.5.0</h1>
 
 <p align="center">
   <strong>Digital Twin Builder for Databricks</strong>

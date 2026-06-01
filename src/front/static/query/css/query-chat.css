@@ -510,6 +510,29 @@
 
 
 /* ---------------------------------------------------
+   Streaming step indicator (live tool-call progress)
+--------------------------------------------------- */
+
+.graph-chat-stream-steps {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    color: #64748b;
+    padding: 0.1rem 0;
+}
+
+.graph-chat-stream-status {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+    color: #64748b;
+    font-style: italic;
+}
+
+
+/* ---------------------------------------------------
    Tool call trace (collapsible under bot bubble)
 --------------------------------------------------- */
 

@@ -194,6 +194,62 @@ class Ontology:
         return config
 
     @staticmethod
+    def sync_class_data_properties(config: Dict[str, Any]) -> None:
+        """Ensure ``classes[].dataProperties`` includes datatype attributes.
+
+        Merges datatype properties declared on ``config['properties']`` (when
+        they carry a ``domain``) into the matching class.  Idempotent.
+        """
+        classes = config.get("classes", [])
+        properties = config.get("properties", [])
+        if not classes:
+            return
+
+        by_name = {c.get("name"): c for c in classes if c.get("name")}
+
+        for prop in properties:
+            prop_type = prop.get("type", "")
+            if prop_type == "ObjectProperty":
+                continue
+            if prop_type not in ("DatatypeProperty", "Property", ""):
+                continue
+
+            domain = prop.get("domain", "")
+            if not domain:
+                continue
+
+            cls = by_name.get(domain)
+            if not cls:
+                continue
+
+            pname = prop.get("name") or prop.get("localName")
+            if not pname:
+                continue
+
+            data_props = cls.setdefault("dataProperties", [])
+            if any(p.get("name") == pname for p in data_props):
+                continue
+
+            data_props.append(
+                {
+                    "name": pname,
+                    "localName": prop.get("localName", pname),
+                    "label": prop.get("label", pname),
+                    "uri": prop.get("uri", ""),
+                }
+            )
+
+    @staticmethod
+    def finalize_class_attributes(config: Dict[str, Any]) -> None:
+        """Sync datatype properties onto classes and propagate inheritance."""
+        from back.core.w3c.owl.OntologyParser import OntologyParser
+
+        Ontology.sync_class_data_properties(config)
+        classes = config.get("classes", [])
+        if classes:
+            OntologyParser._propagate_inherited_properties(classes)
+
+    @staticmethod
     def get_ontology_stats(config: Dict[str, Any]) -> Dict[str, int]:
         """Get statistics from ontology configuration.
 
@@ -1033,6 +1089,8 @@ class Ontology:
                 "groups": groups or [],
             }
         )
+        Ontology.sync_class_data_properties(self._domain.ontology)
+        Ontology.finalize_class_attributes(self._domain.ontology)
         self._domain.save()
         return resolved_name
 

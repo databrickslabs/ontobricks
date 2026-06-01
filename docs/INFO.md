@@ -323,7 +323,7 @@ src/
 │   ├── llm_utils.py             # Shared LLM call with retry
 │   ├── tools/                   # Shared agent tools (context, metadata, SQL, …)
 │   ├── agent_owl_generator/     # OWL ontology generation agent
-│   ├── agent_auto_assignment/   # Entity/relationship → SQL mapping agent
+│   ├── agent_mapping_pge/       # Mapping PGE pipeline (Planner → Generator → Evaluator)
 │   ├── agent_auto_icon_assign/  # Emoji icon mapping agent
 │   └── agent_ontology_assistant/# Conversational assistant + ResponsesAgent wrapper
 │
