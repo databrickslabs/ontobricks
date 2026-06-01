@@ -364,8 +364,10 @@
             bodyEl.removeChild(stepsEl);
         }
 
-        // Render the final markdown reply
-        const reply = event.reply || '(no reply)';
+        // Render the final markdown reply. Empty replies are normally routed
+        // to errorStreamingBubble by the caller; this is a defensive fallback.
+        const reply = (event.reply || '').trim()
+            || '_No response was generated. Please try again._';
         bodyEl.innerHTML = renderMarkdown(reply);
         enhanceEntityLinks(bodyEl);
 
@@ -479,12 +481,23 @@
 
             const doneEvent = await _consumeStream(bubble, response);
 
-            if (doneEvent) {
+            if (doneEvent && (doneEvent.reply || '').trim()) {
                 finalizeStreamingBubble(bubble, doneEvent);
                 conversationHistory.push({
                     role: 'assistant',
-                    content: doneEvent.reply || '',
+                    content: doneEvent.reply,
                 });
+            } else if (doneEvent) {
+                // The turn completed but produced no text — e.g. a transient
+                // model error (success:false) or an empty generation. Surface
+                // an actionable message instead of a cryptic "(no reply)", and
+                // do NOT persist the empty turn to history.
+                errorStreamingBubble(
+                    bubble,
+                    doneEvent.success === false
+                        ? "The assistant didn't return a response — the model may have hit a transient error. Please try again."
+                        : 'No response was generated. Try rephrasing your question, or ask again.'
+                );
             } else {
                 errorStreamingBubble(bubble, 'Stream ended without a final response.');
             }

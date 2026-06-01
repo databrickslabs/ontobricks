@@ -1,11 +1,13 @@
 """
 Planner tools – used by the mapping-PGE Planner agent (Sprint 2+).
 
-Exposes four OpenAI function-calling tools that let the Planner LLM probe
+Exposes the OpenAI function-calling tools that let the Planner LLM probe
 source tables and submit a validated ``SourceModel`` artefact:
 
 * ``sample_table``         — N random rows from a table (n capped at 100).
 * ``column_value_overlap`` — one-sided distinct-value overlap between two columns.
+* ``normalized_value_overlap`` — same metric, but each side is a scalar SQL
+  expression, so canonical-key normalizations can be proven before commit.
 * ``distinct_count``       — uniqueness / completeness of a candidate canonical id.
 * ``submit_source_model``  — terminal tool: validates the candidate SourceModel
   JSON against :class:`agents.agent_mapping_pge.contracts.SourceModel` and stores
@@ -35,6 +37,78 @@ _SAMPLE_TABLE_DEFAULT_N = 20
 # identifiers), plus the usual alphanumerics + underscore. Anything else
 # — semicolons, whitespace, quotes, comment markers — is rejected.
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_.`]+$")
+
+
+# SQL keywords whose presence in a "normalization expression" indicates the
+# string is no longer a scalar expression but a smuggled clause / subquery /
+# DDL. A legitimate canonical-key expression (regexp_extract, regexp_replace,
+# concat, substring, lower, upper, trim, coalesce, ||, string literals) needs
+# none of these. Matched case-insensitively as whole words.
+_EXPR_FORBIDDEN_WORDS = frozenset(
+    {
+        "select",
+        "from",
+        "where",
+        "join",
+        "union",
+        "intersect",
+        "except",
+        "insert",
+        "update",
+        "delete",
+        "drop",
+        "alter",
+        "create",
+        "grant",
+        "revoke",
+        "table",
+        "into",
+        "exec",
+        "execute",
+        "call",
+        "merge",
+        "values",
+        "having",
+        "group",
+        "order",
+        "limit",
+    }
+)
+_EXPR_WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _validate_safe_expression(expr: str, *, role: str) -> Optional[str]:
+    """Return None if ``expr`` is a safe scalar SQL expression; else an error.
+
+    Unlike :func:`_validate_identifier`, this permits the parentheses, commas,
+    quotes and operators a canonical-key normalization needs (e.g.
+    ``regexp_extract(EPISODE_ID, '([a-f0-9][a-f0-9-]+-preg-\\d+)', 1)`` or
+    ``concat(regexp_extract(delivery_id, '...', 1), '-del')``). It still gets
+    interpolated into SQL via an f-string, so it is gated against the obvious
+    injection vectors: statement terminators, comment markers, and any SQL
+    keyword that would turn the scalar into a clause/subquery/DDL.
+    """
+    if not isinstance(expr, str) or not expr.strip():
+        return f"invalid {role}: must be a non-empty string"
+    if ";" in expr or "--" in expr or "/*" in expr or "*/" in expr:
+        return (
+            f"invalid {role}: must not contain ';' or SQL comment markers "
+            f"(got {expr!r})"
+        )
+    bad = sorted(
+        {
+            w.lower()
+            for w in _EXPR_WORD_RE.findall(expr)
+            if w.lower() in _EXPR_FORBIDDEN_WORDS
+        }
+    )
+    if bad:
+        return (
+            f"invalid {role}: a canonical-key expression must be a single scalar "
+            f"expression, not a clause/subquery. Forbidden keyword(s): "
+            f"{', '.join(bad)} (got {expr!r})"
+        )
+    return None
 
 
 def _validate_identifier(name: str, *, role: str) -> Optional[str]:
@@ -230,6 +304,112 @@ def tool_column_value_overlap(
     return json.dumps(result)
 
 
+def tool_normalized_value_overlap(
+    ctx: ToolContext,
+    *,
+    from_table: str = "",
+    from_expr: str = "",
+    to_table: str = "",
+    to_expr: str = "",
+    **_kwargs,
+) -> str:
+    """Like :func:`tool_column_value_overlap`, but each side is an arbitrary
+    scalar SQL *expression* rather than a bare column.
+
+    This is the tool the Planner uses to PROVE a canonical-key normalization
+    works before committing it. When two tables that map to the same ontology
+    class have 0% raw-column overlap, the values are trust-local encodings of
+    the same key. The Planner proposes a normalization expression per table
+    (e.g. ``regexp_extract(EPISODE_ID, '([a-f0-9][a-f0-9-]+-preg-\\d+)', 1)``)
+    and calls this tool to confirm the expressions land in a common value
+    space (overlap_pct > 0). A still-zero overlap means the normalization is
+    wrong — fix it before submitting.
+    """
+    logger.info(
+        "tool_normalized_value_overlap: %s[%s] ↔ %s[%s]",
+        from_table,
+        from_expr,
+        to_table,
+        to_expr,
+    )
+    if not (from_table and from_expr and to_table and to_expr):
+        return json.dumps(
+            {
+                "success": False,
+                "error": "from_table, from_expr, to_table, to_expr are all required",
+            }
+        )
+
+    for value, role in ((from_table, "from_table"), (to_table, "to_table")):
+        err = _validate_identifier(value, role=role)
+        if err is not None:
+            return json.dumps({"success": False, "error": err})
+    for value, role in ((from_expr, "from_expr"), (to_expr, "to_expr")):
+        err = _validate_safe_expression(value, role=role)
+        if err is not None:
+            return json.dumps({"success": False, "error": err})
+
+    sql = (
+        "WITH from_distinct AS ("
+        f"  SELECT DISTINCT {from_expr} AS v FROM {from_table} "
+        f"  WHERE {from_expr} IS NOT NULL AND {from_expr} <> ''"
+        "),"
+        " to_distinct AS ("
+        f"  SELECT DISTINCT {to_expr} AS v FROM {to_table} "
+        f"  WHERE {to_expr} IS NOT NULL AND {to_expr} <> ''"
+        "),"
+        " inter AS ("
+        "  SELECT v FROM from_distinct INTERSECT SELECT v FROM to_distinct"
+        ") "
+        "SELECT (SELECT COUNT(*) FROM from_distinct) AS from_distinct_count, "
+        "       (SELECT COUNT(*) FROM to_distinct)   AS to_distinct_count, "
+        "       (SELECT COUNT(*) FROM inter)         AS intersection_count"
+    )
+    logger.debug("tool_normalized_value_overlap: SQL=%s", sql)
+
+    rows, err = _run_query(ctx, sql, tool_name="tool_normalized_value_overlap")
+    if err is not None:
+        return json.dumps({"success": False, "error": err})
+    if not rows:
+        return json.dumps(
+            {"success": False, "error": "overlap query returned no rows"}
+        )
+
+    row = rows[0]
+    from_distinct = int(row.get("from_distinct_count", 0) or 0)
+    to_distinct = int(row.get("to_distinct_count", 0) or 0)
+    intersection = int(row.get("intersection_count", 0) or 0)
+
+    if from_distinct == 0:
+        result: Dict[str, Any] = {
+            "success": True,
+            "overlap_pct": 0.0,
+            "from_distinct_count": 0,
+            "to_distinct_count": to_distinct,
+            "intersection_count": 0,
+            "note": (
+                f"{from_expr} over {from_table} produced zero distinct non-empty "
+                "values; the expression likely does not match the data — revise it."
+            ),
+        }
+    else:
+        result = {
+            "success": True,
+            "overlap_pct": intersection / from_distinct,
+            "from_distinct_count": from_distinct,
+            "to_distinct_count": to_distinct,
+            "intersection_count": intersection,
+            "note": "",
+        }
+    logger.info(
+        "tool_normalized_value_overlap: overlap_pct=%.4f (%d/%d)",
+        result["overlap_pct"],
+        intersection,
+        from_distinct,
+    )
+    return json.dumps(result)
+
+
 def tool_distinct_count(
     ctx: ToolContext, *, full_name: str = "", column: str = "", **_kwargs
 ) -> str:
@@ -406,6 +586,52 @@ COLUMN_VALUE_OVERLAP_DEF: dict = {
 }
 
 
+NORMALIZED_VALUE_OVERLAP_DEF: dict = {
+    "type": "function",
+    "function": {
+        "name": "normalized_value_overlap",
+        "description": (
+            "Same overlap metric as column_value_overlap, but each side is a "
+            "scalar SQL EXPRESSION instead of a bare column. Use this to PROVE a "
+            "canonical-key normalization before committing it: when two tables "
+            "that map to the same ontology class have 0% raw-column overlap, "
+            "propose a normalization expression per table (e.g. "
+            "regexp_extract(EPISODE_ID, '([a-f0-9][a-f0-9-]+-preg-\\d+)', 1)) and "
+            "call this to confirm overlap_pct > 0. A still-zero result means the "
+            "expression is wrong — fix it before submit_source_model. Expressions "
+            "must be a single scalar (functions/literals/operators only); "
+            "subqueries and SQL keywords are rejected."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "from_table": {
+                    "type": "string",
+                    "description": "Fully-qualified source table.",
+                },
+                "from_expr": {
+                    "type": "string",
+                    "description": (
+                        "Scalar SQL expression over the source table that "
+                        "produces the canonical key (e.g. a regexp_extract / "
+                        "concat). Bare column names are also accepted."
+                    ),
+                },
+                "to_table": {
+                    "type": "string",
+                    "description": "Fully-qualified target table.",
+                },
+                "to_expr": {
+                    "type": "string",
+                    "description": "Scalar SQL expression over the target table.",
+                },
+            },
+            "required": ["from_table", "from_expr", "to_table", "to_expr"],
+        },
+    },
+}
+
+
 DISTINCT_COUNT_DEF: dict = {
     "type": "function",
     "function": {
@@ -466,6 +692,7 @@ SUBMIT_SOURCE_MODEL_DEF: dict = {
 PLANNER_TOOL_DEFINITIONS: List[dict] = [
     SAMPLE_TABLE_DEF,
     COLUMN_VALUE_OVERLAP_DEF,
+    NORMALIZED_VALUE_OVERLAP_DEF,
     DISTINCT_COUNT_DEF,
     SUBMIT_SOURCE_MODEL_DEF,
 ]
@@ -474,6 +701,7 @@ PLANNER_TOOL_DEFINITIONS: List[dict] = [
 PLANNER_TOOL_HANDLERS: Dict[str, Callable] = {
     "sample_table": tool_sample_table,
     "column_value_overlap": tool_column_value_overlap,
+    "normalized_value_overlap": tool_normalized_value_overlap,
     "distinct_count": tool_distinct_count,
     "submit_source_model": tool_submit_source_model,
 }

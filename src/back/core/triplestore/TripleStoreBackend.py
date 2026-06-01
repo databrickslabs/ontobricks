@@ -314,6 +314,7 @@ class TripleStoreBackend(ABC):
         depth: int,
         search: str = "",
         entity_type: str = "",
+        seed_limit: int = 0,
     ) -> List[Dict[str, Any]]:
         """BFS traversal from seed entities.
 
@@ -322,6 +323,14 @@ class TripleStoreBackend(ABC):
 
         *search* and *entity_type* are structured parameters for future
         non-SQL backends (Cypher, Gremlin) that cannot use raw SQL fragments.
+
+        *seed_limit* (when > 0) caps the number of seed entities the BFS
+        starts from. A broad search (e.g. "mother" matching every Mother)
+        otherwise seeds hundreds of subjects and the recursive OR-join
+        expansion over the whole graph becomes very expensive. Capping seeds
+        bounds the entire traversal+fetch pipeline — ideal for "describe a few
+        matching entities" (the Graph Chat agent's use), which never needs all
+        matches at once.
 
         Returns rows with ``entity`` and ``min_lvl`` columns.
         """
@@ -332,9 +341,10 @@ class TripleStoreBackend(ABC):
             f"AND t.predicate != '{RDFS_LABEL}' "
             f"AND (t.object LIKE 'http://%' OR t.object LIKE 'https://%')"
         )
+        seed_cap = f" LIMIT {int(seed_limit)}" if seed_limit and seed_limit > 0 else ""
         sql = (
             f"WITH RECURSIVE seeds AS (\n"
-            f"  SELECT DISTINCT subject AS entity FROM {self._sql_relation(table_name)}{seed_where}\n"
+            f"  SELECT DISTINCT subject AS entity FROM {self._sql_relation(table_name)}{seed_where}{seed_cap}\n"
             f"), bfs(entity, lvl) AS (\n"
             f"  SELECT entity, 0 FROM seeds\n"
             f"  UNION ALL\n"

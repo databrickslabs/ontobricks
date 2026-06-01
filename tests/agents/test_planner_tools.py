@@ -26,6 +26,7 @@ from agents.tools.planner import (
     PLANNER_TOOL_HANDLERS,
     tool_column_value_overlap,
     tool_distinct_count,
+    tool_normalized_value_overlap,
     tool_sample_table,
     tool_submit_source_model,
 )
@@ -260,6 +261,116 @@ class TestColumnValueOverlap:
 
 
 # =====================================================
+# normalized_value_overlap
+# =====================================================
+
+
+class TestNormalizedValueOverlap:
+    def test_happy_path_interpolates_expressions(self):
+        captured = {}
+
+        def handler(sql: str):
+            captured["sql"] = sql
+            return [
+                {
+                    "from_distinct_count": 100,
+                    "to_distinct_count": 40,
+                    "intersection_count": 35,
+                }
+            ]
+
+        ctx = _ctx(handler)
+        out = json.loads(
+            tool_normalized_value_overlap(
+                ctx,
+                from_table="cat.trust_a.maternity_episode",
+                from_expr="regexp_extract(EPISODE_ID, '([a-f0-9][a-f0-9-]+-preg-\\d+)', 1)",
+                to_table="cat.trust_b.delivery",
+                to_expr="regexp_extract(delivery_id, '([a-f0-9][a-f0-9-]+-preg-\\d+)', 1)",
+            )
+        )
+
+        assert out["success"] is True
+        assert out["overlap_pct"] == pytest.approx(0.35)
+        # The expressions reach the SQL verbatim (not stripped to columns).
+        assert "regexp_extract(EPISODE_ID" in captured["sql"]
+        assert "regexp_extract(delivery_id" in captured["sql"]
+
+    def test_zero_distinct_surfaces_revise_note(self):
+        def handler(sql: str):
+            return [
+                {
+                    "from_distinct_count": 0,
+                    "to_distinct_count": 40,
+                    "intersection_count": 0,
+                }
+            ]
+
+        ctx = _ctx(handler)
+        out = json.loads(
+            tool_normalized_value_overlap(
+                ctx,
+                from_table="cat.trust_a.t",
+                from_expr="regexp_extract(EPISODE_ID, 'nomatch', 1)",
+                to_table="cat.trust_b.t",
+                to_expr="delivery_id",
+            )
+        )
+
+        assert out["success"] is True
+        assert out["overlap_pct"] == 0.0
+        assert "revise" in out["note"].lower()
+
+    def test_rejects_injection_in_expression(self):
+        def handler(sql: str):  # pragma: no cover — must not be called
+            raise AssertionError("execute_query should not have been called")
+
+        ctx = _ctx(handler)
+        out = json.loads(
+            tool_normalized_value_overlap(
+                ctx,
+                from_table="cat.sch.a",
+                from_expr="x) AS v FROM cat.sch.a; DROP TABLE secrets--",
+                to_table="cat.sch.b",
+                to_expr="y",
+            )
+        )
+
+        assert out["success"] is False
+        assert "invalid from_expr" in out["error"]
+        assert ctx.client.calls == []
+
+    def test_rejects_subquery_keyword_in_expression(self):
+        def handler(sql: str):  # pragma: no cover — must not be called
+            raise AssertionError("execute_query should not have been called")
+
+        ctx = _ctx(handler)
+        out = json.loads(
+            tool_normalized_value_overlap(
+                ctx,
+                from_table="cat.sch.a",
+                from_expr="(SELECT max(id) FROM cat.sch.other)",
+                to_table="cat.sch.b",
+                to_expr="y",
+            )
+        )
+
+        assert out["success"] is False
+        assert "invalid from_expr" in out["error"]
+        assert ctx.client.calls == []
+
+    def test_requires_all_four_args(self):
+        ctx = _ctx(lambda sql: [])
+        out = json.loads(
+            tool_normalized_value_overlap(
+                ctx, from_table="cat.sch.a", from_expr="x", to_table="cat.sch.b"
+            )
+        )
+        assert out["success"] is False
+        assert "required" in out["error"]
+
+
+# =====================================================
 # distinct_count
 # =====================================================
 
@@ -453,22 +564,20 @@ class TestSubmitSourceModel:
 
 
 class TestPlannerExports:
-    def test_definitions_cover_all_four_tools(self):
+    _EXPECTED_TOOLS = {
+        "sample_table",
+        "column_value_overlap",
+        "normalized_value_overlap",
+        "distinct_count",
+        "submit_source_model",
+    }
+
+    def test_definitions_cover_all_tools(self):
         names = {d["function"]["name"] for d in PLANNER_TOOL_DEFINITIONS}
-        assert names == {
-            "sample_table",
-            "column_value_overlap",
-            "distinct_count",
-            "submit_source_model",
-        }
+        assert names == self._EXPECTED_TOOLS
 
     def test_handlers_match_definitions(self):
-        assert set(PLANNER_TOOL_HANDLERS.keys()) == {
-            "sample_table",
-            "column_value_overlap",
-            "distinct_count",
-            "submit_source_model",
-        }
+        assert set(PLANNER_TOOL_HANDLERS.keys()) == self._EXPECTED_TOOLS
         # All handlers must be callable.
         for fn in PLANNER_TOOL_HANDLERS.values():
             assert callable(fn)

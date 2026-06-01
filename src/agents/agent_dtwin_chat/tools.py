@@ -47,7 +47,11 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-_HTTP_TIMEOUT = 120
+# Interactive chat tools: warm Lakebase graph queries are sub-second; a long
+# wait almost always means the autoscaling Lakebase instance is cold (scaled
+# to zero) and waking. Fail fast with a graceful message rather than make the
+# user wait minutes — a retry once the instance is warm succeeds quickly.
+_HTTP_TIMEOUT = 60
 _MAX_DEPTH = 1
 _SPARQL_DANGEROUS = re.compile(
     r"\b(DROP|DELETE|INSERT|CREATE|CLEAR|LOAD|COPY|MOVE|ADD)\b",
@@ -195,6 +199,11 @@ def tool_describe_entity(
         "depth": min(max(int(depth or _MAX_DEPTH), 1), 10),
         "limit": 500,
         "offset": 0,
+        # Cap BFS seeds: a broad search ("mother") otherwise seeds every match
+        # and the recursive traversal can run for minutes. The agent only needs
+        # a handful of concrete examples to describe, so 25 seeds is plenty and
+        # keeps the query fast.
+        "seed_limit": 25,
     }
     if search:
         params["search"] = search

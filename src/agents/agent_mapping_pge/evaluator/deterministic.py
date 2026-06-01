@@ -79,6 +79,59 @@ def _fail(
     )
 
 
+class _SqlExecError(Exception):
+    """A generated mapping's SQL parsed but failed at execution time.
+
+    Wraps the underlying DB driver exception so the deterministic evaluator
+    can convert it into an actionable FAIL — never let it crash the run.
+    """
+
+
+def _exec(execute_sql_fn: SqlFn, sql: str) -> dict:
+    """Run SQL, normalising any driver-level failure into ``_SqlExecError``.
+
+    Generated mappings routinely produce SQL that *parses* but fails at
+    execution (UNION column-type mismatch, invalid CAST, unknown column).
+    The PGE contract is that such errors become feedback for the generator,
+    so they must surface as a FAIL report rather than an unhandled exception
+    that aborts the whole agent run.
+    """
+    try:
+        return execute_sql_fn(sql) or {}
+    except Exception as exc:  # noqa: BLE001 — any driver error becomes feedback
+        raise _SqlExecError(str(exc)) from exc
+
+
+def _sql_error_report(*, item: str, sql_error: str) -> EvalReport:
+    """Build a FAIL report for a mapping whose SQL failed to execute.
+
+    ``bubble_to_planner`` stays False: a runtime SQL error is the
+    Generator's to fix (align types, correct columns), not a signal that the
+    Planner's source model is wrong.
+    """
+    # Keep the hint compact — driver errors can be very long.
+    err = sql_error.strip().splitlines()[0][:300] if sql_error else "unknown error"
+    return build_report(
+        stage="deterministic",
+        metrics={"sql_error": err},
+        failures=[
+            _fail(
+                check="sql_execution",
+                expected="SQL executes without error",
+                observed="execution error",
+                hint=(
+                    f"The mapping SQL for '{item}' failed to execute: {err}. "
+                    "Fix the SQL — e.g. align UNION branch column types with "
+                    "explicit CAST (a common cause is one branch typing a "
+                    "column as BIGINT and another as STRING/NULL), correct "
+                    "column names, or use try_cast for malformed values."
+                ),
+            )
+        ],
+        bubble_to_planner=False,
+    )
+
+
 # =====================================================
 # Entity evaluator
 # =====================================================
@@ -115,7 +168,15 @@ def evaluate_entity_mapping(
         len(sql),
     )
 
-    result = execute_sql_fn(sql)
+    try:
+        result = _exec(execute_sql_fn, sql)
+    except _SqlExecError as exc:
+        logger.warning(
+            "evaluate_entity_mapping: class=%s SQL failed to execute: %s",
+            class_name,
+            exc,
+        )
+        return _sql_error_report(item=class_name, sql_error=str(exc))
     rows = result.get("rows", []) or []
     row_count = len(rows)
 
@@ -241,7 +302,7 @@ def _distinct_id_set(
     id_col = _resolve_id_col(entity_mapping)
     if id_universe_cache is not None and sql in id_universe_cache:
         return id_universe_cache[sql]
-    result = execute_sql_fn(sql)
+    result = _exec(execute_sql_fn, sql)  # may raise _SqlExecError
     rows = result.get("rows", []) or []
     ids = {r.get(id_col) for r in rows if r.get(id_col) is not None}
     if id_universe_cache is not None:
@@ -304,16 +365,24 @@ def evaluate_relationship_mapping(
         tgt_col,
     )
 
-    edges_result = execute_sql_fn(sql)
-    edge_rows = edges_result.get("rows", []) or []
-    total_edges = len(edge_rows)
+    try:
+        edges_result = _exec(execute_sql_fn, sql)
+        edge_rows = edges_result.get("rows", []) or []
+        total_edges = len(edge_rows)
 
-    source_universe = _distinct_id_set(
-        source_entity_mapping, execute_sql_fn, id_universe_cache
-    )
-    target_universe = _distinct_id_set(
-        target_entity_mapping, execute_sql_fn, id_universe_cache
-    )
+        source_universe = _distinct_id_set(
+            source_entity_mapping, execute_sql_fn, id_universe_cache
+        )
+        target_universe = _distinct_id_set(
+            target_entity_mapping, execute_sql_fn, id_universe_cache
+        )
+    except _SqlExecError as exc:
+        logger.warning(
+            "evaluate_relationship_mapping: property=%s SQL failed to execute: %s",
+            name,
+            exc,
+        )
+        return _sql_error_report(item=name, sql_error=str(exc))
 
     src_values = [r.get(src_col) for r in edge_rows]
     tgt_values = [r.get(tgt_col) for r in edge_rows]
@@ -368,9 +437,11 @@ def evaluate_relationship_mapping(
                 observed=f"{dangling_src_pct:.3f}",
                 hint=(
                     f"{dangling_src_pct:.1%} of source_id values in relationship "
-                    f"'{name}' are absent from the mapped source entity. "
-                    "Confirm the mapping uses the canonical id column (e.g. NHS "
-                    "number), not a trust-local patient_id."
+                    f"'{name}' are absent from the mapped source entity. The "
+                    "source entity's id_column is usually an ALIAS for a derived "
+                    "expression (e.g. CONCAT(regexp_extract(<col>,'...'),'-x')). "
+                    "Reproduce that exact id expression from the source entity's "
+                    "SQL for source_id — do not select a raw/trust-local column."
                 ),
             )
         )
@@ -396,9 +467,10 @@ def evaluate_relationship_mapping(
                 observed=f"{dangling_tgt_pct:.3f}",
                 hint=(
                     f"{dangling_tgt_pct:.1%} of target_id values in relationship "
-                    f"'{name}' are absent from the mapped target entity. "
-                    "Confirm the target join column matches the target entity's "
-                    "canonical id."
+                    f"'{name}' are absent from the mapped target entity. The "
+                    "target entity's id_column is usually an ALIAS for a derived "
+                    "expression; reproduce that exact id expression from the "
+                    "target entity's SQL for target_id — not a raw join column."
                 ),
             )
         )

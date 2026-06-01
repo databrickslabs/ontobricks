@@ -334,11 +334,19 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
                     },
                     "source_id_column": {
                         "type": "string",
-                        "description": "Column name for the source entity identifier.",
+                        "description": (
+                            "The output-column alias in sql_query that holds the "
+                            "source id — alias it AS source_id and pass "
+                            '"source_id" here (NOT the entity\'s id_column).'
+                        ),
                     },
                     "target_id_column": {
                         "type": "string",
-                        "description": "Column name for the target entity identifier.",
+                        "description": (
+                            "The output-column alias in sql_query that holds the "
+                            "target id — alias it AS target_id and pass "
+                            '"target_id" here (NOT the entity\'s id_column).'
+                        ),
                     },
                     "domain": {
                         "type": "string",

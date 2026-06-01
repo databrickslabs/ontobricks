@@ -163,8 +163,14 @@ schema docs).
 actual values, not just column types. Use when a column's role is unclear \
 from its name/type alone.
   • column_value_overlap   – measure |distinct(from) ∩ distinct(to)| / \
-|distinct(from)|. Use to VALIDATE a candidate join key with real data — \
-never propose a join_key on the strength of name similarity alone.
+|distinct(from)| for two bare COLUMNS. Use to VALIDATE a candidate join key \
+with real data — never propose a join_key on the strength of name similarity \
+alone.
+  • normalized_value_overlap – the same overlap metric, but each side is a \
+scalar SQL EXPRESSION. This is how you PROVE a canonical-key normalization: \
+when two tables for the same class have 0% raw overlap, propose a \
+normalization expression per table and confirm overlap_pct > 0 here BEFORE \
+you submit. A still-zero result means your expression is wrong — fix it.
   • distinct_count         – row / distinct / null counts plus is_unique \
 and is_complete flags. Use to confirm a candidate canonical-ID column is \
 actually unique and complete.
@@ -187,7 +193,9 @@ uncertain, run distinct_count to confirm uniqueness/completeness.
 5. For each pair of tables that should join (intra-trust FK or cross-source \
 value match), run column_value_overlap and only record join_keys[] when the \
 realised overlap_pct supports it. Use kind="same_trust_fk" for FK joins and \
-kind="cross_source_value_match" for value-matched joins across sources.
+kind="cross_source_value_match" for value-matched joins across sources. \
+For any class mapped to 2+ tables, follow CANONICAL-KEY NORMALIZATION below \
+and PROVE the chosen keys overlap with normalized_value_overlap.
 6. Build mapping_plan.entity_order so that BASE classes come first \
 (i.e. classes that are referenced by other classes through object properties \
 should be mapped before their referencers). Build \
@@ -200,40 +208,64 @@ call returns success=true when the model is structurally valid; if it \
 returns success=false, fix the indicated problem and call it again.
 
 CANONICAL-KEY NORMALIZATION (CRITICAL — this is the #1 cause of relationship dangling)
-For any class whose canonical_id lists MORE THAN ONE table, you MUST verify \
-the values across those tables are in the SAME format. Pick any two listed \
-columns and call column_value_overlap on them:
+For any class whose canonical_id lists MORE THAN ONE table, run \
+column_value_overlap on a representative column pair to see whether the raw \
+values already share a format:
 
   • If overlap_pct > 0 → values are in compatible formats. Record bare \
 column names in canonical_column_per_table (e.g. ``"MOTHER_NHS_NO"``). \
-A UNION across the tables will produce a coherent ID universe.
+A UNION across the tables produces a coherent ID universe.
 
-  • If overlap_pct == 0 → values are TRUST-LOCAL identifiers in DIFFERENT \
-formats. A naive UNION would produce a set-disjoint ID universe and every \
-relationship pointing at this class would 100% dangle. You MUST emit a \
-SQL EXPRESSION per table that extracts/synthesises a canonical key in a \
-common format. Common patterns:
+  • If overlap_pct == 0 → DO NOT conclude these are "different" or \
+"trust-scoped" entities. When two tables both map to the SAME ontology \
+class, 0% overlap almost always means the SAME real-world key wrapped in \
+DIFFERENT trust-local encodings (prefixes, suffixes, embedded sub-IDs). \
+Leaving them disjoint makes every relationship pointing at this class 100% \
+dangle — that is a FAILURE, not an acceptable outcome. You MUST normalize:
 
-    - Embed a stable external identifier: extract the NHS number plus an \
-ordinal/local id to build a canonical key like ``<NHS>-preg-<ordinal>``.
-      Example for pregnancy across trusts where one trust stores PREGNANCY_ID \
-in the canonical format already and another stores a raw UUID:
-          trust_a.maternity_episode: "PREGNANCY_ID"
-          trust_b.pregnancy: "regexp_extract(pregnancy_id, '([a-f0-9-]+-preg-\\\\d+)')"
-      (sample the columns with sample_table first to confirm the regex \
-matches the actual values; if a table cannot expose the canonical pattern \
-at all, do NOT include it under canonical_column_per_table.)
+    STEP 1 — sample_table BOTH columns and read the raw values. Look for a \
+shared embedded substring across the trusts — a stable inner identifier \
+(UUID, NHS number, ``...-preg-<n>`` core) that appears in every trust's \
+value with only the surrounding prefix/suffix differing.
 
-    - Use a deterministic concatenation when an extractable canonical key \
-isn't available:  ``CONCAT(<nhs_col>, '-preg-', <ordinal_col>)``.
+    STEP 2 — write ONE scalar SQL expression PER TABLE that strips the \
+trust-specific wrapping and exposes that shared core in an identical form. \
+Prefer extracting the shared core over stripping a single known prefix \
+(extraction is robust to multiple prefixes). When matching a hex/UUID core, \
+ALWAYS anchor the regex with a leading character class so a preceding dash \
+is not captured:
+          ✗ WRONG: regexp_extract(EPISODE_ID, '([a-f0-9-]+-preg-[0-9]+)', 1)
+                   → returns "-<uuid>-preg-1" (leading dash) — will NOT match
+          ✓ RIGHT: regexp_extract(EPISODE_ID, '([a-f0-9][a-f0-9-]+-preg-[0-9]+)', 1)
+                   → returns "<uuid>-preg-1"
 
-  • Whatever expression you emit, the EntityGenerator will drop it verbatim \
+    STEP 3 — for a DERIVED / child key (e.g. a Delivery, Baby or Apgar that \
+hangs off a pregnancy), DO NOT concatenate a suffix onto the RAW prefixed \
+local id — that re-introduces the trust prefix and the keys stay disjoint. \
+Extract the shared core FIRST, then append the role suffix, so every trust \
+yields the identical synthetic key:
+          ✗ WRONG: trust_a "CONCAT(EPISODE_ID, '-del')"   (→ STA-<uuid>-preg-1-del)
+                   trust_b "delivery_id"                  (→ BUH-DEL-BUH-<uuid>-preg-1)
+          ✓ RIGHT: trust_a "CONCAT(regexp_extract(EPISODE_ID, '([a-f0-9][a-f0-9-]+-preg-[0-9]+)', 1), '-del')"
+                   trust_b "CONCAT(regexp_extract(delivery_id, '([a-f0-9][a-f0-9-]+-preg-[0-9]+)', 1), '-del')"
+                   (both → <uuid>-preg-1-del)
+
+    STEP 4 — PROVE IT. Call normalized_value_overlap with your two \
+expressions. It MUST return overlap_pct > 0. If it is still 0, your \
+expressions land in different value spaces — go back to STEP 1 and fix them. \
+Do NOT call submit_source_model with an unverified normalization.
+
+    (If, after sampling, a table genuinely cannot expose the shared core at \
+all, omit that table from canonical_column_per_table and note why — but this \
+is rare; exhaust STEP 1–4 first.)
+
+  • Whatever expression you record, the EntityGenerator drops it verbatim \
 into the SELECT aliased AS ID. Bare column names and SQL expressions are \
 both valid here.
 
   • Always update format_note to one sentence describing what the canonical \
-key looks like (e.g. ``"<NHS-number>-preg-<ordinal> derived from local \
-pregnancy IDs"``). Downstream agents read this.
+key looks like (e.g. ``"<NHS-uuid>-preg-<ordinal> core extracted from each \
+trust's local pregnancy id"``). Downstream agents read this.
 
 SOURCEMODEL JSON SCHEMA (these key names are LOAD-BEARING — do not improvise)
 The `model` argument to submit_source_model has exactly this shape:
@@ -295,7 +327,7 @@ summary afterwards — submit_source_model is the terminal step.
 
 GENERAL RULES
 • Prefer the focused tools (sample_table, column_value_overlap, \
-distinct_count) over execute_sql.
+normalized_value_overlap, distinct_count) over execute_sql.
 • Validate candidate join keys with column_value_overlap before adding them \
 to join_keys[].
 • You may batch multiple independent tool calls in a single response.
@@ -603,6 +635,8 @@ def run_planner(
                 notify(f"Sampling {fn}…", pct=pct)
             elif tool_name == "column_value_overlap":
                 notify("Checking column overlap…", pct=pct)
+            elif tool_name == "normalized_value_overlap":
+                notify("Verifying canonical-key normalization…", pct=pct)
             elif tool_name == "distinct_count":
                 notify("Checking distinct count…", pct=pct)
             elif tool_name == "execute_sql":

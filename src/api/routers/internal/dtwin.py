@@ -1410,10 +1410,34 @@ def _auto_discover_llm_endpoint(domain, settings) -> str:
         state = (ep.get("state") or "").upper()
         return state in ("READY", "TRUE", "UP")
 
+    def _is_tool_incompatible(name: str) -> bool:
+        """Reasoning-first models that reject function tools via the standard
+        /v1/chat/completions path (they require /v1/responses) — picking one
+        breaks Graph Chat, which is a tool-calling agent. Skip them in
+        auto-discovery. e.g. ``databricks-gpt-5-5`` returns HTTP 400
+        "Function tools with reasoning_effort are not supported ... use
+        /v1/responses instead".
+        """
+        n = (name or "").lower()
+        markers = ("gpt-5", "gpt5", "-o1", "-o3", "-o4-", "reasoning")
+        return any(m in n for m in markers)
+
+    # Preferred: a tool-capable Databricks foundation model.
     for ep in endpoints:
         name = ep.get("name") or ""
-        if name.startswith("databricks-") and _is_ready(ep):
+        if (
+            name.startswith("databricks-")
+            and _is_ready(ep)
+            and not _is_tool_incompatible(name)
+        ):
             return name
+    # Next: any ready endpoint that isn't a known tool-incompatible model.
+    for ep in endpoints:
+        name = ep.get("name") or ""
+        if name and _is_ready(ep) and not _is_tool_incompatible(name):
+            return name
+    # Last resort: a ready endpoint even if it may be tool-incompatible
+    # (better to try than to return nothing).
     for ep in endpoints:
         if _is_ready(ep) and ep.get("name"):
             return ep["name"]
@@ -1676,8 +1700,20 @@ async def dtwin_assistant_chat_stream(
     event_queue: asyncio.Queue = asyncio.Queue()
 
     def _on_event(step: AgentStep) -> None:
-        """Forward an AgentStep from the sync thread to the async generator."""
-        asyncio.run_coroutine_threadsafe(event_queue.put(step), loop).result(timeout=10)
+        """Forward an AgentStep from the sync thread to the async generator.
+
+        Best-effort: step events drive the live progress UI only — the final
+        reply is delivered separately via the ``done`` event. If the async
+        consumer is slow (slow SSE client, long-running tool), enqueueing must
+        NOT raise, or the timeout would crash the whole agent turn. Drop the
+        progress event instead and let the agent keep running.
+        """
+        try:
+            asyncio.run_coroutine_threadsafe(
+                event_queue.put(step), loop
+            ).result(timeout=10)
+        except Exception as exc:  # noqa: BLE001 — progress delivery is non-critical
+            logger.debug("GraphChat/stream: dropped progress event: %s", exc)
 
     async def _run_agent_task() -> None:
         try:
@@ -1938,6 +1974,7 @@ async def dtwin_triples_find(
     depth: int = 1,
     limit: int = 1000,
     offset: int = 0,
+    seed_limit: int = 0,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -1956,6 +1993,10 @@ async def dtwin_triples_find(
     depth = max(1, min(int(depth or 1), 10))
     limit = max(1, min(int(limit or 1000), 10000))
     offset = max(0, int(offset or 0))
+    # 0 = unbounded (back-compat for callers that paginate over all matches);
+    # >0 caps BFS seeds so a broad search ("mother") can't seed hundreds of
+    # subjects and blow up the recursive traversal.
+    seed_limit = max(0, min(int(seed_limit or 0), 1000))
 
     domain = get_domain(session_mgr)
     table = effective_graph_name(domain)
@@ -1996,6 +2037,7 @@ async def dtwin_triples_find(
             depth,
             search=search or "",
             entity_type=entity_type or "",
+            seed_limit=seed_limit,
         )
 
         if not bfs_rows:

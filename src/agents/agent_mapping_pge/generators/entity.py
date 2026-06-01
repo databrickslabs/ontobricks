@@ -169,7 +169,7 @@ realise this class.
   - canonical_id.canonical_column_per_table[<table>]: the expression that \
 MUST be aliased AS ID for each table. THIS VALUE MAY BE A BARE COLUMN \
 NAME ("MOTHER_NHS_NO") OR A FULL SQL EXPRESSION \
-("regexp_extract(pregnancy_id, '([a-f0-9-]+-preg-\\\\d+)')"). Drop it \
+("regexp_extract(pregnancy_id, '([a-f0-9-]+-preg-[0-9]+)')"). Drop it \
 verbatim into the SELECT and alias it AS ID — do NOT rewrite it, do NOT \
 pick a different column, do NOT strip the function call. The Planner emits \
 SQL expressions when raw column values across trusts are in different \
@@ -205,9 +205,15 @@ rewrite it):
     UNION ALL
     ...
 
-  All branches must return the SAME columns in the SAME order. If a branch \
-lacks a column another branch has, project a NULL of the right type with \
-a matching alias (e.g. ``CAST(NULL AS STRING) AS MOTHER_HOSPITAL_NO``).
+  All branches must return the SAME columns in the SAME order, AND each \
+column must have the SAME TYPE in every branch. If a branch lacks a column \
+another branch has, project a NULL with a matching alias **cast to the same \
+type the real branch uses** (e.g. if branch A has ``BABY_NHS_NO`` typed \
+BIGINT, branch B must use ``CAST(NULL AS BIGINT) AS BABY_NHS_NO`` — not \
+``AS STRING``). When two branches hold the column with DIFFERENT types, cast \
+BOTH to a common type (``CAST(... AS STRING)`` is the safe default). A \
+``CAST_INVALID_INPUT`` / type-mismatch error from execute_sql always means a \
+column's types differ across branches — fix the casts, do not change the ID.
 
 TOOLS
 You have three tools:
@@ -233,7 +239,16 @@ the chosen table. Use the column's original name (no alias).
 • If the same column serves as both an alias and an attribute, include it \
 twice: once with the alias (AS ID or AS Label) and once with its original \
 name so it appears in attribute_mappings.
-• Add WHERE <id_column> IS NOT NULL to filter null keys.
+• Add WHERE <id_column> IS NOT NULL to filter null keys. When the ID is a \
+derived expression, also exclude empty extractions (e.g. \
+``WHERE regexp_extract(...) <> ''``).
+• DEDUP COLLAPSED KEYS: when the canonical-ID is a derived EXPRESSION that \
+can repeat across rows (e.g. a ``<core>-del`` key where several episode rows \
+share one pregnancy core), the same ID will appear on multiple rows and the \
+evaluator FAILs on "duplicate ID values". Make each node id unique: wrap the \
+UNION in ``SELECT ... FROM (<union>) GROUP BY ID`` (taking MAX() of each \
+attribute) or use ``SELECT DISTINCT`` when there are no attributes. The id \
+column must have exactly one row per distinct value.
 • Do NOT add LIMIT — the persisted mapping query must return ALL rows. \
 execute_sql adds a small LIMIT internally for validation only.
 • Do NOT use ORDER BY, CTEs, or subqueries unless absolutely necessary.

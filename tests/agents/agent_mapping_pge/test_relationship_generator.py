@@ -467,6 +467,78 @@ def test_system_prompt_mandates_dangling_edge_self_check(monkeypatch, no_sleep):
     assert "target entity's SQL" in system_content
 
 
+def test_system_prompt_teaches_reproducing_derived_id_expression(monkeypatch, no_sleep):
+    """The id_column is an alias for a derived canonical expression; the
+    prompt must instruct the model to REPRODUCE that expression for the
+    endpoints (not select a raw column) — the root cause of the 100%
+    source-dangling on hasapgarscore/deliveredbaby in the live smoke.
+    """
+    fake = FakeLLM(
+        [
+            _llm_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "submit_relationship_mapping", _valid_submit_args()
+                    )
+                ]
+            )
+        ]
+    )
+    _patch_llm(monkeypatch, fake)
+
+    run_relationship_generator(
+        host="https://x",
+        token="t",
+        endpoint_name="ep",
+        client=None,
+        ontology_property=_ontology_property(),
+        source_entity_mapping=_source_entity_mapping(),
+        target_entity_mapping=_target_entity_mapping(),
+        source_model_slice=_source_model_slice(),
+    )
+
+    system_content = fake.first_messages[0]["content"]
+    assert "ALIAS FOR A DERIVED EXPRESSION" in system_content
+    assert "regexp_extract" in system_content
+    # Must steer away from selecting a raw column for the endpoint.
+    assert "reproduce" in system_content.lower()
+
+
+def test_system_prompt_teaches_shared_coverage_table_rule(monkeypatch, no_sleep):
+    """Cross-trust endpoint entities only overlap on shared trusts; building
+    the edge from a table only one entity covers yields 100% dangling on the
+    other side. The prompt must teach picking a BOTH-covered source table.
+    """
+    fake = FakeLLM(
+        [
+            _llm_response(
+                tool_calls=[
+                    _make_tool_call(
+                        "submit_relationship_mapping", _valid_submit_args()
+                    )
+                ]
+            )
+        ]
+    )
+    _patch_llm(monkeypatch, fake)
+
+    run_relationship_generator(
+        host="https://x",
+        token="t",
+        endpoint_name="ep",
+        client=None,
+        ontology_property=_ontology_property(),
+        source_entity_mapping=_source_entity_mapping(),
+        target_entity_mapping=_target_entity_mapping(),
+        source_model_slice=_source_model_slice(),
+    )
+
+    system_content = fake.first_messages[0]["content"]
+    assert "BOTH" in system_content
+    assert "coverage" in system_content.lower()
+    assert "100% source-dangling" in system_content or "100%" in system_content
+
+
 # =====================================================
 # 6. Wrong property_uri submission does NOT terminate
 # =====================================================

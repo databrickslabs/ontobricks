@@ -389,6 +389,37 @@ class TestEvaluateEntityMapping:
         assert isinstance(d["metrics"], dict)
         assert isinstance(d["failures"], list)
 
+    def test_sql_execution_error_becomes_fail_not_crash(self):
+        """A mapping whose SQL parses but fails at runtime (e.g. a UNION
+        type mismatch) must yield a FAIL report with the error as a hint —
+        never propagate and crash the agent run.
+        """
+        mapping = _mother_mapping()
+
+        def boom(sql: str) -> dict:
+            raise RuntimeError(
+                "[CAST_INVALID_INPUT] The value 'x-preg-1-baby' of the type "
+                '"STRING" cannot be cast to "BIGINT"'
+            )
+
+        report = evaluate_entity_mapping(
+            mapping=mapping,
+            ontology_class=MOTHER_CLASS,
+            execute_sql_fn=boom,
+        )
+
+        assert report.status == "FAIL"
+        # A runtime SQL error is the Generator's to fix, not a re-plan trigger.
+        assert report.bubble_to_planner is False
+        checks = [f.check for f in report.failures]
+        assert "sql_execution" in checks
+        # The underlying DB error is surfaced for the generator to act on.
+        assert "CAST_INVALID_INPUT" in report.metrics.get("sql_error", "")
+        # Report must remain JSON-serialisable.
+        import json as _json
+
+        _json.dumps(report.to_dict())
+
 
 # =====================================================
 # Relationship evaluator
@@ -434,6 +465,27 @@ class TestEvaluateRelationshipMapping:
         assert report.metrics["total_edges"] == 2
         assert report.metrics["dangling_source_pct"] == 0.0
         assert report.metrics["dangling_target_pct"] == 0.0
+
+    def test_sql_execution_error_becomes_fail_not_crash(self):
+        """A relationship (or its endpoint-universe) SQL that errors at
+        runtime must yield a FAIL report, not crash the agent run.
+        """
+        rel = _mother_to_baby_relationship()
+
+        def boom(sql: str) -> dict:
+            raise RuntimeError("[UNRESOLVED_COLUMN] cannot resolve `target_id`")
+
+        report = evaluate_relationship_mapping(
+            mapping=rel,
+            source_entity_mapping=_mother_mapping(),
+            target_entity_mapping=_baby_mapping(),
+            execute_sql_fn=boom,
+        )
+
+        assert report.status == "FAIL"
+        assert report.bubble_to_planner is False
+        assert "sql_execution" in [f.check for f in report.failures]
+        assert "UNRESOLVED_COLUMN" in report.metrics.get("sql_error", "")
 
     def test_fail_47_pct_dangling_source_bubbles(self):
         rel = _mother_to_baby_relationship()

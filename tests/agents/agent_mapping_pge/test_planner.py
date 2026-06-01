@@ -478,3 +478,42 @@ def test_planner_records_steps(monkeypatch, no_sleep):
         # PlannerStep is the right type.
         assert isinstance(call_step, PlannerStep)
         assert isinstance(result_step, PlannerStep)
+
+
+# =====================================================
+# Prompt contract — canonical-key normalization guidance
+# =====================================================
+
+
+class TestCanonicalKeyNormalizationPrompt:
+    """Pin the load-bearing canonical-key guidance in the system prompt.
+
+    Issue 2 root cause: the Planner left cross-trust keys disjoint (0%
+    overlap rationalized as "trust-scoped"), and when it did normalize it
+    copied a non-anchored regex that returns a leading-dash key. These
+    assertions keep the corrective guidance from silently regressing.
+    """
+
+    def test_offers_expression_overlap_verification_tool(self):
+        assert "normalized_value_overlap" in planner_mod.SYSTEM_PROMPT
+
+    def test_zero_overlap_is_not_a_terminal_state(self):
+        prompt = planner_mod.SYSTEM_PROMPT
+        # The prompt must steer the model AWAY from accepting disjoint keys.
+        assert "trust-scoped" in prompt  # names the trap explicitly
+        assert "100%" in prompt and "dangle" in prompt
+
+    def test_regex_example_is_anchored(self):
+        prompt = planner_mod.SYSTEM_PROMPT
+        # The correct, anchored pattern must be present...
+        assert "[a-f0-9][a-f0-9-]+-preg-" in prompt
+        # ...and it must be flagged as the RIGHT one (the WRONG/RIGHT contrast
+        # teaches the leading-dash pitfall).
+        assert "✓ RIGHT" in prompt and "✗ WRONG" in prompt
+
+    def test_derived_key_extracts_core_before_suffix(self):
+        prompt = planner_mod.SYSTEM_PROMPT
+        # Derived child keys must extract the shared core, then append suffix —
+        # not concat onto the raw prefixed local id.
+        assert "regexp_extract" in prompt
+        assert "-del" in prompt  # the worked Delivery example
