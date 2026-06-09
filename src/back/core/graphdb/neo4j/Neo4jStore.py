@@ -1,9 +1,11 @@
 """Neo4j graph database backend.
 
 Bolt-based (Cypher) flat-triple store. Triples are persisted as
-``(:Triple {subject, predicate, object})`` nodes — a deliberately simple
-schema chosen so PR 1 demonstrates the Cypher integration shape without
-committing to a typed-node graph model (which lands in v2 / PR 3+).
+``(:<sanitised_table_name> {subject, predicate, object})`` nodes — a
+deliberately simple schema chosen so PR 1 demonstrates the Cypher
+integration shape without committing to a typed-node graph model (which
+lands in v2 / PR 3+). One label per logical store so Neo4j 5+ CREATE
+CONSTRAINT (which only accepts single-label patterns) works.
 
 Full implementation of the ``TripleStoreBackend`` + ``GraphDBBackend``
 contracts. Connection management, flat-triple CRUD, and the 16 named-query
@@ -49,7 +51,8 @@ class Neo4jStore(GraphDBBackend):
     ----------
     db_name:
         Logical name for the triple set, used as the ``table`` label in the
-        Cypher schema (every triple node carries ``:Triple:<db_name>``).
+        Cypher schema (every triple node carries the single label
+        ``:<sanitised_db_name>``).
     engine_config:
         JSON dict from Settings > Graph DB > Engine Configuration. Keys:
 
@@ -238,7 +241,7 @@ class Neo4jStore(GraphDBBackend):
         label = self.get_node_table(table_name)
         cypher = (
             f"CREATE CONSTRAINT triple_{label}_spo IF NOT EXISTS "
-            f"FOR (t:Triple:{label}) "
+            f"FOR (t:`{label}`) "
             f"REQUIRE (t.subject, t.predicate, t.object) IS UNIQUE"
         )
         self._run(cypher)
@@ -247,7 +250,7 @@ class Neo4jStore(GraphDBBackend):
     def drop_table(self, table_name: str) -> None:
         label = self.get_node_table(table_name)
         self._run(f"DROP CONSTRAINT triple_{label}_spo IF EXISTS")
-        self._run(f"MATCH (t:Triple:{label}) DETACH DELETE t")
+        self._run(f"MATCH (t:`{label}`) DETACH DELETE t")
         logger.info("Dropped Neo4j triple label: %s", label)
 
     def insert_triples(
@@ -263,7 +266,7 @@ class Neo4jStore(GraphDBBackend):
         total = 0
         cypher = (
             f"UNWIND $rows AS r "
-            f"MERGE (t:Triple:{label} {{subject: r.subject, predicate: r.predicate, object: r.object}})"
+            f"MERGE (t:`{label}` {{subject: r.subject, predicate: r.predicate, object: r.object}})"
         )
         for i in range(0, len(triples), batch_size):
             batch = triples[i : i + batch_size]
@@ -295,7 +298,7 @@ class Neo4jStore(GraphDBBackend):
         deleted = 0
         cypher = (
             f"UNWIND $rows AS r "
-            f"MATCH (t:Triple:{label} {{subject: r.subject, predicate: r.predicate, object: r.object}}) "
+            f"MATCH (t:`{label}` {{subject: r.subject, predicate: r.predicate, object: r.object}}) "
             f"DETACH DELETE t"
         )
         for i in range(0, len(triples), batch_size):
@@ -318,7 +321,7 @@ class Neo4jStore(GraphDBBackend):
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"RETURN t.subject AS subject, t.predicate AS predicate, t.object AS object"
         )
         rows = self._run(cypher)
@@ -329,7 +332,7 @@ class Neo4jStore(GraphDBBackend):
 
     def count_triples(self, table_name: str) -> int:
         label = self.get_node_table(table_name)
-        rows = self._run(f"MATCH (t:Triple:{label}) RETURN count(t) AS cnt")
+        rows = self._run(f"MATCH (t:`{label}`) RETURN count(t) AS cnt")
         return int(rows[0]["cnt"]) if rows else 0
 
     def table_exists(self, table_name: str) -> bool:
@@ -364,7 +367,7 @@ class Neo4jStore(GraphDBBackend):
     #  Named query overrides — native Cypher implementations.
     #
     #  Translated from the SQL defaults on TripleStoreBackend. Flat-triple
-    #  model: every triple is a (:Triple:<label> {subject, predicate, object})
+    #  model: every triple is a (:<sanitised_label> {subject, predicate, object})
     #  node. Graph traversal (BFS, transitive closure, neighbours) joins
     #  Triple nodes by property equality — a typed-relationship graph model
     #  would be faster but is a future PR (sets supports_graph_model=True).
@@ -375,7 +378,7 @@ class Neo4jStore(GraphDBBackend):
     def get_aggregate_stats(self, table_name: str) -> Dict[str, int]:
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"RETURN count(t) AS total, "
             f"count(DISTINCT t.subject) AS distinct_subjects, "
             f"count(DISTINCT t.predicate) AS distinct_predicates, "
@@ -395,7 +398,7 @@ class Neo4jStore(GraphDBBackend):
     def get_type_distribution(self, table_name: str) -> List[Dict[str, Any]]:
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (t:Triple:{label}) WHERE t.predicate = $rdf_type "
+            f"MATCH (t:`{label}`) WHERE t.predicate = $rdf_type "
             f"RETURN t.object AS type_uri, count(*) AS cnt "
             f"ORDER BY cnt DESC"
         )
@@ -404,7 +407,7 @@ class Neo4jStore(GraphDBBackend):
     def get_predicate_distribution(self, table_name: str) -> List[Dict[str, Any]]:
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"RETURN t.predicate AS predicate, count(*) AS cnt "
             f"ORDER BY cnt DESC"
         )
@@ -423,10 +426,10 @@ class Neo4jStore(GraphDBBackend):
         label = self.get_node_table(table_name)
         if search:
             cypher = (
-                f"MATCH (t:Triple:{label}) "
+                f"MATCH (t:`{label}`) "
                 f"WHERE t.predicate = $rdf_type AND t.object = $type_uri "
                 f"AND t.subject IN ("
-                f"  MATCH (t2:Triple:{label}) "
+                f"  MATCH (t2:`{label}`) "
                 f"  WHERE t2.predicate <> $rdf_type AND toLower(t2.object) CONTAINS toLower($search) "
                 f"  RETURN DISTINCT t2.subject"
                 f") "
@@ -443,7 +446,7 @@ class Neo4jStore(GraphDBBackend):
             )
         else:
             cypher = (
-                f"MATCH (t:Triple:{label}) "
+                f"MATCH (t:`{label}`) "
                 f"WHERE t.predicate = $rdf_type AND t.object = $type_uri "
                 f"RETURN DISTINCT t.subject AS subject ORDER BY subject "
                 f"SKIP $offset LIMIT $limit"
@@ -462,7 +465,7 @@ class Neo4jStore(GraphDBBackend):
     ) -> Optional[str]:
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"WHERE t.predicate = $rdf_type "
             f"  AND t.object = $type_uri "
             f"  AND (t.subject ENDS WITH ('/' + $idf) OR t.subject ENDS WITH ('#' + $idf)) "
@@ -480,12 +483,12 @@ class Neo4jStore(GraphDBBackend):
             return []
         label = self.get_node_table(table_name)
         cypher_type = (
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"WHERE t.predicate = $rdf_type AND t.subject IN $subjects "
             f"RETURN t.subject AS subject, t.object AS object"
         )
         cypher_label = (
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"WHERE t.predicate = $rdfs_label AND t.subject IN $subjects "
             f"RETURN t.subject AS subject, t.object AS object"
         )
@@ -512,7 +515,7 @@ class Neo4jStore(GraphDBBackend):
             return []
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (t:Triple:{label}) WHERE t.subject IN $subjects "
+            f"MATCH (t:`{label}`) WHERE t.subject IN $subjects "
             f"RETURN t.subject AS subject, t.predicate AS predicate, t.object AS object"
         )
         return self._run(cypher, subjects=subjects) or []
@@ -520,10 +523,10 @@ class Neo4jStore(GraphDBBackend):
     def get_predicates_for_type(self, table_name: str, type_uri: str) -> List[str]:
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (anchor:Triple:{label}) "
+            f"MATCH (anchor:`{label}`) "
             f"WHERE anchor.predicate = $rdf_type AND anchor.object = $type_uri "
             f"WITH anchor.subject AS s LIMIT 1 "
-            f"MATCH (t:Triple:{label}) WHERE t.subject = s "
+            f"MATCH (t:`{label}`) WHERE t.subject = s "
             f"RETURN DISTINCT t.predicate AS predicate"
         )
         rows = self._run(cypher, rdf_type=RDF_TYPE, type_uri=type_uri) or []
@@ -553,7 +556,7 @@ class Neo4jStore(GraphDBBackend):
                 len(conditions),
             )
         cypher = (
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"RETURN t.subject AS subject, t.predicate AS predicate, t.object AS object "
             f"SKIP $offset LIMIT $limit"
         )
@@ -613,7 +616,7 @@ class Neo4jStore(GraphDBBackend):
             f"  RETURN s AS entity, 0 AS lvl "
             f"  UNION ALL "
             f"  WITH seeds "
-            f"  MATCH (t:Triple:{label}) "
+            f"  MATCH (t:`{label}`) "
             f"  WHERE t.subject IN seeds "
             f"    AND t.predicate <> $rdf_type AND t.predicate <> $rdfs_label "
             f"    AND (t.object STARTS WITH 'http://' OR t.object STARTS WITH 'https://') "
@@ -681,38 +684,38 @@ class Neo4jStore(GraphDBBackend):
         if entity_type and value:
             if search_id:
                 cyphers.append(
-                    f"MATCH (t:Triple:{label}) "
+                    f"MATCH (t:`{label}`) "
                     f"WHERE t.predicate = $rdf_type AND t.object = $etype "
                     f"AND {_match_clause('t.subject', 'val')} "
                     f"RETURN DISTINCT t.subject AS subject"
                 )
             if search_label:
                 cyphers.append(
-                    f"MATCH (lab:Triple:{label}) "
+                    f"MATCH (lab:`{label}`) "
                     f"WHERE lab.predicate = $rdfs_label "
                     f"AND {_match_clause('lab.object', 'val')} "
                     f"WITH DISTINCT lab.subject AS s "
-                    f"MATCH (t:Triple:{label}) "
+                    f"MATCH (t:`{label}`) "
                     f"WHERE t.predicate = $rdf_type AND t.object = $etype AND t.subject = s "
                     f"RETURN DISTINCT s AS subject"
                 )
         elif entity_type:
             cyphers.append(
-                f"MATCH (t:Triple:{label}) "
+                f"MATCH (t:`{label}`) "
                 f"WHERE t.predicate = $rdf_type AND t.object = $etype "
                 f"RETURN DISTINCT t.subject AS subject"
             )
         elif value:
             if search_label:
                 cyphers.append(
-                    f"MATCH (t:Triple:{label}) "
+                    f"MATCH (t:`{label}`) "
                     f"WHERE t.predicate = $rdfs_label "
                     f"AND {_match_clause('t.object', 'val')} "
                     f"RETURN DISTINCT t.subject AS subject"
                 )
             if search_id:
                 cyphers.append(
-                    f"MATCH (t:Triple:{label}) "
+                    f"MATCH (t:`{label}`) "
                     f"WHERE t.predicate = $rdf_type "
                     f"AND {_match_clause('t.subject', 'val')} "
                     f"RETURN DISTINCT t.subject AS subject"
@@ -746,7 +749,7 @@ class Neo4jStore(GraphDBBackend):
             params[pkey] = raw.replace("%", ".*")
             clauses.append(f"t.subject =~ ${pkey}")
         cypher = (
-            f"MATCH (t:Triple:{label}) WHERE {' OR '.join(clauses)} "
+            f"MATCH (t:`{label}`) WHERE {' OR '.join(clauses)} "
             f"RETURN DISTINCT t.subject AS subject"
         )
         rows = self._run(cypher, **params) or []
@@ -764,12 +767,12 @@ class Neo4jStore(GraphDBBackend):
         # (real entity instances, not class or property URIs).
         cypher = (
             f"WITH $seeds AS seeds "
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"WHERE (t.subject IN seeds AND t.object STARTS WITH 'http' "
             f"       AND t.predicate <> $rdf_type AND t.predicate <> $rdfs_label) "
             f"   OR (t.object IN seeds AND t.predicate <> $rdf_type AND t.predicate <> $rdfs_label) "
             f"WITH DISTINCT (CASE WHEN t.subject IN seeds THEN t.object ELSE t.subject END) AS entity "
-            f"MATCH (ty:Triple:{label}) "
+            f"MATCH (ty:`{label}`) "
             f"WHERE ty.subject = entity AND ty.predicate = $rdf_type "
             f"RETURN DISTINCT entity"
         )
@@ -806,12 +809,12 @@ class Neo4jStore(GraphDBBackend):
         union_parts: List[str] = []
         # depth=2 means start -> mid -> end (2 hops)
         for d in range(2, depth + 1):
-            chain = "MATCH (h0:Triple:" + label + ")"
+            chain = "MATCH (h0:`" + label + "`)"
             wheres = ["h0.predicate = $pred"]
             if start_uri:
                 wheres.append("h0.subject = $start_uri")
             for i in range(1, d):
-                chain += f", (h{i}:Triple:{label})"
+                chain += f", (h{i}:`{label}`)"
                 wheres.append(f"h{i}.predicate = $pred")
                 wheres.append(f"h{i-1}.object = h{i}.subject")
             union_parts.append(
@@ -827,7 +830,7 @@ class Neo4jStore(GraphDBBackend):
             f"CALL {{ {body} }} "
             f"WITH DISTINCT subject, object "
             f"WHERE NOT EXISTS {{ "
-            f"  MATCH (ex:Triple:{label}) "
+            f"  MATCH (ex:`{label}`) "
             f"  WHERE ex.subject = subject AND ex.predicate = $pred AND ex.object = object "
             f"}} "
             f"RETURN subject, $pred AS predicate, object"
@@ -848,9 +851,9 @@ class Neo4jStore(GraphDBBackend):
     ) -> List[Dict[str, Any]]:
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (t:Triple:{label}) WHERE t.predicate = $pred "
+            f"MATCH (t:`{label}`) WHERE t.predicate = $pred "
             f"AND NOT EXISTS {{ "
-            f"  MATCH (inv:Triple:{label}) "
+            f"  MATCH (inv:`{label}`) "
             f"  WHERE inv.subject = t.object AND inv.predicate = $pred AND inv.object = t.subject "
             f"}} "
             f"RETURN t.object AS subject, $pred AS predicate, t.subject AS object"
@@ -916,7 +919,7 @@ class Neo4jStore(GraphDBBackend):
             return 0
         label = self.get_node_table(table_name)
         cypher = (
-            f"MATCH (t:Triple:{label}) "
+            f"MATCH (t:`{label}`) "
             f"WHERE t.subject STARTS WITH $prefix "
             f"   OR (t.predicate = $in_pred AND t.object STARTS WITH $prefix) "
             f"WITH t LIMIT 100000 "
