@@ -135,6 +135,16 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 
 See [Deployment Guide](docs/deployment.md) for the full checklist including resource configuration and permissions.
 
+## Testing
+
+- `make test` — unit + integration suite.
+- `make test-uat` — **persona-based UAT** (offline): job-function personas
+  (Platform Admin, Ontology Engineer, Data Engineer, Data Steward, Business
+  Consumer) driven through their journeys and permission boundaries via the
+  prod-safe test-auth seam. See [`tests/e2e/personas/README.md`](tests/e2e/personas/README.md).
+- `make test-uat-live` — Tier-2 live smoke against a deployed app
+  (`ONTOBRICKS_LIVE_BASE`).
+
 ## Releasing the Project
 
 1. Ensure all tests pass: `make test`

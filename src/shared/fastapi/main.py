@@ -106,6 +106,15 @@ async def lifespan(app: FastAPI):
     logger.info("OntoBricks FastAPI starting — session_dir=%s", settings.session_dir)
     logger.info("App docs: /docs | External REST: /api/docs")
 
+    if os.getenv("ONTOBRICKS_TEST_AUTH") == "1":
+        logger.warning(
+            "ONTOBRICKS_TEST_AUTH=1 — persona test auth seam is ENABLED. "
+            "Role and domain-role are read from request headers "
+            "(x-ontobricks-test-role / x-ontobricks-test-domain-role). "
+            "This MUST NOT be set in production; it is inert when running "
+            "as a real Databricks App."
+        )
+
     from agents.tracing import setup_tracing
 
     setup_tracing()
@@ -141,9 +150,7 @@ _PERM_BYPASS_PREFIXES = (
 
 _VIEWER_BLOCKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
-_PERM_ADMIN_ONLY_PREFIXES = (
-    "/settings",
-)
+_PERM_ADMIN_ONLY_PREFIXES = ("/settings",)
 
 # Endpoints under an admin-only prefix that non-admins must still be
 # able to reach (read-only status endpoints consumed by the regular
@@ -265,9 +272,7 @@ def _is_status_gated_edit(path: str, method: str) -> bool:
         return False
     if any(path.startswith(p) for p in _STATUS_GATE_EDIT_PREFIXES):
         return True
-    if any(
-        path == p or path.startswith(p) for p in _STATUS_GATE_EDIT_PATHS
-    ):
+    if any(path == p or path.startswith(p) for p in _STATUS_GATE_EDIT_PATHS):
         return True
     return False
 
@@ -301,15 +306,39 @@ class PermissionMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         from back.core.databricks import is_databricks_app
-        from back.objects.registry import (
-            ROLE_NONE,
-            ROLE_VIEWER,
-            ROLE_ADMIN,
-            permission_service,
-        )
+        from back.objects.registry import ROLE_NONE
 
         email = request.headers.get("x-forwarded-email", "")
         request.state.user_email = email
+
+        # ------------------------------------------------------------------
+        # Test-only persona seam (prod-safe).
+        #
+        # Honored ONLY when ``ONTOBRICKS_TEST_AUTH=1`` AND the process is not
+        # a real Databricks App AND an ``x-ontobricks-test-role`` header is
+        # present. It overrides *role resolution only* and then runs the SAME
+        # enforcement production uses (via ``_enforce``), so the Playwright
+        # UAT drives each persona through the real gates rather than a mock.
+        # The triple gate makes it inert in production: ``is_databricks_app()``
+        # is true there, so even a leaked flag cannot bypass real auth.
+        # ------------------------------------------------------------------
+        if (
+            os.getenv("ONTOBRICKS_TEST_AUTH") == "1"
+            and not is_databricks_app()
+            and request.headers.get("x-ontobricks-test-role")
+        ):
+            role = request.headers.get("x-ontobricks-test-role", "")
+            domain_role = (
+                request.headers.get("x-ontobricks-test-domain-role", "") or role
+            )
+            request.state.user_role = role
+            request.state.user_domain_role = domain_role
+            path = request.url.path
+            if any(path.startswith(p) for p in _PERM_BYPASS_PREFIXES):
+                request.state.user_role = ""
+                request.state.user_domain_role = ""
+                return await call_next(request)
+            return await self._enforce(request, call_next, role, domain_role)
 
         if not is_databricks_app():
             request.state.user_role = "admin"
@@ -347,6 +376,27 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             domain_role,
         )
 
+        return await self._enforce(request, call_next, role, domain_role)
+
+    async def _enforce(
+        self, request: Request, call_next, role: str, domain_role: str
+    ) -> Response:
+        """Apply app/domain/lifecycle access gates for a resolved role pair.
+
+        Shared by the production role-resolution path and the test persona
+        seam so both exercise identical enforcement. Callers must have
+        already handled bypass paths and set ``request.state.user_role`` /
+        ``request.state.user_domain_role``.
+        """
+        from back.objects.registry import (
+            ROLE_NONE,
+            ROLE_VIEWER,
+            ROLE_ADMIN,
+            permission_service,
+        )
+
+        path = request.url.path
+
         if role == ROLE_NONE:
             # First-deploy bootstrap: the app's service principal is not
             # allowed to read its own ACL, so *nobody* — not even CAN_MANAGE
@@ -362,23 +412,20 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                 )
             if self._wants_json(request):
                 return self._forbidden_json(request, "Access denied")
-            return RedirectResponse(
-                f"/access-denied?reason={reason}", status_code=302
-            )
+            return RedirectResponse(f"/access-denied?reason={reason}", status_code=302)
 
         if role != ROLE_ADMIN:
-            is_domain_scoped = any(
-                path.startswith(p) for p in _DOMAIN_SCOPED_PREFIXES
-            ) and path not in _DOMAIN_SCOPED_EXCEPTIONS
+            is_domain_scoped = (
+                any(path.startswith(p) for p in _DOMAIN_SCOPED_PREFIXES)
+                and path not in _DOMAIN_SCOPED_EXCEPTIONS
+            )
             if is_domain_scoped and domain_role == ROLE_NONE:
                 if self._wants_json(request):
                     return self._forbidden_json(
                         request,
                         "You are not a member of this domain's team",
                     )
-                return RedirectResponse(
-                    "/access-denied?reason=domain", status_code=302
-                )
+                return RedirectResponse("/access-denied?reason=domain", status_code=302)
 
             if (
                 is_domain_scoped

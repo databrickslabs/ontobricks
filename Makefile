@@ -72,6 +72,16 @@ test-cov:
 	@echo "Running tests with coverage..."
 	. .venv/bin/activate && pytest --cov=src --cov-report=html --cov-report=term
 
+test-uat:
+	@echo "Running persona UAT suite (offline / Tier-1)..."
+	. .venv/bin/activate && ONTOBRICKS_E2E_FAKE_CREDS=1 pytest tests/e2e/personas \
+		-m "uat and not live_integration" -p no:cacheprovider --no-cov
+
+test-uat-live:
+	@echo "Running persona UAT live smoke (Tier-2; requires ONTOBRICKS_LIVE_BASE)..."
+	. .venv/bin/activate && pytest tests/e2e/personas \
+		-m "uat and live_integration" -p no:cacheprovider --no-cov
+
 format:
 	@echo "Formatting code..."
 	. .venv/bin/activate && black src/ tests/

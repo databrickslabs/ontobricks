@@ -21,7 +21,6 @@ from back.objects.registry.PermissionService import (
 )
 from back.core.errors import AuthorizationError
 
-
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
@@ -326,9 +325,7 @@ class TestAdminOnlyPaths:
     )
     def test_app_user_blocked_from_settings(self, path):
         """The settings page and its write endpoints are admin-only."""
-        _, resp, result = _dispatch_with_roles(
-            ROLE_APP_USER, ROLE_NONE, path=path
-        )
+        _, resp, result = _dispatch_with_roles(ROLE_APP_USER, ROLE_NONE, path=path)
         assert resp.status_code in (302, 403)
         assert not result.get("passed")
 
@@ -620,9 +617,7 @@ class TestThreeLevelDomainRoleMatrix:
         _, _, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_VIEWER, method=method, path=prefix
         )
-        assert result.get("passed"), (
-            f"viewer should be allowed to {method} {prefix}"
-        )
+        assert result.get("passed"), f"viewer should be allowed to {method} {prefix}"
 
     @pytest.mark.parametrize("prefix", DOMAIN_PREFIXES)
     @pytest.mark.parametrize("method", WRITE_METHODS)
@@ -630,9 +625,7 @@ class TestThreeLevelDomainRoleMatrix:
         _, resp, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_VIEWER, method=method, path=prefix
         )
-        assert resp.status_code == 403, (
-            f"viewer should be blocked on {method} {prefix}"
-        )
+        assert resp.status_code == 403, f"viewer should be blocked on {method} {prefix}"
         assert not result.get("passed")
 
     # ----- Editor: reads + writes OK on every prefix -----
@@ -643,9 +636,7 @@ class TestThreeLevelDomainRoleMatrix:
         _, _, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_EDITOR, method=method, path=prefix
         )
-        assert result.get("passed"), (
-            f"editor should be allowed to {method} {prefix}"
-        )
+        assert result.get("passed"), f"editor should be allowed to {method} {prefix}"
 
     # ----- Builder: reads + writes OK on every prefix -----
 
@@ -655,9 +646,7 @@ class TestThreeLevelDomainRoleMatrix:
         _, _, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_BUILDER, method=method, path=prefix
         )
-        assert result.get("passed"), (
-            f"builder should be allowed to {method} {prefix}"
-        )
+        assert result.get("passed"), f"builder should be allowed to {method} {prefix}"
 
     # ----- role_level ordering: viewer < editor < builder < admin -----
 
@@ -719,9 +708,7 @@ class TestOwlEndpointPermissions:
 
     # --- GET /ontology/export-owl (read-only preview) ---
 
-    @pytest.mark.parametrize(
-        "role", [ROLE_VIEWER, ROLE_EDITOR, ROLE_BUILDER]
-    )
+    @pytest.mark.parametrize("role", [ROLE_VIEWER, ROLE_EDITOR, ROLE_BUILDER])
     def test_every_tier_can_get_export_owl(self, role):
         """The three domain-level tiers can all preview the OWL
         output — this is what the client falls back to when the
@@ -771,8 +758,14 @@ class TestFilterAccessibleDomains:
         svc.is_admin = MagicMock(return_value=is_admin)
 
         def _get_domain_role(
-            email, host, token, registry_cfg, app_name, folder,
-            user_token="", app_role="",
+            email,
+            host,
+            token,
+            registry_cfg,
+            app_name,
+            folder,
+            user_token="",
+            app_role="",
         ):
             return domain_roles.get(folder, ROLE_NONE)
 
@@ -799,7 +792,12 @@ class TestFilterAccessibleDomains:
         svc = self._make_service({}, is_admin=True)
         entries = ["alpha", "beta"]
         out = svc.filter_accessible_domains(
-            "admin@acme.com", "h", "t", {}, "app", entries,
+            "admin@acme.com",
+            "h",
+            "t",
+            {},
+            "app",
+            entries,
         )
         assert out == entries
 
@@ -837,9 +835,18 @@ class TestFilterAccessibleDomains:
 
     def test_empty_input_short_circuits(self):
         svc = self._make_service({}, is_admin=False)
-        assert svc.filter_accessible_domains(
-            "user@acme.com", "h", "t", {}, "app", [], app_role=ROLE_APP_USER,
-        ) == []
+        assert (
+            svc.filter_accessible_domains(
+                "user@acme.com",
+                "h",
+                "t",
+                {},
+                "app",
+                [],
+                app_role=ROLE_APP_USER,
+            )
+            == []
+        )
         assert not svc.get_domain_role.called
 
     def test_dict_entries_use_name_key(self):
@@ -849,7 +856,12 @@ class TestFilterAccessibleDomains:
         )
         entries = [{"name": "alpha", "extra": 1}, {"name": "beta"}]
         out = svc.filter_accessible_domains(
-            "user@acme.com", "h", "t", {}, "app", entries,
+            "user@acme.com",
+            "h",
+            "t",
+            {},
+            "app",
+            entries,
             app_role=ROLE_APP_USER,
         )
         assert out == [{"name": "alpha", "extra": 1}]
@@ -918,9 +930,7 @@ class TestImportAndResetEndpoints:
         _, resp, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_VIEWER, method="POST", path=path
         )
-        assert resp.status_code == 403, (
-            f"viewer should be blocked on POST {path}"
-        )
+        assert resp.status_code == 403, f"viewer should be blocked on POST {path}"
         assert not result.get("passed")
 
     @pytest.mark.parametrize("path", IMPORT_AND_RESET_PATHS)
@@ -929,9 +939,7 @@ class TestImportAndResetEndpoints:
         _, _, result = _dispatch_with_roles(
             ROLE_APP_USER, role, method="POST", path=path
         )
-        assert result.get("passed"), (
-            f"{role} should be allowed to POST {path}"
-        )
+        assert result.get("passed"), f"{role} should be allowed to POST {path}"
 
     @pytest.mark.parametrize("path", IMPORT_AND_RESET_PATHS)
     def test_admin_allowed_on_import_or_reset(self, path):
@@ -949,3 +957,189 @@ class TestImportAndResetEndpoints:
         )
         assert resp.status_code == 403
         assert not result.get("passed")
+
+
+# ------------------------------------------------------------------
+# Test-only persona seam (ONTOBRICKS_TEST_AUTH)
+# ------------------------------------------------------------------
+
+
+def _dispatch_seam(
+    monkeypatch,
+    *,
+    test_role,
+    test_domain_role=None,
+    method="GET",
+    path="/ontology/",
+    app_mode=False,
+    resolve=None,
+    flag="1",
+):
+    """Drive one middleware dispatch through the persona seam.
+
+    ``test_role`` / ``test_domain_role`` populate the seam headers
+    (``test_role=None`` omits the role header). ``app_mode`` toggles
+    ``is_databricks_app``; ``resolve`` (when set) patches ``_resolve_roles``
+    so a test can prove the seam was bypassed. ``flag=None`` unsets the
+    ``ONTOBRICKS_TEST_AUTH`` env var.
+    """
+    from contextlib import ExitStack
+    from shared.fastapi.main import PermissionMiddleware
+
+    if flag is None:
+        monkeypatch.delenv("ONTOBRICKS_TEST_AUTH", raising=False)
+    else:
+        monkeypatch.setenv("ONTOBRICKS_TEST_AUTH", flag)
+
+    headers = {}
+    if test_role is not None:
+        headers["x-ontobricks-test-role"] = test_role
+    if test_domain_role is not None:
+        headers["x-ontobricks-test-domain-role"] = test_domain_role
+
+    req = _make_request(method=method, path=path, headers=headers)
+    result = {}
+
+    async def call_next(r):
+        result["passed"] = True
+        return MagicMock(status_code=200)
+
+    middleware = PermissionMiddleware(MagicMock())
+
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch("back.core.databricks.is_databricks_app", return_value=app_mode)
+        )
+        if resolve is not None:
+            stack.enter_context(
+                patch.object(
+                    PermissionMiddleware, "_resolve_roles", return_value=resolve
+                )
+            )
+        resp = _run(middleware.dispatch(req, call_next))
+
+    return req, resp, result
+
+
+class TestPersonaSeamActive:
+    """Flag on + not app-mode + role header → seam drives role resolution
+    and runs the REAL enforcement (not a mock of it)."""
+
+    def test_seam_sets_role_from_header(self, monkeypatch):
+        req, _, result = _dispatch_seam(
+            monkeypatch, test_role=ROLE_ADMIN, method="GET", path="/ontology/"
+        )
+        assert req.state.user_role == ROLE_ADMIN
+        assert req.state.user_domain_role == ROLE_ADMIN
+        assert result.get("passed")
+
+    def test_seam_domain_role_defaults_to_app_role(self, monkeypatch):
+        req, _, _ = _dispatch_seam(
+            monkeypatch, test_role=ROLE_ADMIN, test_domain_role=None
+        )
+        assert req.state.user_domain_role == ROLE_ADMIN
+
+    def test_seam_viewer_write_blocked(self, monkeypatch):
+        _, resp, result = _dispatch_seam(
+            monkeypatch,
+            test_role=ROLE_APP_USER,
+            test_domain_role=ROLE_VIEWER,
+            method="POST",
+            path="/ontology/class/add",
+        )
+        assert resp.status_code == 403
+        assert not result.get("passed")
+
+    def test_seam_viewer_read_allowed(self, monkeypatch):
+        _, _, result = _dispatch_seam(
+            monkeypatch,
+            test_role=ROLE_APP_USER,
+            test_domain_role=ROLE_VIEWER,
+            method="GET",
+            path="/ontology/load",
+        )
+        assert result.get("passed")
+
+    def test_seam_no_team_blocked(self, monkeypatch):
+        _, resp, result = _dispatch_seam(
+            monkeypatch,
+            test_role=ROLE_APP_USER,
+            test_domain_role=ROLE_NONE,
+            method="GET",
+            path="/ontology/load",
+        )
+        assert resp.status_code in (302, 403)
+        assert not result.get("passed")
+
+    def test_seam_admin_only_path_blocked_for_non_admin(self, monkeypatch):
+        _, resp, result = _dispatch_seam(
+            monkeypatch,
+            test_role=ROLE_APP_USER,
+            test_domain_role=ROLE_BUILDER,
+            method="POST",
+            path="/settings/save-base-uri",
+        )
+        assert resp.status_code == 403
+        assert not result.get("passed")
+
+    def test_seam_admin_allowed_on_admin_only_path(self, monkeypatch):
+        _, _, result = _dispatch_seam(
+            monkeypatch,
+            test_role=ROLE_ADMIN,
+            test_domain_role=ROLE_ADMIN,
+            method="POST",
+            path="/settings/save-base-uri",
+        )
+        assert result.get("passed")
+
+    def test_seam_bypass_path_skips_enforcement(self, monkeypatch):
+        req, _, result = _dispatch_seam(
+            monkeypatch,
+            test_role=ROLE_VIEWER,
+            method="GET",
+            path="/api/v1/domains",
+        )
+        assert req.state.user_role == ""
+        assert req.state.user_domain_role == ""
+        assert result.get("passed")
+
+
+class TestPersonaSeamInert:
+    """The seam must never fire in production or without an explicit header."""
+
+    def test_seam_inert_in_app_mode(self, monkeypatch):
+        # Flag on + header present, but a real Databricks App → seam ignored;
+        # role comes from _resolve_roles (patched), NOT the header.
+        req, _, result = _dispatch_seam(
+            monkeypatch,
+            test_role=ROLE_VIEWER,
+            method="GET",
+            path="/ontology/",
+            app_mode=True,
+            resolve=(ROLE_ADMIN, ROLE_ADMIN),
+        )
+        assert req.state.user_role == ROLE_ADMIN
+        assert result.get("passed")
+
+    def test_seam_inert_without_role_header(self, monkeypatch):
+        # Flag on, not app-mode, but no role header → local-dev admin bypass.
+        req, _, result = _dispatch_seam(
+            monkeypatch,
+            test_role=None,
+            method="POST",
+            path="/settings/save-base-uri",
+        )
+        assert req.state.user_role == "admin"
+        assert result.get("passed")
+
+    def test_seam_inert_when_flag_unset(self, monkeypatch):
+        # No flag, not app-mode, header present → local-dev admin bypass.
+        req, _, result = _dispatch_seam(
+            monkeypatch,
+            test_role=ROLE_VIEWER,
+            method="POST",
+            path="/ontology/class/add",
+            flag=None,
+        )
+        assert req.state.user_role == "admin"
+        assert result.get("passed")

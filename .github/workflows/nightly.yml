@@ -67,7 +67,17 @@ jobs:
           DATABRICKS_TOKEN: test-token
           DATABRICKS_SQL_WAREHOUSE_ID: test-warehouse
           SECRET_KEY: test-secret-key
-        run: uv run pytest tests/e2e/ -m e2e -v --tb=short
+        run: uv run pytest tests/e2e/ -m e2e --ignore=tests/e2e/personas -v --tb=short
+
+      - name: Run persona UAT suite (offline / Tier-1)
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_TOKEN: test-token
+          DATABRICKS_SQL_WAREHOUSE_ID: test-warehouse
+          SECRET_KEY: test-secret-key
+        run: |
+          uv run pytest tests/e2e/personas \
+            -m "uat and not live_integration" -v --tb=short
 
   external-smoke:
     name: External smoke probe (fevm-ontobricks-int)

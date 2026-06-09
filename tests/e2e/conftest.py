@@ -58,7 +58,6 @@ import pytest
 
 from tests.fixtures.databricks_auth import DatabricksAuth
 
-
 E2E_PORT = 18765
 E2E_BASE = f"http://localhost:{E2E_PORT}"
 
@@ -214,9 +213,7 @@ def _set_env():
     if have_host and have_token:
         os.environ.setdefault(
             "DATABRICKS_SQL_WAREHOUSE_ID",
-            os.environ.get(
-                "ONTOBRICKS_E2E_WAREHOUSE_ID", DEFAULT_E2E_WAREHOUSE_ID
-            ),
+            os.environ.get("ONTOBRICKS_E2E_WAREHOUSE_ID", DEFAULT_E2E_WAREHOUSE_ID),
         )
         return
 
@@ -239,9 +236,7 @@ def _set_env():
     os.environ["DATABRICKS_TOKEN"] = token
     os.environ.setdefault(
         "DATABRICKS_SQL_WAREHOUSE_ID",
-        os.environ.get(
-            "ONTOBRICKS_E2E_WAREHOUSE_ID", DEFAULT_E2E_WAREHOUSE_ID
-        ),
+        os.environ.get("ONTOBRICKS_E2E_WAREHOUSE_ID", DEFAULT_E2E_WAREHOUSE_ID),
     )
 
 
@@ -276,6 +271,15 @@ def live_server(_set_env):
     # the rejection branch.
     env.pop("CSRF_DISABLED", None)
 
+    # Enable the persona test-auth seam in PermissionMiddleware so the UAT
+    # suite (tests/e2e/personas) can drive each persona via the
+    # ``x-ontobricks-test-role`` / ``x-ontobricks-test-domain-role`` headers.
+    # The seam is triple-gated and inert in a real Databricks App; here (a
+    # local subprocess, not app-mode) it lets persona tests exercise the
+    # REAL role/domain/lifecycle gates. Existing e2e tests send no role
+    # header, so they keep seeing admin — unchanged.
+    env["ONTOBRICKS_TEST_AUTH"] = "1"
+
     # Capture stdout/stderr into a session log so startup failures are
     # debuggable. Path is printed on failure.
     log_path = os.path.join(
@@ -308,9 +312,7 @@ def live_server(_set_env):
         log_fh.close()
         with open(log_path) as f:
             tail = f.read()[-4000:]
-        pytest.fail(
-            f"Failed to start test server. uvicorn log tail:\n{tail}"
-        )
+        pytest.fail(f"Failed to start test server. uvicorn log tail:\n{tail}")
 
     yield E2E_BASE
     _kill_server()
