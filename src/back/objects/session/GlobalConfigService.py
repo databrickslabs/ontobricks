@@ -263,7 +263,7 @@ class GlobalConfigService:
         """Persist the navbar logo as a ``data:`` URL (empty string clears it)."""
         return self._save(host, token, registry_cfg, {"navbar_logo": data_url or ""})
 
-    ALLOWED_GRAPH_ENGINES = ("lakebase",)
+    ALLOWED_GRAPH_ENGINES = ("lakebase", "neo4j")
 
     def get_graph_engine(
         self, host: str, token: str, registry_cfg: Dict[str, str]
