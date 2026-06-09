@@ -5,11 +5,13 @@ Bolt-based (Cypher) flat-triple store. Triples are persisted as
 schema chosen so PR 1 demonstrates the Cypher integration shape without
 committing to a typed-node graph model (which lands in v2 / PR 3+).
 
-PR 1 (this file) ships the connection management + flat-triple CRUD.
-Named-query Cypher overrides (transitive closure, BFS, type distribution,
-predicate distribution, etc.) are deliberately stubbed with safe
-defaults — see ``# TODO(PR2)`` markers throughout. The app keeps working
-on Neo4j; advanced features degrade gracefully until PR 2 lands.
+Full implementation of the ``TripleStoreBackend`` + ``GraphDBBackend``
+contracts. Connection management, flat-triple CRUD, and the 16 named-query
+methods are all implemented in native Cypher. The reasoning translator
+(``get_query_translator``) returns a :class:`SWRLFlatCypherTranslator` that
+is currently scaffolded only — full SWRL → Cypher translation lands in a
+follow-up PR. Reasoning on Neo4j therefore reports zero violations /
+inferences (graceful no-op) rather than crashing.
 
 ``execute_query`` deliberately raises ``NotImplementedError`` — no raw
 Cypher entry point. All writes go through ``insert_triples`` after
@@ -215,10 +217,18 @@ class Neo4jStore(GraphDBBackend):
     # ======================================================================
 
     def get_query_translator(self, table_name: str = "") -> Any:
-        # TODO(PR2): return SWRLFlatCypherTranslator(node_label=self.get_node_table(table_name))
-        # PR 1 falls back to the SQL default — reasoning will not work
-        # on Neo4j until PR 2 ships the Cypher translator. Documented.
-        return super().get_query_translator(table_name)
+        """Return the SWRL/rule translator for this engine.
+
+        Returns a :class:`SWRLFlatCypherTranslator` — currently scaffolded
+        (every translation returns ``None``), so reasoning on Neo4j
+        reports zero violations / zero inferences instead of crashing.
+        Full SWRL → Cypher translation is a follow-up PR.
+        """
+        from back.core.reasoning.SWRLFlatCypherTranslator import (
+            SWRLFlatCypherTranslator,
+        )
+
+        return SWRLFlatCypherTranslator(node_label=self.get_node_table(table_name))
 
     # ======================================================================
     #  TripleStoreBackend — core CRUD
