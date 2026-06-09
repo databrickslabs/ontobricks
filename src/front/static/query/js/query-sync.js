@@ -153,7 +153,8 @@ function _applyBuildGraphEngineUi(dtExist) {
 
     var title = document.getElementById('dtGraphBackendTitle');
     if (title) {
-        title.textContent = eng === 'lakebase' ? 'Graph DB (Lakebase)' : 'Graph DB Digital Twin';
+        var labels = { 'lakebase': 'Graph DB (Lakebase)', 'neo4j': 'Graph DB (Neo4j)' };
+        title.textContent = labels[eng] || 'Graph DB Digital Twin';
     }
     var sub = document.getElementById('dtGraphStorageSubtitle');
     var primaryRow = document.getElementById('dtGraphPrimaryRow');

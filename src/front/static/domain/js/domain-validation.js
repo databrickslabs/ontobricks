@@ -450,10 +450,14 @@ function updateDtwinCard(data) {
         }
     }
 
-    // Graph DB card — Lakebase details
+    // Graph DB card — render engine-aware title.
     var eng = dt.graph_engine || 'lakebase';
+    var engineLabels = {
+        'lakebase': 'Graph DB (Lakebase)',
+        'neo4j':    'Graph DB (Neo4j)'
+    };
     var titleGraph = document.getElementById('psDtGraphBackendTitle');
-    if (titleGraph) titleGraph.textContent = 'Graph DB (Lakebase)';
+    if (titleGraph) titleGraph.textContent = engineLabels[eng] || ('Graph DB (' + eng + ')');
 
     var graphCard = document.getElementById('psDtGraphCard');
     if (graphCard) {
