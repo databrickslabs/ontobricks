@@ -1943,6 +1943,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (sel.value === 'lakebase') {
                 mergeLakebasePanelIntoConfigTextarea();
+            } else if (sel.value === 'neo4j') {
+                mergeNeo4jPanelIntoConfigTextarea();
             }
 
             let parsed;
@@ -2004,6 +2006,87 @@ document.addEventListener('DOMContentLoaded', function () {
     // =====================================================================
     //  GLOBAL SAVE BUTTON – warehouse, global prefs, CloudFetch, Graph DB
     // =====================================================================
+
+    // ── Neo4j engine config — form ↔ textarea ───────────────────────────────
+    //
+    // Mirrors the Lakebase merge/toggle pattern. When the active engine is
+    // "neo4j" (Settings > Triple store > Global dropdown), this function
+    // reads the Neo4j config form fields from #neo4j-section and serialises
+    // them into the shared #graphEngineConfig textarea, which the existing
+    // save flow then POSTs to /settings/graph-engine-config.
+    function mergeNeo4jPanelIntoConfigTextarea() {
+        const ta = document.getElementById('graphEngineConfig');
+        if (!ta) return;
+        let o = {};
+        try { o = JSON.parse(ta.value || '{}'); } catch (_) { o = {}; }
+        if (typeof o !== 'object' || Array.isArray(o)) o = {};
+
+        const uri        = (document.getElementById('neo4jUri')?.value || '').trim();
+        const database   = (document.getElementById('neo4jDatabase')?.value || '').trim();
+        const authMethod = (document.getElementById('neo4jAuthMethod')?.value || 'basic').trim();
+        const encrypted  = !!document.getElementById('neo4jEncrypted')?.checked;
+
+        if (uri) o.uri = uri; else delete o.uri;
+        o.database    = database || 'neo4j';
+        o.auth_method = authMethod;
+        o.encrypted   = encrypted;
+
+        if (authMethod === 'basic') {
+            const user = (document.getElementById('neo4jUsername')?.value || '').trim();
+            const pwd  = (document.getElementById('neo4jPassword')?.value || '');
+            if (user) o.username = user; else delete o.username;
+            if (pwd)  o.password = pwd;  else delete o.password;
+            delete o.secret_scope;
+            delete o.secret_key;
+        } else if (authMethod === 'databricks_secret') {
+            const scope = (document.getElementById('neo4jSecretScope')?.value || '').trim();
+            const key   = (document.getElementById('neo4jSecretKey')?.value || '').trim();
+            if (scope) o.secret_scope = scope; else delete o.secret_scope;
+            if (key)   o.secret_key   = key;   else delete o.secret_key;
+            delete o.username;
+            delete o.password;
+        }
+        ta.value = JSON.stringify(o, null, 2);
+    }
+
+    // Auth-method visibility toggle
+    function applyNeo4jAuthMethodVisibility() {
+        const sel = document.getElementById('neo4jAuthMethod');
+        if (!sel) return;
+        const basicFields  = document.querySelectorAll('.neo4j-auth-basic');
+        const secretFields = document.querySelectorAll('.neo4j-auth-databricks-secret');
+        const isBasic  = sel.value === 'basic';
+        const isSecret = sel.value === 'databricks_secret';
+        basicFields.forEach(el => el.classList.toggle('d-none', !isBasic));
+        secretFields.forEach(el => el.classList.toggle('d-none', !isSecret));
+    }
+
+    // Wire up Neo4j form field listeners — keep the textarea in sync as the
+    // user edits the panel, so the save flow always serialises fresh values.
+    [
+        'neo4jUri', 'neo4jDatabase', 'neo4jAuthMethod',
+        'neo4jUsername', 'neo4jPassword',
+        'neo4jSecretScope', 'neo4jSecretKey',
+        'neo4jEncrypted',
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input',  mergeNeo4jPanelIntoConfigTextarea);
+        el.addEventListener('change', mergeNeo4jPanelIntoConfigTextarea);
+    });
+    document.getElementById('neo4jAuthMethod')?.addEventListener('change', applyNeo4jAuthMethodVisibility);
+    // Initial render — apply auth-method visibility on page load.
+    applyNeo4jAuthMethodVisibility();
+
+    // Test-connection button: deferred to a follow-up commit; surface a
+    // friendly message for now so users don't think the button is broken.
+    document.getElementById('btnTestNeo4jConnection')?.addEventListener('click', () => {
+        const result = document.getElementById('neo4jTestResult');
+        if (!result) return;
+        result.className = 'alert alert-info mt-3 small';
+        result.classList.remove('d-none');
+        result.textContent = 'Test-connection is not wired up yet. Save the config and run a build to verify the connection.';
+    });
 
     document.querySelectorAll('.btn-save-settings').forEach(saveBtn => saveBtn.addEventListener('click', async function () {
         const btn = this;
