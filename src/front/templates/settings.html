@@ -104,6 +104,7 @@
                             </label>
                             <select class="form-select form-select-sm settings-graph-engine-select" id="graphEngineSelect">
                                 <option value="lakebase">Lakebase (Postgres)</option>
+                                <option value="neo4j">Neo4j (Bolt)</option>
                             </select>
                             <small class="text-muted d-block mt-2">
                                 Selects the graph database engine used for building and querying knowledge graphs.
@@ -519,6 +520,99 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- ==================== NEO4J SECTION ==================== -->
+            <div id="neo4j-section" class="sidebar-section">
+                <div class="content-section">
+                    <div class="section-header d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="mb-1"><i class="bi bi-bezier2 me-2"></i>Neo4j</h4>
+                            <p class="text-muted mb-0 small">Configure the Neo4j (Bolt) connection — Aura or self-hosted</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary" id="btnTestNeo4jConnection">
+                                <i class="bi bi-plug me-1"></i> Test connection
+                            </button>
+                            <button type="button" class="btn btn-primary btn-save-settings">
+                                <i class="bi bi-check-circle me-1"></i> Save
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Loading banner -->
+                    <div id="neo4jSectionBanner" class="alert alert-light border d-none align-items-center justify-content-center gap-2 py-3 mb-3" role="status" aria-live="polite">
+                        <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                        <span class="text-muted small">Loading Neo4j settings…</span>
+                    </div>
+
+                    <!-- Architecture note (mirrors the Lakebase one) -->
+                    <div class="alert alert-info border-0 mb-3 small">
+                        <strong>Architecture note:</strong> when Neo4j is the active engine,
+                        OntoBricks writes triples via Bolt at build time using the configured
+                        credentials. All ontology validation runs upstream in the build pipeline
+                        (C2 safeguard) — no raw Cypher entry point is exposed to users.
+                    </div>
+
+                    <form id="neo4jConfigForm" autocomplete="off">
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label for="neo4jUri" class="form-label small fw-semibold mb-1">Bolt URI <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jUri"
+                                       placeholder="neo4j+s://&lt;aura-id&gt;.databases.neo4j.io" required>
+                                <div class="form-text small text-muted">
+                                    Aura uses <code>neo4j+s://</code> (TLS embedded). Self-hosted may use <code>bolt://</code> or <code>neo4j://</code>.
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="neo4jDatabase" class="form-label small fw-semibold mb-1">Database</label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jDatabase" placeholder="neo4j">
+                                <div class="form-text small text-muted">Default <code>neo4j</code>.</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="neo4jAuthMethod" class="form-label small fw-semibold mb-1">Auth method</label>
+                                <select class="form-select form-select-sm" id="neo4jAuthMethod">
+                                    <option value="basic" selected>Basic (username + password)</option>
+                                    <option value="databricks_secret">Databricks secret</option>
+                                </select>
+                            </div>
+
+                            <!-- Basic auth fields -->
+                            <div class="col-md-6 neo4j-auth-basic">
+                                <label for="neo4jUsername" class="form-label small fw-semibold mb-1">Username</label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jUsername" autocomplete="off">
+                            </div>
+                            <div class="col-md-6 neo4j-auth-basic">
+                                <label for="neo4jPassword" class="form-label small fw-semibold mb-1">Password</label>
+                                <input type="password" class="form-control form-control-sm" id="neo4jPassword" autocomplete="new-password">
+                            </div>
+
+                            <!-- Databricks-secret auth fields -->
+                            <div class="col-md-6 neo4j-auth-databricks-secret d-none">
+                                <label for="neo4jSecretScope" class="form-label small fw-semibold mb-1">Secret scope</label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jSecretScope">
+                            </div>
+                            <div class="col-md-6 neo4j-auth-databricks-secret d-none">
+                                <label for="neo4jSecretKey" class="form-label small fw-semibold mb-1">Secret key</label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jSecretKey">
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="neo4jEncrypted" checked>
+                                    <label class="form-check-label small" for="neo4jEncrypted">
+                                        Encrypted connection
+                                        <span class="text-muted">(ignored when the URI scheme is <code>neo4j+s://</code> or <code>bolt+s://</code> — TLS is already embedded)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="neo4jTestResult" class="alert d-none mt-3 small" role="status" aria-live="polite"></div>
+                    </form>
                 </div>
             </div>
 
