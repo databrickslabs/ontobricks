@@ -224,6 +224,19 @@ class DatabricksHelpers:
                 use_cloud_fetch=use_cloud_fetch,
             )
 
+        # Local CLI auth: ``DatabricksAuth`` resolves a profile from
+        # ``~/.databrickscfg`` and supplies the host. The client itself does
+        # not need a token here — downstream services call back into
+        # ``DatabricksAuth`` for connection params and headers.
+        probe = _databricks.DatabricksAuth(host=host or None)
+        if probe.has_valid_auth():
+            return _databricks.DatabricksClient(
+                host=probe.host,
+                token="",
+                warehouse_id=warehouse_id,
+                use_cloud_fetch=use_cloud_fetch,
+            )
+
         return None
 
     @staticmethod
@@ -275,6 +288,23 @@ class DatabricksHelpers:
                     logger.debug("Obtained OAuth token for agent call (host=%s)", host)
                 except Exception as exc:
                     logger.warning("Could not obtain OAuth token in app mode: %s", exc)
+            return _databricks.normalize_host(host), token
+
+        # Local CLI auth fallback for agent / MLflow code paths that need a
+        # bearer token outside the request cycle.
+        if not token:
+            try:
+                auth = _databricks.DatabricksAuth(host=host or None)
+                if auth.has_valid_auth():
+                    if not host:
+                        host = auth.host
+                    token = auth.get_bearer_token()
+                    if token:
+                        logger.debug(
+                            "Obtained CLI profile token for agent call (host=%s)", host
+                        )
+            except Exception as exc:
+                logger.debug("Could not obtain CLI profile token: %s", exc)
 
         return _databricks.normalize_host(host), token
 

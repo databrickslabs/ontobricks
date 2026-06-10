@@ -382,3 +382,100 @@ class TestGetBearerToken:
         _clear_databricks_env(monkeypatch)
         auth = DatabricksAuth(host="https://ws.databricks.com", token="")
         assert auth.get_bearer_token() == ""
+
+
+class TestCliMode:
+    """Databricks CLI profile auth (~/.databrickscfg via SDK Config)."""
+
+    def _make_cli_auth(self, monkeypatch, profile=""):
+        """Build a DatabricksAuth with a stubbed CLI Config."""
+        _clear_databricks_env(monkeypatch)
+        if profile:
+            monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", profile)
+        fake_cfg = MagicMock()
+        fake_cfg.host = "https://cli.databricks.com"
+        fake_cfg.authenticate.return_value = {
+            "Authorization": "Bearer cli-token-xyz"
+        }
+        with patch.object(
+            DatabricksAuth, "_resolve_cli_config", return_value=fake_cfg
+        ):
+            auth = DatabricksAuth(warehouse_id="wh-cli")
+        auth._cli_config = fake_cfg
+        return auth, fake_cfg
+
+    def test_auth_mode_is_cli_when_only_profile_resolves(self, monkeypatch):
+        auth, _ = self._make_cli_auth(monkeypatch)
+        assert auth.auth_mode == "cli"
+        assert auth.is_app_mode is False
+        assert auth.token == ""
+
+    def test_host_falls_back_to_cli_config_host(self, monkeypatch):
+        auth, _ = self._make_cli_auth(monkeypatch)
+        assert auth.host == "https://cli.databricks.com"
+
+    def test_has_valid_auth_true_in_cli_mode(self, monkeypatch):
+        auth, _ = self._make_cli_auth(monkeypatch)
+        assert auth.has_valid_auth() is True
+
+    def test_get_auth_headers_uses_sdk_config(self, monkeypatch):
+        auth, fake_cfg = self._make_cli_auth(monkeypatch)
+        headers = auth.get_auth_headers()
+        assert headers["Authorization"] == "Bearer cli-token-xyz"
+        assert headers["Content-Type"] == "application/json"
+        assert headers["User-Agent"] == HTTP_USER_AGENT
+        fake_cfg.authenticate.assert_called()
+
+    def test_get_bearer_token_extracts_token_from_headers(self, monkeypatch):
+        auth, _ = self._make_cli_auth(monkeypatch)
+        assert auth.get_bearer_token() == "cli-token-xyz"
+
+    @patch.object(DatabricksAuth, "can_use_cloud_fetch", return_value=False)
+    def test_sql_params_use_credentials_provider(self, _cf, monkeypatch):
+        auth, fake_cfg = self._make_cli_auth(monkeypatch)
+        params = auth.get_sql_connection_params()
+        assert "access_token" not in params
+        assert "credentials_provider" in params
+        assert params["credentials_provider"]() is fake_cfg.authenticate
+
+    def test_cli_profile_name_defaults_to_default(self, monkeypatch):
+        auth, _ = self._make_cli_auth(monkeypatch)
+        assert auth.cli_profile_name == "default"
+
+    def test_cli_profile_name_reflects_env_var(self, monkeypatch):
+        auth, _ = self._make_cli_auth(monkeypatch, profile="sandbox")
+        assert auth.cli_profile_name == "sandbox"
+
+    def test_pat_takes_precedence_over_cli(self, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        monkeypatch.setenv("DATABRICKS_TOKEN", "pat-wins")
+        with patch.object(
+            DatabricksAuth, "_resolve_cli_config", return_value=MagicMock()
+        ) as mock_resolve:
+            auth = DatabricksAuth(host="https://ws.databricks.com")
+        # CLI resolution must be skipped when a PAT is present
+        mock_resolve.assert_not_called()
+        assert auth.auth_mode == "pat"
+        assert auth._cli_config is None
+
+    def test_app_mode_takes_precedence_over_cli(self, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        monkeypatch.setenv("DATABRICKS_APP_PORT", "8080")
+        monkeypatch.setenv("DATABRICKS_CLIENT_ID", "cid")
+        monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "csec")
+        with patch.object(
+            DatabricksAuth, "_resolve_cli_config", return_value=MagicMock()
+        ) as mock_resolve:
+            auth = DatabricksAuth(host="https://ws.databricks.com", token="")
+        mock_resolve.assert_not_called()
+        assert auth.auth_mode == "app"
+        assert auth._cli_config is None
+
+    def test_resolve_cli_config_returns_none_when_sdk_raises(self, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        with patch(
+            "databricks.sdk.core.Config",
+            side_effect=ValueError("no creds"),
+        ):
+            cfg = DatabricksAuth._resolve_cli_config("", "")
+        assert cfg is None

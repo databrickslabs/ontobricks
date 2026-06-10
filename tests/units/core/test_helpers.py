@@ -42,8 +42,12 @@ class TestGetDatabricksClient:
         client = get_databricks_client(domain, settings)
         assert client is not None
 
+    @patch(
+        "back.core.databricks.DatabricksAuth.DatabricksAuth.has_valid_auth",
+        return_value=False,
+    )
     @patch("back.core.databricks.is_databricks_app", return_value=False)
-    def test_returns_none_without_credentials(self, _):
+    def test_returns_none_without_credentials(self, _is_app, _no_auth):
         domain = _make_domain()
         settings = _make_settings(databricks_host="", databricks_token="")
         client = get_databricks_client(domain, settings)
@@ -188,7 +192,13 @@ class TestNoneDomainSafety:
         host, token, wh = get_databricks_credentials(None, _make_settings())
         assert host and token and wh
 
+    @patch(
+        "back.core.databricks.DatabricksAuth.DatabricksAuth.has_valid_auth",
+        return_value=False,
+    )
     @patch("back.core.databricks.is_databricks_app", return_value=False)
-    def test_get_databricks_client_none_domain_no_creds_returns_none(self, _):
+    def test_get_databricks_client_none_domain_no_creds_returns_none(
+        self, _is_app, _no_auth
+    ):
         settings = _make_settings(databricks_host="", databricks_token="")
         assert get_databricks_client(None, settings) is None

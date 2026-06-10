@@ -1,8 +1,9 @@
 """Tests for back.core.databricks.uc_file_service — UC volume file operations."""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+from back.core.databricks.DatabricksAuth import DatabricksAuth
 from back.core.databricks.VolumeFileService import VolumeFileService as UCFileService
 
 
@@ -31,7 +32,8 @@ class TestIsConfigured:
         svc = UCFileService(host="https://h.com")
         assert svc.is_configured() is True
 
-    def test_not_configured(self, monkeypatch):
+    @patch.object(DatabricksAuth, "_resolve_cli_config", return_value=None)
+    def test_not_configured(self, _no_cli, monkeypatch):
         monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
         monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
         monkeypatch.delenv("DATABRICKS_CLIENT_SECRET", raising=False)
@@ -41,7 +43,8 @@ class TestIsConfigured:
 
 
 class TestReadFile:
-    def test_not_configured(self, monkeypatch):
+    @patch.object(DatabricksAuth, "_resolve_cli_config", return_value=None)
+    def test_not_configured(self, _no_cli, monkeypatch):
         monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
         monkeypatch.delenv("DATABRICKS_CLIENT_ID", raising=False)
         monkeypatch.delenv("DATABRICKS_CLIENT_SECRET", raising=False)

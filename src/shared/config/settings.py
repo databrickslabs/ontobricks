@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     databricks_triplestore_table: str = ""
     databricks_sql_warehouse_id: str = ""
 
+    # Databricks CLI auth (local dev when PATs are not allowed). When
+    # ``DATABRICKS_TOKEN`` is empty and ``DATABRICKS_APP_PORT`` is unset,
+    # ``DatabricksAuth`` falls back to the named profile from
+    # ``~/.databrickscfg`` populated by ``databricks auth login``. Empty
+    # selects the default profile.
+    databricks_config_profile: str = ""
+
     @property
     def sql_warehouse_id(self) -> str:
         """Alias used by resolve_warehouse_id()."""
