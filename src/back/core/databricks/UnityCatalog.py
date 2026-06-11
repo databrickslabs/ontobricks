@@ -5,6 +5,7 @@ both the SQL connector (for metadata queries) and the REST API (for
 volume management).
 """
 
+import re
 import requests
 from databricks import sql
 from typing import Dict, List
@@ -15,6 +16,13 @@ from shared.config.constants import MSG_WAREHOUSE_ID_REQUIRED
 from .DatabricksAuth import DatabricksAuth
 
 logger = get_logger(__name__)
+
+
+def _validate_identifier(name: str) -> str:
+    """Validate SQL identifiers to prevent SQL injection in SHOW/DESCRIBE statements."""
+    if not re.match(r'^[a-zA-Z0-9_]+$', name):
+        raise ValidationError(f"Invalid identifier: {name}")
+    return name
 
 
 class UnityCatalog:
@@ -56,6 +64,8 @@ class UnityCatalog:
         """Return schema names within *catalog*."""
         self._require_warehouse()
         try:
+            # Validate identifier to prevent SQL injection
+            catalog = _validate_identifier(catalog)
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
@@ -72,6 +82,9 @@ class UnityCatalog:
         degradation).
         """
         try:
+            # Validate identifiers to prevent SQL injection
+            catalog = _validate_identifier(catalog)
+            schema = _validate_identifier(schema)
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
@@ -91,6 +104,10 @@ class UnityCatalog:
         degradation).
         """
         try:
+            # Validate identifiers to prevent SQL injection
+            catalog = _validate_identifier(catalog)
+            schema = _validate_identifier(schema)
+            table = _validate_identifier(table)
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
@@ -112,16 +129,22 @@ class UnityCatalog:
     def get_table_comment(self, catalog: str, schema: str, table: str) -> str:
         """Return the table-level comment (empty string if none)."""
         try:
+            # Validate identifiers to prevent SQL injection in the FROM clause
+            catalog = _validate_identifier(catalog)
+            schema = _validate_identifier(schema)
+            table = _validate_identifier(table)
+            
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
+                    # Use parameterized queries for values to prevent SQL injection
                     query = (
                         f"SELECT comment FROM {catalog}.information_schema.tables "
-                        f"WHERE table_catalog = '{catalog}' "
-                        f"AND table_schema = '{schema}' "
-                        f"AND table_name = '{table}'"
+                        "WHERE table_catalog = %s "
+                        "AND table_schema = %s "
+                        "AND table_name = %s"
                     )
-                    cur.execute(query)
+                    cur.execute(query, (catalog, schema, table))
                     row = cur.fetchone()
                     return row[0] if row and row[0] else ""
         except Exception as exc:
@@ -132,6 +155,9 @@ class UnityCatalog:
         """Return volume names via ``SHOW VOLUMES``."""
         self._require_warehouse()
         try:
+            # Validate identifiers to prevent SQL injection
+            catalog = _validate_identifier(catalog)
+            schema = _validate_identifier(schema)
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:

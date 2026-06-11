@@ -20,7 +20,13 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # App settings
-    secret_key: str = "dev-secret-key-change-in-prod"
+    # Security fix: Removed insecure hardcoded default value for secret_key.
+    # It is now a required field that must be provided via environment variables
+    # to prevent session hijacking, forged tokens, or authentication bypass.
+    secret_key: str = Field(
+        ...,
+        description="Secret key for cryptographic signing. Must be set via environment variable in production."
+    )
 
     # Databricks settings
     databricks_host: str = ""
