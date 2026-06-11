@@ -259,6 +259,14 @@ Do NOT call submit_source_model with an unverified normalization.
 all, omit that table from canonical_column_per_table and note why — but this \
 is rare; exhaust STEP 1–4 first.)
 
+  • COMPLETENESS — list EVERY covering trust. When more than one trust table \
+realises the SAME class, include ALL of them in canonical_column_per_table, \
+not just the two you checked overlap on. The same patient/pregnancy is \
+typically present in trust_a AND trust_b AND trust_c; omitting one drops \
+30–60% of that entity's real instances and makes every relationship pointing \
+at it partially dangle. During candidate discovery (step 3) actively look for \
+the class across all source schemas before you settle on its canonical_ids.
+
   • Whatever expression you record, the EntityGenerator drops it verbatim \
 into the SELECT aliased AS ID. Bare column names and SQL expressions are \
 both valid here.

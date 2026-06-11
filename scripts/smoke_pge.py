@@ -186,6 +186,12 @@ def main():
         "mapping_evaluations": result.mapping_evaluations,
         "mapping_run_log": result.mapping_run_log,
         "steps": [{"step_type": s.step_type, "tool_name": s.tool_name, "duration_ms": s.duration_ms} for s in result.steps],
+        # Embed the generated ontology + source metadata so the intrinsic
+        # evaluator (scripts/goals_eval.py score) can compute Stage-1 ontology
+        # metrics offline from this artifact alone.
+        "ontology": ontology,
+        "metadata": metadata,
+        "elapsed_s": round(elapsed, 3),
     }
     out_path = REPO_ROOT / "logs" / f"smoke_pge_{int(t0)}.json"
     out_path.parent.mkdir(exist_ok=True)

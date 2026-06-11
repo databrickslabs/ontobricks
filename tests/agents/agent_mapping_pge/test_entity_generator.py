@@ -536,6 +536,44 @@ def test_system_prompt_mandates_union_for_cross_source(monkeypatch, no_sleep):
     assert "Picking just one" in system_content or "missing" in system_content
 
 
+def test_system_prompt_mandates_value_harmonization(monkeypatch, no_sleep):
+    """Coded attributes (delivery method, feeding status, outcome) are spelled
+    differently across trusts. The Generator must harmonize them to one
+    canonical token set with a CASE expression — copying the raw column
+    verbatim yields a trust-fractured vocabulary that breaks KPI aggregation
+    (the V1.1 quality bar). Also guards the [0-9]-not-\\d regex-safety rule that
+    survives the OntoBricks build's backslash-strip."""
+    fake = FakeLLM(
+        [
+            _llm_response(
+                tool_calls=[
+                    _make_tool_call("submit_entity_mapping", _valid_submit_args())
+                ]
+            )
+        ]
+    )
+    _patch_llm(monkeypatch, fake)
+
+    run_entity_generator(
+        host="https://x",
+        token="t",
+        endpoint_name="ep",
+        client=None,
+        ontology_class=_ontology_class(),
+        source_model_slice=_source_model_slice(),
+    )
+
+    system_content = fake.first_messages[0]["content"]
+    assert "VALUE HARMONIZATION" in system_content
+    assert "controlled vocabulary" in system_content
+    # Canonical token set + the discover-before-harmonize discipline.
+    assert "SELECT DISTINCT" in system_content
+    assert "caesarean" in system_content and "vaginal" in system_content
+    # Regex-safety rule: explicit char classes, never backslash escapes.
+    assert "[0-9]" in system_content
+    assert "\\d" in system_content  # mentioned only to forbid it
+
+
 # =====================================================
 # 7. Step recording invariants
 # =====================================================

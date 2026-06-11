@@ -254,6 +254,44 @@ execute_sql adds a small LIMIT internally for validation only.
 • Do NOT use ORDER BY, CTEs, or subqueries unless absolutely necessary.
 • Write simple, flat SELECT statements.
 
+REGEX SAFETY (CRITICAL — applies to EVERY regex you write)
+• ALWAYS use explicit character classes: ``[0-9]`` for digits, ``[a-z]`` / \
+``[A-Za-z]`` for letters. NEVER use the backslash escapes ``\\d``, ``\\w``, \
+``\\s``. The OntoBricks build pipeline strips a lone backslash, so ``\\d`` \
+silently degrades to the literal ``d`` and the mapping breaks AFTER it has \
+already passed validation here. This applies to the canonical-ID expression \
+(use it verbatim from the slice — the Planner already emits ``[0-9]``) AND to \
+any CASE/RLIKE you write for value harmonization below.
+
+VALUE HARMONIZATION (controlled-vocabulary attributes — match V1.1 quality)
+Some attributes are CODED: the same real-world value is spelled differently \
+across trusts (delivery method as 'CS' / 'C-Section' / 'caesarean' / 'LSCS'; \
+feeding status as 'BF' / 'breast' / 'Breastfeeding'; outcome as \
+'live' / 'livebirth' / 'L'). A raw column copied verbatim then has a \
+trust-fractured, un-aggregatable vocabulary and the KPI it feeds is garbage.
+When an attribute is a controlled vocabulary (the class/attribute name implies \
+a small fixed value set — method, status, type, mode, outcome, category, \
+classification — or sampling reveals a handful of distinct codes):
+  1. DISCOVER the raw distinct values first. For each covering table run \
+``SELECT DISTINCT <col> FROM <table> LIMIT 50`` via execute_sql (or \
+sample_table). Do NOT guess the value set — harmonize what is actually there.
+  2. Map every raw spelling to ONE canonical lowercase token with a CASE \
+expression aliased to the attribute's clean name. Use the SAME token set in \
+EVERY UNION branch so the entity carries one coherent vocabulary regardless of \
+source trust. Example (delivery method):
+        CASE
+          WHEN lower(MODE_OF_DELIVERY) RLIKE 'caes|c-?section|lscs|emcs|elcs' THEN 'caesarean'
+          WHEN lower(MODE_OF_DELIVERY) RLIKE 'forcep|ventouse|instrument|assisted' THEN 'instrumental'
+          WHEN lower(MODE_OF_DELIVERY) RLIKE 'normal|svd|vaginal|spontaneous' THEN 'vaginal'
+          ELSE NULL
+        END AS deliveryMethod
+  3. Record it in attribute_mappings: ontology attribute name → the alias you \
+chose (e.g. "deliveryMethod" → "deliveryMethod").
+  4. This is a LEGITIMATE exception to "use the column's original name": a \
+harmonized attribute is a CASE expression aliased to the clean attribute name. \
+Plain, non-coded attributes (dates, numbers, names, free-text) still use their \
+original column name unaliased.
+
 ATTRIBUTE COVERAGE — NO SILENT DROPS (CRITICAL)
 For EACH ontology attribute on the class, you must do ONE of:
   (a) include a SQL column for it in the SELECT, AND add an entry to \
@@ -276,7 +314,9 @@ WORKFLOW
 3. Compose the SELECT (or UNION ALL) following the SQL RULES above. For \
 each branch, the value of canonical_column_per_table[<that_table>] is what \
 gets aliased AS ID — drop it in verbatim. It may already be a SQL \
-expression (e.g. ``regexp_extract(...)``); do not rewrite it.
+expression (e.g. ``regexp_extract(...)``); do not rewrite it. For any coded \
+attribute, apply VALUE HARMONIZATION (sample the distinct values, then a CASE \
+to a shared canonical token set across all branches).
 4. Call execute_sql to validate the SELECT. If it fails, READ the error and \
 fix the SQL (typically a typo'd column name, mismatched column lists in a \
 UNION, or wrong full_name). Retry as needed. Never submit an un-validated \
