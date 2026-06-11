@@ -378,6 +378,23 @@ class Mapping:
             if chunk_errors:
                 message += f" ({len(chunk_errors)} chunk(s) had errors)"
 
+            # Run the PGE intrinsic evaluator in-app on the completed mapping
+            # run (deterministic — re-uses the captured per-item evaluations,
+            # no extra LLM). Never breaks the run; returns None on failure.
+            from agents.pge_eval.inapp import score_mapping_run
+
+            scorecard = score_mapping_run(
+                ontology={"entities": entities, "relationships": relationships},
+                metadata=schema_context,
+                mapping_run_log=merged_mapping_run_log,
+                mapping_evaluations=merged_mapping_evaluations,
+                entity_mappings=all_entity_mappings,
+                relationship_mappings=all_relationship_mappings,
+                usage=total_usage,
+            )
+            if scorecard:
+                message += f" · quality {scorecard['verdict']}"
+
             tm.complete_task(
                 task.id,
                 result={
@@ -392,6 +409,7 @@ class Mapping:
                     "agent_steps": serialize_agent_steps(all_steps),
                     "agent_iterations": total_iterations,
                     "agent_usage": total_usage,
+                    "pge_scorecard": scorecard,
                 },
                 message=message,
             )

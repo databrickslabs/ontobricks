@@ -1206,6 +1206,21 @@ async def generate_ontology_async(
             )
 
             tm.advance_step(task.id, "Finalizing…")
+
+            # Run the PGE intrinsic evaluator in-app (deterministic, no extra
+            # LLM) so the user gets a quality scorecard for the generated
+            # ontology. Never breaks generation — returns None on failure.
+            from agents.pge_eval.inapp import score_generated_ontology
+
+            scorecard = score_generated_ontology(owl_content, metadata)
+            message = (
+                f"Generated {stats.get('classes', 0)} classes, "
+                f"{stats.get('properties', 0)} properties "
+                f"({agent_result.iterations} agent iterations)"
+            )
+            if scorecard:
+                message += f" · quality {scorecard['verdict']}"
+
             tm.complete_task(
                 task.id,
                 result={
@@ -1214,12 +1229,9 @@ async def generate_ontology_async(
                     "agent_steps": serialize_agent_steps(agent_result.steps),
                     "agent_iterations": agent_result.iterations,
                     "agent_usage": agent_result.usage,
+                    "pge_scorecard": scorecard,
                 },
-                message=(
-                    f"Generated {stats.get('classes', 0)} classes, "
-                    f"{stats.get('properties', 0)} properties "
-                    f"({agent_result.iterations} agent iterations)"
-                ),
+                message=message,
             )
 
         except Exception as e:
