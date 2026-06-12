@@ -33,10 +33,23 @@ visibility once the global engine is known.
    caches the resolved engine onto `cfg.graph_engine` for subsequent
    calls.
 
+## Server-side companion fix
+
+3. **`src/front/fastapi/dependencies.py`** — root-cause fix for
+   `triplestore_page_context`. The previous body was a tautology
+   (`graph_engine = _raw if _raw == "lakebase" else "lakebase"`) that
+   silently coerced any non-Lakebase engine to `"lakebase"` before it
+   reached the template, so the `__TRIPLESTORE_CONFIG.graph_engine`
+   variable in `domain.html` / `dtwin.html` was hard-stuck on Lakebase
+   even when Neo4j was the active global engine. Replaced with a direct
+   pass-through of `TripleStoreFactory._resolve_graph_engine(...)`. The
+   JS fetch fallback above remains in place as defence in depth.
+
 ## Files modified / added
 
 - `src/front/static/domain/js/domain-validation.js`
 - `src/front/static/query/js/query-sync.js`
+- `src/front/fastapi/dependencies.py`
 
 ## Test result
 
