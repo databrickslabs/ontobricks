@@ -1,0 +1,47 @@
+# 2026-06-12 — Build page engine label: API fallback when dt.graph_engine is empty
+
+**Author:** Hugues Journeau (@hourdays)
+**Branch:** `feature/neo4j-graphdb-skeleton` → PR #47 (target: `develop`)
+**Version:** v0.5.0
+
+## Context
+
+Follow-up to commit `5205010` (engine-aware Build page label). The previous
+patch read `dt.graph_engine` from the `/dtwin/exist` payload, but that field
+is only populated **after** a domain has been built. Pre-Build (status
+"Never built"), `dt.graph_engine` is empty and the JS fallback
+`dt.graph_engine || 'lakebase'` mislabels the card as "Graph DB (Lakebase)"
+even when the global engine setting is Neo4j.
+
+This patch fetches `/settings/graph-engine` asynchronously when
+`dt.graph_engine` is empty and re-applies the title + Lakebase-details
+visibility once the global engine is known.
+
+## Changes
+
+1. **`src/front/static/domain/js/domain-validation.js`** — in
+   `populateDtwinCard()` (Build page validation card), when
+   `dt.graph_engine` is falsy, kick off a `fetch('/settings/graph-engine')`
+   and re-apply `psDtGraphBackendTitle` / `psDtLakebaseDetails` from the
+   resolved global engine. Initial render keeps the existing
+   `'lakebase'` fallback so there is no visual flicker for users on
+   Lakebase.
+2. **`src/front/static/query/js/query-sync.js`** — same pattern in
+   `_applyBuildGraphEngineUi()`, gated on both `dt.graph_engine` AND
+   `cfg.graph_engine` being absent (avoids redundant fetches when the
+   value is already cached on `window.__TRIPLESTORE_CONFIG`). On success,
+   caches the resolved engine onto `cfg.graph_engine` for subsequent
+   calls.
+
+## Files modified / added
+
+- `src/front/static/domain/js/domain-validation.js`
+- `src/front/static/query/js/query-sync.js`
+
+## Test result
+
+- Static syntax check on both files: OK.
+- Live behaviour to be verified in the Chrome MCP screenshot capture
+  pass (task #54 in the PR plan) — the Build page should now display
+  "Graph DB (Neo4j)" pre-Build when the global engine is Neo4j on the
+  fevm-mjolnir deployment.

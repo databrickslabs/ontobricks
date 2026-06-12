@@ -152,9 +152,26 @@ function _applyBuildGraphEngineUi(dtExist) {
     if (fnLk) fnLk.classList.remove('d-none');
 
     var title = document.getElementById('dtGraphBackendTitle');
+    var labels = { 'lakebase': 'Graph DB (Lakebase)', 'neo4j': 'Graph DB (Neo4j)' };
     if (title) {
-        var labels = { 'lakebase': 'Graph DB (Lakebase)', 'neo4j': 'Graph DB (Neo4j)' };
         title.textContent = labels[eng] || 'Graph DB Digital Twin';
+    }
+    // Pre-build, dt.graph_engine is empty and `eng` falls back to 'lakebase'.
+    // Fetch the global engine setting to render the correct label.
+    if (!dt.graph_engine && !cfg.graph_engine) {
+        fetch('/settings/graph-engine', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                var globalEng = data && data.graph_engine;
+                if (!globalEng) return;
+                cfg.graph_engine = globalEng;
+                window.__TRIPLESTORE_CONFIG = cfg;
+                var titleEl = document.getElementById('dtGraphBackendTitle');
+                if (titleEl) titleEl.textContent = labels[globalEng] || 'Graph DB Digital Twin';
+                var lkD = document.getElementById('dtLakebaseDetails');
+                if (lkD) lkD.classList.toggle('d-none', globalEng !== 'lakebase');
+            })
+            .catch(function () { /* leave fallback in place */ });
     }
     var sub = document.getElementById('dtGraphStorageSubtitle');
     var primaryRow = document.getElementById('dtGraphPrimaryRow');

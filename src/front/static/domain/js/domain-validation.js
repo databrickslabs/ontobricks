@@ -451,6 +451,12 @@ function updateDtwinCard(data) {
     }
 
     // Graph DB card — render engine-aware title.
+    //
+    // `dt.graph_engine` is populated by the build status endpoint *after* a
+    // domain has been built. Pre-Build (status = "Never built") it is empty,
+    // and falling back to `'lakebase'` mislabels the card when the global
+    // engine setting is actually Neo4j. Fix: when the field is empty, fetch
+    // the global engine setting and re-apply the title asynchronously.
     var eng = dt.graph_engine || 'lakebase';
     var engineLabels = {
         'lakebase': 'Graph DB (Lakebase)',
@@ -458,6 +464,19 @@ function updateDtwinCard(data) {
     };
     var titleGraph = document.getElementById('psDtGraphBackendTitle');
     if (titleGraph) titleGraph.textContent = engineLabels[eng] || ('Graph DB (' + eng + ')');
+    if (!dt.graph_engine) {
+        fetch('/settings/graph-engine', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+                var globalEng = data && data.graph_engine;
+                if (!globalEng) return;
+                var titleEl = document.getElementById('psDtGraphBackendTitle');
+                if (titleEl) titleEl.textContent = engineLabels[globalEng] || ('Graph DB (' + globalEng + ')');
+                var lkD = document.getElementById('psDtLakebaseDetails');
+                if (lkD) lkD.classList.toggle('d-none', globalEng !== 'lakebase');
+            })
+            .catch(function () { /* leave fallback in place */ });
+    }
 
     var graphCard = document.getElementById('psDtGraphCard');
     if (graphCard) {
