@@ -166,22 +166,22 @@ function _applyBuildGraphEngineUi(dtExist) {
         var titleEl   = document.getElementById('dtGraphBackendTitle');
         var lkIcon    = document.querySelector('#dtGraphCard .dt-arch-icon-lakebase-img');
         var syncRow   = document.getElementById('dtLakebaseSyncedUcRow');
+        var boltRow   = document.getElementById('dtNeo4jBoltCard');
         var lkBuild   = document.getElementById('dtLakebaseBuildNote');
         var graphFn   = document.getElementById('dtLakebaseFullName');
-        var connectors = document.querySelectorAll('#dtLakebaseDetails > .dt-arch-connector');
         if (container) container.classList.remove('d-none');
         if (titleEl)   titleEl.textContent = labels[activeEng] || ('Graph DB (' + activeEng + ')');
         if (activeEng === 'neo4j') {
+            // Show the Bolt writer card, hide the Lakebase Sync card + build note + icon
             if (syncRow) syncRow.classList.add('d-none');
+            if (boltRow) boltRow.classList.remove('d-none');
             if (lkBuild) lkBuild.classList.add('d-none');
-            // hide the (Sync-side) leading connector arrow — keep the trailing one
-            if (connectors.length) connectors[0].classList.add('d-none');
             if (lkIcon) lkIcon.classList.add('d-none');
-            if (graphFn) graphFn.textContent = (cfg.graph_name || 'Knowledge Graph') + ' · Bolt';
+            if (graphFn) graphFn.textContent = (cfg.graph_name || 'Knowledge Graph');
         } else {
             if (syncRow) syncRow.classList.remove('d-none');
+            if (boltRow) boltRow.classList.add('d-none');
             if (lkBuild) lkBuild.classList.remove('d-none');
-            if (connectors.length) connectors[0].classList.remove('d-none');
             if (lkIcon) lkIcon.classList.remove('d-none');
         }
     }
