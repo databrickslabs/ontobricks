@@ -156,14 +156,17 @@ function _applyBuildGraphEngineUi(dtExist) {
     if (title) {
         title.textContent = labels[eng] || 'Graph DB Digital Twin';
     }
-    // Pre-build, dt.graph_engine is empty and `eng` falls back to 'lakebase'.
-    // Fetch the global engine setting to render the correct label.
-    if (!dt.graph_engine && !cfg.graph_engine) {
+    // Pre-build, dt.graph_engine is unset *and* the server-rendered
+    // cfg.graph_engine can be stale ('lakebase' from a default-bake even when
+    // the global setting is Neo4j). Always reconcile against
+    // /settings/graph-engine when dt.graph_engine is unset — the API is the
+    // authoritative source for the global engine.
+    if (!dt.graph_engine) {
         fetch('/settings/graph-engine', { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
                 var globalEng = data && data.graph_engine;
-                if (!globalEng) return;
+                if (!globalEng || globalEng === cfg.graph_engine) return;
                 cfg.graph_engine = globalEng;
                 window.__TRIPLESTORE_CONFIG = cfg;
                 var titleEl = document.getElementById('dtGraphBackendTitle');
