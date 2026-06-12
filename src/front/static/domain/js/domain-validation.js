@@ -464,19 +464,20 @@ function updateDtwinCard(data) {
     };
     var titleGraph = document.getElementById('psDtGraphBackendTitle');
     if (titleGraph) titleGraph.textContent = engineLabels[eng] || ('Graph DB (' + eng + ')');
-    if (!dt.graph_engine) {
-        fetch('/settings/graph-engine', { credentials: 'same-origin' })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (data) {
-                var globalEng = data && data.graph_engine;
-                if (!globalEng) return;
-                var titleEl = document.getElementById('psDtGraphBackendTitle');
-                if (titleEl) titleEl.textContent = engineLabels[globalEng] || ('Graph DB (' + globalEng + ')');
-                var lkD = document.getElementById('psDtLakebaseDetails');
-                if (lkD) lkD.classList.toggle('d-none', globalEng !== 'lakebase');
-            })
-            .catch(function () { /* leave fallback in place */ });
-    }
+    // Reconcile unconditionally against /settings/graph-engine — dt.graph_engine
+    // can be a stale per-domain value recorded at build time even when the
+    // active global engine differs.
+    fetch('/settings/graph-engine', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+            var globalEng = data && data.graph_engine;
+            if (!globalEng || globalEng === eng) return;
+            var titleEl = document.getElementById('psDtGraphBackendTitle');
+            if (titleEl) titleEl.textContent = engineLabels[globalEng] || ('Graph DB (' + globalEng + ')');
+            var lkD = document.getElementById('psDtLakebaseDetails');
+            if (lkD) lkD.classList.toggle('d-none', globalEng !== 'lakebase');
+        })
+        .catch(function () { /* leave fallback in place */ });
 
     var graphCard = document.getElementById('psDtGraphCard');
     if (graphCard) {

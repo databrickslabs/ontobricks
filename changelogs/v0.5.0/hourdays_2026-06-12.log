@@ -33,6 +33,15 @@ visibility once the global engine is known.
    caches the resolved engine onto `cfg.graph_engine` for subsequent
    calls.
 
+## Stronger JS reconciliation (2026-06-12 PM)
+
+Server fix landed in `dependencies.py` but `dt.graph_engine` can still arrive
+stale: it reflects the engine recorded on the domain at build-time, which
+isn't necessarily the active global engine. Updated both JS files to
+reconcile unconditionally against `/settings/graph-engine` on every render
+(was: only when `dt.graph_engine` was empty). Global engine is now the
+single source of truth for the Build/Validation Graph DB card title.
+
 ## Server-side companion fix
 
 3. **`src/front/fastapi/dependencies.py`** — root-cause fix for
