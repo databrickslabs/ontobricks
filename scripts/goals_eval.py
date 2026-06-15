@@ -128,17 +128,23 @@ def cmd_score(args) -> int:
 
 
 def cmd_run(args) -> int:
-    """Live mode: run the mapping PGE, dump an artifact, then score it."""
+    """Live mode: run the mapping PGE for ANY domain, dump an artifact, score it.
+
+    Domain-agnostic: the ontology + source metadata come from a registry export
+    (``--registry-json`` [+``--version``]) or plain JSON files (``--ontology``
+    [+``--metadata``]) — nothing about any specific domain is hard-coded.
+    """
     from back.core.databricks.DatabricksClient import DatabricksClient
     from agents.agent_mapping_pge.engine import run_agent
+    from agents.pge_eval.loaders import load_run_inputs
 
-    # Reuse smoke_pge's loader/shaper so live mode and the smoke harness stay
-    # in lock-step on the artifact shape.
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
-    import smoke_pge  # noqa: E402
-
-    raw_ont, metadata, _baseline = smoke_pge.load_v1_1()
-    ontology = smoke_pge.to_agent_shape(raw_ont)
+    registry_json = args.registry_json or os.environ.get("PGE_EVAL_REGISTRY_JSON")
+    ontology, metadata = load_run_inputs(
+        registry_json=registry_json,
+        version=args.version,
+        ontology_path=args.ontology,
+        metadata_path=args.metadata,
+    )
 
     client = DatabricksClient()
     t0 = time.time()
@@ -209,6 +215,18 @@ def main(argv=None) -> int:
     p_score.set_defaults(func=cmd_score)
 
     p_run = sub.add_parser("run", help="run the PGE pipeline live, then score it")
+    p_run.add_argument("--registry-json", dest="registry_json", default=None,
+                       help="exported registry version dump for ANY domain "
+                            "({versions:{<ver>:{ontology,metadata}}}); "
+                            "defaults to $PGE_EVAL_REGISTRY_JSON")
+    p_run.add_argument("--version", default=None,
+                       help="version key to pick from --registry-json "
+                            "(required only when the dump has >1 version)")
+    p_run.add_argument("--ontology", default=None,
+                       help="ontology JSON (registry or agent shape) — "
+                            "alternative to --registry-json")
+    p_run.add_argument("--metadata", default=None,
+                       help="source metadata JSON (used with --ontology)")
     _add_common_flags(p_run)
     p_run.set_defaults(func=cmd_run)
 

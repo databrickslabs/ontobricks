@@ -222,3 +222,68 @@ Shared Tools
    :members:
    :undoc-members:
    :show-inheritance:
+
+PGE Intrinsic Evaluation
+------------------------
+
+A usecase-agnostic, gold-free scorecard for the PGE pipeline (ontology +
+mapping generation). Intrinsic structural/self-consistency metrics plus an
+advisory LLM-judge — no stored reference answer. The deterministic core
+(``score_artifact``) ingests a captured ``AgentResult`` artifact and emits the
+scorecard JSON with zero LLM calls; the in-app hooks run it live after
+generation/mapping; the CLI lives in ``scripts/goals_eval.py``.
+
+.. automodule:: agents.pge_eval
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.scorecard
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.normalize
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.ontology_metrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.mapping_metrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.pipeline_metrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.gates
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.baseline
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.judge
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.inapp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: agents.pge_eval.loaders
+   :members:
+   :undoc-members:
+   :show-inheritance:

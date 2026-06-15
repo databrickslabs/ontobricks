@@ -246,6 +246,39 @@ require installing the optional extra:
 uv sync --extra pitfalls
 ```
 
+### PGE Intrinsic Evaluation (quality scorecard)
+
+The PGE pipeline (ontology + mapping generation) is scored by a
+**usecase-agnostic, gold-free** scorecard (`src/agents/pge_eval/`). It uses
+intrinsic structural/self-consistency metrics — table/column footprint
+coverage, orphan classes, dangling domain/range, naming/duplicate hygiene,
+mapping completeness, id-integrity, dangling-FK fractions — across three gate
+tiers (absolute / ratio / self-baseline regression), plus an **advisory**
+LLM-judge that never gates. No domain reference answer is encoded, so it works
+for any domain.
+
+It runs in two places:
+
+- **In-app** — after you generate an ontology or mappings, a scorecard is
+  attached to the task result (`pge_scorecard`) and the verdict is shown in the
+  completion message (e.g. `… · quality GREEN`). Deterministic, no extra LLM.
+- **CLI** — `scripts/goals_eval.py`:
+
+  ```bash
+  # Score a captured artifact (offline, deterministic; --no-judge = zero network)
+  .venv/bin/python scripts/goals_eval.py score <artifact.json> [--no-judge] [--gate-ratios]
+
+  # Run the pipeline live for ANY domain, then score it (domain-agnostic)
+  .venv/bin/python scripts/goals_eval.py run --registry-json <domain-export.json> [--version V]
+  .venv/bin/python scripts/goals_eval.py run --ontology <ontology.json> --metadata <metadata.json>
+  ```
+
+  Exit code is the verdict: `0` GREEN, non-zero RED.
+
+The OWL generator also gains an **Evaluator stage**: the Stage-1 deterministic
+checks run in its generation loop and feed retry-hints back (a real PGE loop),
+bounded by a retry cap.
+
 ### Documentation
 
 Full documentation is available in [`docs/`](docs/README.md). For a comprehensive feature list and architecture details, see [INFO.md](docs/INFO.md).
