@@ -41,6 +41,17 @@ def test_id_integrity_detects_duplicates():
     assert metrics["id_integrity"] < 1.0
 
 
+def test_id_integrity_ignores_legitimately_empty_entity():
+    # A 0-row entity that passed SQL is id-vacuous: it must NOT drag id_integrity
+    # below 1.0 (that would RED a clean run on empty source data).
+    art = fx.clean_artifact()
+    art["mapping_evaluations"]["ex:Product"]["metrics"] = {
+        "row_count": 0, "distinct_id_count": 0, "null_id_count": 0,
+    }
+    metrics, _ = evaluate_mapping(art, fx.clean_ontology())
+    assert metrics["id_integrity"] == 1.0
+
+
 def test_attribute_coverage_partial():
     art = fx.clean_artifact()
     # Drop one attribute mapping from Customer (3 dp, now 2 mapped).

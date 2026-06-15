@@ -4,8 +4,12 @@
   reached a mapping (ontology footprint − mapped footprint).  The gap
   between the two complementary denominators of D2.
 * ``convergence`` — effort signals (mean generator attempts, planner
-  reinvocations, total tokens, wall-clock) tracked for the Tier-3
-  self-baseline regression gate.
+  reinvocations, total tokens, wall-clock).
+
+Both pipeline metrics are **tracked/advisory only** — they are reported on the
+scorecard for inspection and trend-watching but are not wired into any gate
+tier (no ``METRIC_SPECS`` entry references the ``pipeline`` stage). Treat them
+as observability, not pass/fail.
 
 Usecase-agnostic.
 """

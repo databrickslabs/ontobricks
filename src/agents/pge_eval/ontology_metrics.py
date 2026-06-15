@@ -57,7 +57,6 @@ def compute_footprint(
 
     total_columns = 0
     covered_columns: Set[str] = set()
-    covered_column_keys: Set[str] = set()
     total_tables = len(tables)
     covered_tables: Set[str] = set()
 
@@ -72,7 +71,6 @@ def compute_footprint(
             ckey = _column_key(tname, col)
             if normalize_name(col) in dp_keys:
                 covered_columns.add(ckey)
-                covered_column_keys.add(ckey)
                 table_is_covered = True
         if table_is_covered:
             covered_tables.add(tname)

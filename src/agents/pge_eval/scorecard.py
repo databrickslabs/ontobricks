@@ -114,7 +114,14 @@ def score_artifact(
 
     stages = {
         "ontology": {"metrics": onto_metrics, "judge": onto_judge},
-        "mapping": {"metrics": map_metrics, "judge": map_judge},
+        "mapping": {
+            "metrics": map_metrics,
+            "judge": map_judge,
+            # Persisted so Tier-3 can tell an inactive-1.0 band (no band declared)
+            # from an active measurement, and not flag the first real band reading
+            # as a regression.
+            "band_active": bool(map_extras.get("band_active")),
+        },
         "pipeline": pipeline,
     }
 

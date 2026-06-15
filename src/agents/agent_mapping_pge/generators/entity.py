@@ -168,11 +168,11 @@ this class:
 realise this class.
   - canonical_id.canonical_column_per_table[<table>]: the expression that \
 MUST be aliased AS ID for each table. THIS VALUE MAY BE A BARE COLUMN \
-NAME ("MOTHER_NHS_NO") OR A FULL SQL EXPRESSION \
-("regexp_extract(pregnancy_id, '([a-f0-9-]+-preg-[0-9]+)')"). Drop it \
+NAME ("CUSTOMER_ID") OR A FULL SQL EXPRESSION \
+("regexp_extract(order_ref, '([a-f0-9-]+-ord-[0-9]+)')"). Drop it \
 verbatim into the SELECT and alias it AS ID — do NOT rewrite it, do NOT \
 pick a different column, do NOT strip the function call. The Planner emits \
-SQL expressions when raw column values across trusts are in different \
+SQL expressions when raw column values across sources are in different \
 formats and need to be normalized to a common canonical key.
   - canonical_id.format_note: a one-sentence note describing the canonical \
 key (may be empty). Read it to understand what each row's ID represents.
@@ -187,11 +187,11 @@ class. Write a flat SELECT from that one table. Pick it from the matching \
 candidate_tables entry.
 
   • If canonical_column_per_table has TWO OR MORE tables → CROSS-SOURCE \
-class (e.g. the same patient or pregnancy realised across multiple trusts). \
+class (e.g. the same customer or order realised across multiple sources). \
 You MUST emit a UNION ALL across ALL listed tables, NOT pick one. Each \
 branch uses that table's canonical-ID column AS ID. Picking just one would \
-produce a Mother (or Pregnancy, etc.) entity that's missing 60–70% of its \
-real instances, and every relationship pointing at it would then dangle. \
+produce an entity missing a large fraction of its real instances, and every \
+relationship pointing at it would then dangle. \
 This is the #1 failure mode the orchestrator catches — do not produce it.
 
   UNION shape (use exactly this pattern — substitute the canonical-ID \
@@ -208,8 +208,8 @@ rewrite it):
   All branches must return the SAME columns in the SAME order, AND each \
 column must have the SAME TYPE in every branch. If a branch lacks a column \
 another branch has, project a NULL with a matching alias **cast to the same \
-type the real branch uses** (e.g. if branch A has ``BABY_NHS_NO`` typed \
-BIGINT, branch B must use ``CAST(NULL AS BIGINT) AS BABY_NHS_NO`` — not \
+type the real branch uses** (e.g. if branch A has ``ACCOUNT_ID`` typed \
+BIGINT, branch B must use ``CAST(NULL AS BIGINT) AS ACCOUNT_ID`` — not \
 ``AS STRING``). When two branches hold the column with DIFFERENT types, cast \
 BOTH to a common type (``CAST(... AS STRING)`` is the safe default). A \
 ``CAST_INVALID_INPUT`` / type-mismatch error from execute_sql always means a \
@@ -243,8 +243,8 @@ name so it appears in attribute_mappings.
 derived expression, also exclude empty extractions (e.g. \
 ``WHERE regexp_extract(...) <> ''``).
 • DEDUP COLLAPSED KEYS: when the canonical-ID is a derived EXPRESSION that \
-can repeat across rows (e.g. a ``<core>-del`` key where several episode rows \
-share one pregnancy core), the same ID will appear on multiple rows and the \
+can repeat across rows (e.g. a ``<core>-line`` key where several child rows \
+share one parent core), the same ID will appear on multiple rows and the \
 evaluator FAILs on "duplicate ID values". Make each node id unique: wrap the \
 UNION in ``SELECT ... FROM (<union>) GROUP BY ID`` (taking MAX() of each \
 attribute) or use ``SELECT DISTINCT`` when there are no attributes. The id \
@@ -263,12 +263,12 @@ already passed validation here. This applies to the canonical-ID expression \
 (use it verbatim from the slice — the Planner already emits ``[0-9]``) AND to \
 any CASE/RLIKE you write for value harmonization below.
 
-VALUE HARMONIZATION (controlled-vocabulary attributes — match V1.1 quality)
+VALUE HARMONIZATION (controlled-vocabulary attributes)
 Some attributes are CODED: the same real-world value is spelled differently \
-across trusts (delivery method as 'CS' / 'C-Section' / 'caesarean' / 'LSCS'; \
-feeding status as 'BF' / 'breast' / 'Breastfeeding'; outcome as \
-'live' / 'livebirth' / 'L'). A raw column copied verbatim then has a \
-trust-fractured, un-aggregatable vocabulary and the KPI it feeds is garbage.
+across sources (e.g. a status as 'A' / 'Active' / 'ACTIVE'; a category code as \
+'CS' / 'C-Section' / 'cs'; a flag as 'Y' / 'true' / '1'). A raw column copied \
+verbatim then has a source-fractured, un-aggregatable vocabulary and the KPI it \
+feeds is garbage.
 When an attribute is a controlled vocabulary (the class/attribute name implies \
 a small fixed value set — method, status, type, mode, outcome, category, \
 classification — or sampling reveals a handful of distinct codes):
@@ -278,15 +278,15 @@ sample_table). Do NOT guess the value set — harmonize what is actually there.
   2. Map every raw spelling to ONE canonical lowercase token with a CASE \
 expression aliased to the attribute's clean name. Use the SAME token set in \
 EVERY UNION branch so the entity carries one coherent vocabulary regardless of \
-source trust. Example (delivery method):
+source system. Domain-neutral example (a status attribute):
         CASE
-          WHEN lower(MODE_OF_DELIVERY) RLIKE 'caes|c-?section|lscs|emcs|elcs' THEN 'caesarean'
-          WHEN lower(MODE_OF_DELIVERY) RLIKE 'forcep|ventouse|instrument|assisted' THEN 'instrumental'
-          WHEN lower(MODE_OF_DELIVERY) RLIKE 'normal|svd|vaginal|spontaneous' THEN 'vaginal'
+          WHEN lower(STATUS_CODE) RLIKE 'a|active|open' THEN 'active'
+          WHEN lower(STATUS_CODE) RLIKE 'c|closed|done' THEN 'closed'
+          WHEN lower(STATUS_CODE) RLIKE 'p|pending|hold' THEN 'pending'
           ELSE NULL
-        END AS deliveryMethod
+        END AS status
   3. Record it in attribute_mappings: ontology attribute name → the alias you \
-chose (e.g. "deliveryMethod" → "deliveryMethod").
+chose (e.g. "status" → "status").
   4. This is a LEGITIMATE exception to "use the column's original name": a \
 harmonized attribute is a CASE expression aliased to the clean attribute name. \
 Plain, non-coded attributes (dates, numbers, names, free-text) still use their \

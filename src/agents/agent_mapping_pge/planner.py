@@ -190,7 +190,7 @@ sentence reason.
 4. For each ontology class, decide which column serves as its canonical \
 identifier in each table — record under canonical_ids[]. When you are \
 uncertain, run distinct_count to confirm uniqueness/completeness.
-5. For each pair of tables that should join (intra-trust FK or cross-source \
+5. For each pair of tables that should join (intra-source FK or cross-source \
 value match), run column_value_overlap and only record join_keys[] when the \
 realised overlap_pct supports it. Use kind="same_trust_fk" for FK joins and \
 kind="cross_source_value_match" for value-matched joins across sources. \
@@ -213,42 +213,42 @@ column_value_overlap on a representative column pair to see whether the raw \
 values already share a format:
 
   • If overlap_pct > 0 → values are in compatible formats. Record bare \
-column names in canonical_column_per_table (e.g. ``"MOTHER_NHS_NO"``). \
+column names in canonical_column_per_table (e.g. ``"CUSTOMER_ID"``). \
 A UNION across the tables produces a coherent ID universe.
 
   • If overlap_pct == 0 → DO NOT conclude these are "different" or \
-"trust-scoped" entities. When two tables both map to the SAME ontology \
+"source-scoped" entities. When two tables both map to the SAME ontology \
 class, 0% overlap almost always means the SAME real-world key wrapped in \
-DIFFERENT trust-local encodings (prefixes, suffixes, embedded sub-IDs). \
+DIFFERENT source-local encodings (prefixes, suffixes, embedded sub-IDs). \
 Leaving them disjoint makes every relationship pointing at this class 100% \
 dangle — that is a FAILURE, not an acceptable outcome. You MUST normalize:
 
     STEP 1 — sample_table BOTH columns and read the raw values. Look for a \
-shared embedded substring across the trusts — a stable inner identifier \
-(UUID, NHS number, ``...-preg-<n>`` core) that appears in every trust's \
+shared embedded substring across the sources — a stable inner identifier \
+(UUID, account number, ``...-ord-<n>`` core) that appears in every source's \
 value with only the surrounding prefix/suffix differing.
 
     STEP 2 — write ONE scalar SQL expression PER TABLE that strips the \
-trust-specific wrapping and exposes that shared core in an identical form. \
+source-specific wrapping and exposes that shared core in an identical form. \
 Prefer extracting the shared core over stripping a single known prefix \
 (extraction is robust to multiple prefixes). When matching a hex/UUID core, \
 ALWAYS anchor the regex with a leading character class so a preceding dash \
 is not captured:
-          ✗ WRONG: regexp_extract(EPISODE_ID, '([a-f0-9-]+-preg-[0-9]+)', 1)
-                   → returns "-<uuid>-preg-1" (leading dash) — will NOT match
-          ✓ RIGHT: regexp_extract(EPISODE_ID, '([a-f0-9][a-f0-9-]+-preg-[0-9]+)', 1)
-                   → returns "<uuid>-preg-1"
+          ✗ WRONG: regexp_extract(ORDER_REF, '([a-f0-9-]+-ord-[0-9]+)', 1)
+                   → returns "-<uuid>-ord-1" (leading dash) — will NOT match
+          ✓ RIGHT: regexp_extract(ORDER_REF, '([a-f0-9][a-f0-9-]+-ord-[0-9]+)', 1)
+                   → returns "<uuid>-ord-1"
 
-    STEP 3 — for a DERIVED / child key (e.g. a Delivery, Baby or Apgar that \
-hangs off a pregnancy), DO NOT concatenate a suffix onto the RAW prefixed \
-local id — that re-introduces the trust prefix and the keys stay disjoint. \
-Extract the shared core FIRST, then append the role suffix, so every trust \
+    STEP 3 — for a DERIVED / child key (e.g. an OrderLine, Shipment or Payment \
+that hangs off an order), DO NOT concatenate a suffix onto the RAW prefixed \
+local id — that re-introduces the source prefix and the keys stay disjoint. \
+Extract the shared core FIRST, then append the role suffix, so every source \
 yields the identical synthetic key:
-          ✗ WRONG: trust_a "CONCAT(EPISODE_ID, '-del')"   (→ STA-<uuid>-preg-1-del)
-                   trust_b "delivery_id"                  (→ BUH-DEL-BUH-<uuid>-preg-1)
-          ✓ RIGHT: trust_a "CONCAT(regexp_extract(EPISODE_ID, '([a-f0-9][a-f0-9-]+-preg-[0-9]+)', 1), '-del')"
-                   trust_b "CONCAT(regexp_extract(delivery_id, '([a-f0-9][a-f0-9-]+-preg-[0-9]+)', 1), '-del')"
-                   (both → <uuid>-preg-1-del)
+          ✗ WRONG: source_a "CONCAT(ORDER_REF, '-line')"  (→ SA-<uuid>-ord-1-line)
+                   source_b "line_id"                     (→ SB-LN-SB-<uuid>-ord-1)
+          ✓ RIGHT: source_a "CONCAT(regexp_extract(ORDER_REF, '([a-f0-9][a-f0-9-]+-ord-[0-9]+)', 1), '-line')"
+                   source_b "CONCAT(regexp_extract(line_id, '([a-f0-9][a-f0-9-]+-ord-[0-9]+)', 1), '-line')"
+                   (both → <uuid>-ord-1-line)
 
     STEP 4 — PROVE IT. Call normalized_value_overlap with your two \
 expressions. It MUST return overlap_pct > 0. If it is still 0, your \
@@ -259,21 +259,22 @@ Do NOT call submit_source_model with an unverified normalization.
 all, omit that table from canonical_column_per_table and note why — but this \
 is rare; exhaust STEP 1–4 first.)
 
-  • COMPLETENESS — list EVERY covering trust. When more than one trust table \
+  • COMPLETENESS — list EVERY covering source. When more than one source table \
 realises the SAME class, include ALL of them in canonical_column_per_table, \
-not just the two you checked overlap on. The same patient/pregnancy is \
-typically present in trust_a AND trust_b AND trust_c; omitting one drops \
-30–60% of that entity's real instances and makes every relationship pointing \
-at it partially dangle. During candidate discovery (step 3) actively look for \
-the class across all source schemas before you settle on its canonical_ids.
+not just the two you checked overlap on. The same real-world entity is \
+typically present across multiple sources (e.g. source_a AND source_b AND \
+source_c); omitting one drops a large fraction of that entity's real instances \
+and makes every relationship pointing at it partially dangle. During candidate \
+discovery (step 3) actively look for the class across all source schemas before \
+you settle on its canonical_ids.
 
   • Whatever expression you record, the EntityGenerator drops it verbatim \
 into the SELECT aliased AS ID. Bare column names and SQL expressions are \
 both valid here.
 
   • Always update format_note to one sentence describing what the canonical \
-key looks like (e.g. ``"<NHS-uuid>-preg-<ordinal> core extracted from each \
-trust's local pregnancy id"``). Downstream agents read this.
+key looks like (e.g. ``"<account-uuid>-ord-<ordinal> core extracted from each \
+source's local order id"``). Downstream agents read this.
 
 SOURCEMODEL JSON SCHEMA (these key names are LOAD-BEARING — do not improvise)
 The `model` argument to submit_source_model has exactly this shape:

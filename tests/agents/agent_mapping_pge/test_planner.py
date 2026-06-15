@@ -500,13 +500,16 @@ class TestCanonicalKeyNormalizationPrompt:
     def test_zero_overlap_is_not_a_terminal_state(self):
         prompt = planner_mod.SYSTEM_PROMPT
         # The prompt must steer the model AWAY from accepting disjoint keys.
-        assert "trust-scoped" in prompt  # names the trap explicitly
+        # (Domain-neutral wording: "source-scoped", not "trust-scoped".)
+        assert "source-scoped" in prompt  # names the trap explicitly
         assert "100%" in prompt and "dangle" in prompt
 
     def test_regex_example_is_anchored(self):
         prompt = planner_mod.SYSTEM_PROMPT
-        # The correct, anchored pattern must be present...
-        assert "[a-f0-9][a-f0-9-]+-preg-" in prompt
+        # The correct, anchored pattern must be present (leading char-class so a
+        # preceding dash is not captured) — asserted on the structure, not on a
+        # domain-specific token, so the example stays usecase-agnostic.
+        assert "[a-f0-9][a-f0-9-]+-ord-" in prompt
         # ...and it must be flagged as the RIGHT one (the WRONG/RIGHT contrast
         # teaches the leading-dash pitfall).
         assert "✓ RIGHT" in prompt and "✗ WRONG" in prompt
@@ -516,4 +519,4 @@ class TestCanonicalKeyNormalizationPrompt:
         # Derived child keys must extract the shared core, then append suffix —
         # not concat onto the raw prefixed local id.
         assert "regexp_extract" in prompt
-        assert "-del" in prompt  # the worked Delivery example
+        assert "-line" in prompt  # the worked (domain-neutral) child-key example

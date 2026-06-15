@@ -1209,10 +1209,15 @@ async def generate_ontology_async(
 
             # Run the PGE intrinsic evaluator in-app (deterministic, no extra
             # LLM) so the user gets a quality scorecard for the generated
-            # ontology. Never breaks generation — returns None on failure.
-            from agents.pge_eval.inapp import score_generated_ontology
+            # ontology. Never breaks generation — the import + call are guarded
+            # so even an import-time failure can't fail an already-good run.
+            scorecard = None
+            try:
+                from agents.pge_eval.inapp import score_generated_ontology
 
-            scorecard = score_generated_ontology(owl_content, metadata)
+                scorecard = score_generated_ontology(owl_content, metadata)
+            except Exception as score_exc:  # noqa: BLE001
+                logger.warning("Wizard: in-app scoring unavailable: %s", score_exc)
             message = (
                 f"Generated {stats.get('classes', 0)} classes, "
                 f"{stats.get('properties', 0)} properties "

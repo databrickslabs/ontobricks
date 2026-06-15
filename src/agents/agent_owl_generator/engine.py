@@ -37,8 +37,8 @@ logger = get_logger(__name__)
 MAX_ITERATIONS = 10
 LLM_TIMEOUT = 180
 # Exhaustive per-class datatype-property coverage (see # ATTRIBUTE COVERAGE in
-# the system prompt) makes the Turtle output large — a full maternity ontology
-# with ~17 classes and ~50+ datatype properties runs well past the old 4096
+# the system prompt) makes the Turtle output large — a large domain ontology
+# with dozens of classes and 50+ datatype properties runs well past the old 4096
 # ceiling, which silently truncated the final statement and broke parsing.
 # Claude Opus supports large completions; 16k tokens fits an exhaustive
 # domain ontology with headroom.
@@ -127,25 +127,26 @@ with few datatype properties produces an ID+Label-only entity that is USELESS fo
 analytics. So model attributes EXHAUSTIVELY, not minimally:
 • For EVERY class, emit a DatatypeProperty for EVERY meaningful source column that
   describes an instance of that class — across ALL tables that realise the class.
-  A single class is usually realised by several trust tables that each hold the same
-  real-world entity in a trust-local schema; UNION their columns mentally and cover
-  the full set. Use get_table_detail on each covering table to see every column.
+  A single class is often realised by several source tables (e.g. one per source
+  system, region, or tenant) that each hold the same real-world entity in a local
+  schema; UNION their columns mentally and cover the full set. Use get_table_detail
+  on each covering table to see every column.
 • "Meaningful" = a genuine attribute of the entity: dates, measurements, codes,
   scores, names, statuses, flags, free-text notes. EXCLUDE ONLY: surrogate/auto-
   increment row keys with no analytical value, audit columns (created_at, updated_by,
   etl_*, _ingest_*), and the foreign-key columns that ObjectProperty relationships
   already carry.
-• When two trusts expose the SAME attribute under different column names
-  (delivery_method vs MODE_OF_DELIVERY; bf_status vs FEEDING), emit ONE datatype
-  property — do NOT emit a per-trust duplicate. The mapping layer reconciles the
+• When two sources expose the SAME attribute under different column names
+  (e.g. total_amount vs TOTAL_AMT; status vs STATUS_CODE), emit ONE datatype
+  property — do NOT emit a per-source duplicate. The mapping layer reconciles the
   source columns.
 • Name datatype properties in lowerCamelCase derived from business meaning
-  (mode_of_delivery → deliveryMethod, BOOKING_GEST_WKS → bookingGestationWeeks).
+  (order_date → orderDate, TOTAL_AMT → totalAmount).
   Use ONLY [a-z][A-Za-z0-9]* — never underscores, hyphens, or backslash escapes.
 • The "at least 2 datatype properties" floor in the guidelines is a MINIMUM, not a
-  target. Rich clinical entities (Pregnancy, Delivery, an antenatal/postnatal
-  contact, a maternity episode) typically warrant 6–11 datatype properties. Aim for
-  full column coverage, not a tidy subset.
+  target. Rich, real-world entities (a transaction, an encounter, an event, a core
+  business object) typically warrant 6–11 datatype properties. Aim for full column
+  coverage, not a tidy subset.
 
 # RELATIONSHIP RULES
 • NEVER create bidirectional relationships.
@@ -869,7 +870,13 @@ def run_agent(
             eval_feedback = _evaluate_ontology_stage(
                 content, ctx.metadata, iteration + 1
             )
-            if eval_feedback and _owl_eval_rounds < MAX_OWL_EVAL_ROUNDS:
+            # Only spend an eval-retry round when there's another iteration left
+            # to regenerate in. Without this guard a retry on the penultimate
+            # iteration could exhaust MAX_ITERATIONS and fall through to the
+            # failure path — discarding an ontology that already parses and is
+            # only advisory-imperfect. On the last iteration we accept it.
+            _room_to_retry = iteration < MAX_ITERATIONS - 1
+            if eval_feedback and _owl_eval_rounds < MAX_OWL_EVAL_ROUNDS and _room_to_retry:
                 _owl_eval_rounds += 1
                 notify(
                     f"Ontology defects found — eval round "

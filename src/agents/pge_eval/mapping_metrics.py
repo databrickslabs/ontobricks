@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 from agents.pge_eval.normalize import (
     NormalizedOntology,
+    local_name,
     normalize_name,
     normalize_ontology,
 )
@@ -59,7 +60,7 @@ def _class_dp_counts(norm: NormalizedOntology) -> Dict[str, int]:
         for key in (c.get("uri"), c.get("name")):
             if key:
                 out[key] = n
-                out[key.rsplit("#", 1)[-1].rsplit("/", 1)[-1]] = n
+                out[local_name(key)] = n
     return out
 
 
@@ -118,11 +119,16 @@ def evaluate_mapping(
                 if lo <= overlap <= hi:
                     band_compliant += 1
         if _is_entity_report(metrics):
-            id_total += 1
             row_count = int(metrics.get("row_count", 0))
+            # A legitimately empty (0-row) entity is id-vacuous: it has no ids to
+            # be (non-)unique, so it neither passes nor fails id-integrity.
+            # Counting it as a failure would RED a clean run on empty source data.
+            if row_count == 0:
+                continue
+            id_total += 1
             distinct = int(metrics.get("distinct_id_count", 0))
             null_id = int(metrics.get("null_id_count", 0))
-            if row_count > 0 and distinct == row_count and null_id == 0:
+            if distinct == row_count and null_id == 0:
                 id_ok += 1
 
     dangling_target_pct_max = round(max(dangling_target_pcts), 6) if dangling_target_pcts else 0.0
@@ -149,7 +155,7 @@ def evaluate_mapping(
         cls = em.get("ontology_class") or em.get("class_name") or ""
         if cls and cls not in counted_classes:
             counted_classes.add(cls)
-            dp_denominator += dp_counts.get(cls, dp_counts.get(cls.rsplit("#", 1)[-1].rsplit("/", 1)[-1], 0))
+            dp_denominator += dp_counts.get(cls, dp_counts.get(local_name(cls), 0))
         for value in am.values():
             for tok in _IDENT_RE.findall(str(value)):
                 k = normalize_name(tok)

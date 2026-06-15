@@ -537,12 +537,14 @@ def test_system_prompt_mandates_union_for_cross_source(monkeypatch, no_sleep):
 
 
 def test_system_prompt_mandates_value_harmonization(monkeypatch, no_sleep):
-    """Coded attributes (delivery method, feeding status, outcome) are spelled
-    differently across trusts. The Generator must harmonize them to one
-    canonical token set with a CASE expression — copying the raw column
-    verbatim yields a trust-fractured vocabulary that breaks KPI aggregation
-    (the V1.1 quality bar). Also guards the [0-9]-not-\\d regex-safety rule that
-    survives the OntoBricks build's backslash-strip."""
+    """Coded (controlled-vocabulary) attributes are spelled differently across
+    sources. The Generator must harmonize them to one canonical token set with a
+    CASE expression — copying the raw column verbatim yields a source-fractured
+    vocabulary that breaks KPI aggregation. Also guards the [0-9]-not-\\d
+    regex-safety rule that survives the OntoBricks build's backslash-strip.
+
+    Asserts on the domain-neutral *technique* markers, not example vocabulary, so
+    the prompt stays usecase-agnostic and the test is not brittle to rewordings."""
     fake = FakeLLM(
         [
             _llm_response(
@@ -568,7 +570,7 @@ def test_system_prompt_mandates_value_harmonization(monkeypatch, no_sleep):
     assert "controlled vocabulary" in system_content
     # Canonical token set + the discover-before-harmonize discipline.
     assert "SELECT DISTINCT" in system_content
-    assert "caesarean" in system_content and "vaginal" in system_content
+    assert "CASE" in system_content and "canonical lowercase token" in system_content
     # Regex-safety rule: explicit char classes, never backslash escapes.
     assert "[0-9]" in system_content
     assert "\\d" in system_content  # mentioned only to forbid it

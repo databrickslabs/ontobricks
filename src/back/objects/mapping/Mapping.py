@@ -380,18 +380,23 @@ class Mapping:
 
             # Run the PGE intrinsic evaluator in-app on the completed mapping
             # run (deterministic — re-uses the captured per-item evaluations,
-            # no extra LLM). Never breaks the run; returns None on failure.
-            from agents.pge_eval.inapp import score_mapping_run
+            # no extra LLM). Never breaks the run; the import + call are guarded
+            # so even an import-time failure can't fail an already-good run.
+            scorecard = None
+            try:
+                from agents.pge_eval.inapp import score_mapping_run
 
-            scorecard = score_mapping_run(
-                ontology={"entities": entities, "relationships": relationships},
-                metadata=schema_context,
-                mapping_run_log=merged_mapping_run_log,
-                mapping_evaluations=merged_mapping_evaluations,
-                entity_mappings=all_entity_mappings,
-                relationship_mappings=all_relationship_mappings,
-                usage=total_usage,
-            )
+                scorecard = score_mapping_run(
+                    ontology={"entities": entities, "relationships": relationships},
+                    metadata=schema_context,
+                    mapping_run_log=merged_mapping_run_log,
+                    mapping_evaluations=merged_mapping_evaluations,
+                    entity_mappings=all_entity_mappings,
+                    relationship_mappings=all_relationship_mappings,
+                    usage=total_usage,
+                )
+            except Exception as score_exc:  # noqa: BLE001
+                logger.warning("Auto-assign: in-app scoring unavailable: %s", score_exc)
             if scorecard:
                 message += f" · quality {scorecard['verdict']}"
 

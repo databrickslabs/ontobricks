@@ -146,6 +146,15 @@ def evaluate_tier3(
     base_id = baseline.get("run_id")
     regressions: List[Dict[str, Any]] = []
     for spec in METRIC_SPECS:
+        # A conditional metric (e.g. cross-source band compliance) only counts
+        # as a regression when it was actively measured in BOTH runs — otherwise
+        # the first real measurement after an inactive 1.0 looks like a drop.
+        cond = spec.get("conditional")
+        if cond:
+            cur_active = (stages.get(spec["stage"], {}) or {}).get(cond, False)
+            base_active = (base_stages.get(spec["stage"], {}) or {}).get(cond, False)
+            if not (cur_active and base_active):
+                continue
         value = get_metric(stages, spec["stage"], spec["key"])
         base_value = get_metric(base_stages, spec["stage"], spec["key"])
         if value is None or base_value is None:

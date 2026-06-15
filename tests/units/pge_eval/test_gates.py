@@ -110,3 +110,27 @@ def test_tier3_tolerance_absorbs_tiny_drop():
     current = _stages(mapping={"entity_completeness": 0.99})  # within 0.02 tol
     res = gates.evaluate_tier3(current, baseline)
     assert res["passed"] is True
+
+
+def test_tier3_conditional_band_not_flagged_when_inactive():
+    # Baseline had no band (inactive 1.0); current introduces a band < 1.0.
+    # This is a first measurement, NOT a regression — must NOT flag.
+    base = _stages(mapping={"cross_source_band_compliance": 1.0})
+    base["mapping"]["band_active"] = False
+    baseline = {"run_id": "b1", "stages": base}
+    cur = _stages(mapping={"cross_source_band_compliance": 0.6})
+    cur["mapping"]["band_active"] = True
+    res = gates.evaluate_tier3(cur, baseline)
+    assert res["passed"] is True
+    assert not any(r["metric"].endswith("cross_source_band_compliance") for r in res["regressions"])
+
+
+def test_tier3_conditional_band_flagged_when_active_in_both():
+    base = _stages(mapping={"cross_source_band_compliance": 1.0})
+    base["mapping"]["band_active"] = True
+    baseline = {"run_id": "b1", "stages": base}
+    cur = _stages(mapping={"cross_source_band_compliance": 0.6})
+    cur["mapping"]["band_active"] = True
+    res = gates.evaluate_tier3(cur, baseline)
+    assert res["passed"] is False
+    assert any(r["metric"].endswith("cross_source_band_compliance") for r in res["regressions"])
