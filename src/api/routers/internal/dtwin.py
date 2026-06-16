@@ -38,6 +38,55 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/dtwin", tags=["Query"])
 
+# Canonical rdf:type predicate. Neighbour expansion must preserve type
+# triples so the graph viewer can group/colour expanded nodes by their
+# declared entity type rather than their raw identifier (issue #52).
+_RDF_TYPE_URI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+
+
+def _is_type_predicate(predicate: str) -> bool:
+    """Return True for ``rdf:type`` predicates (full URI or ``#type``/``/type``)."""
+    if not predicate:
+        return False
+    return (
+        predicate == _RDF_TYPE_URI
+        or predicate.endswith("#type")
+        or predicate.endswith("/type")
+    )
+
+
+def _filter_neighbor_triples(
+    rows: list[dict[str, str]],
+    visited: set[str],
+    limit: int,
+) -> list[dict[str, str]]:
+    """Reduce raw store rows to the triples the graph viewer can render.
+
+    A triple is kept when its object is a literal, when its object URI is
+    part of *visited* (so edges have both endpoints rendered), or when it is
+    an ``rdf:type`` triple. Type triples are preserved even though the class
+    URI is never in *visited*: the front-end groups and colours nodes by
+    their declared type, so dropping them makes freshly expanded nodes fall
+    back to identifier-based grouping with random colours (issue #52).
+    """
+    triples: list[dict[str, str]] = []
+    seen: set = set()
+    for r in rows:
+        s = r.get("subject", "") or ""
+        p = r.get("predicate", "") or ""
+        o = r.get("object", "") or ""
+        key = (s, p, o)
+        if key in seen:
+            continue
+        is_uri_obj = o.startswith("http://") or o.startswith("https://")
+        if is_uri_obj and o not in visited and not _is_type_predicate(p):
+            continue
+        seen.add(key)
+        triples.append({"subject": s, "predicate": p, "object": o})
+        if len(triples) >= limit:
+            break
+    return triples
+
 
 # ===========================================
 # Query Execution
@@ -854,20 +903,18 @@ async def sync_info(
         )
         return out
 
-    async def _dt_exist():
-        t_s = _t.monotonic()
-        # Build section must reflect the live state of Lakebase: never serve a
-        # stale `lakebase_table_exists=False` left behind by a previous timeout.
-        out = await dt.get_or_fetch_dt_existence(settings, force_refresh=True)
-        logger.debug(
-            "sync_info: dt existence took %.0fms", (_t.monotonic() - t_s) * 1000
-        )
-        return out
+    # DT existence is served cache-first so the Build page paints instantly.
+    # The live probe is a cold SQL-warehouse / Lakebase wake-up that used to
+    # block this endpoint for tens of seconds; it now runs off the request path.
+    # The frontend confirms the live state with a non-blocking follow-up to
+    # `/dtwin/sync/dt-existence` whenever `dt_existence_pending` is set.
+    cached_existence = dt.get_ts_cache("dt_existence")
+    dt_exist = cached_existence or dt.pending_dt_existence(settings)
+    dt_existence_pending = True
 
-    _, ts_status, dt_exist = await asyncio.gather(
+    _, ts_status = await asyncio.gather(
         _schedule_sync(),
         _graph_status(),
-        _dt_exist(),
     )
 
     if domain.last_build and domain.last_build != last_build:
@@ -889,6 +936,7 @@ async def sync_info(
         "triplestore_status": ts_status,
         "domain_info": domain_info_data,
         "dt_existence": dt_exist,
+        "dt_existence_pending": dt_existence_pending,
         "changes": {"needs_rebuild": needs_rebuild},
     }
 
@@ -2142,22 +2190,7 @@ async def dtwin_neighbors(
 
         rows = store.get_triples_for_subjects(query_table, list(visited))
 
-        triples: list[dict[str, str]] = []
-        seen: set = set()
-        for r in rows:
-            s = r.get("subject", "") or ""
-            p = r.get("predicate", "") or ""
-            o = r.get("object", "") or ""
-            key = (s, p, o)
-            if key in seen:
-                continue
-            is_uri_obj = o.startswith("http://") or o.startswith("https://")
-            if is_uri_obj and o not in visited:
-                continue
-            seen.add(key)
-            triples.append({"subject": s, "predicate": p, "object": o})
-            if len(triples) >= limit:
-                break
+        triples = _filter_neighbor_triples(rows, visited, limit)
 
         return {
             "success": True,

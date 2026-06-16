@@ -1,0 +1,525 @@
+# 2026-06-05 — Deploy config simplification (Lakebase)
+
+## Collapse Lakebase deploy config to its irreducible surface
+
+**Context:** The Lakebase block in `scripts/deploy.config.sh` carried three
+layers, two of which were pure pass-through indirection. The Graph DB
+"separate instance" variables (`LAKEBASE_GRAPH_PROJECT/_BRANCH/_DATABASE`)
+all defaulted to empty and were resolved back to the registry values in
+`deploy.sh` — a hypothetical layout that was never used, since the graph DB,
+sync tables, and registry always co-locate in the same Lakebase
+project/branch/database and differ only by Postgres schema. The
+`LAKEBASE_BOOTSTRAP_INSTANCE/_BRANCH/_SCHEMA` variables were likewise aliases
+of `LAKEBASE_PROJECT` / `LAKEBASE_BRANCH` / `LAKEBASE_REGISTRY_SCHEMA`. Only
+the Postgres datname was genuinely distinct. The mandatory Lakebase config
+surface drops from 13 variables to 7.
+
+**Changes:**
+
+1. `scripts/deploy.config.sh` — removed `DEFAULT_LAKEBASE_BOOTSTRAP_DATABASE`,
+   `DEFAULT_LAKEBASE_GRAPH_PROJECT/_BRANCH/_DATABASE` and the
+   `LAKEBASE_BOOTSTRAP_INSTANCE/_BRANCH/_DATABASE/_SCHEMA` +
+   `LAKEBASE_GRAPH_PROJECT/_BRANCH/_DATABASE` exports. Renamed the datname to
+   `LAKEBASE_DATABASE` (moved into section 3 beside the other core Lakebase
+   vars). Section 3b now only declares `LAKEBASE_GRAPH_SCHEMA` +
+   `LAKEBASE_SYNC_SCHEMA`. `APP_LAKEBASE_DATABASE` now tracks `LAKEBASE_DATABASE`.
+2. `scripts/deploy.sh` — registry/graph/sync grant calls now pass
+   `-i $LAKEBASE_PROJECT -b $LAKEBASE_BRANCH -d $LAKEBASE_DATABASE` directly and
+   vary only `-s` per schema; dropped the `_GRAPH_INSTANCE/_BRANCH/_DATABASE`
+   resolution block and updated the error-guidance echo + a stale comment.
+3. `Makefile` — `bootstrap-lakebase` target uses the core vars instead of the
+   removed `LAKEBASE_BOOTSTRAP_*` aliases.
+4. `scripts/bootstrap-lakebase-perms.sh` — rewrote the three-schema header
+   comment block to reflect the same-instance model; dropped the
+   "different instance" subsection and example.
+5. `scripts/migrate-registry-to-lakebase.sh` — updated the env fallbacks from
+   `LAKEBASE_BOOTSTRAP_*` to `LAKEBASE_REGISTRY_SCHEMA` / `LAKEBASE_DATABASE` /
+   `LAKEBASE_PROJECT` / `LAKEBASE_BRANCH`.
+6. `README.md`, `docs/deployment.md` — renamed the deploy-config variable
+   references in the three-schema tables and removed the "separate Lakebase
+   instance" guidance.
+
+**Compatibility note:** Anyone exporting `LAKEBASE_BOOTSTRAP_DATABASE` (or the
+other removed `LAKEBASE_BOOTSTRAP_*` / `LAKEBASE_GRAPH_*` vars) in their
+env/CI loses that override silently — set `LAKEBASE_DATABASE` instead. The
+legacy `databricks_postgres` datname guidance survives, now via
+`LAKEBASE_DATABASE=databricks_postgres`. Capability removed: pinning the graph
+DB to a different Lakebase instance than the registry (never realistic given
+synced-table co-location requirements).
+
+**Modified files:**
+- `scripts/deploy.config.sh`
+- `scripts/deploy.sh`
+- `Makefile`
+- `scripts/bootstrap-lakebase-perms.sh`
+- `scripts/migrate-registry-to-lakebase.sh`
+- `README.md`
+- `docs/deployment.md`
+
+**Test result:** No Python touched. `bash -n` passes on all 4 modified shell
+scripts; sourcing `deploy.config.sh` resolves the new `LAKEBASE_DATABASE` /
+`APP_LAKEBASE_DATABASE` correctly and leaves the removed vars unset. Full
+`pytest` suite re-run (see session) — pre-existing `tests/property/*`
+collection errors from the missing optional `hypothesis` dev dependency are
+unrelated to this change.
+
+## Section-4 fallbacks track section-3 bound values
+
+**Context:** The `app.yaml` runtime fallbacks (section 4 of
+`deploy.config.sh`) carried their own `DEFAULT_APP_*` literals for the
+registry triplet and the DBSQL warehouse, which had silently drifted from
+the section-3 bound values (e.g. fallback registry `benoit_cayla.ontobricks.
+OntoBricksRegistry` vs bound `benoit_cayla.ontobricks_demo.registry`; fallback
+warehouse `66e8366e84d57752` vs bound `d2096aa075ad44a3`). Since these are
+only consulted on the unbound path (local dev / MCP), the divergence was a
+latent footgun. Map them onto the section-3 values so the unbound path uses
+the same target you actually deploy.
+
+**Changes:**
+
+1. `scripts/deploy.config.sh` — removed `DEFAULT_APP_SQL_WAREHOUSE_FALLBACK`,
+   `DEFAULT_APP_REGISTRY_CATALOG/_SCHEMA/_VOLUME`. `APP_SQL_WAREHOUSE_FALLBACK`
+   now defaults to `$WAREHOUSE_ID`; `APP_REGISTRY_CATALOG/_SCHEMA/_VOLUME`
+   default to `$REGISTRY_CATALOG/_SCHEMA/_VOLUME`. All remain env-overridable.
+2. `scripts/deploy.config.sh` — `APP_TRIPLESTORE_TABLE` now composes its
+   catalog.schema from `REGISTRY_CATALOG.REGISTRY_SCHEMA`; only the table name
+   (`DEFAULT_APP_TRIPLESTORE_TABLE_NAME=default_triplestore`) stays a literal.
+   Was hard-coded `benoit_cayla.ontobricks.default_triplestore`, now resolves
+   to `benoit_cayla.ontobricks_demo.default_triplestore`.
+   Left independent: `DEFAULT_APP_MLFLOW_TRACKING_URI` — no section-3 counterpart.
+
+**Modified files:**
+- `scripts/deploy.config.sh`
+
+**Test result:** Verified in a clean `env -i` subshell — `APP_SQL_WAREHOUSE_
+FALLBACK` now equals `WAREHOUSE_ID` and the `APP_REGISTRY_*` fallbacks equal
+the bound `REGISTRY_*`. `bash -n` passes.
+
+## Remove dead DATABRICKS_CATALOG / DATABRICKS_SCHEMA config chain
+
+**Context:** `DATABRICKS_CATALOG` / `DATABRICKS_SCHEMA` flowed from
+`deploy.config.sh` → `app.yaml` → the `Settings.databricks_catalog` /
+`databricks_schema` pydantic fields, but **no application code read those
+fields** (only a settings unit-test assertion referenced them). The whole
+chain was leftover from before the registry/domain-session config existed.
+Removed end-to-end.
+
+**Changes:**
+
+1. `src/shared/config/settings.py` — removed the `databricks_catalog` /
+   `databricks_schema` fields.
+2. `app.yaml.template` — removed the `DATABRICKS_CATALOG` / `DATABRICKS_SCHEMA`
+   env entries.
+3. `scripts/deploy.config.sh` — removed `DEFAULT_APP_DATABRICKS_CATALOG` /
+   `_SCHEMA` and their `APP_DATABRICKS_*` exports.
+4. `.env.example` — removed the "Default Catalog/Schema" section.
+5. `tests/units/settings/test_config.py` — removed the
+   `s.databricks_catalog == "main"` assertion.
+6. `docs/deployment.md`, `docs/get-started.md` — removed the env-block,
+   app.yaml, and config-table references.
+
+**Modified files:**
+- `src/shared/config/settings.py`
+- `app.yaml.template`
+- `scripts/deploy.config.sh`
+- `.env.example`
+- `tests/units/settings/test_config.py`
+- `docs/deployment.md`
+- `docs/get-started.md`
+
+**Test result:** `tests/units/settings/test_config.py` — 11 passed in 0.09s.
+Repo-wide grep confirms no remaining references outside generated Sphinx HTML.
+`settings.py` parses clean; no lint errors. (Note: the pytest process hangs at
+teardown/atexit in this local env — tests themselves complete instantly;
+pre-existing and unrelated.)
+
+## Harden deploy.sh error handling
+
+**Context:** `scripts/deploy.sh` relied on `set -euo pipefail` alone — a
+failure mid-deploy aborted with no indication of which step broke or why, and
+there were no preflight guards, so a missing tool / empty config value / wrong
+target only surfaced as an opaque Databricks CLI error (or a partial deploy).
+
+**Changes:**
+
+1. `scripts/deploy.sh` — added colourised step logging (`begin_step` / `info`
+   / `ok` / `warn` / `die`, TTY-aware so CI logs stay plain) and an `ERR` trap
+   (`_on_error`) that prints the failing step name, the exact `BASH_COMMAND`,
+   the `deploy.sh:<line>`, the exit code, and a step-specific hint.
+2. New **Preflight** step (runs before any API call): asserts required tooling
+   (`databricks`, `python3`, with CLI-version display), required files
+   (`databricks.yml`, `app.yaml.template`, renderer, bootstrap scripts — only
+   those the chosen flags will use), and non-empty required config values
+   (`APP_NAME`, `WAREHOUSE_ID`, `REGISTRY_*`, and on a Lakebase target
+   `LAKEBASE_*`). Warns when `LAKEBASE_DATABASE_RESOURCE_SEGMENT` is not a
+   `db-…` id, and when the target is not one of the documented values.
+3. Auth verification promoted to its own early step with a fail-fast `die` +
+   login hint; username resolution made tolerant.
+4. Render / Validate / Deploy / Run each wrapped with a `die` carrying a
+   tailored remediation hint; render now asserts `app.yaml` was produced.
+5. Verify / self-permission / Lakebase-grant steps converted to the new
+   helpers; self-permission failure now warns with a `make bootstrap-perms`
+   pointer instead of being silently swallowed. Replaced ad-hoc
+   `[[ $TARGET == *lakebase* ]]` checks with a single `IS_LAKEBASE` flag.
+6. Updated the header docstring (9-step flow) and the `--help` line range.
+
+**Modified files:**
+- `scripts/deploy.sh`
+
+**Test result:** `bash -n` passes. `--help` renders the new flow. Verified the
+guards abort cleanly before any API call: unknown option → `die`; missing
+`databricks` on PATH → preflight `die` with install hint (exit 1). No real
+deploy executed.
+
+## Add --dry-run + resource existence checks to deploy.sh
+
+**Context:** Follow-up to the error-handling work — run *all* checks before
+the deploy mutates anything, and add a way to run only the checks.
+
+**Changes:**
+
+1. `scripts/deploy.sh` — new **Resource existence checks** step (after
+   validate, before deploy): read-only verification that the upstream
+   resources the bundle binds to actually exist — SQL warehouse
+   (`databricks warehouses get`), registry Volume (`databricks volumes read`),
+   and on a Lakebase target the Postgres database (`databricks postgres
+   list-databases` + `db-…` segment match). Soft `warn` on a normal deploy;
+   upgraded to a hard `die` under `--dry-run` so a check run is decisive.
+2. `scripts/deploy.sh` — new `--dry-run` (alias `--check`) flag: runs
+   preflight → auth → render → validate → resource checks, prints a
+   `=== Dry run OK ===` summary, and exits 0 **before** deploy. (app.yaml is
+   still rendered locally — it is a generated throwaway.)
+3. `scripts/deploy.sh` — renumbered the step-comment headers (now 11 steps),
+   updated the header docstring + usage + `--help` line range.
+4. `Makefile` — new `deploy-dry-run` target (and `.PHONY` + help entry)
+   wrapping `scripts/deploy.sh --dry-run`.
+
+**Modified files:**
+- `scripts/deploy.sh`
+- `Makefile`
+
+**Test result:** `bash -n` passes. Ran `scripts/deploy.sh --dry-run` against
+the live workspace end-to-end: preflight + auth (benoit.cayla@databricks.com)
++ render + `bundle validate` + all three resource checks (warehouse, volume,
+Lakebase `db-v6vc-8ibz5oeigo`) passed; exited 0 with no remote changes.
+
+## Make deploy registry-scoped: rename datname, drop graph/sync grants
+
+**Context:** Correction to the earlier "same-instance" assumption in this
+file. There are only **two** Lakebase schemas (registry + graph — the "sync"
+schema is a sub-case of the graph side under `managed_synced`), and they may
+live in **different** Lakebase projects: the graph DB is configured in-app
+(`Settings → Graph DB` → `graph_engine_config`), not at deploy time. So
+`deploy.sh` reaching into the graph/sync schemas with the *registry's*
+project/database was unsafe. The deploy script is now strictly
+registry-scoped, and the datname variable is renamed to make that explicit.
+
+**Changes:**
+
+1. `scripts/deploy.config.sh` — renamed `LAKEBASE_DATABASE` →
+   `LAKEBASE_REGISTRY_DATABASE` (and `DEFAULT_LAKEBASE_DATABASE` →
+   `DEFAULT_LAKEBASE_REGISTRY_DATABASE`), symmetric with
+   `LAKEBASE_REGISTRY_SCHEMA`. Removed the section-3b `LAKEBASE_GRAPH_SCHEMA` /
+   `LAKEBASE_SYNC_SCHEMA` exports entirely. `APP_LAKEBASE_DATABASE` now tracks
+   `LAKEBASE_REGISTRY_DATABASE`.
+2. `scripts/deploy.sh` — `require_var` and the registry grant use
+   `LAKEBASE_REGISTRY_DATABASE`. Removed the graph + sync grant blocks from
+   step 11; it now grants the registry schema only, with a comment pointing to
+   the in-app "Create graph DB" flow for the graph schema.
+3. `Makefile` — `bootstrap-lakebase` uses `LAKEBASE_REGISTRY_DATABASE`.
+4. `scripts/migrate-registry-to-lakebase.sh` — datname fallback reads
+   `LAKEBASE_REGISTRY_DATABASE` (the app-runtime `LAKEBASE_DATABASE` export it
+   emits for the embedded migration is unchanged — that's the Settings
+   contract).
+5. `scripts/bootstrap-lakebase-perms.sh` — rewrote the header from
+   "three same-instance schemas" to a generic per-schema grant tool: registry
+   (auto, via deploy.sh) vs graph (in-app / manual, possibly a different
+   project).
+6. `README.md`, `docs/deployment.md`, `docs/lakebase-graphdb.md` — updated the
+   permission-grant tables and variable references to the two-schema,
+   registry-scoped model; graph examples now use the graph DB's own
+   project/branch/database.
+
+**Compatibility note:** anyone exporting `LAKEBASE_DATABASE`,
+`LAKEBASE_GRAPH_SCHEMA`, or `LAKEBASE_SYNC_SCHEMA` to influence the **deploy**
+loses that override — set `LAKEBASE_REGISTRY_DATABASE` for the datname, and
+grant the graph schema via the in-app flow or a manual
+`bootstrap-lakebase-perms.sh` run. The app-runtime `LAKEBASE_DATABASE` env var
+(read by `Settings` / `LakebaseAuth`) is unchanged.
+
+**Modified files:**
+- `scripts/deploy.config.sh`
+- `scripts/deploy.sh`
+- `Makefile`
+- `scripts/migrate-registry-to-lakebase.sh`
+- `scripts/bootstrap-lakebase-perms.sh`
+- `README.md`
+- `docs/deployment.md`
+- `docs/lakebase-graphdb.md`
+
+**Test result:** `bash -n` passes on all 3 modified shell scripts. Sourcing
+`deploy.config.sh` in a clean `env -i` subshell resolves
+`LAKEBASE_REGISTRY_DATABASE=ontobricks_demo`,
+`APP_LAKEBASE_DATABASE=ontobricks_demo`, and leaves `LAKEBASE_GRAPH_SCHEMA`
+unset. Repo grep confirms the only remaining `LAKEBASE_DATABASE` references are
+the intended app-runtime env var (migrate script export, `src/**`, app.yaml
+template, .env/get-started examples).
+
+## Fix: domain_versions.status column missing on upgraded deployments
+
+**Context:** App crashed with `psycopg.errors.UndefinedColumn: column v.status
+does not exist` when listing registry domains. The `_ensure_domain_versions_
+status_column` self-heal in `store.py` ran an `ALTER TABLE` at runtime but the
+app SP doesn't own the tables (owner is `benoit.cayla@databricks.com`), so it
+silently swallowed the failure (logged as WARNING) and the SELECT immediately
+after hit the missing column.
+
+**Root fix applied directly:** `ALTER TABLE ontobricks_demo.domain_versions ADD
+COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'DRAFT'` + index — run as
+the schema owner, column now present, all 8 domain versions defaulted to
+`DRAFT`. App immediately usable without redeploy.
+
+**Structural fixes:**
+
+1. `scripts/bootstrap-lakebase-perms.sh` — added Step 2b (between schema-
+   exists check and SP grants loop): runs the `status` column migration +
+   index as the schema owner. Idempotent (`ADD COLUMN IF NOT EXISTS` /
+   `CREATE INDEX IF NOT EXISTS`). Any future `make deploy` or
+   `make bootstrap-lakebase` will apply it automatically so upgraded
+   deployments never hit this gap again.
+2. `src/back/objects/registry/store/lakebase/store.py` —
+   `_ensure_domain_versions_status_column` now logs at `ERROR` (not
+   `WARNING`) with an actionable hint pointing to `make bootstrap-lakebase`
+   when the ALTER fails, so the misconfiguration surfaces in app logs.
+
+**Modified files:**
+- `scripts/bootstrap-lakebase-perms.sh`
+- `src/back/objects/registry/store/lakebase/store.py`
+
+**Test result:** Column added and verified in Lakebase (`status|text|'DRAFT'::text`).
+`bash -n` clean; `import store` clean. Domain listing works in the deployed app.
+
+## Multi-instance deploy: change DEFAULT_APP_NAME only
+
+**Context:** Deploying a second instance previously required manually updating
+5 variables (MCP app name, registry schema, Lakebase schema, Lakebase datname,
+DAB target). This made the "just spin up a new instance" workflow error-prone.
+
+**Changes:**
+
+1. `scripts/deploy.config.sh` — restructured section 0 into three sub-sections:
+   - **0a. Instance identity** — `DEFAULT_APP_NAME` is now THE single line
+     to edit. Everything else derives from it.
+   - **0b. Workspace constants** — shared across instances (warehouse ID,
+     UC catalog, Lakebase project/branch/segment). Set once per workspace.
+   - **0b2. Schema name override** — escape hatch (`DEFAULT_SCHEMA_OVERRIDE`)
+     for existing deployments whose schema predates the naming convention.
+     Set to `""` for new deployments; leave set for legacy ones.
+   - **0c. Derived defaults** — auto-computes `DEFAULT_MCP_APP_NAME`,
+     `DEFAULT_REGISTRY_SCHEMA`, `DEFAULT_LAKEBASE_REGISTRY_SCHEMA`,
+     `DEFAULT_LAKEBASE_REGISTRY_DATABASE` from `DEFAULT_APP_NAME`
+     (hyphens → underscores). `DEFAULT_DAB_TARGET` corrected to
+     `dev-lakebase` (was wrong `"ontobricks"`).
+
+   Existing deployment (`ontobricks-050` / `ontobricks_demo` schema) continues
+   working because `DEFAULT_SCHEMA_OVERRIDE="ontobricks_demo"` is set.
+   New instance example: set `DEFAULT_APP_NAME="ontobricks-foo"` and
+   `DEFAULT_SCHEMA_OVERRIDE=""` → `APP=ontobricks-foo`,
+   `MCP=mcp-ontobricks-foo`, all schemas = `ontobricks_foo`.
+
+**Modified files:**
+- `scripts/deploy.config.sh`
+
+**Test result:** Both scenarios verified in `env -i` clean subshell:
+existing → `REGISTRY_SCHEMA=ontobricks_demo`; new instance (`ontobricks-foo`,
+no override) → all three schema names = `ontobricks_foo`, MCP =
+`mcp-ontobricks-foo`.
+
+## Fix: SP permission errors during Digital Twin Build (VIEW + pipeline)
+
+**Context:** After fresh deploy, Digital Twin Build failed with two distinct
+permission errors in the `managed_synced` code path:
+
+1. `Permission denied while creating the VIEW … MANAGE on Table
+   'benoit_cayla.ontobricks_demo.triplestore_cust360auto_v4'` — triplestore
+   views previously created by `benoit.cayla@databricks.com` had
+   `owner=unknown`; the SP had `ALL_PRIVILEGES` on the catalog but not
+   `MANAGE` on those specific objects, so `CREATE OR REPLACE VIEW` was refused.
+
+2. `User 95084ef9 does not have View permissions on pipeline
+   2c552bc9-4131-4998-b2c6-e1b4b46c4bc8` — orphaned Lakeflow synced-table
+   pipeline with no valid owner; Databricks refused both PATCH and PUT
+   permission updates (requires metastore admin to change owner).
+
+**Immediate fixes applied directly:**
+- Dropped 5 `unknown`-owner triplestore views in `ontobricks_demo` (will be
+  recreated by the SP on next Build).
+- Granted `ALL_PRIVILEGES` on schema `benoit_cayla.ontobricks_demo` to both
+  SPs (main + MCP) — includes `MANAGE`, so the SP can now replace any object
+  in the schema regardless of original ownership.
+- Deleted the orphaned pipeline `2c552bc9` (IDLE, no tables, no owner) — SP
+  will recreate it under its own ownership on next Build.
+
+**Structural fix:**
+- `scripts/bootstrap-app-permissions.sh` — added a UC schema
+  `ALL_PRIVILEGES` step after the self-permission loop. Sources
+  `REGISTRY_CATALOG` / `REGISTRY_SCHEMA` from `deploy.config.sh` (or
+  `UC_CATALOG` / `UC_SCHEMA` env overrides). Every future `make bootstrap-perms`
+  or `make deploy` run will apply this grant, so upgraded deployments and
+  new instances both get it automatically.
+
+**Modified files:**
+- `scripts/bootstrap-app-permissions.sh`
+
+**Test result:** `bash -n` passes. SP privileges verified:
+`ALL_PRIVILEGES` on `benoit_cayla.ontobricks_demo`; orphaned pipeline and
+`unknown`-owner views removed. Build retryable immediately.
+
+## Fix: SP lacks USAGE on Lakebase graph schema (managed_synced Build step 5)
+
+**Context:** Build failed at step 5 with `permission denied for schema public
+… CREATE TABLE IF NOT EXISTS cust360auto_v4__app`. The SP connected to Lakebase
+but had no USAGE on the graph schema `ontobricks_graph_demo2`, so Postgres
+fell back to `public` and denied the table creation there too.
+
+Root cause: `bootstrap-lakebase-perms.sh` (called by deploy) only bootstraps
+the registry schema. The graph schema lives in the same Lakebase database
+(`ontobricks_demo` in `ontobricks-demo2/production`) but needs a separate
+bootstrap run — the deploy script intentionally doesn't manage graph grants
+since graph may be in a different project. The graph config was found in
+`global_config.graph_engine_config`: schema=`ontobricks_graph_demo2`,
+database=`ontobricks_demo` (same instance as registry in this deployment).
+
+**Immediate fix:**
+- Ran `bootstrap-lakebase-perms.sh -i ontobricks-demo2 -b production
+  -d ontobricks_demo -s ontobricks_graph_demo2 -a ontobricks-050
+  -a mcp-ontobricks-050` — both SPs got `USAGE + DML` on the graph schema.
+
+**Structural fix:**
+- `scripts/bootstrap-lakebase-perms.sh` — Step 2b migration guard now checks
+  whether `domain_versions` exists in the target schema before running the
+  `ALTER TABLE`. Previously always ran unconditionally, producing a noisy error
+  when bootstrapping the graph schema (which has a different table layout).
+
+**Modified files:**
+- `scripts/bootstrap-lakebase-perms.sh`
+
+**Test result:** Bootstrap ran cleanly on graph schema — both SPs got
+`USAGE + DML`; migration step skipped (no `domain_versions` in graph schema).
+`bash -n` passes. Build retryable.
+
+## Side-step app-name collision: new deploy identity (ontobricks-051)
+
+**Context:** `make deploy` failed with "bundle deploy failed … an app name
+already owned by another bundle". `ontobricks-050` was already deployed by a
+different bundle (must be left untouched). Databricks Apps names are
+workspace-global, so a fresh sync folder alone cannot resolve the clash — the
+new deployment needs its own app name (binding/taking over the existing app is
+not an option here). `databricks.yml` already derives
+`workspace.root_path` from `${var.app_name}`, so renaming the app also
+isolates the sync/state folder automatically.
+
+**Changes:**
+
+1. `scripts/deploy.config.sh` — `DEFAULT_APP_NAME` `ontobricks-050` →
+   `ontobricks-051` (free, verified against `databricks apps list`), and
+   `DEFAULT_MCP_APP_NAME` `-05` (invalid — app names cannot start with `-`) →
+   `mcp-ontobricks-051`. Added a note that app names are workspace-global and
+   the root_path tracks `app_name`.
+
+**Modified files:**
+- `scripts/deploy.config.sh`
+
+**Test result:** `databricks bundle validate -t dev-lakebase` (clean `env -i`
+subshell) exits 0. Resolved `workspace.root_path =
+/Workspace/Users/benoit.cayla@databricks.com/.bundle/ontobricks-051/dev-lakebase`
+(distinct folder) and apps `['mcp-ontobricks-051', 'ontobricks-051']` — the
+existing `ontobricks-050` is not referenced. Only a benign `htmlcov` sync
+exclude warning.
+
+---
+
+## build_runs migration: bootstrap + error surfacing
+
+**Context:** The `Domain/Runs` tab was always empty because the `build_runs` table was never created in the Lakebase registry schema. The self-heal in `_ensure_build_runs_table` silently swallowed the error, making it invisible.
+
+**Changes:**
+1. `scripts/bootstrap-lakebase-perms.sh` — Step 2b extended: added full `CREATE TABLE IF NOT EXISTS build_runs` DDL (matching `store.py`) plus its composite index. Runs as schema owner, idempotent, guarded behind the `_HAS_DOMAIN_VERSIONS` check so it only targets the registry schema. Success message updated to list both objects.
+2. `src/back/objects/registry/store/lakebase/store.py` — `_ensure_build_runs_table` exception handler upgraded from `logger.warning` to `logger.error` with a pointer to `make bootstrap-lakebase`, consistent with the `status` column handler.
+
+**Modified files:**
+- `scripts/bootstrap-lakebase-perms.sh`
+- `src/back/objects/registry/store/lakebase/store.py`
+
+**Test result:** `make bootstrap-lakebase` ran successfully — `build_runs` created, SP INSERT privilege confirmed (`t`). `domain_versions.status` migration skipped cleanly with `NOTICE: already exists`.
+
+---
+
+## MCP app.yaml: remove volume, template all values
+
+**Context:** The MCP companion server `app.yaml` had stale hardcoded values (`ONTOBRICKS_URL`, `LAKEBASE_SCHEMA`) and unnecessary volume-related config (`REGISTRY_VOLUME_PATH`, `volume` resource) that made no sense for a Lakebase deployment.
+
+**Changes:**
+1. `src/mcp-server/app.yaml.template` — new file. Clean MCP config: sql-warehouse resource only; `ONTOBRICKS_URL` optional (stripped when empty); `LAKEBASE_SCHEMA/PROJECT/DATABASE/BRANCH` all templated from deploy.config.sh vars; no volume resource.
+2. `scripts/_render-app-yaml.py` — extended to render both `app.yaml.template` → `app.yaml` and `src/mcp-server/app.yaml.template` → `src/mcp-server/app.yaml` in a single pass. Renderer refactored into `_render_one(tpl, out)` called from a `_RENDERS` list.
+3. `scripts/deploy.config.sh` — added `APP_ONTOBRICKS_URL` (empty default, set after first deploy via `databricks apps get <APP_NAME>`).
+4. `scripts/deploy.sh` — preflight now requires both templates; success message updated.
+5. `.gitignore` — added `/src/mcp-server/app.yaml` (generated file).
+
+**Modified files:**
+- `src/mcp-server/app.yaml.template` (new)
+- `scripts/_render-app-yaml.py`
+- `scripts/deploy.config.sh`
+- `scripts/deploy.sh`
+- `.gitignore`
+
+**Test result:** `python3 scripts/_render-app-yaml.py` renders both files cleanly. `ONTOBRICKS_URL` stripped (empty optional). `LAKEBASE_SCHEMA=ontobricks_demo`, `LAKEBASE_PROJECT=ontobricks-demo2`, `LAKEBASE_BRANCH=production` all correct.
+
+---
+
+## deploy.sh: auto-resolve ONTOBRICKS_URL before rendering MCP app.yaml
+
+**Context:** `APP_ONTOBRICKS_URL` was left empty in deploy.config.sh, requiring a manual post-deploy edit. The deploy script already authenticates before the render step, so it can fetch the URL automatically.
+
+**Changes:**
+1. `scripts/deploy.sh` — added step 2b "Resolve ONTOBRICKS_URL": calls `databricks apps get $APP_NAME` just before the render step and exports `APP_ONTOBRICKS_URL` from the live app's `url` field. Skipped if already set in env. On first deploy (app not yet created) the fetch returns empty → ONTOBRICKS_URL is stripped as an optional env var → MCP uses localhost:8000 fallback until the next redeploy, which auto-fixes it.
+
+**Modified files:**
+- `scripts/deploy.sh`
+
+**Test result:** `databricks apps get ontobricks-050` returned `https://ontobricks-050-2508734981122804.aws.databricksapps.com`; MCP app.yaml rendered with correct `ONTOBRICKS_URL` in one pass.
+
+---
+
+## Fix build_runs INSERT never reaching DB (Postgres ownership bug)
+
+**Root cause:** `_ensure_build_runs_table` always attempted `CREATE INDEX IF NOT EXISTS idx_build_runs_domain_version ON build_runs(...)` regardless of whether the table already existed. In Postgres, `CREATE INDEX` requires ownership of the table — even with `IF NOT EXISTS`. Bootstrap creates `build_runs` as the schema owner (the deploying user), not the SP, so the SP doesn't own the table. The SP's attempt to create the index raised `"must be owner of table build_runs"`, which `_ensure_build_runs_table` caught, logged at ERROR, and returned `False` — causing `record_build_run` to exit before the INSERT. Zero rows were ever written.
+
+The same ownership bug affects `_ensure_domain_versions_status_column`: `ALTER TABLE` and `CREATE INDEX` both require table ownership.
+
+**Fix in `src/back/objects/registry/store/lakebase/store.py`:**
+- `_ensure_build_runs_table`: before any DDL, check `information_schema.tables` for `build_runs`. If the table exists (bootstrap ran), set `_build_runs_ready = True` and return `True` immediately — no DDL attempted. Only run `CREATE TABLE + CREATE INDEX` when the table is genuinely absent (SP creates it, owns it, index succeeds).
+- `_ensure_domain_versions_status_column`: same pattern — check `information_schema.columns` for `status` first. Skip DDL if the column exists; only attempt `ALTER TABLE + CREATE INDEX` when absent.
+
+**Modified files:**
+- `src/back/objects/registry/store/lakebase/store.py`
+
+**Test result:** Fix is correct by design — confirmed with psql that `build_runs` table exists (row count was 0 due to this bug). Next build run will write to `build_runs` successfully.
+
+---
+
+## Fix Settings > Lakebase Objects showing "No objects owned by you"
+
+**Root cause:** `graph_engine_lakebase_objects_result` filtered schemas with `WHERE nspowner = current_user`. In the deployed app, `current_user` is the SP (`95084ef9-...`). Bootstrap creates all schemas as the deploying human user (`benoit.cayla`), so the SP doesn't OWN any schema → empty result → "No objects owned by you in this database."
+
+The graph schema `ontobricks_graph_demo2` (with `*__app` / `*_sync` companion tables) was invisible despite the SP having `USAGE` on it.
+
+**Fix in `src/back/objects/domain/SettingsService.py`:**
+- Widened the WHERE clause to `nspowner = current_user OR has_schema_privilege(current_user, nspname, 'USAGE')`.
+- Added `'public'` to the exclusion list (system schema, no app objects).
+- The frontend already strips the registry schema (`ontobricks_demo`) by name, so only the graph schema(s) and their tables/views appear.
+
+**Verified via psql:** SP has USAGE on `ontobricks_demo` (registry, filtered by frontend), `ontobricks_graph_demo2` (graph — now visible), and `public` (now excluded).
+
+**Modified files:**
+- `src/back/objects/domain/SettingsService.py`

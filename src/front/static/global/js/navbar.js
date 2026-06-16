@@ -118,6 +118,36 @@ function applyWarehouseIcon(warehouse) {
     }
 }
 
+// Lifecycle status → Bootstrap badge classes + label.
+const DOMAIN_STATUS_BADGE = {
+    'DRAFT': { cls: 'bg-warning-subtle text-dark border-warning', label: 'Draft' },
+    'IN-REVIEW': { cls: 'bg-info-subtle text-dark border-info', label: 'In Review' },
+    'PUBLISHED': { cls: 'bg-success-subtle text-dark border-success', label: 'Published' }
+};
+
+/**
+ * Render (or remove) a lifecycle-status badge as a sibling of *el*.
+ * Status values are a controlled enum so no escaping is required.
+ */
+function applyDomainStatusBadge(el, status) {
+    if (!el || !el.parentNode) return;
+    let badge = el.parentNode.querySelector('.domain-status-badge');
+    if (!status) {
+        if (badge) badge.remove();
+        return;
+    }
+    const cfg = DOMAIN_STATUS_BADGE[String(status).toUpperCase()]
+        || DOMAIN_STATUS_BADGE['DRAFT'];
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'domain-status-badge badge border ms-2';
+        badge.style.fontSize = '0.6rem';
+        el.parentNode.insertBefore(badge, el.nextSibling);
+    }
+    badge.className = 'domain-status-badge badge border ms-2 ' + cfg.cls;
+    badge.textContent = cfg.label;
+}
+
 /**
  * Apply domain name and menu visibility from pre-fetched data.
  */
@@ -132,17 +162,21 @@ function applyDomainInfo(data) {
 
     const domainName = (data.info && data.info.name) ? data.info.name : 'NewDomain';
     const version = (data.info && data.info.version) || '1';
+    const status = (data.info && data.info.status) || 'DRAFT';
 
     if (currentDomainNameEl) {
         if (hasDomain) {
             currentDomainNameEl.textContent = `${domainName} V${version}`;
+            applyDomainStatusBadge(currentDomainNameEl, status);
         } else {
             currentDomainNameEl.textContent = 'Domain';
+            applyDomainStatusBadge(currentDomainNameEl, null);
         }
     }
 
     if (domainSectionName) {
         domainSectionName.textContent = domainName;
+        applyDomainStatusBadge(domainSectionName, hasDomain ? status : null);
     }
 
     updateDomainMenuVisibility(hasDomain);
@@ -381,6 +415,7 @@ async function saveDomainInfoBeforeSave() {
     const nameEl = document.getElementById('domainName');
     const descEl = document.getElementById('domainDescription');
     const authorEl = document.getElementById('domainAuthor');
+    const quorumEl = document.getElementById('domainReviewQuorum');
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
     const versionEl = document.getElementById('domainVersionSelect');
@@ -394,6 +429,7 @@ async function saveDomainInfoBeforeSave() {
             base_uri: baseUriEl ? baseUriEl.value.trim() : undefined,
             base_uri_auto: (typeof _baseUriAutoMode !== 'undefined') ? _baseUriAutoMode : undefined,
             llm_endpoint: llmEndpointEl ? llmEndpointEl.value : undefined,
+            review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : undefined,
             version: versionEl ? versionEl.value : undefined,
         };
         
@@ -707,10 +743,11 @@ async function loadVersionsForDomainFromRegistry(domainName) {
         versionSelect.disabled = false;
 
         if (data.success && data.versions && data.versions.length > 0) {
+            const statuses = data.version_status || {};
             const sorted = data.versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
             versionSelect.innerHTML = '';
-            sorted.forEach((ver, idx) => {
-                const label = idx === 0 ? `${ver} (Latest)` : `${ver} (Read-Only)`;
+            sorted.forEach((ver) => {
+                const label = `v${ver} — ${statusLabel(statuses[ver])}`;
                 versionSelect.innerHTML += `<option value="${ver}">${label}</option>`;
             });
             versionSelect.value = sorted[0];
@@ -724,6 +761,14 @@ async function loadVersionsForDomainFromRegistry(domainName) {
         };
     } catch (e) {
         versionSelect.innerHTML = '<option value="">Error loading versions</option>';
+    }
+}
+
+function statusLabel(status) {
+    switch ((status || 'DRAFT').toUpperCase()) {
+        case 'PUBLISHED': return 'Published';
+        case 'IN-REVIEW': return 'In Review';
+        default: return 'Draft';
     }
 }
 

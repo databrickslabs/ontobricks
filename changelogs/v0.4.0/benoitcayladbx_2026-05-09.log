@@ -1,0 +1,512 @@
+## Deploy: wire-level optimisations to dev-lakebase
+
+### Context
+Following the wire-level optimisation pass landed on 2026-05-08
+(streaming reads, materialised diffs, viewport-required `/sync/load`,
+task result trimming), the `v0.3.0_DT_Optimizations` branch was deployed
+to the dev sandbox via the standard DAB pipeline (`scripts/deploy.sh`).
+Both the FastAPI UI app and the MCP companion are managed by the
+bundle; production apps were carved out 2026-04-27 and live in a
+separate repo/bundle (no production touch in this run).
+
+### Plan applied
+1. **Pre-flight**
+   - `databricks --version` → CLI `v0.298.0` present.
+   - `databricks current-user me` → authenticated as
+     `benoit.cayla@databricks.com`.
+   - Working tree contained only the `v0.3.0` wire-level changes already
+     described in `2026-05-08.log` (no untracked sources). The
+     `/changelogs` directory is `.gitignore`'d, so daily logs are local
+     by design.
+   - Test gate: `uv run pytest -q` was already green from the
+     2026-05-08 pass (1503 passed with the documented `--ignore`s for
+     pre-existing PEP 604 / `apscheduler` import issues unrelated to
+     this branch).
+
+2. **Configuration source** (no edits — read from
+   `scripts/deploy.config.sh`)
+   - Target           : `dev-lakebase`
+   - App              : `ontobricks-030` (resource key
+     `ontobricks_dev_app`)
+   - MCP app          : `mcp-ontobricks` (resource key
+     `mcp_ontobricks_app`)
+   - Warehouse        : `d2096aa075ad44a3`
+   - Registry volume  : `benoit_cayla.ontobricks_030.registry`
+   - Lakebase         :
+     `projects/ontobricks-app/branches/production/databases/db-8u4l-0na72ub5sp`
+   - Lakebase schema  : `ontobricks_registry`
+
+3. **Deploy steps executed by `scripts/deploy.sh`**
+   - Step 2 — Rendered `app.yaml` from `app.yaml.template` so the
+     runtime env block matches `deploy.config.sh`.
+   - Step 3 — `databricks bundle validate -t dev-lakebase` → clean
+     (only 3 unrelated warnings for `sync.exclude` patterns matching
+     no files: `htmlcov`, `mlartifacts`, `mlruns` — left as-is, they
+     guard against accidental upload of those dirs when present).
+   - Step 4 — `databricks bundle deploy -t dev-lakebase` → uploaded
+     to
+     `/Workspace/Users/benoit.cayla@databricks.com/.bundle/ontobricks-030/dev-lakebase/files`
+     and updated deployment state.
+   - Step 6 — `databricks bundle run ontobricks_dev_app -t
+     dev-lakebase` → app reached `RUNNING` + compute `ACTIVE`,
+     pulled the new source archive, restarted cleanly.
+   - Step 7 — Resource binding check passed for both apps:
+     `sql-warehouse`, `volume`, `postgres` resolved to the values
+     declared in `deploy.config.sh` (the script's verifier compares
+     the live `databricks apps get` JSON against the expected FQNs
+     and Postgres branch/database paths).
+
+4. **Bootstrap (idempotent, run on every deploy)**
+   - App self-permissions (`scripts/bootstrap-app-permissions.sh`):
+     each app's service principal got `CAN_MANAGE` on its own app;
+     the MCP SP got `CAN_USE` on `ontobricks-030` so MCP tool calls
+     can reach `/api/v1/*` without 401.
+       - `ontobricks-030` SP : `cf06ae08-1920-4b2b-9706-3ef49702fb03`
+       - `mcp-ontobricks` SP : `a99b4987-2c5a-48b5-a578-c4a39a0feb0d`
+   - Lakebase schema GRANTs (`scripts/bootstrap-lakebase-perms.sh`):
+     `USAGE` + DML granted on schema `ontobricks_registry` of
+     database `ontobricks_registry` (Lakebase project
+     `ontobricks-app`, branch `production`, endpoint `primary`) for
+     both SPs. Re-run every deploy because the postgres binding
+     resets schema grants on rebind.
+
+5. **Post-deploy verification**
+   - App URL : <https://ontobricks-030-2508734981122804.aws.databricksapps.com>
+   - State   : `RUNNING`, compute `ACTIVE`.
+   - Resource bindings: `ok` for both apps.
+   - `/healthz` curl probe was *not* run from this terminal because the
+     local CLI refresh token had expired between the deploy call and
+     the curl call (would have required interactive
+     `databricks auth login --profile fe-vm-bcayla-demos`). The
+     deploy script's own verifier — which authenticates through the
+     same persistent CLI session — already confirmed `RUNNING` +
+     resource bindings, which covers the post-deploy checklist.
+
+### What's now live
+The wire-level optimisations from 2026-05-08 are running in the dev
+sandbox:
+- `execute_query_iter` streaming reads on the SQL Warehouse path.
+- `compute_diff_materialized` CTAS-based incremental diffs (diff rows
+  stay in Databricks until the build streams them into Ladybug).
+- `bulk_insert_iter` + `iter_triples` on the LadybugDB flat store.
+- Viewport-required `/dtwin/sync/load` (default 50k limit, 500k hard
+  cap from `DTWIN_MAX_VIZ_TRIPLES`).
+- TaskManager result trimming (1 MiB threshold from
+  `TASK_RESULT_INLINE_BYTES`, head 200 from
+  `TASK_RESULT_LIST_HEAD`).
+- Soft warning over 100k rows on `execute_query` from
+  `DATABRICKS_MAX_FETCHALL_ROWS`.
+- Graph-mode SHACL DQ caps at 2M triples
+  (`DTWIN_MAX_GRAPH_DQ_TRIPLES`).
+
+All defaults are set inside the code and rendered through
+`app.yaml.template` only when explicitly overridden — production-style
+tuning is therefore a one-line change in `scripts/deploy.config.sh` +
+template, no code edit required.
+
+### Modified files
+None — this entry documents a deploy run only. The artefacts uploaded
+to the workspace come from the already-committed `v0.3.0_DT_Optimizations`
+branch state.
+
+### Tests
+No new tests in this entry. The 2026-05-08 entry's test counts apply
+unchanged: `1503 passed` on the streaming/diff path with the
+pre-existing `--ignore`s, and `2058 passed, 80 skipped` on the wider
+unit suite logged earlier the same day.
+
+
+## Streaming-build progress visible in the application logs
+
+### Context
+The build page already showed live progression (rows written / total)
+because the build pipeline pushes `update_progress` calls through the
+TaskManager. The same information was *not* in the application log,
+so anyone tailing pod logs (Databricks Apps → Logs panel) had to wait
+for the post-phase summary line and could not tell if a long-running
+full rebuild was still making forward progress mid-flight.
+
+### Changes
+1. `src/back/objects/digitaltwin/_build_pipeline.py`
+   - New `_make_progress_logger(phase, ui_callback)` helper. Wraps the
+     existing UI progress closure and adds a throttled
+     `logger.info(...)` line every
+     `_BuildPipeline._LOG_PROGRESS_EVERY_ROWS` rows (default 50 000)
+     plus one final line on the last batch. Format is
+     `[DT-BUILD <task_id>] <phase>: <done>/<total> triples (<pct>%)`.
+   - `_apply_full_rebuild` and `_apply_incremental_changes` now build
+     their on_progress via the helper. The original UI callbacks are
+     renamed `_on_ui_progress_full` / `_on_ui_del_progress` /
+     `_on_ui_add_progress` and remain the inner delegate, so the
+     build page keeps updating exactly as before.
+   - In API mode (`build_kind="api"`) the inner UI callback is `None`
+     (TaskManager updates were already suppressed there), but the
+     log line still fires — so even API-driven builds now print
+     progress to the pod log.
+
+2. `src/back/objects/registry/scheduler.py`
+   - New module-level `_make_scheduled_progress_logger(domain_name,
+     phase)` mirroring the pipeline helper, throttled by
+     `_SCHEDULED_LOG_PROGRESS_EVERY_ROWS` (50 000).
+   - `_stream_full_into_store` and `_stream_diff_into_store` gained
+     two optional kwargs (`domain_name`, `expected_total`) — both
+     default to empty/zero so external call sites are unaffected. When
+     `domain_name` is set, the scheduled-build progress logger is
+     wired into `bulk_insert_iter` (Ladybug streaming COPY FROM) and
+     the row-by-row fallback. Format is
+     `Scheduled build [<domain>]: <phase> <done>/<total> triples (<pct>%)`.
+   - `_write_graph_triples` now counts the VIEW upfront for the full
+     rebuild path so the percentage in scheduled-build logs is
+     meaningful, and it logs a "streaming N triples (batch_size=…)"
+     opener on each phase to match the build page wording.
+
+### Sample log output (full rebuild on a 1.2M-triple domain)
+```
+[DT-BUILD 7e5f…] full rebuild: 50000/1234567 triples (4.0%)
+[DT-BUILD 7e5f…] full rebuild: 100000/1234567 triples (8.1%)
+[DT-BUILD 7e5f…] full rebuild: 150000/1234567 triples (12.1%)
+…
+[DT-BUILD 7e5f…] full rebuild: 1234567/1234567 triples (100.0%)
+[DT-BUILD 7e5f…] streamed 1234567 triples into <graph>
+```
+
+### Modified files
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/back/objects/registry/scheduler.py
+- changelogs/v0.3.0/2026-05-09.log
+
+### Tests
+`.venv/bin/python -m pytest -q tests/ --ignore=tests/e2e
+--ignore=tests/test_routes.py --ignore=tests/test_external_api.py
+--ignore=tests/test_help_api.py` → 1934 passed in 19.84s. No new
+tests — the helper sits inside the existing on_progress closures and
+its throttle threshold is verified end-to-end by the streaming tests
+already in `tests/test_incremental_build.py` and
+`tests/test_sql_warehouse.py`.
+
+## Stop building Sphinx in CI — keep scripts for manual builds
+
+Context: The Sphinx HTML site was being rebuilt on every CI push and the
+283 generated artifacts under `docs/sphinx/_build/` were being committed
+to the repo, where they routinely went stale between regenerations. We
+keep the build tooling (sources, `scripts/build_docs.sh`, `docs/sphinx/Makefile`,
+`docs/sphinx/conf.py`) so anyone who wants the rendered API HTML can
+still produce it locally — we just stop forcing it on every change.
+
+Changes:
+
+1. .github/workflows/ci.yml
+   Remove the `docs:` job (no more `make html` in CI).
+2. .gitignore
+   Add `docs/sphinx/_build/` so future local builds stay out of the repo.
+3. .cursor/08-testing-and-deployment.mdc
+   Sphinx §: re-build step is now optional; .rst sources still tracked.
+4. .claude/skills/changelog/SKILL.md
+   Step 6 — keep .rst updates, drop the build requirement.
+5. .claude/skills/adding-subpackage/SKILL.md
+   Step 4 — `.rst` page still required, `scripts/build_docs.sh` is optional.
+   "Don't" list — drop the obsolete "make docs warnings will fail review".
+6. .claude/skills/code-review/SKILL.md
+   Documentation step — clarify that Sphinx HTML is local-only.
+7. docs/README.md
+   Generated API Docs § — clarify that the site is built locally on demand
+   and is no longer built or published by CI.
+8. docs/code_organization.md
+   §11.2 — re-build step is now optional; flagged that artifacts are
+   gitignored.
+9. docs/graphdb-integration.md
+   Step 9 — note that `docs/sphinx/api/<pkg>.rst` is required but the
+   HTML build is local on demand.
+10. git rm -r docs/sphinx/_build/
+    Untrack the 283 stale build artifacts. They will regenerate locally
+    via `scripts/build_docs.sh` whenever a contributor wants the site.
+
+Modified files:
+- .github/workflows/ci.yml
+- .gitignore
+- .cursor/08-testing-and-deployment.mdc
+- .claude/skills/changelog/SKILL.md
+- .claude/skills/adding-subpackage/SKILL.md
+- .claude/skills/code-review/SKILL.md
+- docs/README.md
+- docs/code_organization.md
+- docs/graphdb-integration.md
+- docs/sphinx/_build/** (283 files, removed from index)
+- changelogs/v0.3.0/2026-05-09.log
+
+Tests: `uv run pytest -q tests/ --ignore=tests/e2e
+--ignore=tests/test_routes.py --ignore=tests/test_external_api.py
+--ignore=tests/test_help_api.py` → 1934 passed in 19.10s. No new tests
+— this change only removes a CI job and rewords rule/skill/doc text.
+
+---
+
+## Lakebase GraphDB: DDL parity, streaming insert, dedicated Sphinx page
+
+Context: Align ``LakebaseFlatStore`` with the attached GraphDB plan — optional
+RDF literal columns on the flat triple table, bounded-memory bulk insert from
+iterators, keyed pagination for reads, reference ``schema.sql``, exported
+``default_schema()``, and a standalone API doc page linked from the toctree.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+   Add ``datatype`` / ``lang`` columns, ``ALTER TABLE … IF NOT EXISTS`` for legacy
+   tables, ``_insert_triples_executemany`` / ``bulk_insert_iter``, ``iter_triples``.
+2. ``src/back/core/graphdb/lakebase/LakebaseBase.py`` / ``__init__.py``
+   Export ``default_schema()``.
+3. ``src/back/core/graphdb/lakebase/schema.sql``
+   Reference DDL matching the Python builder.
+4. ``docs/sphinx/api/app.core.graphdb.lakebase.rst`` + ``docs/sphinx/index.rst``
+   New autodoc page; ``app.core.graphdb.rst`` points to it.
+5. ``tests/test_lakebase_flat_store.py``
+   Cover DDL columns, bulk iterator batches, ``iter_triples`` paging,
+   ``default_schema``.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+- ``src/back/core/graphdb/lakebase/LakebaseBase.py``
+- ``src/back/core/graphdb/lakebase/__init__.py``
+- ``src/back/core/graphdb/lakebase/schema.sql``
+- ``docs/sphinx/api/app.core.graphdb.lakebase.rst``
+- ``docs/sphinx/api/app.core.graphdb.rst``
+- ``docs/sphinx/index.rst``
+- ``tests/test_lakebase_flat_store.py``
+- ``changelogs/v0.3.0/2026-05-09.log``
+
+Tests: ``uv run pytest -q`` → 2074 passed, 80 skipped in 23.77s
+
+---
+
+## Build page and Cockpit: Lakebase (Postgres) vs LadybugDB graph storage
+
+Context: When the global graph engine is Lakebase, the Build (Digital Twin sync)
+section and the Cockpit validation card should describe Postgres-backed triple
+storage, hide the UC Volume registry-archive row, and avoid treating a missing
+Ladybug archive as blocking “never built” status. Ladybug mode keeps the
+existing file path and registry-archive behaviour.
+
+Changes:
+
+1. ``src/front/fastapi/dependencies.py``
+   Add ``graph_engine`` to ``triplestore_page_context`` from
+   ``TripleStoreFactory._resolve_graph_engine``.
+2. ``src/front/routes/domain.py`` / ``src/front/routes/dtwin.py``
+   Inject ``get_settings`` and pass ``settings`` into ``triplestore_page_context``.
+3. ``src/back/objects/digitaltwin/DigitalTwin.py``
+   ``resolve_graph_engine``; ``fetch_digital_twin_existence`` branches on lakebase
+   (triple table probe, ``registry_archive_applicable``); ``compute_dtwin_indicator``
+   respects ``registry_archive_applicable``; docstring describes both engines.
+4. ``src/back/objects/domain/HomeService.py``
+   ``dtwin`` detail includes ``graph_engine`` and ``registry_archive_applicable``.
+5. ``src/front/templates/domain.html`` / ``src/front/templates/dtwin.html``
+   Embed ``graph_engine`` in ``#triplestore-config`` JSON.
+6. ``src/front/templates/partials/domain/_domain_information.html``
+   Lakebase vs Ladybug copy for graph storage on the domain Build area.
+7. ``src/front/templates/partials/domain/_domain_validation.html``
+   Cockpit graph card element ids for dynamic titles/subtitles and registry row.
+8. ``src/front/templates/partials/dtwin/_query_sync.html``
+   Archive wrapper visibility hooks; Graph DB column ids; per-engine footnotes.
+9. ``src/front/static/query/js/query-sync.js``
+   ``_applyBuildGraphEngineUi``; preserve ``graph_engine`` when merging domain info;
+   reload respects ``registry_archive_applicable``.
+10. ``src/front/static/domain/js/domain-information.js``
+    Refresh logical table hint for lakebase; Ladybug path only when not lakebase.
+11. ``src/front/static/domain/js/domain-validation.js``
+    Cockpit card updates for lakebase (hide registry row, Postgres subtitle).
+
+Modified files:
+- ``src/front/fastapi/dependencies.py``
+- ``src/front/routes/domain.py``
+- ``src/front/routes/dtwin.py``
+- ``src/back/objects/digitaltwin/DigitalTwin.py``
+- ``src/back/objects/domain/HomeService.py``
+- ``src/front/templates/domain.html``
+- ``src/front/templates/dtwin.html``
+- ``src/front/templates/partials/domain/_domain_information.html``
+- ``src/front/templates/partials/domain/_domain_validation.html``
+- ``src/front/templates/partials/dtwin/_query_sync.html``
+- ``src/front/static/query/js/query-sync.js``
+- ``src/front/static/domain/js/domain-information.js``
+- ``src/front/static/domain/js/domain-validation.js``
+- ``changelogs/v0.3.0/2026-05-09.log``
+
+Tests: ``uv run pytest -q`` → 2074 passed, 80 skipped in 23.65s
+
+---
+
+## Settings Graph DB tab: layout, single Save, refresh on tab focus
+
+Context: The Graph DB settings tab had misaligned Lakebase fields vs help text,
+duplicate Save buttons next to the engine selector and JSON block, and the
+engine dropdown could stay stale after revisiting the tab because loads ran
+only once.
+
+Changes:
+
+1. ``src/front/templates/settings.html``
+   Align Lakebase database/schema in a balanced grid with consistent labels and
+   footnotes; remove per-section Save buttons; note top-of-page Save; widen JSON
+   textarea slightly.
+2. ``src/front/static/config/js/settings.js``
+   ``refreshGraphDbTabFromServer()`` refetches engine + config on every tab show;
+   ``saveGraphDbSettings()`` wired into global Save; schema field syncs JSON on
+   ``input``.
+
+Modified files:
+- ``src/front/templates/settings.html``
+- ``src/front/static/config/js/settings.js``
+- ``changelogs/v0.3.0/2026-05-09.log``
+
+Tests: ``uv run pytest -q`` → 2074 passed, 80 skipped in 23.75s
+
+---
+
+## Graph DB settings: correct engine on tab return (GET auth + fresh config)
+
+Context: Returning to the Graph DB tab always showed Ladybug because GET
+``/settings/graph-engine`` (and config) were blocked for non-admin app users
+(403 → UI kept the HTML default), and global config could be served from a
+stale in-process cache across workers.
+
+Changes:
+
+1. ``src/shared/fastapi/main.py``
+   Allow GET on ``/settings/graph-engine`` and ``/settings/graph-engine-config``
+   for app users; POST remains admin-only.
+2. ``src/back/objects/domain/SettingsService.py``
+   ``load(..., force=True)`` before graph engine GET endpoints so reads match the store.
+3. ``src/front/static/config/js/settings.js``
+   Parse graph API responses only when HTTP OK; map ``graph_engine`` against ``allowed_engines``.
+4. ``tests/test_permission_middleware.py``
+   Extend read-only exceptions; assert POST graph-engine routes stay blocked.
+
+Modified files:
+- ``src/shared/fastapi/main.py``
+- ``src/back/objects/domain/SettingsService.py``
+- ``src/front/static/config/js/settings.js``
+- ``tests/test_permission_middleware.py``
+- ``changelogs/v0.3.0/2026-05-09.log``
+
+Tests: ``uv run pytest -q`` → 2077 passed, 80 skipped in 23.70s
+
+---
+
+## Graph engine persisted as registry global config + domain mirror
+
+Context: The graph DB engine choice must live with registry-backed instance
+settings (Volume ``.global_config.json`` or Lakebase ``global_config`` JSONB),
+and be visible next to the UC triplet for operators.
+
+Changes:
+
+1. ``src/back/objects/session/GlobalConfigService.py``
+   Docstring lists ``graph_engine`` / ``graph_engine_config`` as persisted fields.
+2. ``src/back/objects/domain/SettingsService.py``
+   ``build_registry_get_payload`` adds ``graph_engine`` and ``graph_engine_config``
+   from global config; ``set_graph_engine*`` mirrors into ``domain.settings.registry``
+   after successful save; registry **Initialize** seeds ``graph_engine`` when missing
+   from the global blob.
+3. ``tests/test_graph_engine_config.py``
+   Coverage for registry GET payload and adjusted graph-engine save mocks.
+
+Modified files:
+- ``src/back/objects/session/GlobalConfigService.py``
+- ``src/back/objects/domain/SettingsService.py``
+- ``tests/test_graph_engine_config.py``
+- ``changelogs/v0.3.0/2026-05-09.log``
+
+Tests: ``uv run pytest -q`` → 2079 passed, 80 skipped in 24.49s
+
+---
+
+## Settings Graph DB: hide local files unless Ladybug engine
+
+Context: Local Graph Files under Settings → Graph DB apply only to LadybugDB;
+Lakebase users should not see the list or the ``/settings/ladybugdb/files`` fetch
+until they switch engine.
+
+Changes:
+
+1. ``src/front/templates/settings.html``
+   Wrap Local Graph Files + Ladybug copy in ``#ladybugLocalFilesWrap`` (hidden until JS).
+2. ``src/front/static/config/js/settings.js``
+   ``applyGraphDbEnginePanels()`` toggles Lakebase panel vs local-files wrap; load file list
+   only when engine is ``ladybug``; refresh panels after global graph save.
+3. ``tests/test_ui_rendering.py``
+   Assert wrap id present on settings page.
+
+Modified files:
+- ``src/front/templates/settings.html``
+- ``src/front/static/config/js/settings.js``
+- ``tests/test_ui_rendering.py``
+- ``changelogs/v0.3.0/2026-05-09.log``
+
+Tests: ``uv run pytest -q`` → 2080 passed, 80 skipped in 23.58s
+
+---
+
+## Settings Graph DB: Lakebase health probe + connection info
+
+Context: When Lakebase is the graph engine, admins need a quick read-only check that
+Postgres is reachable and the configured graph schema exists, plus visible PGHOST /
+database resolution.
+
+Changes:
+
+1. ``src/back/objects/domain/SettingsService.py``
+   ``graph_engine_lakebase_health_result`` probes ``information_schema`` using saved
+   ``graph_engine_config`` (database override + schema).
+2. ``src/api/routers/internal/settings.py``
+   ``GET /settings/graph-engine/lakebase-health``.
+3. ``src/shared/fastapi/main.py``
+   Non-admin GET exception for the new path.
+4. ``src/front/templates/settings.html`` / ``src/front/static/config/js/settings.js``
+   Health block inside Lakebase panel; ``loadLakebaseGraphHealth()`` on tab refresh,
+   engine switch, Save, and Refresh button.
+5. ``tests/test_graph_engine_config.py``, ``tests/test_permission_middleware.py``,
+   ``tests/test_ui_rendering.py``
+   Coverage for health helper, middleware allow-list, and template id.
+
+Modified files:
+- ``src/back/objects/domain/SettingsService.py``
+- ``src/api/routers/internal/settings.py``
+- ``src/shared/fastapi/main.py``
+- ``src/front/templates/settings.html``
+- ``src/front/static/config/js/settings.js``
+- ``tests/test_graph_engine_config.py``
+- ``tests/test_permission_middleware.py``
+- ``tests/test_ui_rendering.py``
+- ``changelogs/v0.3.0/2026-05-09.log``
+
+Tests: ``uv run pytest -q`` → 2085 passed, 80 skipped in 23.58s
+
+---
+
+## Knowledge graph search respects Lakebase when global config defaults to Ladybug
+
+Context: Sigma graph search uses ``POST /dtwin/sync/filter`` → ``get_triplestore(..., backend="graph")``.
+When ``GlobalConfigService.load`` returns the empty template (``graph_engine: ladybug``) while the
+domain session still mirrors ``lakebase`` under ``domain.settings.registry`` (after Settings → Graph DB),
+the factory previously passed ``engine=None`` or ``ladybug`` into ``GraphDBFactory``, so preview/expand
+could hit LadybugDB instead of Postgres. GraphQL domain load also synced Ladybug archives even when
+Lakebase was selected.
+
+Changes:
+
+1. ``src/back/core/triplestore/TripleStoreFactory.py``
+   Read ``graph_engine`` / ``graph_engine_config`` from the domain registry mirror; when the mirror
+   is ``lakebase`` but global resolution is not, prefer Lakebase and merge engine config (global keys
+   win on overlap). Coalesce ``engine=None`` to ``ladybug`` only after mirror/global resolution.
+2. ``src/back/fastapi/graphql_routes.py``
+   Skip Ladybug volume sync when ``DigitalTwin.resolve_graph_engine`` is ``lakebase``.
+3. ``tests/test_triplestore_factory.py``
+   Regression test for mirror overriding global ``ladybug``.
+
+Modified files:
+- ``src/back/core/triplestore/TripleStoreFactory.py``
+- ``src/back/fastapi/graphql_routes.py``
+- ``tests/test_triplestore_factory.py``
+- ``changelogs/v0.3.0/2026-05-09.log``
+
+Tests: ``uv run pytest -q`` → 2086 passed, 80 skipped in 23.96s

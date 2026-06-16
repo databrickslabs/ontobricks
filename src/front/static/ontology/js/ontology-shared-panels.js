@@ -646,7 +646,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="addSharedEntityAttribute()" title="Add manually"><i class="bi bi-plus"></i></button>
                     ` : ''}
                 </div>
-                <div id="sharedEntityAttributes" class="border rounded p-2" style="background: #f8f9fa; overflow-y: auto;"></div>
+                <div id="sharedEntityAttributes" class="border rounded p-2" style="background: #ffffff; overflow-y: auto;"></div>
             </div>
 
             <div class="form-tab-pane ${_eTab === 'actions' ? 'active' : ''}" data-form-tab-content="actions">
@@ -655,7 +655,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         <span><i class="bi bi-speedometer2 me-1"></i>Dashboard</span>
                         ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openDashboardSelectorModal()"><i class="bi bi-link-45deg"></i> Assign</button>' : ''}
                     </label>
-                    <div id="sharedEntityDashboard" class="border rounded p-2" style="background: #f8f9fa;">
+                    <div id="sharedEntityDashboard" class="border rounded p-2" style="background: #ffffff;">
                         <div id="sharedEntityDashboardContent">
                             <small class="text-muted">No dashboard assigned</small>
                         </div>
@@ -666,7 +666,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         <span><i class="bi bi-signpost-2 me-1"></i>Bridges</span>
                         ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBridgeSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
                     </label>
-                    <div id="sharedEntityBridges" class="border rounded p-2" style="background: #f8f9fa;">
+                    <div id="sharedEntityBridges" class="border rounded p-2" style="background: #ffffff;">
                         <div id="sharedEntityBridgesContent">
                             <small class="text-muted">No bridges to other domains</small>
                         </div>

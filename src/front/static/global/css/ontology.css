@@ -42,7 +42,7 @@ body.ontology-page {
 
 /* View Selector Styling */
 .view-selector {
-    background: #f8f9fa;
+    background: #ffffff;
     padding: 0.5rem 0.75rem;
     border-radius: 6px;
     border: 1px solid #e9ecef;
@@ -80,7 +80,7 @@ body.ontology-page {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(248, 249, 250, 0.95);
+    background: rgba(255, 255, 255, 0.95);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -142,7 +142,7 @@ body.ontology-page {
 .swrl-rule-code {
     font-family: 'Fira Code', 'Monaco', monospace;
     font-size: 0.85rem;
-    background: #f8f9fa;
+    background: #ffffff;
     padding: 4px 8px;
     border-radius: 4px;
     display: inline-block;
@@ -191,7 +191,7 @@ body.ontology-page {
 
 /* Property chain connector */
 .input-group-text {
-    background: #f8f9fa;
+    background: #ffffff;
     font-weight: bold;
 }
 
@@ -240,7 +240,7 @@ body.ontology-page {
 }
 
 .tree-node-content:hover {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
 }
 
 .tree-toggle {
@@ -293,7 +293,7 @@ body.ontology-page {
 /* Entity attributes list */
 .entity-attributes {
     border-left: 2px solid #17a2b8;
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     border-radius: 0 4px 4px 0;
     padding: 0.25rem 0;
 }
@@ -303,7 +303,7 @@ body.ontology-page {
 }
 
 .entity-attributes .attribute-item:hover {
-    background-color: #e9ecef;
+    background-color: #ffffff;
 }
 
 /* Badge styling for tree */
@@ -368,7 +368,7 @@ body.ontology-page {
 }
 
 .relationship-list .tree-node-content:hover {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
 }
 
 .relationship-list .tree-node-label {
@@ -416,7 +416,7 @@ body.ontology-page {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(248, 249, 250, 0.95);
+    background: rgba(255, 255, 255, 0.95);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -498,6 +498,16 @@ body.ontology-page {
 .ob-design-view-select {
     width: auto;
     min-width: 150px;
+}
+
+/* New Assistant dialog: scrollable entity picker */
+.ob-assistant-entity-list {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.ob-assistant-entity-list .assistant-entity-row {
+    cursor: pointer;
 }
 
 .ob-empty-state-icon-lg {

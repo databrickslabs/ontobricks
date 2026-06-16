@@ -18,7 +18,7 @@
     padding: 0.65rem 1rem;
 }
 .diag-accordion-btn:not(.collapsed) {
-    background: #f8f9fa;
+    background: #ffffff;
     color: #212529;
     box-shadow: none;
 }
@@ -50,7 +50,7 @@
 }
 
 .diag-item-header:hover {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .diag-item-status {
@@ -86,7 +86,7 @@
 /* Body (expanded content) */
 .diag-item-body {
     padding: 0.75rem 1rem;
-    background: #fafbfc;
+    background: #ffffff;
     border-top: 1px solid #e9ecef;
 }
 
@@ -98,7 +98,7 @@
 
 .diag-detail-row code {
     font-size: 0.8rem;
-    background: #e9ecef;
+    background: #ffffff;
     padding: 0.1rem 0.35rem;
     border-radius: 0.25rem;
 }

@@ -1,0 +1,185 @@
+name: M2.P7 — Eval drift detector + MCP smoke probe (CNS §5.4 anti-fragility play)
+
+# Nightly job that:
+# 1. Runs the agent eval suite against the committed datasets (tests/eval/datasets/<agent>/).
+# 2. Compares each agent's aggregate judge score against tests/eval/thresholds.yaml.
+# 3. Opens (or comments on) a `eval-drift` GitHub Issue if any agent regresses.
+# 4. Smoke-probes the deployed `mcp-ontobricks` server (§3.11 dogfooding):
+#    sends a single canonical tool call against the live MCP HTTP endpoint and
+#    expects a non-error response. If it fails, opens an `mcp-smoke-failure` Issue.
+#
+# Status: scaffold. Wires up the CI plumbing so the team can flip it on once
+# M2.P4 (the actual eval datasets and runners) lands. The two `if: false`
+# gates below are the toggle.
+
+on:
+  schedule:
+    # 03:00 UTC every day — staggered behind nightly.yml (02:00 UTC).
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  eval-drift:
+    name: Agent eval drift detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # GATE: enable when M2.P4 lands real datasets + runners.
+    if: ${{ vars.ONTOBRICKS_EVAL_RUNNERS_READY == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        agent:
+          - agent_owl_generator
+          - agent_ontology_assistant
+          - agent_auto_assignment
+          - agent_auto_icon_assign
+          - agent_dtwin_chat
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run eval for ${{ matrix.agent }}
+        env:
+          DATABRICKS_HOST: ${{ secrets.ONTOBRICKS_INT_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.ONTOBRICKS_INT_TOKEN }}
+          DATABRICKS_SQL_WAREHOUSE_ID: ${{ secrets.ONTOBRICKS_INT_WAREHOUSE_ID }}
+          SECRET_KEY: ${{ secrets.ONTOBRICKS_INT_SECRET_KEY }}
+        run: |
+          # Expected runner location once M2.P4 lands.
+          runner="tests/eval/run_${{ matrix.agent }}.py"
+          if [ ! -f "$runner" ]; then
+            echo "::warning::$runner does not exist yet — M2.P4 incomplete for this agent."
+            exit 0
+          fi
+          uv run python "$runner" \
+            --dataset "tests/eval/datasets/${{ matrix.agent }}/baseline.jsonl" \
+            --thresholds tests/eval/thresholds.yaml
+
+      - name: Upload MLflow run URI
+        if: failure() || success()
+        run: |
+          # The runner writes the MLflow URL to mlflow_url.txt; we surface it as a
+          # job output for the issue-opener step below.
+          if [ -f mlflow_url.txt ]; then
+            echo "mlflow_url=$(cat mlflow_url.txt)" >> "$GITHUB_OUTPUT"
+          fi
+
+  open-eval-drift-issue:
+    name: Open issue on eval drift
+    runs-on: ubuntu-latest
+    needs: eval-drift
+    if: failure()
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Open or update the eval-drift tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh issue list --label eval-drift --state open --json number --jq '.[0].number' || echo "")
+          body="Nightly eval drift detected: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --label eval-drift \
+              --title "Eval drift detected ($(date -u +%Y-%m-%d))" \
+              --body "$body"
+          fi
+
+  mcp-smoke-probe:
+    name: MCP smoke probe against deployed mcp-ontobricks (§3.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # GATE: enable when the integration MCP server is reachable and secrets are set.
+    if: ${{ vars.ONTOBRICKS_INT_MCP_REACHABLE == 'true' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Smoke probe — list_domains via deployed MCP
+        env:
+          ONTOBRICKS_INT_URL: https://fevm-ontobricks-int.cloud.databricks.com
+          ONTOBRICKS_INT_MCP_URL: ${{ secrets.ONTOBRICKS_INT_MCP_URL }}
+          DATABRICKS_TOKEN: ${{ secrets.ONTOBRICKS_INT_TOKEN }}
+        run: |
+          # Call list_domains via the deployed MCP server's HTTP transport.
+          # The exact request shape depends on the FastMCP HTTP binding; this
+          # is the canonical probe — if it fails the dogfooding loop is broken.
+          uv run python << 'PY'
+          import os, json, sys
+          import httpx
+          url = os.environ.get("ONTOBRICKS_INT_MCP_URL")
+          if not url:
+              print("ONTOBRICKS_INT_MCP_URL not set — skipping probe.")
+              sys.exit(0)
+          token = os.environ.get("DATABRICKS_TOKEN", "")
+          # FastMCP HTTP transport: POST to /mcp with a JSON-RPC tools/call envelope.
+          payload = {
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "tools/call",
+              "params": {"name": "list_domains", "arguments": {}},
+          }
+          r = httpx.post(
+              url.rstrip("/") + "/mcp",
+              json=payload,
+              headers={"Authorization": f"Bearer {token}"} if token else {},
+              timeout=30,
+          )
+          if r.status_code != 200:
+              print(f"PROBE FAILED: HTTP {r.status_code} — body: {r.text[:400]}")
+              sys.exit(1)
+          body = r.json()
+          if "error" in body:
+              print(f"PROBE FAILED: JSON-RPC error: {body['error']}")
+              sys.exit(1)
+          print(f"PROBE OK: {json.dumps(body)[:200]}")
+          PY
+
+  open-mcp-smoke-issue:
+    name: Open issue on MCP smoke failure
+    runs-on: ubuntu-latest
+    needs: mcp-smoke-probe
+    if: failure()
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Open or update the mcp-smoke tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh issue list --label mcp-smoke-failure --state open --json number --jq '.[0].number' || echo "")
+          body="Nightly MCP smoke probe failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --label mcp-smoke-failure \
+              --title "mcp-ontobricks smoke probe failed ($(date -u +%Y-%m-%d))" \
+              --body "$body"
+          fi

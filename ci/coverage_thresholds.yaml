@@ -1,0 +1,66 @@
+# Per-package coverage thresholds enforced by scripts/check_coverage.py in CI.
+# Matches §9.1 of the methodology plan (Cursor-Native Superpowers).
+#
+# Format:
+#   <package-prefix>:
+#     line: <float 0..1>     # required
+#     branch: <float 0..1>   # optional; falls back to global default
+#
+# `package-prefix` matches the leading path under `src/`. Most-specific match wins.
+
+defaults:
+  line: 0.90
+  branch: 0.80
+
+packages:
+  # Domain — pure dict/dataclass logic, easy to cover, breakage is silent.
+  src/back/objects:
+    line: 0.95
+    branch: 0.85
+
+  # Backend core — translators + reasoners + triplestore (engine room).
+  src/back/core:
+    line: 0.92
+    branch: 0.80
+
+  # High blast-radius monoliths get the strictest gate.
+  src/back/core/w3c/sparql:
+    line: 0.95
+    branch: 0.85
+
+  # New tests required (currently 0%) — start at a survivable floor.
+  src/back/core/w3c/shacl:
+    line: 0.90
+    branch: 0.75
+
+  # 3525-LOC monolith; lift gradually as M4 (DigitalTwin split) proceeds.
+  src/back/objects/digitaltwin:
+    line: 0.88
+    branch: 0.75
+
+  # Agents: line coverage is necessary but not sufficient — eval is the primary signal.
+  src/agents:
+    line: 0.85
+    branch: 0.70
+
+  # MCP server: currently 0%; T-M3 fills it.
+  src/mcp-server:
+    line: 0.90
+    branch: 0.75
+
+  # Thin glue — integration tier carries more weight.
+  src/front:
+    line: 0.80
+    branch: 0.65
+
+  # New tests required (currently 0).
+  src/back/core/logging:
+    line: 0.90
+    branch: 0.75
+
+# Coverage-source exclusions (must mirror pyproject.toml [tool.coverage.run].omit).
+exclusions:
+  - "src/**/_starter_kit/*"
+  - "src/**/__init__.py"
+  - "src/**/migrations/*"
+  - "src/**/generated/*"

@@ -1,0 +1,2336 @@
+2026-04-17 — API/front: package-level imports (no deep internal paths)
+======================================================================
+
+Context:
+  Coding rules require consumers under ``api/`` and ``front/`` to import from
+  package ``__init__.py`` exports, not internal modules.
+
+Changes:
+
+1. ``src/front/routes/resolve.py`` — ``Domain`` from ``back.objects.domain``.
+2. ``src/api/routers/internal/ontology.py`` — rule validators from
+   ``back.core.reasoning``.
+3. ``src/api/routers/internal/domain.py`` — debug cache snapshots from
+   ``back.objects.registry`` and ``back.objects.domain``.
+4. ``src/api/routers/internal/dtwin.py`` — ``uri_local_name`` from
+   ``back.core.w3c``; ``DigitalTwin``/``DomainSnapshot`` from
+   ``back.objects.digitaltwin``; ``graph_volume_path`` from ``back.core.graphdb``;
+   ``InferredTriple``/``ReasoningResult`` from ``back.core.reasoning``.
+5. ``src/api/routers/digitaltwin.py`` — ``DomainSnapshot`` with ``DigitalTwin`` from
+   ``back.objects.digitaltwin``.
+6. ``src/api/routers/v1.py`` — ``resolve_domain_slice`` from ``back.objects.domain``.
+7. ``src/api/service.py`` — ``DomainQueryService`` from ``back.core.w3c``;
+   domain/mapping/ontology JSON helpers from package roots.
+
+8. ``src/back/objects/domain/__init__.py`` — re-export ``get_domain_info``,
+   ``resolve_domain_slice``, ``get_version_status_cache_snapshot``.
+9. ``src/back/core/graphdb/__init__.py`` — re-export ``graph_volume_path``.
+10. ``src/back/objects/mapping/__init__.py`` — re-export ``get_mapping_info``.
+11. ``src/back/objects/ontology/__init__.py`` — re-export ``get_ontology_*``.
+
+Files modified:
+  - src/front/routes/resolve.py
+  - src/api/routers/internal/ontology.py
+  - src/api/routers/internal/domain.py
+  - src/api/routers/internal/dtwin.py
+  - src/api/routers/digitaltwin.py
+  - src/api/routers/v1.py
+  - src/api/service.py
+  - src/back/objects/domain/__init__.py
+  - src/back/core/graphdb/__init__.py
+  - src/back/objects/mapping/__init__.py
+  - src/back/objects/ontology/__init__.py
+
+Tests: ``uv run pytest -q`` — 1265 passed, 45 skipped.
+
+2026-04-17 — Sphinx API: `back.core.graphdb` page and triplestore autodoc cleanup
+=================================================================================
+
+Context:
+  LadybugDB moved out of `back.core.triplestore`; Sphinx still used
+  `.. automodule:: back.core.triplestore.ladybugdb.*` directives. API reference
+  and toctrees are aligned with `back.core.graphdb`.
+
+Changes:
+
+1. docs/sphinx/api/app.core.graphdb.rst (new) — automodule coverage for the
+   graphdb package, `GraphDBBackend`, `GraphDBFactory`, `ladybugdb` package
+   surface, and implementation modules; `:exclude-members:` on package
+   automodules avoids duplicate object descriptions with submodule pages.
+
+2. docs/sphinx/api/app.core.triplestore.rst — removed legacy ladybugdb
+   automodule blocks; note + :doc:`app.core.graphdb` cross-reference; retained
+   constants, `TripleStoreBackend`, `TripleStoreFactory`,
+   `IncrementalBuildService`, and `DeltaTripleStore`.
+
+3. docs/sphinx/api/app.core.rst — toctree entry `app.core.graphdb`.
+
+4. docs/sphinx/index.rst — API Reference toctree entry `api/app.core.graphdb`.
+
+Files modified:
+  - docs/sphinx/api/app.core.graphdb.rst (new)
+  - docs/sphinx/api/app.core.triplestore.rst
+  - docs/sphinx/api/app.core.rst
+  - docs/sphinx/index.rst
+
+Tests: 1310 passed (pytest); `uv run sphinx-build -b html docs/sphinx docs/_build/html` succeeded.
+
+2026-04-17 — Remove dead session helpers, duplicate API routes, and orphan frontend assets
+============================================================================================
+
+Context:
+  Cleanup pass to drop unused session middleware helpers, superseded internal
+  API routes, an unused DatabricksClient re-export from helpers, and orphan
+  ontology partial templates plus their static JS.
+
+Changes:
+
+1. src/back/objects/session/middleware.py — removed ``save_to_session`` and
+   ``get_from_session`` (unused; session mutation uses ``request.state`` in
+   callers).
+
+2. src/back/objects/session/__init__.py — stopped exporting the removed helpers.
+
+3. tests/test_middleware_session.py — dropped tests that only covered the
+   removed helpers; kept ``get_session`` coverage.
+
+4. src/api/routers/internal/home.py — removed ``POST /parse-ontology`` (use
+   ``/ontology/parse-owl`` / ``Ontology.ingest_owl`` instead); removed duplicate
+   ``GET /validate/detailed-status`` alias (same handler as ``/validate/detailed``).
+
+5. src/back/core/helpers/__init__.py — removed unused ``DatabricksClient`` import
+   from the databricks re-export block (call sites use ``back.core.databricks``).
+
+6. Deleted unused templates:
+   - src/front/templates/partials/ontology/_ontology_constraints.html
+   - src/front/templates/partials/ontology/_ontology_swrl.html
+
+7. Deleted unused static script:
+   - src/front/static/ontology/js/ontology-constraints.js
+
+Files modified:
+  - src/back/objects/session/middleware.py
+  - src/back/objects/session/__init__.py
+  - tests/test_middleware_session.py
+  - src/api/routers/internal/home.py
+  - src/back/core/helpers/__init__.py
+
+Files removed:
+  - src/front/templates/partials/ontology/_ontology_constraints.html
+  - src/front/templates/partials/ontology/_ontology_swrl.html
+  - src/front/static/ontology/js/ontology-constraints.js
+
+Tests: 1179 passed, 45 skipped, 0 failures (pytest).
+
+2026-04-17 — Sanitize client-facing errors (no raw exceptions in messages)
+============================================================================
+
+Context:
+  Hardening so API and task payloads expose stable human-readable ``message`` /
+  ``error`` strings while parser failures use ``OntoBricksError.detail`` for
+  internal text. Raw LLM output is no longer returned on extract-SQL failure.
+
+Changes:
+
+1. src/back/core/w3c/owl/OntologyParser.py — ``ValidationError`` on parse
+   failure now uses a fixed message with ``detail=str(e)``.
+
+2. src/back/core/w3c/r2rml/R2RMLParser.py — same for R2RML parse failures.
+
+3. src/back/core/sqlwizard/SQLWizardService.py — ``InfrastructureError`` for LLM
+   HTTP errors uses ``detail=str(e)``; EXPLAIN failures return a generic message
+   and log the exception; ``generate_sql`` no longer includes ``raw_output`` on
+   extract failure; timeout/generic failures use safe ``error`` plus optional
+   ``detail``; telemetry no longer embeds ``str(e)``.
+
+4. src/back/objects/digitaltwin/digitaltwin.py — graph status and Spark query
+   paths use safe messages; removed traceback from API responses;
+   ``diagnose_view_error`` no longer returns raw DB errors to callers; DQ check
+   failures log with ``logger.exception`` and use generic result messages;
+   graph read failures use a safe ``fail_task`` message when not “missing graph”.
+
+Files modified:
+  - src/back/core/w3c/owl/OntologyParser.py
+  - src/back/core/w3c/r2rml/R2RMLParser.py
+  - src/back/core/sqlwizard/SQLWizardService.py
+  - src/back/objects/digitaltwin/digitaltwin.py
+
+Tests: 1179 passed, 45 skipped, 0 failures (pytest).
+
+2026-04-17 — Module-level loggers (`get_logger`)
+===============================================
+
+Context:
+  Add missing ``from back.core.logging import get_logger`` and
+  ``logger = get_logger(__name__)`` to backend modules per ``src/.coding_rules.md``
+  logging policy.
+
+Changes:
+
+1. src/back/core/helpers/URIHelpers.py — ``get_logger`` import and module logger.
+2. src/back/core/helpers/SQLHelpers.py — ``get_logger`` import and module logger.
+3. src/back/core/agents/AgentClient.py — ``get_logger`` import and module logger.
+4. src/back/core/graphql/ResolverFactory.py — ``get_logger`` import and module logger.
+5. src/back/core/w3c/sparql/SparqlQueryRunner.py — ``get_logger`` import and module logger.
+6. src/back/core/reasoning/SWRLParser.py — ``get_logger`` import and module logger.
+7. src/back/objects/registry/registry_cache.py — ``get_logger`` import and module logger.
+8. src/back/objects/session/SessionManager.py — ``get_logger`` import and module logger.
+9. src/back/objects/domain/payload.py — ``get_logger`` import and module logger.
+10. src/back/objects/domain/version_status.py — ``get_logger`` import and module logger.
+11. src/back/objects/ontology/json_views.py — ``get_logger`` import and module logger.
+12. src/back/objects/mapping/json_views.py — ``get_logger`` import and module logger.
+
+Files modified:
+  - (same paths as items 1–12 above)
+
+Tests: ``uv run pytest -q`` — 1224 passed (53.01s).
+
+2026-04-17 — Remove tokens from domain structures (security)
+=============================================================
+
+Context:
+  Domain structures must never include secrets (tokens, passwords). Tokens
+  are resolved at runtime from env vars or OAuth, not persisted in session
+  files or domain snapshots.
+
+Changes:
+
+1. src/back/objects/session/DomainSession.py — removed ``"token": ""``
+   from ``get_empty_domain()`` default structure.
+
+2. src/back/objects/session/DomainSession.py — ``_migrate_legacy()`` no
+   longer copies ``databricks_token`` into ``settings.databricks``.
+
+3. src/back/objects/session/DomainSession.py — ``save()`` now strips
+   ``settings.databricks.token`` before persisting to the session file.
+
+4. src/back/objects/digitaltwin/models.py — ``DomainSnapshot.__init__``
+   no longer copies token from ``domain.databricks``; accepts explicit
+   ``host``/``token`` keyword arguments for background thread use.
+
+5. src/back/objects/registry/scheduler.py — ``_load_domain_for_build``
+   no longer sets ``domain.databricks["token"]``; ``_run_scheduled_build``
+   passes ``host``/``token`` explicitly to ``DomainSnapshot``.
+
+Files modified:
+  - src/back/objects/session/DomainSession.py
+  - src/back/objects/digitaltwin/models.py
+  - src/back/objects/registry/scheduler.py
+
+Tests: 1179 passed, 45 skipped, 0 failures (pytest).
+
+2026-04-17 — Move ErrorResponse handlers to shared/fastapi/ (layering)
+=======================================================================
+
+Context:
+  ``back/core/`` should not depend on FastAPI types. The exception handler
+  registration (which imports ``fastapi.Request`` and ``JSONResponse``) was
+  moved out of ``ErrorResponse.py`` into ``shared/fastapi/error_handlers.py``.
+  A backward-compatible wrapper remains in ``back.core.errors.__init__``.
+
+Changes:
+
+1. src/back/core/errors/ErrorResponse.py — removed
+   ``register_exception_handlers`` static method and FastAPI imports;
+   now a pure Pydantic model with no framework dependency.
+
+2. src/shared/fastapi/error_handlers.py — new module containing the
+   ``register_exception_handlers`` function (moved from ErrorResponse).
+
+3. src/back/core/errors/__init__.py — ``register_exception_handlers``
+   is now a wrapper that delegates to ``shared.fastapi.error_handlers``.
+
+Files modified:
+  - src/back/core/errors/ErrorResponse.py
+  - src/back/core/errors/__init__.py
+
+Files added:
+  - src/shared/fastapi/error_handlers.py
+
+Tests: 1179 passed, 45 skipped, 0 failures (pytest).
+
+2026-04-17 — Rename global_config.py → GlobalConfigService.py (class-first)
+============================================================================
+
+Context:
+  Per coding rules, file names must match the PascalCase class name.
+  ``global_config.py`` held ``GlobalConfigService`` — renamed to match.
+
+Changes:
+
+1. src/back/objects/session/GlobalConfigService.py — canonical module
+   (copied from ``global_config.py``).
+
+2. src/back/objects/session/global_config.py — now a thin backward-compat
+   alias that re-exports from ``GlobalConfigService.py``.
+
+3. src/back/objects/session/__init__.py — imports from ``GlobalConfigService``
+   instead of ``global_config``.
+
+Files modified:
+  - src/back/objects/session/__init__.py
+  - src/back/objects/session/global_config.py
+
+Files added:
+  - src/back/objects/session/GlobalConfigService.py
+
+Tests: 1179 passed, 45 skipped, 0 failures (pytest).
+
+2026-04-17 — Suppress third-party test warnings
+=================================================
+
+Context:
+  Three warnings from third-party libraries (urllib3 NotOpenSSLWarning,
+  google-auth/google-oauth2 FutureWarning) cluttered test output. These
+  are environmental (Python 3.9 + LibreSSL) and not OntoBricks issues.
+
+Changes:
+
+1. conftest.py (root) — new root conftest with ``pytest_configure`` hook
+   that suppresses ``NotOpenSSLWarning`` and ``FutureWarning`` from Google
+   packages before test collection begins.
+
+2. pytest.ini — kept existing ``filterwarnings`` for rdflib/pyparsing
+   DeprecationWarnings.
+
+Files modified:
+  - pytest.ini
+
+Files added:
+  - conftest.py
+
+Tests: 1179 passed, 45 skipped, 0 warnings (pytest).
+
+---
+
+## Knowledge Graph: Move Find feature from right panel to canvas context menu
+
+Context: The "Find" tab in the Knowledge Graph right panel took up a permanent tab slot
+for a feature used intermittently. Moving it to a right-click context menu on the canvas
+makes the UI cleaner and the feature more discoverable via a standard interaction pattern.
+
+Changes:
+1. `src/front/templates/partials/dtwin/_query_sigmagraph.html` — removed the Find tab
+   button and tab pane from the right panel; added a canvas context menu (`#sgContextMenu`)
+   with "Find in graph", "Fit to view", and "Reload" items; added a floating search popup
+   (`#sgFindPopup`) positioned at the top-center of the canvas; updated hint text to
+   mention right-click.
+2. `src/front/static/query/css/query-sigmagraph.css` — added styles for the context menu
+   (`#sgContextMenu`) and the floating find popup (`.sg-find-popup`).
+3. `src/front/static/query/js/query-sigmagraph.js` — added `rightClickStage` Sigma event
+   handler to show the context menu; added `_showContextMenu`, `_hideContextMenu`,
+   `_openFindPopup`, `_closeFindPopup` helper functions; updated `toggleFilterPane` to
+   open the popup instead of the removed tab; added `openFindPopup`/`closeFindPopup`
+   public methods; wired context menu item clicks via `data-sg-ctx` attribute delegation;
+   added Escape key to dismiss both the menu and the popup; suppressed browser default
+   context menu on the canvas container.
+
+Files modified:
+  - src/front/templates/partials/dtwin/_query_sigmagraph.html
+  - src/front/static/query/css/query-sigmagraph.css
+  - src/front/static/query/js/query-sigmagraph.js
+
+Tests: 1179 passed, 45 skipped, 0 warnings (pytest).
+
+---
+
+## Knowledge Graph: Move Groups section to canvas context menu popup
+
+Context: Following the same pattern as the Find feature, the Groups section was moved out
+of the View tab (right panel) into a floating popup accessible via the canvas context menu.
+This frees up space in the View tab and keeps group management accessible on demand.
+
+Changes:
+1. `src/front/templates/partials/dtwin/_query_sigmagraph.html` — removed the Groups section
+   (header, collapse/expand buttons, chips container) from the View tab; added a "Groups"
+   item with divider to the context menu; added a floating Groups popup (`#sgGroupsPopup`)
+   with the same collapse/expand buttons and chips container; renamed Find popup class from
+   `sg-find-popup` to shared `sg-canvas-popup`.
+2. `src/front/static/query/css/query-sigmagraph.css` — renamed `.sg-find-popup` to
+   `.sg-canvas-popup` with overflow-y and max-height for scrollable content; added
+   `#sgContextMenu .ctx-divider` style.
+3. `src/front/static/query/js/query-sigmagraph.js` — added `_openGroupsPopup` /
+   `_closeGroupsPopup` helpers; added `openGroupsPopup` / `closeGroupsPopup` public
+   methods; updated `toggleGroupsPanel` to open the popup; popups are mutually exclusive
+   (opening one closes the other); Escape key dismisses the groups popup; find popup
+   auto-closes after highlight.
+
+Files modified:
+  - src/front/templates/partials/dtwin/_query_sigmagraph.html
+  - src/front/static/query/css/query-sigmagraph.css
+  - src/front/static/query/js/query-sigmagraph.js
+
+Tests: 1179 passed, 45 skipped, 0 warnings (pytest).
+
+---
+
+## Knowledge Graph: Right-click on entity shows bridges and dashboards
+
+Context: Right-clicking an entity node now shows a dedicated context menu listing available
+dashboards and cross-domain bridges for that entity's type. This provides quick access to
+related views without having to click the entity first and scroll through the details panel.
+
+Changes:
+1. `src/front/templates/partials/dtwin/_query_sigmagraph.html` — added an empty
+   `#sgNodeContextMenu` div (content is built dynamically in JS).
+2. `src/front/static/query/css/query-sigmagraph.css` — added styles for
+   `#sgNodeContextMenu` including `.ctx-item`, `.ctx-header`, and `.ctx-divider`.
+3. `src/front/static/query/js/query-sigmagraph.js`:
+   - Added `_resolveNodeMeta(nodeId)` helper that looks up entity mappings and ontology
+     class info to extract bridges, dashboard URL, and dashboard params for a node.
+   - Added `_showNodeContextMenu(nodeId, mouseEvent)` that builds the menu dynamically:
+     "Dashboard" section with "View Dashboard" (if configured) and "Bridges" section with
+     one item per bridge (if any). Shows "No dashboards or bridges" when neither exists.
+   - Added `rightClickNode` Sigma event handler.
+   - Wired `data-sg-node-action="dashboard"` to `openDashboardModal` and
+     `data-sg-node-action="bridge"` to navigate. Escape and outside-click dismiss.
+
+Files modified:
+  - src/front/templates/partials/dtwin/_query_sigmagraph.html
+  - src/front/static/query/css/query-sigmagraph.css
+  - src/front/static/query/js/query-sigmagraph.js
+
+Tests: 1179 passed, 45 skipped, 0 warnings (pytest).
+
+---
+
+## Knowledge Graph: Details panel sections styled as cards
+
+Context: The Details tab (right panel) previously rendered all sections as flat blocks
+separated only by headings. Wrapping each section in a card-like container improves visual
+separation and readability.
+
+Changes:
+1. `src/front/static/query/css/query-visualization.css`:
+   - `.entity-detail-header`: changed from border-bottom divider to a white card with
+     border and border-radius.
+   - `.entity-detail-section`: added light background (`#f8f9fa`), border, border-radius,
+     and inner padding to give each section (Entity Info, Attributes, Dashboard, Bridges,
+     Outgoing, Incoming, Full URI) a card appearance. Section `h6` now has a bottom border.
+   - `.entity-detail-item`: slightly refined font-size and border color to fit within cards.
+   - `.entity-relationship-item`: changed background to white so relationship items contrast
+     with the section card background.
+
+Files modified:
+  - src/front/static/query/css/query-visualization.css
+
+Tests: 1179 passed, 45 skipped, 0 warnings (pytest).
+
+---
+
+## Knowledge Graph: Collapsible detail cards + remove Full URI section
+
+Context: The detail sections are now collapsible/expandable by clicking their heading, and
+the Full URI section at the bottom has been removed (the URI is already shown in the header).
+
+Changes:
+1. `src/front/static/query/js/query-sigmagraph.js`:
+   - Introduced `_sec(icon, title, body, startOpen)` helper inside `_showNodeDetails` that
+     wraps each section in a collapsible card: clickable `h6` header with a chevron icon,
+     body in a `.entity-detail-body` div, toggled via a `collapsed` CSS class.
+   - Converted all sections (Entity Info, Attributes, Dashboard, Bridges, Outgoing,
+     Incoming) to use `_sec()`. Entity Info, Attributes, Dashboard, and Bridges start
+     expanded; Outgoing and Incoming start collapsed.
+   - Removed the Full URI section at the bottom.
+2. `src/front/static/query/css/query-visualization.css`:
+   - Made `h6` clickable with `cursor: pointer`, flex layout, and hover color change.
+   - Added `.entity-section-chevron` with rotation transition.
+   - Added `.entity-detail-section.collapsed` rules: hides `.entity-detail-body`, removes
+     heading border, rotates chevron to -90deg.
+
+Files modified:
+  - src/front/static/query/js/query-sigmagraph.js
+  - src/front/static/query/css/query-visualization.css
+
+Tests: 1179 passed, 45 skipped, 0 warnings (pytest).
+
+---
+
+## Domain-Level Permissions with Builder Role
+
+Context: OntoBricks had a flat, app-wide permission model (admin/editor/viewer/none).
+This change introduces a new "builder" role and per-domain permission overrides.
+Builders can do everything editors can, plus trigger digital twin builds. Editors
+can no longer build digital twins. Domain-level permissions let admins restrict
+(but not elevate) a user's app-level role on a per-domain basis.
+
+Changes:
+
+1. `src/back/objects/registry/permissions.py` — added `ROLE_BUILDER` constant,
+   `ROLE_HIERARCHY` dict, `role_level()` and `min_role()` helpers; added domain
+   permission file I/O (`load_domain_permissions`, `save_domain_permissions`);
+   added `get_domain_role()` with effective = min(app, domain) logic; added
+   domain-level CRUD (`list_domain_entries`, `add_or_update_domain_entry`,
+   `remove_domain_entry`, `clear_domain_perm_cache`).
+
+2. `src/back/objects/registry/__init__.py` — re-exported `ROLE_BUILDER`,
+   `ROLE_HIERARCHY`, `role_level`, and `min_role`.
+
+3. `src/shared/fastapi/main.py` — updated `PermissionMiddleware` to resolve
+   both `user_role` (app-level) and `user_domain_role` (effective domain role);
+   renamed `_resolve_role` to `_resolve_roles`; added `builder` awareness;
+   added `/settings/domain-permissions` to admin-only prefixes.
+
+4. `src/api/routers/internal/dtwin.py` — added builder/admin authorization
+   check on `POST /dtwin/sync/start` (digital twin build endpoint).
+
+5. `src/back/services/settings.py` — updated role validation to accept
+   "builder"; added domain-permission orchestration functions
+   (`list_domain_permissions_result`, `add_domain_permission_result`,
+   `delete_domain_permission_result`).
+
+6. `src/api/routers/internal/settings.py` — added three new endpoints:
+   `GET/POST /settings/domain-permissions/{domain_name}` and
+   `DELETE /settings/domain-permissions/{domain_name}/{principal}`.
+
+7. `src/front/templates/settings.html` — added "Builder" role option to the
+   app-level permission modal dropdown; added Domain-Level Permissions
+   sub-section with domain selector, per-domain permission table, and
+   Add Domain Permission modal.
+
+8. `src/front/static/config/js/permissions.js` — added "Builder" option to
+   the inline role-change select; added full domain-permission management
+   UI logic (load, change, add, delete).
+
+9. `src/front/fastapi/dependencies.py` — added `get_user_domain_role` Jinja2
+   global function.
+
+10. `src/front/templates/partials/dtwin/_query_sync.html` — Build button is
+    now conditionally rendered: shown for builder/admin, disabled with lock
+    icon for editor/viewer.
+
+11. `tests/test_permissions.py` — added 23 new tests covering role hierarchy,
+    `min_role`, domain permission path, load/save/cache, domain role resolution
+    (admin bypass, restrict, cannot elevate, inherit), domain CRUD, and cache
+    clearing.
+
+12. `docs/development.md` — updated roles table (added Builder), updated
+    resolution flow diagram, added Domain-Level Permissions section with
+    storage format, resolution logic, and API endpoints.
+
+13. `docs/architecture.md` — updated PermissionService description, added
+    `.domain_permissions.json` to registry volume layout, updated file tree.
+
+Files modified:
+  - src/back/objects/registry/permissions.py
+  - src/back/objects/registry/__init__.py
+  - src/shared/fastapi/main.py
+  - src/api/routers/internal/dtwin.py
+  - src/back/services/settings.py
+  - src/api/routers/internal/settings.py
+  - src/front/templates/settings.html
+  - src/front/static/config/js/permissions.js
+  - src/front/fastapi/dependencies.py
+  - src/front/templates/partials/dtwin/_query_sync.html
+  - tests/test_permissions.py
+  - docs/development.md
+  - docs/architecture.md
+
+Tests: 1205 passed, 45 skipped, 0 failures (pytest).
+
+---
+
+## Registry Bridges Diagram Redesign
+
+**Context:** The Bridges graph view on the Registry page used a D3 force-directed
+simulation with animated physics, hover-only relationship labels, and domain-only
+bubbles that did not show which entities were involved. Redesigned for clarity and beauty.
+
+### Changes
+
+1. `src/front/static/registry/js/registry.js`
+   - Replaced `_buildGraphModel()`: now builds entity-level nodes grouped by domain
+     (source class and target class as separate nodes, each inside its domain bubble)
+   - Replaced `_renderBridgesGraph()`: fully static layout (no force simulation,
+     no animations). Domains arranged in a circle, entities placed inside each
+     domain bubble. Edges drawn as quadratic curves between entity nodes.
+   - Relationships (edges) and labels always visible, not just on hover.
+   - Removed `_domainColor()`, `_showGraphTooltip()`, `_moveGraphTooltip()`,
+     `_hideGraphTooltip()` (no longer needed). Added `_hashStr()`, `_entityKeyFromPos()`.
+   - Removed `bridgesSimulation` variable (no force simulation).
+   - Domain groups rendered as dashed circles with radial gradient fills.
+   - Entity nodes shown as white circles with colored borders, emoji inside, name below.
+   - Edge labels rendered with semi-transparent background rectangles for readability.
+   - Hover still highlights connected entities and edges (subtle dimming on unrelated).
+   - Auto-fit viewport on render via `requestAnimationFrame`.
+   - Zoom/pan preserved for exploration.
+
+2. `src/front/static/registry/css/registry.css`
+   - Replaced force-graph styles with new static diagram styles.
+   - Added `.bridges-domain-group`, `.bridges-domain-label`, `.bridges-domain-badge`
+     for domain bubble containers.
+   - Added `.bridges-entity-node`, `.bridges-entity-emoji`, `.bridges-entity-label`
+     for entity nodes inside domain bubbles.
+   - Added `.bridges-edge-label`, `.bridges-edge-label-bg` for always-visible edge labels.
+   - Updated `#bridgesGraph` background to a subtle radial gradient.
+   - Removed old `.bridges-graph-node`, `.bridges-graph-badge`, `.bridges-graph-label`,
+     `.bridges-graph-edge-count`, `.bridges-graph-tooltip` styles.
+
+3. `src/front/templates/partials/registry/_registry_bridges.html`
+   - Removed `#bridgesGraphTooltip` div (tooltip no longer used, labels are inline).
+
+### Modified files
+
+- src/front/static/registry/js/registry.js
+- src/front/static/registry/css/registry.css
+- src/front/templates/partials/registry/_registry_bridges.html
+
+Tests: 1228 passed, 45 skipped, 22 pre-existing failures in test_permission_middleware.py (unrelated).
+
+---
+
+## Permission Tests — Middleware, Settings Service & Build Guard
+
+### Context
+
+Added comprehensive tests for the permission enforcement layers that
+were introduced with domain-level permissions and the builder role.
+Existing `test_permissions.py` covers `PermissionService` internals;
+the new test files cover the HTTP middleware, the service orchestration,
+and the build endpoint authorization guard.
+
+### Changes
+
+1. `tests/test_permission_middleware.py` (new, 36 tests)
+   - **TestBypassPaths** — static/health/docs/api/graphql paths skip role enforcement
+   - **TestLocalDevMode** — local dev (no DATABRICKS_APP_PORT) grants admin
+   - **TestRoleEnforcement** — none→403, viewer write→403, editor/builder/admin pass
+   - **TestAdminOnlyPaths** — /settings/permissions and /settings/domain-permissions blocked for non-admin
+   - **TestRequestState** — user_role, user_domain_role, user_email propagated on request.state
+   - **TestResolveRolesFailure** — _resolve_roles exception falls back to ROLE_NONE (403)
+   - **TestBuildEndpointGuard** — role_level gate: admin/builder pass, editor/viewer/none rejected
+
+2. `tests/test_settings_domain_permissions.py` (new, 19 tests)
+   - **TestListDomainPermissions** — list entries returns correct shape
+   - **TestAddDomainPermission** — success, missing principal, invalid role, empty domain, no registry, save failure
+   - **TestDeleteDomainPermission** — success, not found, no registry
+   - **TestAppLevelRoleValidation** — builder accepted, admin/none rejected, missing principal rejected
+
+### Modified files
+
+- tests/test_permission_middleware.py (new)
+- tests/test_settings_domain_permissions.py (new)
+
+Tests: 1260 passed, 45 skipped.
+
+---
+
+## Fix: Principal Search Now Queries App Permissions Instead of SCIM
+
+### Context
+
+The "Search Workspace" feature in the Add Permission modal never
+returned users.  The root cause: `search_workspace_principals` was
+calling the SCIM `/preview/scim/v2/Users` endpoint to search all
+workspace users, but the Databricks App service principal typically
+lacks SCIM read permissions, so the call silently failed and returned
+an empty list.
+
+The correct behaviour is to search among users and groups that already
+have access to the Databricks App (via the App Permissions API), which
+is the same data shown by `list_app_principals`.
+
+### Changes
+
+1. `src/back/services/settings.py` — `search_workspace_principals()`
+   - Replaced SCIM `DatabricksClient.search_users/search_groups` calls
+     with `permission_service.list_app_principals()` + client-side
+     case-insensitive contains filter on email/display_name.
+   - Removed now-unused `DatabricksClient` import from the function.
+
+2. `tests/test_settings_domain_permissions.py` — added `TestSearchWorkspacePrincipals`
+   - Filters by email, by display name, case-insensitive match.
+   - Group search filtering.
+   - No-match returns empty list.
+
+### Modified files
+
+- src/back/services/settings.py
+- tests/test_settings_domain_permissions.py
+
+Tests: 1265 passed, 45 skipped.
+
+---
+
+## Build Page: Role-Gate Drop, Reload Buttons and Build Mode
+
+**Context:** On the Build page (Domain > Build section), the "Drop" snapshot button,
+"Reload from registry" button, and Build mode radio buttons were accessible to all
+users regardless of their role. Only the main Build button was role-gated. Destructive
+actions like dropping snapshots and reloading graphs should require builder or admin role.
+
+### Changes
+
+1. `src/front/templates/partials/dtwin/_query_sync.html`
+   - Drop button (`dtDropSnapshot`): now renders as a disabled locked button with a
+     tooltip for non-builder/non-admin users.
+   - Reload button (`dtReloadFromRegistry`): same role-gating applied.
+   - Build mode radios (`buildModeIncremental`, `buildModeFull`): disabled for
+     non-builder/non-admin users.
+   - Uses the existing `_dr` (domain role) variable already set at the top of the
+     template via `get_user_domain_role()`.
+
+2. `src/api/routers/internal/dtwin.py`
+   - `POST /dtwin/sync/drop-snapshot`: added `request: Request` param and
+     builder role check (`role_level(effective_role) < role_level(ROLE_BUILDER)`).
+     Returns `AuthorizationError` (403) for insufficient role.
+   - `POST /dtwin/sync/reload-from-registry`: same role check added.
+   - Follows the existing pattern from `POST /dtwin/sync/start`.
+
+### Modified files
+
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/api/routers/internal/dtwin.py
+
+Tests: 1265 passed, 45 skipped.
+
+---
+
+## Code Review Fixes — Post-Review Refactoring
+
+### Context
+Applied fixes from the code review of the Builder Role + Domain-Level
+Permissions + Bridges Graph Rewrite changeset.
+
+### Changes
+
+1. `src/back/objects/registry/permissions.py` — Added `ASSIGNABLE_ROLES`
+   constant tuple `(viewer, editor, builder)` to eliminate duplicated
+   inline role-validation tuples.
+2. `src/back/objects/registry/__init__.py` — Re-exported `ASSIGNABLE_ROLES`
+   in imports and `__all__`.
+3. `src/back/services/settings.py` — Replaced two inline `('viewer',
+   'editor', 'builder')` checks with the `ASSIGNABLE_ROLES` constant;
+   added import.
+4. `src/front/templates/partials/dtwin/_query_sync.html` — Changed Build
+   button visibility condition from allowlist `('builder', 'admin', '')`
+   to denylist `not in ('viewer', 'editor', 'none')`, removing fragile
+   empty-string match.
+5. `src/back/objects/registry/permissions.py` — `get_domain_role()` now
+   accepts an optional `app_role` kwarg so callers that already resolved
+   the app role can skip the redundant `get_user_role()` call.
+6. `src/shared/fastapi/main.py` — `_resolve_roles` passes the already-
+   resolved `app_role` to `get_domain_role()`, halving permission-lookup
+   work per request.
+7. `src/api/routers/internal/dtwin.py` — Moved `ROLE_ADMIN`, `ROLE_BUILDER`,
+   `role_level` imports from inline (inside handler) to module level.
+
+### Modified files
+
+- src/back/objects/registry/permissions.py
+- src/back/objects/registry/__init__.py
+- src/back/services/settings.py
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/shared/fastapi/main.py
+- src/api/routers/internal/dtwin.py
+
+Tests: 1265 passed, 45 skipped.
+
+---
+
+## E2E Test Fix — Playwright + Event Loop Compatibility
+
+### Context
+Installed Playwright Chromium browser and fixed event loop conflict that
+caused 26 test failures when E2E and unit tests ran together.
+
+### Changes
+
+1. Installed Playwright Chromium via `playwright install chromium`.
+2. `tests/test_permission_middleware.py` — Replaced `asyncio.new_event_loop()`
+   in `_run()` helper with a pattern that detects an already-running event
+   loop (left by Playwright) and offloads to a thread pool in that case.
+   This allows E2E and middleware tests to coexist in the same pytest session.
+
+### Modified files
+
+- tests/test_permission_middleware.py
+
+Tests: 1310 passed, 0 skipped.
+
+---
+
+## Extract graph DB abstraction layer: new `back.core.graphdb` package
+
+### Context
+
+The graph DB engine (LadybugDB) was coupled to the triple store package
+(`back.core.triplestore`), sharing the same ABC (`TripleStoreBackend`) and
+factory (`TripleStoreFactory`). The triple store (Delta views in Unity
+Catalog) and the graph DB are two separate concerns: the triple store is the
+permanent storage layer; the graph DB is a local/embedded engine for Cypher
+queries, traversal, and reasoning. This refactoring separates them so that
+the graph DB engine can be swapped in the future.
+
+### Changes
+
+1. Created `src/back/core/graphdb/` package with:
+   - `GraphDBBackend.py` — abstract base extending `TripleStoreBackend` with
+     capability flags (`supports_cypher`, `supports_graph_model`,
+     `query_dialect`), connection management, schema introspection, UC Volume
+     sync methods, and `get_query_translator()` for reasoning engines.
+   - `GraphDBFactory.py` — factory with `engine` parameter (default
+     `"ladybug"`) and `get_graphdb()` convenience function.
+   - `__init__.py` — exports `GraphDBBackend`, `GraphDBFactory`,
+     `get_graphdb`, `GRAPHDB_AVAILABLE`.
+
+2. Moved `src/back/core/triplestore/ladybugdb/` to
+   `src/back/core/graphdb/ladybugdb/`.
+
+3. `LadybugBase` now extends `GraphDBBackend` instead of `TripleStoreBackend`.
+   Implements all graph-specific methods: `get_connection()`, `get_node_table()`,
+   `get_graph_schema()`, `sync_to_remote()`, `sync_from_remote()`,
+   `local_path()`, `remote_archive_path()`, `get_query_translator()`.
+
+4. `LadybugGraphStore` overrides `supports_graph_model` and
+   `get_query_translator()` to return `SWRLCypherTranslator` when graph
+   schema is active.
+
+5. `TripleStoreFactory` simplified: only handles Delta (`backend="view"`);
+   `backend="graph"` delegates to `GraphDBFactory.get_graphdb()`.
+
+6. All internal imports within the `ladybugdb/` package updated from
+   `back.core.triplestore.ladybugdb` to `back.core.graphdb.ladybugdb`.
+
+7. Updated `src/.coding_rules.md` section 10.2 to document the new
+   `graphdb/` package alongside `triplestore/`.
+
+### Modified files
+
+- src/back/core/graphdb/__init__.py (new)
+- src/back/core/graphdb/GraphDBBackend.py (new)
+- src/back/core/graphdb/GraphDBFactory.py (new)
+- src/back/core/graphdb/ladybugdb/__init__.py (moved + updated)
+- src/back/core/graphdb/ladybugdb/LadybugBase.py (moved + updated)
+- src/back/core/graphdb/ladybugdb/LadybugFlatStore.py (moved + updated)
+- src/back/core/graphdb/ladybugdb/LadybugGraphStore.py (moved + updated)
+- src/back/core/graphdb/ladybugdb/GraphSchema.py (moved + updated)
+- src/back/core/graphdb/ladybugdb/GraphSchemaBuilder.py (moved + updated)
+- src/back/core/graphdb/ladybugdb/GraphSyncService.py (moved)
+- src/back/core/graphdb/ladybugdb/models.py (moved + updated)
+- src/back/core/triplestore/TripleStoreFactory.py (simplified)
+- src/back/core/triplestore/__init__.py (updated)
+- src/.coding_rules.md (updated)
+
+Tests: 1310 passed (pytest).
+
+---
+
+## LadybugDB imports: use `graphdb` package path
+
+### Context
+
+LadybugDB helpers live under `back.core.graphdb.ladybugdb`. Call sites outside
+the triplestore package were still importing from the legacy
+`back.core.triplestore.ladybugdb` path.
+
+### Changes
+
+1. `src/back/objects/domain/domain.py` — `sync_to_volume` / `sync_from_volume`
+   imports now use `back.core.graphdb.ladybugdb`.
+2. `src/back/objects/digitaltwin/digitaltwin.py` — `graph_volume_path` import
+   updated to `back.core.graphdb.ladybugdb`.
+3. `src/back/fastapi/graphql_routes.py` — `sync_from_volume` import updated.
+4. `src/back/core/helpers/DatabricksHelpers.py` — `local_db_path` import updated.
+5. `src/api/routers/internal/dtwin.py` — `graph_volume_path` import updated.
+6. `tests/test_ladybug.py`, `tests/test_ladybug_schema.py`,
+   `tests/test_ladybug_sync.py` — same import path (submodule
+   `triplestore.ladybugdb.*` is not present; tests target `graphdb.ladybugdb`).
+
+### Modified files
+
+- src/back/objects/domain/domain.py
+- src/back/objects/digitaltwin/digitaltwin.py
+- src/back/fastapi/graphql_routes.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/api/routers/internal/dtwin.py
+- tests/test_ladybug.py
+- tests/test_ladybug_schema.py
+- tests/test_ladybug_sync.py
+
+### Notes
+
+- `src/api/routers/internal/settings.py`, `src/back/objects/registry/scheduler.py`,
+  and `src/back/services/settings.py` had no `triplestore.ladybugdb` imports to change.
+
+Tests: 1265 passed, 45 skipped (pytest); e2e flows skipped where configured.
+
+---
+
+## Reasoning engines: `GraphDBBackend` capability flags (no direct Ladybug imports)
+
+### Context
+
+Reasoning code used `isinstance(store, LadybugBase)` and
+`LadybugBase.safe_table_id` from the legacy `triplestore.ladybugdb` path.
+Backends are now identified via `GraphDBBackend` flags (`supports_cypher`,
+`supports_graph_model`) and schema-safe node labels via `get_node_table`.
+SWRL translator selection delegates to `get_query_translator` on graph backends.
+
+### Changes
+
+1. `src/back/core/reasoning/SWRLEngine.py` — import `GraphDBBackend`; backend
+   checks use `supports_cypher` / `supports_graph_model`; `_get_translator` calls
+   `store.get_query_translator(table_name)` when the store is a `GraphDBBackend`.
+
+2. `src/back/core/reasoning/ReasoningService.py` — constraint phase gate uses
+   `GraphDBBackend` + `supports_cypher` instead of `LadybugBase`.
+
+3. `src/back/core/reasoning/DecisionTableEngine.py` — `_is_cypher_backend` uses
+   capability flags; `build_violation_cypher` takes `store` and uses
+   `store.get_node_table(table_name)`.
+
+4. `src/back/core/reasoning/AggregateRuleEngine.py` — same `_is_cypher_backend`
+   pattern; `build_cypher` takes `store` and uses `get_node_table`.
+
+5. `src/back/core/reasoning/SPARQLRuleEngine.py` — `_is_cypher_backend` and
+   `_construct_to_flat_cypher_select(..., store)` use `get_node_table` for Cypher labels.
+
+6. `src/back/core/reasoning/SWRLCypherTranslator.py` — `GraphSchema` import path
+   is `back.core.graphdb.ladybugdb.GraphSchema`.
+
+7. `src/back/objects/digitaltwin/digitaltwin.py` — DQ graph checks pass `store`
+   into `build_violation_cypher` / `build_cypher`.
+
+8. `tests/test_business_rules.py` — stub store with `get_node_table` for updated
+   builder method signatures.
+
+9. `tests/test_reasoning_service.py` — constraint skip assertion matches the new
+   backend message.
+
+10. `tests/test_triplestore_factory.py` — default graph backend test patches
+    `get_graphdb` instead of removed `_create_ladybug`.
+
+### Modified files
+
+- src/back/core/reasoning/SWRLEngine.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/reasoning/DecisionTableEngine.py
+- src/back/core/reasoning/AggregateRuleEngine.py
+- src/back/core/reasoning/SPARQLRuleEngine.py
+- src/back/core/reasoning/SWRLCypherTranslator.py
+- src/back/objects/digitaltwin/digitaltwin.py
+- tests/test_business_rules.py
+- tests/test_reasoning_service.py
+- tests/test_triplestore_factory.py
+
+Tests: 1310 passed, 0 skipped (pytest).
+
+---
+
+## Remove backward-compat triplestore/ladybugdb shim
+
+### Context
+
+The shim at `src/back/core/triplestore/ladybugdb/` was created during the
+graphdb extraction as a safety net for any remaining old-path imports.
+All imports have been migrated to `back.core.graphdb.ladybugdb`, so the
+shim is unused.
+
+### Changes
+
+1. Deleted `src/back/core/triplestore/ladybugdb/` directory (only contained
+   a re-export `__init__.py`).
+
+### Modified files
+
+- src/back/core/triplestore/ladybugdb/__init__.py (deleted)
+
+Tests: 1310 passed (pytest).
+
+---
+
+## Code review: graphdb docs, `GraphDBBackend.is_cypher_backend`, public store API
+
+### Context
+
+Follow-up from code review after the graph DB / triple store split: documentation
+and layout notes still mentioned a removed `triplestore/ladybugdb` shim; reasoning
+engines duplicated the Cypher-backend check; some call sites used private
+`LadybugBase`-style methods (`_get_connection`, `_node_table`) instead of the
+public `GraphDBBackend` API.
+
+### Changes
+
+1. `src/.coding_rules.md` — Removed the `triplestore/ladybugdb` shim line from the
+   section 10.2 tree and the corresponding bullet in the triplestore subsection.
+
+2. `src/back/core/triplestore/TripleStoreBackend.py` — Class docstring now describes
+   triple store backends as e.g. Delta only (LadybugDB is a graph DB backend).
+
+3. `src/back/core/graphdb/GraphDBBackend.py` — Added `is_cypher_backend(store)`
+   static helper; dropped unused typing imports (`Dict`, `List`, `Set`).
+
+4. `src/back/core/reasoning/DecisionTableEngine.py`,
+   `AggregateRuleEngine.py`, `SPARQLRuleEngine.py` — Use
+   `GraphDBBackend.is_cypher_backend(store)`; removed local `_is_cypher_backend`;
+   Cypher paths use `store.get_connection()`.
+
+5. `src/back/core/reasoning/SWRLEngine.py` — Renamed `_is_ladybug_backend` to
+   `_is_cypher_backend` (delegates to `GraphDBBackend.is_cypher_backend`);
+   `store.get_connection()` instead of `_get_connection()`.
+
+6. `src/back/core/reasoning/ReasoningService.py` — Constraint phase uses
+   `GraphDBBackend.is_cypher_backend`, `get_node_table`, and `get_connection`.
+
+7. `src/back/objects/digitaltwin/digitaltwin.py` — DQ graph checks use
+   `store.get_connection()`.
+
+### Modified files
+
+- src/.coding_rules.md
+- src/back/core/triplestore/TripleStoreBackend.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/reasoning/DecisionTableEngine.py
+- src/back/core/reasoning/AggregateRuleEngine.py
+- src/back/core/reasoning/SPARQLRuleEngine.py
+- src/back/core/reasoning/SWRLEngine.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/objects/digitaltwin/digitaltwin.py
+
+Tests: 1265 passed, 45 skipped (pytest).
+
+---
+
+## Regenerate `.cursor/` rule files from `src/.coding_rules.md`
+
+Context: The 10 `.cursor/*.mdc` files contained rules for a different project ("ontos-app") with
+conflicting architecture, technology stack, and conventions. They were completely rewritten to
+align with the actual OntoBricks coding rules defined in `src/.coding_rules.md`.
+
+Changes:
+1. `.cursor/01-expertise-and-principles.mdc` — Rewritten: Python/FastAPI/Jinja2/Databricks/RDF expertise,
+   PascalCase file naming, personal style preferences preserved.
+2. `.cursor/02-project-overview.mdc` — Rewritten: OntoBricks project description, core features
+   (Ontology, Mapping, DigitalTwin, Domain, Registry, Reasoning, GraphQL, GraphDB, TripleStore,
+   Agents, SQL Wizard), layered architecture summary.
+3. `.cursor/03-system-components-and-requirements.mdc` — Rewritten: system component inventory matching
+   the actual codebase (domain classes, core infrastructure, APIs, session, registry, errors, logging).
+4. `.cursor/04-project-structure.mdc` — Rewritten: full directory tree from coding rules section 10.2,
+   three-layer FastAPI split, frontend/backend/API structure.
+5. `.cursor/05-code-style-and-structure.mdc` — Rewritten: Python/FastAPI code style, error handling,
+   logging security, dependency injection, route patterns, refactoring vocabulary, frontend guidelines.
+6. `.cursor/06-performance-optimization.mdc` — Rewritten: backend (async, logging, session, caching,
+   triplestore, background tasks) and frontend (templates, static assets, lazy loading) optimizations.
+7. `.cursor/07-project-conventions.mdc` — Rewritten: layered architecture, class-first policy, package
+   organisation, where-to-put-new-code table, domain security rules.
+8. `.cursor/08-testing-and-deployment.mdc` — Rewritten: pytest/uv, Databricks App deployment, Sphinx docs,
+   changelog conventions.
+9. `.cursor/09-package-management.mdc` — Rewritten: uv package manager, pyproject.toml, docs/development.md.
+10. `.cursor/10-entity-panel-matrix.mdc` — Replaced entirely: was an ontos-app entity/panel matrix. Now
+    covers OntoBricks error handling convention (OntoBricksError hierarchy, error classes table, response
+    shape) and logging convention (LogManager, %-style formatting, env var configuration).
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- .cursor/02-project-overview.mdc
+- .cursor/03-system-components-and-requirements.mdc
+- .cursor/04-project-structure.mdc
+- .cursor/05-code-style-and-structure.mdc
+- .cursor/06-performance-optimization.mdc
+- .cursor/07-project-conventions.mdc
+- .cursor/08-testing-and-deployment.mdc
+- .cursor/09-package-management.mdc
+- .cursor/10-entity-panel-matrix.mdc
+
+Tests: 1310 passed (pytest).
+
+---
+
+## Append missing coding rules to `.cursor/` rule files
+
+Context: After regenerating the `.cursor/` files, a gap analysis against `src/.coding_rules.md`
+revealed several sections that were only partially covered or entirely missing. The missing rules
+have been appended to the appropriate files.
+
+Changes:
+1. `.cursor/05-code-style-and-structure.mdc` — Appended: §2.3 internal API handler pattern and
+   HTML handler pattern (with code examples), §3 full code smells & preferred refactorings
+   (long route handlers, god services, repeated boilerplate, data clumps, tight coupling),
+   §4 detailed JavaScript/CSS extraction procedure (3-step process).
+2. `.cursor/07-project-conventions.mdc` — Appended: §10.3 subpackage patterns (registry, session,
+   ontology/mapping/digitaltwin, triplestore, graphdb, databricks, w3c, industry, reasoning),
+   §10.4 full 8-step new subpackage checklist, §10.6 detailed `__init__.py` conventions with
+   backward-compat wrapper code example and import convention.
+3. `.cursor/08-testing-and-deployment.mdc` — Appended: §6 full documentation rules (docs review,
+   README.md, product.md structure, dependencies in development.md, Sphinx API documentation
+   with .rst workflow and docstring requirement), §9 working style for refactoring (5-step
+   process: summarize, list smells, propose plan, apply in chunks, summarize after each batch).
+4. `.cursor/10-entity-panel-matrix.mdc` — Appended: §1.2 logging dictConfig detail (log4J-style
+   configuration, LogManager location), §7.2 logging inside error paths (global handler behaviour,
+   warning vs exception, catch-and-translate guidance, error import pattern with code example).
+
+Modified files:
+- .cursor/05-code-style-and-structure.mdc
+- .cursor/07-project-conventions.mdc
+- .cursor/08-testing-and-deployment.mdc
+- .cursor/10-entity-panel-matrix.mdc
+
+Tests: 1310 passed (pytest).
+
+2026-04-17 — Move entity URI resolve logic from HTML route to Domain
+====================================================================
+
+Context:
+  ``src/front/routes/resolve.py`` violated the coding rule that HTML route files
+  serve pages only (no business logic). Entity URI bridging, domain switching,
+  and redirect URL construction are moved to :class:`~back.objects.domain.domain.Domain`.
+
+Changes:
+
+1. ``src/back/objects/domain/domain.py`` — Added
+   ``resolve_entity_uri_redirect``, helpers for registry bridge resolution,
+   optional UC domain load/switch, and dtwin redirect URL building (same
+   logging and behavior as the former route-private functions).
+
+2. ``src/front/routes/resolve.py`` — Route handlers now extract request
+   parameters, call ``Domain(...).resolve_entity_uri_redirect``, and return
+   ``RedirectResponse`` only.
+
+Files modified:
+  - src/back/objects/domain/domain.py
+  - src/front/routes/resolve.py
+
+Tests: 1310 passed (pytest; ``uv run pytest -q``).
+
+---
+
+## Internal API: `map_route_errors` route context manager
+
+### Context
+
+Many internal ontology routes repeated the same try/except: re-raise
+`OntoBricksError` subclasses, log unexpected exceptions, and wrap them in
+`InfrastructureError`. A shared context manager removes that boilerplate.
+
+### Changes
+
+1. `src/api/routers/internal/_helpers.py` — Added `map_route_errors(context, logger)`:
+   re-raises `OntoBricksError` unchanged; logs other exceptions with
+   `logger.exception` and raises `InfrastructureError(context, detail=str(exc))`.
+   Imports `OntoBricksError` and `InfrastructureError` from `back.core.errors`.
+
+2. `src/api/routers/internal/ontology.py` — Replaced 26 handlers’ manual
+   try/except blocks with `with map_route_errors(...):`; removed unused
+   `OntoBricksError` import from this module.
+
+### Modified files
+
+- src/api/routers/internal/_helpers.py
+- src/api/routers/internal/ontology.py
+
+Tests: 1310 passed (`uv run pytest -q`).
+
+2026-04-17 — Migrate legacy `back.services` home/settings to domain layer
+========================================================================
+
+### Context
+
+Coding rules deprecate `service.py`-style modules; routes should call domain
+orchestration classes directly. Legacy `back/services/home.py` and
+`back/services/settings.py` were refactored into class-first services under
+`back.objects.domain`.
+
+### Changes
+
+1. `src/back/objects/domain/home_service.py` (new) — `HomeService` with static
+   methods: session status, validation, navbar state, detailed validation (same
+   behavior as former `back.services.home`).
+2. `src/back/objects/domain/settings_service.py` (new) — `SettingsService` with
+   static methods for Databricks config, registry, permissions, LadybugDB
+   files, and schedules (same behavior as former `back.services.settings`).
+3. `src/back/objects/domain/__init__.py` — re-export `HomeService`,
+   `SettingsService`.
+4. `src/api/routers/internal/home.py` — import `HomeService` as `home_service`.
+5. `src/api/routers/internal/dtwin.py` — same for `validate_status` usage.
+6. `src/api/routers/internal/settings.py` — import `SettingsService` as
+   `config_service`.
+7. `tests/test_home_service.py`, `tests/test_settings_domain_permissions.py` —
+   updated imports and mock patch targets.
+8. Removed `src/back/services/` package entirely (`home.py`, `settings.py`,
+   `__init__.py` deleted; directory removed).
+
+### Modified / created / deleted files
+
+- Created: `src/back/objects/domain/home_service.py`,
+  `src/back/objects/domain/settings_service.py`
+- Modified: `src/back/objects/domain/__init__.py`,
+  `src/api/routers/internal/home.py`,
+  `src/api/routers/internal/dtwin.py`,
+  `src/api/routers/internal/settings.py`,
+  `tests/test_home_service.py`,
+  `tests/test_settings_domain_permissions.py`
+- Deleted: `src/back/services/home.py`, `src/back/services/settings.py`,
+  `src/back/services/__init__.py` (package `back.services` removed)
+
+Tests: `uv run pytest -q` — 1264 passed, 45 skipped, 1 failed
+(`tests/test_external_api.py::TestDomainSparkSQL::test_sparksql_translation_failure`,
+unrelated to this migration: expected 502, received 200).
+
+---
+
+## Core/API: error dicts → OntoBricksError raises
+
+### Context
+
+Refactor infrastructure modules to raise `ValidationError`, `NotFoundError`,
+`InfrastructureError`, and `ConflictError` instead of returning `success: False`
+dicts, so FastAPI global handlers return consistent HTTP errors.
+
+### Changes
+
+1. `src/back/core/w3c/sparql/SparqlTranslator.py` — SPARQL→SQL validation failures
+   raise `ValidationError` instead of `{success: False, message: ...}`.
+2. `src/back/core/sqlwizard/SQLWizardService.py` — `generate_sql` raises
+   `ValidationError` / `InfrastructureError`; re-raises `OntoBricksError`.
+3. `src/back/core/helpers/DatabricksHelpers.py` — `require_serving_llm` returns
+   `(host, token, endpoint)` or raises `ValidationError`.
+4. `src/back/core/industry/fibo/FiboImportService.py`,
+   `src/back/core/industry/cdisc/CdiscImportService.py`,
+   `src/back/core/industry/iof/IofImportService.py` — invalid selection raises
+   `ValidationError`; zero modules fetched raises `InfrastructureError`.
+5. `src/api/routers/internal/tasks.py` — missing task → `NotFoundError`; cancel
+   failure → `ConflictError`.
+6. `src/back/fastapi/graphql_routes.py` — GraphQL error payloads use
+   `_graphql_safe_error_message` (no raw `str(exception)` for clients).
+7. `src/api/routers/internal/ontology.py` — callers updated for new
+   `require_serving_llm` signature.
+8. `src/back/objects/ontology/ontology.py` — industry import: removed dead
+   `result["success"]` branch; import `OntoBricksError` for existing re-raise.
+9. `src/api/routers/domains.py` — Spark SQL route relies on translator raises;
+   re-raise `OntoBricksError` before generic handler.
+10. `src/api/routers/internal/dtwin.py` — background build catches
+    `OntoBricksError` from `translate_sparql_to_spark` for task failure.
+11. `src/back/objects/registry/scheduler.py` — removed redundant post-translate
+    success check (errors raise).
+12. Tests: `tests/test_sparql_service.py`, `tests/test_sql_wizard.py`,
+    `tests/test_external_api.py` aligned with exceptions.
+
+### Modified files
+
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/industry/fibo/FiboImportService.py
+- src/back/core/industry/cdisc/CdiscImportService.py
+- src/back/core/industry/iof/IofImportService.py
+- src/api/routers/internal/tasks.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/internal/ontology.py
+- src/back/objects/ontology/ontology.py
+- src/api/routers/domains.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/registry/scheduler.py
+- tests/test_sparql_service.py
+- tests/test_sql_wizard.py
+- tests/test_external_api.py
+
+Tests: `uv run pytest -q` — 1265 passed, 45 skipped.
+
+---
+
+## `Domain` façade (`domain.py`): failure dicts → OntoBricksError
+
+### Context
+
+Coding rules require the `OntoBricksError` hierarchy instead of returning
+`{"success": False, "message": ...}` from session-scoped domain operations.
+
+### Changes
+
+1. ``src/back/objects/domain/domain.py`` — Replaced all ``success: False``
+   returns with ``ValidationError``, ``NotFoundError``, ``ConflictError``, or
+   ``InfrastructureError`` as appropriate; broad ``except Exception`` handlers
+   re-raise ``InfrastructureError`` after logging (and re-raise
+   ``OntoBricksError`` unchanged). ``get_session_debug_response`` raises
+   ``ValidationError`` when ``LOG_LEVEL`` is not ``DEBUG``. Imports extended
+   with ``ConflictError``, ``InfrastructureError``, ``NotFoundError``,
+   ``OntoBricksError``.
+
+2. ``_switch_domain_if_needed_for_resolve`` — Treats successful
+   ``load_domain_from_uc`` as completion (no ``result["success"]`` check);
+   catches ``OntoBricksError`` for bridge logging.
+
+3. ``tests/test_routes.py`` — ``test_session_debug_blocked_when_not_debug``
+   expects HTTP 400 and validation error JSON (aligned with raised
+   ``ValidationError``).
+
+### Modified files
+
+- src/back/objects/domain/domain.py
+- tests/test_routes.py
+
+**Callers:** ``api/routers/internal/domain.py`` and other routes return
+``Domain`` method results directly; FastAPI exception handlers surface raised
+``OntoBricksError`` subclasses — no try/except changes required there.
+
+Tests: ``uv run pytest -q`` — 1310 passed, 45 skipped.
+
+---
+
+## Domain objects: digitaltwin / ontology / mapping failure dicts → raises
+
+### Context
+
+Same error-handling rule as the ``Domain`` façade: domain-layer methods must
+raise ``OntoBricksError`` subclasses instead of returning ``{"success": False}``.
+
+### Changes
+
+1. ``src/back/objects/digitaltwin/digitaltwin.py`` — ``fetch_graph_triplestore_status``
+   raises ``InfrastructureError`` on unexpected failure; ``get_or_fetch_graph_status``
+   caches every successful fetch; ``execute_spark_query`` raises
+   ``ValidationError`` or ``InfrastructureError`` instead of failure dicts.
+
+2. ``src/back/objects/ontology/ontology.py`` — CRUD helpers and
+   ``import_industry_ontology`` raise ``ValidationError``, ``NotFoundError``, or
+   ``InfrastructureError`` as appropriate; fixed ``_domainync_class_group_field``
+   typo → ``_sync_class_group_field``.
+
+3. ``src/back/objects/mapping/mapping.py`` — ``resolve_auto_assign_schema_context``
+   returns only the context dict (raises when no tables); ``validate_mapping_sql``
+   raises ``ValidationError`` on invalid SQL.
+
+4. ``src/api/routers/internal/mapping.py`` — Auto-assign start/single wrap
+   ``resolve_auto_assign_schema_context`` for stable error messages.
+
+5. Tests: ``tests/test_ontology_service.py``, ``tests/test_routes.py`` (ontology
+   routes + session-debug), ``tests/test_sparql_service.py``.
+
+### Modified files
+
+- src/back/objects/digitaltwin/digitaltwin.py
+- src/back/objects/ontology/ontology.py
+- src/back/objects/mapping/mapping.py
+- src/api/routers/internal/mapping.py
+- tests/test_ontology_service.py
+- tests/test_routes.py
+- tests/test_sparql_service.py
+
+Tests: ``uv run pytest -q`` — 1265 passed, 45 skipped (e2e skipped in run).
+
+---
+
+## Session data: dead-field guards, triplestore stats TTL, stamp documentation
+
+### Context
+
+Session optimization: remove defensive pops for legacy keys that nothing writes
+anymore; add a time-to-live for ``domain.triplestore`` stats cache (same idea as
+``version_status``); document why ``last_update`` / change flags stay persisted.
+
+### Changes
+
+1. ``src/back/objects/session/DomainSession.py`` — Removed ``save()`` strips for
+   ``_validation_cache`` and ``_document_count``; removed ``import_from_file()``
+   pops for ``triplestore.needs_rebuild`` and ``triplestore.build_fingerprint``;
+   documented in ``save()`` that ``last_update``, ``ontology_changed``, and
+   ``assignment_changed`` are intentionally stored (cheap stamp vs recomputation).
+   On project import, ``triplestore`` cache clear now also pops
+   ``_ts_cache_timestamp``.
+
+2. ``src/back/objects/digitaltwin/digitaltwin.py`` — Added
+   ``_TS_STATS_CACHE_TTL_SECONDS`` (300); ``set_ts_cache`` sets
+   ``triplestore._ts_cache_timestamp``; ``get_ts_cache`` returns ``None`` when
+   the stamp is missing or older than the TTL (aligned with
+   ``version_status.get_cached_version_status`` pattern).
+
+3. ``src/api/routers/internal/dtwin.py`` — When clearing ``triplestore.stats``
+   before a build, also remove ``_ts_cache_timestamp``.
+
+4. ``src/back/objects/domain/domain.py`` — After UC load clears graph status
+   caches, remove ``_ts_cache_timestamp`` so the next request refetches.
+
+### Modified files
+
+- src/back/objects/session/DomainSession.py
+- src/back/objects/digitaltwin/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/domain/domain.py
+
+Tests: ``uv run pytest -q`` — 1265 passed, 45 skipped.
+
+---
+
+## Front templates: extract domain triplestore init script; remove inline onclick from base and home
+
+### Context
+
+Coding rules require templates not to embed JavaScript inline. High-impact cleanup:
+move the domain page triplestore JSON bootstrap to static JS; replace navbar and
+home button ``onclick`` handlers with declarative attributes and listeners.
+
+### Changes
+
+1. ``src/front/static/domain/js/domain_init.js`` (new) — Parses
+   ``#triplestore-config`` JSON into ``window.__TRIPLESTORE_CONFIG`` (same logic
+   as the former inline IIFE).
+
+2. ``src/front/templates/domain.html`` — Inline ``<script>`` block replaced with
+   ``domain_init.js`` loaded immediately before ``query/js/query-sync.js``.
+
+3. ``src/front/static/global/js/base-ui-handlers.js`` (new) — Delegated clicks on
+   ``a[data-navbar-action]`` (whitelist: ``domainNew``, ``domainLoad``,
+   ``domainSave``); listeners for task tracker toggle/refresh and notification
+   toggle/clear.
+
+4. ``src/front/templates/base.html`` — Navbar menu links use
+   ``data-navbar-action``; task/notification controls use element IDs instead of
+   ``onclick``; deferred include for ``base-ui-handlers.js`` after
+   ``task-tracker.js``.
+
+5. ``src/front/templates/home.html`` — Domain and reset buttons use
+   ``data-action`` and explicit ``type="button"`` where applicable.
+
+6. ``src/front/static/home/js/home.js`` — ``initHomeActionButtons`` wires
+   ``[data-action]`` clicks for the home panel and workflow section.
+
+### Modified files
+
+- src/front/static/domain/js/domain_init.js (new)
+- src/front/static/global/js/base-ui-handlers.js (new)
+- src/front/templates/domain.html
+- src/front/templates/base.html
+- src/front/templates/home.html
+- src/front/static/home/js/home.js
+
+Tests: ``uv run pytest -q`` — 1310 passed.
+
+---
+
+## Domain template: remove inline ``onchange`` on domain file input
+
+### Context
+
+``domain.html`` still used an inline ``onchange`` handler on ``#domainFileInput``;
+coding rules require no inline JavaScript in templates (triplestore bootstrap was
+already in ``domain_init.js``).
+
+### Changes
+
+1. ``src/front/templates/domain.html`` — Removed ``onchange="handleDomainFileUpload(this)"``;
+   added ``aria-label`` on the hidden file input.
+
+2. ``src/front/static/domain/js/domain.js`` — On ``DOMContentLoaded``, attach a
+   ``change`` listener on ``#domainFileInput`` that calls ``handleDomainFileUpload``.
+
+### Modified files
+
+- src/front/templates/domain.html
+- src/front/static/domain/js/domain.js
+
+Tests: ``uv run pytest -q`` — 1310 passed in 48.02s.
+
+---
+
+## Deduplication: VolumeFileService factory, URI locals, DEFAULT_BASE_URI, RDF constants, SparqlTranslator
+
+### Context
+
+Reduce repeated credential resolution + UC client construction, centralize default
+ontology host string, reuse triplestore RDF URI constants, and deduplicate
+SPARQL translator local-name helpers.
+
+### Changes
+
+1. **6b — ``make_volume_file_service``** — ``src/back/core/helpers/DatabricksHelpers.py``
+   adds ``make_volume_file_service(domain, settings=None)`` (optional settings
+   falls back to cached ``get_settings()``). Re-exported from
+   ``src/back/core/helpers/__init__.py``. Call sites that used
+   ``get_databricks_host_and_token`` + ``VolumeFileService(host=host, token=token)``
+   in internal routers now use the factory:
+   ``src/api/routers/internal/_helpers.py``,
+   ``src/api/routers/internal/domain.py``,
+   ``src/api/routers/internal/ontology.py`` (OWL volume list/load only),
+   ``src/api/routers/internal/dtwin.py`` (reload-from-registry uses
+   ``uc.is_configured()``). Left unchanged: ``home.py`` (manual host/token),
+   ``dtwin`` build thread (credentials from ``get_databricks_credentials``), and
+   other packages.
+
+2. **6c — URI local names** — ``src/back/objects/digitaltwin/digitaltwin.py`` uses
+   ``extract_local_name`` for class/property local-name extraction instead of
+   ad-hoc ``split('#')`` / ``split('/')``.
+
+3. **6d — ``DEFAULT_BASE_URI``** — ``DatabricksHelpers.resolve_default_base_uri``
+   and ``src/api/routers/internal/settings.py`` ``save_base_uri`` default use
+   ``shared.config.constants.DEFAULT_BASE_URI`` (``.rstrip('/')`` where the prior
+   literal had no trailing slash).
+
+4. **6e — RDF_TYPE / RDFS_LABEL** — ``src/back/core/graph_analysis/CommunityDetector.py``
+   imports ``RDF_TYPE`` / ``RDFS_LABEL`` from ``back.core.triplestore.constants``.
+   ``src/back/core/w3c/shacl/SHACLService.py`` ``_extract_violations`` uses
+   ``URIRef(RDF_TYPE)`` instead of a shadowing local string.
+
+5. **6g — SparqlTranslator** — ``src/back/core/w3c/sparql/SparqlTranslator.py`` adds
+   ``_predicate_local_name_key`` and removes duplicate nested ``get_local_name``
+   definitions.
+
+6. **6f — SWRL / rule Cypher (deferred)** — Reasoning engines still assemble Cypher
+   in place per engine; a shared builder would need a agreed contract for
+   node/rel shapes and parameter binding across SWRL, decision tables, and
+   variants. No refactor in this pass.
+
+### Modified files
+
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/api/routers/internal/_helpers.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/settings.py
+- src/back/objects/digitaltwin/digitaltwin.py
+- src/back/core/graph_analysis/CommunityDetector.py
+- src/back/core/w3c/shacl/SHACLService.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+
+Tests: ``uv run pytest -q`` — 1310 passed.
+
+2026-04-17 — Session data: dead-field guards, triplestore cache TTL, domain stamps (docs)
+===========================================================================================
+
+Context:
+  Session optimization follow-up (9a–9c): remove obsolete defensive pops for
+  legacy session keys, ensure triplestore stats cache uses a TTL like
+  ``version_status``, and document why ``last_update`` / change flags stay
+  explicit.
+
+Changes:
+
+1. **9c — Dead session field guards** — Searched ``src/`` for
+   ``triplestore.needs_rebuild``, ``triplestore.build_fingerprint``,
+   ``_validation_cache``, and ``_document_count``: no Python references remain
+   (guards already removed in a prior pass). No further code deletion required.
+
+2. **9b — Triplestore stats TTL** — Already implemented in
+   ``src/back/objects/digitaltwin/digitaltwin.py``:
+   ``_TS_STATS_CACHE_TTL_SECONDS = 300``, ``triplestore._ts_cache_timestamp`` set
+   in ``set_ts_cache``, expiry check in ``get_ts_cache`` (same idea as
+   ``version_status.get_cached_version_status``). ``DomainSession.import_from_file``
+   clears ``stats`` / ``_ts_cache_timestamp`` on load.
+
+3. **9a — Explicit domain stamps** — Module docstring in
+   ``src/back/objects/session/DomainSession.py`` documents that
+   ``last_update``, ``ontology_changed``, and ``assignment_changed`` are kept
+   stored explicitly to avoid recomputing content hashes on every read (the
+   ``save()`` docstring already described this; the module header now states it
+   too).
+
+### Modified files
+
+- src/back/objects/session/DomainSession.py
+
+Tests: ``uv run pytest -q`` — 1265 passed, 45 skipped.
+
+2026-04-17 — Deduplication pass (6b–6g): Volume factory, URI helpers, SPARQL locals
+===================================================================================
+
+Context:
+  Reduce repeated credential wiring, URI local-name logic, and duplicated
+  relationship-predicate matching in ``SparqlTranslator``. ``make_volume_file_service``
+  already lived in ``DatabricksHelpers``; internal DT build archive now uses it.
+
+Changes:
+
+1. **6b — ``make_volume_file_service``** — Confirmed factory in
+   ``src/back/core/helpers/DatabricksHelpers.py`` (host/token via
+   ``DatabricksHelpers.get_databricks_host_and_token``, same as
+   ``get_databricks_host_and_token``); docstring clarified. Updated
+   ``src/api/routers/internal/dtwin.py`` post-build archive to call
+   ``make_volume_file_service(domain, settings)`` instead of constructing
+   ``VolumeFileService`` with tuple locals. Other ``internal/`` routes already
+   used the factory or a different credential pattern (e.g. ``home.py`` manual
+   host/token left unchanged per scope).
+
+2. **6c — URI local names in digitaltwin** — Use ``extract_local_name`` only
+   (removed ``uri_local_name`` import); dropped redundant inner import in
+   ``extract_local_id``.
+
+3. **6d — ``DEFAULT_BASE_URI`` drift** — No remaining inline
+   ``https://databricks-ontology.com`` (no trailing slash) in
+   ``DatabricksHelpers.py`` or ``settings_service.py``; constant already
+   centralised in ``shared.config.constants``.
+
+4. **6e — ``RDF_TYPE`` / ``RDFS_LABEL``** — ``CommunityDetector`` and
+   ``SHACLService`` already import from ``back.core.triplestore.constants`` (no
+   edit).
+
+5. **6f — SWRL / rule Cypher** — Not refactored: reasoning engines mix
+   cardinality, SHACL, and rule-specific Cypher fragments with different
+   placeholders; a shared builder would need a thin template layer and tests
+   across ``DecisionTableEngine`` and related paths — deferred.
+
+6. **6g — ``SparqlTranslator``** — Added
+   ``SparqlTranslator._relationship_predicate_local_name`` and replaced four
+   copies of ``pred_uri.split('#')[-1].split('/')[-1]`` style matching.
+
+### Modified files
+
+- src/api/routers/internal/dtwin.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/digitaltwin/digitaltwin.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1310 passed.
+
+2026-04-17 — Sphinx API + coding rules: `HomeService` / `SettingsService` under `back.objects.domain`
+======================================================================================================
+
+Context:
+  ``back.services.home`` and ``back.services.settings`` were removed after migration
+  to ``back.objects.domain.home_service`` and ``back.objects.domain.settings_service``.
+  Sphinx still autodocumented the deleted modules from ``app.frontend.rst``; the
+  section 10.2 package map still listed ``src/back/services/``.
+
+Changes:
+
+1. ``docs/sphinx/api/app.objects.domain.rst`` — Added ``.. automodule::`` blocks for
+   ``back.objects.domain.home_service`` and ``back.objects.domain.settings_service``
+   (members, undoc-members, show-inheritance).
+
+2. ``docs/sphinx/api/app.frontend.rst`` — Replaced obsolete ``.. automodule::`` entries
+   for ``back.services.home`` / ``back.services.settings`` with a short cross-reference
+   to ``app.objects.domain``.
+
+3. ``src/.coding_rules.md`` — §2.1 ``src/back/`` row no longer mentions a ``services/``
+   package; §10.2 tree removes ``src/back/services/`` and adds ``home_service.py`` /
+   ``settings_service.py`` under ``domain/``; §10.3 ``back/objects/domain`` bullets
+   document ``HomeService`` and ``SettingsService``.
+
+Files modified:
+  - docs/sphinx/api/app.objects.domain.rst
+  - docs/sphinx/api/app.frontend.rst
+  - src/.coding_rules.md
+  - changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1310 passed (sphinx-build / ``build_docs.sh`` not run per request).
+
+---
+
+## Code Review Remediation — Consolidated Summary
+
+Context: Full code review against .cursorrules and src/.coding_rules.md, covering rule compliance,
+duplicate code, unused code, and session data audit. All remediation items executed.
+
+Changes (by priority):
+
+P2 — Logging violations:
+  1. src/back/core/sqlwizard/SQLWizardService.py — 5 f-string logging calls replaced with %-style
+
+P7a — Unused constants removed:
+  2. src/shared/config/constants.py — removed APP_DESCRIPTION, LLM_DEFAULT_MAX_TOKENS,
+     LLM_DEFAULT_TEMPERATURE, MAPPING_SQL_LIMIT, MAX_PREVIEW_ROWS
+  3. src/back/core/industry/constants.py — removed CDISCS
+
+P7d — Unused imports (Ruff F401):
+  4. 23 unused imports auto-fixed across 17 files (agents, api routers, core modules, session)
+
+P4 — Deep imports bypassing __init__.py:
+  5. Fixed ~10 import sites in api/routers/ and front/routes/ to use package-level imports
+  6. Updated __init__.py in back/objects/domain, back/core/graphdb, back/objects/mapping,
+     back/objects/ontology with new re-exports
+
+P5 — Route architecture (resolve.py):
+  7. Extracted business logic (_bridge_domain_for_uri, _switch_domain_if_needed) from
+     front/routes/resolve.py into Domain.resolve_entity_uri_redirect() method
+  8. Route handler now only extracts params, calls Domain method, returns RedirectResponse
+
+P6a — Route error handling deduplication:
+  9. Created map_route_errors() context manager in api/routers/internal/_helpers.py
+  10. Applied to 26 route handlers in api/routers/internal/ontology.py
+
+P1 — Error handling: {'success': False} → OntoBricksError raises:
+  11. back/objects/domain/domain.py — 67 error dict patterns replaced with raises
+  12. back/objects/digitaltwin/digitaltwin.py — ~10 patterns replaced
+  13. back/objects/ontology/ontology.py — ~8 patterns replaced
+  14. back/objects/mapping/mapping.py — ~3 patterns replaced
+  15. back/core/w3c/sparql/SparqlTranslator.py — ~8 patterns replaced (ValidationError)
+  16. back/core/sqlwizard/SQLWizardService.py — ~5 patterns replaced
+  17. back/core/helpers/DatabricksHelpers.py — require_serving_llm returns tuple or raises
+  18. back/core/industry/{fibo,cdisc,iof}/*.py — ~6 patterns replaced
+  19. api/routers/internal/tasks.py — NotFoundError, ConflictError
+  20. back/fastapi/graphql_routes.py — safe error message helper, no raw str(e)
+  21. All callers updated (api/routers, tests)
+
+P3 — Legacy service migration:
+  22. Created back/objects/domain/home_service.py (HomeService class)
+  23. Created back/objects/domain/settings_service.py (SettingsService class)
+  24. Deleted src/back/services/ directory entirely (home.py, settings.py, __init__.py)
+  25. Updated callers in api/routers/internal/home.py, dtwin.py, settings.py
+
+P6b-g — Code deduplication:
+  26. VolumeFileService factory: make_volume_file_service() applied in dtwin.py
+  27. URI local name: digitaltwin.py switched to extract_local_name
+  28. SparqlTranslator: extracted _relationship_predicate_local_name, removed 4 duplicated splits
+
+P8 — Inline JS extraction:
+  29. domain.html: removed onchange handler, wired via addEventListener in domain.js
+
+P9 — Session optimization:
+  30. Triplestore stats TTL: 300s TTL already implemented with _ts_cache_timestamp
+  31. Dead session fields: confirmed already removed from codebase
+  32. Computable fields: documented decision to keep explicit stamps in DomainSession docstring
+
+Documentation:
+  33. Updated docs/sphinx/api/app.objects.domain.rst (HomeService, SettingsService)
+  34. Updated docs/sphinx/api/app.frontend.rst (removed back.services references)
+  35. Updated src/.coding_rules.md (removed back/services/, added home_service/settings_service)
+
+Modified files:
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/shared/config/constants.py
+- src/back/core/industry/constants.py
+- src/back/objects/domain/domain.py
+- src/back/objects/digitaltwin/digitaltwin.py
+- src/back/objects/ontology/ontology.py
+- src/back/objects/mapping/mapping.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/industry/fibo/FiboImportService.py
+- src/back/core/industry/cdisc/CdiscImportService.py
+- src/back/core/industry/iof/IofImportService.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/internal/_helpers.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/mapping.py
+- src/api/routers/internal/tasks.py
+- src/api/routers/internal/home.py
+- src/api/routers/internal/settings.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/v1.py
+- src/api/service.py
+- src/front/routes/resolve.py
+- src/front/templates/domain.html
+- src/front/static/domain/js/domain.js
+- src/back/objects/domain/__init__.py
+- src/back/objects/domain/home_service.py (new)
+- src/back/objects/domain/settings_service.py (new)
+- src/back/objects/mapping/__init__.py
+- src/back/objects/ontology/__init__.py
+- src/back/objects/session/DomainSession.py
+- src/back/core/graphdb/__init__.py
+- src/back/services/ (deleted)
+- docs/sphinx/api/app.objects.domain.rst
+- docs/sphinx/api/app.frontend.rst
+- src/.coding_rules.md
+- tests/test_config.py
+- tests/test_ontology_service.py
+- tests/test_routes.py
+- tests/test_sparql_service.py
+- 17 additional files (Ruff F401 auto-fixes)
+
+Tests: 1310 passed (pytest).
+
+---
+
+## Graph DB Engine Selector
+
+### Context
+
+Added a "Graph DB Engine" dropdown to the Settings > Graph DB tab, persisted
+in global config (`.global_config.json`), and wired through the
+`TripleStoreFactory` → `GraphDBFactory` chain so that future engines
+(Neo4j, KuzuDB, etc.) can be plugged in. Today only "Internal (LadybugDB)"
+is available.
+
+### Changes
+
+1. `src/back/objects/session/GlobalConfigService.py` — Added
+   `ALLOWED_GRAPH_ENGINES` tuple, `get_graph_engine()` (with fallback to
+   `"ladybug"` on unknown values), `set_graph_engine()` (validates against
+   allowed list, normalises case), and `"graph_engine": "ladybug"` in
+   `_empty()` defaults.
+
+2. `src/back/core/triplestore/TripleStoreFactory.py` — Added
+   `_resolve_graph_engine()` static method that reads the engine from
+   `GlobalConfigService`; `create()` now passes `engine=...` to
+   `get_graphdb()` when `backend == "graph"`.
+
+3. `src/back/objects/domain/settings_service.py` — Added
+   `get_graph_engine_result()` and `set_graph_engine_result()` static
+   methods (admin-only for writes) following the existing
+   `get/save_registry_cache_ttl_result` pattern.
+
+4. `src/api/routers/internal/settings.py` — Added `GET /settings/graph-engine`
+   and `POST /settings/graph-engine` endpoints.
+
+5. `src/front/templates/settings.html` — Added "Graph DB Engine" card with
+   `<select>` dropdown and Save button at the top of the Graph DB tab
+   (`#pane-ladybugdb`), above the existing "Local Graph Files" section.
+
+6. `src/front/static/config/js/settings.js` — Added `loadGraphEngine()` on
+   tab show and `btnSaveGraphEngine` click handler for save.
+
+7. `tests/test_graph_engine_config.py` (new) — 10 tests covering
+   `GlobalConfigService` (defaults, get, set, validation, normalisation) and
+   `SettingsService` orchestration (get, set success, validation error).
+
+8. `tests/test_triplestore_factory.py` — Updated `test_default_backend_is_graph`
+   to expect the new `engine=` kwarg on `get_graphdb`.
+
+### Modified files
+
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/triplestore/TripleStoreFactory.py
+- src/back/objects/domain/settings_service.py
+- src/api/routers/internal/settings.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/test_triplestore_factory.py
+
+### Files added
+
+- tests/test_graph_engine_config.py
+
+Tests: 1275 passed (pytest).
+
+---
+
+## Developer Guide: Adding a New Graph DB Engine
+
+### Context
+
+Created a comprehensive developer guide for integrating new graph database
+engines (Neo4j, KuzuDB, etc.) into OntoBricks. Includes architecture overview,
+contract documentation, step-by-step integration instructions, a ready-to-use
+starter kit with a stub `<EngineName>Store` class, a checklist, and an FAQ.
+
+### Changes
+
+1. `docs/graphdb-integration.md` (new) — Full developer guide covering:
+   - Architecture overview (TripleStoreFactory → GraphDBFactory chain)
+   - The two-level contract (TripleStoreBackend + GraphDBBackend)
+   - 9-step integration walkthrough (package, store class, factory registration,
+     GlobalConfigService, Settings UI, dependency, tests, docs)
+   - Reference: LadybugDB structure as a working example
+   - Starter kit: complete stub class with all abstract methods, TODO markers,
+     and `__init__.py`
+   - Integration checklist
+   - FAQ (flat vs graph, remote engines, reasoning, factory wiring)
+
+### Files added
+
+- docs/graphdb-integration.md
+
+Tests: 1275 passed (pytest).
+
+---
+
+## Graph DB Starter Kit — Physical Template Files
+
+Context: The developer guide previously embedded the starter kit as inline
+code blocks in the documentation.  This update creates actual Python files
+that developers can copy directly from the filesystem.
+
+Changes:
+
+1. Created `src/back/core/graphdb/_starter_kit/README.md` — usage instructions
+   (copy, rename, find-and-replace placeholders, fill TODOs).
+2. Created `src/back/core/graphdb/_starter_kit/__init__.py` — package init
+   template with commented re-export.
+3. Created `src/back/core/graphdb/_starter_kit/ExampleStore.py` — full
+   `GraphDBBackend` subclass with every abstract/override method stubbed out,
+   grouped by section (capability flags, connection, schema, sync, reasoning,
+   core CRUD, named query overrides).
+4. Updated `docs/graphdb-integration.md` Section 5 to reference the physical
+   starter kit directory instead of embedding inline code blocks.
+
+Modified files:
+
+- src/back/core/graphdb/_starter_kit/README.md (new)
+- src/back/core/graphdb/_starter_kit/__init__.py (new)
+- src/back/core/graphdb/_starter_kit/ExampleStore.py (new)
+- docs/graphdb-integration.md
+
+Tests: 1320 passed (pytest).
+
+---
+
+## Update `docs/code_organization.md` to reflect `.cursor/` rules
+
+Context: The `docs/code_organization.md` only covered UI navigation, APIs, agents,
+and MCP. The `.cursor/` rule files (01–10) contained architecture principles, naming
+conventions, class-first policy, package organisation, error handling, logging,
+performance optimization, testing/deployment, and package management that were not
+reflected in the contributor documentation.
+
+Changes:
+
+1. `docs/code_organization.md` — Rewrote to incorporate all `.cursor/` rules:
+   - Added Section 1 (Architecture and Key Principles): layered architecture,
+     naming conventions, class-first policy, package organisation, domain security.
+   - Added Section 2 (Project Structure): top-level packages table, three-layer
+     FastAPI split, frontend/backend/API/core directory trees, where-to-put-new-code
+     table with rule-of-thumb guidance.
+   - Renumbered existing UI section to 3, API to 4, Agents to 5, MCP to 6.
+   - Added Section 3.6 (Frontend code guidelines): inline JS/CSS extraction procedure.
+   - Added Section 7 (Code Style and Patterns): RORO, type hints, route patterns,
+     handler examples, dependency injection, refactoring vocabulary, code smells.
+   - Added Section 8 (Error Handling): OntoBricksError hierarchy, error classes
+     table, response shape, logging inside error paths.
+   - Added Section 9 (Logging): LogManager, %-style formatting, env var config.
+   - Added Section 10 (Performance Optimization): backend and frontend guidelines.
+   - Added Section 11 (Testing and Deployment): pytest, uv, Databricks App deployment,
+     changelog, documentation rules, Sphinx, new subpackage checklist.
+   - Renumbered quick file index to Section 12.
+   - Added cross-reference to `src/.coding_rules.md` in the closing note.
+
+Modified files:
+  - docs/code_organization.md
+
+Tests: 1320 passed (pytest).
+
+2026-04-17 — PascalCase modules for core domain objects (class-first filenames)
+==============================================================================
+
+Context:
+  Coding rules require Python module names under ``back/objects`` to match the
+  primary PascalCase class. Seven snake_case modules were renamed with ``git mv``;
+  imports, package ``__init__.py`` re-exports, Sphinx API ``automodule`` paths, and
+  ``src/.coding_rules.md`` §10.2/§10.3 were aligned.
+
+Changes:
+
+1. ``src/back/objects/domain/domain.py`` → ``Domain.py`` (class ``Domain``).
+2. ``src/back/objects/domain/home_service.py`` → ``HomeService.py``.
+3. ``src/back/objects/domain/settings_service.py`` → ``SettingsService.py``.
+4. ``src/back/objects/ontology/ontology.py`` → ``Ontology.py``.
+5. ``src/back/objects/mapping/mapping.py`` → ``Mapping.py``.
+6. ``src/back/objects/digitaltwin/digitaltwin.py`` → ``DigitalTwin.py``.
+7. ``src/back/objects/session/middleware.py`` → ``FileSessionMiddleware.py``.
+
+8. Updated imports and ``unittest.mock.patch`` targets across ``src/`` and
+   ``tests/`` (routers, ``HomeService`` lazy imports, ``_metadata_tasks``,
+   ``front/routes/resolve.py``, graph-engine and domain-permission tests,
+   middleware session tests).
+
+9. ``__init__.py`` — ``domain/``, ``mapping/``, ``ontology/``, ``digitaltwin/``,
+   ``session/`` now import from the new module paths (public API unchanged at
+   package level: ``from back.objects.domain import Domain`` still works).
+
+10. Sphinx source: ``docs/sphinx/api/app.objects.{domain,mapping,ontology,session}.rst``
+    — ``automodule`` directives updated to the new dotted module names.
+
+11. ``src/.coding_rules.md`` — §10.2 tree and §10.3 bullets list the PascalCase
+    filenames.
+
+12. ``.cursor/07-project-conventions.mdc`` — session subpackage bullet updated to
+    ``FileSessionMiddleware.py``.
+
+Files modified (git mv renames + import/doc updates):
+  - src/back/objects/domain/Domain.py (was domain.py)
+  - src/back/objects/domain/HomeService.py (was home_service.py)
+  - src/back/objects/domain/SettingsService.py (was settings_service.py)
+  - src/back/objects/ontology/Ontology.py (was ontology.py)
+  - src/back/objects/mapping/Mapping.py (was mapping.py)
+  - src/back/objects/digitaltwin/DigitalTwin.py (was digitaltwin.py)
+  - src/back/objects/session/FileSessionMiddleware.py (was middleware.py)
+  - src/back/objects/domain/__init__.py
+  - src/back/objects/domain/_metadata_tasks.py
+  - src/back/objects/mapping/__init__.py
+  - src/back/objects/ontology/__init__.py
+  - src/back/objects/digitaltwin/__init__.py
+  - src/back/objects/session/__init__.py
+  - src/front/routes/resolve.py
+  - src/api/routers/internal/dtwin.py, home.py, settings.py
+  - tests/test_graph_engine_config.py
+  - tests/test_settings_domain_permissions.py
+  - tests/test_home_service.py
+  - tests/test_middleware_session.py
+  - docs/sphinx/api/app.objects.domain.rst
+  - docs/sphinx/api/app.objects.mapping.rst
+  - docs/sphinx/api/app.objects.ontology.rst
+  - docs/sphinx/api/app.objects.session.rst
+  - docs/api.md
+  - src/.coding_rules.md
+  - .cursor/07-project-conventions.mdc
+  - changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1320 passed.
+
+2026-04-17 — SettingsService: remove FastAPI Request from domain layer
+======================================================================
+
+Context:
+  Domain code under ``back/objects/`` must not depend on FastAPI
+  ``Request``/``Response`` types. User identity for admin checks and
+  permissions payloads is extracted in the internal settings router and passed
+  as primitive strings.
+
+Changes:
+
+1. ``src/back/objects/domain/SettingsService.py`` — Removed ``fastapi.Request``;
+   ``require_admin_error(email, user_token, session_mgr, settings)``;
+   admin-gated methods and ``apply_config_save`` / ``select_warehouse`` take
+   ``email`` and ``user_token``; ``build_permissions_me`` and
+   ``build_permissions_diag`` take ``email``, ``display_name``, ``user_token``,
+   ``user_role``, ``user_domain_role`` (plus session/settings).  GET
+   ``/settings/permissions/me`` JSON unchanged; ``permissions/diag`` adds
+   ``display_name``, ``state_user_role``, and ``state_user_domain_role`` to the
+   diagnostic payload.  Error logging on permissions/me resolution failure
+   includes middleware role snapshot.
+
+2. ``src/api/routers/internal/settings.py`` — Added
+   ``_settings_request_identity(request)``; all affected endpoints pass primitives
+   into ``SettingsService``.
+
+3. ``tests/test_graph_engine_config.py`` — Updated
+   ``set_graph_engine_result`` calls for the new signature.
+
+Modified files:
+  - src/back/objects/domain/SettingsService.py
+  - src/api/routers/internal/settings.py
+  - tests/test_graph_engine_config.py
+  - changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1320 passed.
+
+2026-04-17 — Mapping: auto-assign orchestration in domain layer
+===============================================================
+
+Context:
+  Batch and single auto-assign endpoints inlined chunking, agent runs,
+  merging, task progress, and session persistence inside FastAPI route
+  handlers. That logic now lives on ``Mapping`` for clearer layering.
+
+Changes:
+
+1. ``src/back/objects/mapping/Mapping.py`` — Added ``run_auto_assign_task``
+   and ``run_single_auto_assign_task``; module helpers
+   ``_auto_assign_chunk_pct`` and ``SINGLE_ITEM_MAX_ITERATIONS``; imports for
+   chunk constants, ``time``, and ``Tuple`` (typing fix for existing
+   ``Tuple`` return annotations).
+
+2. ``src/api/routers/internal/mapping.py`` — ``/auto-assign/start`` and
+   ``/auto-assign/single`` remain the same HTTP contracts; handlers only parse
+   input, validate prerequisites, create tasks/clients, and spawn threads that
+   call the domain methods. Removed unused ``serialize_agent_steps`` import.
+
+Modified files:
+  - src/back/objects/mapping/Mapping.py
+  - src/api/routers/internal/mapping.py
+  - changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1320 passed.
+
+2026-04-17 — Digital Twin: shared build / data quality / inference task orchestration
+====================================================================================
+
+Context:
+  Internal ``dtwin`` and external ``digitaltwin`` routers duplicated threaded
+  orchestration for triple-store build, SHACL data quality runs, and reasoning
+  tasks. That logic is centralized on ``DigitalTwin`` so routes only create
+  tasks and spawn worker threads.
+
+Changes:
+
+1. ``src/back/objects/digitaltwin/DigitalTwin.py`` — Added ``run_build_task``
+   (``build_kind`` ``session`` vs ``api`` preserves prior behavior differences),
+   ``run_data_quality_task``, and ``run_inference_task``; import
+   ``OntoBricksError`` and ``SimpleNamespace``.
+
+2. ``src/api/routers/internal/dtwin.py`` — ``/sync/start``,
+   ``/dataquality/start``, and ``/reasoning/start`` call the new domain methods
+   from thread targets; removed unused ``OntoBricksError`` import.
+
+3. ``src/api/routers/digitaltwin.py`` — ``POST /build``,
+   ``POST /dataquality/start``, and ``POST /inference/start`` delegate to the
+   same domain methods; dropped unused imports.
+
+4. ``src/back/objects/digitaltwin/__init__.py`` — Re-export and module-level
+   wrappers for ``run_build_task``, ``run_data_quality_task``, and
+   ``run_inference_task``.
+
+Modified files:
+  - src/back/objects/digitaltwin/DigitalTwin.py
+  - src/api/routers/internal/dtwin.py
+  - src/api/routers/digitaltwin.py
+  - src/back/objects/digitaltwin/__init__.py
+  - changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1320 passed.
+
+2026-04-17 — SPARQL translator: extract helpers from long SQL builders
+=======================================================================
+
+Context:
+  ``SparqlTranslator`` had several hundred-line methods for Spark SQL
+  generation. They are split into small private static helpers for readability
+  and reuse, without changing the public API.
+
+Changes:
+
+1. ``src/back/core/w3c/sparql/SparqlTranslator.py`` — Added shared helpers
+   (predicate/column maps, value-filter SQL fragments, relationship URI match,
+   CTE fragments, generic triple and filtered-query builders, Spark standard-path
+   init/join steps) and rewired ``_build_spark_sql``,
+   ``_build_generic_triples_query``, and ``_build_filtered_with_relationships_query``
+   to call them. Class keys from URI templates use
+   ``_predicate_local_name_key`` with the same path-only rule as before.
+
+Modified files:
+  - src/back/core/w3c/sparql/SparqlTranslator.py
+  - changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1320 passed.
+
+2026-04-17 — Sync UI: surface `assignment_changed` (and `ontology_changed`) from readiness
+==========================================================================================
+
+Context:
+  ``/dtwin/sync/info`` already returns ``readiness.ontology_changed`` and
+  ``readiness.assignment_changed`` from ``HomeService.validate_status``, but the
+  Digital Twin sync page ignored them; only ``changes.needs_rebuild`` drove the
+  rebuild banner.
+
+Changes:
+
+1. ``src/front/static/query/js/query-sync.js`` — ``_applyReadiness`` toggles
+   readiness badges from ``ontology_changed`` / ``assignment_changed``.
+   New ``_updateSyncRebuildWarningFromPayload`` shows ``syncRebuildWarning`` when
+   ``needs_rebuild`` **or** either readiness flag is true (replacing the inline
+   ``needs_rebuild``-only block in ``loadSyncInfo``).
+
+2. ``src/front/templates/partials/dtwin/_query_sync.html`` — Row under
+   “Readiness Status” with separate **Ontology** and **Mapping** badges when the
+   corresponding session flags are set.
+
+Files modified:
+  - src/front/static/query/js/query-sync.js
+  - src/front/templates/partials/dtwin/_query_sync.html
+  - changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1320 passed.
+
+---
+
+## Front: mapping manual / Spark SQL / ontology wizard — remove inline onclick
+
+### Context
+
+Coding rules forbid inline ``onclick`` / ``onchange`` in Jinja templates. High-traffic
+mapping and ontology wizard partials still called globals or ``ManualModule`` methods
+from HTML attributes.
+
+### Changes
+
+1. ``src/front/templates/partials/mapping/_mapping_manual.html`` — Replaced eight
+   ``onclick="ManualModule.*"`` handlers with ``data-action`` values:
+   ``manual-expand-all``, ``manual-collapse-all``, ``manual-refresh``,
+   ``manual-reset-panel``, ``manual-auto-map``, ``manual-close-panel``,
+   ``manual-save-mapping``.
+
+2. ``src/front/static/mapping/js/mapping-manual.js`` — One-time delegated ``click``
+   listener on ``#manual-section`` maps ``data-action`` to ``ManualModule`` methods.
+
+3. ``src/front/templates/partials/mapping/_mapping_sparksql.html`` — Replaced
+   ``copyMappingSql`` / ``refreshMappingSql`` inline handlers with
+   ``data-action="sparksql-copy-sql"`` and ``data-action="sparksql-refresh-sql"``;
+   added ``type="button"`` on toolbar buttons.
+
+4. ``src/front/static/mapping/js/mapping-sparksql.js`` — Delegated ``click`` on
+   ``#sparksql-section`` for those actions (bound on DOM ready).
+
+5. ``src/front/templates/partials/ontology/_ontology_wizard.html`` — Replaced all
+   template ``onclick`` / header ``onchange`` with ``data-action`` (bulk table/doc
+   buttons use ``data-select-all``) or rely on element id for the header checkbox.
+
+6. ``src/front/static/ontology/js/ontology-wizard.js`` — Delegated ``click`` on
+   ``#wizard-section`` for wizard actions; ``change`` handler for
+   ``#wizardSelectAllCheckbox``, ``.wizard-table-checkbox``, and
+   ``.wizard-doc-checkbox``; removed inline handlers from metadata table and docs
+   list HTML strings; document preview uses ``data-action="wizard-doc-preview"``
+   with ``data-doc-name`` (URL-encoded).
+
+### Modified files
+
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/templates/partials/mapping/_mapping_sparksql.html
+- src/front/static/mapping/js/mapping-sparksql.js
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/ontology/js/ontology-wizard.js
+- changelogs/2026-04-17.log
+
+Tests: ``uv run pytest -q`` — 1275 passed, 45 skipped.
+
+---
+
+## Full Code Review Remediation + Graph DB Engine Configuration Feature
+
+### Context
+
+Full code review against `.cursorrules` and `src/.coding_rules.md`. Executed all 10
+remediation items from the review, plus added a new feature: engine-specific JSON
+configuration for pluggable graph DB backends.
+
+### Feature: Graph DB Engine Configuration (JSON textarea)
+
+1. `src/back/objects/session/GlobalConfigService.py` — Added `get_graph_engine_config()`
+   and `set_graph_engine_config()` for persisting a free-form JSON dict in
+   `.global_config.json`. Added `"graph_engine_config": {}` to `_empty()` defaults.
+
+2. `src/back/objects/domain/SettingsService.py` — Added
+   `get_graph_engine_config_result()` and `set_graph_engine_config_result()`
+   (admin-only for writes).
+
+3. `src/api/routers/internal/settings.py` — Added `GET /settings/graph-engine-config`
+   and `POST /settings/graph-engine-config` endpoints.
+
+4. `src/front/templates/settings.html` — Added JSON textarea under "Engine Configuration"
+   in the Graph DB tab, with validation error display and Save button.
+
+5. `src/front/static/config/js/settings.js` — Added `loadGraphEngineConfig()` and
+   `btnSaveGraphEngineConfig` click handler with client-side JSON validation.
+
+6. `src/back/core/graphdb/GraphDBFactory.py` — `create()` and `get_graphdb()` now
+   accept `engine_config: Optional[Dict]` and forward to engine constructors.
+
+7. `src/back/core/triplestore/TripleStoreFactory.py` — Added
+   `_resolve_graph_engine_config()` static method; `create()` passes `engine_config`
+   to `get_graphdb()`.
+
+8. `tests/test_triplestore_factory.py` — Updated `test_default_backend_is_graph` to
+   expect `engine_config={}` argument.
+
+### Remediation: Critical fixes
+
+9. `src/back/objects/mapping/Mapping.py` — `save_mappings_to_session` now re-raises
+   `InfrastructureError` after logging (was silently swallowing exceptions).
+
+10. `src/api/routers/internal/domain.py` — `/check-name` now re-raises
+    `InfrastructureError` when the registry lookup fails instead of returning
+    `available: True`. Added `OntoBricksError` import.
+
+### Remediation: CORS fix
+
+11. `src/shared/fastapi/main.py` — Removed wildcard `"*"` from `allow_origins`
+    (invalid with `allow_credentials=True`). Kept explicit `localhost` origins only.
+
+### Remediation: PascalCase file renames
+
+12. Renamed 7 domain object files to match class names:
+    `domain.py→Domain.py`, `ontology.py→Ontology.py`, `mapping.py→Mapping.py`,
+    `digitaltwin.py→DigitalTwin.py`, `home_service.py→HomeService.py`,
+    `settings_service.py→SettingsService.py`, `middleware.py→FileSessionMiddleware.py`.
+    Updated all imports, `__init__.py` re-exports, tests, and Sphinx docs.
+
+### Remediation: Remove Request from SettingsService
+
+13. `src/back/objects/domain/SettingsService.py` — Removed `from fastapi import Request`.
+    All methods now receive primitive values (email, user_token, display_name, etc.)
+    instead of the FastAPI Request object.
+
+14. `src/api/routers/internal/settings.py` — Added `_settings_request_identity(request)`
+    helper that extracts identity from request headers/state. All callers updated.
+
+### Remediation: Digital Twin build/DQ/inference deduplication
+
+15. `src/back/objects/digitaltwin/DigitalTwin.py` — Added `run_build_task()`,
+    `run_data_quality_task()`, and `run_inference_task()` static methods. Both
+    internal and external API routers now delegate to these domain methods.
+
+### Remediation: SparqlTranslator method splitting
+
+16. `src/back/core/w3c/sparql/SparqlTranslator.py` — Split `_build_spark_sql` (533→61 lines),
+    `_build_generic_triples_query` (307→66 lines), and
+    `_build_filtered_with_relationships_query` (192→52 lines) into named helpers.
+
+### Remediation: Auto-assign extraction to Mapping
+
+17. `src/back/objects/mapping/Mapping.py` — Added `run_auto_assign_task()` and
+    `run_single_auto_assign_task()` methods. Route handlers in mapping.py are now thin
+    delegates.
+
+### Remediation: Wire assignment_changed in sync UI
+
+18. `src/front/static/query/js/query-sync.js` — `_applyReadiness` now reads
+    `ontology_changed` and `assignment_changed`, showing badges and triggering the
+    rebuild warning when either flag is set.
+
+19. `src/front/templates/partials/dtwin/_query_sync.html` — Added "Ontology" and
+    "Mapping" stale indicator badges in the readiness status row.
+
+### Remediation: Inline JS extraction
+
+20. Removed inline `onclick` handlers from `_mapping_manual.html`,
+    `_mapping_sparksql.html`, and `_ontology_wizard.html`. Added delegated event
+    listeners in `mapping-manual.js`, `mapping-sparksql.js`, and `ontology-wizard.js`.
+
+### Modified files
+
+- src/back/objects/session/GlobalConfigService.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/api/routers/internal/domain.py
+- src/back/objects/mapping/Mapping.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/triplestore/TripleStoreFactory.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/shared/fastapi/main.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/static/query/js/query-sync.js
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/templates/partials/mapping/_mapping_sparksql.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/static/mapping/js/mapping-sparksql.js
+- src/front/static/ontology/js/ontology-wizard.js
+- src/api/routers/internal/dtwin.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/mapping.py
+- src/back/objects/digitaltwin/__init__.py
+- tests/test_triplestore_factory.py
+- (plus all files from PascalCase renames and SettingsService refactor)
+
+Tests: ``uv run pytest -q`` — 1320 passed in 46.29s.
+
+---
+
+## Graph Engine Config — Tests, Starter Kit, and Bug Fixes
+
+Context: Added comprehensive tests for the graph_engine_config feature (JSON
+textarea for engine-specific configuration in Settings > Graph DB).  Updated
+the starter kit to show how engines receive and use engine_config.  Fixed a
+Python 3.9 compatibility issue and a test mock-path bug affecting two test files.
+
+Changes:
+
+1. `tests/test_graph_engine_config.py` — added 8 new tests in two classes:
+   - `TestGlobalConfigGraphEngineConfig`: defaults, get (valid/missing/non-dict),
+     set (valid/empty/non-dict/list).
+   - `TestSettingsServiceGraphEngineConfig`: get result, get empty result,
+     set success, set validation error.
+   - Fixed all SettingsService tests to use `patch.object` instead of
+     string-based patch paths (Python 3.9 module resolution issue).
+2. `tests/test_settings_domain_permissions.py` — fixed all `patch()` calls
+   that used `"back.objects.domain.SettingsService.SettingsService._resolve_context"`
+   (Python treats `SettingsService` module as non-package).  Replaced with
+   `patch.object(SettingsService, ...)` and `patch.object(_svc_module, ...)`.
+3. `src/back/core/w3c/sparql/SparqlTranslator.py` — fixed `str | None` PEP 604
+   type annotation (Python 3.10+) to `Optional[str]` for Python 3.9 compat.
+4. `src/back/core/graphdb/_starter_kit/ExampleStore.py` — added `engine_config`
+   parameter to constructor with docstring and TODO showing how engines should
+   read engine-specific keys from it.
+5. `src/back/core/graphdb/_starter_kit/README.md` — added step 5 about
+   using `engine_config` for engine-specific configuration.
+6. `docs/graphdb-integration.md` — updated Section 2.2 (contract) to document
+   `engine_config` parameter; updated Step 4 (factory registration) to show
+   `engine_config` threading through create/constructor.
+
+Modified files:
+
+- tests/test_graph_engine_config.py
+- tests/test_settings_domain_permissions.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/core/graphdb/_starter_kit/ExampleStore.py
+- src/back/core/graphdb/_starter_kit/README.md
+- docs/graphdb-integration.md
+
+Tests: 1332 passed (pytest).

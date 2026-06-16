@@ -1,0 +1,53 @@
+---
+name: AI Feature Lifecycle
+priority: 90
+scope:
+  globs:
+    - "src/agents/**"
+    - "src/back/core/agents/**"
+    - "src/mcp-server/**"
+  languages: ["python"]
+---
+
+### AI Feature Lifecycle (CNS §3.5)
+
+This rule is the **gate** that closes the 5-agents-zero-eval gap. The companion **path of least resistance** is `.claude/skills/ai-feature/SKILL.md`.
+
+**Trigger:** any PR that touches `src/agents/**`, adds an MLflow-traced LLM call, or changes an MCP tool that wraps an agent.
+
+**Required artifacts in the PR** (CI enforces 1–3 by path-pattern; 4 is a required check):
+
+1. `.planning/<slug>/SPEC.md` — system prompt, tool surface, success criteria, failure modes, eval metrics. Template at `.claude/skills/ai-feature/SPEC.template.md`.
+2. `.planning/<slug>/eval/dataset.jsonl` — minimum **20 examples** for a new agent; minimum **10 examples** for a material change to an existing one.
+3. A linked **MLflow eval run URI** in the PR body (paste it under the "MLflow eval run" heading of the PR template).
+4. Either a **passing eval** (judge score ≥ baseline + delta as declared in SPEC.md), or an explicit **waiver comment** from a reviewer.
+
+**Workflow** (when in doubt, invoke the orchestrator):
+
+```text
+brainstorming → ai-feature skill → SPEC.md → dataset → eval harness → impl → re-eval → land
+```
+
+**Hard rules**
+
+- **No new agent ships without SPEC.md.** The skill template fills it in interactively; CI rejects PRs without one.
+- **No prompt or tool change without an eval delta.** Even a 3-line prompt edit must show a judge-score delta against the dataset.
+- **Eval datasets live under `tests/eval/datasets/<agent>/`** and are committed to the repo. Synthetic examples (`databricks-synthetic-data-generation`) are fine for cold-start; production-derived examples go in `regression.jsonl` so they're never retired by accident.
+- **MLflow tracing must be present** on every code path that calls the Foundation Model API. Use `@trace_agent`, `@trace_llm`, `@trace_tool` (`src/agents/tracing.py`).
+
+**Anti-patterns**
+
+- "Just one prompt tweak, no eval needed" → blocked.
+- "We'll add an eval later" → blocked. The SPEC.md + dataset is the entry ticket.
+- "The judge model is the same as the agent" → fails CI; judge must be a separately configured (typically more capable) endpoint.
+
+**Calibration grace period**
+
+For the first 2 weeks after M2.P5 (G2 CI gate) lands, the gate **reports but does not block**. After the calibration window, the gate becomes hard. The two-week window is to let the team tune thresholds in `tests/eval/thresholds.yaml` without false-positive PR fails.
+
+**Cross-references**
+
+- §3.5 of the methodology plan (`/Users/dermot.smyth/.claude/plans/ultrathink-perform-a-detailed-whimsical-token.md`).
+- `.claude/skills/ai-feature/SKILL.md` — the orchestrator skill.
+- `.github/workflows/eval-gate.yml` — the CI gate.
+- `tests/eval/thresholds.yaml` — per-agent score thresholds.

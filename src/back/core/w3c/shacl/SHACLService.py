@@ -725,6 +725,154 @@ class SHACLService:
     }
 
     # ------------------------------------------------------------------
+    # Auto-suggest rules from OWL ontology introspection
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def suggest_from_ontology(
+        classes: List[Dict],
+        properties: List[Dict],
+        base_uri: str = "",
+    ) -> List[Dict]:
+        """Suggest SHACL shapes derived from OWL class/property declarations.
+
+        Produces three rule categories:
+        - **Completeness** (``sh:minCount 1``): every data property listed on a class
+        - **Consistency / datatype** (``sh:datatype``): data properties with an XSD range
+        - **Consistency / relationship** (``sh:class``): object properties with domain+range
+
+        Returns a list of shape dicts (not persisted).  Each dict carries an extra
+        ``"source": "auto"`` field so the UI can distinguish suggestions from manual rules.
+        Shape IDs are deterministic so calling this method multiple times is idempotent.
+        """
+        import hashlib as _hashlib
+        import re as _re
+
+        sep = "" if base_uri.endswith("#") or base_uri.endswith("/") else "#"
+
+        def _cls_uri(name: str) -> str:
+            for c in classes:
+                if (c.get("name") or "").lower() == name.lower():
+                    return c.get("uri") or (base_uri + sep + name)
+            return (base_uri + sep + name) if base_uri else name
+
+        def _prop_uri_fallback(name: str) -> str:
+            return (base_uri.rstrip("#/") + "/" + name) if base_uri else name
+
+        def _stable_id(*parts: str) -> str:
+            key = "|".join(p for p in parts if p)
+            digest = _hashlib.sha256(key.encode()).hexdigest()[:8]
+            safe = _re.sub(r"[^a-zA-Z0-9_]", "_", key)[:40]
+            return f"auto_{safe}_{digest}"
+
+        _XSD_TYPES = {
+            "xsd:string", "xsd:integer", "xsd:int", "xsd:long", "xsd:short",
+            "xsd:decimal", "xsd:float", "xsd:double", "xsd:boolean",
+            "xsd:date", "xsd:dateTime", "xsd:duration", "xsd:anyURI",
+        }
+        _XSD_REMAP = {
+            "xsd:int": "xsd:integer",
+            "xsd:long": "xsd:integer",
+            "xsd:short": "xsd:integer",
+        }
+
+        suggestions: List[Dict] = []
+        seen_ids: set = set()
+
+        def _add(shape: Dict) -> None:
+            sid = shape.get("id", "")
+            if sid in seen_ids:
+                return
+            seen_ids.add(sid)
+            shape["source"] = "auto"
+            suggestions.append(shape)
+
+        # ── 1. Completeness: data properties listed directly on each class ──
+        for cls in classes:
+            cls_name = cls.get("name", "")
+            cls_uri = cls.get("uri") or (_cls_uri(cls_name) if cls_name else "")
+            for dp in cls.get("dataProperties", []):
+                prop_name = dp.get("name") or dp.get("localName", "")
+                prop_uri = dp.get("uri") or _prop_uri_fallback(prop_name)
+                if not cls_name or not prop_name:
+                    continue
+                sid = _stable_id("completeness", cls_name, prop_name)
+                _add(
+                    SHACLService.create_shape(
+                        category="completeness",
+                        target_class=cls_name,
+                        target_class_uri=cls_uri,
+                        property_path=prop_name,
+                        property_uri=prop_uri,
+                        shacl_type="sh:minCount",
+                        parameters={"sh:minCount": 1},
+                        message=f"{cls_name}.{prop_name} must not be empty",
+                        shape_id=sid,
+                    )
+                )
+
+        # ── 2. Datatype: DatatypeProperty with XSD range ──
+        for prop in properties:
+            ptype = prop.get("type", "")
+            if ptype == "ObjectProperty" or ptype == "owl:ObjectProperty":
+                continue
+            range_val = (prop.get("range") or "").strip()
+            range_val = _XSD_REMAP.get(range_val, range_val)
+            if range_val not in _XSD_TYPES:
+                continue
+            prop_name = prop.get("name", "")
+            prop_uri = prop.get("uri") or _prop_uri_fallback(prop_name)
+            domain_name = prop.get("domain", "")
+            if not prop_name or not domain_name:
+                continue
+            cls_uri = _cls_uri(domain_name)
+            sid = _stable_id("datatype", domain_name, prop_name, range_val)
+            prefix = f"{domain_name}." if domain_name else ""
+            _add(
+                SHACLService.create_shape(
+                    category="consistency",
+                    target_class=domain_name,
+                    target_class_uri=cls_uri,
+                    property_path=prop_name,
+                    property_uri=prop_uri,
+                    shacl_type="sh:datatype",
+                    parameters={"sh:datatype": range_val},
+                    message=f"{prefix}{prop_name} must be {range_val}",
+                    shape_id=sid,
+                )
+            )
+
+        # ── 3. Relationship: ObjectProperty with domain + range ──
+        for prop in properties:
+            ptype = prop.get("type", "")
+            if ptype not in ("ObjectProperty", "owl:ObjectProperty"):
+                continue
+            prop_name = prop.get("name", "")
+            prop_uri = prop.get("uri") or _prop_uri_fallback(prop_name)
+            domain_name = prop.get("domain", "")
+            range_name = prop.get("range", "")
+            if not domain_name or not range_name or not prop_name:
+                continue
+            cls_uri = _cls_uri(domain_name)
+            range_uri = _cls_uri(range_name)
+            sid = _stable_id("relationship", domain_name, prop_name, range_name)
+            _add(
+                SHACLService.create_shape(
+                    category="consistency",
+                    target_class=domain_name,
+                    target_class_uri=cls_uri,
+                    property_path=prop_name,
+                    property_uri=prop_uri,
+                    shacl_type="sh:class",
+                    parameters={"sh:class": range_uri},
+                    message=f"{domain_name}.{prop_name} values must be of type {range_name}",
+                    shape_id=sid,
+                )
+            )
+
+        return suggestions
+
+    # ------------------------------------------------------------------
     # SHACL-to-SQL translation (for Digital Twin execution)
     # ------------------------------------------------------------------
 

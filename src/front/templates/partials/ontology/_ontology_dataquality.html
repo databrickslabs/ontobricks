@@ -10,6 +10,14 @@
         <button class="btn btn-outline-primary" onclick="DataQualityModule.openAddModal()">
             <i class="bi bi-plus-lg me-1"></i> Add Rule
         </button>
+        <button class="btn btn-outline-success" onclick="DataQualityModule.openSuggestModal()"
+                title="Auto-generate SHACL rules from ontology classes and properties">
+            <i class="bi bi-stars me-1"></i> Auto-generate
+        </button>
+        <button class="btn btn-outline-warning" onclick="DataQualityModule.cleanupShapes()"
+                title="Remove rules whose target class or property no longer exists in the ontology">
+            <i class="bi bi-brush me-1"></i> Cleanup
+        </button>
         <button class="btn btn-outline-secondary" onclick="DataQualityModule.toggleShaclPanel()">
             <i class="bi bi-code-slash me-1"></i> SHACL
         </button>
@@ -165,6 +173,59 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="DataQualityModule.saveShape()">
                     <i class="bi bi-check-lg me-1"></i> Save Rule
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Auto-generate Review Modal ═══ -->
+<div class="modal fade" id="dqSuggestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-stars me-2 text-success"></i>Review Auto-generated Rules
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    These rules were inferred from your ontology's classes and properties.
+                    Select the ones you want to keep — they will be added without overwriting existing rules.
+                </div>
+                <div id="dqSuggestLoading" class="text-center py-4">
+                    <div class="spinner-border spinner-border-sm text-secondary me-2"></div>
+                    Analysing ontology…
+                </div>
+                <div id="dqSuggestEmpty" class="text-muted text-center py-4" style="display:none">
+                    <i class="bi bi-check2-circle me-1"></i>
+                    No new rules to suggest — all detected rules already exist.
+                </div>
+                <div id="dqSuggestList" style="display:none">
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                        <span class="small text-muted fw-semibold" id="dqSuggestCount"></span>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none"
+                                    onclick="DataQualityModule.selectAllSuggestions(true)">
+                                Select all
+                            </button>
+                            <span class="text-muted">·</span>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none"
+                                    onclick="DataQualityModule.selectAllSuggestions(false)">
+                                None
+                            </button>
+                        </div>
+                    </div>
+                    <div id="dqSuggestItems"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="dqSuggestAcceptBtn"
+                        onclick="DataQualityModule.acceptSuggestions()" style="display:none">
+                    <i class="bi bi-check-lg me-1"></i> Add selected rules
                 </button>
             </div>
         </div>

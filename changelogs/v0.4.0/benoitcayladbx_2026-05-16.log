@@ -1,0 +1,208 @@
+## App-managed Companion Layout
+
+### Context
+
+In `managed_synced` mode the Postgres layout per graph version consists of three
+objects: a `*_sync` table (owned by Lakeflow), a `*__app` companion (writable by
+the app for reasoning / materialise), and a union view that readers query.
+In `app_managed` mode only a single flat table existed, which meant materialise
+writes were mixed with warehouse data and no clean separation was possible between
+bulk-loaded triples and app-generated triples.
+
+This change makes `app_managed` use the same 3-object layout.  The app streams
+warehouse data into `*_sync` (instead of Lakeflow), the companion absorbs
+reasoning output, and the union view provides a unified read surface.
+
+### Changes
+
+1. `src/back/core/graphdb/lakebase/_companion_ddl.py`
+   - Added `ensure_synced(cur, schema, synced)` — creates the `*_sync` bulk-data
+     table with indexes (used by the `app_managed` build path).
+   - Added `drop_synced(cur, synced)` — drops the `*_sync` table.
+   - Updated module docstring to document that both modes share the 3-object layout.
+
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   - `create_table()` — now creates `*_sync` + `*__app` + union view in
+     `app_managed` mode (was a single flat table); `managed_synced` remains a
+     no-op deferred to `SyncedTableManager`.
+   - `drop_table()` — drops all 3 Postgres objects for `app_managed` (no Lakeflow
+     API call); `managed_synced` branch unchanged.
+   - `_writable_table_id()` — returns `companion_phy(name)` for both modes so
+     reasoning / materialise always target `*__app`.
+   - `optimize_table()` — vacuums `*_sync` and `*__app` for `app_managed`;
+     vacuums companion only for `managed_synced`.
+   - Extracted `_copy_insert_batch_phy(phy, batch)` private helper (takes the
+     physical table name directly); `_copy_insert_batch` delegates to it.
+   - Added `bulk_load_into_sync(table_name, iterator, *, batch_size, on_progress)`
+     — public method for the build pipeline; writes to `*_sync` via
+     `_copy_insert_batch_phy`.
+
+3. `src/back/objects/digitaltwin/_build_pipeline.py`
+   - `_apply_full_rebuild()` — when the store exposes `bulk_load_into_sync`,
+     warehouse data is routed there (targeting `*_sync`); non-Lakebase backends
+     fall back to the legacy `_stream_triples_into_store` path.
+
+4. `tests/test_lakebase_flat_store.py`
+   - Updated `test_create_table_issues_schema_ddl_and_indexes` for the new 3-object DDL.
+   - Added `test_writable_table_id_is_companion_for_app_managed`.
+   - Added `test_drop_table_app_managed_drops_view_companion_and_sync`.
+   - Added `test_optimize_table_vacuums_sync_and_companion_for_app_managed`.
+   - Added `test_bulk_load_into_sync_writes_to_sync_table`.
+
+5. `tests/test_build_pipeline_streaming.py`
+   - Updated `TestFullRebuildProgressMessage._full_pipe` to mock
+     `store.bulk_load_into_sync` (new code path) instead of
+     `_stream_triples_into_store`.
+
+### Modified files
+
+- `src/back/core/graphdb/lakebase/_companion_ddl.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `tests/test_lakebase_flat_store.py`
+- `tests/test_build_pipeline_streaming.py`
+
+### Test result
+
+1979 passed, 80 skipped — all tests green.
+
+---
+
+## Registry OBX Export/Import (Browse page)
+
+### Context
+
+Add a way to export one or several registry domains to a single `.obx`
+(JSON) file from the Registry → Browse page and re-import the file later
+with per-domain conflict resolution. The format carries an integer
+`format_version` (1) plus `ontobricks_version` so future schema changes
+stay backward-compatible via a small upgrader chain.
+
+### Changes
+
+1. `src/back/objects/registry/obx_format.py` *(new)*
+   - `CURRENT_OBX_FORMAT_VERSION = 1`, upgrader registry, `build_envelope()`,
+     and `load()` which validates the integer `format_version`, runs the
+     upgrader chain when an older file is read, and enforces an optional
+     `min_ontobricks_version` gate.
+
+2. `src/back/objects/registry/__init__.py`
+   - Re-export the new `obx_format` module and `CURRENT_OBX_FORMAT_VERSION`.
+
+3. `src/back/objects/domain/SettingsService.py`
+   - `export_registry_obx_result()` — builds the envelope from a spec
+     `{domains: [{name, mode, versions?}]}` with mode in
+     `{all, active, latest, selected}`.
+   - `preview_obx_import_result()` — parses an uploaded `.obx`, returns
+     per-domain conflict flags + a suggested rename.
+   - `import_registry_obx_result()` — applies per-domain decisions
+     (`skip` / `overwrite` / `rename`), defaulting to `skip` when missing.
+   - 50 MB upload cap to protect the in-memory JSON parse.
+
+4. `src/api/routers/internal/settings.py`
+   - `POST /settings/registry/export` — streams the envelope as a JSON
+     attachment (`ontobricks-YYYY-MM-DD.obx`); visibility-filtered via
+     `filter_visible_domains`.
+   - `POST /settings/registry/import/preview` — multipart preview.
+   - `POST /settings/registry/import` — multipart import, gated by
+     `require(ROLE_ADMIN)`.
+
+5. `src/front/templates/partials/registry/_registry_domains.html`
+   - Added Export / Import buttons; Import gated via
+     `data-requires-app="admin"`.
+   - Pulled in the two new modal partials.
+
+6. `src/front/templates/partials/registry/_export_obx_modal.html` *(new)*
+   - Per-domain checkbox + version mode selector (Latest / Active / All /
+     Choose…) with per-version checkboxes when `Choose…` is picked.
+
+7. `src/front/templates/partials/registry/_import_obx_modal.html` *(new)*
+   - Two-step UX: file picker → preview (shows `format_version` and
+     `ontobricks_version` of the file) → per-row Skip / Overwrite / Rename.
+
+8. `src/front/static/registry/js/registry.js`
+   - `openExportObxModal()`, blob download with `Content-Disposition`
+     filename.
+   - `openImportObxModal()`, preview rendering, decision collector with
+     an overwrite-confirmation dialog before submission.
+
+9. `tests/test_obx_format.py` *(new)*
+   - 11 tests covering: missing/non-integer/future `format_version`,
+     `min_ontobricks_version` gate, the upgrader chain pattern, malformed
+     envelopes.
+
+10. `tests/test_settings_obx.py` *(new)*
+    - 13 tests covering export mode resolution, registry-not-configured
+      guard, preview conflict flags, and the three import actions
+      (skip/overwrite/rename), including the rename-conflict fallback.
+
+### Modified files
+
+- `src/back/objects/registry/obx_format.py` *(new)*
+- `src/back/objects/registry/__init__.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/templates/partials/registry/_registry_domains.html`
+- `src/front/templates/partials/registry/_export_obx_modal.html` *(new)*
+- `src/front/templates/partials/registry/_import_obx_modal.html` *(new)*
+- `src/front/static/registry/js/registry.js`
+- `tests/test_obx_format.py` *(new)*
+- `tests/test_settings_obx.py` *(new)*
+
+### Test result
+
+2003 passed — all tests green (24 new OBX tests included).
+
+---
+
+## Drop legacy LadybugDB field names from the runtime
+
+### Context
+
+LadybugDB is no longer a supported graph backend (Lakebase is the only
+engine). The `dt_existence` payload still carried two legacy field names —
+`local_lbug_exists` and `local_lbug_path` — that were reused but never
+renamed when the backend changed. They surfaced into the consolidated
+sync info endpoint and the front-end query-sync code, leading to confusing
+field names. Plus a stale comment in `_export_obx_modal.html` still
+mentioned `.lbug.tar.gz` (already fixed earlier today).
+
+### Changes
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   - Renamed `local_lbug_exists` → `graph_has_data` (Postgres table exists
+     AND row count > 0; preserves the existing tri-state semantic).
+   - Renamed `local_lbug_path` → `graph_display` (database·schema·table
+     display string).
+
+2. `src/back/objects/digitaltwin/_build_pipeline.py`
+   - Same rename in the post-build session-cache writer. Dropped the
+     now-empty `local_path` variable.
+
+3. `src/back/objects/domain/HomeService.py`
+   - Same rename in the consolidated `/dtwin/sync/info` payload.
+
+4. `src/front/static/query/js/query-sync.js`
+   - Reader rename, including the stale-cache override comment. Dropped
+     the `eng === 'lakebase'` guard inside the override since there is no
+     other engine to distinguish anymore.
+
+5. `tests/test_home_service.py`
+   - Updated fixture to use the new field names.
+
+6. `src/front/templates/partials/registry/_export_obx_modal.html`
+   *(already fixed earlier today)* — dropped the `.lbug.tar.gz` mention
+   in the export-modal footer.
+
+### Modified files
+
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/objects/domain/HomeService.py`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/templates/partials/registry/_export_obx_modal.html`
+- `tests/test_home_service.py`
+
+### Test result
+
+2003 passed — full suite green.

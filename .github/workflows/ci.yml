@@ -39,6 +39,55 @@ jobs:
       - name: Lint with flake8
         run: uv run flake8 src/ tests/ --max-line-length=100 --extend-ignore=E203,W503
 
+      # M3.P1 (advisory) — ruff runs in report-only mode against the changed files
+      # of the PR. The full repo currently has ~3000 lint findings; we'll burn
+      # them down over time. Pre-commit hook gates NEW code (changed lines only).
+      - name: Ruff (advisory — changed files only)
+        continue-on-error: true
+        run: |
+          set -e
+          if [ -n "${GITHUB_BASE_REF:-}" ]; then
+            git fetch origin "$GITHUB_BASE_REF" --depth=1
+            files=$(git diff --name-only --diff-filter=ACM "origin/$GITHUB_BASE_REF" \
+                    | grep -E '^(src|tests)/.*\.py$' || true)
+            if [ -n "$files" ]; then
+              echo "Ruff on changed files:"
+              echo "$files"
+              uv run ruff check $files || true
+            else
+              echo "No Python files changed in this PR — skipping ruff."
+            fi
+          else
+            echo "No GITHUB_BASE_REF — running ruff on src/ + tests/ in report mode."
+            uv run ruff check src/ tests/ || true
+          fi
+
+  mypy-diff:
+    name: M3.P1 — mypy diff gate (no new errors)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Enforce mypy baseline (no NEW errors vs mypy_baseline.txt)
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_TOKEN: test-token
+          DATABRICKS_SQL_WAREHOUSE_ID: test-warehouse
+          SECRET_KEY: test-secret-key
+        run: uv run python scripts/check-mypy-diff.py
+
   test:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -63,7 +112,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (G1 — unit + integration)
         env:
           DATABRICKS_HOST: https://test.databricks.com
           DATABRICKS_TOKEN: test-token
@@ -72,10 +121,12 @@ jobs:
         run: |
           uv run pytest tests/ \
             --cov=src \
+            --cov-branch \
             --cov-report=xml \
             --cov-report=term \
             -v \
-            --ignore=tests/e2e
+            --ignore=tests/e2e \
+            -m "not e2e and not property and not eval and not external"
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'
@@ -93,6 +144,76 @@ jobs:
           name: coverage-report
           path: coverage.xml
           retention-days: 14
+
+  coverage-gate:
+    name: Coverage Gate (G1-pkg — per-package thresholds)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: coverage-report
+
+      - name: Enforce per-package thresholds
+        run: uv run python scripts/check_coverage.py --xml coverage.xml --config ci/coverage_thresholds.yaml
+
+  mcp-test:
+    name: MCP Integration (G1c — when src/mcp-server/ touched)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Detect MCP changes
+        id: changes
+        run: |
+          if git diff --name-only HEAD^ HEAD | grep -q '^src/mcp-server/'; then
+            echo "mcp_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mcp_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install uv
+        if: steps.changes.outputs.mcp_changed == 'true'
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        if: steps.changes.outputs.mcp_changed == 'true'
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        if: steps.changes.outputs.mcp_changed == 'true'
+        run: uv sync --dev
+
+      - name: Run MCP integration tests
+        if: steps.changes.outputs.mcp_changed == 'true'
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_TOKEN: test-token
+          DATABRICKS_SQL_WAREHOUSE_ID: test-warehouse
+          SECRET_KEY: test-secret-key
+        run: uv run pytest tests/mcp/ -m mcp -v --tb=short
 
   build:
     name: Build Check

@@ -1,0 +1,96 @@
+# v0.5.0 — 2026-06-12 — benoitcayladbx
+
+## Fix: Deleted class attributes reappear in OWL export (issue #50)
+
+**Context**: Reported in
+[databrickslabs/ontobricks#50](https://github.com/databrickslabs/ontobricks/issues/50).
+When an `owl:DatatypeProperty` (a class attribute) was deleted in the ontology
+designer, the deleted property reappeared as a `DatatypeProperty` in every
+subsequent OWL/Turtle export.
+
+**Root cause**: Domain-scoped datatype properties are stored in two places once
+an OWL file is parsed — `classes[].dataProperties` (the authoritative attribute
+list the designer mutates) and a shadow entry in the top-level `properties[]`
+list (`OntologyParser.get_properties()` legitimately returns every property,
+including datatype ones, and `apply_parsed_owl_to_domain` persists both). When
+an attribute is deleted in the designer only `classes[].dataProperties` is
+updated; the shadow in `properties[]` survives. `OntologyGenerator.generate()`
+emits class attributes from *both* paths — `_add_class()` →
+`_add_data_property_for_class()` *and* `_add_property()` for the `properties[]`
+list — so `_add_property()` re-emitted the stale shadow and the deleted
+attribute came back on export.
+
+Changing `get_properties()` to drop datatype properties was rejected: its
+contract (and downstream consumers / tests) rely on it returning all
+properties. The fix is therefore applied at the single export choke point, the
+generator, which treats `classes[].dataProperties` as the source of truth for
+class attributes.
+
+**Changes**:
+1. `src/back/core/w3c/owl/OntologyGenerator.py` — added `_local_name()`,
+   `_build_class_attr_index()` (built once in `__init__`, maps each class — by
+   name and by URI local name — to the set of attribute local names it
+   declares) and `_is_stale_datatype_shadow()`. In `_add_property()`, a
+   `DatatypeProperty` whose domain class is known but no longer declares that
+   attribute is now skipped (logged at debug). The check is conservative: an
+   empty domain or an unknown domain class is never dropped, so object
+   properties, domain-less datatype properties and surviving attributes
+   (including their declared range, e.g. `xsd:integer`) are unaffected.
+2. `tests/units/ontology/test_owl_generator.py` — added
+   `TestDeletedAttributeNotReexported` with four regression tests: stale shadow
+   skipped, surviving shadow (and its range) kept, unknown-domain datatype
+   property kept, and a full parse → delete-attribute → regenerate round-trip.
+
+**Modified files**:
+- `src/back/core/w3c/owl/OntologyGenerator.py`
+- `tests/units/ontology/test_owl_generator.py`
+
+**Test result**: `python -m pytest tests/units --ignore=tests/property` →
+**2277 passed, 15 skipped**. The two new reproduction tests fail before the fix
+and pass after it; the two conservative-behaviour tests pass throughout.
+(`tests/property/test_owl_roundtrip.py` is skipped — the `hypothesis` package is
+not installed in this environment, unrelated to this change.)
+
+## Fix: Expanded nodes grouped under identifier instead of entity type (issue #52)
+
+**Context**: Reported in
+[databrickslabs/ontobricks#52](https://github.com/databrickslabs/ontobricks/issues/52).
+Using the knowledge graph viewer's right-click → "Expand neighbours" action,
+newly added nodes appeared in the View pane as brand-new entity types named
+after their identifiers (and with random colours) instead of being grouped
+under their existing entity type. This broke entity-type filtering and the
+type-based colour coding.
+
+**Root cause**: The `/dtwin/neighbors` endpoint
+(`src/api/routers/internal/dtwin.py`) returns the induced subgraph of the
+visited instance URIs. To avoid "ghost endpoints", it dropped any triple whose
+object is a URI not present in the visited set. The `rdf:type` triple's object
+is the *class* URI (e.g. `…/Person`), which is an ontology class — never an
+instance, so never in the visited set. Those type triples were therefore
+filtered out, and the front-end (`buildGraph` in `query-d3graph.js`) received
+untyped nodes. With no `rdf:type`, it falls back to `inferTypeFromUri()`, which
+derives a pseudo-type from the URI's local part — i.e. the node's identifier —
+producing the new ad-hoc groups and random colours.
+
+**Changes**:
+1. `src/api/routers/internal/dtwin.py` — extracted the inline neighbour-triple
+   filtering into a testable module-level helper `_filter_neighbor_triples()`
+   plus `_is_type_predicate()` / `_RDF_TYPE_URI`. The filter now keeps a triple
+   when its object is a literal, when its object URI is in the visited set, **or
+   when it is an `rdf:type` triple** (full URI or a `#type`/`/type` suffix),
+   mirroring the predicate detection used by the front-end. Class URIs in type
+   triples don't create ghost nodes because `buildGraph`'s pre-pass already
+   recognises them as type URIs and excludes them from entities.
+2. `tests/units/api/test_routes.py` — added `TestNeighborTripleFilter` with six
+   regression tests: rdf:type kept when class URI not visited (the #52 case),
+   short `#type` predicate kept, non-type URI object outside visited dropped,
+   URI object within visited kept, literal object kept, and de-dup + limit
+   handling.
+
+**Modified files**:
+- `src/api/routers/internal/dtwin.py`
+- `tests/units/api/test_routes.py`
+
+**Test result**: `python -m pytest tests/units` → **2328 passed, 11 skipped**.
+(`tests/property/*` still skipped due to the missing `hypothesis` package,
+unrelated to this change.)

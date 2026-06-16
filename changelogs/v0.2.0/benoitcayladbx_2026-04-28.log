@@ -1,0 +1,890 @@
+## LakebaseAuth: mint JWTs via Postgres API for Autoscaling-only projects (fixes "Database instance 'ontobricks-test' not found")
+
+Context: after the previous "Postgres-API fallback for Autoscaling
+endpoint lookup" change, the dev sandbox switched bindings from the
+Autoscaling project ``ontobricks-app`` (also visible on the legacy
+Database Instance API) to ``ontobricks-test`` (created via the
+Autoscaling UI / Postgres API only). Project resolution worked —
+``LakebaseAuth.instance_name`` correctly returned ``ontobricks-test``
+via the Postgres API endpoint walk — but the JWT-minting path then
+called ``WorkspaceClient.database.generate_database_credential(
+instance_names=['ontobricks-test'])``, which 404s on Autoscaling-only
+projects. Symptom on the Registry page:
+``Could not query Lakebase: Lakebase connection failed: Failed to
+mint Lakebase JWT for instance 'ontobricks-test': Database instance
+'ontobricks-test' not found.``
+
+Root cause: the Lakebase Autoscaling stack uses the Postgres API
+(``POST /api/2.0/postgres/credentials``) to mint endpoint-scoped JWTs.
+Projects created via the Autoscaling UI or Postgres API are invisible
+to the legacy ``database.list_database_instances`` / ``database.
+generate_database_credential`` pair; only projects also created via
+the Database Instance API or the Lakehouse/Provisioned UI are visible
+on both. ``LakebaseAuth.password`` only knew about the legacy mint.
+
+Fix: add a Postgres-API mint path and pick between the two based on
+how the project was discovered.
+
+- ``self._endpoint_resource`` caches the full endpoint resource path
+  (``projects/<project_id>/branches/<branch_id>/endpoints/<endpoint_id>``)
+  whenever ``_lookup_via_postgres_api`` matches PGHOST against
+  ``status.hosts.host`` / ``read_only_host``.
+- ``password()`` now picks:
+  1. ``POST /api/2.0/postgres/credentials`` with the cached endpoint
+     resource when ``_endpoint_resource`` is populated (Autoscaling-
+     only projects).
+  2. The legacy ``database.generate_database_credential(
+     instance_names=[<name>])`` when the project was resolved via the
+     legacy API or via an explicit ``DATABASE_INSTANCE_NAME``
+     override (covers Provisioned + dual-visibility Autoscaling).
+- Belt-and-braces fallback: if the legacy mint raises with the
+  ``Database instance '<name>' not found`` wire signature, we walk
+  the Postgres API once to populate ``_endpoint_resource`` and retry
+  the mint there. Catches the case where ``DATABASE_INSTANCE_NAME``
+  was set explicitly to an Autoscaling-only project name. Other
+  legacy errors (5xx, network) still bubble up as
+  ``ValidationError`` so we don't mask transient outages with a
+  silent retry.
+
+Changes:
+
+- ``src/back/core/databricks/LakebaseAuth.py``
+  - New module-level helper ``_looks_like_instance_not_found`` —
+    string-match against the legacy wire error to gate the fallback.
+  - ``__init__`` initialises the new ``_endpoint_resource`` field.
+  - ``_lookup_via_postgres_api`` now also stashes the matched
+    endpoint's full resource path on ``self._endpoint_resource``.
+  - ``password()`` refactored: forces ``instance_name`` resolution
+    first (so the endpoint resource is populated when applicable),
+    then dispatches to either ``_mint_via_postgres_api`` or
+    ``_mint_via_database_instances``. Logs which path minted.
+  - Two new private helpers:
+    ``_mint_via_database_instances(name)`` (legacy SDK call,
+    factored out) and ``_mint_via_postgres_api(endpoint_resource)``
+    (``POST /api/2.0/postgres/credentials`` with body
+    ``{"endpoint": <endpoint_resource>}``).
+
+- ``tests/test_lakebase_auth.py``
+  - New ``TestPasswordMintingPath`` class covering:
+    * Autoscaling-only project (resolved via Postgres API) mints via
+      ``POST /api/2.0/postgres/credentials``; the legacy SDK call is
+      asserted to *never* run, and the body shape (``{"endpoint":
+      "projects/.../endpoints/primary"}``) is pinned so a regression
+      on the request schema gets caught loudly. Also asserts the
+      cached token short-circuits the second call.
+    * Provisioned-style instance (resolved via legacy API) keeps the
+      legacy mint with ``instance_names=[<name>]``; the Postgres API
+      is asserted to *never* be called.
+    * Explicit ``DATABASE_INSTANCE_NAME`` override pointing at an
+      Autoscaling-only project: legacy mint 404s, fallback walks the
+      Postgres API and retries the mint there.
+    * Random non-not-found legacy errors (e.g. 500, network) bubble
+      up as ``ValidationError`` and do *not* trigger a silent
+      Postgres-API fallback.
+
+Test plan:
+
+- ``uv run pytest tests/test_lakebase_auth.py -q`` — 14 passed
+  (4 new on top of the 10 from the previous Postgres-API-fallback
+  change).
+- ``uv run pytest -q`` — full suite green (1887 passed).
+- Manual: redeploy the dev-lakebase target (``databricks bundle
+  deploy -t dev-lakebase``) bound to project ``ontobricks-test``.
+  Registry page no longer 500s on the JWT mint; ``+ Initialize``
+  succeeds and creates the ``ontobricks_registry`` schema inside
+  the bound database (``databricks_postgres`` for ``ontobricks-test``
+  until a custom database is provisioned).
+
+## LakebaseAuth: Postgres-API fallback for Autoscaling endpoint lookup (fixes "Failed to mint Lakebase JWT for instance '?'")
+
+Context: on the deployed dev sandbox (``ontobricks-dev``) bound to the
+Autoscaling project ``ontobricks-app``, the Registry page returned a
+500 ``Could not query Lakebase: Lakebase connection failed: Failed to
+mint Lakebase JWT for instance '?': No Lakebase instance matched
+PGHOST='ep-damp-art-d1l8gclo.database.us-west-2.cloud.databricks.com'.
+Set DATABASE_INSTANCE_NAME to the instance name.``
+
+Root cause: ``LakebaseAuth.instance_name`` only consulted the legacy
+**Database Instance API** (``w.database.list_database_instances``) and
+matched ``PGHOST`` against ``read_write_dns`` / ``read_only_dns`` of
+each instance. For Lakebase Autoscaling projects whose regional
+endpoint hostname (``ep-<id>.database.<region>.cloud.databricks.com``)
+is the *only* one Databricks Apps injects as ``PGHOST``, the legacy
+DNS fields don't carry that value — so the lookup returned empty,
+and the wrapper in ``password()`` re-raised it as ``Failed to mint
+Lakebase JWT for instance '?'`` (the inner ``ValidationError`` is
+caught before ``self._instance_name`` is ever populated, hence the
+``'?'`` placeholder).
+
+Fix: extend the resolution chain with a third step that falls through
+to the **Postgres API** when the legacy lookup misses. Walks
+``/api/2.0/postgres/projects`` → branches → endpoints and matches
+``status.hosts.host`` / ``status.hosts.read_only_host`` against
+``PGHOST``. The project_id (final segment of ``projects/<id>``) is
+returned as the instance name — ``generate_database_credential``
+accepts it directly via ``instance_names=[<project_id>]``, so no
+change is needed in the JWT-minting path.
+
+Resolution order is now:
+
+1. ``DATABASE_INSTANCE_NAME`` env var (explicit override).
+2. Database Instance API (legacy / Provisioned + DAB-created projects).
+3. Postgres API endpoint walk (Autoscaling projects created via the
+   Autoscaling UI / Postgres API).
+
+Changes:
+
+- ``src/back/core/databricks/LakebaseAuth.py``
+  - Module + property docstrings updated to describe the new
+    fallback step.
+  - ``instance_name`` refactored into two helpers:
+    ``_lookup_via_database_instances`` (existing logic, factored out)
+    and ``_lookup_via_postgres_api`` (new). The latter uses
+    ``WorkspaceClient.api_client.do`` directly so it works on every
+    SDK version regardless of whether ``w.postgres`` is bound on the
+    public surface. Hosts are compared lower-cased + stripped, same
+    convention as the Database Instance API path.
+  - Failure semantics preserved: any unhandled exception from
+    *either* lookup is wrapped into ``ValidationError`` with the same
+    "Could not resolve Lakebase instance name from PGHOST=… Set
+    DATABASE_INSTANCE_NAME explicitly." guidance message. ``PGAPPNAME``
+    is still never consulted.
+
+- ``tests/test_lakebase_auth.py``
+  - Existing ``test_pgappname_is_never_used_as_instance_name`` updated
+    to also stub the Postgres-API ``api_client.do`` so the assertion
+    survives the new fallback step.
+  - New ``TestPostgresApiFallback`` class covering:
+    * Falls back to Postgres API when the Database Instance API
+      returns no match (the deployed-app regression case, with the
+      exact ``ep-damp-art-d1l8gclo`` PGHOST).
+    * Matches against ``read_only_host`` too.
+    * Database Instance API hit short-circuits the Postgres API walk
+      (verified by an ``AssertionError`` side-effect on
+      ``api_client.do``).
+    * No match anywhere → raises with the ``ep-…`` host echoed back.
+    * Postgres API failure is wrapped into ``ValidationError``.
+
+Test plan:
+
+- ``uv run pytest tests/test_lakebase_auth.py -q`` — 10 passed
+  (5 new).
+- ``uv run pytest -q`` — full suite green (1883 passed).
+- Manual recovery options for the running deployed app, in order of
+  preference:
+  1. Redeploy the dev-lakebase target (``databricks bundle deploy
+     -t dev-lakebase``) — picks up the code fix automatically.
+  2. As a hot-fix without a redeploy, set
+     ``DATABASE_INSTANCE_NAME=ontobricks-app`` on the
+     ``ontobricks-dev`` app's runtime env from the Apps UI; the
+     explicit-override step (1) skips both SDK lookups entirely.
+
+## Lakebase backend now sources catalog/schema/volume from the registries row
+
+Context: a deployment whose ``volume`` resource happens to bind a
+*different* Volume than the one referenced by the Lakebase
+``registries`` row would render every Build-page existence check
+against the wrong location and silently report all-red badges, even
+though the underlying Delta view and ``.lbug`` archive were perfectly
+intact. Concretely, ``ontobricks-dev`` was bound to
+``benoit_cayla.ontobricks_deployed.registry`` while the row in
+Lakebase pointed at ``benoit_cayla.ontobricks.OntoBricksRegistry`` —
+where the artifacts actually live. ``RegistryCfg.from_domain`` was
+unconditionally sourcing catalog/schema/volume from the bound Volume
+path, so ``effective_view_table`` resolved to
+``benoit_cayla.ontobricks_deployed.triplestore_cust360auto_v4`` (no
+such view) and ``uc_version_path`` to
+``/Volumes/benoit_cayla/ontobricks_deployed/registry/domains/cust360auto/V4``
+(no such directory), turning every status badge red.
+
+Root cause: with the Lakebase backend, the **Postgres row is the
+source of truth** for where binary artefacts live — the Volume
+resource binding is just a connection capability. The two had been
+allowed to drift, and ``from_domain`` was reading the wrong one.
+
+Fix: when ``backend`` resolves to ``"lakebase"``,
+``RegistryCfg.from_domain`` now reads the
+``(catalog, schema, volume)`` triplet from the singleton
+``registries`` row in Lakebase. The Volume binding is only consulted
+as a fall-back when Lakebase is unreachable or the row hasn't been
+created yet — preserving the existing behaviour for first-time
+initialization and offline cases.
+
+Changes:
+
+- ``src/back/objects/registry/store/lakebase/store.py``
+  - New module-level helper ``fetch_lakebase_registry_triplet(schema,
+    database)`` that opens a pooled connection and returns the
+    ``(catalog, schema, volume)`` of the singleton ``registries`` row
+    or ``None`` on any error / missing row.
+  - Process-wide cache keyed on ``(schema, database)``: positive
+    results live for the lifetime of the process, negative results
+    have a short 60s TTL so a transient cold-start failure doesn't
+    pin the app to the Volume fallback indefinitely.
+  - Companion ``reset_lakebase_triplet_cache()`` for tests and
+    admin-side row edits.
+
+- ``src/back/objects/registry/RegistryService.py``
+  - ``RegistryCfg.from_domain`` now short-circuits via
+    ``fetch_lakebase_registry_triplet`` when ``backend == "lakebase"``
+    and the helper returns a triplet; otherwise falls through to the
+    pre-existing Volume-binding / env-var chain. Fail-soft: any
+    Lakebase issue (offline, auth, missing row) silently falls back
+    so the app never 500s on this path.
+  - Docstring resolution-order block updated to call out the new
+    Lakebase short-circuit explicitly.
+
+- ``tests/test_registry.py``
+  - New ``TestRegistryCfgFromDomainLakebaseTriplet`` covering:
+    * Lakebase row overrides Volume binding when reachable.
+    * Falls back to Volume binding when Lakebase returns ``None``.
+    * Volume backend never consults Lakebase (zero wasted I/O).
+    * The ``lakebase_database`` admin override is propagated to the
+      triplet probe so two databases on the same Lakebase instance
+      can each have their own registry row.
+
+- ``tests/test_registry_store.py``
+  - New ``TestFetchLakebaseRegistryTriplet`` covering: row-triplet
+    return, positive-result caching (only one SELECT for repeated
+    calls), missing-row → ``None``, pool-failure → ``None``,
+    auth-failure → ``None``, distinct cache entries per
+    ``(schema, database)`` pair.
+
+Test plan:
+
+- ``uv run pytest -q`` — full suite green (1875 passed).
+- Manual: on a deployment where the Volume binding diverges from the
+  Lakebase row, ``effective_view_table`` and ``uc_version_path`` now
+  resolve to the row's catalog/schema/volume — Build-page badges flip
+  back to green without any change to the Volume resource.
+
+Operator notes:
+
+- The triplet cache is process-local. After editing a ``registries``
+  row directly in Postgres (e.g. to relocate the binary archive),
+  restart the app or wait the negative TTL window — there's no
+  hot-reload endpoint.
+- This change is fully backwards-compatible with the legacy adoption
+  path in ``_fetch_registry_id``: pre-existing schemas that adopt a
+  legacy row continue to work, and the adopted row's
+  ``(catalog, schema, volume)`` becomes the canonical answer for the
+  rest of the process lifetime.
+
+## domain.delta now follows RegistryCfg precedence (fixes red Triple-Store badge)
+
+Context: even after the previous "Lakebase backend now sources
+catalog/schema/volume from the registries row" change, the Build page
+Triple-Store badge (``Unity Catalog VIEW``) was still rendering red on
+``ontobricks-dev``. ``uc_version_path`` and ``uc_domain_path`` had been
+correctly migrated to delegate to ``RegistryCfg.from_domain``, so they
+picked up the Lakebase-row triplet — but ``DomainSession.delta`` was
+still reading ``catalog`` and ``schema`` *directly* from
+``self._data["settings"]["registry"]``. With the Lakebase backend
+active, that dict can hold stale values (carry-over from a prior
+session under a different binding), so ``effective_view_table`` would
+resolve against the wrong catalog and the SQL existence check would
+correctly report ``False`` — even though the view was alive and well
+in the catalog.schema referenced by the Lakebase row.
+
+Symptom on ``ontobricks-dev`` / ``cust360auto``:
+
+- ``effective_view_table`` resolved to
+  ``benoit_cayla.<stale>.triplestore_cust360auto_V4`` instead of
+  ``benoit_cayla.ontobricks.triplestore_cust360auto_V4``.
+- SQL ``DESCRIBE`` against the wrong catalog returned no row.
+- Triple-Store badge rendered "Not found" while the view was visible
+  via ``benoit_cayla.ontobricks_deployed.triplestore_cust360auto_V4``
+  (Volume binding) and ``benoit_cayla.ontobricks.triplestore_…``
+  (Lakebase row) — i.e. the user could *see* the view exists but the
+  app couldn't.
+
+Separately, the Registry-archive sub-badge was rendering "Not
+archived". ``uc_version_path`` did resolve correctly to
+``/Volumes/benoit_cayla/ontobricks/OntoBricksRegistry/domains/cust360auto/V4``,
+but the dev app's service principal had **no privileges** on the
+``OntoBricksRegistry`` Volume — only on the ``ontobricks_deployed.registry``
+Volume that its resource binding pointed at. ``list_directory``
+therefore returned an empty result and the check correctly inferred
+the archive was missing.
+
+Changes:
+
+- ``src/back/objects/session/DomainSession.py``
+  - ``DomainSession.delta`` now resolves ``catalog`` and ``schema``
+    via ``RegistryCfg.from_domain(self, get_settings())`` so the same
+    precedence applies as for ``uc_domain_path`` /
+    ``uc_version_path``: UI override → Lakebase ``registries`` row →
+    bound Volume resource path → env vars → raw session.
+  - Wrapped in a ``try/except`` that falls back to the raw
+    ``settings["registry"]`` values when the resolver raises (e.g.
+    minimal test harnesses where ``shared.config.settings`` isn't
+    importable). Same fail-soft contract as before — the property
+    must never 500 the Build page.
+
+- ``tests/test_domain_session.py``
+  - New ``TestDomainSessionDelta`` class covering:
+    * Volume-binding override beats stale ``settings.registry`` values.
+    * Lakebase-row triplet wins on the Lakebase backend
+      (``ontobricks`` schema, not the ``ontobricks_deployed`` binding).
+    * Resolver failure falls back to raw session values without
+      raising — keeps the Build page renderable in degraded modes.
+
+Operator action (one-shot, not in code):
+
+- Granted the dev app service principal
+  ``7f3b3cad-b944-4f2c-ae04-a0f51384ca86`` the privileges it needed on
+  the *real* artefact location:
+  * ``USE_CATALOG`` on ``benoit_cayla``
+  * ``USE_SCHEMA`` + ``SELECT`` on ``benoit_cayla.ontobricks``
+  * ``READ_VOLUME`` on ``benoit_cayla.ontobricks.OntoBricksRegistry``
+  Without these, even the corrected ``effective_view_table`` /
+  ``uc_version_path`` would have hit access-denied and reported red.
+
+Test plan:
+
+- ``uv run pytest -q`` — full suite green (1878 passed).
+- Manual: re-open the ``cust360auto`` project on ``ontobricks-dev``;
+  the Triple-Store and Registry-archive badges flip back to green
+  without any Volume re-binding.
+
+## Registry Initialize: re-pin to current Volume binding + surface volume-creation result
+
+Context: the OntoBricks dev sandbox was re-bound from ``benoit_cayla.
+ontobricks_deployed.registry`` to ``benoit_cayla.ontobricks_deployed_test.
+registry_test`` via the Apps ``volume`` resource (``databricks.yml``
+``registry_schema=ontobricks_deployed_test``,
+``registry_volume=registry_test``). After the rebind, the Registry
+Configuration panel kept showing the *old* triplet — and re-clicking
+``+ Initialize`` did not propagate the new triplet into the Lakebase
+``registries`` row, so artefact paths and the panel's display stayed
+stale forever.
+
+Two compounding root causes:
+
+1. ``RegistryCfg.from_domain`` for ``backend == "lakebase"`` reads
+   ``catalog/schema/volume`` from the Lakebase ``registries`` row —
+   that row is the source of truth for read paths so binary archive
+   locations track where artefacts were *actually* built. But the
+   Initialize handler was *also* using that row-derived cfg as its
+   source of truth, so when ``_ensure_registry_row`` tried to UPSERT
+   the new triplet, it actually re-upserted the stale one. Re-init
+   was effectively a no-op on the row.
+2. ``RegistryService.initialize`` swallowed the result of
+   ``client.create_volume`` as a ``logger.warning`` only — admins
+   couldn't tell whether the binary Volume creation step had run, let
+   alone whether the SP had ``CREATE VOLUME`` on the schema. The
+   Volume initialisation half of "Initialize" was effectively
+   invisible from the UI.
+
+Changes:
+
+1. ``src/back/objects/registry/RegistryService.py`` — added
+   ``prefer_volume_binding: bool = False`` kwarg to
+   ``RegistryCfg.from_domain`` (and ``RegistryService.from_context``).
+   When ``True`` the Lakebase row read is skipped and the cfg falls
+   through to ``settings.registry_volume_path`` (the Apps volume
+   binding). Used exclusively by the Initialize path so a re-bind +
+   re-init cycle propagates the new triplet into the row. Default
+   (``False``) preserves the row-as-source-of-truth contract for all
+   other reads.
+2. ``src/back/objects/registry/RegistryService.py`` —
+   ``RegistryService.initialize`` (Lakebase branch) now surfaces the
+   binary-Volume outcome in the returned message: "Created binary
+   volume X.Y.Z." / "Binary volume X.Y.Z already exists." / "WARNING:
+   could not create binary volume X.Y.Z — check ... CREATE VOLUME
+   privilege ...". The schema/row creation still runs even when the
+   Volume probe explodes (transient UC outages shouldn't block
+   Lakebase schema initialisation).
+3. ``src/back/objects/domain/SettingsService.py`` —
+   ``initialize_registry_result`` now passes
+   ``prefer_volume_binding=True`` to ``RegistryService.from_context``
+   *and* invalidates the process-wide ``_TRIPLET_CACHE`` via
+   ``reset_lakebase_triplet_cache()`` after a successful init, so the
+   first read after Initialize sees the freshly-upserted row instead
+   of the cached pre-init triplet.
+4. ``databricks.yml`` — synced the ``registry_volume`` default to
+   ``"registry_test"`` (the Volume name actually bound on the
+   ``dev-lakebase`` target). Without this, ``databricks bundle
+   deploy -t dev-lakebase`` failed with ``Volume
+   'benoit_cayla.ontobricks_deployed_test.registry' does not exist``
+   because the default and the live binding had drifted.
+5. ``tests/test_registry.py`` — added five regression tests:
+   - ``TestRegistryCfgFromDomainLakebaseTriplet
+     .test_prefer_volume_binding_skips_lakebase_row`` — pins that the
+     Initialize-path flag bypasses ``fetch_lakebase_registry_triplet``
+     and falls through to the Volume binding.
+   - ``TestInitializeLakebase`` (4 tests) covering: volume-creation
+     happy path with row upsert, "already exists" message, ``CREATE
+     VOLUME`` privilege failure surfaced as a warning (schema still
+     initialised), and ``list_volumes`` exception handled (schema
+     still initialised, error included in the message).
+
+Files modified:
+
+- ``src/back/objects/registry/RegistryService.py``
+- ``src/back/objects/domain/SettingsService.py``
+- ``databricks.yml``
+- ``tests/test_registry.py``
+
+Test plan:
+
+- ``uv run pytest tests/test_registry.py -q`` — 91 passed (5 new).
+- ``uv run pytest -q`` — full suite green (1892 passed).
+- Manual: ``databricks bundle deploy -t dev-lakebase`` succeeded;
+  ``databricks bundle run ontobricks_dev_app -t dev-lakebase`` brought
+  the app up clean. After clicking ``+ Initialize`` on the Registry
+  page, the ``registries`` row UPSERT now propagates the new
+  ``(benoit_cayla, ontobricks_deployed_test, registry_test)`` triplet,
+  the response message includes the Volume status, and a page reload
+  shows the corrected configuration.
+
+## Auto-Map: don't append `LIMIT` to non-SELECT statements in `execute_sql` tool
+
+Context: during an auto-map run the agent submitted a metadata
+statement (``DESCRIBE benoit_cayla.customer.payment``) to the
+``execute_sql`` tool. The tool unconditionally rewrote it as
+``DESCRIBE benoit_cayla.customer.payment LIMIT 3`` and the SQL
+warehouse rejected it with::
+
+    [PARSE_SYNTAX_ERROR] Syntax error at or near '3': extra input '3'.
+    SQLSTATE: 42601 (line 1, pos 45)
+    == SQL ==
+    DESCRIBE benoit_cayla.customer.payment LIMIT 3
+
+Spark SQL only accepts ``LIMIT`` after ``SELECT`` / set-operation
+queries — ``DESCRIBE``, ``SHOW``, ``EXPLAIN`` reject it.
+
+Fix: ``tool_execute_sql`` now strips & re-appends ``LIMIT _SAMPLE_ROWS``
+only when the statement starts with ``SELECT`` or ``WITH`` (case-
+insensitive, after stripping a trailing semicolon). Anything else runs
+verbatim, so the agent can use ``DESCRIBE`` / ``SHOW`` to introspect
+schema without provoking a parse error and self-correct properly when
+its row-returning queries are wrong.
+
+Changes
+1. ``src/agents/tools/sql.py`` — gate ``LIMIT`` rewrite on a
+   ``^(SELECT|WITH)\b`` match against the trimmed SQL; non-row
+   statements are executed as-is.
+
+Modified files
+- ``src/agents/tools/sql.py``
+
+Test result: ``pytest`` — 1892 passed in 62.30s.
+
+## Auto-Map agent: forbid DESCRIBE/SHOW/EXPLAIN via execute_sql in SYSTEM_PROMPT
+
+Context: companion to the previous ``execute_sql`` LIMIT-rewrite fix.
+Even though the tool now tolerates non-``SELECT`` statements, the
+intended contract is that ``execute_sql`` only runs row-returning
+queries, and that ``get_metadata`` is the single path for schema
+introspection. The earlier crash showed the model occasionally
+deviates (temperature=0.1 still leaves room for variance), so we make
+the contract explicit in the prompt to cut down on wasted iterations
+spent re-introspecting tables the agent already has in context.
+
+Changes
+1. ``src/agents/agent_auto_assignment/engine.py`` — add a GENERAL RULES
+   bullet stating: only pass row-returning queries (``SELECT`` /
+   ``WITH``) to ``execute_sql``; use ``get_metadata`` for schema
+   introspection; never use ``DESCRIBE`` / ``SHOW`` / ``EXPLAIN`` via
+   the SQL tool.
+
+Modified files
+- ``src/agents/agent_auto_assignment/engine.py``
+
+Test result: ``pytest`` — 1892 passed in 59.71s.
+
+## Lakebase init probe: surface live (database, role, schema_exists) in the no_usage error
+
+Context: deployed app reports "Schema ontobricks_registry visible but
+the app service principal lacks USAGE. Run scripts/bootstrap-lakebase-perms.sh
+(or grant manually) and refresh." even when the operator confirms the
+GRANTs are in place. Two common causes the old message could not
+distinguish:
+
+  * grants applied to a different Lakebase database than the one the
+    Apps ``postgres`` resource binds (each Lakebase project may host
+    several databases, and Postgres permissions are per-database, so
+    USAGE on schema ``X`` in database ``A`` is invisible from a
+    session connected to database ``B``);
+  * the schema name resolved from settings differs from the one the
+    operator granted on (e.g. legacy ``ontobricks_registry`` vs a
+    Settings-overridden ``lakebase_schema``).
+
+Both look identical to the old probe — ``has_schema_privilege`` simply
+returned ``f`` and the message named only the schema, leaving the
+operator with no way to tell whether the GRANT was wrong or the binding
+was wrong.
+
+Fix: the probe now selects ``current_database()``, ``current_user`` and
+``EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = <schema>)``
+alongside the privilege check. The error message names all three so the
+operator can immediately see ``(database, role, schema_exists)`` and
+spot the mismatch::
+
+    Role 'sp-<uuid>' lacks USAGE on schema 'ontobricks_registry'
+    in database 'databricks_postgres'. Run
+    scripts/bootstrap-lakebase-perms.sh -i <instance>
+    -d databricks_postgres -s ontobricks_registry -a <app-name>, ...
+
+If the schema is absent in the bound database the probe now returns a
+distinct message that names the live ``current_database`` and points
+the operator at the bundle's ``lakebase_database_resource``.
+
+Changes
+1. ``src/back/objects/registry/store/lakebase/store.py`` — replace the
+   single ``has_schema_privilege`` query with a 4-column probe
+   (``current_database()``, ``current_user``, privilege bit, schema
+   existence). Compose two distinct ``no_usage`` messages depending on
+   whether the schema exists in the connected database.
+2. ``tests/test_registry_store.py`` — update the two existing
+   ``no_usage``/``no_registries_table``/``no_registry_row``/``ok``
+   tests to feed the new 4-tuple shape; add
+   ``test_no_usage_when_schema_missing_in_bound_database`` covering
+   the new schema-missing branch and asserting the live database name
+   appears in the error.
+
+Modified files
+- ``src/back/objects/registry/store/lakebase/store.py``
+- ``tests/test_registry_store.py``
+
+Test result: ``pytest`` — 1893 passed in 59.60s.
+
+## Lakebase: Autoscaling-only — strip legacy Provisioned/Database-Instance-API code paths
+
+Context: the runtime auth helper and the admin Lakebase metadata
+lookup both still carried "try legacy Database Instance API first,
+fall back to the Postgres Autoscaling API" plumbing. OntoBricks only
+ever runs against Autoscaling projects (every Lakebase instance
+created after 2026-03-12 is Autoscaling, including the
+``ontobricks-test`` dev sandbox), so the legacy path is dead weight
+that mostly serves to mask configuration mistakes — and silently
+broke when the dev sandbox was bound to an Autoscaling-only project
+that ``list_database_instances`` cannot see.
+
+The user directive is unambiguous: only Autoscaling can be leveraged
+here. This change removes every reference to the legacy
+``WorkspaceClient.database.list_database_instances`` and
+``generate_database_credential`` APIs from the runtime + admin code.
+
+### LakebaseAuth (``src/back/core/databricks/LakebaseAuth.py``)
+
+- ``instance_name`` now resolves the project_id via the Postgres API
+  endpoint walk (``GET /api/2.0/postgres/projects`` → branches →
+  endpoints, match ``status.hosts.host`` / ``read_only_host``
+  against ``PGHOST``). Misses raise a single ``ValidationError``
+  pointing at "the bundle is binding the wrong project" — no
+  fallback / retry.
+- ``password()`` mints exclusively via
+  ``POST /api/2.0/postgres/credentials`` scoped to the endpoint
+  resource discovered above. The legacy mint path
+  (``WorkspaceClient.database.generate_database_credential``) and
+  the "legacy not_found → Postgres API retry" plumbing are gone.
+- ``DATABASE_INSTANCE_NAME`` env override removed — without legacy
+  resolution it could not short-circuit anything (the endpoint walk
+  must still happen for the mint).
+- Helpers ``_lookup_via_database_instances``,
+  ``_mint_via_database_instances``, ``_looks_like_instance_not_found``
+  deleted.
+
+### SettingsService (``src/back/objects/domain/SettingsService.py``)
+
+- ``_lakebase_instance_metadata`` no longer iterates
+  ``w.database.list_database_instances()``. New helper
+  ``_find_autoscaling_endpoint_for_host`` walks the Postgres API and
+  returns ``(project_id, primary_host, read_only_host)``; the
+  payload is then enriched with branch + autoscaling CU range via
+  the existing ``_lakebase_branch_info``.
+- Provisioned-only fields (``capacity``, ``pg_version``,
+  ``node_count``) are returned as empty so the admin UI degrades to
+  ``—`` placeholders for them; the autoscaling CU range is the
+  Autoscaling-native replacement and was already wired through
+  ``_lakebase_branch_info``.
+- Removed dead helpers ``_enum_short`` / ``_pg_version_short`` —
+  they only existed to format Provisioned SDK enums for the UI and
+  are no longer called from anywhere.
+
+### Tests
+
+- ``tests/test_lakebase_auth.py`` — rewritten for the Autoscaling-
+  only contract: ``instance_name`` resolves via Postgres API only
+  (legacy ``list_database_instances`` is wired to ``AssertionError``
+  in every test to prove it is never called), ``password()`` mints
+  via Postgres API only, caching + invalidation behaviour pinned,
+  ``PGAPPNAME`` regression preserved. Net change: 14 legacy +
+  fallback tests removed, 10 Autoscaling-only tests in their place.
+- ``tests/test_settings_lakebase_tier.py`` — added
+  ``TestLakebaseInstanceMetadataPostgresApi`` (3 tests) covering the
+  new endpoint walk + payload shape; the legacy SDK call is wired to
+  ``AssertionError`` in the fake workspace to lock the ban in.
+
+Modified files
+- ``src/back/core/databricks/LakebaseAuth.py``
+- ``src/back/objects/domain/SettingsService.py``
+- ``tests/test_lakebase_auth.py``
+- ``tests/test_settings_lakebase_tier.py``
+
+Test result: ``pytest`` — 1892 passed in 59.35s.
+
+## Registry panel: surface the backend's rich `no_usage` message verbatim
+
+Context: the previous fix enriched the Lakebase ``init_status`` error
+to name the live ``(database, role, schema_exists)`` the probe ran
+against, so operators can spot grants that landed on a different
+database than the one bound by the Apps ``postgres`` resource.
+However the admin Registry panel's ``registry.js`` was hard-coding a
+boilerplate "Schema X visible but the app service principal lacks
+USAGE…" message for every ``reason === 'no_usage'`` payload and
+ignoring ``data.message``, so the new diagnostic was invisible in the
+UI — operators saw the same generic copy and had no way to spot a
+db/role mismatch.
+
+Fix: when ``reason === 'no_usage'`` and ``data.message`` is present,
+render it verbatim (with the same red shield icon). Fall back to the
+old boilerplate only when the backend did not provide a message.
+
+Changes
+1. ``src/front/static/registry/js/registry.js`` — prefer
+   ``data.message`` over the static "lacks USAGE" copy in the
+   ``no_usage`` branch of the Lakebase status renderer.
+
+Modified files
+- ``src/front/static/registry/js/registry.js``
+
+Test result: ``pytest`` — 1892 passed (no Python paths affected).
+
+## bootstrap-lakebase-perms.sh: align defaults with the dev sandbox bundle
+
+Context: the script defaulted to ``-i ontobricks-app -d ontobricks_registry``,
+which made sense for the production layout but is wrong for the
+current dev sandbox. ``databricks.yml`` binds the Apps ``postgres``
+resource to the Autoscaling project ``ontobricks-test`` and the
+``databricks_postgres`` Lakebase database (the registry schema lives
+inside that database — see the ``lakebase_database_resource``
+variable comment). Running the script with defaults therefore landed
+``GRANT USAGE`` on a database the runtime never connects to, leaving
+``has_schema_privilege(current_user, 'ontobricks_registry', 'USAGE')``
+false in the actually-bound ``databricks_postgres`` and surfacing the
+``no_usage`` panel error.
+
+Fix: change the defaults to match the dev sandbox layout. Operators
+running for the production app keep using ``-i ontobricks-app
+-d ontobricks_registry -a ontobricks`` explicitly. The new
+``Defaults match the dev sandbox`` header documents the rationale
+and the override flags inline.
+
+Changes
+1. ``scripts/bootstrap-lakebase-perms.sh`` — flip defaults to
+   ``INSTANCE=ontobricks-test``, ``DATABASE=databricks_postgres``,
+   ``APPS=("ontobricks-dev")`` (the latter was already the default).
+   Updated the usage block accordingly.
+
+Modified files
+- ``scripts/bootstrap-lakebase-perms.sh``
+
+Test result: ``pytest`` — 1892 passed (script change has no Python coverage).
+
+## bootstrap-lakebase-perms.sh: switch to Postgres API for endpoint + JWT
+
+Context: even after aligning the script's defaults to the dev sandbox
+(``-i ontobricks-test -d databricks_postgres``), the script still
+crashed on first run with::
+
+    json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+Root cause: the script resolved the instance host via
+``GET /api/2.0/database/instances/<name>``, which is part of the
+**legacy Database Instance API** that does not see Autoscaling-only
+projects. That endpoint returned a 404 with an empty body, ``python3
+json.load(sys.stdin)`` blew up, and PGHOST stayed empty. Same story
+for the JWT mint via ``/api/2.0/database/credentials``.
+
+Fix: replace both legacy API calls with the Postgres Autoscaling API
+that the runtime ``LakebaseAuth`` already uses.
+
+- Endpoint resolution: walk
+  ``GET /api/2.0/postgres/projects/<project>/branches`` → for each
+  branch ``GET /api/2.0/postgres/<branch_path>/endpoints`` → pick the
+  first endpoint whose ``status.hosts.host`` is populated. Print the
+  host (becomes PGHOST) and the full endpoint resource path.
+- JWT mint: ``POST /api/2.0/postgres/credentials`` with
+  ``{"endpoint": "<endpoint_resource>"}`` instead of
+  ``/api/2.0/database/credentials`` with ``instance_names`` — the
+  legacy mint cannot scope to Autoscaling-only project endpoints.
+
+Verified end-to-end against the dev sandbox::
+
+    Project  : ontobricks-test (ep-damp-art-d1l8gclo.database.us-west-2…)
+    Endpoint : projects/ontobricks-test/branches/production/endpoints/primary
+    Database : databricks_postgres
+    Schema   : ontobricks_registry
+    Acting as: benoit.cayla@databricks.com
+    Apps     : ontobricks-dev
+      [ontobricks-dev] service principal: 7f3b3cad-b944-4f2c-ae04-a0f51384ca86
+      [ontobricks-dev] ✓ granted USAGE + DML on schema 'ontobricks_registry'
+
+Changes
+1. ``scripts/bootstrap-lakebase-perms.sh`` — replace the
+   ``/api/2.0/database/instances/<name>`` host lookup with an inline
+   ``python3`` heredoc that walks the Postgres API; replace the
+   ``/api/2.0/database/credentials`` JWT mint with a
+   ``/api/2.0/postgres/credentials`` POST scoped to the resolved
+   endpoint resource. Output now also names the endpoint path so
+   operators can verify it matches what ``databricks.yml`` binds.
+
+Modified files
+- ``scripts/bootstrap-lakebase-perms.sh``
+
+Test result: not covered by ``pytest`` (shell script); validated by
+running it end-to-end against the dev sandbox and observing the
+expected GRANT verification (``USAGE=t``, ``SELECT registries=t``).
+
+----------------------------------------------------------------------
+Fix: Mapping page "Reset" button no longer fires
+----------------------------------------------------------------------
+
+Context
+~~~~~~~
+
+On the Mapping page, the top-right red ``Reset`` button (``id=resetMappingsBtn``
+in ``_mapping_information.html``) silently did nothing. Regression
+introduced in commit ``5f2ee0e`` (2026-04-16): the inline
+``onclick="confirmResetMappings()"`` was removed from the partial and
+replaced with a top-level ``addEventListener`` call at the bottom of
+``mapping-information.js``. Because ``mapping.html`` loads the script
+**before** the partial is rendered into the DOM (script tag at line 21,
+partial included at line 51), the listener wiring ran while
+``getElementById('resetMappingsBtn')`` was still ``null``, so no click
+handler was ever attached.
+
+Changes
+~~~~~~~
+
+1. ``src/front/static/global/js/mapping-information.js`` — moved the
+   button wiring into ``_initMappingInformationButtons()`` and gated
+   it on ``DOMContentLoaded`` (with an immediate run if the script is
+   loaded after parsing finishes). Idempotent via a
+   ``data-ob-reset-wired`` flag so re-init is safe. Same wrapper
+   re-runs ``setupImportExportButtons()`` for consistency.
+
+Modified files
+~~~~~~~~~~~~~~
+
+- ``src/front/static/global/js/mapping-information.js``
+
+Test result: not covered by ``pytest`` (front-end only). Verified
+manually — the Reset button now opens the confirmation dialog and
+clears all entity / relationship mappings.
+
+----------------------------------------------------------------------
+Fix: align deploy tooling with the dev-sandbox-only bundle
+----------------------------------------------------------------------
+
+Context
+~~~~~~~
+
+After ``databricks.yml`` was carved on 2026-04-27 to manage only the
+``ontobricks-dev`` sandbox app, ``scripts/deploy.sh``,
+``scripts/bootstrap-app-permissions.sh`` and the ``Makefile`` were
+left referring to the no-longer-bundled production apps
+(``ontobricks_app``, ``mcp_ontobricks_app``, ``mcp-ontobricks``).
+The visible failure modes were:
+
+- ``make deploy-all`` deployed cleanly but then failed on
+  ``Error: resource with key "ontobricks_app" not found`` when it
+  tried to start the (non-existent) production app.
+- A plain ``make deploy`` runs target ``dev``, which does **not**
+  declare the ``postgres`` resource. DAB reconciles the live app to
+  match the spec, so each deploy silently stripped the Lakebase
+  binding from ``ontobricks-dev`` and the registry fell back to
+  Volume-only mode.
+
+Changes
+~~~~~~~
+
+1. ``scripts/deploy.sh`` — rewritten to target a single resource key
+   (``ontobricks_dev_app``) and a single app name
+   (``ontobricks-dev``). Default target is now ``dev-lakebase`` so
+   the Lakebase Postgres binding survives every deploy. Removed the
+   dead ``--all``, ``--mcp-only``, cross-app permission grants and
+   the production apps verification loop. Bind path now binds only
+   ``ontobricks_dev_app → ontobricks-dev``.
+
+2. ``Makefile`` — replaced the stale deploy targets with three:
+
+   - ``make deploy``         → ``-t dev-lakebase`` (default; Lakebase backend)
+   - ``make deploy-volume``  → ``-t dev`` (Volume-only fallback)
+   - ``make deploy-no-run``  → ``-t dev-lakebase --no-run``
+
+   ``bundle-validate`` and ``bundle-summary`` now run against
+   ``-t dev-lakebase`` so the resolved spec includes the postgres
+   resource. ``bootstrap-perms`` now invokes the script with
+   ``ontobricks-dev`` explicitly. Dropped ``deploy-all``,
+   ``deploy-mcp``, ``deploy-prod`` from ``.PHONY`` and ``help``.
+
+3. ``scripts/bootstrap-app-permissions.sh`` — default app list
+   shrunk from ``("ontobricks" "mcp-ontobricks")`` to
+   ``("ontobricks-dev")``; usage block updated. Multi-app
+   pass-through behavior is unchanged.
+
+Modified files
+~~~~~~~~~~~~~~
+
+- ``scripts/deploy.sh``
+- ``scripts/bootstrap-app-permissions.sh``
+- ``Makefile``
+
+Test result: shell scripts pass ``bash -n``;
+``databricks bundle validate -t dev`` and
+``databricks bundle validate -t dev-lakebase`` both succeed (only
+the pre-existing cosmetic warnings about the empty ``htmlcov`` /
+``mlruns`` / ``mlartifacts`` exclude patterns). Full ``pytest`` run
+still green at 1892 passed (no Python code touched).
+
+----------------------------------------------------------------------
+Fix: auto-bootstrap Lakebase schema GRANTs on every dev-lakebase deploy
+----------------------------------------------------------------------
+
+Context
+~~~~~~~
+
+Whenever the postgres resource binding is unbound and rebound — which
+happens any time the deploy target switches between ``dev`` and
+``dev-lakebase`` — Lakebase loses the schema-level GRANTs the app's
+service principal needs. The runtime then fails with::
+
+    Role '7f3b3cad-b944-4f2c-ae04-a0f51384ca86' lacks USAGE on schema
+    'ontobricks_registry' in database 'databricks_postgres'.
+
+The remediation script ``scripts/bootstrap-lakebase-perms.sh`` already
+existed and was idempotent, but nothing called it after a deploy, so
+operators had to re-run it by hand every single time.
+
+Changes
+~~~~~~~
+
+1. ``scripts/deploy.sh`` — new step 8 invokes
+   ``scripts/bootstrap-lakebase-perms.sh -a ontobricks-dev`` whenever
+   ``$TARGET == "dev-lakebase"``. Failures are tolerated (e.g. first
+   deploy before ``Settings > Registry > Initialize`` has created the
+   schema, or ``psql`` not on PATH) and surface a one-line follow-up
+   command.
+
+2. ``Makefile`` — new ``make bootstrap-lakebase`` target that wraps
+   the same script for the dev sandbox, so the GRANT can be re-run
+   on its own without redeploying. ``.PHONY`` and ``help`` updated.
+
+Modified files
+~~~~~~~~~~~~~~
+
+- ``scripts/deploy.sh``
+- ``Makefile``
+
+Test result: ``bash -n scripts/deploy.sh`` syntax-clean; live run of
+``make bootstrap-lakebase`` against the dev sandbox printed::
+
+    [ontobricks-dev] ✓ granted USAGE + DML on schema 'ontobricks_registry'
+    === Done — Lakebase schema bootstrap complete ===
+
+restoring the runtime path. ``pytest`` not re-run (no Python code
+touched).

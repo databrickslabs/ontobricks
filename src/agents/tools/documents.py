@@ -10,6 +10,7 @@ from typing import Callable, Dict, List, Optional
 import requests
 
 from back.core.logging import get_logger
+from back.core.databricks import DocumentExtractor
 from agents.tools.context import ToolContext
 from shared.config.constants import HTTP_USER_AGENT
 
@@ -17,6 +18,9 @@ logger = get_logger(__name__)
 
 _TOOL_TIMEOUT = 30
 _MAX_DOC_CHARS = 80_000  # Increased to allow more context for mapping decisions
+
+# Per-run cache of extracted binary-document text, stored on the ToolContext.
+_DOC_PARSE_CACHE_ATTR = "_doc_parse_cache"
 
 
 def _headers(ctx: ToolContext) -> dict:
@@ -42,6 +46,30 @@ def _volume_docs_path(ctx: ToolContext) -> Optional[str]:
     path = f"/Volumes/{c.catalog}/{c.schema}/{c.volume}/{_DOMAINS_FOLDER}/{folder}/V{version}/documents"
     logger.debug("_volume_docs_path: resolved to %s", path)
     return path
+
+
+def _extract_binary_document(ctx: ToolContext, file_path: str) -> Optional[str]:
+    """Convert a binary document to text via the core ``DocumentExtractor``.
+
+    Returns ``None`` when no SQL warehouse is configured or parsing fails, so
+    the caller falls back. Parsed text is cached on the context per agent run.
+    """
+    if not getattr(ctx, "warehouse_id", ""):
+        logger.info("read_document: no SQL warehouse configured — skipping binary parse")
+        return None
+
+    cache = getattr(ctx, _DOC_PARSE_CACHE_ATTR, None)
+    if cache is None:
+        cache = {}
+        try:
+            setattr(ctx, _DOC_PARSE_CACHE_ATTR, cache)
+        except Exception:
+            cache = None
+
+    extractor = DocumentExtractor.from_credentials(
+        ctx.host, ctx.token, ctx.warehouse_id
+    )
+    return extractor.extract(file_path, cache=cache)
 
 
 # =====================================================
@@ -89,8 +117,44 @@ def tool_list_documents(ctx: ToolContext, **_kwargs) -> str:
         return json.dumps({"error": str(exc)})
 
 
+def _doc_payload(filename: str, content: str, parsed_with: Optional[str] = None) -> str:
+    """Build the JSON tool result, truncating to ``_MAX_DOC_CHARS``."""
+    original_len = len(content)
+    truncated = original_len > _MAX_DOC_CHARS
+    if truncated:
+        logger.info(
+            "tool_read_document: '%s' truncated %d → %d chars (limit=%d)",
+            filename,
+            original_len,
+            _MAX_DOC_CHARS,
+            _MAX_DOC_CHARS,
+        )
+        content = content[:_MAX_DOC_CHARS] + f"\n\n[…truncated, {original_len} total chars]"
+    logger.info(
+        "tool_read_document: '%s' read OK — %d chars, truncated=%s%s",
+        filename,
+        original_len,
+        truncated,
+        f", parsed_with={parsed_with}" if parsed_with else "",
+    )
+    payload = {
+        "filename": filename,
+        "content": content,
+        "size": original_len,
+        "truncated": truncated,
+    }
+    if parsed_with:
+        payload["parsed_with"] = parsed_with
+    return json.dumps(payload)
+
+
 def tool_read_document(ctx: ToolContext, *, filename: str = "", **_kwargs) -> str:
-    """Read the text content of a document from the domain volume."""
+    """Read the text content of a document from the domain volume.
+
+    Plain-text files are decoded as UTF-8. Binary documents (PDF, images,
+    Office) are converted to markdown via ``ai_parse_document`` when a SQL
+    warehouse is configured.
+    """
     logger.info("tool_read_document: reading '%s'", filename)
     if not filename:
         logger.warning("tool_read_document: called without filename parameter")
@@ -102,6 +166,27 @@ def tool_read_document(ctx: ToolContext, *, filename: str = "", **_kwargs) -> st
         return json.dumps({"error": "Domain not saved to Unity Catalog"})
 
     file_path = f"{base_path}/{filename}"
+
+    # Binary formats (PDF/Office/images): parse to markdown via the extractor.
+    if DocumentExtractor.supports(DocumentExtractor.file_extension(filename)):
+        parsed_text = _extract_binary_document(ctx, file_path)
+        if parsed_text is not None:
+            return _doc_payload(filename, parsed_text, parsed_with="ai_parse_document")
+        logger.info(
+            "tool_read_document: '%s' is a binary document but could not be parsed",
+            filename,
+        )
+        return json.dumps(
+            {
+                "filename": filename,
+                "error": (
+                    "Binary document could not be parsed. A SQL warehouse with "
+                    "ai_parse_document access is required to read PDF, Office, or "
+                    "image files."
+                ),
+            }
+        )
+
     url = f"{ctx.host}/api/2.0/fs/files{file_path}"
     logger.info("tool_read_document: GET %s", file_path)
     logger.debug("tool_read_document: full url=%s", url)
@@ -117,6 +202,12 @@ def tool_read_document(ctx: ToolContext, *, filename: str = "", **_kwargs) -> st
         try:
             content = resp.content.decode("utf-8")
         except UnicodeDecodeError:
+            # Unknown-extension binary: try the document extractor as a fallback.
+            parsed_text = _extract_binary_document(ctx, file_path)
+            if parsed_text is not None:
+                return _doc_payload(
+                    filename, parsed_text, parsed_with="ai_parse_document"
+                )
             logger.warning(
                 "tool_read_document: '%s' is binary (decode failed) — %d bytes",
                 filename,
@@ -126,39 +217,12 @@ def tool_read_document(ctx: ToolContext, *, filename: str = "", **_kwargs) -> st
                 {"filename": filename, "error": "Binary file – cannot read as text"}
             )
 
-        original_len = len(content)
-        truncated = original_len > _MAX_DOC_CHARS
-        if truncated:
-            logger.info(
-                "tool_read_document: '%s' truncated %d → %d chars (limit=%d)",
-                filename,
-                original_len,
-                _MAX_DOC_CHARS,
-                _MAX_DOC_CHARS,
-            )
-            content = (
-                content[:_MAX_DOC_CHARS]
-                + f"\n\n[…truncated, {original_len} total chars]"
-            )
-        logger.info(
-            "tool_read_document: '%s' read OK — %d chars, truncated=%s",
-            filename,
-            original_len,
-            truncated,
-        )
         logger.debug(
             "tool_read_document: '%s' content preview (300 chars): %.300s",
             filename,
             content,
         )
-        return json.dumps(
-            {
-                "filename": filename,
-                "content": content,
-                "size": original_len,
-                "truncated": truncated,
-            }
-        )
+        return _doc_payload(filename, content)
     except requests.exceptions.HTTPError as exc:
         logger.error(
             "tool_read_document: HTTP error for '%s': status=%s, body=%.300s",
@@ -267,7 +331,10 @@ DOCUMENT_TOOL_DEFINITIONS: List[dict] = [
             "name": "read_document",
             "description": (
                 "Read the text content of a document from the domain volume. "
-                "Supports .txt, .csv, .json, .md and similar text formats."
+                "Plain-text formats (.txt, .csv, .json, .md, .xml) are read directly. "
+                "Binary documents (.pdf, .docx, .pptx, images) are automatically "
+                "converted to markdown via ai_parse_document when a SQL warehouse is "
+                "configured."
             ),
             "parameters": {
                 "type": "object",

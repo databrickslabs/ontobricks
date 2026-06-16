@@ -50,9 +50,21 @@ document.addEventListener('DOMContentLoaded', function() {
             if (section === 'validation') {
                 loadValidationDetails();
             }
+            // Load review/validation workflow when switching to review section
+            if (section === 'review' && typeof window.loadDomainReview === 'function') {
+                window.loadDomainReview();
+            }
             // Load versions when switching to versions section
             if (section === 'versions' && typeof loadVersionsList === 'function') {
                 loadVersionsList();
+            }
+            // Load build runs when switching to runs section
+            if (section === 'runs' && typeof loadDomainRuns === 'function') {
+                loadDomainRuns();
+            }
+            // Load the unified audit trail when switching to audit section
+            if (section === 'audit' && typeof window.loadDomainAudit === 'function') {
+                window.loadDomainAudit();
             }
             // Load OWL content when switching to owl-content section
             if (section === 'owl-content' && typeof window.loadOwlContent === 'function') {
@@ -92,12 +104,14 @@ async function loadDomainInfo() {
             const nameEl = document.getElementById('domainName');
             const descEl = document.getElementById('domainDescription');
             const authorEl = document.getElementById('domainAuthor');
+            const quorumEl = document.getElementById('domainReviewQuorum');
             const baseUriEl = document.getElementById('domainBaseUri');
             const autoToggle = document.getElementById('baseUriCustomToggle');
             
             if (nameEl) nameEl.value = data.info.name || 'NewDomain';
             if (descEl) descEl.value = data.info.description || '';
             if (authorEl) authorEl.value = data.info.author || '';
+            if (quorumEl) quorumEl.value = data.info.review_quorum || 1;
             
             if (authorEl && !authorEl.value) {
                 loadCurrentUserAsAuthor(authorEl);
@@ -256,6 +270,7 @@ async function saveDomainInfo() {
     const nameEl = document.getElementById('domainName');
     const descEl = document.getElementById('domainDescription');
     const authorEl = document.getElementById('domainAuthor');
+    const quorumEl = document.getElementById('domainReviewQuorum');
     const versionEl = document.getElementById('domainVersionSelect');
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
@@ -283,6 +298,7 @@ async function saveDomainInfo() {
         base_uri: baseUriEl ? baseUriEl.value.trim() : '',
         base_uri_auto: _baseUriAutoMode,
         llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
+        review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : 1,
     };
     
     try {

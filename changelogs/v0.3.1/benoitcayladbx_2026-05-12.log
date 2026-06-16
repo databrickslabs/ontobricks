@@ -1,0 +1,236 @@
+## Security: patch Dependabot alerts #22–#28 (dependency upgrades)
+
+Context: GitHub Dependabot flagged 7 high-severity vulnerabilities in transitive
+and direct dependencies pinned in uv.lock. Four could be addressed immediately
+using packages available on the internal proxy; two (urllib3 #27/#28 and GitPython
+section-param bypass #26) are blocked by the proxy's mirror lag and are documented
+below for follow-up.
+
+### Changes
+
+1. **pyproject.toml** — `python-multipart` direct dependency bumped from `>=0.0.26`
+   to `>=0.0.27`.
+   - Closes #24: CVE-2026-42561 — DoS via unbounded multipart part headers.
+
+2. **pyproject.toml** — `[tool.uv] constraint-dependencies`: `mako` floor raised from
+   `1.3.11` to `1.3.12`.
+   - Closes #23: CVE-2026-44307 — path traversal via backslash URI on Windows in
+     `TemplateLookup`.
+
+3. **pyproject.toml** — `[tool.uv] constraint-dependencies`: `gitpython` floor raised
+   from `3.1.47` to `3.1.49`.
+   - Closes #22: CVE-2026-44243 — path traversal in reference APIs (fixed 3.1.48).
+   - Closes #25: CVE-2026-44244 — newline injection in `config_writer().set_value()`
+     enabling RCE via `core.hooksPath` (fixed 3.1.49).
+   - **Partial** — #26 (GHSA-mv93-w799-cj2w, section-param bypass of the 3.1.49
+     patch) requires `gitpython>=3.1.50`, which the internal proxy does not carry yet.
+     The constraint comment documents this; bump to `>=3.1.50` once mirrored.
+
+4. **uv.lock** — regenerated; effective version changes:
+   - `gitpython` 3.1.47 → 3.1.49
+   - `mako` 1.3.11 → 1.3.12
+   - `python-multipart` 0.0.26 → 0.0.27
+
+### Deferred (proxy lag)
+
+- **#26** GHSA-mv93-w799-cj2w: GitPython section-param newline injection → RCE.
+  Requires `gitpython>=3.1.50`. Blocked on internal proxy mirror.
+- **#27/#28** GHSA-38jv-5279-wg99 / GHSA-qccp-gfcp-xxvc: urllib3 decompression bomb
+  (streaming API) + sensitive headers forwarded in proxied low-level redirects.
+  Both fixed in `urllib3>=2.7.0`. Blocked on internal proxy mirror.
+  The commented-out constraint in `pyproject.toml` is ready to re-enable.
+
+### Modified files
+
+- `pyproject.toml`
+- `uv.lock`
+
+### Test results
+
+2058 passed, 80 skipped, 3 failed (pre-existing failures in
+`tests/test_settings_lakebase_status.py`, unrelated to this change — confirmed
+by reproducing on the baseline commit).
+
+---
+
+## Fix: cohort discovery preview returns nothing (predicate normalisation bug)
+
+Context: In the deployed app, `CohortBuilder._outgoing_edge_index` (commit
+`d4d59e3`) was a `@staticmethod` that stored raw (un-normalised) predicate URIs
+in its edge index. `_normalized_links` normalised every hop's `via` predicate
+through `_to_data_uri`, which cannot bridge foreign namespaces (e.g.
+`https://ontobricks.com/ontology#hasElectricityContract`). The mismatch meant
+the path walk (Stage 3b) found 0 neighbours at every hop → 0 edges → 0 cohorts,
+even though Stage 3a correctly identified 82 class members (e.g. rule
+`CustWithElectricityContracts`).
+
+### Changes
+
+1. **src/back/core/graph_analysis/CohortBuilder.py** (commit `06c52d2`) —
+   `_outgoing_edge_index` converted from `@staticmethod` to instance method;
+   predicates normalised with `self._to_data_uri(pred)` before indexing.
+   Added `_predicate_alias_map()` + `_resolve_predicate()` for robust
+   local-name fallback when predicate lives in a foreign namespace.
+   `_normalized_links` / `_normalized_compat` switched to `_resolve_predicate`.
+
+2. **src/front/static/query/js/query-cohorts.js** (commit `2e5e3f4`) —
+   Hop-where and compat property dropdowns now filter to data properties for
+   the selected class only (`_dataPropsForClass(classUri)`).
+
+### Deployment
+
+Deployed to `ontobricks-030` on `fe-vm-bcayla-demos.cloud.databricks.com`
+(target: `dev-lakebase`). App status: RUNNING.
+URL: https://ontobricks-030-2508734981122804.aws.databricksapps.com
+
+### Modified files
+
+- `src/back/core/graph_analysis/CohortBuilder.py`
+- `src/front/static/query/js/query-cohorts.js`
+
+### Test results
+
+2058 passed, 80 skipped, 3 failed (same pre-existing failures — unrelated).
+## Cohort Discovery: fix "hasClaim returns nothing" — ontology-form predicate bug
+
+Context: The rule `ElectricitySuspended` (and any rule whose data was loaded
+outside the R2RML pipeline) reported "Path collapses at hop 1 (hasclaim →
+Claim): no neighbours found via this predicate" even though the data actually
+contained `hasClaim` triples. The root cause was a two-part problem:
+
+**Bug 1 — Backend (`CohortBuilder._outgoing_edge_index`):**
+`_normalized_links` already converts the *rule's* `via` predicate from
+ontology-namespace form (`…#hasClaim`) to data-namespace form (`…/hasClaim`).
+However `_outgoing_edge_index` — which builds the `(subject, predicate) →
+[object]` lookup — did not normalise the predicates stored in the triples
+themselves. When data was inserted outside R2RML (direct insert, W3C OWL
+round-trip, manual load) the triple predicate was in ontology form (`#hasClaim`)
+while the lookup key was in data form (`/hasClaim`), causing a silent miss and
+`neighbours_raw = 0`.
+
+**Bug 2 — Frontend diagnostic (`query-cohorts.js`):**
+The "Path collapses" diagnostic shows "no neighbours found via this predicate"
+whenever `neighbours_raw === 0`. But `neighbours_raw` is also 0 when the
+starting frontier is empty (`in_frontier === 0`), which happens when all members
+were eliminated by compatibility (Stage 3a) filters. The message was therefore
+misleading users into checking their predicate URI when the real issue was
+upstream filtering.
+
+### Changes
+
+1. `src/back/core/graph_analysis/CohortBuilder.py`
+   - Changed `_outgoing_edge_index` from `@staticmethod` to instance method so
+     it can call `self._to_data_uri(pred)`.
+   - Normalise every triple predicate to data-namespace form when building the
+     outgoing-edge index. Triples in data form are returned unchanged;
+     triples in ontology form are rewritten — both now match the data-form
+     lookup key produced by `_normalized_links`.
+
+2. `src/front/static/query/js/query-cohorts.js`
+   - In `_renderTraceLink`, added an `in_frontier === 0` guard before the
+     `neighbours_raw === 0` check. When the frontier is empty the diagnostic
+     now says "the starting frontier for this hop is empty — all members were
+     eliminated before reaching it. Check the compatibility (Stage 3a) filters
+     or the previous hop's target_class." instead of blaming the predicate URI.
+
+3. `tests/test_cohort_builder.py`
+   - Added `_graph_with_ontology_form_predicates()` fixture in
+     `TestOntologyDataNamespaceDrift` with data triples using ontology-namespace
+     (`#`) predicates.
+   - Added `test_data_with_ontology_form_predicate_is_indexed_correctly` — verifies
+     the engine produces the correct cohort (Alice ↔ Bob via P1) even when
+     the triple predicates are in ontology form.
+   - Added `test_trace_shows_nonzero_raw_for_ontology_form_predicate` — verifies
+     `neighbours_raw > 0` in `trace_paths` output, ensuring the "no neighbours"
+     diagnostic is not triggered incorrectly.
+
+### Modified files
+
+- `src/back/core/graph_analysis/CohortBuilder.py`
+- `src/front/static/query/js/query-cohorts.js`
+- `tests/test_cohort_builder.py`
+
+---
+
+## Cohort Discovery: fix cross-namespace predicate — local-name alias fallback
+
+Context: After the first fix, `ElectricitySuspended` still returned nothing.
+Investigation revealed a second, deeper bug: the domain's object property URIs
+use `https://ontobricks.com/ontology#hasclaim` (an inherited shared namespace)
+while the domain's `base_uri` is `https://databricks-ontology.com/Cust360Auto#`
+and the triplestore predicates are `https://databricks-ontology.com/Cust360Auto/hasclaim`.
+`_to_data_uri` can only bridge `#` ↔ `/` within the **same** base namespace;
+it cannot cross two completely unrelated namespaces. The same issue is already
+solved by `SparqlTranslator` via local-name matching — `CohortBuilder` needed
+the same treatment.
+
+### Changes
+
+1. `src/back/core/graph_analysis/CohortBuilder.py`
+   - Added `_predicate_alias_map()` — scans loaded triples and builds
+     `{local_name → canonical_data_namespace_uri}`. Cached in
+     `self._cache["predicate_alias"]` and invalidated on triple reload.
+   - Added `_resolve_predicate(uri)` — calls `_to_data_uri` first; if the
+     URI is unchanged (foreign namespace), falls back to the alias map by
+     local name. This is the mirror of `SparqlTranslator._predicate_local_name_key`.
+   - Updated `_normalized_links` to use `_resolve_predicate` instead of
+     `_to_data_uri` for hop `via` and `where[*].property`.
+   - Updated `_normalized_compat` to use `_resolve_predicate` for
+     `compatibility[*].property`.
+
+2. `tests/test_cohort_builder.py`
+   - Added `test_via_from_foreign_namespace_resolved_by_local_name` — exact
+     replica of the production scenario (domain base `…/Cust360Auto#`,
+     property URIs `https://ontobricks.com/ontology#hasclaim`, data triples
+     `…/Cust360Auto/hasclaim`) that proves the fix end-to-end.
+
+### Modified files
+
+- `src/back/core/graph_analysis/CohortBuilder.py`
+- `tests/test_cohort_builder.py`
+
+### Test results
+
+```
+tests/test_cohort_builder.py        49 passed  (3 new total)
+tests/test_dtwin_cohort.py          31 passed
+tests/test_cohort_models.py         34 passed
+tests/test_agent_cohort_tools.py    24 passed
+tests/test_agent_cohort_engine.py    3 passed
+Total: 141 cohort tests passed, 0 failed
+```
+
+
+---
+
+## Cohort Discovery: restrict attribute dropdown to entity's own properties
+
+Context: In the Path "where" filter and the Compatibility section, the property
+dropdown listed every property in the ontology regardless of the entity being
+filtered. Users had to scroll through unrelated properties (e.g. Agent properties
+when filtering a Claim hop). The same issue applied to the root-entity compatibility
+section.
+
+### Changes
+
+1. `src/front/static/query/js/query-cohorts.js`
+   - Added `_dataPropsForClass(classUri)` helper — mirrors the existing
+     `_objectPropsForSource` pattern: filters to data properties (non-object)
+     whose `domain` matches the class name; falls back to all data properties
+     if nothing matches.
+   - `_renderHopWhereRow`: replaced raw `this.properties` with
+     `_dataPropsForClass(targetClassUri)` so each hop's filter shows only
+     the target entity's own attributes.
+   - `_renderCompat`: replaced raw `this.properties` with
+     `_dataPropsForClass(this.rule.class_uri)` so the compatibility section
+     shows only the root entity's attributes.
+
+### Modified files
+
+- `src/front/static/query/js/query-cohorts.js`
+
+### Test results
+
+```
+tests/test_cohort_builder.py  49 passed
+```

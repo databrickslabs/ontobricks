@@ -45,12 +45,19 @@ async function loadVersionsList() {
                 ? '<span class="badge bg-primary"><i class="bi bi-check-circle me-1"></i>v' + escapeHtml(v.version) + '</span>'
                 : '<span class="badge bg-secondary">v' + escapeHtml(v.version) + '</span>';
 
-            // MCP/API "active" flag is read-only here — changing it is only
-            // supported from Registry → Browse (see registry.js).
-            const mcpBadge = v.mcp_enabled
-                ? '<span class="badge bg-success" title="This version is exposed via API and MCP">'
-                + '<i class="bi bi-broadcast me-1"></i>Active</span>'
-                : '<span class="text-muted small" title="Not the API/MCP-active version">—</span>';
+            // Lifecycle status is read-only here — transitions are made from
+            // Registry → Browse (see registry.js). Color map matches the
+            // shared badge convention (DRAFT amber / IN-REVIEW blue /
+            // PUBLISHED green).
+            const STATUS_MAP = {
+                'DRAFT': { cls: 'bg-warning-subtle text-dark border-warning', icon: 'pencil', label: 'Draft' },
+                'IN-REVIEW': { cls: 'bg-info-subtle text-dark border-info', icon: 'eye', label: 'In Review' },
+                'PUBLISHED': { cls: 'bg-success-subtle text-dark border-success', icon: 'broadcast', label: 'Published' }
+            };
+            const st = STATUS_MAP[String(v.status || 'DRAFT').toUpperCase()] || STATUS_MAP['DRAFT'];
+            const mcpBadge = '<span class="badge border ' + st.cls
+                + '" title="Lifecycle status"><i class="bi bi-' + st.icon + ' me-1"></i>'
+                + st.label + '</span>';
 
             const loadBtn = v.is_current
                 ? ''

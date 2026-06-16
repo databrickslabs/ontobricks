@@ -1,0 +1,364 @@
+2026-04-16 — Digital Twin Information page: replace 2 tiles with 5 tiles
+==========================================================================
+
+Context:
+  The Digital Twin Information page previously had 2 readiness tiles
+  ("Ontology" and "Assignments") showing a Ready/Not Ready badge.
+  The user requested splitting their content into 5 individual tiles
+  on a single row: Entities, Attributes, Relationships, Mapped Entities,
+  Mapped Relationships — each displaying a numeric count.
+
+Changes:
+
+1. src/back/services/home.py — _compute_validation()
+   - Added `attributes` field to `ontology_stats` (count of datatype properties).
+   - Added `object_properties` field to `ontology_stats` (count of object properties).
+   - Kept existing `properties` field (total count) for backward compatibility
+     with the domain validation page (domain-validation.js).
+
+2. src/back/services/home.py — get_detailed_validation()
+   - Added the same `attributes` and `object_properties` fields to `ontology_stats`
+     for consistency across both validation endpoints.
+
+3. src/front/static/query/js/query-sync.js — _applyReadiness()
+   - Updated `relationships` variable to prefer `ontology_stats.object_properties`
+     (with fallback to `properties` for backward compatibility).
+   - Simplified `attributes` variable to use `ontology_stats.attributes`.
+
+Files modified:
+  - src/back/services/home.py
+  - src/front/static/query/js/query-sync.js
+
+Tests: All 1183 tests pass (0 failures).
+
+
+2026-04-16 — Code review fixes and refactoring
+==========================================================================
+
+Context:
+  Code review identified several issues across the changeset. Applied all
+  important fixes and suggestions.
+
+Changes:
+
+1. src/back/objects/digitaltwin/digitaltwin.py
+   - _count_violations_sql: replaced silent `except Exception: pass` with
+     `logger.warning("COUNT(*) fallback failed: %s", exc)`.
+   - _enrich_with_population: fixed truthiness check — now uses
+     `vt is not None` instead of `or` to correctly handle violation_total=0.
+   - Extracted _apply_sql_violation_limit() static helper to centralise the
+     shared LIMIT + COUNT(*) + truncate pattern used in SHACL, SWRL,
+     Decision Table, and Aggregate SQL checks (removes ~60 lines of duplication).
+   - Refactored SHACL loop, _run_swrl_sql_checks, _run_dt_sql_checks,
+     _run_agg_sql_checks to delegate to _apply_sql_violation_limit().
+
+2. src/front/templates/partials/domain/_domain_validation.html
+   - Removed inline `style="..."` from #validationLoadingOverlay; replaced
+     with CSS classes (validation-section-wrapper, validation-loading-overlay).
+   - Replaced `onclick="loadValidationDetails()"` on Refresh button with
+     `id="validationRefreshBtn"` for JS event binding.
+
+3. src/front/static/domain/css/domain-validation.css
+   - Added .validation-section-wrapper and .validation-loading-overlay classes.
+
+4. src/front/static/domain/js/domain-validation.js
+   - Added addEventListener for #validationRefreshBtn in DOMContentLoaded.
+
+5. src/front/static/query/js/query-sync.js
+   - Replaced global `let insightsLoaded = false` with namespaced
+     `window._obInsights = window._obInsights || { loaded: false }`.
+
+6. src/front/static/query/js/query.js
+   - Updated insightsLoaded reference to window._obInsights.loaded.
+
+7. src/front/static/query/js/query-dataquality.js
+   - Modified score calculation to prefer violation_total over
+     violations.length for accuracy.
+
+8. docs/development.md
+   - Documented Chart.js 4.x in Frontend Dependencies (CDN) table and
+     License Summary.
+
+Files modified:
+  - src/back/objects/digitaltwin/digitaltwin.py
+  - src/front/templates/partials/domain/_domain_validation.html
+  - src/front/static/domain/css/domain-validation.css
+  - src/front/static/domain/js/domain-validation.js
+  - src/front/static/query/js/query-sync.js
+  - src/front/static/query/js/query.js
+  - src/front/static/query/js/query-dataquality.js
+  - docs/development.md
+
+Tests: All 1183 tests pass (0 failures).
+
+
+2026-04-16 — Domain Cockpit: tile + gauge redesign
+==========================================================================
+
+Context:
+  Renamed "Status" to "Cockpit" in the sidebar menu and redesigned the
+  Domain validation page to use Chart.js doughnut gauges for ontology and
+  mapping summary tiles.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   - Renamed "Status" to "Cockpit", changed icon.
+   - Added "Insight" group with "Overview" item for standalone insights.
+
+2. src/front/templates/partials/domain/_domain_validation.html
+   - Merged ontology/mapping tiles into a single row with larger counter
+     values (ontology) and Chart.js doughnut gauges (mapping).
+
+3. src/front/templates/domain.html
+   - Added Chart.js CDN script tag.
+
+4. src/front/templates/dtwin.html
+   - Included new partials/dtwin/_query_insights.html partial.
+
+5. src/front/templates/partials/dtwin/_query_insights.html (new)
+   - Standalone Digital Twin Insights section with loading spinner,
+     no-data placeholder, summary cards, and detail tables.
+
+6. src/front/templates/partials/dtwin/_query_sync.html
+   - Removed "Insights" tab (now standalone section).
+   - Replaced 2-column Ontology/Assignment readiness cards with 5 tiles.
+
+Files modified:
+  - src/front/config/menu_config.json
+  - src/front/templates/partials/domain/_domain_validation.html
+  - src/front/templates/domain.html
+  - src/front/templates/dtwin.html
+  - src/front/templates/partials/dtwin/_query_insights.html (new)
+  - src/front/templates/partials/dtwin/_query_sync.html
+
+Tests: All 1183 tests pass (0 failures).
+
+
+2026-04-16 — Mapping Summary: tile + gauge display
+==========================================================================
+
+Context:
+  Applied the same tile + gauge visual style to the Mapping Information
+  summary page, replacing the old text counters and progress bar with
+  3 Chart.js doughnut gauge tiles (Entities, Attributes, Relationships).
+
+Changes:
+
+1. src/front/templates/mapping.html
+   - Added Chart.js CDN script tag.
+
+2. src/front/templates/partials/mapping/_mapping_information.html
+   - Replaced 3-column count display and progress bar with 3 tile cards,
+     each with an icon, Chart.js doughnut gauge canvas, mapped/total count,
+     and label.
+   - Removed inline styles from #mappingLoadingPlaceholder and
+     #mappingLoadedContent; replaced with CSS classes.
+   - Replaced onclick="confirmResetMappings()" with id="resetMappingsBtn".
+
+3. src/front/static/mapping/css/mapping-shared.css
+   - Added .mapping-loading-overlay, .mapping-summary-tile,
+     .mapping-tile-icon, .mapping-tile-label CSS classes.
+
+4. src/front/static/global/js/mapping-information.js
+   - Added _drawMappingGauge() function for Chart.js doughnut gauges.
+   - Updated updateMappingCompletionStatus() to call _drawMappingGauge().
+   - Updated display toggling to use classList.
+   - Wired reset button via addEventListener in DOMContentLoaded.
+
+Files modified:
+  - src/front/templates/mapping.html
+  - src/front/templates/partials/mapping/_mapping_information.html
+  - src/front/static/mapping/css/mapping-shared.css
+  - src/front/static/global/js/mapping-information.js
+
+Tests: All 1183 tests pass (0 failures).
+
+
+2026-04-16 — Auto-Map page: tile + gauge display
+==========================================================================
+
+Context:
+  Applied the same tile + gauge visual style to the Auto-Map sub-page,
+  replacing the 3 old status cards (plain text counts with a conditionally-
+  hidden attributes card) with 3 consistent Chart.js doughnut gauge tiles.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_autoassign.html
+   - Replaced 3 status cards (col-md-4 layout with icon + text count) with
+     3 mapping-summary-tile cards using the shared CSS classes.
+   - Each tile has: icon, Chart.js doughnut gauge canvas, mapped/total count,
+     and label (Entities Mapped, Attributes Mapped, Relationships Mapped).
+   - Removed the conditionally-hidden #autoAssignAttrCard; attributes tile
+     now always visible with gauge showing completion percentage.
+
+2. src/front/static/mapping/js/mapping-autoassign.js
+   - updateStatus(): computes actual attribute mapping completion (total
+     dataProperties vs mapped ones across all active classes) and calls
+     _drawMappingGauge() for all 3 gauges (gaugeAutoEntities,
+     gaugeAutoAttributes, gaugeAutoRelationships).
+   - Live-progress polling: updated to redraw entity and relationship
+     gauges in real time during auto-map task execution.
+   - "Re-Assign Missing Attributes" button still toggles based on
+     entitiesWithMissingAttrs count (functional behavior preserved).
+
+Files modified:
+  - src/front/templates/partials/mapping/_mapping_autoassign.html
+  - src/front/static/mapping/js/mapping-autoassign.js
+
+Tests: All 1183 tests pass (0 failures).
+
+
+2026-04-16 — Diagnostics page: KPI tiles + accordions
+==========================================================================
+
+Context:
+  Redesigned the Mapping Diagnostics page to use 4 KPI tiles on the first
+  row (Total Checks, Passed, Warnings, Errors) replacing the flat summary
+  bar. Wrapped the Entities and Relationships result sections in Bootstrap
+  accordions for a cleaner, collapsible layout.
+
+Changes:
+
+1. src/front/templates/partials/mapping/_mapping_diagnostics.html
+   - Replaced the diag-summary-bar div with 4 KPI tile cards in a row
+     (Total Checks, Passed, Warnings, Errors), each with icon, large value,
+     and label. OK/Warn/Error tiles have color-coded bottom borders.
+   - Replaced the flat diag-group sections (Entities, Relationships) with a
+     Bootstrap accordion (#diagAccordion). Entities accordion is expanded by
+     default; Relationships is collapsed.
+   - Added file reference comments (JS/CSS paths).
+
+2. src/front/static/mapping/css/mapping-diagnostics.css
+   - Removed old .diag-summary-bar, .diag-summary-item, .diag-summary-count,
+     .diag-summary-label, .diag-summary-ok/warn/error, and .diag-group-title
+     styles.
+   - Added .diag-kpi-tile, .diag-kpi-icon, .diag-kpi-value, .diag-kpi-label,
+     .diag-kpi-ok/warn/error for the new KPI tiles.
+   - Added .diag-accordion-item and .diag-accordion-btn for accordion styling.
+
+3. src/front/static/mapping/js/mapping-diagnostics.js
+   - Updated section toggle to use 'diagKpiTiles' instead of 'diagSummaryBar'.
+   - Added _updateBadge() helper that colors the accordion header badge
+     (bg-danger, bg-warning, bg-success) based on item statuses.
+   - Refactored entity/relationship rendering to use _updateBadge().
+
+Files modified:
+  - src/front/templates/partials/mapping/_mapping_diagnostics.html
+  - src/front/static/mapping/css/mapping-diagnostics.css
+  - src/front/static/mapping/js/mapping-diagnostics.js
+
+Tests: All 1183 tests pass (0 failures).
+
+
+2026-04-16 — Digital Twin Insights: two-column layout, remove attributes
+==========================================================================
+
+Context:
+  Changed the Digital Twin Insights section to display Entity Types and
+  Relationships side by side in a two-column row layout. Removed the
+  Attributes block entirely (HTML, JS data/rendering, pagination).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_insights.html
+   - Replaced the three stacked cards (Entity Types, Relationships,
+     Attributes) with a single row containing two col-md-6 columns
+     for Entity Types and Relationships.
+   - Removed the Attributes card and its #insightsAttributes container.
+   - Updated the subtitle to remove "and attributes".
+
+2. src/front/static/query/js/query-sync.js
+   - Removed _insightsAttrPage, _insightsAttrData, _insightsAttrMax
+     variables.
+   - Removed _renderAttrPage() function.
+   - Removed attribute data filtering and rendering from renderInsights().
+   - Removed 'attr' branch from _insightsGoTo() pagination handler.
+
+Files modified:
+  - src/front/templates/partials/dtwin/_query_insights.html
+  - src/front/static/query/js/query-sync.js
+
+Tests: All 1183 tests pass (0 failures).
+
+
+2026-04-16 — Harmonize first-line KPI tiles across all pages
+==========================================================================
+
+Context:
+  Five pages had "first line tiles" using different CSS classes and
+  slightly different structures: DT Sync (sync-readiness-tile), DT Insights
+  (inline JS-rendered cards), Mapping Information (mapping-summary-tile),
+  Mapping Auto-Map (mapping-summary-tile), and Mapping Diagnostics
+  (diag-kpi-tile). Unified them all under a single shared component.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - Added shared .ob-kpi-tile component: base tile (vertical flex, centered),
+     .ob-kpi-tile-icon, .ob-kpi-tile-value, .ob-kpi-tile-label,
+     canvas support, state variants (tile-success, tile-danger, tile-warning,
+     tile-muted), and accent border variants (tile-accent-success/warning/danger).
+
+2. src/front/templates/partials/dtwin/_query_sync.html
+   - Replaced sync-readiness-tile classes with ob-kpi-tile on all 5 tiles.
+
+3. src/front/static/query/js/query-sync.js
+   - _setSyncTile(): changed className from 'sync-readiness-tile' to 'ob-kpi-tile'.
+   - renderInsights(): updated JS-rendered summary cards to use ob-kpi-tile
+     structure (icon, value, label as separate elements).
+
+4. src/front/static/query/css/query-sync.css
+   - Removed all .sync-readiness-tile* styles (replaced by shared component).
+
+5. src/front/templates/partials/mapping/_mapping_diagnostics.html
+   - Replaced diag-kpi-tile classes with ob-kpi-tile + tile-accent-* variants.
+
+6. src/front/static/mapping/css/mapping-diagnostics.css
+   - Removed all .diag-kpi-tile* styles (replaced by shared component).
+
+7. src/front/templates/partials/mapping/_mapping_information.html
+   - Replaced card mapping-summary-tile wrapper with ob-kpi-tile.
+
+8. src/front/templates/partials/mapping/_mapping_autoassign.html
+   - Same replacement as Mapping Information (3 gauge tiles).
+
+9. src/front/static/mapping/css/mapping-shared.css
+   - Removed all .mapping-summary-tile / .mapping-tile-icon / -label styles.
+
+Files modified:
+  - src/front/static/global/css/components.css
+  - src/front/templates/partials/dtwin/_query_sync.html
+  - src/front/static/query/js/query-sync.js
+  - src/front/static/query/css/query-sync.css
+  - src/front/templates/partials/mapping/_mapping_diagnostics.html
+  - src/front/static/mapping/css/mapping-diagnostics.css
+  - src/front/templates/partials/mapping/_mapping_information.html
+  - src/front/templates/partials/mapping/_mapping_autoassign.html
+  - src/front/static/mapping/css/mapping-shared.css
+
+Tests: All 1183 tests pass (0 failures).
+
+
+2026-04-16 — Licenses folder: add missing NetworkX license
+==========================================================================
+
+Context:
+  Cross-referenced all dependencies in pyproject.toml and CDN imports
+  against the /licenses folder. NetworkX (>=3.0, BSD-3-Clause) was the
+  only missing entry — used by back/core/graph_analysis/ for community
+  detection.
+
+Changes:
+
+1. licenses/python/networkx-LICENSE.txt (new)
+   - Added BSD-3-Clause license text for NetworkX.
+
+2. licenses/README.md
+   - Added NetworkX row to the Python Libraries table.
+   - Added NetworkX to the BSD-3-Clause entry in the License Summary.
+
+Files modified:
+  - licenses/python/networkx-LICENSE.txt (new)
+  - licenses/README.md

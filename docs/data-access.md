@@ -173,10 +173,14 @@ App, authenticates with an M2M OAuth token, and uses `httpx.AsyncClient`. It
 | `query_graphql` | `POST /graphql/{domain}` | **GraphQL** | Resolvers → SPARQL → **Spark SQL** |
 | `ontobricks://*` resources | various | REST / GraphQL | Same as the equivalent tools |
 
-> **Note.** MCP only sees **published** domain versions because `/api/v1/...`
-> requires a registry version. To query an unsaved working session, use the
-> Graph Chat (next section), which talks to the session-aware `/dtwin/...`
-> internal routes instead.
+> **Note.** MCP and the external REST/GraphQL API only see versions whose
+> lifecycle status is **PUBLISHED** — they default to the numeric-latest
+> PUBLISHED version and reject explicit requests for `DRAFT`/`IN-REVIEW`
+> versions. A version becomes servable by transitioning it
+> DRAFT → IN-REVIEW → PUBLISHED from **Registry → Browse** (this replaces the
+> former "Active"/`mcp_enabled` toggle). To query an unsaved working session,
+> use the Graph Chat (next section), which talks to the session-aware
+> `/dtwin/...` internal routes instead.
 
 ---
 
@@ -217,6 +221,33 @@ These agents do not query the triple store at runtime; they operate on the
 | `agent_auto_icon_assign` | Pick emojis for entities | Inspects ontology + metadata | REST | None — generation only |
 | `agent_ontology_assistant` | Conversational ontology editing | Dozens of tools mutating the in-session ontology | REST | Python ontology object model |
 | `agent_dtwin_chat` | Conversational graph querying | See §6 | REST + **GraphQL** + **SPARQL** | **Spark SQL** + **Cypher** (engine-side) |
+
+### Document reading (`documents.read` / `read_document`)
+
+Both `agent_owl_generator` and `agent_business_rules_generator` read uploaded
+domain documents from the UC Volume via `read_document`:
+
+- **Plain text** (`.txt`, `.md`, `.json`, `.csv`, `.xml`) is fetched through the
+  Files API and decoded as UTF-8.
+- **Binary documents** (`.pdf`, `.docx`, `.pptx`, images) are converted to
+  markdown on the fly using the Databricks **`ai_parse_document`** SQL function
+  (output schema pinned to v2.0):
+  `SELECT to_json(ai_parse_document(content, map('version', '2.0'))) FROM READ_FILES(<volume path>, format => 'binaryFile')`.
+  This runs on the configured **SQL warehouse**, so the warehouse identity (app
+  service principal or user) must have `READ VOLUME` on the documents volume.
+  The function returns a `VARIANT` (output schema **v2.0**, verified live): text
+  is read from `document.elements[].content` (figures expose an AI-generated
+  `description`); `document.pages[]` only carries `id`/`image_uri`. The extractor
+  prefers elements and keeps page-content / markdown-blob fallbacks for other
+  schema versions. The extraction engine is a generic, reusable class —
+  `back.core.databricks.DocumentExtractor` (`src/back/core/databricks/DocumentExtractor.py`,
+  exposing `supports()` / `is_available()` / `extract()` /
+  `extract_text_from_parsed()`) — so it can be used outside the agents and
+  swapped for a different parser without changing callers.
+- When no SQL warehouse is configured, binary documents are skipped (the tool
+  returns an explanatory message) and generation proceeds from metadata + text
+  documents only. Parsed text is cached per file for the duration of an agent
+  run and truncated to the per-document character cap.
 
 ---
 

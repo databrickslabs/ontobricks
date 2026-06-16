@@ -1,12 +1,18 @@
 /**
  * OntoBricks - settings.js
- * Settings page JavaScript – tabbed layout; global Save persists all sections including Graph DB
+ * Settings page JavaScript – sidebar layout; global Save persists all sections including triple store
  */
 
 document.addEventListener('DOMContentLoaded', function () {
 
     let currentWarehouseId = null;
     let warehouseLocked = false;
+    let graphDbLoaded = false;
+    // Registry rebuilt on every loadLakebaseObjects call; keyed by domain base name.
+    // Avoids embedding JSON in onclick HTML attributes (double quotes break the attribute).
+    let _lkDomainRegistry = {};
+    // UC/Lakeflow objects keyed by domain base name; populated by loadLakebaseSyncObjects.
+    let _lkUCRegistry = {};
 
     function escapeHtmlSettings(str) { return escapeHtml(str); }
 
@@ -528,14 +534,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (help) help.textContent = data.databases.length + ' database(s) found.';
 
             if (matched && dbSel.value) {
-                await loadLakebasePgSchemas(dbSel.value, cfgSchema);
+                await loadLakebasePgSchemas(dbSel.value, cfgSchema, branchPath);
             }
         } catch (e) {
             _setSelectError(dbSel, '(error — ' + (e.message || 'network') + ')');
         }
     }
 
-    async function loadLakebasePgSchemas(database, cfgSchema) {
+    async function loadLakebasePgSchemas(database, cfgSchema, branchPath) {
         const schSel = document.getElementById('lakebaseGraphSchema');
         const schIn  = document.getElementById('lakebaseGraphSchemaInput');
         const help   = document.getElementById('lakebaseGraphSchemaHelp');
@@ -544,8 +550,10 @@ document.addEventListener('DOMContentLoaded', function () {
         _setSelectLoading(schSel, 'Loading schemas…');
 
         try {
+            const params = new URLSearchParams({ database });
+            if (branchPath) params.set('branch_path', branchPath);
             const resp = await fetch(
-                '/settings/graph-engine/lakebase-pg-schemas?database=' + encodeURIComponent(database),
+                '/settings/graph-engine/lakebase-pg-schemas?' + params.toString(),
                 { credentials: 'same-origin' }
             );
             const data = resp.ok ? await resp.json() : {};
@@ -720,6 +728,46 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    /**
+     * Ensure `sel` has `value` selected, matching an existing option by exact
+     * value or by short segment (last path component) so we reuse a real
+     * cascade-loaded option when present, and only inject a synthetic option
+     * when the value is genuinely absent. Keeps the field non-empty.
+     */
+    function _ensureSelectedOption(sel, value, label) {
+        if (!sel || !value) return;
+        const short = value.indexOf('/') >= 0 ? value.split('/').pop() : value;
+        let opt = Array.from(sel.options).find((op) =>
+            op.value === value ||
+            op.value === short ||
+            (op.value.indexOf('/') >= 0 && op.value.split('/').pop() === short)
+        );
+        if (!opt) {
+            opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = label || short;
+            sel.appendChild(opt);
+        }
+        sel.value = opt.value;
+        sel.disabled = false;
+    }
+
+    /**
+     * Guarantee the 4 Connection-tab fields (project, branch, database,
+     * schema) always reflect the saved registry config — even when the live
+     * workspace cascade can't list/match them (stale or unreachable project).
+     */
+    function prefillLakebaseConnectionFromConfig() {
+        let o = {};
+        try { o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}'); } catch (_) {}
+        _ensureSelectedOption(document.getElementById('lakebaseProject'),    o.lakebase_project || '');
+        _ensureSelectedOption(document.getElementById('lakebaseBranch'),     o.lakebase_branch  || '');
+        _ensureSelectedOption(document.getElementById('lakebaseGraphDb'),    o.database         || '');
+        _ensureSelectedOption(document.getElementById('lakebaseGraphSchema'), o.schema          || '');
+        const schIn = document.getElementById('lakebaseGraphSchemaInput');
+        if (schIn && o.schema) schIn.value = o.schema;
+    }
+
     function applyLakebaseFormFromConfigTextarea() {
         const ta         = document.getElementById('graphEngineConfig');
         const syncModeEl = document.getElementById('lakebaseSyncMode');
@@ -783,13 +831,16 @@ document.addEventListener('DOMContentLoaded', function () {
             msgEl.innerHTML = '<i class="bi bi-' + (data.schema_exists ? 'check-circle' : 'exclamation-triangle') + ' me-1"></i>'
                 + escapeHtmlSettings(data.message || 'OK');
             dl.innerHTML = (
-                row('PGHOST', escapeHtmlSettings(String(data.host || '')))
+                row('Bound host (PGHOST)', escapeHtmlSettings(String(data.host || '')))
                 + row('Port', escapeHtmlSettings(String(data.port != null ? data.port : '')))
-                + row('Bound PGDATABASE', escapeHtmlSettings(String(data.bound_database || '')))
-                + row('Effective database', escapeHtmlSettings(String(data.effective_database || '')))
+                + row('Graph database', escapeHtmlSettings(String(data.graph_database || '')))
                 + row('Graph schema', escapeHtmlSettings(String(data.graph_schema || '')))
                 + row('Schema exists', data.schema_exists ? 'yes' : 'no')
                 + row('Tables in schema', escapeHtmlSettings(String(data.tables_in_schema != null ? data.tables_in_schema : '')))
+                + '<dt class="col-sm-4 text-muted text-warning small mt-2">Registry database</dt>'
+                + '<dd class="col-sm-8 font-monospace text-break small mt-2 text-muted">'
+                + escapeHtmlSettings(String(data.registry_database || ''))
+                + ' <span class="text-muted">(PGDATABASE — registry only, separate from graph)</span></dd>'
             );
         } catch (e) {
             msgEl.className = 'small mb-2 text-danger';
@@ -800,13 +851,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setGraphDbTabLoading(loading) {
-        const banner  = document.getElementById('graphDbTabLoadingBanner');
-        const content = document.getElementById('graphDbTabContent');
-        if (banner) {
-            banner.classList.toggle('d-none', !loading);
-            banner.classList.toggle('d-flex', loading);
+        // Only the Lakebase section shows a spinner (ts-global/Global has no spinner).
+        const lkBanner = document.getElementById('lakebaseSectionBanner');
+        const lkPanel  = document.getElementById('lakebaseGraphPanel');
+        if (lkBanner) {
+            lkBanner.classList.toggle('d-none', !loading);
+            lkBanner.classList.toggle('d-flex', loading);
         }
-        if (content) content.classList.toggle('d-none', loading);
+        // Hide lakebase panel during load; applyGraphDbEnginePanels() restores it after
+        if (loading && lkPanel) lkPanel.style.display = 'none';
     }
 
     /** Reload engine + JSON from server so the tab matches persisted settings after every visit. */
@@ -839,6 +892,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (sel.value === 'lakebase') {
                 // auto-load the cascading chain if a project is already configured
                 await loadLakebaseProjects();
+                // guarantee the 4 fields always show the saved registry config,
+                // even when the cascade couldn't list/match a stale project
+                prefillLakebaseConnectionFromConfig();
                 await loadLakebaseGraphHealth();
                 // restore UC catalog/schema dropdowns when managed_synced was persisted
                 const syncModeEl = document.getElementById('lakebaseSyncMode');
@@ -858,6 +914,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (this.value === 'lakebase') {
             applyLakebaseFormFromConfigTextarea();
             await loadLakebaseProjects();
+            prefillLakebaseConnectionFromConfig();
             await loadLakebaseGraphHealth();
         }
     });
@@ -886,7 +943,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const schSel = document.getElementById('lakebaseGraphSchema');
         _setSelectLoading(schSel, '(select a database first)');
         mergeLakebasePanelIntoConfigTextarea();
-        if (this.value) await loadLakebasePgSchemas(this.value, _getCurrentSchemaValue());
+        if (this.value) {
+            const bp = document.getElementById('lakebaseBranch')?.value || '';
+            await loadLakebasePgSchemas(this.value, _getCurrentSchemaValue(), bp);
+        }
     });
     document.getElementById('lakebaseGraphSchema')?.addEventListener('change', function () {
         mergeLakebasePanelIntoConfigTextarea();
@@ -912,14 +972,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Lakebase objects (schemas / tables / views) ──────────────────────────
     async function loadLakebaseObjects() {
-        const btn        = document.getElementById('btnLoadLakebaseObjects');
-        const result     = document.getElementById('lakebaseObjectsResult');
-        const dbSel      = document.getElementById('lakebaseGraphDb');
-        const branchSel  = document.getElementById('lakebaseBranch');
+        const btn    = document.getElementById('btnLoadLakebaseObjects');
+        const result = document.getElementById('lakebaseObjectsResult');
+        const dbSel  = document.getElementById('lakebaseGraphDb');
         if (!result) return;
 
+        // Always query the BOUND Lakebase host (where GraphDBFactory writes data).
+        // The branch_path from the Connection form refers to the provisioner target
+        // project — not the actual connection host — so it must NOT be forwarded here.
         const database   = dbSel?.value   || '';
-        const branchPath = branchSel?.value || '';
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Loading…';
@@ -928,8 +989,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             const params = new URLSearchParams();
-            if (database)   params.set('database',    database);
-            if (branchPath) params.set('branch_path', branchPath);
+            if (database) params.set('database', database);
             const url = '/settings/graph-engine/lakebase-objects'
                 + (params.toString() ? '?' + params.toString() : '');
             const resp = await fetch(url, { credentials: 'same-origin' });
@@ -941,49 +1001,160 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const cu = data.current_user || '';
-            const schemas = data.schemas || [];
-            const tables  = data.tables  || [];
-            const views   = data.views   || [];
+            const regSchema = data.registry_schema || 'ontobricks_registry';
+            const schemas = (data.schemas || []).filter(o => o.name   !== regSchema);
+            const tables  = (data.tables  || []).filter(o => o.schema !== regSchema);
+            const views   = (data.views   || []).filter(o => o.schema !== regSchema);
 
             if (schemas.length === 0 && tables.length === 0 && views.length === 0) {
                 result.innerHTML = '<p class="small text-muted mt-2">No objects owned by you in this database.</p>';
                 return;
             }
 
+            // ── helpers ─────────────────────────────────────────────────────
             function mkDropBtn(kind, schema, name) {
-                return '<button type="button" class="btn btn-danger btn-sm py-0 px-2"'
-                    + ' onclick="window._lkDropObject(' + JSON.stringify(kind) + ','
-                    + JSON.stringify(schema) + ',' + JSON.stringify(name) + ','
-                    + JSON.stringify(database) + ',' + JSON.stringify(branchPath) + ')">'
-                    + '<i class="bi bi-trash"></i></button>';
+                return '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 lk-drop-obj-btn"'
+                    + ' data-lk-kind="'   + escapeHtmlSettings(kind)   + '"'
+                    + ' data-lk-schema="' + escapeHtmlSettings(schema) + '"'
+                    + ' data-lk-name="'   + escapeHtmlSettings(name)   + '"'
+                    + ' title="Drop ' + escapeHtmlSettings(kind) + '">'
+                    + '<i class="bi bi-trash3"></i></button>';
             }
 
-            function mkRows(items, kindLabel, schemaKey, nameKey) {
-                return items.map(function (o) {
-                    const schema  = o[schemaKey] || '';
-                    const name    = o[nameKey]   || '';
-                    const kindVal = kindLabel.toLowerCase();
-                    return '<tr>'
-                        + '<td><span class="badge bg-secondary-subtle text-secondary-emphasis border">'
-                        + escapeHtmlSettings(kindLabel) + '</span></td>'
-                        + '<td class="font-monospace small">' + escapeHtmlSettings(schema) + '</td>'
-                        + '<td class="font-monospace small">' + escapeHtmlSettings(name) + '</td>'
-                        + '<td class="text-center">' + mkDropBtn(kindVal, schema, name) + '</td>'
-                        + '</tr>';
-                }).join('');
+            // Strip _sync / __app suffix to get the common base name shared by all
+            // three objects belonging to a graph version (view, sync table, companion).
+            // Tables: "{base}_sync" and "{base}__app"  →  base = "{domain}_v{version}"
+            // Views:  "{base}"                          →  base = "{domain}_v{version}"
+            function objectBase(name, kind) {
+                if (kind === 'table') {
+                    if (name.endsWith('_sync')) return name.slice(0, -5);
+                    if (name.endsWith('__app')) return name.slice(0, -5);
+                }
+                return name;
             }
 
-            const html = '<p class="small text-muted mt-2 mb-1">Connected as: <code>'
-                + escapeHtmlSettings(cu) + '</code> — showing only objects you own.</p>'
-                + '<table class="table table-sm table-bordered small mt-2 mb-0">'
-                + '<thead class="table-light"><tr>'
-                + '<th>Type</th><th>Schema</th><th>Name</th><th>Action</th>'
-                + '</tr></thead><tbody>'
-                + mkRows(schemas, 'Schema', 'name',   'name')
-                + mkRows(tables,  'Table',  'schema',  'name')
-                + mkRows(views,   'View',   'schema',  'name')
-                + '</tbody></table>';
+            function kindBadge(kind) {
+                const map = { view: 'bg-info-subtle text-info-emphasis', table: 'bg-primary-subtle text-primary-emphasis', schema: 'bg-secondary-subtle text-secondary-emphasis' };
+                return '<span class="badge border ' + (map[kind] || 'bg-secondary-subtle text-secondary-emphasis') + '">'
+                    + kind.charAt(0).toUpperCase() + kind.slice(1) + '</span>';
+            }
+
+            function mkObjectRow(kind, schemaName, name) {
+                return '<tr>'
+                    + '<td>' + kindBadge(kind) + '</td>'
+                    + '<td class="font-monospace small">' + escapeHtmlSettings(name) + '</td>'
+                    + '<td class="text-end">' + mkDropBtn(kind, schemaName, name) + '</td>'
+                    + '</tr>';
+            }
+
+            // ── group tables + views by base (= domain label) ────────────────
+            // Store in the module-level registry so onclick handlers can look
+            // up items by key without embedding JSON in HTML attributes
+            // (embedded JSON with " quotes breaks onclick="..." delimiters).
+            _lkDomainRegistry = {};   // reset for this load
+            _lkUCRegistry = {};
+
+            [...tables.map(o => ({ kind: 'table', schemaName: o.schema, name: o.name })),
+             ...views.map(o => ({ kind: 'view',  schemaName: o.schema, name: o.name }))]
+            .forEach(o => {
+                const base = objectBase(o.name, o.kind);
+                if (!_lkDomainRegistry[base]) {
+                    _lkDomainRegistry[base] = { base, schema: o.schemaName, items: [] };
+                }
+                _lkDomainRegistry[base].items.push(o);
+            });
+
+            // ── render ───────────────────────────────────────────────────────
+            let html = '<p class="small text-muted mt-2 mb-3">Connected as: <code>'
+                + escapeHtmlSettings(cu) + '</code>.'
+                + ' <span><i class="bi bi-eye-slash me-1"></i>Registry schema'
+                + ' (<code>' + escapeHtmlSettings(regSchema) + '</code>) hidden.</span></p>';
+
+            // Domain groups — custom collapse cards, one per domain, collapsed by default
+            const domainKeys = Object.keys(_lkDomainRegistry).sort();
+            if (domainKeys.length > 0) {
+                html += '<div class="lk-domain-cards">';
+                domainKeys.forEach((key, idx) => {
+                    const grp = _lkDomainRegistry[key];
+                    // views first (drop order: views before tables)
+                    const sorted = [...grp.items].sort((a, b) => {
+                        if (a.kind === b.kind) return 0;
+                        return a.kind === 'view' ? -1 : 1;
+                    });
+                    // Store sorted order back so dropDomainObjects picks it up
+                    grp.sortedItems = sorted;
+                    const collapseId = 'lkDomainCollapse_' + idx;
+
+                    html += '<div class="lk-domain-card">';
+
+                    // ── header ────────────────────────────────────────────
+                    html += '<div class="lk-domain-header">';
+                    html += '<button class="lk-domain-toggle" type="button"'
+                        + ' data-bs-toggle="collapse" data-bs-target="#' + collapseId + '"'
+                        + ' aria-expanded="false" aria-controls="' + collapseId + '">';
+                    html += '<i class="bi bi-chevron-right lk-chevron"></i>';
+                    html += '<i class="bi bi-folder2 text-muted" style="font-size:.85rem"></i>';
+                    html += '<span class="lk-domain-name">' + escapeHtmlSettings(key) + '</span>';
+                    html += '<span class="badge bg-secondary-subtle text-secondary-emphasis border lk-domain-count">'
+                        + grp.items.length + '</span>';
+                    html += '</button>';
+                    html += '<button type="button"'
+                        + ' class="btn btn-sm btn-outline-danger lk-domain-delete-btn lk-drop-domain-btn"'
+                        + ' data-lk-domain="' + escapeHtmlSettings(key) + '"'
+                        + ' title="Delete all objects for this domain">'
+                        + '<i class="bi bi-trash3 me-1"></i>Delete</button>';
+                    html += '</div>';
+
+                    // ── body ──────────────────────────────────────────────
+                    html += '<div id="' + collapseId + '" class="collapse lk-domain-body">';
+                    html += '<table class="table table-sm mb-0"><thead class="table-light"><tr>'
+                        + '<th style="width:90px">Type</th><th>Name</th>'
+                        + '<th class="text-end" style="width:90px">Action</th>'
+                        + '</tr></thead><tbody>';
+                    sorted.forEach(o => {
+                        html += mkObjectRow(o.kind, o.schemaName, o.name);
+                    });
+                    html += '</tbody></table>';
+                    // Placeholder filled by loadLakebaseSyncObjects() after the main load
+                    html += '<div class="lk-sync-slot" data-lk-base="' + escapeHtmlSettings(key) + '"></div>';
+                    html += '</div>';
+
+                    html += '</div>'; // /.lk-domain-card
+                });
+                html += '</div>'; // /.lk-domain-cards
+            }
+
+
             result.innerHTML = html;
+
+            // Wire buttons after DOM is ready — avoids JSON in HTML attributes
+            result.querySelectorAll('.lk-drop-domain-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    dropDomainObjects(this.dataset.lkDomain);
+                });
+            });
+            result.querySelectorAll('.lk-drop-obj-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    dropLakebaseObject(
+                        this.dataset.lkKind,
+                        this.dataset.lkSchema,
+                        this.dataset.lkName,
+                        database,
+                        '',
+                    );
+                });
+            });
+
+            // Toggle .lk-open on the card for chevron rotation + header style
+            result.querySelectorAll('.lk-domain-card').forEach(card => {
+                const collapseEl = card.querySelector('.collapse');
+                if (!collapseEl) return;
+                collapseEl.addEventListener('show.bs.collapse', () => card.classList.add('lk-open'));
+                collapseEl.addEventListener('hide.bs.collapse', () => card.classList.remove('lk-open'));
+            });
+
+            // Best-effort: load UC/Lakeflow sync objects and inject into each domain slot
+            loadLakebaseSyncObjects(database, '');
         } catch (e) {
             result.innerHTML = '<div class="alert alert-danger small py-2 mt-2">'
                 + escapeHtmlSettings(e.message || 'Network error') + '</div>';
@@ -995,22 +1166,32 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function _showDropSpinner(result, msg) {
+        if (result) {
+            result.innerHTML = '<div class="d-flex align-items-center gap-2 py-3 text-muted small">'
+                + '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>'
+                + '<span>' + escapeHtmlSettings(msg) + '</span></div>';
+        }
+    }
+
     async function _execDrop(kind, schema, name, database, branchPath) {
         const label = kind === 'schema' ? '"' + name + '"' : '"' + schema + '"."' + name + '"';
         const result = document.getElementById('lakebaseObjectsResult');
+        _showDropSpinner(result, 'Dropping ' + kind + ' ' + label + '…');
         try {
             const resp = await fetch('/settings/graph-engine/lakebase-drop-object', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ kind, schema, name, database: database || '', branch_path: branchPath || '' }),
+                body: JSON.stringify({ kind, schema, name, database: database || '' }),
             });
-            const data = resp.ok ? await resp.json() : {};
+            let data = {};
+            try { data = await resp.json(); } catch (_) {}
             if (data.success) {
                 showNotification('Dropped ' + kind + ' ' + label, 'success');
                 await loadLakebaseObjects();
             } else {
-                const msg = data.message || 'Drop failed';
+                const msg = data.detail || data.message || ('HTTP ' + resp.status);
                 if (result) {
                     result.insertAdjacentHTML('afterbegin',
                         '<div class="alert alert-danger small py-2 mb-2">'
@@ -1048,10 +1229,693 @@ document.addEventListener('DOMContentLoaded', function () {
         modal.show();
     }
 
-    // expose to inline onclick handlers inside the dynamically rendered table
-    window._lkDropObject = dropLakebaseObject;
+    // ── Permissions tab ──────────────────────────────────────────────────────
+
+    function _lkPermEsc(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function _lkPermBanner(cls, html) {
+        const el = document.getElementById('lkPermBanner');
+        if (!el) return;
+        el.className = 'alert ' + cls + ' py-2 px-3 small mb-3';
+        el.innerHTML = html;
+    }
+
+    async function _lkPermGrantEmail(email) {
+        if (!email) {
+            _lkPermBanner('alert-warning', 'Please select a user first.');
+            return;
+        }
+        _lkPermBanner('alert-info',
+            '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Granting superuser to <strong>' + _lkPermEsc(email) + '</strong>…');
+        try {
+            const resp = await fetch('/settings/graph-engine/lakebase-grant-superuser', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_email: email}),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) throw new Error(data.detail || data.message || 'Failed');
+            _lkPermBanner('alert-success',
+                '<i class="bi bi-check-circle me-1"></i>' + _lkPermEsc(data.message || 'Done'));
+            await loadLakebasePermissions();
+        } catch (e) {
+            _lkPermBanner('alert-danger', 'Grant failed: ' + _lkPermEsc(e.message));
+        }
+    }
+
+    async function loadLakebasePermissions() {
+        const loading   = document.getElementById('lkPermLoading');
+        const tableWrap = document.getElementById('lkPermTableWrap');
+        const tbody     = document.getElementById('lkPermTbody');
+        const empty     = document.getElementById('lkPermEmpty');
+        const selUser   = document.getElementById('lkPermUserSelect');
+        if (!loading) return;
+
+        const bannerEl = document.getElementById('lkPermBanner');
+        if (bannerEl) bannerEl.className = 'alert d-none py-2 px-3 small mb-3';
+        loading.classList.remove('d-none');
+        tableWrap.classList.add('d-none');
+
+        let data;
+        try {
+            const resp = await fetch('/settings/graph-engine/lakebase-pg-roles');
+            data = await resp.json();
+            if (!resp.ok || !data.success) throw new Error(data.detail || data.message || 'Failed');
+        } catch (e) {
+            loading.classList.add('d-none');
+            _lkPermBanner('alert-danger', 'Could not load permissions: ' + _lkPermEsc(e.message));
+            return;
+        }
+
+        // Build email→role lookup
+        const roleMap = {};
+        (data.roles || []).forEach(r => { roleMap[r.email.toLowerCase()] = r; });
+
+        // Merge: app_users + any Postgres roles not in app_users
+        const appUsers = data.app_users || [];
+        const appEmails = new Set(appUsers.map(u => u.email.toLowerCase()));
+        const extraRoles = (data.roles || []).filter(r => !appEmails.has(r.email.toLowerCase()));
+
+        const allRows = [
+            ...appUsers.map(u => ({email: u.email, display: u.display_name, fromApp: true})),
+            ...extraRoles.map(r => ({email: r.email, display: r.email, fromApp: false})),
+        ];
+
+        // Populate dropdown
+        if (selUser) {
+            const prevVal = selUser.value;
+            selUser.innerHTML = '<option value="">— select a user —</option>';
+            allRows.forEach(row => {
+                const opt = document.createElement('option');
+                opt.value = row.email;
+                opt.textContent = row.display + (row.display !== row.email ? ' (' + row.email + ')' : '');
+                selUser.appendChild(opt);
+            });
+            if (prevVal) selUser.value = prevVal;
+        }
+
+        // Render table
+        tbody.innerHTML = '';
+        empty.classList.toggle('d-none', allRows.length > 0);
+        allRows.forEach(row => {
+            const em   = row.email.toLowerCase();
+            const role = roleMap[em];
+            const hasRole      = Boolean(role);
+            const hasSuperuser = hasRole && role.has_superuser;
+
+            const tr = document.createElement('tr');
+
+            // User cell
+            const tdUser = document.createElement('td');
+            tdUser.className = 'align-middle';
+            tdUser.innerHTML = row.display !== row.email
+                ? '<span class="fw-semibold">' + _lkPermEsc(row.display) + '</span>'
+                  + ' <span class="text-muted small">' + _lkPermEsc(row.email) + '</span>'
+                : '<span class="font-monospace small">' + _lkPermEsc(row.email) + '</span>';
+            tr.appendChild(tdUser);
+
+            // Role cell
+            const tdRole = document.createElement('td');
+            tdRole.className = 'text-center align-middle';
+            tdRole.innerHTML = hasRole
+                ? '<span class="badge bg-success-subtle text-success-emphasis">yes</span>'
+                : '<span class="badge bg-secondary-subtle text-secondary-emphasis">none</span>';
+            tr.appendChild(tdRole);
+
+            // Superuser cell
+            const tdSu = document.createElement('td');
+            tdSu.className = 'text-center align-middle';
+            tdSu.innerHTML = hasSuperuser
+                ? '<span class="badge bg-primary-subtle text-primary-emphasis"><i class="bi bi-shield-fill-check me-1"></i>superuser</span>'
+                : '<span class="badge bg-warning-subtle text-warning-emphasis">no</span>';
+            tr.appendChild(tdSu);
+
+            // Action cell
+            const tdBtn = document.createElement('td');
+            tdBtn.className = 'text-end align-middle';
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-xs btn-outline-primary py-0 px-2';
+            btn.disabled = hasSuperuser;
+            btn.dataset.email = row.email;
+            btn.innerHTML = '<i class="bi bi-shield-plus me-1"></i>Grant';
+            btn.addEventListener('click', function () {
+                _lkPermGrantEmail(this.dataset.email);
+            });
+            tdBtn.appendChild(btn);
+            tr.appendChild(tdBtn);
+
+            tbody.appendChild(tr);
+        });
+
+        loading.classList.add('d-none');
+        tableWrap.classList.remove('d-none');
+    }
+
+    // Wire Permissions tab listeners once
+    (function () {
+        const tabBtn     = document.getElementById('lktab-perms');
+        const grantBtn   = document.getElementById('btnLkPermGrant');
+        const refreshBtn = document.getElementById('btnLkPermRefresh');
+        let loaded = false;
+
+        if (tabBtn) {
+            tabBtn.addEventListener('shown.bs.tab', function () {
+                if (!loaded) { loaded = true; loadLakebasePermissions(); }
+            });
+        }
+        if (grantBtn) {
+            grantBtn.addEventListener('click', function () {
+                const sel = document.getElementById('lkPermUserSelect');
+                _lkPermGrantEmail(sel ? sel.value.trim() : '');
+            });
+        }
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', function () { loadLakebasePermissions(); });
+        }
+    }());
+
+    /** Drop all objects for a domain (views first, then tables, then UC/Lakeflow sync objects).
+     *  Takes only the registry key — items are looked up from _lkDomainRegistry
+     *  to avoid embedding JSON in HTML onclick attributes. */
+    function dropDomainObjects(domainKey) {
+        const entry = _lkDomainRegistry[domainKey];
+        if (!entry) {
+            showNotification('Domain not found: ' + domainKey, 'danger');
+            return;
+        }
+        const { schema, sortedItems: items } = entry;
+        const ucItems = _lkUCRegistry[domainKey] || [];
+        const database   = document.getElementById('lakebaseGraphDb')?.value  || '';
+        const branchPath = document.getElementById('lakebaseBranch')?.value   || '';
+        const count = items.length + ucItems.length;
+
+        const pgListHtml = items.map(o =>
+            '<li class="font-monospace small">' + escapeHtmlSettings(o.kind) + ': '
+            + escapeHtmlSettings(o.name) + '</li>'
+        ).join('');
+        const ucListHtml = ucItems.map(u =>
+            '<li class="font-monospace small">'
+            + (u.is_sync ? 'sync (Lakeflow): ' : 'delta: ')
+            + escapeHtmlSettings(u.full_name) + '</li>'
+        ).join('');
+        const listHtml = pgListHtml + (ucListHtml
+            ? '<li class="small text-muted mt-1 fw-semibold" style="list-style:none;margin-left:-1rem">Unity Catalog</li>'
+              + ucListHtml
+            : '');
+
+        const bodyContent = 'Drop all <strong>' + count + ' object' + (count !== 1 ? 's' : '')
+            + '</strong> for domain <code>' + escapeHtmlSettings(domainKey) + '</code>?'
+            + '<ul class="mt-2 mb-0 ps-3">' + listHtml + '</ul>';
+
+        const modalEl  = document.getElementById('lkDropConfirmModal');
+        const bodyEl   = document.getElementById('lkDropConfirmModalBody');
+        const confirmBtn = document.getElementById('lkDropConfirmBtn');
+
+        if (!modalEl || !bodyEl || !confirmBtn) {
+            if (window.confirm('Drop all ' + count + ' objects for domain ' + domainKey + '?')) {
+                _execDropAll(items, schema, database, branchPath, ucItems);
+            }
+            return;
+        }
+
+        bodyEl.innerHTML = bodyContent;
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        newBtn.addEventListener('click', function () {
+            modal.hide();
+            _execDropAll(items, schema, database, branchPath, ucItems);
+        });
+        modal.show();
+    }
+
+    /** Execute sequential drops: Postgres objects first, then UC/Lakeflow sync objects. */
+    async function _execDropAll(items, schema, database, branchPath, ucItems = []) {
+        const result = document.getElementById('lakebaseObjectsResult');
+        const errors = [];
+        const total = items.length + ucItems.length;
+        _showDropSpinner(result, 'Deleting ' + total + ' object' + (total !== 1 ? 's' : '') + '…');
+
+        // ── Postgres objects ─────────────────────────────────────────────
+        for (let i = 0; i < items.length; i++) {
+            const o = items[i];
+            _showDropSpinner(result, 'Dropping ' + o.kind + ' ' + o.name + ' (' + (i + 1) + '/' + total + ')…');
+            try {
+                const resp = await fetch('/settings/graph-engine/lakebase-drop-object', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ kind: o.kind, schema, name: o.name, database: database || '' }),
+                });
+                let data = {};
+                try { data = await resp.json(); } catch (_) { /* non-JSON body */ }
+                if (!data.success) {
+                    const detail = data.detail || data.message || (resp.ok ? 'server returned failure' : 'HTTP ' + resp.status);
+                    errors.push(o.kind + ' ' + o.name + ': ' + detail);
+                }
+            } catch (e) {
+                errors.push(o.kind + ' ' + o.name + ': ' + (e.message || 'network error'));
+            }
+        }
+
+        // ── UC / Lakeflow sync objects ────────────────────────────────────
+        for (let j = 0; j < ucItems.length; j++) {
+            const u = ucItems[j];
+            const label = (u.is_sync ? 'sync' : 'delta') + ' ' + u.full_name;
+            _showDropSpinner(result, 'Dropping ' + label + ' (' + (items.length + j + 1) + '/' + total + ')…');
+            try {
+                const resp = await fetch('/settings/graph-engine/drop-uc-object', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ full_name: u.full_name, is_sync: u.is_sync }),
+                });
+                let data = {};
+                try { data = await resp.json(); } catch (_) { /* non-JSON body */ }
+                if (!data.success) {
+                    const detail = data.detail || data.message || (resp.ok ? 'server returned failure' : 'HTTP ' + resp.status);
+                    errors.push(label + ': ' + detail);
+                }
+            } catch (e) {
+                errors.push(label + ': ' + (e.message || 'network error'));
+            }
+        }
+
+        if (errors.length) {
+            showNotification('Drops failed:\n' + errors.join('\n'), 'danger');
+            if (result) {
+                result.innerHTML = '<div class="alert alert-danger small py-2 mb-2"><strong>Drop errors:</strong><ul class="mb-0 mt-1 ps-3">'
+                    + errors.map(e => '<li>' + escapeHtmlSettings(e) + '</li>').join('')
+                    + '</ul></div>';
+            }
+        } else {
+            showNotification('All domain objects dropped', 'success');
+        }
+        _showDropSpinner(result, 'Reloading objects…');
+        await loadLakebaseObjects();
+    }
+
+
+    /** Fetch UC/Lakeflow synced-table objects and inject into each domain's sync slot. */
+    async function loadLakebaseSyncObjects(database, branchPath) {
+        const slots = document.querySelectorAll('.lk-sync-slot');
+        if (!slots.length) return;
+
+        // Show a spinner in each slot while loading
+        slots.forEach(slot => {
+            slot.innerHTML = '<div class="lk-sync-loading d-flex align-items-center gap-2 px-3 py-2 border-top">'
+                + '<span class="spinner-border spinner-border-sm text-muted" aria-hidden="true"></span>'
+                + '<span class="small text-muted">Loading sync objects…</span></div>';
+        });
+
+        function stateBadge(state) {
+            const map = {
+                ONLINE: 'bg-success-subtle text-success-emphasis',
+                ONLINE_NO_PENDING_UPDATE: 'bg-success-subtle text-success-emphasis',
+                PROVISIONING: 'bg-info-subtle text-info-emphasis',
+                PROVISIONING_INITIAL_SNAPSHOT: 'bg-info-subtle text-info-emphasis',
+                PROVISIONING_PIPELINE_RESOURCES: 'bg-info-subtle text-info-emphasis',
+                ONLINE_TRIGGERED_UPDATE: 'bg-info-subtle text-info-emphasis',
+                ONLINE_CONTINUOUS_UPDATE: 'bg-info-subtle text-info-emphasis',
+                FAILED: 'bg-danger-subtle text-danger-emphasis',
+                OFFLINE_FAILED: 'bg-danger-subtle text-danger-emphasis',
+                TABLED_OFFLINE: 'bg-danger-subtle text-danger-emphasis',
+                ERROR: 'bg-danger-subtle text-danger-emphasis',
+                NOT_FOUND: 'bg-secondary-subtle text-secondary-emphasis',
+                TIMEOUT: 'bg-warning-subtle text-warning-emphasis',
+                UNKNOWN: 'bg-secondary-subtle text-secondary-emphasis',
+            };
+            const cls = map[state] || 'bg-secondary-subtle text-secondary-emphasis';
+            return '<span class="badge border ' + cls + ' lk-sync-state-badge">'
+                + escapeHtmlSettings(state || '—') + '</span>';
+        }
+
+        try {
+            const params = new URLSearchParams();
+            if (database)   params.set('database',    database);
+            if (branchPath) params.set('branch_path', branchPath);
+            const url = '/settings/graph-engine/lakebase-sync-objects'
+                + (params.toString() ? '?' + params.toString() : '');
+            const resp = await fetch(url, { credentials: 'same-origin' });
+            const data = resp.ok ? await resp.json() : {};
+
+            if (!data.success || !data.uc_tables?.length) {
+                slots.forEach(slot => { slot.innerHTML = ''; });
+                return;
+            }
+
+            // Group UC tables by domain base name:
+            //   "domain_v1_sync"  → base "domain_v1"  (Lakeflow synced table)
+            //   "domain_v1"       → base "domain_v1"  (Delta source table/view)
+            const byBase = {};
+            (data.uc_tables || []).forEach(t => {
+                const base = t.name.endsWith('_sync') ? t.name.slice(0, -5) : t.name;
+                if (!byBase[base]) byBase[base] = [];
+                byBase[base].push(t);
+            });
+            // Publish to module-level registry so dropDomainObjects can include them.
+            _lkUCRegistry = byBase;
+
+            const ucLabel = data.uc_catalog && data.uc_schema
+                ? data.uc_catalog + '.' + data.uc_schema : '';
+
+            slots.forEach(slot => {
+                const base = slot.dataset.lkBase || '';
+                const tables = byBase[base];
+                if (!tables || !tables.length) {
+                    slot.innerHTML = '';
+                    return;
+                }
+
+                let h = '<div class="lk-sync-section border-top">';
+                h += '<div class="lk-sync-header px-3 py-1 d-flex align-items-center gap-2">'
+                    + '<span class="small text-muted fw-semibold" style="letter-spacing:.04em;font-size:.72rem;text-transform:uppercase">'
+                    + '<i class="bi bi-table me-1"></i>Unity Catalog</span>';
+                if (ucLabel) {
+                    h += '<span class="badge bg-light border text-muted font-monospace" style="font-size:.68rem">'
+                        + escapeHtmlSettings(ucLabel) + '</span>';
+                }
+                h += '</div>';
+                h += '<table class="table table-sm mb-0 lk-sync-table"><tbody>';
+
+                function mkUCDropBtn(fullName, isSync) {
+                    return '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 lk-drop-uc-btn"'
+                        + ' data-lk-full-name="' + escapeHtmlSettings(fullName) + '"'
+                        + ' data-lk-is-sync="' + (isSync ? '1' : '0') + '"'
+                        + ' title="Drop ' + escapeHtmlSettings(fullName) + '">'
+                        + '<i class="bi bi-trash" style="font-size:.75rem"></i></button>';
+                }
+
+                tables.forEach(t => {
+                    if (t.is_sync) {
+                        // Lakeflow synced-table registration row
+                        const pipelineLink = t.pipeline_id
+                            ? ' <a href="#" class="lk-sync-pipeline-link small text-muted ms-1"'
+                              + ' data-lk-pipeline-id="' + escapeHtmlSettings(t.pipeline_id) + '"'
+                              + ' title="Copy pipeline ID: ' + escapeHtmlSettings(t.pipeline_id) + '">'
+                              + '<i class="bi bi-clipboard" style="font-size:.7rem"></i></a>'
+                            : '';
+                        const errorTip = t.error
+                            ? ' <span class="text-danger ms-1" title="' + escapeHtmlSettings(t.error) + '">'
+                              + '<i class="bi bi-exclamation-circle" style="font-size:.75rem"></i></span>'
+                            : '';
+                        h += '<tr>'
+                            + '<td style="width:90px"><span class="badge border bg-warning-subtle text-warning-emphasis lk-sync-badge">sync</span></td>'
+                            + '<td class="font-monospace lk-sync-uc-cell">'
+                            + escapeHtmlSettings(t.full_name) + errorTip + '</td>'
+                            + '<td class="text-end" style="width:120px">'
+                            + (t.state ? stateBadge(t.state) : '') + pipelineLink
+                            + ' ' + mkUCDropBtn(t.full_name, true) + '</td>'
+                            + '</tr>';
+                        // Lakeflow source table sub-row
+                        if (t.source_table) {
+                            h += '<tr class="lk-sync-source-row">'
+                                + '<td></td>'
+                                + '<td class="font-monospace lk-sync-uc-cell text-muted" colspan="2">'
+                                + '<i class="bi bi-arrow-return-right me-1 text-muted" style="font-size:.7rem"></i>'
+                                + 'source: ' + escapeHtmlSettings(t.source_table) + '</td>'
+                                + '</tr>';
+                        }
+                    } else {
+                        // Delta table / view row
+                        const typeBadge = (t.table_type || '').toLowerCase() === 'view'
+                            ? '<span class="badge border bg-info-subtle text-info-emphasis lk-sync-badge">view</span>'
+                            : '<span class="badge border bg-primary-subtle text-primary-emphasis lk-sync-badge">delta</span>';
+                        h += '<tr>'
+                            + '<td style="width:90px">' + typeBadge + '</td>'
+                            + '<td class="font-monospace lk-sync-uc-cell text-muted">'
+                            + escapeHtmlSettings(t.full_name) + '</td>'
+                            + '<td class="text-end" style="width:120px">'
+                            + mkUCDropBtn(t.full_name, false) + '</td>'
+                            + '</tr>';
+                    }
+                });
+
+                h += '</tbody></table></div>';
+                slot.innerHTML = h;
+
+                slot.querySelectorAll('.lk-sync-pipeline-link').forEach(a => {
+                    a.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        const pid = this.dataset.lkPipelineId || '';
+                        if (pid && navigator.clipboard) {
+                            navigator.clipboard.writeText(pid).then(() => {
+                                showNotification('Pipeline ID copied: ' + pid, 'info', 2000);
+                            });
+                        } else if (pid) {
+                            showNotification('Pipeline ID: ' + pid, 'info', 3000);
+                        }
+                    });
+                });
+
+                slot.querySelectorAll('.lk-drop-uc-btn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        dropUCObject(
+                            this.dataset.lkFullName,
+                            this.dataset.lkIsSync === '1',
+                        );
+                    });
+                });
+            });
+        } catch (e) {
+            slots.forEach(slot => { slot.innerHTML = ''; });
+        }
+    }
+
+    /** Ask for confirmation, then DROP a Unity Catalog table or Lakeflow synced-table. */
+    function dropUCObject(fullName, isSync) {
+        const kindLabel = isSync ? 'Lakeflow sync table' : 'UC table';
+        const warn = isSync
+            ? '<br><small class="text-muted">This will also remove the Lakeflow pipeline registration.</small>'
+            : '';
+        const modalEl  = document.getElementById('lkDropConfirmModal');
+        const bodyEl   = document.getElementById('lkDropConfirmModalBody');
+        const confirmBtn = document.getElementById('lkDropConfirmBtn');
+        if (!modalEl || !bodyEl || !confirmBtn) { return; }
+
+        bodyEl.innerHTML = 'Are you sure you want to drop the ' + kindLabel
+            + ' <strong>' + escapeHtmlSettings(fullName) + '</strong>?' + warn;
+
+        const fresh = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(fresh, confirmBtn);
+        fresh.addEventListener('click', async function () {
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            try {
+                const resp = await fetch('/settings/graph-engine/drop-uc-object', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ full_name: fullName, is_sync: isSync }),
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    showNotification('Dropped: ' + fullName, 'success', 3000);
+                    loadLakebaseObjects();
+                } else {
+                    showNotification('Error: ' + (result.message || result.detail || 'Unknown error'), 'error', 5000);
+                }
+            } catch (err) {
+                showNotification('Request failed: ' + err.message, 'error', 5000);
+            }
+        });
+
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
 
     document.getElementById('btnLoadLakebaseObjects')?.addEventListener('click', loadLakebaseObjects);
+
+    // ── Provision new graph DB from scratch ──────────────────────────────────
+    const PROVISION_TASK_KEY = 'ontobricks_lakebase_provision_task';
+
+    function updateProvProgress(percent, text) {
+        const bar = document.getElementById('provProgressBar');
+        const status = document.getElementById('provStatusText');
+        if (bar) {
+            const pct = Math.max(0, Math.min(100, percent || 0));
+            bar.style.width = pct + '%';
+            bar.textContent = pct + '%';
+        }
+        if (status && text) status.textContent = text;
+    }
+
+    function renderProvStepLog(task) {
+        const list = document.getElementById('provStepLog');
+        if (!list || !task || !Array.isArray(task.steps)) return;
+        const icon = (s) => {
+            if (s === 'completed') return '<i class="bi bi-check-circle-fill text-success me-2"></i>';
+            if (s === 'running')   return '<span class="spinner-border spinner-border-sm text-primary me-2"></span>';
+            if (s === 'failed')    return '<i class="bi bi-x-circle-fill text-danger me-2"></i>';
+            if (s === 'skipped')   return '<i class="bi bi-dash-circle text-muted me-2"></i>';
+            return '<i class="bi bi-circle text-muted me-2"></i>';
+        };
+        const rows = task.steps.map(s => {
+            // Surface the live message under the running step and the error
+            // under the failed step so each step has a visible log line.
+            let detail = '';
+            if (s.status === 'running' && task.message) {
+                detail = '<div class="small text-muted ms-4">' +
+                    escapeHtmlSettings(task.message) + '</div>';
+            } else if (s.status === 'failed' && task.error) {
+                detail = '<div class="small text-danger ms-4">' +
+                    escapeHtmlSettings(task.error) + '</div>';
+            }
+            return '<li class="list-group-item bg-transparent px-0 py-1">' +
+                '<div class="d-flex align-items-center">' +
+                icon(s.status) + '<span>' +
+                escapeHtmlSettings(s.description || s.name) + '</span></div>' +
+                detail + '</li>';
+        });
+        list.innerHTML = rows.join('');
+    }
+
+    function _provDone() {
+        const btn = document.getElementById('btnProvisionLakebaseGraph');
+        if (btn) btn.disabled = false;
+    }
+
+    async function monitorProvisionTask(taskId) {
+        const pollInterval = 1500;
+        const area = document.getElementById('provProgressArea');
+        if (area) area.classList.remove('d-none');
+        while (true) {
+            try {
+                await new Promise(r => setTimeout(r, pollInterval));
+                const resp = await fetch('/tasks/' + encodeURIComponent(taskId), { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success) throw new Error('Task not found');
+                const task = data.task;
+                updateProvProgress(task.progress || 0, task.message || '');
+                renderProvStepLog(task);
+
+                if (task.status === 'completed') {
+                    sessionStorage.removeItem(PROVISION_TASK_KEY);
+                    const warnings = (task.result && task.result.warnings) || [];
+                    if (warnings.length) {
+                        showNotification('Graph DB created with ' + warnings.length +
+                            ' warning(s): ' + warnings.join(' | '), 'warning', 8000);
+                    } else {
+                        showNotification('Lakebase graph DB created successfully!', 'success', 4000);
+                    }
+                    _provDone();
+                    // Refresh the connection pickers so the new project shows up.
+                    if (typeof loadLakebaseProjects === 'function') loadLakebaseProjects();
+                    if (typeof refreshTasks === 'function') refreshTasks();
+                    break;
+                } else if (task.status === 'failed') {
+                    sessionStorage.removeItem(PROVISION_TASK_KEY);
+                    showNotification('Provisioning failed: ' + (task.error || 'Unknown error'), 'error', 8000);
+                    _provDone();
+                    break;
+                } else if (task.status === 'cancelled') {
+                    sessionStorage.removeItem(PROVISION_TASK_KEY);
+                    showNotification('Provisioning was cancelled', 'warning');
+                    _provDone();
+                    break;
+                }
+            } catch (err) {
+                sessionStorage.removeItem(PROVISION_TASK_KEY);
+                showNotification('Provisioning monitoring failed: ' + (err.message || 'unknown'), 'error');
+                _provDone();
+                break;
+            }
+        }
+    }
+
+    // Lowercase + restrict to [a-z0-9_-]; mirrors the backend normaliser so
+    // the value the operator sees matches what gets created.
+    function normalizeProvName(raw) {
+        return (raw || '').trim().toLowerCase()
+            .replace(/[^a-z0-9_-]+/g, '_')
+            .replace(/^[-_]+|[-_]+$/g, '');
+    }
+
+    // Per-keystroke variant: 1:1 char replacement (preserves caret position)
+    // and no edge trimming so the operator can still type a leading "_".
+    function normalizeProvNameLive(raw) {
+        return (raw || '').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    }
+
+    async function provisionLakebaseGraph() {
+        const btn = document.getElementById('btnProvisionLakebaseGraph');
+        const name = normalizeProvName(document.getElementById('provInstanceName')?.value);
+        const database = normalizeProvName(document.getElementById('provDatabase')?.value);
+        if (!name || !database) {
+            showNotification('Instance name and Postgres database are required.', 'warning');
+            return;
+        }
+        const payload = {
+            name: name,
+            capacity: document.getElementById('provCapacity')?.value || 'CU_2',
+            branch: normalizeProvName(document.getElementById('provBranch')?.value) || 'production',
+            database: database,
+            schema: normalizeProvName(document.getElementById('provSchema')?.value) || 'ontobricks_graph',
+            mcp_app_name: (document.getElementById('provMcpAppName')?.value || '').trim(),
+            grant_uc_catalog: !!document.getElementById('provGrantUcCatalog')?.checked,
+        };
+        if (btn) btn.disabled = true;
+        const list = document.getElementById('provStepLog');
+        if (list) list.innerHTML = '';
+        updateProvProgress(0, 'Starting…');
+        const area = document.getElementById('provProgressArea');
+        if (area) area.classList.remove('d-none');
+
+        try {
+            const resp = await fetch('/settings/graph-engine/lakebase-provision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                showNotification('Error: ' + (data.message || data.detail || 'Failed to start provisioning'), 'error', 6000);
+                _provDone();
+                return;
+            }
+            sessionStorage.setItem(PROVISION_TASK_KEY, data.task_id);
+            monitorProvisionTask(data.task_id);
+        } catch (err) {
+            showNotification('Error: ' + err.message, 'error', 6000);
+            _provDone();
+        }
+    }
+
+    document.getElementById('btnProvisionLakebaseGraph')?.addEventListener('click', provisionLakebaseGraph);
+
+    // Live-normalise the name fields on every keystroke so the operator always
+    // sees a value that matches what the backend will create (lowercase,
+    // [a-z0-9_-] only). The caret is restored since the replacement is 1:1.
+    ['provInstanceName', 'provDatabase', 'provSchema'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('input', (e) => {
+            const el = e.target;
+            const start = el.selectionStart;
+            const end = el.selectionEnd;
+            const next = normalizeProvNameLive(el.value);
+            if (next !== el.value) {
+                el.value = next;
+                try { el.setSelectionRange(start, end); } catch (_) { /* ignore */ }
+            }
+        });
+    });
+
+    // Resume a provisioning task across reloads (reopen the modal so the
+    // live progress is visible again).
+    (function _resumeProvisionTask() {
+        const taskId = sessionStorage.getItem(PROVISION_TASK_KEY);
+        if (taskId) {
+            const btn = document.getElementById('btnProvisionLakebaseGraph');
+            if (btn) btn.disabled = true;
+            const modalEl = document.getElementById('lakebaseProvisionModal');
+            if (modalEl && window.bootstrap) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            }
+            monitorProvisionTask(taskId);
+        }
+    })();
 
     _initSchemaToggle();
 
@@ -1121,15 +1985,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // =====================================================================
-    //  GRAPH DB TAB – tab activation
+    //  TRIPLE STORE SECTIONS – lazy-load on first visit to ts-global or lakebase
     // =====================================================================
 
-    document.getElementById('tab-graphdb')?.addEventListener('shown.bs.tab', async () => {
-        setGraphDbTabLoading(true);
-        try {
-            await refreshGraphDbTabFromServer();
-        } finally {
-            setGraphDbTabLoading(false);
+    document.addEventListener('sidebarSectionChanged', async (e) => {
+        const s = e.detail?.section;
+        if ((s === 'ts-global' || s === 'lakebase') && !graphDbLoaded) {
+            graphDbLoaded = true;
+            setGraphDbTabLoading(true);
+            try {
+                await refreshGraphDbTabFromServer();
+            } finally {
+                setGraphDbTabLoading(false);
+            }
         }
     });
 
@@ -1137,7 +2005,7 @@ document.addEventListener('DOMContentLoaded', function () {
     //  GLOBAL SAVE BUTTON – warehouse, global prefs, CloudFetch, Graph DB
     // =====================================================================
 
-    document.getElementById('btnSaveAllSettings')?.addEventListener('click', async function () {
+    document.querySelectorAll('.btn-save-settings').forEach(saveBtn => saveBtn.addEventListener('click', async function () {
         const btn = this;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
@@ -1204,5 +2072,5 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             showNotification('All settings saved', 'success', 2000);
         }
-    });
+    }));
 });

@@ -1,0 +1,421 @@
+## Settings / Create Graph DB — do not overwrite active connection config
+
+**Context**: After "Create Graph DB" provisioning completed, the `_persist_cfg` callback silently
+overwrote the stored `graph_engine_config` (project / branch / database / schema) with the newly
+provisioned values. This changed the active connection shown in the Connection tab without the
+user's consent, even when they just wanted to provision an additional graph DB without switching.
+
+**Changes**:
+1. `src/back/objects/domain/SettingsService.py` — `graph_engine_lakebase_provision_result`
+   - Removed the `_persist_cfg` callback that was passed as `on_success=` to
+     `LakebaseGraphProvisioner`. The provisioner still creates the instance, database, schema,
+     and grants as before; it just no longer auto-updates the saved connection config.
+   - The `sync_mode` / `uc_catalog` pre-fetch from `saved_cfg` is kept (drives the UC grant).
+
+**Modified files**:
+- `src/back/objects/domain/SettingsService.py`
+
+**Test result**: pending deploy.
+
+---
+
+## Provisioner — auto-grant Postgres superuser to CAN_MANAGE workspace users
+
+**Context**: The "Create Graph DB" flow runs as the app service principal, so only the SP received
+a Postgres superuser role on the newly created Lakebase project. Workspace users with `CAN_MANAGE`
+on the project (e.g. the human operator who triggered the flow) could see the project and branch in
+the Databricks UI but got "Permission denied" when trying to query objects — their Postgres identity
+had never been federated because no Postgres role existed for them.
+
+**Changes**:
+1. `src/back/core/graphdb/lakebase/provisioner.py`
+   - Added `"superusers"` step to `provision_steps()` (inserted after `"grants"`).
+   - Added `_step_grant_superuser_to_managers(api)`: reads the project ACL via
+     `GET /api/2.0/permissions/database-projects/{project}`, collects all *user* identities
+     (not SPs or groups) holding `CAN_MANAGE`, then calls `_ensure_superuser_role` for each.
+   - Added `_ensure_superuser_role(api, user_email, role_map)`: creates a `LAKEBASE_OAUTH_V1`
+     Postgres role for the user via `POST /api/2.0/postgres/{branch}/roles` if absent, then
+     patches it to add `DATABRICKS_SUPERUSER` membership via
+     `PATCH /api/2.0/postgres/{branch}/roles/{id}?update_mask=spec.membership_roles`.
+     Fully idempotent — skips users who already hold the membership. Best-effort — failures
+     produce warnings but do not abort the provision flow.
+   - `run()`: added `tm.advance_step` + call to `_step_grant_superuser_to_managers` after
+     `_step_grant_schema`.
+
+**Modified files**:
+- `src/back/core/graphdb/lakebase/provisioner.py`
+
+**Test result**: 12/12 provisioner unit tests pass. 2344 total tests pass (1 pre-existing skip:
+pyshacl not installed locally).
+
+**Deployed**: `make deploy` — exit 0, app RUNNING at https://ontobricks-050-2508734981122804.aws.databricksapps.com
+
+**Follow-up fix 1 (same session)**: The ACL-based approach was wrong — workspace admins hold
+`CAN_MANAGE` via the *admins group*, which is never expanded to individual `user_name` rows in
+the project ACL.  Replaced ACL lookup with a SCIM lookup:
+`GET /api/2.0/preview/scim/v2/Groups?filter=displayName+eq+admins` → resolve `Users/` members
+to their `userName` (email).  Service-principal members in the group are filtered out.  Affected
+method: `_resolve_admin_emails` (new) replaces the inline ACL comprehension in
+`_step_grant_superuser_to_managers`.
+
+**Follow-up fix 2 (same session)**: The SCIM lookup also fails silently when the provisioner
+runs as the app service principal (SP lacks SCIM read access → empty `Resources` → no emails →
+no grant).  Root fix: added `operator_email: str = ""` parameter to `LakebaseGraphProvisioner`.
+`SettingsService.graph_engine_lakebase_provision_result` passes the authenticated human's `email`
+as `operator_email`.  `_resolve_admin_emails` now always seeds the list with `operator_email`
+first (guaranteed correct, no SCIM required), then tries SCIM as a best-effort supplement for
+other admins.  SCIM failures are demoted from `warning` to `debug` log (expected when SP lacks
+access).
+- Modified: `src/back/core/graphdb/lakebase/provisioner.py`
+- Modified: `src/back/objects/domain/SettingsService.py`
+
+**Deployed**: `make deploy` — exit 0, app RUNNING.
+
+---
+
+## Settings / Lakebase Objects tab — correct database fallback (fix of prior fix)
+
+**Context**: After a build, the Objects tab showed an empty list. Two assumptions were corrected:
+1. Prior fix (wrong): connected to `graph_engine_config.lakebase_project` — a separate Lakebase
+   project provisioned via the UI. But `GraphDBFactory` always uses the **bound** Lakebase host
+   (`PGHOST`). The `lakebase_project` field is provisioner metadata, not a live connection target.
+2. Root cause: `GraphDBFactory` connects to `PGHOST` (bound = `ontobricks-demo2`) and overrides
+   `PGDATABASE` with `graph_engine_config.database` (= `ontobricks_test`). Graph tables land in
+   `ontobricks_test` database on the bound host — the Objects tab wasn't querying that.
+
+**Changes**:
+1. `src/back/objects/domain/SettingsService.py`
+   - Replaced `_graph_engine_branch_and_database` helper with simpler `_graph_engine_database`:
+     reads only `graph_engine_config.database` (ignores `lakebase_project`).
+   - In `graph_engine_lakebase_objects_result` fallback (no form `branch_path`): use the BOUND
+     Lakebase auth (same as `GraphDBFactory`) and override `dbname` with:
+     form `database` → `graph_engine_config.database` → bound PGDATABASE default.
+
+**Modified files**:
+- `src/back/objects/domain/SettingsService.py`
+
+**Test result**: pending deploy.
+
+---
+
+## Align Health tab with registry/graph DB separation
+
+Context: The "Graph DB → Health" panel displayed "Bound PGDATABASE" (which is
+the registry database, not the graph DB) and "Effective database", creating
+confusion since registry and graph DB are totally separate Postgres databases
+on the same bound Lakebase host. The `/health` tab also had ambiguous check
+labels that mixed registry and graph concerns.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Rename health response keys: bound_database→registry_database,
+   effective_database→graph_database. Update success/failure messages to
+   clearly state both databases.
+
+2. src/front/static/config/js/settings.js
+   Update Graph DB Health panel labels: "Bound PGDATABASE"→"Bound host (PGHOST)"
+   + "Graph database", registry DB shown as a clearly labelled footnote row.
+
+3. src/front/templates/settings.html
+   Add architecture note banner in Connection tab explaining that project/branch
+   are provisioner metadata only, actual connection uses PGHOST; database/schema
+   govern graph storage; registry uses a separate database.
+
+4. src/shared/fastapi/health.py
+   Rename check labels: "Lakebase Postgres"→"Lakebase — Registry Postgres",
+   "Lakebase permissions"→"Lakebase — Registry permissions",
+   "Graph DB (Lakebase)"→"Lakebase — Graph DB (separate database)".
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/front/static/config/js/settings.js
+- src/front/templates/settings.html
+- src/shared/fastapi/health.py
+
+Tests: uv run pytest -q (hanging on network — integration suite requires live Databricks)
+
+---
+
+## Fix Objects tab always querying bound Lakebase (not provisioner project)
+
+Context: After a successful build, the Objects tab remained empty. Root cause:
+`loadLakebaseObjects()` was forwarding `branch_path = lakebaseBranch.value` to
+the backend. The Connection form pre-fills `lakebaseBranch` with the saved
+provisioner branch (e.g., `projects/.../branches/...` for `ontobricks-test`).
+The backend then connected to that provisioner project instead of the BOUND
+Lakebase host (`ontobricks-demo2`) where `GraphDBFactory` had actually written
+the graph data. Registry and graph share the same Lakebase host (PGHOST) but
+use different databases.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Remove branch_path from loadLakebaseObjects URL params; always rely on the
+   bound Lakebase auth (empty branch_path triggers the correct fallback path).
+   Remove branch_path from drop-object calls for the same reason.
+   Remove dead branchSel/branchPath variables from the function scope.
+
+Modified files:
+- src/front/static/config/js/settings.js
+
+Tests: n/a (integration suite requires live Databricks)
+
+---
+
+## Support separate Lakebase project for graph DB (BranchLakebaseAuth)
+
+Context: GraphDBFactory always used the bound Lakebase auth (PGHOST, the
+registry project), ignoring the lakebase_project/lakebase_branch saved in
+the Connection tab. When the user configures a different project for the
+graph DB, writes would silently land in the registry's Lakebase instead.
+
+The fix adds BranchLakebaseAuth — a drop-in auth alternative that resolves
+the Postgres endpoint host and mints JWTs for a specific branch resource
+path (projects/<proj>/branches/<branch>) via the Databricks Postgres API.
+GraphDBFactory now instantiates BranchLakebaseAuth when lakebase_branch is
+present in engine_config, falling back to the bound auth otherwise.
+The Health probe was updated to match the same auth selection logic.
+
+Changes:
+
+1. src/back/core/databricks/LakebaseAuth.py
+   Add BranchLakebaseAuth class: same interface as LakebaseAuth, resolves
+   host/JWT from an explicit branch resource path, caches token ~55 min.
+
+2. src/back/core/graphdb/GraphDBFactory.py
+   _create_lakebase: use BranchLakebaseAuth(branch_path, database_override)
+   when engine_config.lakebase_branch is set; otherwise use get_lakebase_auth().
+
+3. src/back/objects/domain/SettingsService.py
+   graph_engine_lakebase_health_result: mirror the same auth selection so
+   the Health panel connects to the same host as the build engine.
+
+Modified files:
+- src/back/core/databricks/LakebaseAuth.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/domain/SettingsService.py
+
+Tests: n/a (integration suite requires live Databricks)
+
+---
+
+## Fix "database does not exist" race in LakebaseGraphProvisioner
+
+Context: "Create Graph DB" failed with "database ontobricks_graph_db does not
+exist". The control-plane API reported the DB as created (making _database_exists
+return True) before Postgres actually accepted connections to it. The schema
+creation step then immediately tried to connect and got the error.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/provisioner.py
+   _step_create_database: add Phase 2 reachability poll after Phase 1 API
+   listing check. New _wait_for_db_reachable helper retries a lightweight
+   psycopg connect up to 15 times (5s apart, ~75s) until the database accepts
+   connections, or warns and proceeds if the timeout is exceeded.
+
+Modified files:
+- src/back/core/graphdb/lakebase/provisioner.py
+
+Tests: n/a (integration suite requires live Databricks)
+
+---
+
+## Fix schema dropdown querying bound Lakebase instead of selected branch
+
+Context: After creating a Graph DB in a non-bound project, the Connection tab
+schema dropdown was empty because lakebase-pg-schemas always used the bound
+Lakebase auth (registry project) instead of the branch selected in the form.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   loadLakebasePgSchemas: accept branchPath parameter, forward as branch_path
+   query param. Callers (cascade from loadLakebasePgDatabases and the
+   lakebaseGraphDb change listener) now pass lakebaseBranch.value.
+
+2. src/api/routers/internal/settings.py
+   lakebase-pg-schemas: add branch_path query parameter, pass to service.
+
+3. src/back/objects/domain/SettingsService.py
+   graph_engine_lakebase_pg_schemas_result: use BranchLakebaseAuth when
+   branch_path is supplied, fall back to bound auth otherwise.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+
+Tests: n/a (integration suite requires live Databricks)
+
+---
+
+## Full graph/registry Lakebase separation audit — fix remaining sites
+
+Context: Comprehensive audit revealed that graph DB operations (objects listing,
+drop, schema discovery, health probe) still connected to the bound registry
+Lakebase instead of the separately-configured graph Lakebase project. This
+contradicts the core architecture: registry and graph DB are totally separate
+Lakebase instances. Four sites were broken; all now use the same auth selection
+as GraphDBFactory (BranchLakebaseAuth when lakebase_branch is configured).
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Add _graph_engine_auth() static helper: resolves correct Lakebase auth
+   (BranchLakebaseAuth or bound) + effective database from saved config,
+   with form params taking priority. Single source of truth for all graph
+   operations in SettingsService.
+
+2. src/back/objects/domain/SettingsService.py
+   graph_engine_lakebase_objects_result: replace manual bound-auth fallback
+   with _graph_engine_auth(); removes stale comment about bound host.
+
+3. src/back/objects/domain/SettingsService.py
+   graph_engine_lakebase_drop_object_result: same — use _graph_engine_auth();
+   also fixes missing database fallback (was only applied when database param
+   truthy, now correctly resolved from saved config).
+
+4. src/back/objects/domain/SettingsService.py
+   graph_engine_lakebase_pg_schemas_result: replace BranchLakebaseAuth(branch_path)
+   with _graph_engine_auth() so saved lakebase_branch is used when branch_path
+   form param is empty.
+
+5. src/shared/fastapi/health.py
+   _check_graphdb_lakebase: stop using LakebaseRegistryStore (registry pool).
+   Now selects BranchLakebaseAuth vs bound auth from engine_cfg.lakebase_branch,
+   then opens a direct psycopg connection on the graph host.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/shared/fastapi/health.py
+
+Tests: n/a (integration suite requires live Databricks)
+
+---
+
+## Fix BranchLakebaseAuth missing branch_name — managed_synced mode broken
+
+Context: After switching to BranchLakebaseAuth for graph operations, builds
+in managed_synced mode failed with "managed_synced mode active but no
+SyncedTableManager was wired". Root cause: BranchLakebaseAuth was missing
+the branch_name property. GraphDBFactory._build_synced_manager called
+auth.branch_name, got AttributeError, fell back silently... but the
+LakebaseFlatStore was somehow still created in managed_synced state without
+a manager.
+
+Fix: add branch_name and annotate instance_name on BranchLakebaseAuth.
+The branch resource path "projects/<proj>/branches/<branch>" provides both:
+instance_name = parts[1] (project name), branch_name = parts[-1] (branch name).
+SyncedTableManager can now be built correctly for graph projects.
+
+Changes:
+
+1. src/back/core/databricks/LakebaseAuth.py
+   BranchLakebaseAuth: add branch_name property (last path segment),
+   annotate instance_name docstring for clarity.
+
+Modified files:
+- src/back/core/databricks/LakebaseAuth.py
+
+Tests: n/a (integration suite requires live Databricks)
+
+---
+
+## Lakebase Objects tab — filter out internal Databricks schemas
+
+**Context**: After granting `DATABRICKS_SUPERUSER` to workspace admins, the Objects tab started showing
+Lakebase-internal schemas and their tables (`__db_prog_*`, `partition_*`, `table_pipeline_id`, etc.)
+because `has_schema_privilege` returns true for a superuser on *all* schemas — including `__db_system`
+and other `__*` internal schemas created by Databricks. The tab should only show user-created schemas.
+
+**Changes**:
+1. `src/back/objects/domain/SettingsService.py` — `graph_engine_lakebase_objects_result`
+   - Added `AND nspname NOT LIKE '__%%'` to the schema query, excluding all `__*` Databricks-internal
+     schemas. Combined with the existing `pg_*` and `information_schema`/`public` filters, this
+     restricts the listing to purely user-created schemas and their objects.
+
+**Modified files**:
+- `src/back/objects/domain/SettingsService.py`
+
+**Test result**: 2385 passed, 1 pre-existing skip (pyshacl). Deployed: `make deploy` — exit 0, app RUNNING.
+
+---
+
+## Lakebase Permissions tab — grant Postgres superuser from the UI
+
+**Context**: After deploying the automated superuser grant in the provisioner, users found it still
+didn't work reliably (SCIM lookup unreliable when running as SP). The new Permissions tab gives admins
+a direct UI to grant `DATABRICKS_SUPERUSER` to any user on demand, without re-running the provisioner.
+
+**Changes**:
+1. `src/back/core/databricks/LakebaseAuth.py`
+   - Added `branch_path` property to `LakebaseAuth`: returns `projects/<inst>/branches/<branch>`
+     (triggers endpoint resolution on first call, same cost as `.host`).
+   - Added `branch_path` property to `BranchLakebaseAuth`: returns `self._branch_path` directly.
+
+2. `src/back/objects/domain/SettingsService.py`
+   - `graph_engine_lakebase_pg_roles_result(session_mgr, settings)`: lists all Postgres roles on
+     the configured graph Lakebase branch via `GET /api/2.0/postgres/{branch_path}/roles`; overlays
+     app-user principals to produce a combined roles + app_users response.
+   - `graph_engine_lakebase_grant_superuser_result(user_email, session_mgr, settings)`: idempotent
+     grant — creates `LAKEBASE_OAUTH_V1` Postgres role if absent, then PATCHes to add
+     `DATABRICKS_SUPERUSER` membership. Mirrors provisioner logic, reusable outside the provision flow.
+
+3. `src/api/routers/internal/settings.py`
+   - `GET /settings/graph-engine/lakebase-pg-roles` (admin only): delegates to service above.
+   - `POST /settings/graph-engine/lakebase-grant-superuser` (admin only): body `{user_email}`.
+
+4. `src/front/templates/settings.html`
+   - Added "Permissions" tab (nav item + pane) between Objects and Advanced in the Lakebase section.
+   - Pane: email input + Grant button, Refresh button, status banner, two tables
+     (application users with role/superuser status, all Postgres roles).
+
+5. `src/front/static/config/js/settings.js`
+   - `loadLakebasePermissions()`: fetches roles + app users, renders both tables with status badges
+     and per-row Grant buttons (disabled when already superuser).
+   - `grantSuperuser(email)`: POSTs to grant endpoint, shows inline progress/success/error, refreshes
+     the table on success.
+   - `escHtml()`: local HTML-escaping helper for safe innerHTML rendering.
+
+**Modified files**:
+- `src/back/core/databricks/LakebaseAuth.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+**Test result**: 2385 passed, 1 pre-existing skip (pyshacl). Deployed: `make deploy`.
+
+---
+
+## Permissions tab — fix Grant button scope + replace text input with user dropdown
+
+**Context**: The Grant button did nothing because `grantSuperuser` and `loadLakebasePermissions`
+were defined inside the `DOMContentLoaded` closure but called via `onclick=` string attributes
+which look up names in the global scope. Also the text input was replaced with a proper dropdown
+populated from application users (CAN USE + CAN MANAGE) to make granting more ergonomic.
+
+**Changes**:
+1. `src/front/templates/settings.html`
+   - Removed `onclick=` from the Permissions tab `<button>` (was ignored anyway by Bootstrap tabs).
+   - Replaced the free-form email `<input>` with a `<select id="lkPermUserSelect">` dropdown.
+   - Added `id="btnLkPermGrant"` and `id="btnLkPermRefresh"` on action buttons (no inline JS).
+   - Simplified table: single merged table (app users + orphan Postgres roles) replacing the two
+     separate tables.
+
+2. `src/front/static/config/js/settings.js`
+   - `loadLakebasePermissions()`: no more `onclick=` in generated HTML — row Grant buttons use
+     `btn.dataset.email` + `btn.addEventListener('click', ...)`.
+   - Dropdown is populated from the merged `allRows` list (app_users first, then any Postgres roles
+     not already in app_users). Previous selection is preserved across refreshes.
+   - `_lkPermGrantEmail(email)`: renamed internal helper (not global), handles the fetch + banner.
+   - IIFE at the bottom wires `shown.bs.tab` → first load, `btnLkPermGrant` click → grant selected
+     user, `btnLkPermRefresh` click → reload — all via `addEventListener`, no global pollution.
+
+**Modified files**:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+**Test result**: 2385 passed, 1 pre-existing skip. Deployed: `make deploy`.

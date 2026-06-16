@@ -7,20 +7,32 @@
    CSS Custom Properties (Variables)
    ========================================================================== */
 :root {
-    /* Primary Colors - Databricks Red */
-    --db-primary: #FF3621;
-    --db-primary-dark: #E62E1C;
-    --db-primary-darker: #CC2819;
-    --db-primary-light: rgba(255, 54, 33, 0.1);
-    --db-primary-rgb: 255, 54, 33;
+    /* Accent color - dark grey (replaces the former Databricks Red accent) */
+    --db-primary: #495057;
+    --db-primary-dark: #3a4046;
+    --db-primary-darker: #2b3035;
+    --db-primary-light: rgba(73, 80, 87, 0.1);
+    --db-primary-rgb: 73, 80, 87;
     
     /* Neutral Colors */
     --db-dark: #1B1C1D;
     --db-gray: #2C2D2E;
     --db-gray-600: #6c757d;
-    --db-light-gray: #F7F7F7;
+    --db-light-gray: #FFFFFF;
+    --db-bg-secondary: #FFFFFF;
     --db-border: #E0E0E0;
     --db-border-light: #dee2e6;
+
+    /* Navbar / top banner - classic light grey chrome */
+    --db-navbar-bg: #ECECEC;
+    --db-navbar-border: #D8D8D8;
+
+    /* Bootstrap `light` surface kept white so `.bg-light` utilities are white.
+       NOTE: do NOT override --bs-secondary-bg / --bs-tertiary-bg here — Bootstrap
+       uses --bs-secondary-bg for the .form-range slider track and disabled-control
+       surfaces, so whitening it hides the slider line on a white page. */
+    --bs-light: #FFFFFF;
+    --bs-light-rgb: 255, 255, 255;
     
     /* Text Colors */
     --db-text: #1E1E1E;
@@ -64,26 +76,28 @@ body {
    Navbar
    ========================================================================== */
 .navbar {
-    background-color: var(--db-dark);
-    padding: 0.5rem 1rem;
+    background-color: var(--db-navbar-bg);
+    border-bottom: 1px solid var(--db-navbar-border);
+    padding: 0.2rem 1rem;
+    min-height: 0;
     position: relative;
     z-index: 1050; /* Above OntoViz elements */
 }
 
 .navbar .dropdown-menu {
     z-index: 1051;
-    background-color: var(--db-dark);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--db-navbar-bg);
+    border: 1px solid var(--db-navbar-border);
     border-radius: 0.5rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
     padding: 0.4rem 0;
     min-width: 14rem;
     margin-top: 0.35rem;
 }
 
 .navbar .dropdown-menu .dropdown-item {
-    color: rgba(255, 255, 255, 0.88);
-    font-size: 0.875rem;
+    color: var(--db-text);
+    font-size: 0.8125rem;
     padding: 0.4rem 1rem;
     transition: background-color 0.15s ease, color 0.15s ease;
     border-radius: 0.25rem;
@@ -112,16 +126,16 @@ body {
 }
 
 .navbar .dropdown-menu .dropdown-header {
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--db-text-muted);
     font-size: 0.7rem;
-    font-weight: 600;
+    font-weight: 400;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     padding: 0.45rem 1rem 0.2rem;
 }
 
 .navbar .dropdown-menu .dropdown-divider {
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--db-navbar-border);
     margin: 0.35rem 0.8rem;
 }
 
@@ -135,10 +149,10 @@ body {
     left: 100%;
     margin-top: 0;
     margin-left: 0.125rem;
-    background-color: var(--db-dark);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--db-navbar-bg);
+    border: 1px solid var(--db-navbar-border);
     border-radius: 0.5rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
     min-width: 14rem;
 }
 .navbar .dropdown-menu .dropend:hover > .dropdown-menu {
@@ -151,20 +165,38 @@ body {
 }
 
 .navbar-brand {
-    color: white !important;
-    font-weight: 600;
+    color: var(--db-text) !important;
+    font-weight: 400;
     font-size: 1.25rem;
 }
 
 .navbar-brand:hover {
-    color: white !important;
+    color: var(--db-text) !important;
+}
+
+.navbar-nav {
+    align-items: center;
 }
 
 .navbar .nav-link {
-    color: rgba(255, 255, 255, 0.85) !important;
+    color: var(--db-text) !important;
     margin: 0 0.5rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     transition: var(--db-transition-fast);
     white-space: nowrap;
+    /* Match the Databricks (apps-v2) top-nav text size: 13px, weight 400. */
+    font-size: 0.8125rem;
+    font-weight: 400;
+}
+
+/* Menu labels in the navbar carry Bootstrap's .small (0.875em), which would
+   shrink them below the 13px target — pin them to the nav-link size instead. */
+.navbar .nav-link .small {
+    font-size: 1em;
 }
 
 .navbar .nav-link .bi {
@@ -174,11 +206,12 @@ body {
 }
 
 .navbar .nav-link:hover {
-    color: white !important;
+    color: var(--db-primary) !important;
 }
 
 .navbar .nav-link.active {
     color: var(--db-primary) !important;
+    font-weight: 400;
 }
 
 /* Disabled navigation items (requires domain saved to UC) */
@@ -189,7 +222,7 @@ body {
 }
 
 .navbar .nav-link.nav-disabled:hover {
-    color: rgba(255, 255, 255, 0.5) !important;
+    color: rgba(0, 0, 0, 0.4) !important;
 }
 
 /* ==========================================================================
@@ -235,6 +268,23 @@ body {
     50%      { opacity: 1;   transform: scale(1.08); }
 }
 
+/* --------------------------------------------------------------------------
+   Unify ALL inline spinners on the OntoBricks brand spinner.
+   Every Bootstrap `.spinner-border` / `.spinner-grow` (in templates and in
+   JS-generated markup) is repainted as the self-animating brand SVG, so we
+   never have to touch individual call sites. The SVG carries its own SMIL
+   rotation, which runs even when referenced as a CSS background-image.
+   -------------------------------------------------------------------------- */
+.spinner-border,
+.spinner-grow {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: url('/static/global/img/loading-spinner.svg') center / contain no-repeat !important;
+    animation: none !important;
+    color: transparent !important;
+    vertical-align: -0.18em;
+}
+
 /* ==========================================================================
    Full-page Project Loading Overlay
    ========================================================================== */
@@ -266,10 +316,12 @@ body {
 .navbar .nav-chevron {
     display: flex;
     align-items: stretch;
+    height: 1.5rem;
     padding: 0;
     margin: 0 0.1rem;
     pointer-events: none;
     user-select: none;
+    color: var(--db-primary);
 }
 
 .navbar .nav-chevron svg {
@@ -338,6 +390,14 @@ body {
 }
 
 /* ==========================================================================
+   Tooltips - dark grey (matches the accent), arrow included
+   ========================================================================== */
+.tooltip {
+    --bs-tooltip-bg: var(--db-primary);
+    --bs-tooltip-color: #fff;
+}
+
+/* ==========================================================================
    Tabs (Nav Tabs) – neutral standard styling
    ========================================================================== */
 .nav-tabs {
@@ -379,6 +439,13 @@ body {
     border-radius: 0 0 6px 6px;
     padding: 1.25rem;
     margin-right: 12px;
+}
+
+/* Inside a card the card already provides the outer border — reset the margin */
+.card-body > .ob-tab-content,
+.card-header > .ob-tab-content,
+.card > .ob-tab-content {
+    margin-right: 0;
 }
 
 /* ==========================================================================
@@ -438,7 +505,7 @@ pre {
 }
 
 code {
-    background-color: #f1f3f5;
+    background-color: #ffffff;
     color: #495057;
     padding: 0.2rem 0.4rem;
     border-radius: 3px;

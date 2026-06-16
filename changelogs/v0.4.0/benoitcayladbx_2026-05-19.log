@@ -1,0 +1,424 @@
+## Fix FHIR entities list empty: self-referencing Resource and wrong parent resolution
+
+### Context
+After importing FHIR, the Ontology/Entities page showed an empty list even though
+classes were successfully stored. Root cause: `buildClassHierarchy` (JS) puts a class
+in `roots` only if its parent is absent or not in the classMap. Since every class was
+put in children of another class (including Resource pointing to itself), roots was
+always empty, so `renderHierarchyTree` returned an empty string.
+
+Three bugs in `_transform_fhir_to_ontobricks`:
+
+1. **Self-referencing `Resource`**: `parent` was initialised to `"Resource"`, so
+   `fhir:Resource` itself (whose only fhir:-namespace parent is `fhir:Base`) ended
+   up with `parent = "Resource"` — classMap has "Resource" → Resource added as its
+   own child, never a root → empty tree.
+
+2. **Wrong parent from non-FHIR URIs**: the loop used `break` after the first
+   `URIRef` subClassOf, including `w5:administrative.individual` and `rim:` URIs
+   that co-appear with `fhir:DomainResource` in Patient's `rdfs:subClassOf`.
+   When those came first in the RDF iteration, the real FHIR parent was skipped.
+
+3. **Missing base structural types**: `Base`, `Element`, `DataType` were not in
+   the FOUNDATION domain resources, so they were neither collected from the graph
+   nor injected as stubs, leaving dangling parent references.
+
+### Changes
+
+1. **src/back/core/industry/fhir/FhirImportService.py**
+   - `FOUNDATION` resources list extended with `Base`, `Element`, `DataType`,
+     `BackboneType` (the structural root types needed for the hierarchy skeleton)
+   - Parent resolution in Pass 1: initialised to `""` (not `"Resource"`);
+     loop now skips non-`fhir:` namespace URIRefs (w5:, rim:, dc:, etc.) and
+     takes the first valid fhir: parent
+   - `_BASE_HIERARCHY` extended to `Base → Resource → DomainResource` and
+     `Base → Element → DataType / BackboneElement / BackboneType`, matching
+     the actual FHIR R5 OWL class hierarchy from fhir.ttl
+
+2. **tests/units/ontology/test_industry_importers.py**
+   - Added `test_transform_resource_not_self_referencing`: verifies that
+     `fhir:Resource rdfs:subClassOf fhir:Base` gives Resource `parent != "Resource"`
+   - Added `test_transform_base_is_tree_root`: verifies Base stub has `parent = ""`
+     so it renders as the root node
+
+### Modified files
+- src/back/core/industry/fhir/FhirImportService.py
+- tests/units/ontology/test_industry_importers.py
+
+### Test results
+17/17 FHIR unit tests pass. 44/44 industry importer tests pass.
+
+---
+
+## Fix FHIR: auto-include complex datatype classes to resolve property ranges
+
+### Context
+After importing FHIR, the Ontology/Entities page logged JS warnings:
+`[Map] Skipping property "address": domain="Patient" (found), range="Address" (NOT FOUND)`.
+`ontology-map.js` validates that both the domain AND range class of every object
+property exist in the ontology before rendering a relationship link. FHIR properties
+like `Patient.address`, `Patient.name`, `CarePlan.addresses`, etc. reference complex
+datatype classes (`Address`, `HumanName`, `CodeableReference`, etc.) that are not
+themselves "resources" — they live outside the domain domain buckets and were
+therefore excluded from the class list, causing every relationship to those types
+to be silently dropped.
+
+Fix: extend `_build_allowed_resources()` to always add `_FHIR_COMPLEX_TYPES` — the
+full set of FHIR R5 compound/compound datatypes — regardless of which domain buckets
+the user selected.
+
+### Changes
+
+1. **src/back/core/industry/fhir/FhirImportService.py**
+   - Added `_FHIR_COMPLEX_TYPES` class-level set (30 types: Address, Age, Annotation,
+     Attachment, Availability, BackboneElement, BackboneType, CodeableConcept,
+     CodeableReference, Coding, ContactDetail, ContactPoint, Count, DataRequirement,
+     Distance, Dosage, Duration, Element, Expression, ExtendedContactDetail,
+     HumanName, Identifier, MarketingStatus, Meta, Money, Narrative,
+     Period, Quantity, Range, Ratio, Reference, RelatedArtifact, SampledData,
+     Signature, SimpleQuantity, Timing, TriggerDefinition, UsageContext, etc.)
+   - `_build_allowed_resources()` now appends `_FHIR_COMPLEX_TYPES` unconditionally
+   - `_BASE_HIERARCHY` in the transform pass now uses an ordered list with explicit
+     parent assignments for cleaner stub injection
+
+2. **tests/units/ontology/test_industry_importers.py**
+   - Added `test_build_allowed_resources_always_includes_complex_types`: asserts
+     Address, CodeableConcept, Reference, HumanName, Identifier, CodeableReference
+     are present even when only FOUNDATION is selected
+
+### Modified files
+- src/back/core/industry/fhir/FhirImportService.py
+- tests/units/ontology/test_industry_importers.py
+
+### Test results
+15/15 FHIR unit tests pass. 42/42 industry importer tests pass.
+
+---
+
+## Fix FHIR mapper: extract attributes and relationships from OWL restrictions
+
+### Context
+After the initial import, FHIR classes appeared with no data properties and no
+relationships. Root cause: FHIR's `fhir.ttl` declares ALL property bindings via
+`owl:Restriction` blank nodes on classes (same BFO-style pattern as IOF), NOT via
+`rdfs:domain` on the properties. The original mapper was looking for `rdfs:domain`
+and finding nothing. Fix: walk `rdfs:subClassOf` blank nodes, extract
+`owl:onProperty` + `owl:allValuesFrom` pairs, classify as dataProperty (FHIR
+primitive type) or objectProperty (complex type), and inject into class/properties.
+Also added a FHIR branch in `import_industry_ontology` to correctly resolve
+ontology name and base_uri (was falling through to the IOF default).
+
+### Changes
+
+1. **src/back/core/industry/fhir/FhirImportService.py**
+   - Added `_FHIR_PRIMITIVE_TYPES` class-level set of FHIR primitive datatype names
+   - Added `_extract_properties_from_restrictions(graph, class_uri, class_local_name,
+     known_class_names)` — walks restriction blank nodes to build data- and
+     object-property lists per class
+   - Rewrote `_transform_fhir_to_ontobricks()`: two-pass approach — Pass 1 collects
+     classes; Pass 2 calls the restriction extractor per class; base types
+     (Resource, DomainResource, BackboneElement, Element) always injected so parent
+     links resolve correctly
+   - `dataProperties` embedded per class (CDISC pattern); object properties returned
+     flat in `properties` list
+
+2. **src/back/objects/ontology/Ontology.py**
+   - Added `elif kind == "fhir":` branch in `import_industry_ontology` to use
+     `info["name"]` and `info["base_uri"]` (not the IOF `name`/`uri` keys)
+
+3. **tests/units/ontology/test_industry_importers.py**
+   - Updated `test_transform_returns_classes_and_properties` to assert base types
+     always present (new behaviour)
+   - Updated `test_transform_uses_domain_filter` to match new base-type injection
+   - Added `test_transform_extracts_data_properties_from_restrictions`: builds a
+     minimal graph with a Patient class + birthDate restriction and asserts the
+     data property appears on the class
+
+### Modified files
+- src/back/core/industry/fhir/FhirImportService.py
+- src/back/objects/ontology/Ontology.py
+- tests/units/ontology/test_industry_importers.py
+
+### Test results
+14/14 FHIR unit tests pass. 41/41 industry importer tests pass. No regressions.
+
+---
+
+## Add HL7 FHIR R5 industry ontology integration
+
+### Context
+Integrate HL7 FHIR R5 (Fast Healthcare Interoperability Resources) as a new importable
+industry ontology, alongside the existing FIBO, CDISC, and IOF integrations. FHIR is the
+leading standard for healthcare data exchange (150+ resource types). A custom domain mapper
+handles FHIR's flat class hierarchy (all resources extend Resource/DomainResource) by
+filtering against curated domain groups (Foundation, Clinical, Diagnostics, Medications,
+Workflow, Financial). The ontology is fetched as a single Turtle file from hl7.org/fhir/R5.
+
+### Changes
+
+1. **src/back/core/industry/constants.py**
+   - Added `FHIR_BASE_URL = "https://hl7.org/fhir/R5"` and `FHIR_NS = "http://hl7.org/fhir/"`
+
+2. **src/back/core/industry/fhir/FhirImportService.py** *(new)*
+   - `FHIR_DOMAINS` catalog with 6 domain groups (FOUNDATION required, plus CLINICAL,
+     DIAGNOSTICS, MEDICATIONS, WORKFLOW, FINANCIAL)
+   - `get_fhir_catalog()` — returns catalog for the API
+   - `_fetch_fhir_ttl()` — downloads `fhir.ttl` with HTML-rejection and timeout handling
+   - `_build_allowed_resources()` — resolves selected domain keys to resource local-names
+   - `_transform_fhir_to_ontobricks()` — custom mapper: enumerates owl:Class in fhir:
+     namespace, applies domain filter, extracts ObjectProperty/DatatypeProperty
+   - `fetch_and_parse_fhir()` — entry point matching existing industry service contract
+
+3. **src/back/core/industry/fhir/__init__.py** *(new)*
+   - Re-exports `FhirImportService`, `get_fhir_catalog`, `fetch_and_parse_fhir`
+
+4. **src/back/core/industry/__init__.py**
+   - Added FHIR imports and `__all__` entries
+
+5. **src/back/objects/ontology/Ontology.py**
+   - Added `"fhir"` to `IndustryKind` Literal, `_INDUSTRY_EMPTY_MESSAGE`,
+     `_INDUSTRY_LOG_LABEL`, and `_INDUSTRY_FETCH`
+
+6. **src/api/routers/internal/ontology.py**
+   - Added `get_fhir_catalog` import and `"fhir"` entry in `_INDUSTRY_CATALOGS`
+
+7. **src/front/templates/partials/ontology/_ontology_import.html**
+   - Added FHIR tab button in nav tabs
+   - Added FHIR pane with domain checkboxes (Foundation required, 5 optional domains)
+     and progress indicator, matching the style of FIBO/CDISC/IOF tabs
+
+8. **src/front/static/ontology/js/ontology-import.js**
+   - Added FHIR import click handler: collects selected domains, POSTs to
+     `/ontology/import-fhir`, shows progress spinner, reloads session on success
+
+9. **tests/units/ontology/test_industry_importers.py**
+   - Added `TestFhirImportService` (13 tests): catalog structure, Foundation required,
+     domain filtering, `_build_allowed_resources`, `_transform_fhir_to_ontobricks`,
+     `_fetch_fhir_ttl` with mocked HTTP (success/HTML rejection/HTTP error),
+     and empty-domain validation
+
+### Modified files
+- src/back/core/industry/constants.py
+- src/back/core/industry/fhir/FhirImportService.py *(new)*
+- src/back/core/industry/fhir/__init__.py *(new)*
+- src/back/core/industry/__init__.py
+- src/back/objects/ontology/Ontology.py
+- src/api/routers/internal/ontology.py
+- src/front/templates/partials/ontology/_ontology_import.html
+- src/front/static/ontology/js/ontology-import.js
+- tests/units/ontology/test_industry_importers.py
+
+### Test results
+40/40 industry importer unit tests pass (13 new FHIR tests + 27 existing).
+23 pre-existing Lakebase/registry/settings infrastructure failures unaffected.
+
+---
+
+## Use ontology labels throughout graph chat and MCP server
+
+### Context
+Following the addition of a distinct `label` field for entities and relationships, this change
+propagates labels (falling back to names) into all remaining display surfaces: the query-page
+detail panels, the graph-chat agent responses, and the MCP server tool outputs.
+
+### Changes
+
+1. **src/front/static/query/js/query-entity-details.js**
+   - `classInfo.name` → `classInfo.label || classInfo.name` in three priority-resolution branches
+   - Relationship list (outgoing + incoming): predicate display now resolved via `findOntologyProperty`
+   - Relationship detail panel: predicate label resolved via `findOntologyProperty` with local-name fallback
+
+2. **src/front/static/query/js/query-sigmagraph.js**
+   - Context-menu class name: `meta.classInfo.name` → `meta.classInfo.label || meta.classInfo.name`
+
+3. **src/front/static/query/js/query-ontology-viewer.js**
+   - Link objects now carry `label: prop.label || prop.name`
+   - Link label text uses `d.label || d.name`
+
+4. **src/front/static/query/js/query-loaders.js**
+   - `findOntologyProperty`: removed the `label`-only guard so properties are returned even when
+     `label` is empty (callers decide the fallback)
+
+5. **src/agents/tools/context.py**
+   - Added `dtwin_ontology_labels: dict` field to `ToolContext` (cache for graph-chat label map)
+
+6. **src/agents/tools/graph_formatting.py**
+   - Added `_resolve_uri_label(uri, ontology_labels)` helper
+   - `_format_entity_block` accepts optional `ontology_labels` dict; uses it for rdf:type, predicate,
+     and relationship display
+   - `format_find_response` accepts and threads `ontology_labels` through to `_format_entity_block`
+
+7. **src/agents/agent_dtwin_chat/tools.py**
+   - Added `_get_ontology_labels(ctx)`: lazily loads ontology via `GET /ontology/load`, builds
+     URI/name→label map, caches on `ctx.dtwin_ontology_labels`
+   - `tool_list_entity_types`: uses `_get_ontology_labels` for entity types and predicates
+   - `tool_describe_entity`: passes `ontology_labels` to `format_find_response`
+
+8. **src/mcp-server/server/app.py**
+   - Added module-level `_post()` helper (symmetric to `_get()`)
+   - Added `_ontology_labels` dict and `_label_or_local()` resolution helper inside the factory
+   - Added `_load_ontology_labels()`: called after every successful `select_domain`, fetches
+     `POST /api/v1/domain/ontology` and populates `_ontology_labels`
+   - `list_entity_types`: entity types and predicates now resolved via `_label_or_local`
+   - `_format_entity_block`: accepts `label_or_local` callback, uses it for types and predicates
+   - `_format_find_response`: threads `label_or_local` through to `_format_entity_block`
+   - `describe_entity` call to `_format_find_response` now passes `_label_or_local`
+
+9. **tests/units/agents/test_agent_dtwin_chat.py**
+   - Updated `TestListEntityTypes.test_happy_path`: handler now routes by path so `/ontology/load`
+     side-call returns an empty-but-valid response
+   - Updated `TestDescribeEntity.test_depth_is_clamped` / `test_search_query_is_forwarded`:
+     handlers now only capture params when the path matches `/triples/find`
+
+### Modified files
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-ontology-viewer.js
+- src/front/static/query/js/query-loaders.js
+- src/agents/tools/context.py
+- src/agents/tools/graph_formatting.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/mcp-server/server/app.py
+- tests/units/agents/test_agent_dtwin_chat.py
+
+### Test results
+122/122 agent unit tests pass. 23 pre-existing Lakebase/registry/settings failures unaffected.
+
+---
+
+## Fix Knowledge Graph page bottom cut off
+
+### Context
+The Sigma.js Knowledge Graph canvas and right pane were visually cut at the bottom because
+`#sigmagraph-section.active` used a hardcoded `height: calc(100vh - 80px)`. The section lives
+inside `.sidebar-content` which has `padding: 1rem` — the bottom padding was consuming space
+not accounted for in the viewport calculation.
+
+### Changes
+
+1. **src/front/static/query/css/query-sigmagraph.css**
+   - Added `.sidebar-content:has(#sigmagraph-section.active)` rule to strip container padding
+     and set `overflow: hidden` when the graph view is active
+   - Changed `#sigmagraph-section.active` from `height: calc(100vh - 80px)` to `height: 100%`
+     so the section fills its container naturally
+   - Added `padding: 1rem; padding-bottom: 0` on `#sigmagraph-section.active` to restore
+     spacing for the section header without affecting the bottom
+
+### Modified files
+- src/front/static/query/css/query-sigmagraph.css
+
+### Test results
+10/10 dtwin/navigation e2e tests pass.
+
+---
+
+## Use ontology labels for incoming/outgoing predicates in KG right pane
+
+### Context
+The Incoming and Outgoing relationship sections in the Knowledge Graph right pane were showing
+raw predicate values (full URIs or camelCase names) instead of ontology labels.
+
+### Changes
+
+1. **src/front/static/query/js/query-sigmagraph.js**
+   - Outgoing rels: resolve predicate via `findOntologyProperty`, show `label || name || raw`
+   - Incoming rels: same resolution
+   - Edge detail panel: also extend fallback to `label || name` (was `label`-only)
+
+### Modified files
+- src/front/static/query/js/query-sigmagraph.js
+
+### Test results
+No regressions (CSS-only / JS display change, no unit tests needed).
+
+---
+
+## Fix: mapping lost after editing relationship (or entity) label
+
+### Context
+Editing a relationship's label (or any field) in the ontology designer right pane caused
+the associated R2RML mapping to silently disappear.
+
+Root cause — three-step failure chain:
+1. `saveSharedRelationship` built `propertyData = { name, localName, label, ... }` — **no `uri`**
+2. `OntologyState.config.properties[idx] = propertyData` replaced the whole object, stripping
+   the server-assigned `uri` from the frontend state.
+3. `POST /ontology/save` → backend `ensure_uris` regenerated the URI as `base_uri + name`.
+   If that value differed from the stored mapping's `property` URI (e.g. due to a prior rename
+   or a base_uri that changed), `prune_mappings_to_ontology_uris` treated the mapping as
+   orphaned and deleted it.
+
+The same bug existed in `saveSharedEntity` (entity label edits → entity mapping lost).
+
+### Changes
+
+1. **src/front/static/ontology/js/ontology-shared-panels.js**
+   - `saveSharedEntity` (update path): read `existing.uri` before replacing the object;
+     copy it into `classData.uri` so the URI is preserved through the save cycle.
+   - `saveSharedRelationship` (update path): same pattern — copy `existingProp.uri` into
+     `propertyData.uri` before overwriting the array slot.
+
+### Modified files
+- src/front/static/ontology/js/ontology-shared-panels.js
+
+### Test results
+102/102 ontology e2e tests pass.
+
+---
+
+## Fix: mapping-import.js crash blocking mapping designer
+
+### Context
+The mapping page threw `Uncaught TypeError: Cannot read properties of null (reading 'addEventListener')`
+at `mapping-import.js:7`. The script's three top-level `document.getElementById(...)` calls ran
+before the DOM elements were ready (or the elements live in a conditional template not yet rendered).
+The null-dereference crashed the JS engine before the mapping designer initialisation chain completed,
+which is why "many links were missing" — the graph simply never built.
+
+### Changes
+
+1. **src/front/static/mapping/js/mapping-import.js**
+   - Changed all three top-level `getElementById(...).addEventListener(...)` calls to
+     `getElementById(...)?. addEventListener(...)` (optional chaining) so the script
+     no longer crashes when the buttons are absent from the current view.
+
+### Modified files
+- src/front/static/mapping/js/mapping-import.js
+
+### Test results
+No unit tests for client-side JS; crash reproduced and fixed by optional-chaining the three null-risk lookups.
+
+---
+
+## Fix: missing inheritance (and relationship) links in mapping designer
+
+### Context
+After fixing the JS crash, many inheritance links were still absent. The root cause is that
+`validNodeIds` uses an exact-string comparison (`Set.has(cls.parent)`), but the `parent` /
+`domain` / `range` values stored in the ontology can differ from node IDs in two ways:
+
+1. **Case mismatch** — e.g. node id `"FiscalYear"` vs `parent: "fiscalYear"`.
+2. **Full URI stored** — e.g. `parent: "http://example.org/ontology#FiscalYear"` when
+   nodes are keyed by local name only (common when the ontology was imported from OWL without
+   full normalization of the `parent` field).
+
+Neither case was handled by the existing exact lookup, so any class/property reference that
+was even slightly off simply vanished from the graph.
+
+### Changes
+
+1. **src/front/static/mapping/js/mapping-design.js**
+   - Added `resolveNodeId(id)` helper that tries three strategies in order:
+     1. Exact match in `validNodeIds`
+     2. Case-insensitive match via `nodeIdByLower` map
+     3. URI local-part extraction (`#` or `/`) with exact + case-insensitive retry
+   - Used `resolveNodeId` for both relationship links (`prop.domain` / `prop.range`)
+     and inheritance links (`cls.parent`), replacing the bare `validNodeIds.has()` checks.
+   - The resolved canonical node id is now used as `source`/`target` in the link object,
+     so D3 can join it correctly regardless of how the reference was stored.
+
+### Modified files
+- src/front/static/mapping/js/mapping-design.js
+
+### Test results
+No regressions (display-only change; existing e2e mapping tests still pass).

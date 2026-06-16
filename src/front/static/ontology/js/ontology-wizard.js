@@ -14,6 +14,7 @@ let wizardSelectedDocs = new Set();
 let wizardDocsCache = [];
 let wizardCurrentTaskId = null;  // Track running task
 let wizardNotificationShown = false;  // Prevent duplicate notifications
+let _wizardIterationLog = [];  // Per-round pitfall refinement data
 
 // Session storage keys for persisting state across navigation
 const WIZARD_TASK_KEY = 'ontobricks_wizard_task';
@@ -158,22 +159,121 @@ function disableWizardForm(disabled) {
 }
 
 /**
- * Show task progress in the overlay
+ * Show task progress in the overlay.
+ * Detects "__iter__:{json}" messages emitted by the generation quality loop
+ * and appends a row to the live refinement table instead of showing them as
+ * the main status message.
  */
 function showWizardTaskProgress(task) {
     const progressBar = document.getElementById('wizardOverlayProgress');
     const stepEl = document.getElementById('wizardOverlayStep');
     const messageEl = document.getElementById('wizardOverlayMessage');
-    
-    if (progressBar) {
-        progressBar.style.width = task.progress + '%';
-    }
+
+    if (progressBar) progressBar.style.width = task.progress + '%';
     if (stepEl && task.steps && task.current_step < task.steps.length) {
         stepEl.textContent = task.steps[task.current_step].description;
     }
-    if (messageEl) {
-        messageEl.textContent = task.message || 'Processing...';
+
+    const msg = task.message || '';
+
+    // Structured iteration event from the quality loop
+    if (msg.startsWith('__iter__:')) {
+        try {
+            const data = JSON.parse(msg.slice('__iter__:'.length));
+            _appendRefinementRow(data);
+            if (messageEl) {
+                messageEl.textContent = `Refining quality — round ${data.round}, score ${data.score}/100…`;
+            }
+        } catch (_e) { /* ignore malformed */ }
+        return;
     }
+
+    if (messageEl) messageEl.textContent = msg || 'Processing...';
+}
+
+/**
+ * Append one iteration block to the live refinement panel inside the overlay.
+ * Each block shows: round header (score + status) + warnings list +
+ * a "Asking agent to fix…" notice when status === 'challenged'.
+ */
+function _appendRefinementRow(data) {
+    // Ensure the refinement panel exists inside the overlay
+    let panel = document.getElementById('wizardRefinementPanel');
+    if (!panel) {
+        const overlay = document.getElementById('wizardFormOverlay');
+        if (!overlay) return;
+        panel = document.createElement('div');
+        panel.id = 'wizardRefinementPanel';
+        panel.style.cssText = 'margin-top:14px; max-width:480px; width:100%; text-align:left;';
+        panel.innerHTML = `
+            <p class="small fw-semibold mb-2" style="color:#94a3b8;">
+                <i class="bi bi-arrow-repeat me-1"></i>Quality refinement
+            </p>
+            <div id="wizardIterBlocks"></div>`;
+        overlay.querySelector('.text-center').appendChild(panel);
+    }
+
+    const container = document.getElementById('wizardIterBlocks');
+    if (!container) return;
+
+    _wizardIterationLog.push(data);
+
+    const scoreColor = data.score >= 70 ? '#22c55e' : data.score >= 40 ? '#f59e0b' : '#ef4444';
+    const statusCfg = {
+        passed:           { cls: 'text-bg-success',          label: 'Passed ✓' },
+        challenged:       { cls: 'text-bg-warning text-dark', label: 'Fixing…' },
+        max_rounds_reached: { cls: 'text-bg-secondary',        label: 'Max rounds' },
+    }[data.status] || { cls: 'text-bg-secondary', label: data.status };
+
+    // Build the warnings detail HTML
+    const warnings = data.warnings || [];
+    let warningsHtml = '';
+    if (warnings.length === 0 && (!data.pitfalls || data.pitfalls.length === 0)) {
+        warningsHtml = `<li style="color:#86efac;">No warnings — ontology is clean.</li>`;
+    } else if (warnings.length > 0) {
+        for (const w of warnings) {
+            const itemsHtml = w.items && w.items.length
+                ? w.items.map(it => `<span style="color:#cbd5e1;margin-left:10px;">• ${it}</span><br>`).join('')
+                : '';
+            const hintHtml = w.hint
+                ? `<span style="color:#93c5fd;font-style:italic;margin-left:10px;">→ ${w.hint}</span>`
+                : '';
+            warningsHtml += `
+                <li style="margin-bottom:6px;">
+                    <span class="badge" style="background:#374151;color:#fbbf24;font-size:0.65rem;">${w.id}</span>
+                    <span style="color:#e2e8f0;margin-left:4px;">${w.title}</span>
+                    <span style="color:#94a3b8;font-size:0.72rem;margin-left:4px;">(${w.count})</span>
+                    <br>${itemsHtml}${hintHtml}
+                </li>`;
+        }
+    } else {
+        // only IDs, no detail (old format fallback)
+        warningsHtml = data.pitfalls.map(id =>
+            `<li><span class="badge" style="background:#374151;color:#fbbf24;font-size:0.65rem;">${id}</span></li>`
+        ).join('');
+    }
+
+    // "Asking agent to fix" footer shown only when a fix round is triggered
+    const fixNotice = (data.status === 'challenged')
+        ? `<div style="margin-top:6px;padding:4px 8px;background:rgba(251,191,36,0.12);border-left:3px solid #fbbf24;border-radius:3px;font-size:0.72rem;color:#fde68a;">
+               <i class="bi bi-send me-1"></i>Asking agent to fix these warnings…
+           </div>`
+        : '';
+
+    const block = document.createElement('div');
+    block.style.cssText = 'margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:0.75rem;';
+    block.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span style="color:#94a3b8;">Round ${data.round}</span>
+            <span>
+                <strong style="color:${scoreColor};">${data.score}<span style="color:#64748b;font-weight:400;">/100</span></strong>
+                ${data.critical > 0 ? `<span style="color:#ef4444;margin-left:6px;">⚠ ${data.critical} critical</span>` : ''}
+                <span class="badge ms-2 ${statusCfg.cls}" style="font-size:0.65rem;">${statusCfg.label}</span>
+            </span>
+        </div>
+        <ul style="list-style:none;padding:0;margin:0 0 4px 0;">${warningsHtml}</ul>
+        ${fixNotice}`;
+    container.appendChild(block);
 }
 
 /**
@@ -261,7 +361,26 @@ async function showWizardResults(result) {
         if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.switchTo === 'function') {
             SidebarNav.switchTo('map');
         }
-        showNotification('Ontology created successfully!', 'success');
+
+        // Build convergence summary message from task result or local log
+        const iterLog = result.iteration_summary || _wizardIterationLog;
+        const finalScore = result.generation_score ?? null;
+        let successMsg = 'Ontology created successfully!';
+        if (iterLog && iterLog.length > 0) {
+            const lastRound = iterLog[iterLog.length - 1];
+            const score = finalScore ?? lastRound.score;
+            const rounds = iterLog.length;
+            if (lastRound.status === 'passed') {
+                successMsg = `Ontology ready — quality score ${score}/100, converged in ${rounds} round${rounds > 1 ? 's' : ''}.`;
+            } else if (lastRound.status === 'max_rounds_reached') {
+                successMsg = `Ontology applied — quality score ${score}/100 (max refinement rounds reached).`;
+            } else {
+                successMsg = `Ontology applied — quality score ${score}/100.`;
+            }
+        } else if (finalScore !== null) {
+            successMsg = `Ontology created successfully — quality score ${finalScore}/100.`;
+        }
+        showNotification(successMsg, 'success');
     } else {
         showNotification('Auto-apply failed. Click Generate again to retry.', 'warning');
         clearWizardPreview();
@@ -573,10 +692,11 @@ async function generateOntologyFromWizard() {
         const taskId = startResult.task_id;
         console.log('[Wizard] Task started:', taskId);
         
-        // Clear any previously persisted OWL
+        // Clear any previously persisted OWL and iteration log
         sessionStorage.removeItem(WIZARD_OWL_KEY);
         sessionStorage.removeItem(WIZARD_STATS_KEY);
         wizardGeneratedOWL = null;
+        _wizardIterationLog = [];
         
         // Save task ID to session storage (persist across page navigation)
         sessionStorage.setItem(WIZARD_TASK_KEY, taskId);
@@ -653,8 +773,7 @@ function downloadWizardOWL() {
  */
 function clearWizardPreview() {
     wizardGeneratedOWL = null;
-    
-    // Clear persisted OWL from sessionStorage
+    _wizardIterationLog = [];
     sessionStorage.removeItem(WIZARD_OWL_KEY);
     sessionStorage.removeItem(WIZARD_STATS_KEY);
 }
@@ -710,6 +829,7 @@ async function applyWizardOntology() {
             if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.switchTo === 'function') {
                 SidebarNav.switchTo('map');
             }
+
         } else {
             showNotification('Error applying ontology: ' + result.message, 'error');
         }
@@ -874,7 +994,7 @@ function renderAgentStepsLog(steps) {
             <summary class="small text-muted" style="cursor:pointer;">
                 <i class="bi bi-robot me-1"></i>Agent activity log (${steps.length} steps)
             </summary>
-            <div class="border rounded p-2 mt-1" style="max-height:180px; overflow-y:auto; background:#fafafa;">
+            <div class="border rounded p-2 mt-1" style="max-height:180px; overflow-y:auto; background:#ffffff;">
                 ${rows.join('')}
             </div>
         </details>`;

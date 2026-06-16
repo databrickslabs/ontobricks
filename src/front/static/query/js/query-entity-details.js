@@ -158,6 +158,19 @@ async function showEntityDetails(entity) {
                 validAttributeNames.add(colName.toLowerCase());
             });
         }
+        // Include all data properties declared on the ontology class so that
+        // attributes present in the graph but not yet in attributeMappings are shown
+        if (entityMapping.dataProperties && entityMapping.dataProperties.length > 0) {
+            entityMapping.dataProperties.forEach(dp => {
+                if (dp.name) validAttributeNames.add(dp.name.toLowerCase());
+                if (dp.localName) validAttributeNames.add(dp.localName.toLowerCase());
+                if (dp.label) validAttributeNames.add(dp.label.toLowerCase());
+                if (dp.uri) {
+                    const localPart = dp.uri.split('#').pop().split('/').pop();
+                    if (localPart) validAttributeNames.add(localPart.toLowerCase());
+                }
+            });
+        }
         // Also add standard names
         validAttributeNames.add('label');
         validAttributeNames.add('name');

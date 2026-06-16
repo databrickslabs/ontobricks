@@ -1,0 +1,397 @@
+## Knowledge Graph — Inferred toggle now re-fetches from the correct table
+
+### Context
+The "Inferred" checkbox in the DT/Knowledge Graph section previously only
+hid or showed edges that were already marked `_inferred` in the client-side
+Graphology graph object.  Because materialized (inferred) triples are written
+to the `__app` companion table and returned undifferentiated through the union
+view, the toggle had no visible effect in practice.
+
+The new behaviour re-fetches data from the backend when the checkbox state
+changes:
+- **Checked (Inferred ON):** query the union view (`g_<dom>_v<n>`) which
+  combines synced bulk data and all materialized/inferred triples.
+- **Unchecked (Inferred OFF):** query only the `_sync` table
+  (`g_<dom>_v<n>_sync`) which contains the original, warehouse-sourced
+  triples with no reasoning output.
+
+### Changes
+
+1. `src/back/core/triplestore/TripleStoreBackend.py`
+   - Added `synced_table_name(table_name)` method (default no-op: returns
+     `table_name` unchanged for backends that have no sync/app split).
+
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   - Overrides `synced_table_name()` to return `synced_phy(table_name)`
+     (`*_sync` suffix), routing reads to the synced-only Postgres table.
+
+3. `src/api/routers/internal/dtwin.py`
+   - `POST /dtwin/sync/load`: reads `include_inferred` from JSON body
+     (default `True`); resolves `query_table` accordingly.
+   - `POST /dtwin/sync/filter` (both preview and expand phases): reads
+     `include_inferred` from JSON body; passes resolved `query_table` to
+     `DigitalTwin.filter_preview` / `filter_expand`.
+   - `GET /dtwin/neighbors`: accepts `include_inferred` query param (bool,
+     default `True`); applies to both BFS expansion and triple fetch.
+
+4. `src/front/static/query/js/query-sigmagraph.js`
+   - `_expandAndRenderGraph`: includes `include_inferred` flag in the
+     `/sync/filter` POST body, read from the `#sgShowInferred` checkbox.
+   - `expandHop` (right-click expand): appends `include_inferred` to the
+     `/dtwin/neighbors` URL.
+   - `_executeGraphSearch` (preview phase): includes `include_inferred` in
+     the preview POST body.
+   - `focusEntityByUri` preview call: same.
+   - `toggleInferred`: replaced client-side hide/show with a full async
+     re-fetch: if a filter subgraph is active it re-runs `_expandAndRenderGraph`;
+     otherwise it calls `loadTripleStore({ silent:true, navigate:false })`.
+
+5. `src/front/static/query/js/query-sync.js`
+   - `loadTripleStore`: reads `#sgShowInferred` checkbox and passes
+     `include_inferred` in the `/dtwin/sync/load` POST body.
+
+### Modified files
+- `src/back/core/triplestore/TripleStoreBackend.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-sigmagraph.js`
+- `src/front/static/query/js/query-sync.js`
+
+### Test results
+247 passed, 1 skipped — pre-existing failures (14 unrelated) unchanged.
+No new failures introduced.
+
+---
+
+## Fix: PITFALL_RULES.md missing (test failure)
+
+### Context
+`test_pitfall_rules_file_exists` was failing because the file was named
+`PITFALL_RULES.txt` while the test, `agent_owl_generator/engine.py`, and all
+docstrings expected `PITFALL_RULES.md`. `agent_ontology_assistant/engine.py`
+also had the wrong `.txt` extension in its path constant.
+
+### Changes
+
+1. `src/agents/PITFALL_RULES.txt` → renamed to `src/agents/PITFALL_RULES.md`
+2. `src/agents/agent_ontology_assistant/engine.py`
+   - `_PITFALL_RULES_PATH`: changed extension `.txt` → `.md`
+
+### Modified files
+- `src/agents/PITFALL_RULES.md` (renamed from `.txt`)
+- `src/agents/agent_ontology_assistant/engine.py`
+
+### Test results
+7/7 passed in `test_agent_ontology_assistant_engine.py`.
+
+---
+
+## feat (ontology/pitfalls): D2KLab attribution footer
+
+### Context
+The pitfall detector is powered by the vendored D2KLab
+Ontology-Pitfalls-Detector (Apache 2.0). A small attribution line is now
+shown at the bottom of the Pitfalls section as good open-source practice.
+
+### Changes
+
+1. `src/front/templates/partials/ontology/_pitfalls.html`
+   - Added a muted footer line below the card: "Powered by D2KLab
+     Ontology-Pitfalls-Detector (Apache 2.0)" linking to the GitHub repo.
+
+### Modified files
+- `src/front/templates/partials/ontology/_pitfalls.html`
+
+### Test results
+No logic change — no tests required.
+
+---
+
+## perf (ontology/pitfalls): eliminate taxonomy fetch spinner
+
+### Context
+On every page load `PitfallsModule.init()` fired a `fetch('/ontology/pitfalls/taxonomy')`
+round-trip which triggered a lazy import of `runner.py` (sentence-transformers,
+nltk, sklearn try/except block) on the backend — causing a noticeable delay and
+a spinner before the pattern list appeared.
+
+The taxonomy is a **static, hardcoded list of 19 pitfalls** (P1.1–P4.7) that
+never changes at runtime. Moving it to the JS constant `STATIC_TAXONOMY` (a
+direct copy of `PITFALL_TAXONOMY` from `runner.py`) eliminates the round-trip
+and the spinner entirely — patterns appear instantly on section open.
+
+### Changes
+
+1. `src/front/static/ontology/js/ontology-pitfalls.js`
+   - Added `STATIC_TAXONOMY` constant (19 entries, mirrors `runner.py`).
+   - Replaced `_loadTaxonomy()` (async fetch) with a synchronous inline
+     assignment: `_taxonomy = STATIC_TAXONOMY; _renderPatternSelector(); selectAll();`
+   - Removed `_loadTaxonomy()` function entirely.
+
+2. `src/front/templates/partials/ontology/_pitfalls.html`
+   - Removed the loading spinner inside `#pitfallsPatternBody` (no longer needed).
+
+### Modified files
+- `src/front/static/ontology/js/ontology-pitfalls.js`
+- `src/front/templates/partials/ontology/_pitfalls.html`
+
+### Test results
+7/7 pitfalls agent tests pass. No regressions.
+
+---
+
+## fix (mcp/agent): MCP server tool descriptions missing inferred-data guidance
+
+### Context
+Both Graph Chat and the MCP server already read the union view
+(`g_<dom>_v<n>` = `_sync UNION ALL __app`), so materialized/inferred
+triples are always reachable via `describe_entity` and `list_entity_types`.
+
+The problem: the MCP server's FastMCP `instructions` string and tool
+docstrings contained no guidance on which tools see inferred data and
+which don't. An external LLM client would default to `query_graphql`
+(schema-filtered, misses inferred predicates not in the ontology) rather
+than `describe_entity` (raw triple store, sees everything).
+
+Graph Chat already had the correct guidance in its `SYSTEM_PROMPT`
+(lines 67–105 of `engine.py`) — this fix brings the MCP server to parity.
+
+### Changes
+
+1. `src/mcp-server/server/app.py`
+   - `FastMCP(instructions=...)`: expanded with a DATA SOURCES section
+     explaining `describe_entity` = ground truth (union view, all triples
+     including inferred), `query_graphql` = schema-only (may miss inferred
+     predicates), and a DECISION RULE to always prefer `describe_entity`
+     for entity-level questions.
+   - `describe_entity` docstring: added explicit note that it queries the
+     raw triple store union view and is the primary tool for inferred data.
+   - `query_graphql` docstring: added WARNING that inferred/materialised
+     predicates not declared in the ontology are silently invisible.
+
+### Modified files
+- `src/mcp-server/server/app.py`
+
+### Test results
+122/122 agent unit tests pass.
+
+---
+
+## Inferred-data visibility: stats signal + explicit LLM hint
+
+### Context
+Agents (Graph Chat, MCP server) were not reliably surfacing inferred/reasoning
+triples to the LLM because the LLM had no way to know that inferred data existed
+before choosing a query tool.  Without a visible signal, it would fall back to
+`run_sparql` (warehouse Delta view — no inferred data) or `query_graphql`
+(schema-filtered — may miss inferred predicates not in the ontology).  GraphQL
+worked because users tested it directly, bypassing the LLM tool-selection step.
+
+### Changes
+1. `src/back/core/triplestore/TripleStoreBackend.py` — added
+   `get_inferred_triple_count(table_name)` method (default returns 0).
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py` — overrides
+   `get_inferred_triple_count` to `COUNT(*)` from the `*__app` companion table
+   directly.
+3. `src/api/routers/internal/dtwin.py` — `/dtwin/sync/stats` now queries
+   `get_inferred_triple_count` and includes `inferred_triples` in the response.
+4. `src/api/routers/digitaltwin.py` — `StatsResponse` model gains
+   `inferred_triples: int = 0`; `/api/v1/digitaltwin/stats` includes the field.
+5. `src/agents/agent_dtwin_chat/tools.py` — `tool_list_entity_types` renders
+   `"Inferred triples: N  [reasoning output — ONLY visible via describe_entity,
+   NOT via query_graphql or run_sparql]"` when N > 0.
+6. `src/mcp-server/server/app.py` — `list_entity_types` renders the same hint
+   when `inferred_triples > 0`.
+
+### Modified files
+- `src/back/core/triplestore/TripleStoreBackend.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/api/routers/digitaltwin.py`
+- `src/agents/agent_dtwin_chat/tools.py`
+- `src/mcp-server/server/app.py`
+
+### Test results
+845/846 tests pass. 1 pre-existing failure in `test_permissions.py`
+(`test_app_and_workspace_caches_are_isolated`) unrelated to these changes.
+
+---
+
+## Graph Chat: remove run_sparql to guarantee all data is always visible
+
+### Context
+The `run_sparql` tool in Graph Chat translates SPARQL to SQL over the Databricks
+warehouse Delta views — which only contain the synced (`_sync`) data and never
+include inferred/materialised triples from the `__app` companion table.  When the
+LLM chose `run_sparql` for entity or relationship queries (a common pattern), the
+results silently excluded all reasoning output, giving the impression that Graph
+Chat "respected" the Inferred checkbox.  The checkbox does NOT technically affect
+Graph Chat's data path, but the LLM's tool choice did.
+
+### Changes
+1. `src/agents/agent_dtwin_chat/tools.py` — removed `_RUN_SPARQL_DEF` from
+   `TOOL_DEFINITIONS` and `run_sparql` from `TOOL_HANDLERS` so the LLM can only
+   use `describe_entity` (raw union view) and `query_graphql` (schema-filtered
+   union view) — both of which always include inferred data.
+2. `src/agents/agent_dtwin_chat/engine.py` — removed the `run_sparql` tool entry
+   from the system prompt TOOLS section and WORKFLOW step 3 reference.
+
+### Modified files
+- `src/agents/agent_dtwin_chat/tools.py`
+- `src/agents/agent_dtwin_chat/engine.py`
+
+### Test results
+122/122 agent unit tests pass.
+
+---
+
+## HTTP User-Agent propagation — all API calls now tagged as OntoBricks
+
+### Context
+Only the industry ontology importers (FIBO, IOF, FHIR, CDISC) were sending
+`User-Agent: OntoBricks/<version>`. All internal Databricks REST calls,
+loopback agent calls, LLM calls, and MCP server calls were missing the tag,
+making it impossible to identify OntoBricks traffic in server logs.
+
+### Changes
+1. `src/back/core/databricks/DatabricksAuth.py` — added `"User-Agent": HTTP_USER_AGENT` to both branches of `get_auth_headers()` (PAT + OAuth) and to the OIDC token request; covers all downstream services that call this method (UnityCatalog, DashboardService, SQLWarehouse, WorkspaceService, SQLWizardService).
+2. `src/back/core/databricks/VolumeFileService.py` — added UA to `_headers()` return dict.
+3. `src/back/core/graphdb/lakebase/SyncedTableManager.py` — added UA to inline headers dict in `_call_api`.
+4. `src/back/objects/mapping/Mapping.py` — added UA to inline headers dict; added `HTTP_USER_AGENT` to constants import.
+5. `src/shared/fastapi/health.py` — added UA to Accelerated Sync probe headers; added `HTTP_USER_AGENT` to constants import.
+6. `src/agents/tools/documents.py` — added UA to `_headers()` return dict.
+7. `src/agents/llm_utils.py` — merge UA into a local copy of `headers` before each POST (avoids mutating the caller's dict).
+8. `src/agents/agent_dtwin_chat/tools.py` — added UA as base header in `httpx.Client` factory.
+9. `src/agents/agent_cohort/tools.py` — same.
+10. `src/mcp-server/server/app.py` — added `_USER_AGENT = "OntoBricks-MCP/1.0.0"` constant; applied to `_client()` factory (`httpx.AsyncClient`) and the OAuth token request (`httpx.Client`).
+11. `tests/units/auth/test_auth.py` — updated three `get_auth_headers` assertions to expect the new `User-Agent` key; import `HTTP_USER_AGENT` instead of hardcoding.
+
+### Modified files
+- `src/back/core/databricks/DatabricksAuth.py`
+- `src/back/core/databricks/VolumeFileService.py`
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+- `src/back/objects/mapping/Mapping.py`
+- `src/shared/fastapi/health.py`
+- `src/agents/tools/documents.py`
+- `src/agents/llm_utils.py`
+- `src/agents/agent_dtwin_chat/tools.py`
+- `src/agents/agent_cohort/tools.py`
+- `src/mcp-server/server/app.py`
+- `tests/units/auth/test_auth.py`
+
+### Test result
+422 passed, 1 skipped (units) — all tests green after updating assertions.
+
+---
+
+## New test suite — User-Agent coverage across all HTTP call sites
+
+### Context
+Follow-up to the User-Agent propagation change. Added a dedicated test file
+that systematically verifies every outbound HTTP call site sets the
+`User-Agent: OntoBricks/<version>` header.
+
+### Changes
+1. `tests/units/test_user_agent.py` — new file with 13 tests covering:
+   - `DatabricksAuth.get_auth_headers()` – PAT, OAuth, and no-creds branches
+   - `VolumeFileService._headers()`
+   - `_RestDatabaseAPI._do()` – raw-requests fallback path
+   - `Mapping.fetch_documents_for_agent()` – requests.get call
+   - `health._check_lakebase_accelerated_sync()` – probe requests.get
+   - `agents.tools.documents._headers()`
+   - `agents.llm_utils.call_llm_with_retry()` – UA injected, caller dict not mutated
+   - `agent_dtwin_chat.tools._client()` – httpx.Client headers
+   - `agent_cohort.tools._client()` – httpx.Client headers
+   - Extra: session headers forwarded alongside UA are not overwritten
+
+### Modified files
+- `tests/units/test_user_agent.py` (new)
+
+### Test result
+13 passed in 0.63s
+
+---
+
+## E2E test expansion — 87 new tests across 6 new sub-suites
+
+### Context
+The e2e campaign previously covered 170 tests across navigation, settings,
+mapping/domain/dtwin sidebar navigation, registry smoke tests, help modal,
+security (CSRF/permissions), and ontology CRUD+import+export.  Large API
+surfaces had no e2e coverage: the external REST API v1, the internal home/
+session/validation endpoints, domain config & design views, the dtwin
+query/sync API, mapping write ops, and ontology axioms.
+
+### Changes
+1. `tests/e2e/api/__init__.py` — new sub-suite package
+2. `tests/e2e/api/test_external_api_flows.py` — External `/api/v1/*` routes:
+   health, domains/list, domain/{info,ontology,mappings,r2rml}, query/validate, query/samples
+3. `tests/e2e/home/__init__.py` — new sub-suite package
+4. `tests/e2e/home/test_home_api_flows.py` — Internal home/session API:
+   navbar/state, session-status, validate/ontology, validate/detailed, reset-session, clear-ontology
+5. `tests/e2e/domain/test_domain_api_flows.py` — Domain internal API:
+   info, config, check-name, design-views, map-layout, session-debug, app-debug, reset, clear, create design view
+6. `tests/e2e/dtwin/test_dtwin_api_flows.py` — Digital Twin internal API:
+   sync/status, sync/stats, sync/info, dt-existence, groups, SPARQL execute, translate, filter
+7. `tests/e2e/mapping/test_mapping_api_flows.py` — Mapping internal API:
+   load, download, diagnostics, llm-endpoints, generate, reset, clear, entity add/delete, save
+8. `tests/e2e/ontology/test_axiom_flows.py` — Ontology axiom API:
+   axioms/list, get-by-type (SubClassOf/DisjointWith/EquivalentClasses), get-by-class, save, delete
+
+### Modified files
+- `tests/e2e/api/__init__.py` (new)
+- `tests/e2e/api/test_external_api_flows.py` (new)
+- `tests/e2e/home/__init__.py` (new)
+- `tests/e2e/home/test_home_api_flows.py` (new)
+- `tests/e2e/domain/test_domain_api_flows.py` (new)
+- `tests/e2e/dtwin/test_dtwin_api_flows.py` (new)
+- `tests/e2e/mapping/test_mapping_api_flows.py` (new)
+- `tests/e2e/ontology/test_axiom_flows.py` (new)
+
+### Test result
+87 passed in 25.10s — zero failures.
+
+---
+
+## Fix unit test suite — mock-patch path shadowing and missing optional deps
+
+### Context
+Running the full unit test suite revealed 23 pre-existing test failures caused by two categories of issues:
+1. `__init__.py` re-exports in `back.core.databricks` and `back.objects.registry` shadow the submodule names, causing `mock.patch("pkg.Module.Class", ...)` to resolve `pkg.Module` to the CLASS instead of the module, then fail to find `Class` on it.
+2. Optional dependencies (`psycopg`, `apscheduler`) not installed in the local venv caused tests to short-circuit before reaching the mocked code.
+
+### Changes
+1. `tests/units/core/test_health.py` — add `_VFS_MOD` / `_LBA_MOD` via `importlib.import_module`; replace 5 `patch(string)` calls with `patch.object(module, attr)` (11 tests fixed).
+2. `tests/units/auth/test_permissions.py` — add `_PS_MOD` via `importlib`; replace 7 `patch(string)` calls with `patch.object` (5 tests fixed).
+3. `tests/units/settings/test_graph_engine_config.py` — add `_db_auth_mod` / `_uc_mod` via `importlib`; replace 2 `patch(string)` calls with `patch.object` (1 test fixed).
+4. `tests/units/settings/test_settings_lakebase_status.py` — add `patch.dict(sys.modules, {"psycopg": MagicMock()})` to 3 tests that require psycopg to be "available" (3 tests fixed).
+5. `tests/units/registry/test_registry.py` — add `@pytest.mark.skipif(not find_spec("apscheduler"), ...)` to `TestSchedulerResolveCredsLakebase` (3 tests skipped cleanly instead of erroring).
+
+### Modified files
+- `tests/units/core/test_health.py`
+- `tests/units/auth/test_permissions.py`
+- `tests/units/settings/test_graph_engine_config.py`
+- `tests/units/settings/test_settings_lakebase_status.py`
+- `tests/units/registry/test_registry.py`
+
+### Test result
+2024 passed, 15 skipped in 238.24s — zero failures.
+E2E: 257 passed in 110.35s — zero failures.
+
+---
+
+## Simplify HTTP User-Agent to plain "ontobricks"
+
+### Context
+The `User-Agent` header was set to `OntoBricks/<version>` (e.g. `OntoBricks/0.4.0`). Changed to the simpler lowercase string `ontobricks` — no version, no capitalisation — consistent with how the app identifies itself in other contexts (logger name, graph name, session cookie).
+
+### Changes
+1. `src/shared/config/constants.py` — `HTTP_USER_AGENT` now a fixed string `"ontobricks"` instead of `f"{APP_NAME}/{APP_VERSION}"`.
+2. `src/mcp-server/server/app.py` — local `_USER_AGENT` changed from `"OntoBricks-MCP/1.0.0"` to `"ontobricks"`.
+
+### Modified files
+- `src/shared/config/constants.py`
+- `src/mcp-server/server/app.py`
+
+### Test result
+47 passed (auth + user-agent unit tests) — zero failures.

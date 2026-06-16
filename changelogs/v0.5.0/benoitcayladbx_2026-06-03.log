@@ -1,0 +1,141 @@
+# 2026-06-03 — Rebase onto upstream/develop + redeploy + full test run
+
+## Rebase
+
+Rebased `cns/test-foundations` off `upstream/develop` (the project's actual primary branch). The branch was previously based on `upstream/master`, which is now 28+ commits behind develop. Strategy: dropped the master-merge commit and cherry-picked the 11 substantive work commits in chronological order, resolving conflicts as we went.
+
+**Branch state:** 11 clean linear commits on top of `upstream/develop` (HEAD = `5846313` "feat (DT) Build-run tracing in the registry"). Old branch preserved as the local tag `pre-rebase-cns` (`19aed22`) for recovery if needed.
+
+**Notable conflict resolutions during the rebase:**
+
+1. **`pyproject.toml`** — kept develop's `pip-audit>=2.7.0` AND added the CNS test-foundation deps (hypothesis, syrupy, testcontainers[postgres], fastmcp, pyyaml, ruff>=0.7.4, mypy>=1.13.0, pytest-mock).
+2. **`uv.lock`** — regenerated via `uv lock` after merging pyproject.
+3. **`.cursor/11-` filename collision** — develop has `.cursor/11-frontend-design.mdc`. Renamed CNS rule to `.cursor/12-ai-feature-lifecycle.mdc` and updated 8 referencing files (`.claude/skills/ai-feature/{SKILL,SPEC.template}.md`, `docs/PR_REVIEW_CHECKLIST.md`, `.github/workflows/eval-gate.yml`, `.planning/agents/{README,agent_owl_generator/SPEC}.md`, `.planning/ROADMAP.md`, `src/.coding_rules.md`). Folded into the CNS-foundation commit.
+4. **`changelogs/2026-05-14.log`** — dropped the round-6 entry (master-merge no longer applies); rewrote round-7 context line.
+5. **`tests/test_settings_lakebase_status.py`** — develop relocated this to `tests/units/settings/test_settings_lakebase_status.py`. Git's rename-detection applied the psycopg-stub fix to the correct path.
+6. **`tests/back/core/digitaltwin/test_build_pipeline_units.py`** — `_BuildPipeline.__init__` signature is simpler on develop (no `stored_source_versions`, `force_full`, `config_changed`, `snapshot_version`, `archive_to_registry`; no `actual_mode`/`cfg_forced_full` attributes). Rewrote 15 tests to match develop's API; landed 16/16 green. Fixup folded into the round-7 commit via `git rebase --autosquash`.
+
+## Redeploy to integration workspace
+
+Both apps redeployed to `https://fevm-ontobricks-int.cloud.databricks.com/` via:
+
+```
+DATABRICKS_CONFIG_PROFILE=fevm-ontobricks-int \
+DAB_TARGET=dev \
+WAREHOUSE_ID=fcdf5a06992ad225 \
+REGISTRY_CATALOG=ontobricks_int_catalog \
+REGISTRY_SCHEMA=ontobricks \
+REGISTRY_VOLUME=registry \
+APP_SQL_WAREHOUSE_FALLBACK=fcdf5a06992ad225 \
+APP_DATABRICKS_CATALOG=ontobricks_int_catalog \
+APP_DATABRICKS_SCHEMA=ontobricks \
+APP_TRIPLESTORE_TABLE=ontobricks_int_catalog.ontobricks.default_triplestore \
+APP_REGISTRY_CATALOG=ontobricks_int_catalog \
+APP_REGISTRY_SCHEMA=ontobricks \
+APP_REGISTRY_VOLUME=registry \
+scripts/deploy.sh --no-bootstrap
+
+# MCP app — the deploy script still doesn't run this one, ran manually:
+DATABRICKS_CONFIG_PROFILE=fevm-ontobricks-int \
+  databricks bundle run mcp_ontobricks_app -t dev \
+    --var=warehouse_id=fcdf5a06992ad225 \
+    --var=registry_catalog=ontobricks_int_catalog \
+    --var=registry_schema=ontobricks \
+    --var=registry_volume=registry
+```
+
+**Result:**
+
+- `ontobricks-030` (FastAPI UI) — RUNNING — https://ontobricks-030-7474657573264612.aws.databricksapps.com — `/healthz` returns **200**.
+- `mcp-ontobricks` — ACTIVE — https://mcp-ontobricks-7474657573264612.aws.databricksapps.com — `/mcp` returns **400 "Missing session ID"** (correct FastMCP Streamable HTTP behaviour without a session handshake).
+
+Resource binding check passed for both apps ("ok ✓ resources match configured values"). App self-permissions from the previous deploy are still in effect — no re-bootstrap required.
+
+## Full test run
+
+| Suite | Result | Wall time |
+|---|---|---|
+| Unit + Integration (excl. e2e/property/live) | **2329 passed, 2 failed, 12 skipped** | 15s |
+| Property (Hypothesis — OWL/SHACL/R2RML) | **12 passed** | 2s |
+| Live integration probes (against the redeployed instance) | **17 passed** | 16s |
+| E2E (Playwright, defaults to int via the auto-mint conftest) | **258 passed** | 178s |
+| **Total** | **2616 passed, 2 failed (pre-existing)** | ~3.5 min |
+
+**Pre-existing failures** (NOT caused by the rebase or redeploy):
+
+- `tests/units/api/test_external_api.py::TestDomainVersions::test_versions_not_found`
+- `tests/units/api/test_external_api.py::TestDomainVersions::test_versions_success`
+
+Both fail with `ValidationError [400]: Registry not configured` because `psycopg` is not installed in the test venv and the registry config requires Lakebase. Verified by checking out `upstream/develop`'s version of the test file and re-running — same failure. Should be addressed by either installing `psycopg` for the lakebase extra in the dev env or stubbing it in the test setup. Not a blocker for the rebase/redeploy work.
+
+## Files modified / created (today)
+
+- `changelogs/2026-06-03.log` — this entry.
+
+## Verification commands
+
+```
+# Auth
+databricks auth login --host https://fevm-ontobricks-int.cloud.databricks.com/ --profile fevm-ontobricks-int
+
+# Pre-flight tests
+uv run pytest -q --ignore=tests/e2e --ignore=tests/property --ignore=tests/live_integration --no-cov
+# 2329 passed, 2 failed (pre-existing), 12 skipped
+
+# Property tests
+uv run pytest tests/property/ -q --no-cov
+# 12 passed
+
+# Live integration
+ONTOBRICKS_LIVE_BASE=https://ontobricks-030-7474657573264612.aws.databricksapps.com \
+ONTOBRICKS_LIVE_MCP_BASE=https://mcp-ontobricks-7474657573264612.aws.databricksapps.com \
+DATABRICKS_CONFIG_PROFILE=fevm-ontobricks-int \
+  uv run pytest tests/live_integration/ -v -m live_integration --no-cov
+# 17 passed
+
+# E2E
+uv run pytest tests/e2e/ -q --no-cov
+# 258 passed
+```
+
+---
+
+## Fix the 2 pre-existing TestDomainVersions failures
+
+**Root cause:** It wasn't actually about psycopg being missing (although that was a contributing factor). The route `GET /api/v1/domain/versions` was refactored to do an early `RegistryCfg.from_session(...).is_configured` check and return `400 "Registry not configured"` before reaching the mocked `RegistryService`. The 2 failing tests (`test_versions_not_found`, `test_versions_success`) only mocked `DigitalTwin` and `RegistryService`, not the cfg-resolution path — so they bailed at the new guard.
+
+**Fix:**
+
+1. **`pyproject.toml`** — added `psycopg[binary]>=3.2.0` and `psycopg-pool>=3.2.0` to `[dependency-groups].dev` so a plain `uv sync` installs them (mirrors `[project.optional-dependencies].lakebase`). Means the registry-config gate doesn't fire the optional-extra import error in the test env.
+2. **`tests/units/api/test_external_api.py`** — both `TestDomainVersions::test_versions_not_found` and `::test_versions_success` now pass `registry_catalog=c&registry_schema=s&registry_volume=v` as query-string overrides. The route honours those over the unconfigured session cfg, so `cfg.is_configured` returns True and the mocked `RegistryService` is reached as intended. Removed two unused `mock_dt.resolve_registry.return_value` lines that the route no longer calls.
+3. **`uv.lock`** — regenerated.
+
+**Verification:**
+
+```
+uv run pytest tests/units/api/test_external_api.py::TestDomainVersions -q --no-cov
+# 4 passed in 5.37s
+
+# Full re-run after the fix:
+uv run pytest -q --ignore=tests/e2e --ignore=tests/property --ignore=tests/live_integration --no-cov
+# 2373 passed, 11 skipped, 0 failed   (was 2329 passed, 2 failed)
+
+uv run pytest tests/property/ -q --no-cov
+# 12 passed
+
+ONTOBRICKS_LIVE_BASE=... ONTOBRICKS_LIVE_MCP_BASE=... DATABRICKS_CONFIG_PROFILE=fevm-ontobricks-int \
+  uv run pytest tests/live_integration/ -q -m live_integration --no-cov
+# 17 passed
+
+uv run pytest tests/e2e/ -q --no-cov
+# 258 passed in 284.76s
+```
+
+**Grand total: 2660 tests pass, 0 failures.**
+
+## Files modified
+
+- `pyproject.toml` — psycopg + psycopg-pool added to `[dependency-groups].dev`.
+- `uv.lock` — regenerated.
+- `tests/units/api/test_external_api.py` — `TestDomainVersions` registry-cfg fix.
+- `changelogs/2026-06-03.log` — this entry.

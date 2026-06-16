@@ -1,0 +1,171 @@
+## Add "Exclude unmapped" and "Include excluded" bulk actions to mapping designer
+
+Context: The mapping toolbar previously only allowed excluding/including items one at a
+time via the context menu or side panel. When a domain has many unmapped entities or
+relationships, clearing them in bulk required repetitive right-click interactions.
+The backend `POST /mapping/exclude` already accepted a list of URIs, so the gap was
+purely frontend — a toolbar-level bulk action was missing.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Added `excludeAllUnmapped()`: collects all class and property URIs with no mapping
+   entry and not already excluded, sends them in bulk to `POST /mapping/exclude`
+   (`excluded: true`), updates local `MappingState` in-place, and refreshes the graph.
+
+2. src/front/static/mapping/js/mapping-design.js
+   Added `includeAllExcluded()`: collects all class and property URIs currently marked
+   `excluded`, sends them in bulk to `POST /mapping/exclude` (`excluded: false`),
+   removes the `excluded` flag from local state, and refreshes the graph.
+
+3. src/front/static/mapping/js/mapping-design.js
+   Exposed both functions on `window` (`window.excludeAllUnmapped`,
+   `window.includeAllExcluded`) so the inline `onclick` handlers in the template work.
+
+4. src/front/templates/partials/mapping/_mapping_design.html
+   Added two toolbar buttons after the Refresh button: "Exclude unmapped"
+   (`btn-outline-warning`, eye-slash icon) and "Include excluded"
+   (`btn-outline-success`, eye icon), separated from the view controls by an existing
+   `<div class="vr">` divider.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/templates/partials/mapping/_mapping_design.html
+
+Tests: uv run pytest -q → 2358 passed in 138.64s
+
+---
+
+## Replace "Exclude unmapped" with "Auto-Exclude" smart bulk action
+
+Context: The previous "Exclude unmapped" button only excluded entities with no sql_query
+mapping. The user asked for a smarter action that also excludes orphan entities (nodes
+with no ObjectProperty relationships) and pure-parent entities (abstract base classes
+that only appear in inheritance links but have no ObjectProperty as domain or range).
+The new "Auto-Exclude" button applies all three rules in one click.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Replaced `excludeAllUnmapped()` with `autoExcludeAll()`. The new function:
+   - Replicates `buildMappingGraph()`'s `resolveNodeId` to handle name/URI references.
+   - Builds `nodesWithRelationships`: set of node IDs that appear as domain or range
+     of at least one non-excluded ObjectProperty.
+   - Auto-excludes any non-excluded entity that is NOT (mapped AND has relationships):
+     covers unmapped entities, orphans, and pure parents in one pass.
+   - Still excludes unmapped ObjectProperties (same as before).
+   - Updated `window` export: `window.autoExcludeAll`.
+
+2. src/front/templates/partials/mapping/_mapping_design.html
+   Renamed toolbar button from "Exclude unmapped" (eye-slash icon) to
+   "Auto-Exclude" (magic icon), wired to `autoExcludeAll()`.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/templates/partials/mapping/_mapping_design.html
+
+Tests: uv run pytest -q → 2358 passed in 124.04s
+
+Context: After the initial implementation, the "Exclude unmapped" button produced no
+visible effect. Two logic bugs were found:
+(1) `mappedEntityUris` was built from ALL config entries, including excluded stubs
+    (entries with only `{ontology_class, excluded: true}`, no sql_query). This differed
+    from the graph's definition, which only counts entries with a sql_query as "truly
+    mapped". As a result, entities that appeared as "unmapped" in the graph were
+    incorrectly skipped by the function.
+(2) `properties` was taken from the full `loadedOntology.properties` array including
+    DatatypeProperties, whereas the graph only displays ObjectProperties. Attempting to
+    exclude DatatypeProperties via `item_type: 'relationship'` created spurious stubs.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Extracted `_filterObjectProperties(allProperties)` helper that replicates the graph's
+   ObjectProperty-only filter heuristic (by type field or by xsd/range exclusion).
+
+2. src/front/static/mapping/js/mapping-design.js
+   `excludeAllUnmapped()`: use `_filterObjectProperties()` for the properties list;
+   build `mappedEntityUris` and `mappedRelUris` from entries with `sql_query` only,
+   matching `buildMappingGraph()`'s `mappedClassUris` logic.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+
+Tests: uv run pytest -q → 2358 passed in 125.50s
+
+---
+
+## DT Publication Workflow (Topic 3)
+
+Context: Publication state was implicit — no formal workflow state machine existed.
+The MCP/API active toggle was manual (via Registry → Browse) and disconnected from
+any publication concept. Domain sub-pages showed version but no lifecycle status.
+The Domain Cockpit (Insights) was also missing domain/version context.
+
+Changes:
+
+1. src/back/objects/session/DomainSession.py
+   Added `publication_status: "draft"` to the empty domain info template.
+   Exported and imported via `export_for_save()` / `import_from_file()` following
+   the same pattern as `mcp_enabled`.
+
+2. src/back/objects/domain/Domain.py
+   Added `_set_version_publication_status(svc, version, status)` internal method:
+   transitions the publication state and, when status is `"published"`, automatically
+   sets `mcp_enabled=True` on that version and clears it on all others.
+   Added four public methods: `publish_version`, `deprecate_version`,
+   `set_version_review`, `set_version_draft`.
+   Updated `list_version_details()` to include `publication_status` per version.
+   Updated `get_version_status()` to include `publication_status` for the loaded version.
+
+3. src/api/routers/internal/domain.py
+   Added four new endpoints:
+   - POST /domain/publish — publish a version (auto-activates MCP)
+   - POST /domain/deprecate — deprecate a version (deactivates MCP)
+   - POST /domain/set-review — submit a version for review
+   - POST /domain/set-draft — revert a version to draft
+
+4. src/front/routes/dtwin.py
+   Added `publication_status` to the dtwin template context, read from the session info.
+
+5. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   src/front/templates/partials/dtwin/_query_reasoning.html
+   src/front/templates/partials/dtwin/_query_chat.html
+   src/front/templates/partials/dtwin/_query_dataquality.html
+   src/front/templates/partials/dtwin/_query_cohorts.html
+   src/front/templates/partials/dtwin/_query_graphql.html
+   Added publication_status badge in sub-header after the version badge.
+   Colors: Draft=grey, In Review=yellow, Published=green, Deprecated=red.
+
+6. src/front/templates/partials/dtwin/_query_insights.html
+   Added publication_status badge in section heading (Domain Cockpit).
+   Added Domain and version line below the description.
+
+7. src/front/static/domain/js/domain-versions.js
+   Replaced mcp_enabled badge with publication_status badge.
+   Added `_pubStatusBadge()` and `_pubTransitionButtons()` helpers.
+   Added `publishVersion()`, `deprecateVersion()`, `setVersionReview()`,
+   `setVersionDraft()`, and `_applyPublicationTransition()` functions.
+   Transition buttons are shown per-state: draft→review/publish, review→publish/draft,
+   published→deprecate, deprecated→draft (restore).
+
+8. src/front/templates/partials/domain/_domain_versions.html
+   Renamed table column from "MCP / API" to "Status".
+   Removed the "change Active in Registry → Browse" guidance note (now automatic).
+
+Modified files:
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/Domain.py
+- src/api/routers/internal/domain.py
+- src/front/routes/dtwin.py
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/templates/partials/dtwin/_query_graphql.html
+- src/front/templates/partials/dtwin/_query_insights.html
+- src/front/static/domain/js/domain-versions.js
+- src/front/templates/partials/domain/_domain_versions.html
+
+Tests: pytest -q → 2302 passed, 15 skipped in 119.51s

@@ -68,17 +68,14 @@ class TestSettingsRoutes:
         response = client.get("/settings")
         assert response.status_code == 200
 
-    def test_settings_page_includes_health_tab(self, client):
+    def test_settings_page_includes_health_section(self, client):
         # In tests the request is treated as ``user_role == 'admin'`` (the
         # PermissionMiddleware short-circuit for non-Apps mode), so the
-        # admin-only Health tab must be rendered.  Asserting on the nav-
-        # link and the include's KPI container catches both the tab
-        # registration and the partial wiring.
+        # admin-only Health section must be rendered as a sidebar section.
         response = client.get("/settings")
         assert response.status_code == 200
         body = response.text
-        assert 'id="tab-health"' in body
-        assert 'id="pane-health"' in body
+        assert 'id="health-section"' in body
         assert 'id="healthKpiTiles"' in body
         assert "settings-health.js" in body
 
@@ -601,6 +598,100 @@ class TestDigitalTwinAPIRoutes:
             "/dtwin/neighbors?uri=http://example.org/Thing/1&depth=2"
         )
         assert response.status_code in (200, 400, 502)
+
+
+class TestNeighborTripleFilter:
+    """Unit tests for the neighbour-expansion triple filter (issue #52)."""
+
+    @staticmethod
+    def _filter(rows, visited, limit=2000):
+        from api.routers.internal.dtwin import _filter_neighbor_triples
+
+        return _filter_neighbor_triples(rows, set(visited), limit)
+
+    def test_keeps_rdf_type_triple_even_when_class_uri_not_visited(self):
+        # Regression for issue #52: expanded nodes were grouped under their
+        # identifier because the rdf:type triple (whose object is the class
+        # URI, never part of the visited instance set) was being dropped.
+        rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+        rows = [
+            {
+                "subject": "http://ex.org/Person/42",
+                "predicate": rdf_type,
+                "object": "http://ex.org/onto/Person",
+            },
+        ]
+        out = self._filter(rows, visited={"http://ex.org/Person/42"})
+        assert out == [
+            {
+                "subject": "http://ex.org/Person/42",
+                "predicate": rdf_type,
+                "object": "http://ex.org/onto/Person",
+            }
+        ]
+
+    def test_keeps_short_type_predicate(self):
+        rows = [
+            {
+                "subject": "http://ex.org/Person/42",
+                "predicate": "http://ex.org/onto#type",
+                "object": "http://ex.org/onto/Person",
+            },
+        ]
+        out = self._filter(rows, visited={"http://ex.org/Person/42"})
+        assert len(out) == 1
+
+    def test_drops_non_type_uri_object_outside_visited(self):
+        rows = [
+            {
+                "subject": "http://ex.org/Person/42",
+                "predicate": "http://ex.org/onto/worksAt",
+                "object": "http://ex.org/Org/99",
+            },
+        ]
+        out = self._filter(rows, visited={"http://ex.org/Person/42"})
+        assert out == []
+
+    def test_keeps_uri_object_within_visited(self):
+        rows = [
+            {
+                "subject": "http://ex.org/Person/42",
+                "predicate": "http://ex.org/onto/worksAt",
+                "object": "http://ex.org/Org/99",
+            },
+        ]
+        out = self._filter(
+            rows, visited={"http://ex.org/Person/42", "http://ex.org/Org/99"}
+        )
+        assert len(out) == 1
+
+    def test_keeps_literal_object(self):
+        rows = [
+            {
+                "subject": "http://ex.org/Person/42",
+                "predicate": "http://ex.org/onto/name",
+                "object": "Alice",
+            },
+        ]
+        out = self._filter(rows, visited={"http://ex.org/Person/42"})
+        assert len(out) == 1
+
+    def test_dedups_and_respects_limit(self):
+        rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+        dup = {
+            "subject": "http://ex.org/Person/42",
+            "predicate": rdf_type,
+            "object": "http://ex.org/onto/Person",
+        }
+        rows = [dup, dict(dup), {
+            "subject": "http://ex.org/Person/43",
+            "predicate": rdf_type,
+            "object": "http://ex.org/onto/Person",
+        }]
+        out = self._filter(rows, visited={
+            "http://ex.org/Person/42", "http://ex.org/Person/43"
+        }, limit=1)
+        assert len(out) == 1
 
     def test_triples_without_domain(self, client):
         response = client.get("/api/v1/digitaltwin/triples")

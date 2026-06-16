@@ -1,0 +1,349 @@
+/* Domain → Validation (review workflow) */
+
+.review-banner {
+    border: 1px solid var(--db-border);
+    border-left-width: 4px;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    background: #fff;
+}
+
+.review-banner-draft {
+    border-left-color: var(--db-text-muted);
+}
+
+.review-banner-inreview {
+    border-left-color: #f0ad4e;
+}
+
+.review-banner-published {
+    border-left-color: var(--db-success);
+}
+
+.review-progress {
+    max-width: 420px;
+}
+
+/* ── Lifecycle diagram ─────────────────────────────── */
+.review-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+}
+
+.review-stage {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    border: 1px solid var(--db-border);
+    border-radius: 10px;
+    padding: 0.85rem 0.9rem;
+    background: #fff;
+    transition: box-shadow .15s, border-color .15s, opacity .15s;
+}
+
+/* Per-stage status tone — kept consistent with the badge convention:
+   Draft = yellow (warning), In Review = blue (info), Published = green
+   (success). The current/done/todo state only controls emphasis. */
+.review-stage.tone-draft {
+    --stage: #ffc107;
+    --stage-bg: rgba(255, 193, 7, 0.12);
+    --stage-fg: #997404;
+}
+
+.review-stage.tone-inreview {
+    --stage: #0dcaf0;
+    --stage-bg: rgba(13, 202, 240, 0.12);
+    --stage-fg: #055160;
+}
+
+.review-stage.tone-published {
+    --stage: #198754;
+    --stage-bg: rgba(25, 135, 84, 0.12);
+    --stage-fg: #0a3622;
+}
+
+.review-stage.is-todo {
+    opacity: 0.5;
+}
+
+.review-stage.is-done {
+    border-color: var(--stage);
+    background: var(--stage-bg);
+}
+
+.review-stage.is-current {
+    border-color: var(--stage);
+    border-width: 2px;
+    background: var(--stage-bg);
+    box-shadow: 0 0 0 3px var(--stage-bg);
+}
+
+.review-stage-badge {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid var(--db-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+}
+
+.review-stage.is-done .review-stage-badge,
+.review-stage.is-current .review-stage-badge {
+    background: var(--stage);
+    border-color: var(--stage);
+    color: #fff;
+}
+
+.review-stage-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.25rem;
+}
+
+.review-stage-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: var(--db-bg-secondary, #ffffff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    color: var(--db-text);
+    flex: 0 0 auto;
+}
+
+.review-stage .review-stage-icon {
+    background: var(--stage-bg);
+    color: var(--stage-fg);
+}
+
+.review-stage-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.review-stage-now {
+    margin-left: auto;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--stage-fg);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.review-stage-desc {
+    font-size: 0.75rem;
+    color: var(--db-text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.review-stage-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.review-stage-line-label {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--db-text-muted);
+    margin-bottom: 0.2rem;
+}
+
+.review-stage-muted {
+    font-size: 0.78rem;
+    color: var(--db-text-muted);
+    font-style: italic;
+}
+
+.review-people {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.review-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--db-bg-secondary, #ffffff);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem 0.1rem 0.15rem;
+    max-width: 100%;
+}
+
+.review-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--db-primary, #FF3621);
+    color: #fff;
+    font-size: 0.58rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.review-avatar-muted {
+    background: var(--db-text-muted);
+}
+
+.review-avatar-group {
+    background: var(--db-text-muted);
+}
+
+/* ── Domain access (member roster) ─────────────────── */
+.review-role-group:last-child {
+    margin-bottom: 0 !important;
+}
+
+.review-role-head .badge {
+    font-weight: 600;
+}
+
+.review-person-name {
+    font-size: 0.74rem;
+    color: var(--db-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 130px;
+}
+
+.review-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--db-text-muted);
+    flex: 0 0 auto;
+    padding: 0 0.1rem;
+    min-width: 44px;
+}
+
+.review-arrow i {
+    font-size: 1.05rem;
+}
+
+.review-arrow-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+.review-arrow.is-active {
+    color: var(--db-success);
+}
+
+@media (max-width: 991px) {
+    .review-flow {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .review-arrow {
+        transform: rotate(90deg);
+        align-self: center;
+        min-width: 0;
+        padding: 0.1rem 0;
+    }
+}
+
+.review-card {
+    border: 1px solid var(--db-border);
+    border-radius: 8px;
+}
+
+.review-card .card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.review-check span {
+    color: var(--db-text);
+}
+
+/* Audit timeline */
+.review-timeline {
+    position: relative;
+}
+
+.review-event {
+    display: flex;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+    position: relative;
+}
+
+.review-event:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 11px;
+    top: 24px;
+    bottom: 0;
+    width: 2px;
+    background: var(--db-border);
+}
+
+.review-event-icon {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid var(--db-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    z-index: 1;
+}
+
+.review-event-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.review-event-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.review-event-time {
+    margin-left: auto;
+}
+
+.review-transition {
+    font-size: 0.72rem;
+    font-family: var(--bs-font-monospace, monospace);
+    background: #ffffff;
+    border-radius: 4px;
+    padding: 0 0.35rem;
+    color: var(--db-text-muted);
+}
+
+.review-event-comment {
+    margin-top: 0.35rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--db-bg-secondary, #f7f7f7);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--db-text);
+}

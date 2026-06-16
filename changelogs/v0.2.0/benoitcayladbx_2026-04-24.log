@@ -1,0 +1,277 @@
+## Viewer role: cascade read-only to all ontology/mapping widgets
+
+Context: The backend already rejects write calls for users whose domain
+role is ``viewer`` (``PermissionMiddleware`` + ``/settings/permissions/me``
+return 403 on POST/PUT/PATCH/DELETE). The front-end sets
+``window.isDomainViewer = true`` on viewer detection and installs a
+fetch guard, but the per-widget read-only plumbing (right-click context
+menus on the ontology/mapping maps, the OntoViz canvas, the shared
+side-panel with its Save button, the dashboard/bridge assign buttons,
+the "Add attribute"/"Remove attribute" icons, the mapping Designer &
+Manual save buttons, ...) only gates on ``window.isActiveVersion ===
+false``. Because version remains ``active`` for viewers, every one of
+those widgets silently rendered as editable. The user could click
+"Add attribute", "Assign dashboard", "Add bridge", open the right-click
+menu on the canvas, type into the save-ready side panel, ... all of
+which then flashed the viewer banner red when the fetch guard blocked
+the eventual save — but only after confusing write intent.
+
+This change consolidates the two read-only states: when viewer role is
+detected, ``window.isActiveVersion`` is also flipped to ``false`` so
+every existing ``isActiveVersion === false`` guard throughout the
+codebase cascades to viewers with zero duplication. Viewers now see:
+- No right-click context menu on the Ontology Map, Mapping Designer
+  map, or the OntoViz designer canvas.
+- No "Edit" toggle on the Business Views designer (stays view-only ⇒
+  OntoViz ``viewOnly: true`` ⇒ context menu, toolbar, entity/property
+  edit buttons, and add-property affordance all hidden).
+- The shared side-panel opens in view mode: Save button hidden, no
+  "Add attribute"/"Remove attribute" buttons, no "Assign dashboard"
+  or "Add bridge" buttons, all inputs disabled.
+- Mapping Designer & Manual save/auto-map/reset buttons disabled.
+- Create/Rename/Delete view buttons disabled; design auto-save skipped.
+
+Tooltip text on every disabled control is now role-aware — viewers see
+"Viewer role — ask for editor/builder rights" instead of the
+misleading "Load latest version to edit".
+
+Changes:
+
+1. src/front/static/global/js/version-check.js
+   - New ``_readOnlyTooltip()`` helper returns viewer- or older-version
+     wording based on ``window.isDomainViewer``.
+   - ``disableEditingForInactiveVersion``, ``disableDomainMetadataViewMode``,
+     ``disableDomainDocumentsViewMode``, ``disableOntologyBusinessViewsViewMode``,
+     ``_disableDqCards``, ``disableMappingDesignerViewMode``,
+     ``disableMappingManualViewMode``: all hardcoded
+     "Read-only: Load latest version to edit" strings replaced with
+     ``_readOnlyTooltip()``.
+   - Navbar "Save Domain" menu-item tooltip and Documents drop-zone
+     tooltip are also role-aware.
+   - ``checkDomainRole``: after setting ``window.isDomainViewer = true``,
+     also set ``window.isActiveVersion = false``. This is the core
+     cascade: it reuses every existing read-only guard in
+     ``ontology-shared-panels.js`` (``canEdit`` at lines 2098/2110 ⇒
+     panel routed to ``openEntityPanelForView`` /
+     ``openRelationshipPanelForView``), ``ontology-map.js`` (line 427,
+     540, 566), ``ontology-design.js`` (line 81, 197, 804, 896, 968,
+     1475, 607), ``mapping-design.js`` (lines 479, 568, 593, 1573,
+     1827, 2292), ``mapping-manual.js`` (lines 442, 548),
+     ``ontology-entities.js``, ``ontology-relationships.js``,
+     ``ontology-dataquality.js``, ``ontology-swrl.js``,
+     ``ontology-axioms.js``, ``ontology-assistant.js``, and
+     ``domain-documents.js``. No per-module changes were needed.
+
+Modified files:
+- src/front/static/global/js/version-check.js
+
+Tests: .venv/bin/python -m pytest — 1633 passed in 64.35s.
+
+
+## Read-only: OWL preview no longer fails with "Unknown error"
+
+Context: With the viewer-role cascade above (``isActiveVersion = false``
+for viewers), ``autoGenerateOwl()`` in
+``src/front/static/global/js/ontology-core.js`` started failing the first
+time the Ontology page rendered. The function always POSTed to
+``/ontology/generate-owl``, which ``Ontology.generate_owl_endpoint`` saves
+into the current domain (it calls ``domain.save()``). For viewers that
+POST is legitimately rejected by both the client-side
+``installViewerFetchGuard`` and the backend ``PermissionMiddleware`` with
+a 403 carrying ``{"error": "authorization", "message": "Viewer role does
+not allow write operations"}``. The client-side handler only inspected
+``result.message`` with a fallback string, which the fetch guard does not
+set — so the OWL preview area showed the validation report with an
+opaque "Unknown error during OWL generation" server-error block.
+
+Fix: ``autoGenerateOwl()`` now detects read-only mode
+(``window.isDomainViewer === true || window.isActiveVersion === false``)
+and, in that case, issues a ``GET /ontology/export-owl`` instead. That
+endpoint renders OWL from the currently loaded domain using the same
+``Ontology.generate_owl`` code path, but without persisting anything, so
+it passes through the permission middleware as a safe read. The
+response shapes differ slightly (``{owl}`` vs ``{owl_content}``) so the
+client normalises with ``result.owl || result.owl_content``. The
+post-generation ``saveConfigToSession()`` call is also skipped when the
+read-only endpoint is used (it was already a no-op for viewers behind
+the fetch guard, but is now skipped explicitly to avoid confusing 403
+logs). Error messaging additionally falls back through ``result.error``
+so any future fetch-guard responses are surfaced verbatim.
+
+Race-condition follow-up: ``window.isDomainViewer`` and
+``window.isActiveVersion`` are populated asynchronously by
+``version-check.js`` (``checkVersionStatus`` + ``checkDomainRole``),
+while ``autoGenerateOwl`` is invoked from
+``loadOntologyFromSession`` — a sibling ``DOMContentLoaded`` handler
+that runs in parallel. The viewer role can therefore still look
+"editable" at the moment of the first call, routing the request to
+``POST /ontology/generate-owl`` and triggering a backend 403 with the
+"Viewer role does not allow write operations" message the user
+reported. The client now handles that explicitly: if the POST comes
+back with HTTP 403, it transparently retries via the read-only GET
+endpoint and flips ``usedReadOnlyEndpoint`` so the subsequent
+``saveConfigToSession()`` call is suppressed. This keeps behaviour
+correct under the race regardless of script ordering.
+
+Modified files:
+- src/front/static/global/js/ontology-core.js
+
+
+## Read-only: belt-and-suspenders contextmenu blocker on design surfaces
+
+Context: Even after the viewer cascade flips ``window.isActiveVersion``
+to ``false``, the Mapping Designer kept showing its right-click popup
+(entity, relationship, canvas variants — plus the default browser
+menu). Individual D3 handlers in ``mapping-design.js``,
+``ontology-map.js`` and OntoViz already gate on ``isActiveVersion ===
+false``, but they share the same init-time race as
+``autoGenerateOwl``: when the map is rendered before the viewer
+cascade lands, some handlers cache the decision or run their
+``preventDefault`` inside a conditional branch, leaving the native
+menu reachable on the first interactions. Fixing every handler
+individually was error-prone, so we add a single defensive blocker
+that doesn't depend on per-widget state.
+
+Fix: ``version-check.js`` now installs a document-level capture-phase
+``contextmenu`` listener (``installReadOnlyContextMenuBlocker``) from
+``disableEditingForInactiveVersion``. Whenever
+``window.isActiveVersion === false`` and the event target is inside
+any known design surface — ``#mapping-map-container``,
+``#ontology-map-container``, ``.ovz-canvas``, ``.ontoviz-container``
+— it calls ``preventDefault`` + ``stopPropagation`` +
+``stopImmediatePropagation``, which both swallows the native browser
+menu and prevents the custom D3/OntoViz menus from ever being
+constructed. Capture phase guarantees we run before any downstream
+handler. The installer is idempotent
+(``window._readOnlyContextMenuBlockerInstalled`` latch).
+
+This gives us a single source of truth for "no right-click in
+read-only mode" that covers Mapping Designer, Ontology Map, OntoViz
+Business Views canvas, and any future map container that follows the
+same naming convention.
+
+Modified files:
+- src/front/static/global/js/version-check.js
+
+
+## Tests: three-level permission matrix + OWL endpoint contract
+
+Added three new test classes to ``tests/test_permission_middleware.py``
+so the three domain-level tiers (viewer / editor / builder) and the
+OWL-preview read-only contract are locked down:
+
+- ``TestThreeLevelDomainRoleMatrix``: cartesian product of the three
+  tiers × every HTTP method × every domain-scoped prefix
+  (``/domain/``, ``/ontology/``, ``/mapping/``, ``/dtwin/``). Asserts
+  viewer reads pass, viewer writes 403, editor reads + writes pass,
+  builder reads + writes pass. Also checks the strict
+  ``ROLE_NONE < ROLE_VIEWER < ROLE_EDITOR < ROLE_BUILDER < ROLE_ADMIN``
+  ordering that the ``role_level(...) >= role_level(X)`` comparisons
+  rely on.
+- ``TestOwlEndpointPermissions``: locks the new read-only OWL preview
+  contract — ``POST /ontology/generate-owl`` (a write) must be
+  blocked for viewers and accepted for editors/builders/admins;
+  ``GET /ontology/export-owl`` (the read-only fallback) must be
+  reachable by all three tiers plus admin, while an app user without
+  a domain team entry still gets 403.
+- ``TestFilterAccessibleDomains``: covers the new
+  ``PermissionService.filter_accessible_domains`` helper — admins
+  (either by passed-in app_role or by live lookup) see everything
+  unchanged; non-admin users only see entries where their domain
+  role is not ``ROLE_NONE``; dict entries use the ``name`` key by
+  default; a custom ``key=`` callback is honoured; empty input
+  short-circuits without any role lookups.
+
+Test counts: ``tests/test_permission_middleware.py`` went from 64 to
+141 tests. Full suite: ``.venv/bin/python -m pytest`` — 1710 passed
+in 65.50s (previously 1633).
+
+Modified files:
+- tests/test_permission_middleware.py
+
+## Viewer / read-only: gate data-source reset and all ontology/mapping imports
+
+User report: "in read only, data sources cannot be reset, also in
+ontology and mapping no import allowed". The backend middleware
+already rejects every ``POST`` on domain-scoped prefixes for viewers,
+but the front-end was not hiding/disabling the triggers, so read-only
+users saw clickable buttons that only surfaced a "Viewer role does not
+allow write operations" toast after the round-trip.
+
+Front-end (``src/front/static/global/js/version-check.js``):
+
+- ``disableDomainMetadataViewMode()`` now disables the Reset button via
+  its actual selector. The partial ships the reset button as
+  ``<button data-meta-action="clear-metadata">`` (wired through the
+  delegated ``click`` handler in ``domain-metadata.js`` at
+  ``act === 'clear-metadata'``), not ``onclick="clearMetadata()"``,
+  so the previous ``onclick*=`` selector was a no-op. Both selectors
+  are now covered to stay robust across template refactors.
+- The same routine also neutralises every other ``data-meta-action``
+  write path (``open-ds-modal``, ``edit-comment``, ``table-details``,
+  ``update-from-uc``, ``remove-selected-tables``, ``update-mappings``,
+  ``show-load-modal``) with ``pointer-events: none`` + dimmed opacity
+  + context-aware tooltip, so read-only users cannot click through
+  ``<td>`` cells or dynamically rendered buttons either.
+- New ``disableOntologyImportViewMode()`` disables every ontology
+  import trigger: ``#importOwlLocalBtn``, ``#importOwlUCBtn``,
+  ``#importRdfsLocalBtn``, ``#importRdfsUCBtn``, ``#importFiboBtn``,
+  ``#importCdiscBtn``, ``#importIofBtn``, plus the FIBO/CDISC/IOF
+  module checkboxes and the hidden file inputs
+  (``#importOwlFileInput``, ``#importRdfsFileInput``).
+- New ``disableMappingImportViewMode()`` disables the R2RML import
+  buttons (``#importR2rmlLocalBtn``, ``#importR2rmlUCBtn``) and the
+  hidden ``#importR2rmlFileInput`` that backs "From Local File".
+- Both new routines are wired into ``disableEditingForInactiveVersion()``
+  alongside the existing per-area disablers.
+
+Back-end: no code change — the middleware already blocks viewers on
+POST. The test suite is extended to pin that contract so the UI gating
+and backend gating stay aligned:
+
+- New ``TestImportAndResetEndpoints`` in
+  ``tests/test_permission_middleware.py``. Parametrised across the 10
+  domain-scoped write endpoints the read-only UI now disables
+  (``/ontology/import-owl``, ``/ontology/import-rdfs``,
+  ``/ontology/import-fibo``, ``/ontology/import-cdisc``,
+  ``/ontology/import-iof``, ``/mapping/parse-r2rml``,
+  ``/domain/metadata/clear``, ``/domain/metadata/save``,
+  ``/domain/metadata/update``, ``/domain/metadata/update-mappings``).
+  For each path: viewer → 403, editor → allowed, builder → allowed,
+  admin → allowed, app user without team entry → 403.
+
+Test counts: ``tests/test_permission_middleware.py`` went from 141 to
+191 tests. Full suite: ``.venv/bin/python -m pytest`` — 1760 passed in
+97.59s (previously 1710).
+
+Modified files:
+- src/front/static/global/js/version-check.js
+- tests/test_permission_middleware.py
+
+## Registry → Teams sub-menu leaked to non-admins in the top navbar
+
+User report: "Teams sub menu is available (in the navbar not the page)
+for all". ``menu_config.json`` marks the ``teams`` item under
+``registry-domains`` with ``"admin_only": true``. The sidebar template
+(``_sidebar_nav.html``) already honours that flag — it adds the
+``admin-only-nav`` class with inline ``display:none`` and the
+``navbar.js#showAdminNavItems`` helper reveals it only for admins.
+
+The top navbar branch in ``base.html`` for non-``domain`` menus (the
+Registry / Digital Twin path, at ~line 124) rendered every item
+identically — no ``admin_only`` handling — so the Teams dropdown item
+was visible to viewers and editors. The Teams API (``/settings/teams``)
+was already protected by ``PermissionMiddleware`` under
+``_PERM_ADMIN_ONLY_PREFIXES = ("/settings",)``, so non-admins clicking
+the item hit a 403 rather than a data leak, but the menu entry itself
+was wrong.
+
+Fix (``src/front/templates/base.html``): apply the same
+``admin-only-nav`` class + inline ``display:none`` pattern that the
+sidebar already uses, so ``showAdminNavItems()`` can reveal it for
+admins and everyone else sees the ``display:none`` until then. The
+domain-menu branch (line 98/101) keeps its own existing rendering —
+no ``admin_only`` items currently live there.
+
+Modified files:
+- src/front/templates/base.html

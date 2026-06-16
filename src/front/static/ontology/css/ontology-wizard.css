@@ -1,7 +1,7 @@
 /* Ontology wizard progress & table styles */
 
 .cursor-pointer { cursor: pointer; }
-#wizardMetadataTableBody tr:hover { background-color: #f8f9fa; }
+#wizardMetadataTableBody tr:hover { background-color: #ffffff; }
 .wizard-table-checkbox { cursor: pointer; }
 
 /* Progress steps styling */

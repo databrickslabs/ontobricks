@@ -636,9 +636,12 @@ These already exist; reuse before reinventing.
   (`.tile-success`, `.tile-danger`, `.tile-warning`, `.tile-muted`) and
   bottom-accent variants (`.tile-accent-*`). Sub-elements:
   `.ob-kpi-tile-icon`, `.ob-kpi-tile-value`, `.ob-kpi-tile-label`.
-- **Loading spinner** — `.ob-loading-spinner` with `.ob-spinner-svg` and
-  optional `.ob-spinner-label`. SVG markup is in `base.html` (do not
-  redraw the rings/diamond — include the partial or copy verbatim).
+- **Loading spinner** — one brand spinner app-wide. Inline: plain Bootstrap
+  `.spinner-border` (auto-repainted to the brand spinner by `main.css`).
+  Large/centered: `.ob-loading-spinner` with `.ob-spinner-svg` and optional
+  `.ob-spinner-label` (SVG markup is in `base.html` — do not redraw the
+  rings/diamond — include the partial or copy verbatim). See
+  *Loading Spinners* for the full contract.
 - **Page-level loading overlay** — `.domain-loading-overlay` already wired
   in `base.html` as `#domainLoadingOverlay`. Toggle via `.d-none`.
 - **Breadcrumb** — `.ob-breadcrumb` driven by `breadcrumb.js`; do not
@@ -658,6 +661,51 @@ These already exist; reuse before reinventing.
 - **Wizard overlay** — `.wizard-form-overlay` for absolute-positioned
   blocking spinners over a form during async tasks.
 - **Keyboard shortcut overlay** — `.ob-shortcut-overlay` + `.ob-shortcut-card`.
+
+### Loading Spinners
+
+There is **one** loading-spinner look across the whole app: the **OntoBricks
+brand spinner** (the rotating node-ring + diamond). Never introduce a second
+spinner style.
+
+**How it works.** A global override in `global/css/main.css` repaints every
+Bootstrap `.spinner-border` / `.spinner-grow` into the brand spinner (it drops
+the border + Bootstrap rotation and paints
+`background: url(/static/global/img/loading-spinner.svg)`; the SVG self-animates
+via SMIL). So **the standard way to show an inline spinner is plain Bootstrap
+markup** — it is automatically branded, at every call site, present and future:
+
+```html
+<div class="spinner-border" role="status" aria-hidden="true"></div>
+<!-- small variant -->
+<div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+```
+
+Size is controlled by Bootstrap's own `width/height` (and the `-sm` modifier) —
+do not set a custom size that fights the override.
+
+**Pick the right tool:**
+
+| Need | Use |
+|------|-----|
+| Inline spinner in a button, cell, or while a section loads | Bootstrap `.spinner-border` (auto-branded). Add a label in a sibling `<span>` if needed. |
+| Large, centered spinner with a caption (panel/empty-state) | `.ob-loading-spinner` + `.ob-spinner-svg` + optional `.ob-spinner-label`. SVG markup lives in `base.html` — include the partial or copy it **verbatim**; never redraw the rings/diamond. |
+| Full-page domain load | The existing `#domainLoadingOverlay` / `.domain-loading-overlay` in `base.html` (toggle `.d-none`). |
+
+`.spin-animation` (a rotating **status** icon for running tasks) is **not** a
+loading spinner — leave it as is.
+
+**Don'ts**
+
+- ❌ A new spinner style — custom `@keyframes` ring, a third-party/SVG spinner
+  library, an emoji/`bi-hourglass` "loading" glyph, or an `<img>` of a
+  different spinner. Use the Bootstrap spinner (auto-branded) or
+  `.ob-loading-spinner`.
+- ❌ Overriding `.spinner-border` / `.spinner-grow` to re-add a border, change
+  the animation, or repaint the background — that defeats the single brand
+  spinner. The override lives once in `main.css`.
+- ❌ Redrawing the brand spinner SVG (`loading-spinner.svg` / the
+  `.ob-spinner-svg` rings + diamond) in page code.
 
 ### Popups, Modals, Confirmations & Notifications
 
@@ -888,6 +936,11 @@ src/front/static/
   styles. All tab nav uses the shared `ob-tabs` flat-underline
   treatment from `components.css` (see *Tabs (`.ob-tabs`) —
   flat-underline style*).
+- ❌ A second spinner style. Use the single brand spinner — inline via
+  Bootstrap `.spinner-border` (auto-branded) or `.ob-loading-spinner` for
+  large/centered cases. No custom keyframes, spinner libraries, emoji/
+  `bi-hourglass` "loading" glyphs, or `.spinner-border` overrides (see
+  *Loading Spinners*).
 - ❌ Inline `<style>` or `style="…"` in templates. Move to
   `static/<area>/css/`.
 - ❌ Inline `<script>` blocks beyond a single tiny bootstrap call. Move

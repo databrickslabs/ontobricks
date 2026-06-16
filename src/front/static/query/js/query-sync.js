@@ -350,6 +350,14 @@ async function initSyncSection() {
         if (payload && payload.dt_existence) {
             _applyBuildGraphEngineUi(payload.dt_existence);
             _applyDtExistence(payload.dt_existence);
+
+            // Existence is served cache-first (or as a pending skeleton) for an
+            // instant paint. Confirm the live Lakebase/UC state in the
+            // background so a cold SQL-warehouse / Lakebase wake-up never blocks
+            // the page. Fire-and-forget: it silently updates the badges in place.
+            if (payload.dt_existence_pending && typeof _loadDtExistence === 'function') {
+                setTimeout(function () { _loadDtExistence(); }, 50);
+            }
         }
 
         var targetLabel = document.getElementById('syncTargetLabel');

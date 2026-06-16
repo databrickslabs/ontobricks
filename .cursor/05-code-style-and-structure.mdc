@@ -87,6 +87,11 @@ When refactoring, explicitly name smells and apply suitable refactorings from Fo
 - Templates must NOT contain inline CSS or JavaScript.
 - Treat the OntoViz JS/CSS as a reusable library across pages.
 - Put shared, reusable front-end code (CSS, JS, images) under `front/static/`.
+- **Never use native browser dialogs** (`alert()`, `confirm()`, `prompt()`) for
+  user interaction. Use the application's modal helpers instead — `showConfirmDialog`
+  / `showDeleteConfirm` for confirmations (e.g. deletions) and `showNotification`
+  for messages (both in `front/static/global/js/utils.js`). This keeps dialogs
+  consistent, styled, and non-blocking across the app.
 
 **JavaScript extraction procedure** (when moving inline JS out of templates):
 1. If a JS file with the same area name does not exist, create it in `src/front/static/<area>/js/` (e.g., `mapping`, `domain`, `ontology`).

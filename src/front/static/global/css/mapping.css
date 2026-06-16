@@ -56,7 +56,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(248, 249, 250, 0.95);
+    background: rgba(255, 255, 255, 0.95);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -126,7 +126,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.5rem;
-    background: #f8f9fa;
+    background: #ffffff;
     border-right: 1px solid #dee2e6;
     flex-shrink: 0;
     width: auto;
@@ -173,7 +173,7 @@
 .mapping-right-panel .panel-close-btn-corner:hover,
 .manual-bottom-panel .panel-close-btn-corner:hover {
     opacity: 1;
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 /* Panel Body - Main content area */
@@ -195,7 +195,7 @@
     justify-content: flex-end;
     gap: 0.5rem;
     padding: 0.5rem;
-    background: #f8f9fa;
+    background: #ffffff;
     border-left: 1px solid #dee2e6;
     flex-shrink: 0;
     min-width: 80px;
@@ -218,7 +218,7 @@
 /* Panel Tabs */
 .mapping-right-panel .panel-tabs,
 .manual-bottom-panel .panel-tabs {
-    background: #f8f9fa;
+    background: #ffffff;
     border-bottom: 1px solid #dee2e6;
     gap: 0.25rem;
     padding: 0.25rem 0.5rem 0;
@@ -244,7 +244,7 @@
 .mapping-right-panel .panel-tabs .nav-link:hover:not(:disabled),
 .manual-bottom-panel .panel-tabs .nav-link:hover:not(:disabled) {
     color: #495057;
-    background: #e9ecef;
+    background: #ffffff;
     border-color: #dee2e6 #dee2e6 transparent;
 }
 
@@ -366,7 +366,7 @@
 }
 
 .panel-col-menu .dropdown-item:hover {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .panel-col-menu .dropdown-item.active {
@@ -385,7 +385,7 @@
 
 .mapping-right-panel th[data-col]:hover,
 .manual-bottom-panel th[data-col]:hover {
-    background-color: #e9ecef;
+    background-color: #ffffff;
 }
 
 /* Read-only mode adjustments for design section */
@@ -435,7 +435,7 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
 }
 
 .summary-detail-row:hover {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
 }
 
 .summary-detail-name {
@@ -597,7 +597,7 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
 
 #queryResultsTable th,
 #entityQueryResultsTable th {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     font-weight: 600;
     position: sticky;
     top: 0;
@@ -622,13 +622,13 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
    ========================================================================== */
 .attribute-mapping-row {
     padding: 8px 12px;
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     border-radius: 6px;
     margin-bottom: 8px;
 }
 
 .attribute-mapping-row:hover {
-    background-color: #e9ecef;
+    background-color: #ffffff;
 }
 
 .attribute-mapping-row .attribute-column-select {
@@ -680,7 +680,7 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
 /* Greyscale tabs with spacing */
 #addEntityMappingModal .entity-mapping-tabs,
 #addRelationshipMappingModal .rel-mapping-tabs {
-    background: #f8f9fa;
+    background: #ffffff;
     border-bottom: 1px solid #dee2e6;
     gap: 0.5rem;
 }
@@ -704,7 +704,7 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
 #addEntityMappingModal .entity-mapping-tabs .nav-link:hover:not(:disabled),
 #addRelationshipMappingModal .rel-mapping-tabs .nav-link:hover:not(:disabled) {
     color: #495057;
-    background: #e9ecef;
+    background: #ffffff;
     border-color: #dee2e6 #dee2e6 transparent;
 }
 
@@ -742,7 +742,7 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
 
 #entityResultsMappingTable th:hover,
 #relResultsMappingTable th:hover {
-    background: #e9ecef;
+    background: #ffffff;
 }
 
 #entityResultsMappingTable th .column-name,
@@ -791,7 +791,7 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
 
 #entityResultsMappingTable th .mapping-dropdown .dropdown-item:hover,
 #relResultsMappingTable th .mapping-dropdown .dropdown-item:hover {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 #entityResultsMappingTable th .mapping-dropdown .dropdown-item.active,

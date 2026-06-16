@@ -2,11 +2,11 @@
 
 .ob-api-card { border-color: #e2e8f0; }
 .ob-api-card .card-header {
-    background: #fafbfc;
+    background: #ffffff;
     border-bottom: 1px solid #e2e8f0;
     cursor: pointer;
 }
-.ob-api-card .card-header:hover { background: #f1f5f9; }
+.ob-api-card .card-header:hover { background: #ffffff; }
 .ob-api-card .card-header code { color: #1e293b; }
 .ob-api-chevron { transition: transform .2s ease; }
 .ob-api-card.open .ob-api-chevron { transform: rotate(180deg); }
@@ -31,7 +31,7 @@
 .ob-api-response pre code {
     background: transparent !important; color: #f1f5f9 !important;
 }
-.ob-api-note { background: #f8fafc; border: 1px solid #e2e8f0; }
+.ob-api-note { background: #ffffff; border: 1px solid #e2e8f0; }
 
 /* ------------------------------------------------------------------ */
 /* External API docs (_query_api.html) — typography                  */

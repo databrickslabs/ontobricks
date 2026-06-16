@@ -62,7 +62,7 @@
     --gc-user-end:   #E5341F;
     --gc-bot-bg:     #ffffff;
     --gc-bot-border: #e9ecef;
-    --gc-panel-bg:   linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    --gc-panel-bg:   #ffffff;
     --gc-shadow-sm:  0 1px 2px rgba(15, 23, 42, 0.06);
     --gc-shadow-md:  0 4px 14px rgba(15, 23, 42, 0.08);
     --gc-radius:     16px;
@@ -434,7 +434,7 @@
     font-size: 0.68rem;
     padding: 0.08rem 0.35rem;
     border-radius: 4px;
-    background: #f1f5f9;
+    background: #ffffff;
     border: 1px solid #e2e8f0;
     color: #475569;
     box-shadow: none;
@@ -455,7 +455,7 @@
     gap: 0.3rem;
     font-size: 0.72rem;
     color: #64748b;
-    background: #f8fafc;
+    background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 999px;
     padding: 0.1rem 0.55rem;
@@ -550,7 +550,7 @@
     gap: 0.3rem;
     padding: 0.18rem 0.55rem;
     border-radius: 999px;
-    background: #f1f5f9;
+    background: #ffffff;
     cursor: pointer;
     user-select: none;
     transition: background 0.15s ease, color 0.15s ease;
@@ -712,7 +712,7 @@
     text-align: left;
 }
 .graph-chat-messages .bot-msg .assistant-msg-body th {
-    background: #f8fafc;
+    background: #ffffff;
     font-weight: 600;
     white-space: nowrap;
 }

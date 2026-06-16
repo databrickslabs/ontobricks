@@ -7,8 +7,10 @@
             <p class="text-muted mb-0 small">Manage domain version history</p>
             <p class="text-muted small mb-0 mt-1">
                 <i class="bi bi-info-circle me-1"></i>
-                To change which version is <strong>Active</strong> (API / MCP), use
+                To change a version's <strong>lifecycle status</strong>
+                (Draft → In Review → Published), use
                 <a href="/registry/">Registry</a> → <strong>Browse</strong>.
+                The API/MCP serves the latest <strong>Published</strong> version.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -52,7 +54,7 @@
                     <tr>
                         <th class="dm-th-version-col">Version</th>
                         <th>Description</th>
-                        <th class="dm-th-mcp-col text-center" title="Read-only; change Active in Registry → Browse">MCP / API</th>
+                        <th class="dm-th-mcp-col text-center" title="Lifecycle status; change in Registry → Browse">Status</th>
                         <th class="dm-th-author-col">Author</th>
                         <th class="dm-th-actions-col text-center">Actions</th>
                     </tr>

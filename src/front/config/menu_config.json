@@ -28,6 +28,20 @@
             ],
             "groups": [
                 {
+                    "id": "registry-review",
+                    "title": "Review",
+                    "icon": "bi-inbox",
+                    "items": [
+                        {
+                            "id": "my-tasks",
+                            "label": "My Tasks",
+                            "icon": "bi-inbox",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "registry-domains",
                     "title": "Domains",
                     "icon": "bi-folder2-open",
@@ -65,6 +79,13 @@
                             "id": "schedule",
                             "label": "Scheduler",
                             "icon": "bi-clock-history",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "build-analytics",
+                            "label": "Build Analytics",
+                            "icon": "bi-bar-chart",
                             "default": false,
                             "requires": null
                         }
@@ -130,6 +151,13 @@
                             "requires": "domain_saved"
                         },
                         {
+                            "id": "review",
+                            "label": "Validation",
+                            "icon": "bi-patch-check",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
                             "id": "metadata",
                             "label": "Data Sources",
                             "icon": "bi-database",
@@ -175,6 +203,20 @@
                             "id": "sync",
                             "label": "Build",
                             "icon": "bi-arrow-repeat",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "runs",
+                            "label": "Runs",
+                            "icon": "bi-list-check",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "audit",
+                            "label": "Audit trail",
+                            "icon": "bi-journal-text",
                             "default": false,
                             "requires": "domain_saved"
                         }
@@ -429,9 +471,95 @@
         },
 
         {
+            "id": "settings",
+            "label": "Settings",
+            "icon": "bi-gear",
+            "route": "/settings",
+            "requires_domain_saved": false,
+            "navbar_hidden": true,
+            "status_indicator": null,
+            "navbar_actions": [],
+            "groups": [
+                {
+                    "id": "settings-config",
+                    "title": "Configuration",
+                    "icon": "bi-sliders",
+                    "items": [
+                        {
+                            "id": "databricks",
+                            "label": "Databricks",
+                            "icon": "bi-database",
+                            "default": true,
+                            "requires": null
+                        },
+                        {
+                            "id": "global",
+                            "label": "Global",
+                            "icon": "bi-sliders",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "settings-triplestore",
+                    "title": "Triple store",
+                    "icon": "bi-diagram-3",
+                    "items": [
+                        {
+                            "id": "ts-global",
+                            "label": "Global",
+                            "icon": "bi-sliders",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "lakebase",
+                            "label": "Lakebase",
+                            "icon": "bi-diagram-3",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "settings-admin",
+                    "title": "Admin",
+                    "icon": "bi-shield-lock",
+                    "items": [
+                        {
+                            "id": "permissions",
+                            "label": "Permissions",
+                            "icon": "bi-shield-lock",
+                            "default": false,
+                            "requires": null,
+                            "admin_only": true
+                        },
+                        {
+                            "id": "registry",
+                            "label": "Registry",
+                            "icon": "bi-archive",
+                            "default": false,
+                            "requires": null,
+                            "admin_only": true
+                        },
+                        {
+                            "id": "health",
+                            "label": "Health",
+                            "icon": "bi-heart-pulse",
+                            "default": false,
+                            "requires": null,
+                            "admin_only": true
+                        }
+                    ]
+                }
+            ]
+        },
+
+        {
             "id": "digitaltwin",
             "label": "Digital Twin",
-            "icon": "bi-box-fill",
+            "icon": "bi-box",
             "route": "/dtwin/",
             "requires_domain_saved": true,
             "status_indicator": null,

@@ -1,0 +1,1035 @@
+## Graph DB Settings: Cascading Lakebase + UC Pickers — 2026-05-12
+
+### Context
+Settings → Graph DB now offers a guided, cascading selection flow for Lakebase configuration
+instead of a single free-text database field. Admins can discover the available Autoscaling
+projects, then drill down to branches → databases → Postgres schemas. For Managed Sync,
+the UC catalog picker now triggers a UC schema picker (previously only catalog was selectable).
+A new `sync_uc_schema` config key stores the UC schema separately from the catalog.
+
+### Changes
+
+1. `src/back/core/graphdb/lakebase/LakebaseBase.py`
+   - `validate_engine_config_keys`: added `sync_uc_schema` (string) key.
+   - Docstring updated to document the new key.
+
+2. `src/back/objects/domain/SettingsService.py`
+   - `graph_engine_lakebase_projects_result`: list all Autoscaling projects via
+     `/api/2.0/postgres/projects`.
+   - `graph_engine_lakebase_branches_result(project_path)`: list branches for a project.
+   - `graph_engine_lakebase_pg_databases_result(branch_path)`: list Postgres databases on
+     a branch via `/api/2.0/postgres/{branch}/databases`.
+   - `graph_engine_lakebase_pg_schemas_result(database)`: list Postgres schemas in a
+     database using `pg_catalog.pg_namespace` (privilege-independent).
+   - `graph_engine_uc_schemas_result(catalog)`: list UC schemas via `UnityCatalog.get_schemas`.
+
+3. `src/api/routers/internal/settings.py`
+   - Added 5 new GET routes:
+     - `GET /settings/graph-engine/lakebase-projects`
+     - `GET /settings/graph-engine/lakebase-branches?project=`
+     - `GET /settings/graph-engine/lakebase-pg-databases?branch=`
+     - `GET /settings/graph-engine/lakebase-pg-schemas?database=`
+     - `GET /settings/graph-engine/uc-schemas?catalog=`
+
+4. `src/front/templates/settings.html`
+   - Replaced single Postgres database dropdown with cascading pickers:
+     Project (+ Load button) → Branch → Database → Schema (select + manual pencil toggle).
+   - UC Catalog picker is now a `<select>` (was `<input list>`); triggers a UC Schema
+     `<select>` that loads on catalog change.
+
+5. `src/front/static/config/js/settings.js`
+   - New functions: `loadLakebaseProjects`, `loadLakebaseBranches`, `loadLakebasePgDatabases`,
+     `loadLakebasePgSchemas`, `loadUcSchemasForGraphEngine`, `_initSchemaToggle`,
+     `_setSelectLoading`, `_setSelectError`, `_getCurrentSchemaValue`.
+   - `mergeLakebasePanelIntoConfigTextarea`: now writes `lakebase_project`, `lakebase_branch`,
+     `sync_uc_schema` in addition to existing fields.
+   - `applyLakebaseFormFromConfigTextarea`: restores UC catalog/schema; schema input mirror.
+   - `refreshGraphDbTabFromServer`: calls `loadLakebaseProjects` instead of deprecated
+     `loadLakebaseGraphDatabasesForGraphEngine`; auto-restores cascading state.
+   - Event listeners: full cascade chain wired (project → branch → db → schema;
+     UC catalog → UC schema).
+
+### Modified files
+- `src/back/core/graphdb/lakebase/LakebaseBase.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+### Test results
+- 76 passed, 1 pre-existing failure (`TestGraphEngineUcCatalogs::test_returns_sorted_catalogs`
+  — bad mock path for `DatabricksAuth.DatabricksAuth`, unrelated to this change)
+
+---
+
+## SyncedTable State Prefix Bug + Health Check Query Fix — 2026-05-12
+
+### Context
+Two bugs found and fixed:
+
+1. **SyncedTableManager state matching broken** — The Databricks SDK's `SyncedTableState`
+   enum prefixes all member names with `SYNCED_TABLE_` (e.g. `SYNCED_TABLE_OFFLINE_FAILED`).
+   `_extract_state` returns `.name` of the enum value, so the string never matched any entry
+   in `_TERMINAL_FAIL`, `_TERMINAL_OK`, or `_IN_PROGRESS`. The build poll loop always ran
+   until timeout instead of failing fast on e.g. `SYNCED_TABLE_OFFLINE_FAILED`. Users saw
+   the build stuck indefinitely.
+
+2. **Health check schema visibility** — `information_schema.schemata` only shows schemas the
+   connecting user has USAGE on. If the app service principal lacks that grant, the schema
+   appears missing even though it exists. Replaced with `pg_catalog.pg_namespace` (schema
+   check) and `pg_catalog.pg_class`/`pg_catalog.pg_namespace` (table count), both visible
+   to all connected users regardless of grants.
+
+### Changes
+
+1. `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+   - `_extract_state`: strip `SYNCED_TABLE_` prefix from state names returned by the SDK
+     enum so they match the unprefixed constant sets.
+   - `_TERMINAL_FAIL`: added `TABLED_OFFLINE` (SDK typo: `SYNCED_TABLED_OFFLINE`).
+   - `_IN_PROGRESS`: added `ONLINE_CONTINUOUS_UPDATE`; removed `ONLINE_NO_PENDING_UPDATE`
+     (that's a terminal-ok state, not in-progress).
+
+2. `src/back/objects/domain/SettingsService.py`
+   - `graph_engine_lakebase_health_result`: replaced `information_schema.schemata` /
+     `information_schema.tables` queries with `pg_catalog.pg_namespace` /
+     `pg_catalog.pg_class` equivalents that are privilege-independent.
+
+### Modified files
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+- `src/back/objects/domain/SettingsService.py`
+
+### Test results
+- `tests/test_lakebase_flat_store.py` — 15 passed
+- `tests/test_graphdb_factory.py` — 15 passed, 1 skipped
+- `tests/test_graph_engine_config.py` — 37 passed (1 pre-existing mock failure)
+- `tests/test_sync_uc_schema.py` — 3 passed
+- `tests/test_build_pipeline_streaming.py` — 5 pre-existing failures (bad mock paths),
+  not caused by this change (confirmed via git stash check)
+
+---
+
+## Lakebase Health Check Schema Resolution Fix — 2026-05-12
+
+### Context
+Settings → Lakebase Connection reported "schema 'ontobricks_graph' does not exist yet" even
+though the schema was created by a Digital Twin build. Root cause: the health check was reading
+the schema name only from `graph_engine_config.schema`, while the build pipeline resolves the
+schema via `resolve_lakebase_graph_schema()` — which first checks `RegistryCfg.schema` (the
+middle segment of the registry Volume UC triplet `catalog.schema.volume`) and overrides the
+config value with it. When a registry Volume schema is configured, the two paths diverged and
+the health check always queried for the wrong schema name.
+
+### Changes
+
+1. `src/back/objects/domain/SettingsService.py`
+   - `graph_engine_lakebase_health_result`: capture `domain` from `_resolve_context` (was
+     discarded with `_`).
+   - Replace `validate_graph_schema(schema_raw or default_schema())` with a call to
+     `resolve_lakebase_graph_schema(domain, settings, schema_raw)` so the health check uses
+     the exact same schema resolution logic as the build pipeline (RegistryCfg.schema wins,
+     falls back to `graph_engine_config.schema`, then to the default).
+   - Added a safe fallback: if `resolve_lakebase_graph_schema` itself raises, fall back to
+     `validate_graph_schema` to avoid crashing the probe entirely.
+
+### Modified files
+- `src/back/objects/domain/SettingsService.py`
+
+### Test results
+- `tests/test_lakebase_flat_store.py` — 15 passed
+- `tests/test_graphdb_factory.py` — 15 passed, 1 skipped
+- `tests/test_graph_engine_config.py` — 37 passed (1 pre-existing unrelated failure in
+  `TestGraphEngineUcCatalogs::test_returns_sorted_catalogs` due to bad mock path for
+  `DatabricksAuth.DatabricksAuth`, not related to this change)
+
+---
+
+## Cohort Discovery Data Fix — 2026-05-12
+
+### Context
+Cohort discovery rule `CustWithElectricityContracts` returned 82 path survivors
+but 0 cohorts in the preview. Root cause was traced to the Cust360Auto synthetic
+dataset: every contract had a unique `contract_id`, owned by exactly one customer,
+so the graph had zero shared contract nodes. With no shared nodes, cohort edges
+are mathematically impossible regardless of the engine logic.
+
+### Changes
+
+1. `data/customer/generate_data.py`
+   - **`gen_contracts`**: Added a shared electricity contract pool (`electricity_pool`
+     parameter, default 40 slots with IDs `ECON#####`). A configurable fraction
+     (`pool_share_rate`, default 0.35) of contract rows are sampled from this pool,
+     assigning different customers to the same contract URI. This creates multi-customer
+     contract nodes in the graph, enabling cohort edge formation.
+   - **`run`**: Passes `electricity_pool` and `pool_share_rate` from CLI args to
+     `gen_contracts`.
+   - **`_build_insert_sql`**: Fixed `%s` → `?` parameter placeholders (Databricks
+     SQL connector DBAPI requirement; `%s` was rejected with PARSE_SYNTAX_ERROR).
+   - **`main`**: Added `--electricity-pool` and `--pool-share-rate` CLI arguments.
+
+2. Regenerated `benoit_cayla.customer` tables with `--drop-existing --seed 42`:
+   - 40 shared electricity contracts (`ECON00001`–`ECON00040`)
+   - Top shared contracts held by up to 7 customers (e.g. ECON00022, ECON00037)
+   - All other tables unchanged in shape and scale (200 customers, 300 contract rows, etc.)
+
+3. App restarted and redeployed (`ontobricks-030`, state: RUNNING).
+
+### Modified files
+- `data/customer/generate_data.py`
+
+### Next steps (manual, in the app)
+- Open the Cust360Auto domain → **Build** → run a full rebuild to regenerate the
+  triplestore and Ladybug graph from the new source data.
+- After rebuild, run the `CustWithElectricityContracts` cohort rule — the preview
+  should now return cohort groups.
+
+---
+
+## Security: Dependabot vulnerability remediation
+
+### Context
+Seven high-severity Dependabot alerts (#22–#28) flagged vulnerabilities across
+four transitive/direct dependencies. Addressed all that can be satisfied by the
+current Databricks internal PyPI proxy; documented the urllib3 gap for follow-up.
+
+### Changes
+1. `pyproject.toml` — `[tool.uv] constraint-dependencies`
+   - **mako>=1.3.12** (already present): closes #23 — CVE-2026-44307 / GHSA-2h4p-vjrc-8xpq, TemplateLookup path traversal on Windows
+   - **gitpython>=3.1.49** (already present): closes #22, #25, #26 — path traversal in reference APIs + two newline-injection RCE vectors via `config_writer()`
+   - **urllib3>=2.7.0** (commented out, pending proxy update): will close #27 and #28 once the Databricks proxy indexes urllib3 2.7.0 (released 2026-05-07)
+
+2. `pyproject.toml` — direct dependency
+   - **python-multipart>=0.0.27** (already present as direct dep): closes #24 — CVE-2026-42561, unbounded multipart part-header DoS; 0.0.27 is the fix version per the advisory
+
+3. `uv.lock` — regenerated; all resolved versions confirmed:
+   - mako 1.3.12 ✓, gitpython 3.1.49 ✓, python-multipart 0.0.27 ✓
+   - urllib3 remains at 2.6.3 (proxy limitation — see commented constraint)
+
+### Modified files
+- `pyproject.toml`
+- `uv.lock`
+
+### Test results
+2163 passed, 80 skipped — all green.
+
+### Known gap
+urllib3 alerts #27 and #28 (GHSA-mf9v-mfxr-j63j + GHSA-qccp-gfcp-xxvc) cannot
+be closed until the proxy indexes urllib3 2.7.0. The constraint is pre-written
+and commented; uncomment and `uv lock` once the proxy catches up.
+
+---
+
+## Fix: Synced Table PK Violation — Duplicate Triples in R2RML View — 2026-05-12
+
+### Context
+Building a Digital Twin with `managed_synced` mode failed during Lakeflow sync
+with `SYNCED_TABLE_USER_ERROR.PRIMARY_KEY_CONSTRAINT_VIOLATION`. The source UC
+view `triplestore_cust360auto_v4` used `UNION ALL` across 19 source branches but
+the outermost `SELECT` lacked `DISTINCT`, allowing duplicate `(subject, predicate,
+object)` triples through. Lakebase Postgres rejected them on insert because the
+synced table declares those three columns as its PK.
+
+Root cause: the SPARQL template that drives R2RML-to-Spark SQL translation used
+`SELECT ?subject ?predicate ?object` (no `DISTINCT`). The `SparqlTranslator`
+correctly propagates `is_distinct=False` all the way to the final SQL, producing
+`SELECT subject, predicate, object FROM (...) AS triples`.
+
+### Changes
+1. `src/back/objects/digitaltwin/_build_pipeline.py` — changed the all-data
+   SPARQL template from `SELECT ?subject ?predicate ?object` to
+   `SELECT DISTINCT ?subject ?predicate ?object`.
+2. `src/back/objects/registry/scheduler.py` (`_generate_sql_from_r2rml`) — same
+   one-word fix in the parallel scheduled-build path.
+3. Databricks: regenerated the existing `benoit_cayla.ontobricks.triplestore_cust360auto_v4`
+   view with `SELECT DISTINCT` at the outer level (512 duplicates eliminated;
+   row count dropped from 16 794 → 16 282).
+
+### Modified files
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/objects/registry/scheduler.py`
+
+### Test results
+1678 passed, 81 skipped — pre-existing failures unrelated to this change
+(Python 3.9 `str | None` syntax in `dtwin.py`, stale mock paths).
+
+---
+
+## Fix: Postgres Schema Override — explicit `graph_engine_config.schema` now wins — 2026-05-12
+
+### Context
+Settings → Graph DB allowed operators to configure a dedicated Postgres schema
+(`graph_engine_config.schema`, e.g. `ontobricks_graph`). However, the runtime
+resolver `resolve_lakebase_graph_schema` **always** overrode that value with the
+middle segment of the Registry Volume path (e.g. `ontobricks` from
+`/Volumes/benoit_cayla/ontobricks/...`), silently making the build use a
+different schema than what the Settings UI showed.
+
+The "registry wins" logic was originally designed to keep managed-sync UC names
+aligned with the registry namespace. It was incorrect to apply this override when
+an explicit schema was already set by the operator.
+
+### Changes
+1. `src/back/core/graphdb/GraphDBFactory.py` — stop pre-defaulting `schema_raw`
+   before passing it to the resolver; pass the raw (possibly empty) config value
+   so the resolver can distinguish "explicitly set" from "not configured".
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   (`resolve_lakebase_graph_schema`) — new priority:
+   - **Explicit `graph_engine_config.schema`** → used as-is (validated).
+   - **Empty / unset** → fall back to Registry Volume schema, then
+     `DEFAULT_GRAPH_SCHEMA` (`ontobricks_graph`).
+3. `tests/test_graphdb_factory.py` — replaced `test_lakebase_schema_follows_registry_volume_schema`
+   with two targeted tests:
+   - `test_lakebase_explicit_schema_overrides_registry_volume_schema`
+   - `test_lakebase_schema_falls_back_to_registry_volume_when_not_configured`
+
+### Modified files
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `tests/test_graphdb_factory.py`
+
+### Test results
+211 failed (pre-existing), 1679 passed, 81 skipped — +1 pass vs baseline.
+
+---
+
+## Fix: UC Sync Object Created in Wrong Schema — decouple Postgres schema from UC schema — 2026-05-12
+
+### Context
+After the previous fix, `graph_engine_config.schema = "ontobricks_graph"` was
+correctly used as the Postgres schema. However `synced_uc_name()` used
+`self._schema` (the Postgres schema) as the **UC schema segment** of the
+Lakeflow synced-table FQN, placing the sync object at
+`benoit_cayla.ontobricks_graph.<table>` instead of the expected
+`benoit_cayla.ontobricks.<table>` (the registry UC namespace).
+
+Root cause: `sync_uc_schema` was validated in `validate_engine_config_keys` but
+never stored, surfaced as a property, or used in `synced_uc_name`. The Postgres
+schema and the UC registration schema are two independent concepts that were
+conflated.
+
+### Changes
+1. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   - Added `resolve_sync_uc_schema(domain, settings, config_sync_uc_schema, pg_schema)`
+     resolver with priority: explicit config → registry Volume schema → pg_schema.
+   - Added `sync_uc_schema: str = ""` parameter to `LakebaseFlatStore.__init__`
+     and stored as `self._sync_uc_schema`.
+   - Added `sync_uc_schema` property.
+   - `synced_uc_name()` now uses `self._sync_uc_schema or self._schema` (UC schema
+     separate from Postgres schema).
+2. `src/back/core/graphdb/GraphDBFactory.py`
+   - Reads `cfg.get("sync_uc_schema")` from engine config.
+   - Added import for `resolve_sync_uc_schema`.
+   - Calls `resolve_sync_uc_schema` after resolving the Postgres schema.
+   - Passes `sync_uc_schema` through to `LakebaseFlatStore` constructor.
+3. `tests/test_graphdb_factory.py` — two new tests:
+   - `test_lakebase_sync_uc_schema_explicit_overrides_registry`
+   - `test_lakebase_sync_uc_schema_falls_back_to_registry_when_not_configured`
+
+### Resulting behaviour (your setup)
+| | Before | After |
+|---|---|---|
+| Postgres schema | `ontobricks_graph` ✓ | `ontobricks_graph` ✓ |
+| UC sync object | `benoit_cayla.ontobricks_graph.<tbl>` ✗ | `benoit_cayla.ontobricks.<tbl>` ✓ |
+
+### Modified files
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `tests/test_graphdb_factory.py`
+
+### Test results
+211 failed (pre-existing), 1681 passed, 81 skipped — +2 passes vs baseline.
+
+---
+
+## Fix: Union View Creation Fails When sync_uc_schema ≠ Postgres Schema — 2026-05-12
+
+### Context
+After the previous two fixes, the build succeeded but failed at the
+`ensure_synced_union_view` step with:
+
+> `relation "cust360auto_v4_sync" does not exist`
+
+Root cause: `LakebaseFlatStore.ensure_synced_union_view` used an unqualified
+`synced` reference in the `CREATE OR REPLACE VIEW` DDL. The `search_path` for
+`_cursor()` is set to the Postgres graph schema (`ontobricks_graph`). But the
+Lakebase `_sync` table is created in the Postgres schema that corresponds to the
+**UC schema segment** of the synced-table FQN — which is now `ontobricks` (from
+the registry). So Postgres resolved `cust360auto_v4_sync` to
+`ontobricks_graph.cust360auto_v4_sync` while the table actually lives at
+`ontobricks.cust360auto_v4_sync`.
+
+### Change
+`src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+(`ensure_synced_union_view`): when `sync_uc_schema` ≠ `_schema`, the `_sync`
+table reference is explicitly schema-qualified
+(`"ontobricks".g_v1_sync`) so the DDL is independent of `search_path`.
+
+```sql
+-- Before (broke when schemas differ)
+FROM g_v1_sync
+
+-- After
+FROM "ontobricks".g_v1_sync
+```
+
+When the two schemas are the same (simple / single-namespace deployment), the
+unqualified reference is kept as before.
+
+### Also updated
+`tests/test_lakebase_flat_store.py`:
+- `test_ensure_synced_union_view_qualifies_sync_table_when_schemas_differ` (new)
+- `test_synced_uc_name_uses_explicit_sync_uc_schema` (new)
+- `test_drop_table_uses_sync_uc_schema_in_fqn` (new)
+- Renamed and corrected `test_prefers_registry_volume_schema` →
+  `test_explicit_config_schema_wins_over_registry` to match current resolver
+  behaviour; added `test_falls_back_to_registry_when_config_schema_empty`.
+
+### Modified files
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `tests/test_lakebase_flat_store.py`
+
+### Test results
+211 failed (pre-existing), 1681 passed, 81 skipped — no regression.
+
+---
+
+## Refactor: Revert sync_uc_schema — One Postgres Schema for All Graph Objects — 2026-05-12
+
+### Context
+The previous fix added a `sync_uc_schema` concept to allow the UC synced-table
+FQN schema segment to differ from the Postgres graph schema. This introduced a
+two-schema situation in Postgres (`_sync` table in `ontobricks`, companion and
+union view in `ontobricks_graph`) which broke `ensure_synced_union_view`.
+
+The correct design is **one Postgres schema** for all graph objects (`_sync`,
+companion, union view). The UC FQN schema segment is always the Postgres graph
+schema (`graph_engine_config.schema`), keeping all Lakebase objects aligned.
+
+### Changes
+1. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   - Removed `sync_uc_schema` constructor param, `_sync_uc_schema` attribute,
+     and `sync_uc_schema` property.
+   - Removed `resolve_sync_uc_schema()` helper function.
+   - Restored `synced_uc_name()` to use `self._schema` directly.
+   - Simplified `ensure_synced_union_view()` back to unqualified table names
+     (everything in one schema via `search_path`).
+2. `src/back/core/graphdb/GraphDBFactory.py`
+   - Removed `sync_uc_schema_raw` extraction, `resolve_sync_uc_schema` import
+     and call, and `sync_uc_schema` kwarg in `LakebaseFlatStore` construction.
+3. `tests/test_lakebase_flat_store.py` — removed `sync_uc_schema`-specific tests.
+4. `tests/test_graphdb_factory.py` — removed `sync_uc_schema`-specific tests.
+
+### Net result (your config)
+| Object | Location |
+|---|---|
+| Postgres `_sync` table | `ontobricks_graph` schema |
+| Postgres companion table | `ontobricks_graph` schema |
+| Postgres union view | `ontobricks_graph` schema |
+| UC synced-table FQN | `benoit_cayla.ontobricks_graph.<table>` |
+
+### Modified files
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `tests/test_lakebase_flat_store.py`
+- `tests/test_graphdb_factory.py`
+
+### Test results
+211 failed (pre-existing), 1679 passed, 81 skipped — baseline unchanged.
+
+---
+
+## Fix: UC Sync Object Follows Registry catalog.schema — 2026-05-12
+
+### Context
+The correct architecture is:
+- **Postgres graph schema** (`graph_engine_config.schema` = `ontobricks_graph`) —
+  where companion table and union view live (operator-configured, one schema).
+- **UC synced-table FQN** (`<catalog>.ontobricks.<table>`) — always follows the
+  Registry catalog/schema from Settings, keeping the Lakeflow object in the same
+  UC namespace as registry artefacts.
+- The `_sync` table Lakebase creates lands in the PG schema derived from the UC
+  schema segment (`ontobricks`), which may differ from the graph PG schema.
+- The union view references the `_sync` table with an explicit schema qualifier
+  when the two schemas differ, so `search_path` never causes a resolution error.
+
+`sync_uc_schema` is intentionally NOT user-configurable — it is always derived
+from the registry settings automatically.
+
+### Changes
+1. `src/back/core/graphdb/GraphDBFactory.py`
+   - Added `_resolve_registry_uc_schema(domain, settings, fallback)` module-level
+     helper that reads `RegistryCfg.from_domain().schema` (registry Volume schema).
+   - `_create_lakebase` calls it after resolving the Postgres schema, then passes
+     the result as `sync_uc_schema` to `LakebaseFlatStore`.
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   - Re-added `sync_uc_schema: str = ""` constructor param / `_sync_uc_schema`
+     attribute (internal — not in `validate_engine_config_keys`).
+   - `synced_uc_name()` uses `_sync_uc_schema or _schema` for the UC FQN.
+   - `ensure_synced_union_view()` schema-qualifies the `_sync` table reference
+     when `sync_uc_schema != _schema`.
+3. Tests updated in `test_graphdb_factory.py` and `test_lakebase_flat_store.py`.
+
+### Modified files
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `tests/test_graphdb_factory.py`
+- `tests/test_lakebase_flat_store.py`
+
+### Test results
+211 failed (pre-existing), 1680 passed, 81 skipped — +1 pass vs previous.
+
+---
+
+## Digital Twin / Inference: Graph materialization now refreshes the Knowledge Graph — 2026-05-12
+
+### Context
+When a user ran inference and chose "Append to graph database (Graph DB)", the triples were
+correctly inserted into the Lakebase graph table, but the Sigma Knowledge Graph visualization
+never refreshed — showing the old stale graph. Also, when all inferred triples used non-HTTP(S)
+URI schemes (e.g. `urn:`), they were silently filtered to 0 with a misleading green "OK" badge.
+
+### Changes
+1. `src/front/static/query/js/query-sigmagraph.js`
+   - Added `_lastExpandedSeedUris` variable — stores the seed URIs from the last `_expandAndRenderGraph` call
+   - Exposed `SigmaGraph.refreshCurrentExpansion()` — re-runs the expand/render pipeline with the stored seeds if a filter is active
+
+2. `src/front/static/query/js/query-reasoning.js`
+   - After a successful `materialize_graph` with count > 0, automatically calls `SigmaGraph.refreshCurrentExpansion()` to reload the visible graph from the backend
+   - If no filter is active (no seeds to re-expand), shows an inline hint pointing the user to the Knowledge Graph tab
+   - Changed the `0 triples appended` result badge from green `OK` to yellow `Warning`, with an explanation that non-HTTP(S) URIs are excluded from the graph write
+
+### Modified files
+- `src/front/static/query/js/query-sigmagraph.js`
+- `src/front/static/query/js/query-reasoning.js`
+
+### Test results
+211 failed (pre-existing), 1680 passed, 81 skipped — no regression.
+
+---
+
+## Security: urllib3 2.7.0 + GitPython 3.1.50 vulnerability fixes — 2026-05-12
+
+### Context
+Three high-severity Dependabot alerts (#26, #27, #28) against transitive
+dependencies in `uv.lock`:
+
+- **#27** `urllib3` GHSA-mf9v-mfxr-j63j — decompression-bomb safeguards
+  bypassed in parts of the streaming API.
+- **#28** `urllib3` GHSA-qccp-gfcp-xxvc — sensitive headers forwarded across
+  origins in proxied low-level redirects.
+- **#26** `GitPython` — newline injection in `config_writer()` section param
+  bypasses the CVE-2026-42215 patch, enabling RCE via `core.hooksPath`.
+
+The Databricks internal PyPI proxy index does not yet list urllib3 2.7.0 or
+GitPython 3.1.50.  Both wheels were downloaded directly from pythonhosted.org
+(which IS reachable), locked via `UV_FIND_LINKS`, then the lock entries were
+patched to reference the canonical pythonhosted.org URLs so the committed
+`uv.lock` remains reproducible on any machine that can reach pythonhosted.org.
+
+### Changes
+1. `pyproject.toml`
+   - `[tool.uv].constraint-dependencies`: bumped `gitpython>=3.1.49` →
+     `>=3.1.50`; uncommented and enabled `urllib3>=2.7.0` (was commented out
+     with a TODO). Updated comments to document the proxy-lag workaround.
+
+2. `uv.lock`
+   - `urllib3`: 2.6.3 → 2.7.0 (wheel SHA256
+     `9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897`).
+   - `gitpython`: 3.1.49 → 3.1.50 (wheel SHA256
+     `d352abe2908d07355014abdd21ddf798c2a961469239afec4962e9da884858f9`).
+
+3. `scripts/dl-vuln-fix-wheels.sh` *(new)*
+   - Downloads the two fix wheels from pythonhosted.org into `/tmp/vuln-fix-wheels`
+     so that `UV_FIND_LINKS=/tmp/vuln-fix-wheels uv lock` can regenerate the
+     lock file until the proxy catches up.
+
+### Modified files
+- `pyproject.toml`
+- `uv.lock`
+- `scripts/dl-vuln-fix-wheels.sh`
+
+### Test results
+17 passed, 1 skipped — no regression. (`test_external_api.py` excluded: pre-existing
+Python 3.9 / `str | None` syntax incompatibility, unrelated to this change.)
+
+---
+
+## Fix: psycopg (Lakebase) always installed in local dev — 2026-05-12
+
+### Context
+`psycopg[binary]` and `psycopg-pool` live in the `[lakebase]` optional-dependency group.
+`scripts/setup.sh` used plain `uv pip install -e .` (no extras), so a fresh venv never
+got psycopg. After the first setup, `start.sh` never re-synced deps, so adding a new extra
+in a later pull was also silently skipped. Result: Settings → Registry showed
+"Lakebase unavailable: psycopg extra not installed" even though Lakebase is the primary backend.
+
+### Changes
+1. `scripts/setup.sh`
+   - `uv pip install -e .` → `uv pip install -e ".[lakebase]"` so fresh setups include psycopg
+
+2. `scripts/start.sh`
+   - Added `uv pip install -e ".[lakebase]" --quiet` before starting uvicorn so every launch
+     self-heals any missing extras (e.g. after a `git pull` that adds a new optional dep)
+
+### Modified files
+- `scripts/setup.sh`
+- `scripts/start.sh`
+
+### Test results
+No regression — pre-existing test failures unchanged.
+
+---
+
+## Fix: SWRL inference SQL — chained property atoms produce empty object — 2026-05-12
+
+### Context
+Multi-hop SWRL rules (e.g. `P(?x,?y) ∧ Q(?y,?z) → R(?x,?z)`) generated
+`'' AS object` for the consequent because `build_inference_sql` only joined
+property atoms directly connected to `primary_var` (one-hop). The second-hop
+variable `?z` was never added to `var_bindings`, so `obj_expr` fell through to
+the `else "''"` branch. All 112 inferred triples had an empty `object` field →
+`is_uri('')` returned False → **0 triples ever reached Lakebase**, despite the
+Materialise button returning a 200 success response.
+
+`build_violation_sql` already solved this correctly using
+`SWRLParser.find_connected_vars` + `order_connected_props` for a full BFS
+traversal. `build_inference_sql` was missing the same logic.
+
+### Changes
+`src/back/core/reasoning/SWRLSQLTranslator.py`
+- Replaced the `primary_props` (direct-only) loop with a BFS traversal using
+  `SWRLParser.find_connected_vars` + `order_connected_props`, matching the
+  pattern already used in `build_violation_sql`
+- Each JOIN now checks which side (`subj_var` or `obj_var`) is already bound
+  and uses that as the anchor, so chained hops are resolved in topological order
+- Two-hop+ rules now emit the correct column reference (`a3.subject` or
+  `a2.object`) instead of `''` for the consequent object
+
+`src/api/routers/internal/dtwin.py`
+- Removed the temporary debug log added during diagnosis
+
+### Modified files
+- `src/back/core/reasoning/SWRLSQLTranslator.py`
+- `src/api/routers/internal/dtwin.py`
+
+### Test results
+17 passed, 1 skipped — no regression.
+
+---
+
+## Remove obsolete dl-vuln-fix-wheels.sh script
+
+### Context
+The `scripts/dl-vuln-fix-wheels.sh` script was a temporary workaround to download
+`urllib3 2.7.0` and `gitpython 3.1.50` wheels directly from PyPI because the Databricks
+PyPI proxy had not yet indexed those versions. Both packages are now available directly
+from the proxy, so the workaround is no longer needed.
+
+### Changes
+1. `scripts/dl-vuln-fix-wheels.sh` — deleted (no longer needed)
+2. `pyproject.toml` — removed stale comments referencing `UV_FIND_LINKS` workaround
+   and `dl-vuln-fix-wheels.sh`
+
+### Modified files
+- `scripts/dl-vuln-fix-wheels.sh` (deleted)
+- `pyproject.toml`
+
+### Test results
+No functional change — constraints remain in place, only the proxy-workaround comments
+and script are removed.
+
+---
+
+## Cohort Discovery: apply all fixes from v0.3.1 to current codebase
+
+### Context
+
+The v0.3.1 changelog (2026-05-12) documented four cohort bugs that were fixed
+in that branch but were not yet present in the main v0.4.0 codebase. This
+entry records their application.
+
+### Changes
+
+1. **src/back/core/graph_analysis/CohortBuilder.py**
+   - Added `_predicate_alias_map()` instance method — scans loaded triples and
+     builds `{local_name → canonical_data_namespace_uri}` for predicates in
+     the data namespace. Cached in `self._cache["predicate_alias"]`.
+   - Added `_resolve_predicate(uri)` — calls `_to_data_uri` first (same-namespace
+     `#`→`/` rewrite); if unchanged (foreign namespace), falls back to the alias
+     map by local name. Mirrors `SWRLSQLTranslator._predicate_local_name_key`.
+   - Converted `_outgoing_edge_index` from `@staticmethod` to instance method;
+     every triple predicate is now normalised with `_resolve_predicate` before
+     being stored as an index key. This fixes the silent-zero-neighbour bug for
+     data loaded outside R2RML (direct inserts, W3C OWL round-trips, manual loads)
+     where predicates are in ontology form (`#hasClaim`) but the path walker
+     looks up data form (`/hasClaim`).
+   - Updated `_normalized_links` and `_normalized_compat` to call
+     `_resolve_predicate` instead of bare `_to_data_uri` for hop `via`,
+     hop `where[*].property`, and compatibility `property`. This fixes the
+     cross-namespace predicate bug (e.g. `ontobricks.com/ontology#hasclaim`
+     in a domain whose base is `databricks-ontology.com/Cust360Auto#`).
+
+2. **src/front/static/query/js/query-cohorts.js**
+   - Added `_dataPropsForClass(classUri)` helper — filters `this.properties` to
+     data (non-object) properties whose `domain` matches the class; falls back
+     to all data properties if nothing matches. Mirrors `_objectPropsForSource`.
+   - `_renderHopWhereRow`: replaced `this.properties` with
+     `_dataPropsForClass(targetClassUri)` so the attribute dropdown shows only
+     the hop target entity's own data properties.
+   - `_renderCompat`: replaced `this.properties` with
+     `_dataPropsForClass(this.rule.class_uri)` so the compatibility attribute
+     dropdown shows only the root entity's own data properties.
+   - `_renderTraceLink`: added `in_frontier === 0` guard before the
+     `neighbours_raw === 0` check. When the frontier is empty the diagnostic now
+     says "the starting frontier for this hop is empty — all members were
+     eliminated before reaching it" instead of wrongly blaming the predicate URI.
+
+3. **tests/test_cohort_builder.py** — added to `TestOntologyDataNamespaceDrift`:
+   - `_graph_with_ontology_form_predicates()` fixture — data triples whose
+     predicates are in ontology (`#`) form.
+   - `test_data_with_ontology_form_predicate_is_indexed_correctly` — verifies the
+     engine finds the correct cohort (Alice ↔ Bob via P1) even when data triple
+     predicates are in ontology form.
+   - `test_trace_shows_nonzero_raw_for_ontology_form_predicate` — verifies
+     `neighbours_raw > 0` in `trace_paths` output, ensuring the "no neighbours"
+     diagnostic is not triggered incorrectly.
+   - `test_via_from_foreign_namespace_resolved_by_local_name` — exact replica of
+     the Cust360Auto production scenario: domain base `…/Cust360Auto#`, property
+     URIs `ontobricks.com/ontology#hasclaim` (foreign namespace), data triples
+     `…/Cust360Auto/hasclaim`. Proves the local-name alias fallback works
+     end-to-end.
+
+### Modified files
+
+- `src/back/core/graph_analysis/CohortBuilder.py`
+- `src/front/static/query/js/query-cohorts.js`
+- `tests/test_cohort_builder.py`
+
+### Test results
+
+```
+2172 passed, 80 skipped (same pre-existing skips — unrelated)
+```
+
+---
+
+## Fix stale install commands in setup.sh and start.sh
+
+### Context
+`setup.sh` and `start.sh` were using `uv pip install -e ".[lakebase]"` — the old
+workflow. The project now uses `uv sync` (lock-file-based installs). Also fixed a
+stale path `app/` → `src/` in the `black` hint printed by `setup.sh`.
+
+### Changes
+1. `scripts/setup.sh` — `uv pip install -e ".[lakebase]"` → `uv sync --extra lakebase`; `black app/` → `black src/`
+2. `scripts/start.sh` — `uv pip install -e ".[lakebase]" --quiet` → `uv sync --extra lakebase --quiet`
+
+### Modified files
+- `scripts/setup.sh`
+- `scripts/start.sh`
+
+### Test results
+No functional change to production code.
+
+---
+
+## Remove Cohort "Describe (prompt)" NL agent feature
+
+### Context
+The NL-agent tab ("Describe (prompt)") in Ontology → Cohorts was removed to simplify
+the cohort design workflow. Users build rules exclusively via the "Build rule" form (steps 1–5).
+
+### Changes
+
+1. `src/front/templates/partials/ontology/_ontology_cohorts.html` — removed the Describe tab
+   button and its tab pane; the Build rule tab is now the default active view; stripped the
+   tab `<ul>` nav entirely (single-panel card).
+2. `src/front/static/query/js/query-cohorts.js` — removed `runAgent()`, `_renderAgentTrace()`,
+   `_applyRuleFromAgent()` methods and the "Stage 2: NL agent" comment block.
+3. `src/api/routers/internal/dtwin.py` — removed the `POST /cohorts/agent` route and its
+   entire implementation block.
+
+### Modified files
+
+- `src/front/templates/partials/ontology/_ontology_cohorts.html`
+- `src/front/static/query/js/query-cohorts.js`
+- `src/api/routers/internal/dtwin.py`
+
+### Test results
+
+```
+141 cohort tests passed (test_cohort_builder, test_dtwin_cohort, test_cohort_models,
+test_agent_cohort_engine, test_agent_cohort_tools)
+```
+
+---
+
+## Fix Knowledge Graph entity-type dropdown and ID search
+
+### Context
+Two bugs in Digital Twin → Knowledge Graph:
+1. The Entity Type dropdown in the Filter pane was broken: selecting a type re-triggered
+   `populateFilterEntityTypes` (which re-fetches and overwrites the dropdown), so the
+   selection was immediately reset.
+2. Searching for an entity by its ID (e.g. `CUST00001`) returned nothing because the
+   SQL `TripleStoreBackend` treated `field="any"` as label-only. The JS always sends
+   `field: "any"`, and the Ladybug (Cypher) backend already handled `"any"` correctly;
+   only the SQL backend was missing it.
+
+### Changes
+
+1. `src/front/templates/partials/dtwin/_query_sigmagraph.html` — removed
+   `data-sg-change="populateFilterEntityTypes"` from the `sgFilterEntityType` select.
+   The dropdown is populated once when the Filter tab opens; it does not need to react
+   to its own change events.
+2. `src/back/core/triplestore/TripleStoreBackend.py` — rewrote `find_seed_subjects` to
+   treat `field="any"` as union of label-match and subject-URI-match, mirroring the
+   Ladybug implementation. Also uses `search_label` / `search_id` flags so `"label"` and
+   `"id"` modes still work independently.
+
+### Modified files
+
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/back/core/triplestore/TripleStoreBackend.py`
+
+### Test results
+
+```
+45 ladybug tests passed; 97 cohort/graphdb tests passed
+```
+
+---
+
+## Fix spurious second schema created during Build (managed_synced mode)
+
+### Context
+During a Build with Lakebase `managed_synced` mode, a second Postgres schema
+(e.g. `ontobricks`) was being created and the `cust360auto_v4_sync` table was
+placed there instead of in the configured graph schema (`ontobricks_graph`).
+
+**Root cause:** `GraphDBFactory._build_lakebase_store` computed `sync_uc_schema`
+by calling `_resolve_registry_uc_schema()`, which always returned the *Registry
+Volume schema* (e.g. `ontobricks`) regardless of the configured graph schema.
+Lakebase then created a new Postgres schema matching that UC schema segment,
+landing the `_sync` table in the wrong schema.
+
+Additionally, `sync_uc_schema` set explicitly in `graph_engine_config` via the
+Settings UI was silently ignored — the factory never read `cfg["sync_uc_schema"]`.
+
+### Changes
+
+1. `src/back/core/graphdb/GraphDBFactory.py`
+   - Removed `_resolve_registry_uc_schema()` (only caller removed).
+   - `sync_uc_schema` is now read from `cfg.get("sync_uc_schema")` first (explicit
+     user override via Settings), falling back to the Postgres graph schema (`schema`).
+     No more registry schema lookup.
+
+2. `tests/test_graphdb_factory.py`
+   - Renamed `test_lakebase_sync_uc_schema_always_follows_registry` →
+     `test_lakebase_sync_uc_schema_follows_graph_schema` and flipped assertion to
+     expect graph schema, not registry schema.
+   - Added `test_lakebase_sync_uc_schema_explicit_override` to cover the explicit
+     `sync_uc_schema` in engine_config path.
+
+### Modified files
+
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `tests/test_graphdb_factory.py`
+
+### Test results
+
+```
+18 graphdb_factory + lakebase tests passed
+```
+
+---
+
+## Build page: "Loaded" badge shown while "not built yet" message — 2026-05-12
+
+### Context
+On the Build tab with the Lakebase graph engine configured, the **Graph DB (Lakebase)** card
+could simultaneously show a green **"Loaded"** badge while the triplestore-status area said
+**"Digital Twin not built yet. Click Build to create the VIEW and graph."** — a contradictory
+state that confused users.
+
+Root causes identified:
+
+1. **Shared cache timestamp**: `DigitalTwin.set_ts_cache` used a single `_ts_cache_timestamp`
+   for every section. Refreshing one section (e.g. `status → has_data=false`) bumped the
+   shared clock, making a stale `dt_existence` entry (`local_lbug_exists=true` from an earlier
+   live fetch) appear within the 5-minute TTL — causing the two sections to serve contradictory
+   values from the same cache.
+
+2. **`_populate_session_cache` bug (Lakebase)**: After a successful Lakebase build the pipeline
+   set `local_lbug_exists = os.path.exists(ladybug_local_path)`, which is always `False` for
+   Lakebase (no `.lbug` file is ever created). The badge therefore showed **"Not loaded"**
+   immediately after a build, which is also wrong (inverse direction).
+
+3. **Missing `graph_engine` in build cache**: `_populate_session_cache` did not store the
+   resolved `graph_engine` in `existence_cache`, so the JS had to fall back to heuristics for
+   the badge label.
+
+### Changes
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   - `get_ts_cache`: now reads a per-section `_ts` timestamp stored inside each section dict.
+     Falls back to the shared `_ts_cache_timestamp` for legacy entries. Each section expires
+     independently, preventing cross-section staleness.
+   - `set_ts_cache`: embeds `_ts: time.time()` in each section entry; keeps the shared key
+     for backward compatibility.
+
+2. `src/back/objects/digitaltwin/_build_pipeline.py`
+   - `_populate_session_cache`: for Lakebase engine, sets `local_lbug_exists = final_count > 0`
+     (correct value since we just wrote the data) instead of the LadybugDB path check.
+     Also stores `graph_engine` in the existence cache and uses empty strings for LadybugDB
+     paths (irrelevant for Lakebase).
+
+3. `src/front/static/query/js/query-sync.js`
+   - `loadSyncInfo`: adds a consistency guard — if `triplestore_status.has_data` is `false`
+     but `dt_existence.local_lbug_exists` is `true` for Lakebase, overrides `local_lbug_exists`
+     to `false` and logs a warning. Prevents the contradictory "not built" + "Loaded" display
+     even in the rare case the backend still serves stale cached data.
+
+### Modified files
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/front/static/query/js/query-sync.js`
+
+### Test result
+`pytest tests/test_cohort_builder.py tests/test_graphdb_factory.py tests/test_lakebase_flat_store.py`
+→ **67 passed, 1 skipped**
+
+---
+
+## Fix: sync UC FQN must use registry schema, not graph schema — 2026-05-12
+
+### Context
+After the previous fix that changed `sync_uc_schema` to default to the
+Postgres graph schema (`ontobricks_graph`), Lakebase/Lakeflow registered the
+sync object under a UC schema `ontobricks_graph`, which should not exist in
+Unity Catalog (it is a Postgres-only namespace).
+
+The correct architecture is:
+- **UC sync FQN** → `<catalog>.<registry_schema>.<table>_sync` (same UC
+  namespace as all other registry artefacts, e.g. `benoit_cayla.ontobricks`)
+- **Postgres `_sync` foreign table** → Lakebase auto-mirrors the UC schema
+  name, placing the table in Postgres schema `ontobricks`
+- **Postgres companion + graph tables** → remain in `ontobricks_graph`
+- **Union view** → already cross-references both schemas correctly
+
+### Changes
+
+1. `src/back/core/graphdb/GraphDBFactory.py`
+   - Restored `_resolve_registry_uc_schema()` helper that extracts the
+     registry UC schema from `domain.uc_domain_path`
+     (`/Volumes/<cat>/<schema>/<vol>/…` → `parts[2]`).
+   - Updated `_build_lakebase_store` resolution priority:
+     1. Explicit `engine_config["sync_uc_schema"]` (user override)
+     2. Registry UC schema from `domain.uc_domain_path`
+     3. Fallback to graph schema when domain has no UC path
+
+2. `tests/test_graphdb_factory.py`
+   - Replaced `test_lakebase_sync_uc_schema_follows_graph_schema` with two
+     accurate tests:
+     - `test_lakebase_sync_uc_schema_uses_registry_schema_from_uc_domain_path`
+       — domain with `uc_domain_path` → registry schema is used
+     - `test_lakebase_sync_uc_schema_fallback_to_graph_schema_when_no_path`
+       — domain without path → graph schema fallback
+
+### Modified files
+
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `tests/test_graphdb_factory.py`
+
+### Test result
+`pytest tests/test_cohort_builder.py tests/test_graphdb_factory.py tests/test_lakebase_flat_store.py`
+→ **68 passed, 1 skipped**
+
+---
+
+## Fix: _resolve_registry_uc_schema must call RegistryCfg directly — 2026-05-12
+
+### Context
+The previous fix used `domain.uc_domain_path` (a property that internally calls
+`RegistryCfg.from_domain(self, get_settings())`) to extract the registry UC schema.
+This was unreliable because:
+- `get_settings()` is a global call independent of the `settings` arg already in scope
+- Any exception inside the property (e.g. DB unreachable) is swallowed by the
+  outer `except Exception`, silently falling back to the graph schema (`ontobricks_graph`)
+- The `ontobricks_graph` UC schema was therefore still being created
+
+The fix mirrors `resolve_lakebase_graph_schema`: call `RegistryCfg.from_domain(domain, settings)`
+directly with the `settings` already available in the factory.
+
+### Changes
+
+1. `src/back/core/graphdb/GraphDBFactory.py`
+   - `_resolve_registry_uc_schema`: replaced `domain.uc_domain_path` parsing with a
+     direct `RegistryCfg.from_domain(domain, settings)` call → `rc.schema`.
+     Adds a debug log when the schema is resolved successfully.
+
+2. `tests/test_graphdb_factory.py`
+   - `test_lakebase_sync_uc_schema_uses_registry_schema_from_registry_cfg`: updated
+     to patch `RegistryCfg.from_domain` (authoritative mock) instead of setting
+     `domain.uc_domain_path`.
+   - `test_lakebase_sync_uc_schema_fallback_to_graph_schema_when_registry_empty`:
+     renamed and updated — mock returns empty schema to trigger fallback.
+
+### Modified files
+
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `tests/test_graphdb_factory.py`
+
+### Test result
+`pytest tests/test_graphdb_factory.py`
+→ **19 passed**
+
+---
+
+## Lakebase: three-schema permission bootstrap — 2026-05-13
+
+### Context
+OntoBricks uses up to three distinct Postgres schemas on Lakebase, each
+requiring USAGE + DML grants for the app service principal:
+
+1. **Registry schema** (e.g. `ontobricks_registry`) — existing bootstrap
+2. **Graph schema** (e.g. `ontobricks_graph`) — triple tables + companion;
+   already partially handled but always assumed the same instance as the registry
+3. **Sync schema** (e.g. `ontobricks`) — Lakebase creates this automatically when
+   Lakeflow registers a `managed_synced` snapshot table (it mirrors the UC schema
+   segment of the synced-table FQN); was not covered at all
+
+Additionally, the Graph DB may be bound to a **separate Lakebase Autoscaling
+project** from the registry, requiring a different `-i/-b/-d` bootstrap invocation.
+
+### Changes
+
+1. `scripts/deploy.config.sh`
+   - Added section 3c: `LAKEBASE_GRAPH_PROJECT`, `LAKEBASE_GRAPH_BRANCH`,
+     `LAKEBASE_GRAPH_DATABASE` — default empty (same instance as registry);
+     override when Graph DB is on a different Lakebase project.
+   - Added `LAKEBASE_SYNC_SCHEMA` — Postgres schema for `_sync` foreign tables
+     (only needed for `managed_synced` mode). Default empty (skip).
+
+2. `scripts/deploy.sh`
+   - Graph schema bootstrap now resolves `_GRAPH_INSTANCE/_BRANCH/_DATABASE`
+     from `LAKEBASE_GRAPH_*` vars with registry fallback — supports separate instance.
+   - Added a third bootstrap call for `LAKEBASE_SYNC_SCHEMA` (skipped when unset).
+
+3. `scripts/bootstrap-lakebase-perms.sh`
+   - Expanded header comment: documents all three schemas, their trigger
+     conditions, and example invocations for same-instance and cross-instance layouts.
+
+4. `README.md`
+   - Added table summarising the three schemas, when each grant is needed,
+     and which deploy.config.sh variable controls it.
+   - Added note about `sync_uc_schema` engine config key.
+
+### Modified files
+
+- `scripts/deploy.config.sh`
+- `scripts/deploy.sh`
+- `scripts/bootstrap-lakebase-perms.sh`
+- `README.md`
+
+### Test result
+No code logic changed — scripts only. Existing tests unaffected.

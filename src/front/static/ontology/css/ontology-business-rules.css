@@ -1,5 +1,15 @@
 /* Business Rules — styles for the tabbed rule editor container */
 
+/* Each rule-type list scrolls independently when it overflows the pane,
+   matching the Data Quality list behaviour. */
+.br-rules-list,
+#swrlRulesList {
+    min-height: 60px;
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 .br-rules-list .br-rule-card {
     border: 1px solid var(--bs-border-color);
     border-radius: 0.375rem;
@@ -93,4 +103,24 @@
 .dt-logic-badge {
     font-size: 0.65rem;
     letter-spacing: 0.05em;
+}
+
+/* ── Auto-generate review modal ── */
+.br-suggest-section-title {
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.br-suggest-item {
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.br-suggest-item:hover {
+    background-color: #ffffff;
+    border-color: var(--bs-primary, #0d6efd);
+}
+
+.br-suggest-item code {
+    word-break: break-word;
+    white-space: normal;
 }

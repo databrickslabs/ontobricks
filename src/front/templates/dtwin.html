@@ -2,6 +2,11 @@
 
 {% block title %}Digital Twin - OntoBricks{% endblock %}
 
+{# The Digital Twin is a read / analysis surface (query, explore, run
+   reasoning, discover cohorts). Lifecycle / viewer read-only gating must NOT
+   disable its filter / search / query controls — see permissions.css. #}
+{% block page_id %}digitaltwin{% endblock %}
+
 {% block extra_css %}
 <!-- Query module styles (extracted from partials) -->
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-visualization.css') }}?v={{ asset_version }}">

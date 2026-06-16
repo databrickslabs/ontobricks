@@ -6,13 +6,28 @@
         <h4 class="mb-1"><i class="bi bi-bug me-2"></i>Pitfalls</h4>
         <p class="text-muted mb-0 small">Detect structural, logical, and semantic issues in your ontology (P1.1–P4.7)</p>
     </div>
-    <button class="btn btn-sm btn-primary" id="pitfallsRunBtn">
-        <i class="bi bi-play-fill me-1"></i>Run Analysis
-    </button>
+    <div class="d-flex align-items-center gap-3">
+        <!-- Precision score gauge (hidden until first analysis) -->
+        <div id="pitfallsGaugeWrapper" class="d-none text-center" style="min-width:90px" title="Ontology Precision Score">
+            <svg id="pitfallsGaugeSvg" width="72" height="72" viewBox="0 0 72 72" aria-label="Precision score gauge">
+                <circle cx="36" cy="36" r="28" fill="none" stroke="#e9ecef" stroke-width="8"/>
+                <circle id="pitfallsGaugeArc" cx="36" cy="36" r="28" fill="none"
+                        stroke="#198754" stroke-width="8" stroke-linecap="round"
+                        stroke-dasharray="175.93" stroke-dashoffset="175.93"
+                        transform="rotate(-90 36 36)"/>
+                <text id="pitfallsGaugeLabel" x="36" y="40" text-anchor="middle"
+                      font-size="14" font-weight="700" fill="#212529">—</text>
+            </svg>
+            <div class="small text-muted" style="font-size:.7rem;margin-top:-2px">Precision</div>
+        </div>
+        <button class="btn btn-sm btn-primary" id="pitfallsRunBtn">
+            <i class="bi bi-play-fill me-1"></i>Run Analysis
+        </button>
+    </div>
 </div>
 
 <div class="card h-100">
-    <div class="card-body p-0">
+    <div class="card-body p-0 d-flex flex-column">
 
         <!-- Tab strip -->
         <ul class="nav nav-tabs ob-tabs" id="pitfallsTabs" role="tablist">
@@ -34,6 +49,19 @@
             </li>
         </ul>
 
+        <!-- Progress area (visible across all tabs while running) -->
+        <div id="pitfallsProgress" class="flex-shrink-0 d-none px-3 py-3 border-bottom">
+            <div class="text-center mb-2">
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                <strong id="pitfallsProgressMsg" class="text-muted">Starting analysis…</strong>
+            </div>
+            <div class="progress pf-progress-md">
+                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                     id="pitfallsProgressBar" role="progressbar" style="width: 0%">0%</div>
+            </div>
+            <small id="pitfallsProgressDetail" class="text-muted mt-1 d-block text-center"></small>
+        </div>
+
         <!-- Tab panes -->
         <div class="tab-content p-3" id="pitfallsTabContent">
 
@@ -54,22 +82,6 @@
 
                 <!-- Pattern checkboxes (rendered synchronously from static taxonomy) -->
                 <div id="pitfallsPatternBody"></div>
-
-                <!-- Progress (stays in Patterns tab while running) -->
-                <div id="pitfallsProgress" class="d-none mt-3">
-                    <div class="card border-primary">
-                        <div class="card-body py-3">
-                            <div class="d-flex align-items-center gap-3 mb-2">
-                                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                                <span class="small fw-semibold" id="pitfallsProgressMsg">Starting analysis…</span>
-                            </div>
-                            <div class="progress" style="height: 6px;">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated"
-                                     id="pitfallsProgressBar" role="progressbar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <!-- ── Results pane ───────────────────────────────────────── -->
@@ -86,9 +98,15 @@
                 <div id="pitfallsResults" class="d-none">
                     <div class="alert d-flex align-items-center gap-3 mb-3" id="pitfallsSummaryBanner">
                         <i class="bi fs-4" id="pitfallsSummaryIcon"></i>
-                        <div>
+                        <div class="flex-grow-1">
                             <div class="fw-semibold" id="pitfallsSummaryTitle"></div>
                             <div class="small text-muted" id="pitfallsSummaryDetail"></div>
+                        </div>
+                        <!-- Inline precision score badge in result banner -->
+                        <div id="pitfallsScoreBadge" class="text-center" style="min-width:64px">
+                            <div id="pitfallsScoreValue" class="fw-bold fs-4"></div>
+                            <div class="small text-muted" style="font-size:.7rem">/ 100</div>
+                            <div class="small text-muted" style="font-size:.65rem">Precision</div>
                         </div>
                     </div>
                     <div class="accordion" id="pitfallsAccordion"></div>

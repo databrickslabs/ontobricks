@@ -1,0 +1,60 @@
+## Live-mode e2e — run the Playwright user-journey flows against a deployed Databricks App
+
+**Context:** The `tests/live_integration/` suite only does httpx HTTP/JSON-RPC
+smoke probes against a deployed instance, while the 258 Playwright flows in
+`tests/e2e/` only ran against a local uvicorn subprocess (unauthenticated admin
+mode). We wanted the real browser user-journeys to run against the deployed app
+too, as part of the manual live-integration testing story (no CI changes).
+
+A de-risking spike confirmed the approach is viable: a Playwright browser
+context with an `Authorization: Bearer <token>` header authenticates through the
+Databricks Apps gateway for page navigations, sub-resources, and XHRs. The spike
+also surfaced a deployed-app quirk — behind the gateway the app emits
+`redirect_slashes` redirects to the wrong host (`https://localhost:8000/...`), in
+both directions — so a server-side canonical-URL resolver was needed instead of
+naive slash-fixing.
+
+**Changes:**
+1. `tests/fixtures/databricks_auth.py` — new shared `DatabricksAuth` helper
+   (`mint_token`, `mint_host_and_token`) so the `databricks auth token`
+   invocation lives in one place instead of being duplicated across the two
+   suites' conftests.
+2. `tests/e2e/conftest.py` — dual-mode harness gated by `ONTOBRICKS_LIVE_BASE`:
+   `_set_env`/`live_server` short-circuit the local subprocess in live mode;
+   new `_live_bearer` session fixture mints the token; the `page` fixture injects
+   the bearer header on the browser context and installs `_install_redirect_fix`
+   (resolves the canonical URL via httpx, pinning the wrong-host redirect back
+   onto the live base, then same-origin `continue_`); a
+   `pytest_collection_modifyitems` hook skips ENV-SPECIFIC tests always and
+   durable-MUTATING tests unless `ONTOBRICKS_LIVE_ALLOW_MUTATING=1`. Docstring
+   documents live mode.
+3. `tests/live_integration/conftest.py` — `bearer_token` now delegates to
+   `DatabricksAuth.mint_token`; replaced the (dead) module-level `pytestmark`
+   skip with a working `pytest_collection_modifyitems` gate so the suite is
+   actually skipped when `ONTOBRICKS_LIVE_BASE` is unset (fixes a pre-existing
+   latent bug where `test_root_redirects_when_unauthenticated` KeyError-ed on the
+   env var in a no-`-m` full-suite run).
+4. `CONTRIBUTING.md` — added a "Live integration (deployed Databricks App)"
+   section documenting both the httpx and live-e2e run commands and the
+   mutating opt-in.
+
+**Live-mode gating (skipped against the shared int app):**
+- ENV-SPECIFIC (assume local admin / synced files / gateway-status differences):
+  settings host-display, settings save-session (admin-gated), the local-admin
+  permission assertion, and 3 help-docs tests (deployed bundle excludes
+  README.md so the "Overview" slug 404s; gateway returns 400 not 404 for the
+  path-traversal probe).
+- MUTATING (durable writes to the shared registry, opt-in only):
+  settings save-route contracts, domain design-view create/save-current.
+
+**Files modified:**
+- `tests/fixtures/databricks_auth.py` (new)
+- `tests/e2e/conftest.py`
+- `tests/live_integration/conftest.py`
+- `CONTRIBUTING.md`
+
+**Tests:**
+- `uv run pytest tests/ --ignore=tests/e2e --no-cov` (no live base) — 2468 passed, 28 skipped, 0 failed.
+- `uv run pytest tests/live_integration/ -m live_integration --no-cov` (base set) — 17 passed.
+- `uv run pytest tests/e2e/` (local mode, navigation) — 18 passed (no regression).
+- `ONTOBRICKS_LIVE_BASE=… uv run pytest tests/e2e/ --no-cov` (live mode, full) — 247 passed, 11 skipped, 0 failed.

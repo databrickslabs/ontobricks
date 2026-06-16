@@ -13,6 +13,8 @@ from __future__ import annotations
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from back.objects.domain.SettingsService import SettingsService
 from back.objects.registry.RegistryService import RegistryCfg
 
@@ -25,6 +27,21 @@ def _rcfg() -> RegistryCfg:
         lakebase_schema="ontobricks_registry",
         lakebase_database="",
     )
+
+
+@pytest.fixture
+def psycopg_installed(monkeypatch):
+    """Stub ``psycopg`` so the optional-extra gate inside
+    ``_lakebase_schema_status`` lets the test reach the mocked factory.
+
+    The production code does ``import psycopg`` at function scope and
+    bails to ``{initialized: False, populated: False}`` if the package
+    is missing. The ``[lakebase]`` extra is not part of the base venv,
+    so every test that wants to assert behaviour past the gate must
+    opt into this fixture.
+    """
+    monkeypatch.setitem(sys.modules, "psycopg", MagicMock())
+    yield
 
 
 class TestLakebaseSchemaStatus:
@@ -46,7 +63,7 @@ class TestLakebaseSchemaStatus:
             "populated": False,
         }
 
-    def test_uninitialized_skips_row_count_probe(self):
+    def test_uninitialized_skips_row_count_probe(self, psycopg_installed):
         # When ``is_initialized`` is False the helper must short-circuit
         # — no point hitting ``table_row_counts`` against a schema that
         # doesn't have the registry tables yet (it'd just round-trip
@@ -61,7 +78,9 @@ class TestLakebaseSchemaStatus:
         assert status == {"initialized": False, "populated": False}
         store.table_row_counts.assert_not_called()
 
-    def test_initialized_but_empty_tables_reports_unpopulated(self):
+    def test_initialized_but_empty_tables_reports_unpopulated(
+        self, psycopg_installed
+    ):
         store = MagicMock()
         store.is_initialized.return_value = True
         store.table_row_counts.return_value = {
@@ -80,7 +99,9 @@ class TestLakebaseSchemaStatus:
                 "populated": False,
             }
 
-    def test_initialized_with_any_table_populated_reports_true(self):
+    def test_initialized_with_any_table_populated_reports_true(
+        self, psycopg_installed
+    ):
         # A single non-empty table is enough — the UI only needs the
         # has-data signal, not exact counts.
         store = MagicMock()
@@ -101,7 +122,7 @@ class TestLakebaseSchemaStatus:
                 "populated": True,
             }
 
-    def test_factory_failure_is_swallowed(self):
+    def test_factory_failure_is_swallowed(self, psycopg_installed):
         # Mirrors the failure mode where ``RegistryFactory.lakebase``
         # itself raises (e.g. broken config). The probe must keep the
         # admin UI rendering — never raise.
@@ -114,7 +135,7 @@ class TestLakebaseSchemaStatus:
                 "populated": False,
             }
 
-    def test_row_count_failure_keeps_initialized_true(self):
+    def test_row_count_failure_keeps_initialized_true(self, psycopg_installed):
         # ``table_row_counts`` now propagates connection / permission
         # errors (intentional, it surfaces deployment misconfigurations).
         # The status probe still wants to keep ``initialized=True`` so

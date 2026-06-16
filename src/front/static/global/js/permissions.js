@@ -169,7 +169,15 @@
      * resolution and the user can do everything anyway.
      */
     function applyRoleIndicators() {
-        if (!isAppMode) return;
+        // Local-dev mode: there is no real permission resolution and every
+        // caller is treated as admin server-side. The pill is always laid out
+        // (Bootstrap's ``.d-flex`` on ``#roleNavBadgeItem`` wins over the
+        // ``display:none`` base rule), so without this we'd leave the raw
+        // ``ROLE`` placeholder on screen. Render it as ADMIN instead.
+        if (!isAppMode) {
+            showRoleNavBadge('admin');
+            return;
+        }
 
         const role = effectiveRole();
         if (!role) return;
@@ -253,8 +261,9 @@
      * ``ontology-shared-panels.js`` / ``ontology-core.js`` only need a
      * single check instead of duplicating the logic per call site:
      *
-     *   - ``window.isActiveVersion === false`` → older inactive
-     *     version, set asynchronously by ``version-check.js``;
+     *   - ``window.isActiveVersion === false`` → the loaded version is
+     *     not editable (not DRAFT), set asynchronously by
+     *     ``version-check.js``;
      *   - domain-role below editor → viewer (or none) on the current
      *     domain. Admins always satisfy domain gates per the backend
      *     ``require(scope='domain')`` fall-back.
@@ -266,6 +275,11 @@
      */
     function canEditOntology() {
         if (window.isActiveVersion === false) return false;
+        // Editing is only allowed while the loaded version is DRAFT.
+        // ``window.versionStatus`` defaults to 'DRAFT' until
+        // ``version-check.js`` resolves it, so this stays permissive
+        // until the async check runs (mirrors ``isActiveVersion``).
+        if (window.versionStatus && window.versionStatus !== 'DRAFT') return false;
         return permissions.hasDomainRole('editor');
     }
 

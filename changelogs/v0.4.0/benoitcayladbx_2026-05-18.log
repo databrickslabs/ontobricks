@@ -1,0 +1,77 @@
+## Ontology Pitfalls Detector Integration
+
+### Context
+Integrated the D2KLab Ontology-Pitfalls-Detector (Apache-2.0) into OntoBricks as a
+new "Pitfalls" analysis panel on the ontology page. The library detects 19 structural,
+logical, and semantic pitfalls (P1.1–P4.7) across four categories, backed by an async
+TaskManager job and a new sidebar section with pattern selector and accordion results UI.
+
+### Changes
+
+1. **`src/back/core/w3c/pitfalls/__init__.py`** — new subpackage: re-exports `PitfallsService`
+2. **`src/back/core/w3c/pitfalls/utils.py`** — vendored utility functions (camelCase split, normalize, sort); heavy nltk import moved inside `ensure_nltk_resource` to avoid breaking imports when optional deps are absent
+3. **`src/back/core/w3c/pitfalls/runner.py`** — vendored `OntologyPatternToolkit` with all 19 `run_p*` methods; numpy/sentence-transformers/sklearn imported via try/except at module level so taxonomy constants are always accessible
+4. **`src/back/core/w3c/pitfalls/PitfallsService.py`** — new service: serializes rdflib Graph to temp TTL, runs toolkit, returns `{metadata, selected_pitfalls, results, grouped_results}`; `get_taxonomy()` and `get_available_patterns()` work without optional deps
+5. **`src/back/core/w3c/__init__.py`** — added `PitfallsService` to exports
+6. **`src/api/routers/internal/ontology.py`** — added three routes: `GET /ontology/pitfalls/taxonomy`, `POST /ontology/pitfalls/analyze` (async via TaskManager + threading), `GET /ontology/pitfalls/results/{task_id}`
+7. **`pyproject.toml`** — added `[project.optional-dependencies] pitfalls` group: sentence-transformers, scikit-learn, nltk, scipy
+8. **`src/front/config/menu_config.json`** — added "Pitfalls" item (id: pitfalls, icon: bi-bug) under the "Advanced" ontology group
+9. **`src/front/templates/ontology.html`** — added `<div id="pitfalls-section">` + partial include + JS script tag
+10. **`src/front/templates/partials/ontology/_pitfalls.html`** — new partial: pattern selector (grouped checkboxes), progress bar, results accordion with per-category cards, empty state
+11. **`src/front/static/ontology/js/ontology-pitfalls.js`** — new JS module (`PitfallsModule`): lazy init, taxonomy load, run/poll cycle, grouped results render, deps-missing warning
+12. **`src/front/static/ontology/js/ontology-init.js`** — added `case 'pitfalls'` branch to `_initSectionByName`
+13. **`tests/units/ontology/test_pitfalls_service.py`** — new test file: 22 tests covering taxonomy, utils (camelCase, normalize, sort, parse), service grouping, and (skipped when deps absent) run_analysis with synthetic TTL fixtures
+
+### Modified files
+- `src/back/core/w3c/pitfalls/` (new — 4 files)
+- `src/back/core/w3c/__init__.py`
+- `src/api/routers/internal/ontology.py`
+- `pyproject.toml`
+- `src/front/config/menu_config.json`
+- `src/front/templates/ontology.html`
+- `src/front/templates/partials/ontology/_pitfalls.html` (new)
+- `src/front/static/ontology/js/ontology-pitfalls.js` (new)
+- `src/front/static/ontology/js/ontology-init.js`
+- `tests/units/ontology/test_pitfalls_service.py` (new)
+
+### Test results
+- Pitfalls tests: **11 passed, 11 skipped** (skipped = ML-dep tests, require `pip install .[pitfalls]`)
+- Full unit suite: **1949 passed, 12 skipped** — 23 pre-existing failures in unrelated modules (auth, health, registry, settings), no regressions introduced
+
+---
+
+## Pitfalls UI/UX Fixes & Enhancements
+
+### Context
+Post-integration fixes: scrolling, tab layout alignment, tooltips, server restart race condition,
+and license/dependency documentation.
+
+### Changes
+
+1. **`src/front/static/global/css/sidebar-layout.css`** — Pitfalls section now uses `display: flex` default (consistent with other sections); removed the `display: block; height: auto` override that was fighting the flex chain
+2. **`src/front/templates/partials/ontology/_pitfalls.html`** — Restructured to match the Axioms section pattern: `section-header mb-4` → `card h-100` → `card-body p-0` → `ob-tabs` → `tab-content p-3`; split into **Patterns** tab (checkboxes + All/Fast toolbar + progress bar) and **Results** tab (summary banner + accordion); results pane gets `overflow-y: auto; max-height: calc(100vh - 280px)` via scoped `<style>` for reliable scrolling; Run Analysis button moved to section header top-right
+3. **`src/front/static/ontology/js/ontology-pitfalls.js`** — Results tab auto-activates on analysis completion; results badge shows issue count (yellow/green); `_showResults(totalIssues)` signature; `_showError` also switches to Results tab
+4. **`src/back/core/external/pitfalls/runner.py`** — `PITFALL_TAXONOMY` enriched with `description` field for all 19 pitfalls (plain-English explanation of what each check detects and why it matters)
+5. **`src/front/static/ontology/js/ontology-pitfalls.js`** — Pattern selector renders ⚡ (fast/graph-only) and 💻 (ML-required) speed icons per check; Bootstrap tooltip on ℹ icon shows the description from taxonomy
+6. **`scripts/start.sh`** — `uv sync` now always includes `--extra pitfalls` alongside `--extra lakebase` to prevent ML deps being stripped on restart
+7. **`requirements.txt`** — Updated from `-e ".[lakebase]"` to `-e ".[lakebase,pitfalls]"` for Databricks Apps deployment
+8. **`licenses/README.md`** — Added "Python Libraries (Optional — Pitfalls Detection)" section; added sentence-transformers, scikit-learn, NLTK, SciPy, and D2KLab vendored code to license summary table
+9. **`licenses/python/sentence-transformers-LICENSE.txt`** — new (Apache-2.0)
+10. **`licenses/python/scikit-learn-LICENSE.txt`** — new (BSD-3-Clause)
+11. **`licenses/python/nltk-LICENSE.txt`** — new (Apache-2.0)
+12. **`licenses/python/scipy-LICENSE.txt`** — new (BSD-3-Clause)
+13. **`licenses/python/d2klab-ontology-pitfalls-detector-LICENSE.txt`** — new (Apache-2.0, vendored code)
+
+### Modified files
+- `src/front/static/global/css/sidebar-layout.css`
+- `src/front/templates/partials/ontology/_pitfalls.html`
+- `src/front/static/ontology/js/ontology-pitfalls.js`
+- `src/back/core/external/pitfalls/runner.py`
+- `scripts/start.sh`
+- `requirements.txt`
+- `licenses/README.md`
+- `licenses/python/sentence-transformers-LICENSE.txt` (new)
+- `licenses/python/scikit-learn-LICENSE.txt` (new)
+- `licenses/python/nltk-LICENSE.txt` (new)
+- `licenses/python/scipy-LICENSE.txt` (new)
+- `licenses/python/d2klab-ontology-pitfalls-detector-LICENSE.txt` (new)

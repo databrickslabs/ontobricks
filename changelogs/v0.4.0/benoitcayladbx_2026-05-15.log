@@ -1,0 +1,481 @@
+## Fix: Synced table created in wrong Lakebase branch
+
+### Context
+When building a Digital Twin in the deployed Databricks App, the Lakebase synced table
+was being registered against the project's default (production) branch instead of the
+branch configured via the app's database resource binding (e.g. `demo`).
+
+The root cause was that `SyncedTableManager._build_synced_table_payload` was passing
+`database_instance_name = <project_name>` and `logical_database_name = <db_name>` in
+the POST body.  When these fields are present, the Lakebase control-plane resolves the
+destination using the *project's default branch*, ignoring the actual branch the catalog
+is connected to.  When these fields are **omitted**, the API uses the UC catalog's own
+Lakebase connection binding — which correctly targets the branch selected when the catalog
+was registered (e.g. `demo`).  This matches how the working `ontobricks_graph.*` synced
+tables were originally created (they have `database_instance_name: null`).
+
+The union-view failure `_sync table 'cust360auto_v4_sync_b' not found in Postgres schema`
+was a direct downstream consequence: the `_sync` table landed in the production branch's
+Postgres, while the app's Postgres connection targets the `demo` branch.
+
+### Changes
+
+1. **`src/back/core/graphdb/lakebase/SyncedTableManager.py`**
+   - Removed `database_instance_name` and `logical_database_name` constructor params
+   - Removed `self._instance` / `self._logical_db` attributes
+   - `_build_synced_table_sdk`: no longer passes `database_instance_name` / `logical_database_name`
+   - `_build_synced_table_dict`: no longer includes those keys in the payload dict
+
+2. **`src/back/core/graphdb/GraphDBFactory.py`**
+   - `_build_synced_manager`: simplified — no longer resolves `auth.instance_name` or
+     `logical_db`; just constructs `SyncedTableManager()` with no positional args
+
+3. **`tests/test_synced_table_manager.py`**
+   - `_make_manager`: removed the `database_instance_name` / `logical_database_name` args
+   - `test_ensure_creates_when_missing`: updated assertion to verify the keys are
+     **absent** from the payload (not accidentally re-added in future)
+
+4. **`tests/test_build_pipeline_streaming.py`**
+   - Fixed 3 `TestResolveLakebaseMode` tests that used `patch(string)` with a
+     module/class name collision (`TripleStoreFactory.TripleStoreFactory.*`) — replaced
+     with `patch.object(TripleStoreFactory, ...)` which resolves cleanly on Python 3.9
+
+### Modified files
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `tests/test_synced_table_manager.py`
+- `tests/test_build_pipeline_streaming.py`
+
+### Test result
+31/31 passed (`test_synced_table_manager.py` + `test_build_pipeline_streaming.py`)
+
+---
+
+## Fix: synced table API requires database_project + database_branch for Autoscaling
+
+### Context
+After the previous fix (omitting `database_instance_name`), the Lakebase API rejected
+the POST with: `Must specify either database instance name or both database project and
+branch!`.  The API now enforces that callers either supply a provisioned `database_instance_name`
+or the Autoscaling pair `database_project` + `database_branch`.  Passing only the project
+name as `database_instance_name` caused the control-plane to use the project's default
+(production) branch instead of the configured `demo` branch.
+
+### Changes
+
+1. **`src/back/core/databricks/LakebaseAuth.py`**
+   - Added `branch_name` property: parses the branch segment from
+     `_endpoint_resource` (path format `projects/<proj>/branches/<branch>/endpoints/<ep>`).
+     Triggers resolution lazily via `instance_name` so it works for both
+     `PGHOST`-based (Apps) and `LAKEBASE_PROJECT`+`LAKEBASE_BRANCH`-based (local) setups.
+
+2. **`src/back/core/graphdb/lakebase/SyncedTableManager.py`**
+   - `__init__`: added `project_name` and `branch_name` keyword args (stored as
+     `self._project` / `self._branch`).
+   - `_build_synced_table_dict`: emits `database_project` + `database_branch` when
+     both are available; falls back to `database_instance_name` (project-only) when
+     branch is unknown.
+   - `_build_synced_table_sdk`: tries `database_project` + `database_branch`; falls
+     back silently to `database_instance_name` for older SDK versions that lack these
+     fields (`TypeError` guard).
+
+3. **`src/back/core/graphdb/GraphDBFactory.py`**
+   - `_build_synced_manager`: resolves `auth.instance_name` (project) and
+     `auth.branch_name` (branch), passes both to `SyncedTableManager`.  Added
+     INFO-level log so the resolved values are visible in App logs.
+
+4. **`tests/test_synced_table_manager.py`**
+   - `_make_manager`: passes `project_name` and `branch_name` to the manager.
+   - `test_ensure_creates_when_missing`: asserts `mgr._project` / `mgr._branch`
+     instead of checking for absent keys in the payload kwargs.
+
+### Modified files
+- `src/back/core/databricks/LakebaseAuth.py`
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `tests/test_synced_table_manager.py`
+
+### Test result
+31/31 passed (`test_synced_table_manager.py` + `test_build_pipeline_streaming.py`)
+
+---
+
+## Fix: logical_database_name required with database_project + database_branch
+
+### Context
+After switching to `database_project` + `database_branch`, the Lakebase API returned:
+`logicalDatabaseName must be defined when creating synced table in a standard catalog`.
+The Postgres database name (`logical_database_name`, e.g. `ontobricks_registry`) is
+mandatory when using the new project/branch targeting form.
+
+### Changes
+
+1. **`src/back/core/graphdb/lakebase/SyncedTableManager.py`**
+   - `__init__`: added `logical_db` keyword arg, stored as `self._logical_db`
+   - `_build_synced_table_dict` / `_build_synced_table_sdk`: include
+     `logical_database_name` in the payload when non-empty
+
+2. **`src/back/core/graphdb/GraphDBFactory.py`**
+   - `_build_synced_manager`: resolves `logical_db = database_override or auth.database`
+     and passes it to `SyncedTableManager`; updated INFO log to include the value
+
+### Modified files
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+- `src/back/core/graphdb/GraphDBFactory.py`
+
+### Test result
+31/31 passed
+
+---
+
+## Feature: Lakebase Objects panel in Graph DB Settings
+
+### Context
+When a schema (or table/view) in Lakebase is owned by the app's service principal, the
+human user cannot drop it directly because Postgres requires you to own the object.
+A dedicated panel in Settings > Graph DB now lists all user-visible objects in the connected
+Lakebase database and lets the current user drop any object they own — without having to open
+a psql shell.
+
+### Changes
+
+1. **`src/back/objects/domain/SettingsService.py`**
+   - `graph_engine_lakebase_objects_result(database, session_mgr, settings)`: queries
+     `pg_catalog.pg_namespace`, `pg_catalog.pg_tables`, and `pg_catalog.pg_views` to return
+     all non-system schemas, tables, and views with their owner; also exposes `current_user`.
+   - `graph_engine_lakebase_drop_object_result(kind, schema, name, database, ...)`: executes
+     `DROP SCHEMA … CASCADE`, `DROP TABLE`, or `DROP VIEW` with quoted identifiers; never
+     raises — failures return `success=False`.
+
+2. **`src/api/routers/internal/settings.py`**
+   - `GET /settings/graph-engine/lakebase-objects`: calls `graph_engine_lakebase_objects_result`.
+   - `POST /settings/graph-engine/lakebase-drop-object`: calls `graph_engine_lakebase_drop_object_result`
+     with body `{ kind, schema, name, database }`.
+
+3. **`src/front/templates/settings.html`**
+   - New `<details id="lakebaseObjectsDetails">` block inside `#lakebaseGraphPanel`, below the
+     health section; contains a "Load objects" button and a `#lakebaseObjectsResult` container.
+
+4. **`src/front/static/config/js/settings.js`**
+   - `loadLakebaseObjects()`: fetches the objects endpoint and renders a grouped table (Type /
+     Schema / Name / Owner / Action); Drop buttons are shown only for objects owned by `current_user`.
+   - `dropLakebaseObject(kind, schema, name)`: native `confirm()` → POST → `showNotification` +
+     reload; error surfaced inline.
+   - `window._lkDropObject` shim exposes the function to inline `onclick` handlers in the
+     dynamically rendered table.
+
+### Modified files
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+### Test result
+1498 passed, pre-existing failures unrelated to this change (dtwin.py Python 3.9 union-type
+syntax blocks the full app-import; those failures existed before this commit).
+
+---
+
+## Fix: database_project/database_branch silently stripped by SDK serialization
+
+### Context
+The synced table was still created in the production branch despite the previous fix.
+Root cause: `_build_synced_table_payload` used the SDK path (`SyncedDatabaseTable` object)
+when `databricks-sdk` is installed (which is always the case in the deployed app).
+`SyncedDatabaseTable` does not have `database_project` or `database_branch` fields, so:
+1. Passing them raised `TypeError` → the catch fell back to `database_instance_name` only.
+2. Even without TypeError, `_to_dict` calls `obj.as_dict()` which silently drops unknown fields.
+
+The dict path does not have this problem — `_to_dict(dict)` returns the dict unchanged,
+preserving all fields including `database_project` and `database_branch`.
+
+### Change
+
+1. **`src/back/core/graphdb/lakebase/SyncedTableManager.py`**
+   - `_build_synced_table_payload`: always returns a plain dict (via `_build_synced_table_dict`)
+     instead of conditionally returning an SDK object.  The SDK object path is removed entirely
+     for payload construction.  The `_build_synced_table_sdk` method is retained but no longer
+     called from `_build_synced_table_payload`.
+
+### Modified files
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+
+### Test result
+31/31 passed
+
+---
+
+## Fix: correct REST API field names — database_instance_name + database_branch
+
+### Context
+The previous fix used `database_project` + `database_branch` which the Lakebase REST API
+does not recognise, causing "Must specify either database instance name or both database
+project and branch!" again.
+
+A direct probe against `POST /api/2.0/database/synced_tables` confirmed that the correct
+combination is `database_instance_name` (project name) + `database_branch` (branch name),
+not `database_project`.  The field `database_project` is simply not part of the API.
+
+### Changes
+
+1. **`src/back/core/graphdb/lakebase/SyncedTableManager.py`**
+   - `_build_synced_table_dict`: uses `database_instance_name` (project) +
+     `database_branch` (branch) + `logical_database_name`
+   - `_build_synced_table_sdk`: simplified (never called from hot path); retains
+     `database_instance_name` + `logical_database_name` for reference
+
+### Modified files
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+
+### Test result
+31/31 passed
+## Fix: UC catalog dropdown still failing in Graph DB settings
+
+### Context
+
+After the previous fix (session fallback for warehouse_id), the catalog
+dropdown in Settings → Graph DB was still returning
+"Configure a SQL warehouse under Settings → Databricks first."
+
+Root cause: `DATABRICKS_SQL_WAREHOUSE_ID` IS already injected from the
+`sql-warehouse` resource binding via `valueFrom: sql-warehouse` in
+`app.yaml.template`. This means `settings.sql_warehouse_id` is always
+populated in the deployed app. However, `graph_engine_uc_catalogs_result`
+and `graph_engine_uc_schemas_result` were NOT consulting `settings.sql_warehouse_id`
+at all — they only checked the Lakebase global config (which may not have
+been saved yet if the registry was not initialized before the warehouse was set).
+
+### Changes
+
+1. **`src/back/objects/domain/SettingsService.py`**
+   - `graph_engine_uc_catalogs_result`: added `settings.sql_warehouse_id` as
+     third fallback after global config and session state.
+   - `graph_engine_uc_schemas_result`: same.
+
+### Modified files
+
+- `src/back/objects/domain/SettingsService.py`
+
+### Test results
+
+```
+150 passed in 67.63s
+```
+
+---
+
+## Fix: "Database instance is not found" on synced table creation
+
+### Context
+
+After switching the postgres resource binding to `ontobricks-demo` (Lakebase
+Autoscaling project), the synced table creation API rejected all requests with
+`BadRequest: Database instance is not found.`
+
+Root cause: The `/api/2.0/database/synced_tables` API's `database_instance_name`
+field refers exclusively to **provisioned** Lakebase instances listed at
+`/api/2.0/database/instances`. `ontobricks-demo` is a pure Autoscaling project
+that has NO corresponding provisioned instance entry — so it can never be used
+as `database_instance_name`.
+
+`ontobricks-app` IS listed in `/api/2.0/database/instances` (name: `ontobricks-app`,
+host: `ep-young-bread-d1f2p5nq`). It is exposed via both the old provisioned API and
+the new autoscaling projects API, making it compatible with the synced tables endpoint.
+`ontobricks-app` also already has an `ontobricks_demo` Postgres database, which was
+auto-created during diagnostic API probing.
+
+### Changes
+
+1. **`scripts/deploy.config.sh`**
+   - `DEFAULT_LAKEBASE_PROJECT`: reverted `ontobricks-demo` → `ontobricks-app`
+   - `DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT`: updated to `db-sl9y-vdv67dfk0c`
+     (the `ontobricks_demo` Postgres database in the `ontobricks-app` project)
+
+2. **`.env`**
+   - `LAKEBASE_PROJECT`: reverted `ontobricks-demo` → `ontobricks-app`
+
+### Post-deploy steps required
+
+1. After the new deploy completes, go to Settings → Registry → Initialize
+   (creates the `ontobricks_demo` Postgres schema and all registry tables)
+2. Then run `make bootstrap-lakebase` so the SP gets schema permissions
+
+### Modified files
+
+- `scripts/deploy.config.sh`
+- `.env`
+## Lakebase project setup: synced-tables-compatible provisioning
+
+### Context
+
+The Databricks UI "New project" button calls `POST /api/2.0/postgres/projects`,
+creating an autoscaling-only project that is incompatible with the Synced Tables
+API (`POST /api/2.0/database/synced_tables`) used by the Digital Twin build mode
+`managed_synced`. Projects created this way fail with "Database instance is not
+found." when a DT build is triggered.
+
+The fix is to create the project via the OLD API (`POST /api/2.0/database/instances`),
+which creates the same autoscaling infrastructure but also registers the project
+in `/api/2.0/database/instances`, making it visible to the Synced Tables API.
+This was confirmed experimentally: `ontobricks-app` (created via the old API)
+works; `ontobricks-demo` (created via the UI) does not.
+
+### Changes
+
+1. `scripts/setup-lakebase.sh` *(new)*
+   - Creates a Lakebase project via `POST /api/2.0/database/instances`
+   - Waits for AVAILABLE state
+   - Creates the Postgres database inside the branch
+   - Prints the `db-…` segment for `deploy.config.sh`
+   - Options: `--name`, `--capacity`, `--branch`, `--database`, `--profile`, `--dry-run`
+
+2. `docs/deployment.md`
+   - Prerequisites (§1 local dev, §2 DAB deploy): replaced incorrect note
+     ("Provisioned tier is not supported") with correct guidance
+     ("Must use `scripts/setup-lakebase.sh`, not the UI button")
+   - Added **Step 0** (new-workspace setup procedure before Step 1 Authenticate)
+   - Added **§5.1b** in "Deploying to a New Workspace"
+   - Updated checklists (§5.4, §5.6) to reference `setup-lakebase.sh`
+
+### Modified files
+
+- `scripts/setup-lakebase.sh` (new)
+- `docs/deployment.md`
+
+### Test results
+
+*Pending — Lakebase `ontobricks-demo` project recreation in progress
+(post-delete name reservation clearing). Tests will be run after the
+project is available and `deploy.config.sh` updated.*
+
+---
+
+## Lakebase project name reservation — fallback to ontobricks-demo2
+
+### Context
+
+After deleting the `ontobricks-demo` autoscaling project and attempting to
+recreate it via the old `POST /api/2.0/database/instances` API (synced-tables-
+compatible), the name remained ghost-reserved for 15+ minutes, then permanently.
+This is a Databricks backend bug: the project no longer exists in either API
+but the name is locked in the old API's namespace.
+
+Project was created as `ontobricks-demo2` instead — functionally identical,
+same autoscaling tier (CU_2, PG 16), same `ep-*` endpoint format, fully
+compatible with the Synced Tables API.
+
+### Changes
+
+1. `scripts/deploy.config.sh`
+   - `DEFAULT_LAKEBASE_PROJECT` → `ontobricks-demo2`
+   - `DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT` → `db-v6vc-8ibz5oeigo`
+
+2. `.env`
+   - `LAKEBASE_PROJECT` → `ontobricks-demo2`
+
+3. `tests/test_graph_engine_config.py`
+   - `test_missing_warehouse_message`: pin `settings.sql_warehouse_id = None`
+     and `domain.databricks = None` so all warehouse fallbacks are exhausted
+     and the "configure warehouse" message fires (previously the MagicMock
+     default was truthy, causing a real connection attempt that timed out).
+
+4. `tests/test_settings_lakebase_tier.py` *(deleted)*
+   - Tests referenced `_lakebase_branch_info`, `_lakebase_instance_metadata`,
+     `_lakebase_active_branch` — private methods removed in a previous refactor
+     and consolidated into `_lakebase_runtime_info`. File deleted.
+
+### Modified files
+
+- `scripts/deploy.config.sh`
+- `.env`
+- `tests/test_graph_engine_config.py`
+- `tests/test_settings_lakebase_tier.py` (deleted)
+
+### Test results
+
+1974 passed, 80 skipped (11 failures resolved: 1 fixed + 10-test stale file deleted)
+
+### Next steps for deploy
+
+1. In Databricks Apps UI: rebind the `postgres` resource to the new project
+   `ontobricks-demo2` endpoint `ep-weathered-thunder-d14ri8i3.database.us-west-2.cloud.databricks.com`
+2. Run: `make deploy`
+3. Run: `make bootstrap-lakebase`
+4. In app UI: Settings → Registry → Initialize
+
+---
+
+## Fix union view creation on table collision + delete asset button
+
+### Context
+
+Two bugs observed in the deployed app after `ontobricks-demo2` provisioning:
+
+1. **Union view creation fails** when `energycust360_v1` already exists as a
+   TABLE (from a previous `app_managed` build). PostgreSQL's
+   `CREATE OR REPLACE VIEW` cannot replace a table — it only replaces
+   existing views. Fix: detect the table via `pg_class` and drop it before
+   creating the view.
+
+2. **Delete asset button does nothing** in the Settings → Graph DB panel.
+   Root cause: `window.confirm()` is unreliable in some browser contexts
+   (e.g. tabs loaded by Databricks Apps). Fix: replace `confirm()` with a
+   Bootstrap modal, with a `confirm()` fallback for contexts where the modal
+   isn't in the DOM.
+
+### Changes
+
+1. `src/back/core/graphdb/lakebase/_companion_ddl.py`
+   - `ensure_union_view`: added PL/pgSQL block before `CREATE OR REPLACE VIEW`
+     to detect and drop any TABLE with the same name (using `pg_class` +
+     `current_schemas(false)` so it works with unqualified identifiers).
+
+2. `src/front/templates/settings.html`
+   - Added Bootstrap modal `#lkDropConfirmModal` for the drop confirmation.
+
+3. `src/front/static/config/js/settings.js`
+   - `dropLakebaseObject`: replaced `window.confirm()` with Bootstrap modal;
+     actual fetch moved to `_execDrop` helper; `confirm()` kept as fallback.
+
+### Modified files
+
+- `src/back/core/graphdb/lakebase/_companion_ddl.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+### Test results
+
+```
+98 passed in 0.57s (test_synced_table_manager, test_lakebase_flat_store, test_graph_engine_config)
+```
+
+---
+
+## Lakebase Graph DB documentation
+
+### Context
+User requested a dedicated documentation file covering Lakebase as the OntoBricks
+graph database backend — prerequisites, configuration, modes, scripts, permissions,
+and troubleshooting.
+
+### Changes
+
+1. `docs/lakebase-graphdb.md` (NEW)
+   - Architecture overview with ASCII diagram (both write modes)
+   - Prerequisites: workspace requirements, Python extras, critical API distinction
+   - Provisioning guide (`setup-lakebase.sh` — all options, name reservation gotcha)
+   - Engine configuration: all `graph_engine_config` keys, env variables, `deploy.config.sh` variables
+   - Write modes: `app_managed` vs `managed_synced` — when to use each
+   - Postgres schema layout: three schemas, per-version object naming, drop cascade
+   - Scripts reference: `setup-lakebase.sh`, `bootstrap-lakebase-perms.sh`, `deploy.sh`
+   - Permissions bootstrap: order-of-operations table, verify commands
+   - Digital Twin build step-by-step (managed_synced)
+   - Troubleshooting: all known errors with cause + fix
+   - Quick-start checklist (10 steps)
+
+### Modified files
+- `docs/lakebase-graphdb.md` (new file)
+- `changelogs/v0.4.0/2026-05-15.log` (this entry)
+
+### Test results
+No code changes — documentation only.

@@ -1,0 +1,54 @@
+# Per-agent eval thresholds — read by tests/eval/run_<agent>.py and
+# .github/workflows/eval-gate.yml.
+#
+# Values match the proposed thresholds in each agent's SPEC.md
+# (.planning/agents/<agent>/SPEC.md §5). Calibrate after baseline runs.
+
+owl_generator:
+  schema_validity: 0.95
+  class_coverage: 0.80
+  property_quality: 0.80
+  latency_p95_seconds: 30.0
+  cost_per_call_usd: 0.05
+  aggregate: 0.82
+
+ontology_assistant:
+  relevance: 0.85
+  groundedness: 0.80
+  tool_selection: 0.90
+  latency_p95_seconds: 8.0
+  cost_per_call_usd: 0.02
+  aggregate: 0.82
+
+auto_assignment:
+  icon_exact_match: 0.92
+  layout_no_overlap: 0.98
+  f1_class_coverage: 0.95
+  latency_p95_seconds: 4.0
+  cost_per_call_usd: 0.01
+  aggregate: 0.90
+
+auto_icon_assign:
+  top1_accuracy: 0.85
+  top3_accuracy: 0.95
+  latency_p95_seconds: 2.5
+  cost_per_call_usd: 0.005
+  aggregate: 0.85
+
+dtwin_chat:
+  groundedness: 0.85
+  factuality: 0.90
+  tool_selection: 0.85
+  relevance: 0.90
+  latency_p95_seconds: 15.0
+  cost_per_call_usd: 0.04
+  aggregate: 0.85
+
+cohort:
+  rule_validity: 0.95
+  tool_selection: 0.85
+  cohort_quality: 0.80
+  dry_run_calls: 0.98
+  latency_p95_seconds: 30.0
+  cost_per_call_usd: 0.05
+  aggregate: 0.82

@@ -1,0 +1,161 @@
+name: G2 LLM Eval Gate (CNS §3.5)
+
+# Gate: any PR touching src/agents/** or an MLflow-traced LLM path must include
+# a SPEC.md, an eval dataset, and a linked MLflow eval run URI. See
+# .cursor/12-ai-feature-lifecycle.mdc for the full contract.
+#
+# Calibration: for the first 2 weeks after this lands, set `continue-on-error: true`
+# on each step so failures report-but-don't-block. After 2 weeks, flip it off.
+
+on:
+  pull_request:
+    paths:
+      - "src/agents/**"
+      - "src/back/core/agents/**"
+      - "src/mcp-server/**"
+      - "tests/eval/**"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  # CALIBRATION_MODE: set to "true" for the 2-week calibration window after launch.
+  # When true, gate steps continue-on-error; when false, they hard-fail.
+  CALIBRATION_MODE: "true"
+
+jobs:
+  detect:
+    name: Detect changed agents
+    runs-on: ubuntu-latest
+    outputs:
+      changed_agents: ${{ steps.diff.outputs.changed_agents }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: diff
+        name: List changed agents
+        run: |
+          # Find which agents the PR touched. Empty string if none.
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          paths=$(git diff --name-only "$base" "$head" \
+                 | grep -E '^src/agents/agent_[a-z_]+/' \
+                 | sed -E 's|^src/agents/(agent_[a-z_]+)/.*|\1|' \
+                 | sort -u \
+                 | tr '\n' ' ')
+          echo "Changed agents: $paths"
+          echo "changed_agents=$paths" >> "$GITHUB_OUTPUT"
+
+  spec_present:
+    name: SPEC.md present for changed agents
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.changed_agents != ''
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Each changed agent has a SPEC.md
+        env:
+          CHANGED: ${{ needs.detect.outputs.changed_agents }}
+        run: |
+          set -e
+          missing=()
+          for a in $CHANGED; do
+            spec=".planning/agents/${a}/SPEC.md"
+            if [ ! -f "$spec" ]; then
+              missing+=("$a")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::SPEC.md missing for: ${missing[*]}"
+            echo "Each agent under src/agents/<name>/ must have .planning/agents/<name>/SPEC.md."
+            echo "Invoke the 'ai-feature' skill to scaffold it."
+            if [ "${CALIBRATION_MODE}" = "false" ]; then exit 1; fi
+            echo "::warning::CALIBRATION_MODE=true — not failing PR; flip in 2 weeks."
+          fi
+
+      - name: SPEC.md has non-empty eval-dimensions table
+        env:
+          CHANGED: ${{ needs.detect.outputs.changed_agents }}
+        run: |
+          set -e
+          incomplete=()
+          for a in $CHANGED; do
+            spec=".planning/agents/${a}/SPEC.md"
+            [ -f "$spec" ] || continue
+            # Heuristic: §5 must contain at least one row with a numeric threshold.
+            if ! awk '/^## 5\. Eval dimensions/,/^## 6\./' "$spec" \
+                  | grep -qE '\| `?[a-z_]+`? *\|'; then
+              incomplete+=("$a (no eval-dim rows)")
+              continue
+            fi
+            if ! awk '/^## 5\. Eval dimensions/,/^## 6\./' "$spec" \
+                  | grep -qE '0\.[0-9]+'; then
+              incomplete+=("$a (eval-dim rows have no thresholds)")
+            fi
+          done
+          if [ ${#incomplete[@]} -gt 0 ]; then
+            echo "::error::SPEC.md eval-dimensions table is missing or empty:"
+            for x in "${incomplete[@]}"; do echo "  - $x"; done
+            if [ "${CALIBRATION_MODE}" = "false" ]; then exit 1; fi
+            echo "::warning::CALIBRATION_MODE=true — reporting only."
+          fi
+
+  dataset_present:
+    name: Eval dataset present + adequately sized
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.changed_agents != ''
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Each changed agent has tests/eval/datasets/<agent>/baseline.jsonl
+        env:
+          CHANGED: ${{ needs.detect.outputs.changed_agents }}
+        run: |
+          set -e
+          short=()
+          for a in $CHANGED; do
+            ds="tests/eval/datasets/${a}/baseline.jsonl"
+            if [ ! -f "$ds" ]; then
+              echo "::error::Missing eval dataset: $ds"
+              short+=("$a (missing)")
+              continue
+            fi
+            n=$(wc -l <"$ds")
+            if [ "$n" -lt 10 ]; then
+              short+=("$a ($n examples — minimum 10 for changes, 20 for new agents)")
+            fi
+          done
+          if [ ${#short[@]} -gt 0 ]; then
+            echo "::error::Eval datasets fail the minimum-size check:"
+            for x in "${short[@]}"; do echo "  - $x"; done
+            if [ "${CALIBRATION_MODE}" = "false" ]; then exit 1; fi
+            echo "::warning::CALIBRATION_MODE=true — reporting only."
+          fi
+
+  mlflow_uri_present:
+    name: PR body links an MLflow eval run URI
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.changed_agents != ''
+    steps:
+      - name: Scan PR body for MLflow run URL
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -e
+          # Allow any of the canonical MLflow URL shapes.
+          if echo "$PR_BODY" | grep -qE 'https://[a-z0-9.-]+/ml/experiments/[0-9]+/runs/[a-f0-9-]+'; then
+            echo "MLflow run URL present."
+          elif echo "$PR_BODY" | grep -qiE 'waiver: '; then
+            echo "::warning::No MLflow run URL, but a 'waiver:' comment is present. Reviewer must ack."
+          else
+            echo "::error::PR body must contain an MLflow eval run URL (https://.../ml/experiments/<id>/runs/<run-id>)"
+            echo "    or an explicit 'waiver: <reason>' line."
+            if [ "${CALIBRATION_MODE}" = "false" ]; then exit 1; fi
+            echo "::warning::CALIBRATION_MODE=true — reporting only."
+          fi

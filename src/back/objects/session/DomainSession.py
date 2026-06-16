@@ -25,7 +25,7 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from shared.config.constants import (
@@ -67,6 +67,8 @@ def get_empty_domain() -> Dict[str, Any]:
                 "author": "",
                 "llm_endpoint": "",
                 "mcp_enabled": False,
+                "status": "DRAFT",
+                "review_quorum": 1,
             },
             "triplestore": {
                 "stats": {},
@@ -884,6 +886,16 @@ class DomainSession:
         self._data["domain"]["ontology_changed"] = value
 
     @property
+    def precision_score(self) -> Optional[int]:
+        """Last computed ontology precision score (0–100), or None if not yet analyzed."""
+        val = self._data["domain"].get("precision_score")
+        return int(val) if val is not None else None
+
+    @precision_score.setter
+    def precision_score(self, value: Optional[int]) -> None:
+        self._data["domain"]["precision_score"] = value
+
+    @property
     def assignment_changed(self) -> bool:
         """Whether the mapping has been modified since the last project save."""
         return self._data["domain"].get("assignment_changed", False)
@@ -1258,6 +1270,10 @@ class DomainSession:
             "author": self._data["domain"]["info"].get("author", ""),
             "llm_endpoint": self._data["domain"]["info"].get("llm_endpoint", ""),
             "mcp_enabled": self._data["domain"]["info"].get("mcp_enabled", False),
+            "status": self._data["domain"]["info"].get("status", "DRAFT"),
+            "review_quorum": max(
+                1, int(self._data["domain"]["info"].get("review_quorum") or 1)
+            ),
             "last_update": self._data["domain"].get("last_update", ""),
             "last_build": self._data["domain"].get("last_build", ""),
         }
@@ -1353,6 +1369,10 @@ class DomainSession:
             self._data["domain"]["info"]["author"] = info.get("author", "")
             self._data["domain"]["info"]["llm_endpoint"] = info.get("llm_endpoint", "")
             self._data["domain"]["info"]["mcp_enabled"] = info.get("mcp_enabled", False)
+            self._data["domain"]["info"]["status"] = info.get("status", "DRAFT")
+            self._data["domain"]["info"]["review_quorum"] = max(
+                1, int(info.get("review_quorum") or 1)
+            )
             self._data["domain"]["last_update"] = info.get("last_update", "")
             self._data["domain"]["last_build"] = info.get("last_build", "")
             ts = self._data["domain"].setdefault(

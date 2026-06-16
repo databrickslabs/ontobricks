@@ -17,7 +17,10 @@ After ANY code change (feature, fix, refactoring, review, etc.):
     - Use the version (vX.X.X) as the first level for storing the logs. 
         - Get and Use the version specified in the pyproject.toml file for each entry
         - Each application update must be affected to the right version/folder.
-    - Use today's date as filename: YYYY-MM-DD.log (for example if i make an update on the version 0.2.1 the 2026 May 20th i should have the file /changelogs/v0.2.1/2026-05-20.log)
+    - For the filename:
+        - Use the user (github) as prefix: [user]
+        - Then Use today's date as filename: YYYY-MM-DD.log 
+        For example if use benoitcayladbx make an update on the version 0.2.1 the 2026 May 20th i should have the file /changelogs/v0.2.1/benoitcayladbx_2026-05-20.log)
     - If the file already exists, append a new section (one file per day).
     - If the file does not exist, create it.
     - Each section must include: a title, context, numbered list of changes

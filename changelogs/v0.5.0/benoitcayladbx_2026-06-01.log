@@ -1,0 +1,205 @@
+## Pitfall check promoted to agent tool (check_owl_pitfalls)
+
+### Context
+Previously the pitfall loop was external to the agent: Python code ran the check
+after each OWL text response, then injected synthetic user messages to trigger a
+fix. The user requested making this a proper tool the agent calls itself, so the
+agent owns the validate → fix → re-validate cycle.
+
+### Changes
+1. **NEW `src/agents/tools/pitfalls.py`**
+   - `tool_check_owl_pitfalls(ctx, *, turtle_text)` — parses Turtle, runs
+     `PitfallsService`, returns JSON: `{score, is_clean, total_warnings,
+     warnings:[{id,title,count,items,hint}], fix_instruction}`.
+   - Moved `NON_ML_PATTERNS`, `PATTERN_FIX_HINTS`, `_item_label` here from engine.py.
+   - `PITFALL_TOOL_DEFINITIONS` / `PITFALL_TOOL_HANDLERS` — function-calling schema.
+
+2. `src/agents/agent_owl_generator/tools.py`
+   - Imported and wired in `PITFALL_TOOL_DEFINITIONS` + `PITFALL_TOOL_HANDLERS`.
+
+3. `src/agents/agent_owl_generator/engine.py`
+   - Updated `SYSTEM_PROMPT` `# TOOLS` and `# WORKFLOW` sections: agent now has five
+     tools; step 5 instructs it to ALWAYS call `check_owl_pitfalls` and loop until
+     `is_clean=true`, step 6 to output final Turtle only when clean.
+   - Removed `_PitfallRound`, `_check_owl_pitfalls`, `_PATTERN_FIX_HINTS`,
+     `_NON_ML_PATTERNS`, `_item_label` — all moved to the tool module.
+   - Replaced the external post-text-response pitfall loop with in-loop detection:
+     when `tool_name == "check_owl_pitfalls"` is dispatched, parse result, emit
+     `__iter__` event, update `iteration_summary`, and enforce `max_fix_rounds` cap
+     by disabling tools (forcing final output) when budget is exhausted.
+   - Removed unused `score_threshold` / `stop_on_no_critical` config variables.
+   - Simplified `else` branch to unconditionally accept the text response as
+     final OWL (the agent has already validated via the tool).
+
+### Modified files
+- src/agents/tools/pitfalls.py (new)
+- src/agents/agent_owl_generator/tools.py
+- src/agents/agent_owl_generator/engine.py
+
+### Test result
+2302 passed, 15 skipped — all green
+
+---
+
+## Iteration loop — target 100% clean ontology by default
+
+### Context
+The generation loop used `score_threshold=70` and `stop_on_no_critical=True`,
+meaning it accepted an ontology with minor warnings (P2.x / P3.x) as "done"
+as long as no P1.x logical issues existed. Users expected the final ontology
+to have zero warnings.
+
+### Changes
+1. `src/agents/agent_owl_generator/engine.py`
+   - `_DEFAULT_SCORE_THRESHOLD`: 70 → **100** (only converge when score = 100 = no warnings)
+   - `_DEFAULT_STOP_ON_NO_CRITICAL`: True → **False** (minor warnings still require fixing)
+   - `_DEFAULT_MAX_FIX_ROUNDS`: 3 → **5** (more attempts to reach clean state)
+
+### Modified files
+- src/agents/agent_owl_generator/engine.py
+
+### Test result
+37 passed, 12 skipped — all green
+
+---
+
+## Fix: precision score 100% despite active warnings
+
+### Context
+`compute_precision_score` normalised the penalty by `_MAX_WEIGHT * size` where `size`
+is the total number of classes + properties (~50-100 for a typical ontology).
+This made the denominator ~1800-3600, so even P3.2 firing 2 times gave
+`penalty/max = 0.1%` → rounded straight to **100**.  Users saw "100% precision"
+alongside clearly listed warnings.
+
+### Root cause
+`max_penalty = _MAX_WEIGHT * size` grows linearly with ontology size, making each
+warning vanishingly small for any non-trivial ontology.
+
+### Fix
+Replace the size-based normalisation with a fixed cap
+`_MAX_OCCURRENCES_PER_PITFALL = 5` (same cap applied per-pitfall) so that:
+- `max_penalty = 36 × 5 = 180` (constant, independent of ontology size)
+- A single minor warning (weight=1, count=1) → score **99** (not 100)
+- Two minor warnings → **98**, a critical (P1.1) → **97**, both critical × 5 → **72**
+- All pitfalls firing at max count → **0**
+
+Score reference table (new formula):
+
+| Warnings                    | Score |
+|-----------------------------|-------|
+| Clean                       | 100   |
+| P3.2 × 1                    |  99   |
+| P3.2 × 3                    |  98   |
+| P2.6 × 1 + P3.2 × 2        |  98   |
+| P1.1 × 1                    |  97   |
+| P1.1 × 5 + P1.3 × 5        |  72   |
+
+### Changes
+1. `src/back/core/external/pitfalls/PitfallsService.py`
+   - Added `_MAX_OCCURRENCES_PER_PITFALL = 5` constant.
+   - `compute_precision_score`: replaced `min(count, size)` per-pitfall cap with
+     `min(count, _MAX_OCCURRENCES_PER_PITFALL)`, and changed
+     `max_penalty = _MAX_WEIGHT * size` → `max_penalty = _MAX_WEIGHT * _MAX_OCCURRENCES_PER_PITFALL`.
+   - Updated docstring.
+
+### Modified files
+- src/back/core/external/pitfalls/PitfallsService.py
+
+### Test result
+17 pitfall/precision tests passed — all green
+
+---
+
+## Pitfalls progress bar moved below tab strip, no wrapper card
+
+### Context
+The progress bar was nested inside the Patterns tab pane, so it disappeared when
+the user switched to the Results tab while analysis was running. User requested it
+be repositioned just below the section header (below the tab strip, visible across
+all tabs) and without any card/border wrapper.
+
+### Changes
+1. `src/front/templates/partials/ontology/_pitfalls.html`
+   - Removed the progress block from inside the Patterns tab pane.
+   - Added it between the `</ul>` tab strip and `<div class="tab-content">` as a
+     borderless `flex-shrink-0` div with only a `border-bottom` separator — no card,
+     no `bg-light`, no rounded wrapper (just spinner + progress bar + detail line).
+   - Added `d-flex flex-column` to `.card-body` so the progress area and tab-content
+     stack correctly.
+
+### Modified files
+- src/front/templates/partials/ontology/_pitfalls.html
+
+### Test result
+2302 passed, 15 skipped — all green
+
+---
+
+## Iteration loop — show warnings detail + "asking agent to fix" notice
+
+### Context
+During ontology generation the iteration loop was running pitfall checks and
+sending the feedback to the LLM, but the wizard overlay only showed pitfall IDs
+(P3.2, P2.6 …) with no detail.  The user had no visibility of *what* the
+warnings were, *which elements* triggered them, *what fix hint* was being sent to
+the agent, nor any explicit notice that the agent was being instructed to fix them.
+
+### Changes
+1. `src/agents/agent_owl_generator/engine.py`
+   - Added `_item_label()` helper to extract a readable label from a pitfall result item dict.
+   - Extended `_PitfallRound` with a `warnings: List[Dict]` field (id, title, count, items, hint).
+   - `_check_owl_pitfalls` now builds the structured `warnings` list and stores it on the round.
+   - The `__iter__` SSE event JSON now includes `"warnings"` alongside the existing fields.
+
+2. `src/front/static/ontology/js/ontology-wizard.js`
+   - Rewrote `_appendRefinementRow` from a flat table row to a card-like block per round.
+   - Each block shows: round header (score + critical count + status badge), then for every
+     warning: pitfall ID badge, title, occurrence count, up to 5 affected elements, and the
+     fix hint in italic blue.
+   - When `status === 'challenged'` a highlighted footer reads
+     "Asking agent to fix these warnings…", making the feedback loop visible to the user.
+   - Graceful fallback: if `data.warnings` is absent (old event format) the block falls back
+     to showing only pitfall IDs.
+
+### Modified files
+- src/agents/agent_owl_generator/engine.py
+- src/front/static/ontology/js/ontology-wizard.js
+
+### Test result
+2302 passed, 15 skipped — all green
+
+---
+
+## Pitfalls progress bar aligned with Data Quality run style
+
+### Context
+The pitfalls analysis progress area used a distinct blue-bordered card style
+(`card border-primary`, small 6 px bar, flex-row spinner) inconsistent with the
+established "Data Quality run" style used in the Digital Twin section
+(`card bg-light`, 20 px bar with inline percentage, centered spinner, detail line).
+
+### Changes
+1. `src/front/templates/partials/ontology/_pitfalls.html`
+   - Replaced `card border-primary` with `card bg-light border rounded-0 mb-0`
+   - Changed spinner row from `d-flex align-items-center gap-3` to `text-center`
+   - Changed label from `<span class="small fw-semibold">` to `<strong class="text-muted">`
+   - Changed progress element to use class `pf-progress-md` instead of inline `height:6px`
+   - Added inline percentage text inside the progress bar (`0%`)
+   - Added `<small id="pitfallsProgressDetail">` line below the bar for contextual info
+
+2. `src/front/static/ontology/css/ontology-pitfalls.css`
+   - Added `.pf-progress-md { height: 20px; }` to match `dq-progress-md`
+
+3. `src/front/static/ontology/js/ontology-pitfalls.js`
+   - Updated `_showProgress(pct, msg, detail)` signature to accept a third `detail` arg
+   - Progress bar now writes `p + '%'` as `textContent` (matches DQ run)
+   - Detail element populated from `data.detail` during polling or from pattern count on start
+
+### Modified files
+- src/front/templates/partials/ontology/_pitfalls.html
+- src/front/static/ontology/css/ontology-pitfalls.css
+- src/front/static/ontology/js/ontology-pitfalls.js
+
+### Test result
+2302 passed, 15 skipped — all green

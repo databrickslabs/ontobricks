@@ -25,8 +25,6 @@ class Settings(BaseSettings):
     # Databricks settings
     databricks_host: str = ""
     databricks_token: str = ""
-    databricks_catalog: str = "main"
-    databricks_schema: str = "default"
     databricks_triplestore_table: str = ""
     databricks_sql_warehouse_id: str = ""
 

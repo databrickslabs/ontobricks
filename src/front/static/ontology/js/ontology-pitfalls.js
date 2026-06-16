@@ -150,7 +150,7 @@ window.PitfallsModule = (function () {
             return;
         }
 
-        _showProgress(0, 'Starting analysis…');
+        _showProgress(0, 'Starting analysis…', `${_selectedPatterns.size} pattern(s) selected`);
         _hideResults();
 
         const patterns = Array.from(_selectedPatterns);
@@ -183,7 +183,7 @@ window.PitfallsModule = (function () {
                 .then(r => r.json())
                 .then(data => {
                     const status = data.status;
-                    _showProgress(data.progress || 0, data.message || '');
+                    _showProgress(data.progress || 0, data.message || '', data.detail || '');
 
                     if (status === 'completed') {
                         _hideProgress();
@@ -203,6 +203,43 @@ window.PitfallsModule = (function () {
         poll();
     }
 
+    // ── Circular gauge ────────────────────────────────────────────────────────
+
+    /**
+     * Update the SVG circular gauge in the section header.
+     * r=28, circumference = 2π×28 ≈ 175.93
+     */
+    function _updateGauge(score) {
+        const CIRCUMFERENCE = 175.93;
+        const wrapper = document.getElementById('pitfallsGaugeWrapper');
+        const arc     = document.getElementById('pitfallsGaugeArc');
+        const label   = document.getElementById('pitfallsGaugeLabel');
+
+        if (!wrapper || !arc || !label) return;
+
+        wrapper.classList.remove('d-none');
+
+        const pct = Math.max(0, Math.min(100, score));
+        const offset = CIRCUMFERENCE * (1 - pct / 100);
+
+        arc.setAttribute('stroke-dashoffset', offset.toFixed(2));
+
+        // Colour: green ≥ 80, orange ≥ 50, red < 50
+        let colour = '#198754';   // green
+        if (pct < 50) colour = '#dc3545';       // red
+        else if (pct < 80) colour = '#fd7e14';  // orange
+        arc.setAttribute('stroke', colour);
+
+        label.textContent = pct;
+
+        // Also update inline score badge inside the results banner
+        const scoreVal = document.getElementById('pitfallsScoreValue');
+        if (scoreVal) {
+            scoreVal.textContent = pct;
+            scoreVal.style.color = colour;
+        }
+    }
+
     // ── Render results ────────────────────────────────────────────────────────
 
     function _renderResults(result) {
@@ -218,6 +255,11 @@ window.PitfallsModule = (function () {
             totalIssues += typeof count === 'number' ? count : 0;
         }
 
+        // Precision score gauge
+        if (result.precision_score !== undefined && result.precision_score !== null) {
+            _updateGauge(result.precision_score);
+        }
+
         // Summary banner
         const bannerEl = document.getElementById('pitfallsSummaryBanner');
         const iconEl = document.getElementById('pitfallsSummaryIcon');
@@ -231,7 +273,7 @@ window.PitfallsModule = (function () {
         } else {
             bannerEl.className = 'alert alert-warning d-flex align-items-center gap-3 mb-3';
             iconEl.className = 'bi bi-exclamation-triangle-fill fs-4';
-            titleEl.textContent = `${totalIssues} issue${totalIssues !== 1 ? 's' : ''} found`;
+            titleEl.textContent = `${totalIssues} warning${totalIssues !== 1 ? 's' : ''} found`;
         }
         detailEl.textContent =
             `${meta.classes || 0} classes · ${meta.object_properties || 0} object properties · ` +
@@ -288,7 +330,7 @@ window.PitfallsModule = (function () {
         if (hasError) {
             bodyHtml = `<div class="alert alert-warning small py-1 mb-0"><i class="bi bi-exclamation-circle me-1"></i>${result.error}</div>`;
         } else if (count === 0) {
-            bodyHtml = `<span class="text-muted small"><i class="bi bi-check-circle text-success me-1"></i>No issues found</span>`;
+            bodyHtml = `<span class="text-muted small"><i class="bi bi-check-circle text-success me-1"></i>No warnings found</span>`;
         } else {
             let listHtml = '<ul class="list-unstyled mb-0 small">';
             const visible = items.slice(0, 10);
@@ -324,15 +366,21 @@ window.PitfallsModule = (function () {
 
     // ── UI helpers ────────────────────────────────────────────────────────────
 
-    function _showProgress(pct, msg) {
+    function _showProgress(pct, msg, detail) {
         const el = document.getElementById('pitfallsProgress');
         const bar = document.getElementById('pitfallsProgressBar');
         const msgEl = document.getElementById('pitfallsProgressMsg');
+        const detailEl = document.getElementById('pitfallsProgressDetail');
         const runBtn = document.getElementById('pitfallsRunBtn');
 
         if (el) el.classList.remove('d-none');
-        if (bar) bar.style.width = (pct || 0) + '%';
+        if (bar) {
+            const p = pct || 0;
+            bar.style.width = p + '%';
+            bar.textContent = p + '%';
+        }
         if (msgEl) msgEl.textContent = msg || '';
+        if (detailEl) detailEl.textContent = detail || '';
         if (runBtn) runBtn.disabled = true;
     }
 

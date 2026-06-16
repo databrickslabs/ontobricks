@@ -555,6 +555,45 @@ class TestGraphEngineLakebaseHealth:
         call_kw = psycopg_mod.connect.call_args[1]
         assert call_kw["dbname"] == "bounddb"
 
+    def test_probe_failure_returns_graceful_result(self):
+        # A failed connection / missing database must NOT raise (502); it
+        # returns success=False with a message so the UI shows a warning.
+        session_mgr, settings = _mock_context()
+        auth = MagicMock()
+        auth.is_available = True
+        auth.database = "bounddb"
+        auth.kwargs.return_value = {"host": "h", "port": 5432, "dbname": "bounddb"}
+
+        psycopg_mod = MagicMock()
+        psycopg_mod.connect = MagicMock(
+            side_effect=Exception('database "graph4" does not exist')
+        )
+
+        with (
+            patch("back.core.databricks.get_lakebase_auth", return_value=auth),
+            patch.dict("os.environ", {"PGHOST": "lh", "PGUSER": "u", "PGPORT": "5432"}, clear=False),
+            patch.object(
+                SettingsService,
+                "_resolve_context",
+                return_value=(MagicMock(), "h", "t", REGISTRY_CFG),
+            ),
+            patch.object(_svc_module, "global_config_service") as gcs,
+            patch(
+                "back.core.graphdb.lakebase.pool._require_psycopg",
+                return_value=(psycopg_mod, MagicMock()),
+            ),
+        ):
+            gcs.get_graph_engine_config.return_value = {
+                "database": "graph4",
+                "schema": "ontobricks_graph",
+            }
+            out = SettingsService.graph_engine_lakebase_health_result(session_mgr, settings)
+
+        assert out["success"] is False
+        assert out["reason"] == "probe_failed"
+        assert "graph4" in out["message"]
+        assert out["schema_exists"] is False
+
     def test_bad_schema_config(self):
         session_mgr, settings = _mock_context()
         auth = MagicMock()

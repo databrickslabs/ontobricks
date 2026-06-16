@@ -1,0 +1,402 @@
+================================================================================
+Full Test Coverage for Previously Untested Features
+================================================================================
+Context: Comprehensive audit identified 12 source modules/features with no test
+coverage. Created 11 new test files and fixed 1 incomplete existing test.
+
+Changes:
+1. tests/test_agent_engine_base.py — NEW: 22 tests for AgentStep dataclass,
+   call_serving_endpoint, dispatch_tool, extract_message_content, accumulate_usage
+2. tests/test_agent_serialization.py — NEW: 6 tests for serialize_agent_steps
+   (empty, None, AgentStep objects, plain objects, missing/None attributes)
+3. tests/test_agent_tracing.py — NEW: 24 tests for MLflow tracing helpers:
+   _resolve_experiment_name, _truncate, _safe_inputs, _safe_result,
+   setup_tracing, is_tracing_ready, trace_agent/llm/tool decorators
+4. tests/test_community_detector.py — NEW: 16 tests for CommunityDetector and
+   graph_analysis models (louvain, label_propagation, greedy_modularity,
+   empty graph, max_triples, class/predicate filters, modularity range)
+5. tests/test_industry_importers.py — NEW: 22 tests for FIBO/CDISC/IOF import
+   services (catalog generation, module collection, auto-dependency inclusion,
+   deduplication, xsd type mapping, single module fetch)
+6. tests/test_incremental_build.py — NEW: 28 tests for IncrementalBuildService
+   (extract_source_tables, check_source_versions, snapshot operations,
+   compute_diff, should_fallback_to_full, count_view_triples)
+7. tests/test_rdf_utils.py — NEW: 10 tests for uri_local_name and
+   parse_rdf_flexible (Turtle, XML, invalid, custom formats)
+8. tests/test_uri_sql_helpers.py — NEW: 24 tests for URIHelpers (is_uri,
+   extract_local_name, safe_identifier) and SQLHelpers (sql_escape,
+   validate_table_name, effective_view_table, effective_graph_name)
+9. tests/test_version_status_cache.py — NEW: 6 tests for version_status TTL
+   cache (set/get, clear, expiry, snapshot)
+10. tests/test_registry_cache.py — NEW: 13 tests for registry_cache TTL
+    (details/names set/get/expire, invalidate specific/all, TTL min, snapshot)
+11. tests/test_csrf_middleware.py — NEW: 8 tests for CSRFMiddleware (disabled,
+    GET pass, POST without cookie, mismatched token reject, matching pass,
+    API/GraphQL bypass, cookie set on first response)
+12. tests/test_timing_middleware.py — NEW: 3 tests for RequestTimingMiddleware
+    (normal request, health skip, static skip)
+13. tests/test_graphdb_factory.py — NEW: 12 tests for GraphDBFactory (unknown
+    engine, singleton, default/explicit ladybug, engine_config passthrough,
+    get_graphdb convenience) and GraphDBBackend capability flags (supports_cypher,
+    query_dialect, get_node_table, get_graph_schema, sync defaults,
+    get_query_translator)
+14. tests/test_triplestore_factory.py — FIX: Added missing assertion to
+    test_view_success (result was assigned but never checked)
+
+Modified files:
+- tests/test_agent_engine_base.py (new)
+- tests/test_agent_serialization.py (new)
+- tests/test_agent_tracing.py (new)
+- tests/test_community_detector.py (new)
+- tests/test_industry_importers.py (new)
+- tests/test_incremental_build.py (new)
+- tests/test_rdf_utils.py (new)
+- tests/test_uri_sql_helpers.py (new)
+- tests/test_version_status_cache.py (new)
+- tests/test_registry_cache.py (new)
+- tests/test_csrf_middleware.py (new)
+- tests/test_timing_middleware.py (new)
+- tests/test_graphdb_factory.py (new)
+- tests/test_triplestore_factory.py (modified)
+
+Test result: 1531 passed in 48s (0 failed, 0 errors)
+
+================================================================================
+Move AI Assistant to floating popup + make it draggable
+================================================================================
+Context: The AI Assistant was embedded as a tab in the right-side detail panel
+(Ontology/Model section). It has been moved to a standalone floating popup
+anchored at the bottom-left of the canvas, toggled by the toolbar "Assistant"
+button. The popup can be freely dragged around the canvas by its header.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_map.html
+   - Added floating popup markup (#assistantPopup) inside the card-body
+     container for correct absolute positioning over the canvas.
+
+2. src/front/static/ontology/js/ontology-shared-panels.js
+   - Removed the "AI Assistant" tab and its chat pane from the right panel.
+   - Removed openAssistantPanel() function.
+   - Simplified switchPanelTab() (no more assistant-specific logic).
+
+3. src/front/static/ontology/js/ontology-assistant.js
+   - toggleAssistant() now shows/hides the floating #assistantPopup.
+   - Added closeAssistant() for the popup close button.
+   - Added initDrag() for drag-to-move: mousedown on the header starts a
+     drag, mousemove repositions the popup (clamped to parent bounds),
+     mouseup ends the drag. Ignores clicks on buttons within the header.
+   - Respects window.isActiveVersion === false by hiding the toggle button.
+
+4. src/front/static/ontology/css/ontology-assistant.css
+   - Replaced tab-pane layout with floating popup styles (absolute position,
+     bottom-left, rounded corners, shadow, slide-up animation).
+   - Header styled as drag handle with cursor: grab and user-select: none.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-assistant.js
+- src/front/static/ontology/css/ontology-assistant.css
+
+Test result: 1531 passed in 49s (0 failed, 0 errors)
+
+================================================================================
+Split entity/relationship forms into collapsible groups
+================================================================================
+Context: The right-panel detail forms for entities and relationships were flat
+long scrollable forms. They have been reorganised into collapsible accordion
+groups for better usability.
+
+Entity form — 4 groups:
+  1. Details (Inherits From, Group, Name, Icon, Description) — open by default
+  2. Attributes (inherited + own, with add buttons) — open by default
+  3. Actions (Dashboard, Bridges) — collapsed by default
+  4. Constraints (Disjoint With, Equivalent To) — collapsed by default
+
+Relationship form — 2 groups:
+  1. Details (Name, Source, Target, Direction, Description) — open by default
+  2. Constraints (Cardinality, Property Characteristics) — collapsed by default
+
+Changes:
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   - Rewrote renderEntityForm() HTML to wrap fields in 4 panel-group divs
+     with collapsible headers and bodies.
+   - Rewrote renderRelationshipForm() HTML to wrap fields in 2 panel-group
+     divs.
+   - Added togglePanelGroup() function for open/close toggle.
+
+2. src/front/static/ontology/css/ontology-shared-panels.css
+   - Added .panel-group, .panel-group-header, .panel-group-chevron,
+     .panel-group-body, .panel-group-actions styles.
+   - Chevron rotates on open/close, header has hover highlight.
+   - Removed obsolete .mb-3:last-child flex stretch and max-height:150px
+     on attributes container.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+
+Test result: 1531 passed in 51s (0 failed, 0 errors)
+
+================================================================================
+Fix vertical scroll on Ontology Model page
+================================================================================
+Context: The Ontology Model page had a small unwanted vertical scrollbar caused
+by the section header's mb-4 margin and the card-body's fixed
+height: calc(100vh - 200px) exceeding the available viewport.
+
+Changes:
+1. src/front/static/ontology/css/ontology-map.css
+   - Added .sidebar-content:has(#map-section.active) override to suppress
+     overflow and reduce padding (matching other full-height sections).
+   - Added #map-section flex layout rules so the card fills remaining space
+     naturally via flex: 1 / min-height: 0.
+   - Reduced .section-header margin to 0.5rem.
+
+2. src/front/templates/partials/ontology/_ontology_map.html
+   - Removed mb-4 from the section-header div.
+   - Removed inline height: calc(100vh - 200px) and min-height: 500px from
+     the card-body (now handled by CSS flex layout).
+
+Modified files:
+- src/front/static/ontology/css/ontology-map.css
+- src/front/templates/partials/ontology/_ontology_map.html
+
+Test result: 1531 passed in 48s (0 failed, 0 errors)
+
+================================================================================
+Replace accordion groups with horizontal tabs in entity/relationship forms
+================================================================================
+Context: The entity and relationship detail forms used collapsible accordion
+groups. Replaced them with horizontal tab bars for a cleaner, more accessible
+navigation between form sections.
+
+Entity form — 4 tabs: Details, Attributes, Actions, Constraints
+Relationship form — 2 tabs: Details, Constraints
+
+Changes:
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   - Replaced togglePanelGroup() with switchFormTab() that toggles
+     .form-tab-link active state and .form-tab-pane visibility.
+   - Rewrote renderEntityForm() HTML: replaced 4 panel-group divs with
+     a <ul class="form-tabs-nav"> tab bar + 4 .form-tab-pane divs.
+   - Rewrote renderRelationshipForm() HTML: replaced 2 panel-group divs
+     with a tab bar + 2 .form-tab-pane divs.
+
+2. src/front/static/ontology/css/ontology-shared-panels.css
+   - Removed all .panel-group, .panel-group-header, .panel-group-chevron,
+     .panel-group-body, .panel-group-actions styles.
+   - Added .form-tabs-nav (flex row, bottom border), .form-tab-link
+     (underline-style active indicator), .form-tab-pane (show/hide) styles.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+
+Test result: 1531 passed in 49s (0 failed, 0 errors)
+
+================================================================================
+Fix vertical scroll caused by breadcrumb on all pages
+================================================================================
+Context: The breadcrumb bar added between the navbar and the content wrapper
+introduced ~35px of extra height that was not accounted for in the sidebar
+layout sizing (hardcoded calc(100vh - 60px)). This caused a small vertical
+scroll on every page where the breadcrumb is visible.
+
+Changes:
+1. src/front/static/global/css/sidebar-layout.css
+   - Replaced hardcoded 60px with CSS variable --ob-chrome-height (default
+     60px) in .sidebar-layout height/max-height and .sidebar-content
+     max-height.
+   - Replaced hardcoded 100px with --ob-chrome-height-ro in read-only mode
+     overrides.
+
+2. src/front/static/global/js/breadcrumb.js
+   - Added _updateChromeHeight() method: measures the breadcrumb's actual
+     offsetHeight after it becomes visible and sets --ob-chrome-height and
+     --ob-chrome-height-ro on :root so the sidebar layout subtracts the
+     correct total chrome height.
+   - Called immediately after nav.classList.remove('d-none').
+
+Modified files:
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/global/js/breadcrumb.js
+
+Test result: 1531 passed in 48s (0 failed, 0 errors)
+
+================================================================================
+Remove redundant outer "Details" tab in Model right pane
+================================================================================
+Context: After the AI Assistant was moved to a floating popup, the Model
+(map) section still used a tabbed panel wrapper with a single "Details" tab,
+creating an unnecessary extra tab level above the entity/relationship form
+tabs. Entity and Relationship sub-pages already used the simpler layout.
+
+Changes:
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   - Removed the isMapSection branch that created the tabbed panel wrapper
+     (panel-tabs-header, panel-nav-tabs, panel-tab-pane). All sections now
+     share the same panel HTML structure: panel-header, panel-body, panel-footer.
+   - Removed switchPanelTab() function (no longer needed).
+   - Removed tab-switching event listeners from setupPanelListeners().
+   - Removed stale tabbed-panel check in populateSharedPanel().
+2. src/front/static/ontology/css/ontology-shared-panels.css
+   - Removed all CSS rules for .panel-tabs-header, .panel-nav-tabs,
+     .panel-tab-pane, and .shared-detail-panel-tabbed (no longer used).
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+
+Test result: 1531 passed in 48s (0 failed, 0 errors)
+
+================================================================================
+Move AI Assistant trigger to a Floating Action Button (FAB) on the canvas
+================================================================================
+Context: The AI Assistant was triggered by a toolbar button ("Assistant") in the
+section header (top-right). It has been replaced with a circular Floating Action
+Button anchored at the bottom-right of the D3 canvas, styled with the OntoBricks
+brand red (#FF3621) and the OB logo icon (white). The assistant popup now opens
+from the bottom-right above the FAB instead of bottom-left.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_map.html
+   - Removed the vertical separator and the old "Assistant" outline button
+     from the section-header toolbar.
+   - Added a new <button id="mapToggleAssistant" class="assistant-fab"> with
+     the OntoBricks logo SVG (white strokes/fills) inside the card-body,
+     just before the assistant popup div.
+
+2. src/front/static/ontology/css/ontology-assistant.css
+   - Added .assistant-fab rules: absolute positioning (bottom: 20px,
+     right: 20px), 56px circular shape, #FF3621 background, shadow with
+     red tint, hover scale-up, active press-down, and .active darkened state.
+   - Repositioned .assistant-popup from bottom-left to bottom-right
+     (right: 16px, bottom: 88px) so it anchors above the FAB.
+   - Replaced the old #mapToggleAssistant.active toolbar-button styles with
+     a comment (active state now handled by .assistant-fab.active).
+
+No JavaScript changes were needed for the basic toggle — the existing
+logic in ontology-assistant.js keys on the #mapToggleAssistant element
+ID which is preserved on the new FAB.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/css/ontology-assistant.css
+
+Test result: 1531 passed in 47s (0 failed, 0 errors)
+
+================================================================================
+Prevent FAB/popup from overlapping the right detail panel
+================================================================================
+Context: The assistant FAB and popup are absolutely positioned inside the
+card-body. When the right detail panel opens (entity/relationship editing),
+it occupies the right side of the canvas but the FAB stayed at a fixed
+right: 20px, overlapping the panel.
+
+Changes:
+1. src/front/static/ontology/css/ontology-assistant.css
+   - Both .assistant-fab and .assistant-popup now use
+     right: calc(Npx + var(--ob-panel-offset, 0px)) instead of a fixed
+     right value, so they shift left when the panel is open.
+   - Added transition on `right` for smooth sliding.
+
+2. src/front/static/ontology/js/ontology-assistant.js
+   - Added initPanelOffsetWatcher() function that:
+     a) Uses a MutationObserver on #ontology-map-container to detect
+        the panel-open class being toggled.
+     b) Uses a second MutationObserver (childList) to detect when the
+        .shared-detail-panel element is first created, then attaches
+        a ResizeObserver to track user-driven resize via the drag handle.
+     c) On each change, reads the panel's offsetWidth + resize handle
+        width and sets --ob-panel-offset on the .card-body element.
+   - Called from DOMContentLoaded alongside existing event bindings.
+
+Modified files:
+- src/front/static/ontology/css/ontology-assistant.css
+- src/front/static/ontology/js/ontology-assistant.js
+
+Test result: 1531 passed in 47s (0 failed, 0 errors)
+
+================================================================================
+Change FAB icon from OntoBricks logo to a wizard
+================================================================================
+Context: The assistant FAB used the OntoBricks graph logo (nodes + edges) as its
+icon. Replaced it with a wizard-themed SVG (hat, wand, and sparkles) to better
+convey the AI-assistant nature of the button.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_map.html
+   - Replaced the OB graph-logo SVG inside the #mapToggleAssistant FAB with
+     a wizard SVG: a pointed hat with brim, two red accent sparkles, a wand
+     with a round tip, and a white sparkle on the wand.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+
+Test result: 1531 passed in 47s (0 failed, 0 errors)
+
+================================================================================
+Fix assistant blocking the event loop (UI freezes during chat)
+================================================================================
+Context: The /ontology/assistant/chat endpoint was declared as `async def` but
+called the synchronous run_agent() function directly. Since run_agent() performs
+multiple blocking HTTP calls to the LLM serving endpoint (up to 20 iterations,
+each with a 120s timeout), this blocked the single-threaded asyncio event loop.
+While the assistant was processing, no other HTTP request could be served,
+causing the rest of the UI (right panel, API calls) to appear frozen.
+
+Changes:
+1. src/api/routers/internal/ontology.py
+   - Added `import asyncio` at the top of the module.
+   - Wrapped the `run_assistant(...)` call inside `await asyncio.to_thread()`
+     so it executes in a background thread pool, freeing the event loop to
+     serve other concurrent requests while the LLM agent is running.
+
+Modified files:
+- src/api/routers/internal/ontology.py
+
+Test result: 1531 passed in 47s (0 failed, 0 errors)
+
+================================================================================
+Code review — fix inline styles, dead code, and duplicate HTML
+================================================================================
+Context: Full code review of recently changed frontend files. Fixed violations
+of the coding rules (no inline CSS/JS in templates), removed dead code, and
+eliminated duplicated assistant welcome markup.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_map.html
+   - Replaced inline style="position: relative;" on .card-body with Bootstrap
+     utility class "position-relative".
+   - Removed inline flex/background/overflow styles from #ontology-map-container
+     (moved to CSS).
+   - Replaced inline style on #assistantClearBtn with the CSS class
+     .assistant-clear-btn.
+2. src/front/static/ontology/css/ontology-map.css
+   - Added flex: 1, min-width: 0, height: 100% to #ontology-map-container
+     rule (previously only inline).
+3. src/front/static/ontology/css/ontology-assistant.css
+   - Added .assistant-clear-btn rule (font-size, text-decoration) for the
+     clear-chat button previously styled inline.
+4. src/front/static/ontology/js/ontology-shared-panels.js
+   - Removed dead code: assistant toggle button reset in closeSharedPanel()
+     (assistant is now a separate floating popup, not a panel tab).
+5. src/front/static/ontology/js/ontology-assistant.js
+   - Refactored clearConversation() to reuse the existing welcome element
+     from the DOM instead of duplicating the HTML string. Now simply shows
+     the hidden welcome div and removes message nodes.
+6. README.md
+   - Added "AI Assistant" subsection documenting the floating assistant
+     feature in the Ontology Model view.
+7. Cleared all __pycache__ and .pytest_cache directories.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/css/ontology-assistant.css
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-assistant.js
+- README.md
+
+Test result: 1531 passed in 48s (0 failed, 0 errors)

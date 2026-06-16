@@ -108,8 +108,19 @@ class GraphDBFactory:
         #      schema where all other graph tables live.
         sync_uc_schema = sync_uc_schema_override or schema
 
+        branch_path = str(cfg.get("lakebase_branch") or "").strip()
         try:
-            auth = get_lakebase_auth()
+            if branch_path:
+                from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+
+                auth = BranchLakebaseAuth(branch_path, database_override)
+                logger.info(
+                    "Graph engine using explicit branch %r (database=%r)",
+                    branch_path,
+                    database_override,
+                )
+            else:
+                auth = get_lakebase_auth()
         except Exception as exc:  # noqa: BLE001
             logger.warning("Lakebase auth unavailable for graph engine: %s", exc)
             return None
@@ -117,6 +128,8 @@ class GraphDBFactory:
         if not getattr(auth, "is_available", False):
             logger.warning(
                 "Lakebase graph engine selected but PGHOST/PGUSER are not configured"
+                " (branch=%r)",
+                branch_path or "<bound>",
             )
             return None
 

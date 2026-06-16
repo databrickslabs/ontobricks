@@ -7,8 +7,8 @@
 :root {
     /* Colors - Greyscale theme */
     --ovz-bg-primary: #ffffff;
-    --ovz-bg-surface: #fafafa;
-    --ovz-bg-overlay: #f0f0f0;
+    --ovz-bg-surface: #ffffff;
+    --ovz-bg-overlay: #ffffff;
     --ovz-text-primary: #1a1a1a;
     --ovz-text-secondary: #555555;
     --ovz-text-muted: #888888;
@@ -24,7 +24,7 @@
     /* Entity colors */
     --ovz-entity-bg: #ffffff;
     --ovz-entity-border: #d0d0d0;
-    --ovz-entity-header-bg: linear-gradient(135deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.06) 100%);
+    --ovz-entity-header-bg: #ffffff;
     --ovz-entity-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     
     /* Relationship colors */

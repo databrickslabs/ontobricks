@@ -24,53 +24,38 @@ set -euo pipefail
 # Idempotent — re-running is a no-op for objects that already carry the
 # privileges.
 #
-# ── OntoBricks uses up to THREE Postgres schemas that each need this grant ──
+# ── Generic per-schema grant tool ──────────────────────────────────────────
+#
+# This is a single-schema grant tool: -i/-b/-d locate the Lakebase
+# project / branch / database and -s names the schema to grant on.
+#
+# OntoBricks has two distinct Lakebase schemas, which may live in the
+# SAME or in DIFFERENT Lakebase projects:
 #
 #   1. Registry schema  (e.g. ontobricks_registry)
-#      Instance : deploy.config.sh → LAKEBASE_BOOTSTRAP_INSTANCE
-#      Database : deploy.config.sh → LAKEBASE_BOOTSTRAP_DATABASE
-#      Schema   : deploy.config.sh → LAKEBASE_BOOTSTRAP_SCHEMA
-#      → Run once after "Settings > Registry > Initialize"
+#      Coords : deploy.config.sh → LAKEBASE_PROJECT / LAKEBASE_BRANCH /
+#               LAKEBASE_REGISTRY_DATABASE / LAKEBASE_REGISTRY_SCHEMA
+#      → ``scripts/deploy.sh`` grants this one automatically on every
+#        dev-lakebase deploy (re-run after "Settings > Registry > Initialize"
+#        if the schema did not exist yet at deploy time).
 #
 #   2. Graph schema  (e.g. ontobricks_graph)
-#      Instance : deploy.config.sh → LAKEBASE_GRAPH_PROJECT  (defaults to registry instance)
-#      Database : deploy.config.sh → LAKEBASE_GRAPH_DATABASE (defaults to registry database)
-#      Schema   : deploy.config.sh → LAKEBASE_GRAPH_SCHEMA
-#      → Run once after the first "Build" in Digital Twin
-#      → If the Graph DB is on a DIFFERENT Lakebase instance, set
-#        LAKEBASE_GRAPH_PROJECT / LAKEBASE_GRAPH_BRANCH / LAKEBASE_GRAPH_DATABASE
-#        in deploy.config.sh and pass them here via -i / -b / -d.
+#      Configured IN-APP (Settings → Graph DB) and may live in a
+#      DIFFERENT Lakebase project. ``deploy.sh`` does NOT touch it — the
+#      in-app "Create graph DB" flow runs this grant, or run it manually
+#      with the graph DB's own project/branch/database below.
 #
-#   3. Sync schema  (e.g. ontobricks — mirrors the UC registry schema segment)
-#      Same instance/database as the Graph DB (Lakebase creates it there).
-#      Schema   : deploy.config.sh → LAKEBASE_SYNC_SCHEMA
-#      → Only needed when sync_mode = managed_synced.
-#      → Run after the first Lakeflow snapshot has completed (Lakebase
-#        creates the schema automatically; this script grants USAGE + DML).
-#
-#   ``scripts/deploy.sh`` calls this script three times automatically when
-#   LAKEBASE_GRAPH_SCHEMA and LAKEBASE_SYNC_SCHEMA are set. You can also
-#   run it manually:
+# Manual runs:
 #
 #     # Registry
 #     scripts/bootstrap-lakebase-perms.sh \
 #       -i ontobricks-app -b production -d ontobricks_registry \
 #       -s ontobricks_registry -a ontobricks-030 -a mcp-ontobricks
 #
-#     # Graph DB on SAME instance
+#     # Graph DB (use the graph project/branch/database — may differ)
 #     scripts/bootstrap-lakebase-perms.sh \
-#       -i ontobricks-app -b production -d ontobricks_registry \
+#       -i <graph-project> -b <graph-branch> -d <graph-database> \
 #       -s ontobricks_graph -a ontobricks-030 -a mcp-ontobricks
-#
-#     # Graph DB on DIFFERENT instance
-#     scripts/bootstrap-lakebase-perms.sh \
-#       -i ontobricks-graph-instance -b production -d ontobricks_graph_db \
-#       -s ontobricks_graph -a ontobricks-030 -a mcp-ontobricks
-#
-#     # Sync schema (managed_synced mode only, same instance as Graph DB)
-#     scripts/bootstrap-lakebase-perms.sh \
-#       -i ontobricks-app -b production -d ontobricks_registry \
-#       -s ontobricks -a ontobricks-030 -a mcp-ontobricks
 #
 # Prerequisites:
 #   - Databricks CLI authenticated against the same workspace as the apps
@@ -265,6 +250,79 @@ if ! psql "$PGCONN" -tAc "SELECT 1 FROM information_schema.schemata WHERE schema
     echo "       CAN_USE grants above were applied — re-run after initialisation" >&2
     echo "       to apply the Postgres schema grants." >&2
     exit 1
+fi
+
+# ── Step 2b: Registry schema migrations (idempotent — run as schema owner) ────
+# Apply DDL columns/indexes added after the initial Initialize.
+# Only runs when the registry table `domain_versions` actually exists in this
+# schema — skipped silently for the graph schema which has a different layout.
+_HAS_DOMAIN_VERSIONS="$(psql "$PGCONN" -tAc \
+    "SELECT 1 FROM information_schema.tables WHERE table_schema='${SCHEMA}' AND table_name='domain_versions'" \
+    | tr -d '[:space:]')"
+if [[ "$_HAS_DOMAIN_VERSIONS" == "1" ]]; then
+    echo "  Applying registry schema migrations..."
+    if psql "$PGCONN" -v ON_ERROR_STOP=1 -q <<SQL
+-- domain_versions.status (lifecycle column added after initial release)
+ALTER TABLE "${SCHEMA}".domain_versions
+    ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'DRAFT';
+CREATE INDEX IF NOT EXISTS idx_domain_versions_status
+    ON "${SCHEMA}".domain_versions(domain_id, status);
+
+-- domains.review_quorum (per-domain sign-off quorum added after initial release)
+ALTER TABLE "${SCHEMA}".domains
+    ADD COLUMN IF NOT EXISTS review_quorum integer NOT NULL DEFAULT 1;
+
+-- build_runs (build history table added after initial release)
+CREATE TABLE IF NOT EXISTS "${SCHEMA}".build_runs (
+    id                  bigserial PRIMARY KEY,
+    domain_id           uuid NOT NULL
+                        REFERENCES "${SCHEMA}".domains(id) ON DELETE CASCADE,
+    version             text NOT NULL,
+    build_kind          text NOT NULL DEFAULT 'session',
+    status              text NOT NULL,
+    message             text NOT NULL DEFAULT '',
+    error               text NOT NULL DEFAULT '',
+    started_at          timestamptz NOT NULL DEFAULT now(),
+    finished_at         timestamptz,
+    duration_s          double precision NOT NULL DEFAULT 0,
+    triple_count        bigint NOT NULL DEFAULT 0,
+    entity_count        integer NOT NULL DEFAULT 0,
+    relationship_count  integer NOT NULL DEFAULT 0,
+    sql_chars           integer NOT NULL DEFAULT 0,
+    graph_engine        text NOT NULL DEFAULT '',
+    sync_mode           text NOT NULL DEFAULT '',
+    view_table          text NOT NULL DEFAULT '',
+    graph_name          text NOT NULL DEFAULT '',
+    task_id             text NOT NULL DEFAULT '',
+    phase_times         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    stats               jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_build_runs_domain_version
+    ON "${SCHEMA}".build_runs(domain_id, version, started_at DESC);
+
+-- domain_review_events (validation/review audit log added after initial release)
+CREATE TABLE IF NOT EXISTS "${SCHEMA}".domain_review_events (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id       uuid NOT NULL
+                    REFERENCES "${SCHEMA}".domains(id) ON DELETE CASCADE,
+    version         text NOT NULL,
+    actor           text NOT NULL,
+    action          text NOT NULL,
+    from_status     text NOT NULL DEFAULT '',
+    to_status       text NOT NULL DEFAULT '',
+    comment         text NOT NULL DEFAULT '',
+    meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_review_events_domain_version
+    ON "${SCHEMA}".domain_review_events(domain_id, version, created_at);
+SQL
+    then
+        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, build_runs, domain_review_events)"
+    else
+        echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
+    fi
 fi
 
 for app in "${APPS[@]}"; do

@@ -33,12 +33,29 @@ window.SwrlModule = {
     thenLinks: new Set(),
     nodeVars: new Map(),
 
+    // Attribute conditions (data-property + SWRL builtin), e.g.
+    // loyaltyPoints(?c, ?lp) ^ swrlb:greaterThanOrEqual(?lp, 1000).
+    // Each entry: { subjectNodeId, property, op, value }.
+    conditions: [],
+
     // Context menu state
     _ctxTarget: null,
     _ctxType: null,
 
     ATOM_RE: /([A-Za-z_][\w.]*)\(([^)]+)\)/g,
     VAR_NAMES: ['?x', '?y', '?z', '?w', '?v1', '?v2', '?v3', '?v4', '?v5'],
+    // SWRL builtin comparison/string operators offered for attribute conditions.
+    SWRL_BUILTINS: [
+        { op: 'greaterThan', label: '>' },
+        { op: 'greaterThanOrEqual', label: '\u2265' },
+        { op: 'lessThan', label: '<' },
+        { op: 'lessThanOrEqual', label: '\u2264' },
+        { op: 'equal', label: '=' },
+        { op: 'notEqual', label: '\u2260' },
+        { op: 'contains', label: 'contains' },
+        { op: 'startsWith', label: 'starts with' },
+        { op: 'endsWith', label: 'ends with' },
+    ],
     rawMode: false,
 
     // ── Initialisation ───────────────────────────────────
@@ -95,12 +112,18 @@ window.SwrlModule = {
     renderRulesList() {
         const container = document.getElementById('swrlRulesList');
         const noMsg = document.getElementById('noSwrlRulesMessage');
+        if (!container) return;
+
+        // Always clear previously rendered cards first so deletions (incl. the
+        // last rule) reflect immediately. The empty-state message is a
+        // permanent child of the container and is only toggled.
+        container.querySelectorAll('.swrl-rule-card').forEach(c => c.remove());
 
         if (this.rules.length === 0) {
-            noMsg.classList.remove('d-none');
+            if (noMsg) noMsg.classList.remove('d-none');
             return;
         }
-        noMsg.classList.add('d-none');
+        if (noMsg) noMsg.classList.add('d-none');
         const canEdit = (window.OB && typeof window.OB.canEditOntology === 'function')
             ? window.OB.canEditOntology()
             : window.isActiveVersion !== false;
@@ -147,7 +170,9 @@ window.SwrlModule = {
                     </div>
                 </div>`;
         });
-        container.innerHTML = html + noMsg.outerHTML;
+        // Insert cards before the (hidden) empty-state message, keeping it in
+        // the DOM for the next empty render.
+        container.insertAdjacentHTML('afterbegin', html);
     },
 
     async toggleEnabled(index) {
@@ -182,6 +207,9 @@ window.SwrlModule = {
         this.ifLinks = new Set();
         this.thenLinks = new Set();
         this.nodeVars = new Map();
+        this.conditions = [];
+        const condWrap = document.getElementById('swrlConditions');
+        if (condWrap) condWrap.innerHTML = '';
         this.rawMode = false;
         this._ctxTarget = null;
         this._ctxType = null;
@@ -195,6 +223,10 @@ window.SwrlModule = {
         if (rawToggle) rawToggle.checked = false;
         const rawEditor = document.getElementById('swrlRawEditor');
         if (rawEditor) rawEditor.classList.add('d-none');
+        const rawAnt = document.getElementById('swrlRawAntecedent');
+        if (rawAnt) rawAnt.value = '';
+        const rawCons = document.getElementById('swrlRawConsequent');
+        if (rawCons) rawCons.value = '';
 
         this._hideContextMenu();
     },
@@ -322,7 +354,7 @@ window.SwrlModule = {
         const width = container.clientWidth || window.innerWidth * 0.7;
         const height = container.clientHeight || window.innerHeight - 60;
 
-        const nodes = classes.map((cls, idx) => {
+        let nodes = classes.map((cls, idx) => {
             const saved = savedLayout?.positions?.[cls.name];
             return {
                 id: cls.name,
@@ -335,30 +367,61 @@ window.SwrlModule = {
                 fy: saved ? (saved.y ?? saved.fy) : null
             };
         });
-        this._graphNodes = nodes;
 
         const validIds = new Set(nodes.map(n => n.id));
-        const links = [];
+        // Resolve a class reference (parent / domain / range) to its canonical
+        // node id, tolerating case differences. Some saved ontologies store
+        // parent names with flattened casing (e.g. "Customerengagement" vs the
+        // class "CustomerEngagement"), which would otherwise drop inheritance
+        // edges from the graph.
+        const idByLower = new Map(nodes.map(n => [n.id.toLowerCase(), n.id]));
+        const resolveId = (ref) => {
+            if (!ref) return null;
+            if (validIds.has(ref)) return ref;
+            return idByLower.get(String(ref).toLowerCase()) || null;
+        };
+        let links = [];
 
         properties.forEach(prop => {
-            if (prop.domain && prop.range && validIds.has(prop.domain) && validIds.has(prop.range)) {
+            const src = resolveId(prop.domain);
+            const tgt = resolveId(prop.range);
+            if (src && tgt) {
                 links.push({
-                    source: prop.domain, target: prop.range,
+                    source: src, target: tgt,
                     name: prop.name, type: 'relationship',
                     direction: prop.direction || 'forward',
-                    linkId: `rel__${prop.name}__${prop.domain}__${prop.range}`
+                    linkId: `rel__${prop.name}__${src}__${tgt}`
                 });
             }
         });
 
         classes.forEach(cls => {
-            if (cls.parent && validIds.has(cls.parent)) {
+            const par = resolveId(cls.parent);
+            if (par) {
                 links.push({
-                    source: cls.parent, target: cls.name,
+                    source: par, target: cls.name,
                     name: 'inherits', type: 'inheritance',
-                    linkId: `inh__${cls.parent}__${cls.name}`
+                    linkId: `inh__${par}__${cls.name}`
                 });
             }
+        });
+
+        // Only display entities that participate in at least one business
+        // relationship (object property). Entities with no relationships — or
+        // with inheritance links only — are hidden, and their inheritance edges
+        // are dropped so no orphan nodes remain.
+        const connectedIds = new Set();
+        links.forEach(l => {
+            if (l.type !== 'relationship') return;
+            connectedIds.add(typeof l.source === 'object' ? l.source.id : l.source);
+            connectedIds.add(typeof l.target === 'object' ? l.target.id : l.target);
+        });
+        nodes = nodes.filter(n => connectedIds.has(n.id));
+        this._graphNodes = nodes;
+        links = links.filter(l => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            return connectedIds.has(s) && connectedIds.has(t);
         });
         this._graphLinks = links;
 
@@ -772,20 +835,28 @@ window.SwrlModule = {
 
     _updateRulePane() {
         const atoms = this._buildAtomsFromSelection();
-        const ifAtoms = atoms.ifAtoms;
+        const condAtoms = this._conditionAtoms();
+        // Attribute conditions are part of the antecedent (IF).
+        const ifAtoms = atoms.ifAtoms.concat(condAtoms);
         const thenAtoms = atoms.thenAtoms;
 
-        // IF section
+        // Render the editable condition rows (separate from the auto-derived
+        // class/relationship badges).
+        this._renderConditions();
+
+        // IF section — badges show class/relationship atoms only; attribute
+        // conditions are listed in their own editable rows below.
+        const ifBadgeAtoms = atoms.ifAtoms;
         const ifContainer = document.getElementById('swrlIfAtoms');
         const ifEmpty = document.getElementById('swrlIfEmpty');
         const ifCount = document.getElementById('swrlIfCount');
         if (ifContainer) {
-            if (ifAtoms.length === 0) {
+            if (ifBadgeAtoms.length === 0) {
                 ifContainer.innerHTML = '';
                 if (ifEmpty) { ifEmpty.style.display = ''; ifContainer.appendChild(ifEmpty); }
             } else {
                 let html = '';
-                ifAtoms.forEach((a, i) => {
+                ifBadgeAtoms.forEach((a, i) => {
                     const display = a.kind === 'class'
                         ? `${this._esc(a.name)}(${this._esc(a.args[0])})`
                         : `${this._esc(a.name)}(${this._esc(a.args[0])}, ${this._esc(a.args[1])})`;
@@ -913,6 +984,133 @@ window.SwrlModule = {
         }
     },
 
+    // ── Attribute conditions ─────────────────────────────
+
+    _dataPropsForClass(nodeId) {
+        const names = new Set();
+        const cls = (this._rawClasses || []).find(c => (c.name || c.uri) === nodeId);
+        if (cls && Array.isArray(cls.dataProperties)) {
+            cls.dataProperties.forEach(dp => { const n = dp.name || dp.localName; if (n) names.add(n); });
+        }
+        // Also surface global datatype properties whose domain is this class.
+        const classNames = new Set((this._rawClasses || []).map(c => String(c.name || c.uri || '').toLowerCase()));
+        (this._rawProperties || []).forEach(p => {
+            if (String(p.domain || '').toLowerCase() !== String(nodeId).toLowerCase()) return;
+            const rng = String(p.range || '').toLowerCase();
+            if (rng && classNames.has(rng)) return; // object property → not an attribute
+            const n = p.name || p.localName;
+            if (n) names.add(n);
+        });
+        return [...names];
+    },
+
+    _formatLiteral(value) {
+        const s = String(value == null ? '' : value).trim();
+        if (/^-?\d+(\.\d+)?$/.test(s)) return s;
+        if (s === 'true' || s === 'false') return s;
+        return '"' + s.replace(/"/g, '\\"') + '"';
+    },
+
+    _parseLiteral(token) {
+        let t = String(token == null ? '' : token).trim();
+        if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+            t = t.slice(1, -1);
+        }
+        return t.replace(/\\"/g, '"');
+    },
+
+    // Build the data-property + builtin atom pairs for every complete condition.
+    _conditionAtoms() {
+        const atoms = [];
+        const used = new Set(this.nodeVars.values());
+        (this.conditions || []).forEach(c => {
+            const subjVar = this.nodeVars.get(c.subjectNodeId);
+            if (!subjVar || !this.ifNodes.has(c.subjectNodeId)) return;
+            if (!c.property || !c.op || c.value === '' || c.value == null) return;
+            let base = '?' + String(c.property).replace(/[^A-Za-z0-9]/g, '');
+            if (base === '?') base = '?val';
+            let v = base, k = 1;
+            while (used.has(v)) { v = base + k; k++; }
+            used.add(v);
+            atoms.push({ kind: 'data', name: c.property, args: [subjVar, v] });
+            atoms.push({ kind: 'builtin', name: 'swrlb:' + c.op, args: [v, this._formatLiteral(c.value)] });
+        });
+        return atoms;
+    },
+
+    addConditionRow() {
+        if (this._readOnly) return;
+        // Default the subject to the first IF entity that has data properties.
+        const subject = [...this.ifNodes].find(id => this._dataPropsForClass(id).length) || '';
+        this.conditions.push({ subjectNodeId: subject, property: '', op: 'greaterThanOrEqual', value: '' });
+        this._updateRulePane();
+    },
+
+    _removeCondition(index) {
+        if (index < 0 || index >= this.conditions.length) return;
+        this.conditions.splice(index, 1);
+        this._updateRulePane();
+    },
+
+    _onConditionChange(index, field, value) {
+        const c = this.conditions[index];
+        if (!c) return;
+        if (field === 'subject') { c.subjectNodeId = value; c.property = ''; }
+        else if (field === 'property') c.property = value;
+        else if (field === 'op') c.op = value;
+        else if (field === 'value') c.value = value;
+        this._updateRulePane();
+    },
+
+    _renderConditions() {
+        const wrap = document.getElementById('swrlConditions');
+        if (!wrap) return;
+        const ro = this._readOnly;
+        // Entities eligible as a condition subject: IF entities with attributes.
+        const entIds = [...this.ifNodes].filter(id => this._dataPropsForClass(id).length);
+
+        if (!this.conditions.length) {
+            wrap.innerHTML = entIds.length
+                ? '<div class="text-muted small fst-italic">No attribute conditions</div>'
+                : '<div class="text-muted small fst-italic">Add an IF entity that has attributes to define conditions</div>';
+            return;
+        }
+
+        let html = '';
+        this.conditions.forEach((c, i) => {
+            const entOpts = ['<option value="">entity\u2026</option>'].concat(
+                entIds.map(id => {
+                    const v = this.nodeVars.get(id) || '';
+                    const sel = id === c.subjectNodeId ? ' selected' : '';
+                    return `<option value="${this._esc(id)}"${sel}>${this._esc(id)} (${this._esc(v)})</option>`;
+                })
+            ).join('');
+
+            const props = this._dataPropsForClass(c.subjectNodeId);
+            if (c.property && !props.includes(c.property)) props.unshift(c.property);
+            const propOpts = ['<option value="">attribute\u2026</option>'].concat(
+                props.map(p => `<option value="${this._esc(p)}"${p === c.property ? ' selected' : ''}>${this._esc(p)}</option>`)
+            ).join('');
+
+            const builtins = this.SWRL_BUILTINS.slice();
+            if (c.op && !builtins.some(b => b.op === c.op)) builtins.unshift({ op: c.op, label: c.op });
+            const opOpts = builtins.map(b =>
+                `<option value="${this._esc(b.op)}"${b.op === c.op ? ' selected' : ''}>${this._esc(b.label)}</option>`
+            ).join('');
+
+            const dis = ro ? ' disabled' : '';
+            html +=
+                `<div class="swrl-condition-row d-flex align-items-center gap-1 mb-1">` +
+                `<select class="form-select form-select-sm"${dis} onchange="SwrlModule._onConditionChange(${i},'subject',this.value)">${entOpts}</select>` +
+                `<select class="form-select form-select-sm"${dis} onchange="SwrlModule._onConditionChange(${i},'property',this.value)">${propOpts}</select>` +
+                `<select class="form-select form-select-sm" style="max-width:5.5rem"${dis} onchange="SwrlModule._onConditionChange(${i},'op',this.value)">${opOpts}</select>` +
+                `<input type="text" class="form-control form-control-sm" style="max-width:6rem" placeholder="value" value="${this._esc(c.value)}"${dis} onchange="SwrlModule._onConditionChange(${i},'value',this.value)">` +
+                (ro ? '' : `<button type="button" class="btn btn-sm btn-link text-danger p-0 px-1" onclick="SwrlModule._removeCondition(${i})" title="Remove"><i class="bi bi-x-lg"></i></button>`) +
+                `</div>`;
+        });
+        wrap.innerHTML = html;
+    },
+
     // ── SWRL string utilities ────────────────────────────
 
     _buildSwrlString(atoms) {
@@ -932,19 +1130,49 @@ window.SwrlModule = {
         return atoms;
     },
 
+    // Like _parseSwrlString but keeps the namespace prefix so SWRL builtins
+    // (swrlb:greaterThanOrEqual …) can be told apart from ontology atoms.
+    _parseAtomsDetailed(str) {
+        const out = [];
+        if (!str) return out;
+        const re = /(?:([A-Za-z_]\w*):)?([A-Za-z_][\w.]*)\s*\(([^)]*)\)/g;
+        let m;
+        while ((m = re.exec(str)) !== null) {
+            out.push({
+                prefix: m[1] || '',
+                name: m[2],
+                args: m[3].split(',').map(s => s.trim()).filter(Boolean),
+            });
+        }
+        return out;
+    },
+
     // ── Pre-fill from existing rule ──────────────────────
 
     _prefillFromRule(rule) {
         if (!rule) return;
-        const ifAtoms = this._parseSwrlString(rule.antecedent || '');
-        const thenAtoms = this._parseSwrlString(rule.consequent || '');
+        const antD = this._parseAtomsDetailed(rule.antecedent || '');
+        const conD = this._parseAtomsDetailed(rule.consequent || '');
+
+        // Always seed the raw editor so it stays accurate if the user toggles
+        // it — and so the fallback below can rely on it.
+        const rawAnt = document.getElementById('swrlRawAntecedent');
+        const rawCons = document.getElementById('swrlRawConsequent');
+        if (rawAnt) rawAnt.value = rule.antecedent || '';
+        if (rawCons) rawCons.value = rule.consequent || '';
 
         const varToNodeId = new Map();
+        // Atoms the graph cannot represent (data-property atoms, SWRL builtins
+        // like swrlb:*, or derived classes not present in the ontology) are
+        // counted here; if any exist the rule is not faithfully editable in
+        // the visual graph, so we fall back to raw mode (keeps the full
+        // IF/THEN — including derived consequents — visible and editable).
+        let unmapped = 0;
 
         const processClassAtom = (atom, side) => {
             const nodeId = atom.name;
             const varName = atom.args[0];
-            if (!this._graphNodes.find(n => n.id === nodeId)) return;
+            if (!this._graphNodes.find(n => n.id === nodeId)) { unmapped++; return; }
             if (side === 'if') this.ifNodes.add(nodeId); else this.thenNodes.add(nodeId);
             this.nodeVars.set(nodeId, varName);
             varToNodeId.set(varName, nodeId);
@@ -952,7 +1180,7 @@ window.SwrlModule = {
 
         const processPropertyAtom = (atom, side) => {
             const link = this._graphLinks.find(l => l.name === atom.name && l.type === 'relationship');
-            if (!link) return;
+            if (!link) { unmapped++; return; }
 
             const srcVar = atom.args[0];
             const tgtVar = atom.args[1];
@@ -975,10 +1203,54 @@ window.SwrlModule = {
             varToNodeId.set(tgtVar, tgtId);
         };
 
-        ifAtoms.forEach(a => { if (a.kind === 'class') processClassAtom(a, 'if'); });
-        ifAtoms.forEach(a => { if (a.kind === 'property') processPropertyAtom(a, 'if'); });
-        thenAtoms.forEach(a => { if (a.kind === 'class') processClassAtom(a, 'then'); });
-        thenAtoms.forEach(a => { if (a.kind === 'property') processPropertyAtom(a, 'then'); });
+        // ── Antecedent ──────────────────────────────────
+        // 1) Class atoms first so their variables resolve before conditions.
+        antD.filter(a => !a.prefix && a.args.length <= 1).forEach(a => processClassAtom(a, 'if'));
+
+        // 2) Two-arg atoms: object-property → graph link; otherwise a candidate
+        //    data-property atom feeding an attribute condition.
+        const dataAtomByObjVar = new Map();
+        antD.filter(a => !a.prefix && a.args.length === 2).forEach(a => {
+            const link = this._graphLinks.find(l => l.name === a.name && l.type === 'relationship');
+            if (link) processPropertyAtom(a, 'if');
+            else dataAtomByObjVar.set(a.args[1], { subjVar: a.args[0], property: a.name });
+        });
+
+        // 3) Builtins (swrlb:*) pair with a data atom to form a condition.
+        const consumed = new Set();
+        antD.filter(a => a.prefix).forEach(b => {
+            if (b.args.length < 2) { unmapped++; return; }
+            const objVar = b.args[0];
+            const data = dataAtomByObjVar.get(objVar);
+            const subjNode = data ? varToNodeId.get(data.subjVar) : null;
+            if (!data || !subjNode) { unmapped++; return; }
+            consumed.add(objVar);
+            this.conditions.push({
+                subjectNodeId: subjNode,
+                property: data.property,
+                op: b.name,
+                value: this._parseLiteral(b.args[1]),
+            });
+        });
+
+        // 4) A data atom not consumed by a builtin can't be shown visually.
+        dataAtomByObjVar.forEach((d, objVar) => { if (!consumed.has(objVar)) unmapped++; });
+
+        // ── Consequent ──────────────────────────────────
+        conD.forEach(a => {
+            if (a.prefix) { unmapped++; return; }
+            if (a.args.length <= 1) { processClassAtom(a, 'then'); return; }
+            const link = this._graphLinks.find(l => l.name === a.name && l.type === 'relationship');
+            if (link) processPropertyAtom(a, 'then'); else unmapped++;
+        });
+
+        // If the visual graph cannot fully represent the rule, switch to raw
+        // mode so nothing (notably the THEN clause) is silently dropped.
+        if (unmapped > 0) {
+            const toggle = document.getElementById('swrlRawToggle');
+            if (toggle) toggle.checked = true;
+            this.toggleRawMode();
+        }
 
         this._applyVisualSelection();
         this._updateRulePane();
@@ -1006,7 +1278,7 @@ window.SwrlModule = {
             consequent = (document.getElementById('swrlRawConsequent')?.value || '').trim();
         } else {
             const atoms = this._buildAtomsFromSelection();
-            antecedent = this._buildSwrlString(atoms.ifAtoms);
+            antecedent = this._buildSwrlString(atoms.ifAtoms.concat(this._conditionAtoms()));
             consequent = this._buildSwrlString(atoms.thenAtoms);
         }
 

@@ -64,3 +64,57 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
     cursor: default !important;
 }
 
+/* ==========================================================================
+   Entity collapse / expand toggle (inlined here, not in ontoviz-entity.css,
+   because that file is pulled via @import without a cache-busting version and
+   would otherwise be served stale — see the note at the top of this file).
+   ========================================================================== */
+.ovz-entity-collapse-btn {
+    width: 18px;
+    height: 18px;
+    margin-left: auto;
+    flex: 0 0 auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--ovz-text-muted, #94a3b8);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+    opacity: 0.6;
+    transition: background var(--ovz-transition), color var(--ovz-transition), opacity var(--ovz-transition);
+}
+
+.ovz-entity:hover .ovz-entity-collapse-btn {
+    opacity: 1;
+}
+
+.ovz-entity-collapse-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--ovz-text, #334155);
+}
+
+/* Keep the action group next to the (right-pinned) collapse toggle. */
+.ovz-entity-header .ovz-entity-actions {
+    margin-left: 4px;
+}
+
+/* Collapsed entity: header-only compact card */
+.ovz-entity.ovz-collapsed {
+    min-width: 160px;
+}
+
+.ovz-entity.ovz-collapsed .ovz-entity-header {
+    border-bottom: none;
+    border-radius: var(--ovz-radius-lg);
+}
+
+/* Light red header background for entities (inlined for cache-busting). */
+.ovz-entity-header {
+    background: #fdeaea;
+}
+

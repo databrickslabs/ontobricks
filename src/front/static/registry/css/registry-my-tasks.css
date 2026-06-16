@@ -1,0 +1,24 @@
+/* Registry → My Tasks worklist */
+
+.my-tasks-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--db-text-muted);
+    border-bottom: 2px solid var(--db-border);
+}
+
+.my-tasks-table td {
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
+
+.my-tasks-approvals {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.my-tasks-empty i {
+    font-size: 2rem;
+    color: var(--db-success);
+}

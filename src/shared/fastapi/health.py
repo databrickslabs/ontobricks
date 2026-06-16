@@ -352,18 +352,13 @@ def _check_registry_uc_schema_ddl() -> Tuple[str, str]:
 def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
     """Probe the configured Graph DB Lakebase database and graph schema.
 
-    Reads ``graph_engine_config`` from the registry global-config to
-    discover the graph database/schema. When nothing is configured the
-    probe reports a warning rather than an error.
+    Uses the same auth selection as :class:`GraphDBFactory._create_lakebase`:
+    ``BranchLakebaseAuth`` when ``graph_engine_config.lakebase_branch`` is set,
+    otherwise the bound Lakebase auth.  This ensures the health probe always
+    targets the same host as the actual build engine — the graph DB may be
+    on a completely different Lakebase project than the registry.
     """
-    from back.core.databricks.LakebaseAuth import get_lakebase_auth
-
-    auth = get_lakebase_auth()
-    if not auth.is_available:
-        return (
-            _WARNING,
-            "Lakebase not bound (PG* env vars unset) — Graph DB not probed",
-        )
+    from back.core.databricks.LakebaseAuth import BranchLakebaseAuth, get_lakebase_auth
 
     cfg = _resolve_registry_cfg(settings)
     try:
@@ -377,23 +372,32 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
 
     database = (engine_cfg.get("database") or "").strip()
     schema = (engine_cfg.get("schema") or engine_cfg.get("graph_schema") or "ontobricks_graph").strip()
+    branch_path = (engine_cfg.get("lakebase_branch") or "").strip()
 
     if not schema:
         return _WARNING, "Graph DB schema not configured — set it in Settings → Graph DB"
 
-    try:
-        from back.core.graphdb.lakebase.LakebaseBase import (
-            default_schema,
-            validate_graph_schema,
-        )
-        from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
+    # Select auth: explicit branch → BranchLakebaseAuth; else bound auth.
+    if branch_path:
+        auth = BranchLakebaseAuth(branch_path, database)
+    else:
+        auth = get_lakebase_auth()
 
-        graph_store = LakebaseRegistryStore(
-            registry_cfg=cfg,
-            schema=schema,
-            database=database,
+    if not auth.is_available:
+        return (
+            _WARNING,
+            "Lakebase not bound (PG* env vars unset) — Graph DB not probed",
         )
-        with graph_store._connect() as conn, conn.cursor() as cur:
+
+    try:
+        from back.core.graphdb.lakebase.pool import _require_psycopg
+
+        psycopg, _ = _require_psycopg()
+        kwargs = auth.kwargs(application_name="ontobricks-graphdb-health")
+        if database:
+            kwargs["dbname"] = database
+
+        with psycopg.connect(**kwargs) as conn, conn.cursor() as cur:
             cur.execute("SELECT current_database(), current_user")
             row = cur.fetchone() or ("?", "?")
             cur_db, cur_user = row[0], row[1]
@@ -720,21 +724,21 @@ def run_readiness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
     checks.append(
         _safely_run(
             "lakebase",
-            "Lakebase Postgres",
+            "Lakebase — Registry Postgres",
             lambda: _check_lakebase(settings),
         )
     )
     checks.append(
         _safely_run(
             "lakebase.permissions",
-            "Lakebase permissions",
+            "Lakebase — Registry permissions",
             lambda: _check_lakebase_permissions(settings),
         )
     )
     checks.append(
         _safely_run(
             "graphdb.lakebase",
-            "Graph DB (Lakebase)",
+            "Lakebase — Graph DB (separate database)",
             lambda: _check_graphdb_lakebase(settings),
         )
     )

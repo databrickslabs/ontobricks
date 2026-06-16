@@ -86,7 +86,7 @@ const DocManager = {
         btn.disabled = false;
 
         list.innerHTML = this.queuedFiles.map((f, i) => `
-            <div class="d-flex align-items-center justify-content-between py-1 px-2 mb-1 rounded" style="background:#f8f9fa;">
+            <div class="d-flex align-items-center justify-content-between py-1 px-2 mb-1 rounded" style="background:#ffffff;">
                 <span class="small text-truncate me-2" title="${f.name}">
                     <i class="bi ${fileIcon(f.name)} me-1"></i>${f.name}
                     <span class="text-muted">(${formatSize(f.size)})</span>

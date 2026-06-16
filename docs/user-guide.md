@@ -268,8 +268,20 @@ Click **Wizard** in the sidebar to generate an ontology automatically from your 
 
 1. Select the **LLM Endpoint** (a Databricks Model Serving endpoint)
 2. Choose which **catalog/schema** metadata to include
-3. Write custom **Guidelines** or pick a **Quick Template**
-4. Click **Generate** to create the ontology
+3. (Optional) Select uploaded **Documents** to enrich the generation
+4. Write custom **Guidelines** or pick a **Quick Template**
+5. Click **Generate** to create the ontology
+
+#### Documents (PDF and other formats)
+
+Documents uploaded under **Domain → Documents** feed the Wizard. Plain-text
+files (`.txt`, `.md`, `.json`, `.csv`, `.xml`) are read directly. Binary
+documents (`.pdf`, `.docx`, `.pptx`, images) are automatically converted to
+markdown using the Databricks `ai_parse_document` function, which runs on your
+configured **SQL warehouse** — so a warehouse must be configured and its
+identity must have read access to the documents volume. Without a SQL warehouse,
+binary documents are skipped and generation uses metadata, guidelines, and text
+documents only.
 
 #### Quick Templates
 
@@ -665,7 +677,49 @@ When you save an existing domain:
 
 ### Domain Cockpit (Validation)
 
-Under **Domain → Validation** (Cockpit), tiles summarise registry and build readiness. The **Active Version** tile shows which registry version is currently **exposed via API and MCP** (the “MCP-enabled” version). That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint. This is **not** the same as “you are on the latest writable version” — read-only UI for ontology/mapping is still driven by whether the loaded version is the **latest** on disk (see **Version status** below).
+Under **Domain → Validation** (Cockpit), tiles summarise registry and build readiness. The **Published Version** tile shows which registry version is currently **exposed via API and MCP** — the numeric-latest version whose lifecycle status is **PUBLISHED**. That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint.
+
+#### Version lifecycle (DRAFT / IN-REVIEW / PUBLISHED)
+
+Every domain version carries a **lifecycle status**, shown as a colour-coded badge wherever the domain + version appears (navbar, Domain → Information, Registry → Browse, Domain → Versions, and the query headers):
+
+- **DRAFT** (amber) — editable. New versions always start here.
+- **IN-REVIEW** (blue) — locked for editing, pending review. Requires a successful build first.
+- **PUBLISHED** (green) — locked for editing and served on the API/MCP.
+
+Transitions are made from **Registry → Browse** (or Domain → Information):
+DRAFT → IN-REVIEW → PUBLISHED (admin or builder), IN-REVIEW → DRAFT (admin or builder), and PUBLISHED → DRAFT (admin only). While a version is **not DRAFT**, the ontology/mapping editors, metadata/document writes, and the Build/sync action are read-only — set it back to **DRAFT** to make changes.
+
+#### Validation & Review workflow (My Tasks + Domain → Validation)
+
+For a guided, business-user-oriented review on top of the raw lifecycle, OntoBricks adds a
+review workflow that collects reviewer sign-offs and keeps a durable audit trail.
+
+- **Registry → My Tasks** — a cross-domain worklist of the versions that need *you*. Each row
+  shows the domain, version, status, sign-off progress, and the action available to you:
+  **Submit for review** (builders/admins, on a built DRAFT), **Review & sign off** (any
+  domain member, on an IN-REVIEW version), or **Publish** (builders/admins, once the quorum
+  is met). "Review & sign off" loads the domain and opens its Validation workspace.
+- **Domain → Validation** — the per-version review workspace:
+  - **Consistency checks** — a soft readiness summary (ontology valid, mapping complete,
+    warehouse configured, Digital Twin built) with shortcuts to the Cockpit and Pitfalls.
+    These checks are advisory and never block publishing.
+  - **Your actions** — context-aware buttons: Submit for review, **Approve** / **Request
+    changes** (with an optional comment for the audit trail), Publish, or Reopen.
+  - **Audit trail** — a timeline of every decision (submitted, approved, changes requested,
+    published, reopened) with the actor, timestamp, comment, and the `from → to` status
+    snapshot for lifecycle transitions.
+- **Roles & quorum** — Submit and Publish stay builder/admin. **Publish** unlocks for a
+  builder only once the **sign-off quorum** is reached; an **admin** (app-level or domain-level)
+  may **publish at any time, overriding the quorum** (the override is flagged in the audit
+  trail). The quorum is a **per-domain** setting (default `1`), configured on
+  **Domain → Information → Global** ("Sign-off quorum") and applied to every version of that
+  domain. **Sign-off** (approve / request changes) is open to any principal with a role on the
+  domain; **request changes** sends the version back to DRAFT for editing. **Reopen**
+  (PUBLISHED → DRAFT) is admin-only.
+- **Persistence** — every decision is stored append-only in the `domain_review_events`
+  registry table, so the full "who validated what, when" history survives restarts and is
+  queryable.
 
 ### Version Management (Domain → Versions)
 
@@ -816,7 +870,7 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 
 | Tool | Description |
 |------|-------------|
-| `list_domains` | List all MCP-enabled domains in the registry |
+| `list_domains` | List all domains with ≥1 PUBLISHED version in the registry |
 | `select_domain` | Activate a domain for subsequent queries |
 | `list_domain_versions` | List registry versions for a domain |
 | `get_design_status` | Ontology / metadata / assignment readiness for a domain |

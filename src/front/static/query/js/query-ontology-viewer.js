@@ -52,7 +52,7 @@ const OntologyViewer = (() => {
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                     </div>
-                    <div class="modal-body p-0" style="overflow: hidden; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                    <div class="modal-body p-0" style="overflow: hidden; background: #ffffff;">
                         <div id="${CONTAINER_ID}" style="width: 100%; height: 100%; position: relative;"></div>
                     </div>
                 </div>

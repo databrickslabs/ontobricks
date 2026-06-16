@@ -2,6 +2,9 @@
 
 .dq-shapes-list {
     min-height: 60px;
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .dq-shape-card {

@@ -166,6 +166,43 @@ else
     echo "  [cross-app] SKIP — could not resolve both app service principals"
 fi
 
+# ── UC schema ALL_PRIVILEGES for both SPs ────────────────────────────────────
+# The SP must be able to CREATE OR REPLACE views/tables in the registry schema
+# even if those objects were previously created by a different principal (e.g.
+# the deploying user in a notebook run). Without ALL_PRIVILEGES on the schema,
+# CREATE OR REPLACE VIEW on an object owned by another principal fails with
+# "Permission denied … MANAGE on Table/View".
+# Source the deploy config for catalog + schema values; skip silently if absent.
+_UC_CATALOG=""
+_UC_SCHEMA=""
+if [[ -f scripts/deploy.config.sh ]]; then
+    # shellcheck disable=SC1091
+    _UC_CATALOG="$(source scripts/deploy.config.sh 2>/dev/null; echo "${REGISTRY_CATALOG:-}")"
+    _UC_SCHEMA="$(source scripts/deploy.config.sh 2>/dev/null; echo "${REGISTRY_SCHEMA:-}")"
+fi
+# Allow env overrides
+_UC_CATALOG="${UC_CATALOG:-$_UC_CATALOG}"
+_UC_SCHEMA="${UC_SCHEMA:-$_UC_SCHEMA}"
+
+if [[ -n "$_UC_CATALOG" && -n "$_UC_SCHEMA" ]]; then
+    echo
+    echo "=== UC schema ALL_PRIVILEGES: ${_UC_CATALOG}.${_UC_SCHEMA} ==="
+    for sp in "${APP_SP_ID:-}" "${MCP_SP_ID:-}"; do
+        [[ -z "$sp" ]] && continue
+        if databricks grants update SCHEMA "${_UC_CATALOG}.${_UC_SCHEMA}" \
+            --json "{\"changes\":[{\"principal\":\"${sp}\",\"add\":[\"ALL_PRIVILEGES\"]}]}" \
+            >/dev/null 2>&1; then
+            echo "  ✓ ALL_PRIVILEGES on ${_UC_CATALOG}.${_UC_SCHEMA} → $sp"
+        else
+            echo "  ⚠ UC schema grant failed for $sp — run manually:"
+            echo "    databricks grants update SCHEMA ${_UC_CATALOG}.${_UC_SCHEMA} \\"
+            echo "      --json '{\"changes\":[{\"principal\":\"${sp}\",\"add\":[\"ALL_PRIVILEGES\"]}]}'"
+        fi
+    done
+else
+    echo "  [UC schema] SKIP — REGISTRY_CATALOG/REGISTRY_SCHEMA not resolved (source deploy.config.sh or set UC_CATALOG/UC_SCHEMA env vars)"
+fi
+
 echo
 if [[ $FAILED -eq 0 ]]; then
     echo "=== Done — all apps bootstrapped ==="

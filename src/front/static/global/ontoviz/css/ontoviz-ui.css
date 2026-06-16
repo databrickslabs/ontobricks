@@ -521,7 +521,7 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
     align-items: center;
     padding: 12px 16px;
     border-bottom: 1px solid #dee2e6;
-    background: #f8f9fa;
+    background: #ffffff;
     border-radius: 8px 8px 0 0;
     font-size: 14px;
     font-weight: 600;
@@ -544,7 +544,7 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
 }
 
 .ovz-palette-close:hover {
-    background: #e9ecef;
+    background: #ffffff;
     color: #212529;
 }
 
@@ -554,7 +554,7 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
     gap: 8px;
     padding: 10px 16px;
     border-bottom: 1px solid #dee2e6;
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .ovz-palette-action-btn {
@@ -571,7 +571,7 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
 }
 
 .ovz-palette-action-btn:hover:not(:disabled) {
-    background: #e9ecef;
+    background: #ffffff;
     color: #212529;
     border-color: #adb5bd;
 }
@@ -619,7 +619,7 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
 }
 
 .ovz-palette-item:hover {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .ovz-palette-item input[type="checkbox"] {
@@ -673,7 +673,7 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
 }
 
 .ovz-palette-toggle-item:hover {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .ovz-palette-toggle-item input[type="checkbox"] {

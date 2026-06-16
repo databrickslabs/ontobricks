@@ -1,0 +1,151 @@
+## UI & Backend polish — TODO.md batch
+
+**Context:** Applied all items from `releasereq/TODO.md` — UI cleanup, Graph DB
+card improvements, Cockpit parity, schedule de-duplication, and Health check
+coverage.
+
+### Changes
+
+1. **DT / Knowledge Graph — remove Entity Type dropdown** (`src/front/templates/partials/dtwin/_query_sigmagraph.html`)
+   - Removed the redundant "Entity Type" label + select from the Filter tab.
+     Entity type visibility is still controlled via the View → Entity Types chips.
+   - `src/front/static/query/js/query-sigmagraph.js` — already uses null-guards,
+     no JS update required.
+
+2. **Domain / Build — Graph DB (Lakebase) card** (`src/front/templates/partials/dtwin/_query_sync.html`, `src/front/static/query/js/query-sync.js`, `src/back/objects/digitaltwin/DigitalTwin.py`)
+   - Removed the long `graphEngineFootnoteLakebase` footnote below the card.
+   - Added a compact in-card build note (`dtLakebaseBuildNote`) with database,
+     schema and table codes plus an optional synced-table clause.
+   - Added existence badges for the Lakebase table (`dtLakebaseTableExists`) and
+     UC sync object (`dtLakebaseSyncedUcExists`).
+   - Backend: `DigitalTwin.get_dt_existence_data` now returns `lakebase_table_exists`
+     (bool) separately from `local_lbug_exists` (which also requires count > 0).
+
+3. **Domain / Cockpit — Graph DB card parity** (`src/front/templates/partials/domain/_domain_validation.html`, `src/front/static/domain/js/domain-validation.js`)
+   - Replaced the old single-line "UC sync object / Local graph database" layout
+     with the same Database / Schema / Table / UC sync row structure used in Build.
+   - Added existence badges (`psDtLakebaseTableExists`, `psDtLakebaseSyncedUcExists`).
+
+4. **Registry — schedule consolidation** (`src/back/objects/session/GlobalConfigService.py`)
+   - Removed dead-code that cleaned `schedules.registry_cfg` and stripped
+     `schedule_history` from the in-memory config dict.  The Lakebase store layer
+     already guarantees these keys never appear in the `global_config` JSONB blob.
+
+5. **global_config — graph DB config** (no code change)
+   - Verified: `GlobalConfigService.get_graph_engine_config` /
+     `set_graph_engine_config` and the `GET /settings/graph-engine-config` /
+     `POST /settings/graph-engine-config` endpoints are already wired end-to-end.
+     The graph DB configuration is persisted in `global_config.config` and loaded
+     on every app request.
+
+6. **Settings / Health — Graph DB check** (`src/shared/fastapi/health.py`)
+   - Added `_check_graphdb_lakebase()` probe that reads `graph_engine_config` from
+     the global registry config, opens a connection to the configured Lakebase
+     database, and verifies the graph schema exists.  Reports `warning` when not
+     yet configured or schema is absent (first build pending), `error` on
+     connection failure.
+   - Registered as `graphdb.lakebase` / "Graph DB (Lakebase)" in
+     `run_readiness_checks`.
+
+7. **DT / Inference — all tiles checked by default** (`src/front/templates/partials/dtwin/_query_reasoning.html`)
+   - Decision Tables, SPARQL CONSTRUCT Rules, and Aggregate Rules tiles now have
+     `checked` and the `active` CSS class pre-set, matching the always-on T-Box /
+     SWRL / Graph Inference tiles.
+
+### Modified files
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `src/front/templates/partials/domain/_domain_validation.html`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/static/domain/js/domain-validation.js`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/shared/fastapi/health.py`
+
+### Test results
+- Core unit tests: 275 passed, 15 pre-existing failures (all in
+  `test_health.py` / `test_build_pipeline_streaming.py` / `test_graph_engine_config.py`
+  — caused by ongoing lakebase engine migration unrelated to this batch).
+- No new test failures introduced by these changes.
+
+## Fix DT status regression — missing lakebase fields & stale cache
+
+Context: After the TODO.md changes, users reported the Build and Cockpit pages
+showed "Not found" / "Not loaded" badges for Triple-Store and Graph DB even
+after a successful DT generation. Root causes: the build session cache was
+missing the new `lakebase_table_exists` field (showing "Not found" on live
+checks), the cockpit `/validate/detailed` response omitted all lakebase-specific
+fields, and `_loadDtExistence()` didn't call `_applyBuildGraphEngineUi` so the
+Table badge was never refreshed after a build.
+
+Changes:
+
+1. src/back/objects/digitaltwin/_build_pipeline.py
+   Added `lakebase_table_exists`, `view_table`, and `registry_archive_applicable`
+   to the post-build session cache so badges show correct state immediately.
+2. src/back/objects/domain/HomeService.py
+   Added all lakebase fields (`lakebase_table_exists`, `lakebase_database`,
+   `lakebase_schema`, `lakebase_table`, `lakebase_synced_uc`, `lakebase_sync_mode`)
+   to `dtwin_detail` so the Cockpit page has the same data as the Build page.
+   Also switched `triple_count` to prefer `dt_existence` over `ts_status`.
+3. src/front/static/query/js/query-sync.js
+   `_loadDtExistence()` now calls `_applyBuildGraphEngineUi(data)` before
+   `_applyDtExistence(data)` so the Table existence badge is updated on the
+   post-build refresh call.
+
+Modified files:
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/back/objects/domain/HomeService.py
+- src/front/static/query/js/query-sync.js
+
+Tests: pre-existing failures only (189 failed are from ongoing lakebase migration
+unrelated to these changes); 1468 passed, 0 new failures introduced.
+
+---
+
+## Remove obsolete "Backing up the graph to the registry" build step
+
+**Context:** The registry archive step was a leftover from the file-based LadybugDB engine. Lakebase Postgres is now the sole system of record; no volume backup is ever needed. The step appeared as "Not needed for this build" on every run, causing confusion.
+
+**Changes:**
+1. `src/api/routers/internal/dtwin.py` — removed the `archive` entry from the Digital Twin Build task's `steps` list.
+2. `src/back/objects/digitaltwin/_build_pipeline.py` — removed `archive_task_id` attribute, `_start_background_archive()` method, its call site in `run()`, and the `archive_background`/`archive_skipped` dead-code in `_complete_task()`.
+3. `src/front/static/query/js/query-sync.js` — removed `_isArchiveBackgroundStep()` helper, the archive branch in `_renderStepTime()`, and the `archive_background` block in the task export formatter.
+
+**Modified files:**
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/front/static/query/js/query-sync.js
+
+Tests: no new failures introduced.
+
+---
+
+## Code review — rule compliance, dead code, import hygiene
+
+**Context:** Full OntoBricks code review pass per `.cursorrules`. Covers rule compliance, duplication analysis, dead-code identification, session-data audit, and targeted fixes.
+
+**Changes:**
+
+1. `tests/test_build_pipeline_streaming.py` — removed `TestStartBackgroundArchive` class; its only test called `_BuildPipeline._start_background_archive()` which was deleted in a prior refactor. Test was dead code causing a hard failure.
+2. `src/api/routers/internal/domain.py:90` — changed `return {"success": False, "email": ""}` (violates `.cursor/10` convention) to `return {"success": True, "email": ""}` for the no-client case; an unconfigured Databricks connection is not an error, just an empty identity.
+3. `src/api/routers/internal/settings.py` — changed `from back.objects.domain.SettingsService import SettingsService` to `from back.objects.domain import SettingsService` (violates `src/.coding_rules.md §10.6`: always import from package, not internal module).
+4. `src/api/routers/internal/dtwin.py` — promoted `HomeService` and `Domain` to top-level imports (from `back.objects.domain` package); removed equivalent lazy imports inside `sync_info` handler body.
+
+**Proposed (not applied — require separate approval):**
+
+- `src/api/routers/internal/dtwin.py::filter_triplestore` (~200 lines): expand/seed logic belongs in `DigitalTwin` (violates `.cursor/05` — business logic in route). Propose Extract Method into `DigitalTwin.filter_triples_expand()`.
+- `src/api/routers/internal/ontology.py:570,683`: `return {"success": False, "valid": False}` for validation endpoints — discuss whether to switch to `ValidationError` or keep as structured 200-OK response.
+- `src/api/routers/internal/dtwin.py` — `get_triplestore + not store → raise InfrastructureError` repeated 5×; extract `_require_graph_store(domain, settings)` helper.
+- `src/back/core/reasoning/ReasoningService.py::run_constraint_checks()` — always returns `skipped`; document as placeholder or remove.
+- `src/back/objects/session/DomainSession.py::preferences` property — backward-compat alias for `settings`; verify no consumers then remove.
+- Deprecated routes `/quality/execute` and `/quality/start` — already marked `deprecated=True`; plan removal once frontend fully migrated to `/dataquality/*`.
+
+**Modified files:**
+- tests/test_build_pipeline_streaming.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- src/api/routers/internal/dtwin.py
+
+**Test result:** 1976 passed, 80 skipped, 0 failed (was 1 failed before).

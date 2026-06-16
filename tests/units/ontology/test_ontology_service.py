@@ -455,6 +455,52 @@ class TestApplyAgentOntologyChanges:
         assert len(ps.get_entity_mappings()) == 2
 
 
+class _StubDomain:
+    """Minimal domain exposing only what agent_ontology_context needs."""
+
+    def __init__(self, classes, properties):
+        self._classes = classes
+        self._properties = properties
+
+    def get_classes(self):
+        return self._classes
+
+    def get_properties(self):
+        return self._properties
+
+
+class TestAgentOntologyContext:
+    classes = [
+        {"name": "Customer", "uri": "http://t/Customer", "dataProperties": [{"name": "age"}]},
+        {"name": "Order", "uri": "http://t/Order", "dataProperties": []},
+        {"name": "Lonely", "uri": "http://t/Lonely", "dataProperties": [{"name": "x"}]},
+        {"name": "Child", "uri": "http://t/Child", "parent": "Customer", "dataProperties": []},
+    ]
+    properties = [
+        {"name": "placesOrder", "type": "ObjectProperty", "domain": "Customer", "range": "Order"},
+    ]
+
+    def _onto(self):
+        onto = Ontology.__new__(Ontology)
+        onto._domain = _StubDomain(self.classes, self.properties)
+        return onto
+
+    def test_default_keeps_all_entities(self):
+        ctx = self._onto().agent_ontology_context()
+        assert {e["name"] for e in ctx["entities"]} == {
+            "Customer",
+            "Order",
+            "Lonely",
+            "Child",
+        }
+
+    def test_connected_only_drops_relationshipless_and_inheritance_only(self):
+        ctx = self._onto().agent_ontology_context(connected_only=True)
+        # Lonely (no rels) and Child (inheritance only) are excluded.
+        assert {e["name"] for e in ctx["entities"]} == {"Customer", "Order"}
+        assert len(ctx["relationships"]) == 1
+
+
 class TestValidateSwrlRule:
     def test_valid(self):
         assert (

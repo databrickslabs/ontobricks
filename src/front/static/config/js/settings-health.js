@@ -24,14 +24,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let healthLoaded = false;
 
-    // Lazy-load on first tab show so the eight backend probes do not run
-    // for every visitor of the Settings page.
-    const tabBtn = document.getElementById('tab-health');
-    if (tabBtn) {
-        tabBtn.addEventListener('shown.bs.tab', () => {
-            if (!healthLoaded) loadHealth();
-        });
-    }
+    // Lazy-load on first sidebar navigation so the eight backend probes do not
+    // run for every visitor of the Settings page.
+    document.addEventListener('sidebarSectionChanged', (e) => {
+        if (e.detail?.section === 'health' && !healthLoaded) loadHealth();
+    });
 
     const btnRefresh = document.getElementById('btnRefreshHealth');
     if (btnRefresh) {

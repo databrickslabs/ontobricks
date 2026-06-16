@@ -339,6 +339,29 @@ document.addEventListener('DOMContentLoaded', function () {
         return html;
     }
 
+    // --- Lifecycle status helpers ---
+
+    // Color map: DRAFT = amber/secondary, IN-REVIEW = blue/info,
+    // PUBLISHED = green/success (Bootstrap ``badge bg-*-subtle``).
+    const STATUS_BADGE = {
+        'DRAFT': { cls: 'bg-warning-subtle text-dark border-warning', icon: 'pencil', label: 'Draft' },
+        'IN-REVIEW': { cls: 'bg-info-subtle text-dark border-info', icon: 'eye', label: 'In Review' },
+        'PUBLISHED': { cls: 'bg-success-subtle text-dark border-success', icon: 'broadcast', label: 'Published' }
+    };
+
+    function statusBadge(status) {
+        const s = (status || 'DRAFT').toUpperCase();
+        const cfg = STATUS_BADGE[s] || STATUS_BADGE['DRAFT'];
+        return '<span class="badge ' + cfg.cls + ' border" style="font-size:.65rem;" ' +
+            'title="Lifecycle status: ' + escapeHtml(cfg.label) + '">' +
+            '<i class="bi bi-' + cfg.icon + ' me-1"></i>' + escapeHtml(cfg.label) + '</span>';
+    }
+
+    // Lifecycle/workflow actions are NOT surfaced here. The Browse view is
+    // read-only with respect to the review workflow: each version exposes a
+    // "Validate" button that loads the version (if needed) and jumps to the
+    // Domain → Validation workspace, the single place to drive the workflow.
+
     // --- Registry domain list ---
 
     async function loadRegistryDomains() {
@@ -392,7 +415,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const versions = d.versions || [];
                 const vCount = versions.length;
                 const hasVersions = vCount > 0;
-                const activeVer = versions.find(v => typeof v === 'object' && v.active);
+                const publishedVer = versions.find(
+                    v => typeof v === 'object' && (v.status || '').toUpperCase() === 'PUBLISHED'
+                );
                 const rowId = 'reg-versions-' + idx;
                 const isCurrent = currentFolder && d.name === currentFolder;
                 const nameLabel = escapeHtml(d.name) +
@@ -403,10 +428,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-btn" data-requires-app="admin" ' +
                           'data-domain="' + escapeHtml(d.name) + '" title="Delete domain and all versions">' +
                           '<i class="bi bi-trash"></i></button>';
-                const versionsBadge = activeVer
+                const versionsBadge = publishedVer
                     ? '<span class="badge bg-secondary">' + vCount + '</span> ' +
-                      '<span class="badge bg-success-subtle text-success border-success" style="font-size:0.65rem;" title="Active: v' + escapeHtml(activeVer.version) + '">' +
-                          '<i class="bi bi-broadcast"></i> v' + escapeHtml(activeVer.version) +
+                      '<span class="badge bg-success-subtle text-dark border-success" style="font-size:0.65rem;" title="Published: v' + escapeHtml(publishedVer.version) + '">' +
+                          '<i class="bi bi-broadcast"></i> v' + escapeHtml(publishedVer.version) +
                       '</span>'
                     : '<span class="badge bg-secondary">' + vCount + '</span>';
                 html += '<tr class="registry-domain-row" data-target="' + rowId + '" style="cursor:pointer;">' +
@@ -426,23 +451,20 @@ document.addEventListener('DOMContentLoaded', function () {
                         '<div class="registry-version-list">';
                     d.versions.forEach(v => {
                         const ver = typeof v === 'object' ? v.version : v;
-                        const isActive = typeof v === 'object' && v.active;
+                        const status = (typeof v === 'object' && v.status ? v.status : 'DRAFT').toUpperCase();
                         const lastUpdate = (typeof v === 'object' && v.last_update) ? v.last_update : '';
                         const lastBuild = (typeof v === 'object' && v.last_build) ? v.last_build : '';
                         const isLoaded = currentFolder === d.name && currentVersion === ver;
-                        const activeLabel = isActive
-                            ? '<span class="badge bg-success-subtle text-success border-success" style="font-size:.65rem;"><i class="bi bi-broadcast me-1"></i>Active</span>'
-                            : '';
+                        const statusLabel = statusBadge(status);
                         const loadedLabel = isLoaded
                             ? '<span class="badge bg-primary-subtle text-primary border" style="font-size:.65rem;"><i class="bi bi-check-circle me-1"></i>Loaded</span>'
                             : '';
                         const datesHtml = _formatVersionDates(lastUpdate, lastBuild);
-                        const activeBtn = isActive
-                            ? '<button type="button" class="btn btn-sm btn-success registry-active-version-btn" disabled title="This version is Active">' +
-                                  '<i class="bi bi-broadcast me-1"></i>Active</button>'
-                            : '<button type="button" class="btn btn-sm btn-outline-success registry-active-version-btn" ' +
-                                  'data-domain="' + escapeHtml(d.name) + '" data-version="' + escapeHtml(ver) + '" title="Set as Active version">' +
-                                  '<i class="bi bi-broadcast me-1"></i>Set Active</button>';
+                        const reviewBtn = '<button type="button" class="btn btn-sm btn-outline-info registry-review-btn" ' +
+                            'data-domain="' + escapeHtml(d.name) + '" data-version="' + escapeHtml(ver) + '" ' +
+                            'data-loaded="' + (isLoaded ? '1' : '') + '" ' +
+                            'title="Open this version in the Validation workspace to manage its review workflow">' +
+                            '<i class="bi bi-ui-checks me-1"></i>Validate</button>';
                         const loadBtn = isLoaded
                             ? ''
                             : '<button type="button" class="btn btn-sm btn-outline-primary registry-load-version-btn" ' +
@@ -456,10 +478,10 @@ document.addEventListener('DOMContentLoaded', function () {
                                   '<i class="bi bi-trash"></i></button>';
                         html += '<div class="registry-version-row d-flex align-items-center gap-2 px-4 py-2' + (isLoaded ? ' registry-version-loaded' : '') + '">' +
                             '<span class="badge ' + (isLoaded ? 'bg-primary' : 'bg-secondary') + ' registry-version-num">v' + escapeHtml(ver) + '</span>' +
-                            '<div class="d-flex align-items-center gap-2">' + activeLabel + loadedLabel + '</div>' +
+                            '<div class="d-flex align-items-center gap-2">' + statusLabel + loadedLabel + '</div>' +
                             datesHtml +
                             '<span class="flex-grow-1"></span>' +
-                            '<div class="d-flex align-items-center gap-1">' + activeBtn + loadBtn + deleteBtn + '</div>' +
+                            '<div class="d-flex align-items-center gap-1">' + reviewBtn + loadBtn + deleteBtn + '</div>' +
                         '</div>';
                     });
                     html += '</div></td></tr>';
@@ -505,10 +527,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             });
 
-            listDiv.querySelectorAll('.registry-active-version-btn:not([disabled])').forEach(btn => {
+            listDiv.querySelectorAll('.registry-review-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    setRegistryVersionActive(btn.dataset.domain, btn.dataset.version);
+                    openVersionInValidation(
+                        btn.dataset.domain, btn.dataset.version, btn.dataset.loaded === '1'
+                    );
                 });
             });
 
@@ -604,35 +628,41 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function setRegistryVersionActive(domainName, version) {
+    // Jump to the Domain → Validation workspace for a registry version,
+    // loading it from Unity Catalog first when it is not already current.
+    async function openVersionInValidation(domainName, version, alreadyLoaded) {
+        if (alreadyLoaded) {
+            window.location.href = '/domain/?section=review';
+            return;
+        }
         const confirmed = await showConfirmDialog({
-            title: 'Set Active Version',
-            message: 'Set <strong>v' + escapeHtml(version) + '</strong> of <strong>' + escapeHtml(domainName) + '</strong> as the Active version? Any previously active version will be deactivated.',
-            confirmText: 'Set Active',
-            confirmClass: 'btn-success',
-            icon: 'broadcast'
+            title: 'Open in Validation',
+            message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' +
+                escapeHtml(version) + '</strong> and open its Validation workspace? ' +
+                'Any unsaved changes to the current domain will be lost.',
+            confirmText: 'Open',
+            confirmClass: 'btn-info',
+            icon: 'ui-checks'
         });
         if (!confirmed) return;
 
         try {
-            const resp = await fetch(
-                '/settings/registry/domains/' + encodeURIComponent(domainName) + '/versions/' + encodeURIComponent(version) + '/active',
-                {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled: true })
-                }
-            );
+            showNotification('Opening ' + domainName + ' v' + version + '…', 'info', 5000);
+            const resp = await fetch('/domain/load-from-uc', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain: domainName, version: version })
+            });
             const data = await resp.json();
-            if (data.success) {
-                showNotification('v' + version + ' is now Active for ' + domainName, 'success');
-                loadRegistryDomains();
+            if (resp.ok && data.success) {
+                if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
+                window.location.href = '/domain/?section=review';
             } else {
-                showNotification('Error: ' + (data.message || 'Failed to set active'), 'error');
+                showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
             }
         } catch (e) {
-            showNotification('Error: ' + e.message, 'error');
+            showNotification('Error loading domain: ' + e.message, 'error');
         }
     }
 

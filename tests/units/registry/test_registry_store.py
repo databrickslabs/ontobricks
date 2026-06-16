@@ -51,6 +51,8 @@ class _InMemoryStore(RegistryStore):
         self._perms: Dict[str, Dict[str, Any]] = {}
         self._schedules: Dict[str, Dict[str, Any]] = {}
         self._history: Dict[str, List[ScheduleHistoryEntry]] = {}
+        self._build_runs: Dict[str, List[Dict[str, Any]]] = {}
+        self._review_events: List[Dict[str, Any]] = []
         self._global: Dict[str, Any] = {}
         self._initialized = False
 
@@ -79,6 +81,13 @@ class _InMemoryStore(RegistryStore):
 
     def domain_exists(self, folder: str) -> bool:
         return any(f == folder for (f, _) in self._versions.keys())
+
+    def get_domain_quorum(self, folder: str) -> int:
+        for (f, v), data in self._versions.items():
+            if f == folder:
+                info = data.get("info", {}) or {}
+                return max(1, int(info.get("review_quorum") or 1))
+        return 1
 
     def delete_domain(self, folder: str) -> List[str]:
         for key in [k for k in self._versions if k[0] == folder]:
@@ -109,6 +118,15 @@ class _InMemoryStore(RegistryStore):
         self._versions.pop((folder, version), None)
         return True, "ok"
 
+    def update_version_status(
+        self, folder: str, version: str, status: str
+    ) -> Tuple[bool, str]:
+        data = self._versions.get((folder, version))
+        if data is None:
+            return False, f"missing {folder}/{version}"
+        data.setdefault("info", {})["status"] = status
+        return True, "ok"
+
     def load_domain_permissions(self, folder: str) -> Dict[str, Any]:
         return dict(self._perms.get(folder, {"version": 1, "permissions": []}))
 
@@ -137,6 +155,87 @@ class _InMemoryStore(RegistryStore):
         bucket.append(dict(entry))
         if len(bucket) > max_entries:
             del bucket[: len(bucket) - max_entries]
+
+    def record_build_run(self, folder: str, entry: Dict[str, Any]) -> None:
+        runs = self._build_runs.setdefault(folder, [])
+        row = dict(entry)
+        row.setdefault("id", len(runs) + 1)
+        runs.append(row)
+
+    def load_build_runs(
+        self, folder: str, *, version=None, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        runs = [
+            dict(r)
+            for r in self._build_runs.get(folder, [])
+            if version is None or r.get("version") == version
+        ]
+        runs.reverse()  # newest-first
+        return runs[:limit]
+
+    def build_analytics(self, folder: str, *, version=None) -> Dict[str, Any]:
+        runs = [
+            r
+            for r in self._build_runs.get(folder, [])
+            if version is None or r.get("version") == version
+        ]
+        total = len(runs)
+        successes = [r for r in runs if r.get("status") == "success"]
+        durations = [float(r.get("duration_s", 0) or 0) for r in successes]
+        active = successes[-1] if successes else None
+        return {
+            "total_runs": total,
+            "success_runs": len(successes),
+            "failed_runs": total - len(successes),
+            "success_rate": (len(successes) / total) if total else 0.0,
+            "avg_duration_s": (sum(durations) / len(durations)) if durations else 0.0,
+            "min_duration_s": min(durations) if durations else 0.0,
+            "max_duration_s": max(durations) if durations else 0.0,
+            "last_triple_count": int(active.get("triple_count", 0)) if active else 0,
+            "active_build": dict(active) if active else None,
+            "per_version": [],
+        }
+
+    def record_review_event(
+        self,
+        folder: str,
+        version: str,
+        actor: str,
+        action: str,
+        *,
+        from_status: str = "",
+        to_status: str = "",
+        comment: str = "",
+        meta=None,
+    ) -> Tuple[bool, str]:
+        self._review_events.append(
+            {
+                "id": str(len(self._review_events) + 1),
+                "folder": folder,
+                "version": version,
+                "actor": actor,
+                "action": action,
+                "from_status": from_status,
+                "to_status": to_status,
+                "comment": comment,
+                "meta": dict(meta or {}),
+                "created_at": f"2026-01-01T00:00:{len(self._review_events):02d}",
+            }
+        )
+        return True, "ok"
+
+    def list_review_events(
+        self, folder: str, version=None
+    ) -> List[Dict[str, Any]]:
+        return [
+            dict(e)
+            for e in self._review_events
+            if e["folder"] == folder
+            and (version is None or e["version"] == version)
+        ]
+
+    def list_all_review_events(self) -> List[Dict[str, Any]]:
+        return [dict(e) for e in self._review_events]
 
     def load_global_config(self) -> Dict[str, Any]:
         return dict(self._global)
@@ -269,6 +368,19 @@ class TestStoreContract:
         ok, versions, _ = store.list_versions("a")
         assert ok and versions == ["2"]
 
+    def test_update_version_status_round_trip(self, store):
+        store.write_version("demo", "1", {"info": {"name": "demo"}})
+        ok, msg = store.update_version_status("demo", "1", "IN-REVIEW")
+        assert ok, msg
+        ok, got, _ = store.read_version("demo", "1")
+        assert ok
+        assert got["info"]["status"] == "IN-REVIEW"
+
+    def test_update_version_status_unknown_version(self, store):
+        ok, msg = store.update_version_status("ghost", "9", "PUBLISHED")
+        assert ok is False
+        assert msg
+
     def test_permissions_default_shape(self, store):
         out = store.load_domain_permissions("nobody")
         assert out == {"version": 1, "permissions": []}
@@ -288,6 +400,91 @@ class TestStoreContract:
         history = store.load_schedule_history("a")
         assert len(history) == 3
         assert [h["timestamp"] for h in history] == ["2", "3", "4"]
+
+    def test_build_runs_round_trip_newest_first(self, store):
+        for i in range(3):
+            store.record_build_run(
+                "demo",
+                {
+                    "version": "1",
+                    "build_kind": "session",
+                    "status": "success",
+                    "started_at": str(i),
+                    "duration_s": float(i),
+                    "triple_count": i * 10,
+                },
+            )
+        runs = store.load_build_runs("demo")
+        assert len(runs) == 3
+        # Newest-first (last recorded comes back first).
+        assert [r["started_at"] for r in runs] == ["2", "1", "0"]
+
+    def test_build_runs_filter_by_version(self, store):
+        store.record_build_run("demo", {"version": "1", "status": "success"})
+        store.record_build_run("demo", {"version": "2", "status": "success"})
+        store.record_build_run("demo", {"version": "2", "status": "error"})
+        v2 = store.load_build_runs("demo", version="2")
+        assert len(v2) == 2
+        assert all(r["version"] == "2" for r in v2)
+
+    def test_build_analytics_aggregates_and_active(self, store):
+        store.record_build_run(
+            "demo",
+            {"version": "1", "status": "success", "duration_s": 2.0,
+             "triple_count": 100, "started_at": "1"},
+        )
+        store.record_build_run(
+            "demo",
+            {"version": "1", "status": "error", "duration_s": 0.0,
+             "started_at": "2"},
+        )
+        store.record_build_run(
+            "demo",
+            {"version": "1", "status": "success", "duration_s": 4.0,
+             "triple_count": 200, "started_at": "3"},
+        )
+        a = store.build_analytics("demo")
+        assert a["total_runs"] == 3
+        assert a["success_runs"] == 2
+        assert a["failed_runs"] == 1
+        assert abs(a["success_rate"] - (2 / 3)) < 1e-9
+        assert abs(a["avg_duration_s"] - 3.0) < 1e-9
+        # Active build = latest successful run (triple_count=200).
+        assert a["active_build"] is not None
+        assert a["last_triple_count"] == 200
+
+    def test_build_analytics_empty_domain(self, store):
+        a = store.build_analytics("ghost")
+        assert a["total_runs"] == 0
+        assert a["active_build"] is None
+        assert a["success_rate"] == 0.0
+
+    def test_review_events_round_trip_oldest_first(self, store):
+        store.record_review_event(
+            "demo", "1", "alice@a.com", "submitted",
+            from_status="DRAFT", to_status="IN-REVIEW", comment="go",
+        )
+        store.record_review_event(
+            "demo", "1", "bob@a.com", "approved", comment="lgtm",
+        )
+        events = store.list_review_events("demo", "1")
+        assert [e["action"] for e in events] == ["submitted", "approved"]
+        assert events[0]["from_status"] == "DRAFT"
+        assert events[0]["to_status"] == "IN-REVIEW"
+        assert events[1]["actor"] == "bob@a.com"
+
+    def test_review_events_filter_by_version(self, store):
+        store.record_review_event("demo", "1", "a@a.com", "submitted")
+        store.record_review_event("demo", "2", "a@a.com", "submitted")
+        assert len(store.list_review_events("demo", "1")) == 1
+        assert len(store.list_review_events("demo")) == 2
+
+    def test_list_all_review_events_spans_domains(self, store):
+        store.record_review_event("demo", "1", "a@a.com", "submitted")
+        store.record_review_event("other", "1", "a@a.com", "submitted")
+        allev = store.list_all_review_events()
+        folders = {e["folder"] for e in allev}
+        assert folders == {"demo", "other"}
 
     def test_table_row_counts_defaults_to_zero(self, store):
         # The base class returns zero for every requested table — only
