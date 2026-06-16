@@ -1,0 +1,73 @@
+# v0.5.0 — 2026-06-16 (FiifiB)
+
+## PGE intrinsic-evaluation toolkit + ontology-gen Evaluator stage + in-app scorecard
+
+### Context
+The PGE pipeline (ontology + mapping generation) had no measurable, gold-free
+stopping condition. This adds a **usecase-agnostic intrinsic scorecard**
+(`src/agents/pge_eval/`), wires it to run **in-app** after generation/mapping,
+turns `agent_owl_generator` into a real PGE loop via a new Evaluator stage, and
+ships a CLI. No golden/reference labels are encoded (correctness is measured by
+internal consistency against the actual runtime inputs), so it works for any
+domain — not just the NHS CDM/maternity demo it was developed against.
+
+### Changes
+1. `src/agents/pge_eval/` (new package) — the scorer:
+   - `scorecard.py` — `score_artifact`, the single offline-testable scoring
+     core; emits the scorecard JSON + GREEN/RED verdict + exit code.
+   - `ontology_metrics.py` / `mapping_metrics.py` / `pipeline_metrics.py` —
+     Stage-1 (footprint coverage, orphan/dangling/naming/duplicate), Stage-2
+     (entity/rel/attribute completeness, dangling-FK max, id-integrity, sql-exec
+     failures, conditional cross-source band), and pipeline (coverage_loss +
+     convergence, advisory/tracked only).
+   - `gates.py` — three tiers: absolute / ratio (`--gate-ratios`) / direction-
+     aware self-baseline regression.
+   - `baseline.py` — Tier-3 self-baseline store in `logs/goals/` (baseline = most
+     recent GREEN; RED runs never baseline).
+   - `judge.py` — advisory LLM-judge; the only network path; never gates; skipped
+     under `--no-judge` (zero network).
+   - `normalize.py` / `loaders.py` — shape-agnostic ontology/metadata
+     normalisation + domain-agnostic live-run input loaders.
+   - `inapp.py` — fail-safe in-app hooks (deterministic, never raise).
+2. `scripts/goals_eval.py` (new) — CLI with `score` / `run` subcommands and
+   `--no-judge` / `--gate-ratios`; `run` is domain-agnostic
+   (`--registry-json`/`--version` or `--ontology`/`--metadata`). Exit code =
+   verdict.
+3. `src/agents/agent_owl_generator/engine.py` — new **Evaluator stage**: after
+   the (upstream) pitfall-tool loop settles, run the Stage-1 deterministic checks
+   and feed retry-hints back into generation, bounded by `MAX_OWL_EVAL_ROUNDS`;
+   cleans prose/markdown preambles before parsing; de-maternified the ATTRIBUTE
+   COVERAGE prompt (domain-neutral examples).
+4. In-app scorecard hooks — `src/api/routers/internal/ontology.py` and
+   `src/back/objects/mapping/Mapping.py`: after generation/mapping, attach
+   `pge_scorecard` to the task result and append the verdict to the completion
+   message (kept alongside upstream's per-iteration generation score).
+5. Generality hardening — de-maternified the mapping VALUE HARMONIZATION
+   (`generators/entity.py`) and planner CANONICAL-KEY NORMALIZATION
+   (`planner.py`) prompts; broadened `test_no_domain_hardcoding` to also scan the
+   generator prompt files.
+6. `scripts/smoke_pge.py` — artifact dump embeds `ontology`/`metadata`/
+   `elapsed_s` so score-only is self-contained.
+7. Docs — Sphinx `docs/sphinx/api/agents.rst` "PGE Intrinsic Evaluation" section
+   (all 11 modules) + README "PGE Intrinsic Evaluation (quality scorecard)"
+   section.
+8. Integrated 65 upstream `master` commits (mid-0.5.0) via merge `198f38e`;
+   re-landed the Evaluator stage onto upstream's new tool-driven pitfall loop.
+
+### Modified / added files
+- src/agents/pge_eval/*.py (new: __init__, scorecard, normalize, ontology_metrics,
+  mapping_metrics, pipeline_metrics, gates, baseline, judge, inapp, loaders)
+- scripts/goals_eval.py (new), scripts/smoke_pge.py
+- src/agents/agent_owl_generator/engine.py
+- src/agents/agent_mapping_pge/generators/entity.py, src/agents/agent_mapping_pge/planner.py
+- src/api/routers/internal/ontology.py, src/back/objects/mapping/Mapping.py
+- docs/sphinx/api/agents.rst, README.md
+- tests/units/pge_eval/* (new), tests/agents/agent_mapping_pge/{test_entity_generator,test_planner}.py
+
+### Test result
+- `pytest tests/units tests/agents` → **2528 passed, 11 skipped, 0 failed**
+  (post-merge with origin/master).
+- Evidence captured during development: clean artifact → GREEN/exit 0; seeded
+  dangling-FK → RED/exit 1; Tier-3 regression → RED; `--no-judge` zero-network
+  verified; grep clean for trust_a/b/c, preg, maternity, NHS, spr in scorer +
+  generator prompts.

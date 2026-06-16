@@ -1,0 +1,108 @@
+# v0.5.0 — 2026-06-02
+
+## PGE generation quality: exhaustive attributes + value harmonization
+
+### Context
+`newdomain` (ontobricks_pge_registry) was attribute-sparse: the OWL generator
+emitted a curated ~28-property ontology subset (vs V1.1's ~53), so most classes
+had empty `dataProperties` and the EntityGenerator produced ID+Label-only
+entities — unfit as the KPI/analytical source of truth. Root cause is generation
+QUALITY in two LLM-driven agents, not plumbing (the sync/finalize infra in
+`Ontology.finalize_class_attributes` already works and runs at session load).
+This change strengthens both generators so the PGE pipeline reproduces V1.1-level
+coverage from source introspection.
+
+### Changes
+1. `src/agents/agent_owl_generator/engine.py` — Part 1: exhaustive datatype-property
+   coverage.
+   - Added a `# ATTRIBUTE COVERAGE (CRITICAL — exhaustive, NOT curated)` section
+     to the system prompt: emit a DatatypeProperty for EVERY meaningful source
+     column per class across ALL covering trust tables; exclude only surrogate
+     keys / audit columns / FK columns; collapse cross-trust synonyms to one
+     property; lowerCamelCase `[a-z][A-Za-z0-9]*` names; rich clinical entities
+     warrant 6–11 properties; "2 props" is a floor not a target.
+   - Workflow now instructs `get_table_detail` on every covering table (so the
+     LLM sees the full column list past the 80-column get_metadata truncation).
+   - Softened the conflicting `GENERIC_GUIDELINES §2.1` minimalism line to defer
+     to the new coverage rule.
+2. `src/agents/agent_mapping_pge/generators/entity.py` — Part 2: value harmonization
+   + regex safety.
+   - Added a `VALUE HARMONIZATION` section: for coded attributes (method/status/
+     type/mode/outcome), discover raw distinct values (`SELECT DISTINCT`) then map
+     to ONE canonical lowercase token set with a CASE expression aliased to the
+     clean attribute name, using the SAME tokens across all UNION branches
+     (delivery method → caesarean/instrumental/vaginal worked example).
+   - Added a `REGEX SAFETY` section: always `[0-9]`/`[a-z]`, NEVER `\d`/`\w`/`\s`
+     (the build strips a lone backslash → `\d` degrades to literal `d`).
+   - Workflow step 3 now references harmonization.
+3. `src/agents/agent_mapping_pge/planner.py` — Part 2: multi-trust completeness.
+   - Added a COMPLETENESS rule to CANONICAL-KEY NORMALIZATION: include EVERY
+     covering trust table in `canonical_column_per_table`, not just the two
+     checked for overlap (omitting one drops 30–60% of instances and dangles
+     relationships). Planner already emits `[0-9]`-safe regex and mandates
+     multi-trust UNION — this reinforces full coverage during candidate discovery.
+4. `tests/agents/agent_mapping_pge/test_entity_generator.py` — added
+   `test_system_prompt_mandates_value_harmonization` (canonical token set,
+   discover-before-harmonize, `[0-9]`-not-`\d` regex safety).
+
+### Modified files
+- src/agents/agent_owl_generator/engine.py
+- src/agents/agent_mapping_pge/generators/entity.py
+- src/agents/agent_mapping_pge/planner.py
+- tests/agents/agent_mapping_pge/test_entity_generator.py
+
+### Test result
+`uv run --offline pytest tests/agents/agent_mapping_pge/ tests/units/ontology/test_owl_generator.py`
+— 101 passed → 102 passed with the new harmonization test. No regressions.
+
+---
+
+# v0.5.0 — 2026-06-03
+
+## OWL generator output ceiling + live newdomain regeneration
+
+### Context
+Exercising the v0.5.0 generation-quality changes end-to-end against the live
+`ontobricks-pge` registry surfaced one defect and confirmed the rest.
+
+### Changes
+1. `src/agents/agent_owl_generator/engine.py` — raised the LLM completion ceiling
+   from a hardcoded `max_tokens=4096` to a named `MAX_OUTPUT_TOKENS = 16000`
+   (both the main-loop and tools-unsupported fallback call sites). The exhaustive
+   `# ATTRIBUTE COVERAGE` prompt makes the Turtle output larger; at 4096 the final
+   statement was silently truncated (`finish_reason=length`) and OWL parsing failed.
+   Claude Opus supports large completions; 16k fits a full maternity ontology.
+
+### Live regeneration result (newdomain, ontobricks-pge / ontobricks_pge_registry)
+Ran the real PGE pipeline against the live workspace (endpoint
+`databricks-claude-opus-4-7`, warehouse `e6b70b0c07bbaa10`,
+`fiifi_cdm_demo_catalog`):
+- OWL generator → 17 classes, **60 datatype properties** (was 22), all KPI props.
+- Mapping-PGE → 15 entities + 12 relationships, every item PASS the deterministic
+  evaluator, **72 attribute mappings**, multi-trust UNIONs + value harmonization,
+  `[0-9]`-safe canonical key, GROUP BY dedup. (ClinicalFinding / ClinicalProvider
+  honestly skipped — no source rows; they were ID+Label stubs in V1.1.)
+- One targeted re-run of Pregnancy via a retry-hint to DERIVE `bookingGestationWeeks`
+  (= `DATEDIFF(lmp_date, booking_date)/7`, a computed feature with no source column).
+- Overwrote `newdomain` v1 in Lakebase (rollback backup
+  `/tmp/newdomain_live_backup_2026-06-02.json`).
+
+### Independent verification (warehouse audit, round-tripped from Lakebase)
+- Entity-join dangling: **0.00% across all 12 relationships** (worst case 0.00%).
+- Delivery method mix vaginal 1227 / caesarean 849 / instrumental 297 (matches V1.1).
+- Pregnancy outcome delivered 1658 / transferred 715 / ongoing 74; feeding_status
+  mixed 549 / formula 543 / breast 542; booking gestation avg 10.5 wks; Pregnancy
+  hub 2463 rows = 2463 distinct IDs.
+- All 5 KPI columns present: deliveryMethod, outcomeStatus, bookingGestationWeeks,
+  contactType (=contact_type), feedingStatus (=feeding_status).
+
+NOTE (next phase, out of scope here): the downstream `canonical.*` UC views +
+metric views were built from the prior hand-copy's entity SQLs and must be
+republished from the regenerated newdomain SQLs.
+
+### Modified files
+- src/agents/agent_owl_generator/engine.py
+
+### Test result
+`uv run --offline pytest tests/agents/agent_mapping_pge/ tests/units/ontology/test_owl_generator.py`
+— 102 passed. No regressions.
