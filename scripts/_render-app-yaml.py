@@ -33,8 +33,11 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE_PATH = REPO_ROOT / "app.yaml.template"
-OUTPUT_PATH = REPO_ROOT / "app.yaml"
+
+_RENDERS: list[tuple[Path, Path]] = [
+    (REPO_ROOT / "app.yaml.template",                     REPO_ROOT / "app.yaml"),
+    (REPO_ROOT / "src/mcp-server/app.yaml.template",      REPO_ROOT / "src/mcp-server/app.yaml"),
+]
 
 # Matches a 2-line optional env-var block:
 #   - name: FOO  # optional
@@ -64,34 +67,41 @@ def _strip_empty_optional(text: str) -> tuple[str, list[str]]:
     return cleaned, removed
 
 
-def main() -> int:
-    if not TEMPLATE_PATH.exists():
-        print(f"ERROR: missing {TEMPLATE_PATH}", file=sys.stderr)
+def _render_one(template_path: Path, output_path: Path) -> int:
+    if not template_path.exists():
+        print(f"ERROR: missing {template_path}", file=sys.stderr)
         return 1
 
-    template = string.Template(TEMPLATE_PATH.read_text())
+    template = string.Template(template_path.read_text())
     try:
         rendered = template.substitute(os.environ)
     except KeyError as exc:
         print(
-            f"ERROR: app.yaml.template references ${{{exc.args[0]}}} but the "
+            f"ERROR: {template_path.name} references ${{{exc.args[0]}}} but the "
             "variable is not set. Add it to scripts/deploy.config.sh or "
-            f"export it before running deploy.",
+            "export it before running deploy.",
             file=sys.stderr,
         )
         return 2
     except ValueError as exc:
-        print(f"ERROR: malformed placeholder in template: {exc}", file=sys.stderr)
+        print(f"ERROR: malformed placeholder in {template_path.name}: {exc}", file=sys.stderr)
         return 3
 
     rendered, omitted = _strip_empty_optional(rendered)
     for name in omitted:
         print(f"  omitted empty optional env var: {name}")
 
-    OUTPUT_PATH.write_text(rendered)
-    print(f"  rendered {OUTPUT_PATH.relative_to(REPO_ROOT)} from "
-          f"{TEMPLATE_PATH.relative_to(REPO_ROOT)}")
+    output_path.write_text(rendered)
+    print(f"  rendered {output_path.relative_to(REPO_ROOT)} from "
+          f"{template_path.relative_to(REPO_ROOT)}")
     return 0
+
+
+def main() -> int:
+    rc = 0
+    for tpl, out in _RENDERS:
+        rc = rc or _render_one(tpl, out)
+    return rc
 
 
 if __name__ == "__main__":

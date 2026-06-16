@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry-teams.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry-my-tasks.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
 {% endblock %}
 
@@ -20,6 +21,11 @@
 
         <!-- Right Content Area -->
         <div class="sidebar-content">
+            <!-- My Tasks section (review worklist) -->
+            <div id="my-tasks-section" class="sidebar-section">
+                {% include "partials/registry/_registry_my_tasks.html" %}
+            </div>
+
             <!-- Domains section (default) -->
             <div id="domains-section" class="sidebar-section active">
                 {% include "partials/registry/_registry_domains.html" %}
@@ -40,6 +46,11 @@
                 {% include "partials/registry/_registry_schedule.html" %}
             </div>
 
+            <!-- Build Analytics Section (build-run trace) -->
+            <div id="build-analytics-section" class="sidebar-section">
+                {% include "partials/registry/_registry_build_analytics.html" %}
+            </div>
+
             <!-- API Section -->
             <div id="api-section" class="sidebar-section">
                 {% include "partials/registry/_registry_api.html" %}
@@ -52,6 +63,8 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='registry/js/registry-teams.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='registry/js/registry-my-tasks.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/schedule.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/build-analytics.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 {% endblock %}

@@ -23,6 +23,7 @@ from agents.agent_owl_generator.tools import (
     TOOL_DEFINITIONS,
     TOOL_HANDLERS,
 )
+from agents.tools.pitfalls import tool_check_owl_pitfalls
 from agents.engine_base import (
     AgentStep,
     call_serving_endpoint,
@@ -38,6 +39,10 @@ MAX_ITERATIONS = 10
 LLM_TIMEOUT = 180
 
 _TRACE_NAME = "owl_generator"
+
+# Max pitfall-fix rounds the agent may consume (overridable via options dict).
+# The agent drives the quality loop itself via check_owl_pitfalls tool calls.
+_DEFAULT_MAX_FIX_ROUNDS = 5
 
 
 # =====================================================
@@ -55,6 +60,7 @@ class AgentResult:
     iterations: int = 0
     error: str = ""
     usage: Dict[str, int] = field(default_factory=dict)
+    iteration_summary: List[Dict] = field(default_factory=list)
 
 
 # =====================================================
@@ -82,16 +88,16 @@ Your goal is to generate a concise, logically consistent OWL ontology (**Turtle*
 
 # TOOLS
 You have four tools:
-  • list_documents  – discover documents in the domain volume
-  • read_document   – read a document's text content
-  • get_metadata    – get all table schemas (names, columns, types)
+  • list_documents   – discover documents in the domain volume
+  • read_document    – read a document's text content
+  • get_metadata     – get all table schemas (names, columns, types)
   • get_table_detail – get detailed info for one table
 
 # WORKFLOW
 1. Call get_metadata to understand the database schema.
 2. Call list_documents to discover available documents.
 3. Read relevant documents with read_document.
-4. Generate the Turtle ontology from all gathered information.
+4. Output ONLY the final Turtle ontology as plain text (starting with @prefix).
 
 # NAMING RULES (CRITICAL – NO EXCEPTIONS)
 • Classes: PascalCase (Customer, SalesOrder)
@@ -99,9 +105,27 @@ You have four tools:
 • NO spaces, underscores or hyphens in local names.
 • Convert: street_address → streetAddress, Sales Order → SalesOrder
 
+# PROPERTY NAMING — CRITICAL – NO EXCEPTIONS (violations = P3.2 / P3.3 pitfalls)
+• NEVER embed the range class name inside a property name.
+  ❌ WRONG: hasPersonName, containsEvent, hasOrderDate, includesProduct
+  ✅ RIGHT:  hasName, contains, hasDate, includes
+• NEVER embed the domain class name inside a property name.
+  ❌ WRONG: personHasName, orderContainsItem, customerHasAddress
+  ✅ RIGHT:  hasName, containsItem, hasAddress
+• The domain/range are declared separately; the name must express only the relationship verb.
+
+# PROPERTY HIERARCHY RULES (violations = P2.6 pitfall)
+• If you create two properties where one is a specialisation of the other
+  (e.g., hasAddress + hasBillingAddress), you MUST either:
+  (a) Declare rdfs:subPropertyOf (hasBillingAddress rdfs:subPropertyOf hasAddress), OR
+  (b) Merge them into one general property and use a class/type to distinguish instances.
+• Never leave pairs of suspiciously similar property names without an explicit hierarchy link.
+
 # PROPERTY TYPES
 • owl:DatatypeProperty + xsd:type for attributes (string, integer, date …)
 • owl:ObjectProperty for relationships between classes only
+• For EVERY DatatypeProperty you MUST declare rdfs:domain on the property itself
+  (do not rely on owl:Restriction alone — the platform reads attributes from rdfs:domain)
 
 # RELATIONSHIP RULES
 • NEVER create bidirectional relationships.
@@ -209,68 +233,11 @@ If you detect a likely inconsistency or anti-pattern, correct it before output a
 # Internal helpers
 # =====================================================
 
-# Pitfall IDs that do not require ML deps — safe to run inside the agent loop.
-_NON_ML_PATTERNS = [
-    "P1.1", "P1.2", "P1.3",
-    "P2.1", "P2.2", "P2.3", "P2.4", "P2.5", "P2.6",
-    "P3.1", "P3.2", "P3.3",
-    "P4.1",
-]
-
-
-def _check_owl_pitfalls(turtle_text: str, iteration: int) -> Optional[str]:
-    """Parse *turtle_text* as an rdflib Graph, run non-ML pitfall checks, and
-    return a feedback prompt string if any issues are found, or ``None`` if clean.
-
-    Gracefully returns ``None`` on parse errors or missing optional deps so that
-    a pitfall-check failure never blocks OWL delivery.
-    """
+def _parse_pitfall_tool_result(tool_result_json: str) -> Optional[Dict]:
+    """Parse the JSON returned by the check_owl_pitfalls tool.  Returns None on error."""
     try:
-        from rdflib import Graph
-        from back.core.external.pitfalls import PitfallsService
-        import tempfile, os
-
-        graph = Graph()
-        graph.parse(data=turtle_text, format="turtle")
-
-        svc = PitfallsService()
-        result = svc.run_analysis(graph, patterns=_NON_ML_PATTERNS)
-
-        issues = {
-            pid: r
-            for pid, r in result["results"].items()
-            if isinstance(r.get("count"), int) and r["count"] > 0
-        }
-        if not issues:
-            logger.info("Iteration %d: pitfall check — ontology is CLEAN", iteration)
-            return None
-
-        total = sum(r["count"] for r in issues.values())
-        logger.info(
-            "Iteration %d: pitfall check — %d issue(s) in %d pattern(s): %s",
-            iteration,
-            total,
-            len(issues),
-            list(issues.keys()),
-        )
-
-        lines = [
-            "The Turtle ontology you just produced has the following pitfall issues. "
-            "Please fix ALL of them and output the corrected Turtle (no markdown, no comments, "
-            "starting with @prefix declarations):\n"
-        ]
-        for pid, r in issues.items():
-            lines.append(f"**{pid}** — {r.get('title', pid)} ({r['count']} occurrence(s))")
-            for item in (r.get("items") or [])[:5]:
-                lines.append(f"  • {item}")
-        return "\n".join(lines)
-
-    except Exception as exc:
-        logger.warning(
-            "Iteration %d: pitfall check skipped due to error: %s",
-            iteration,
-            exc,
-        )
+        return json.loads(tool_result_json)
+    except Exception:
         return None
 
 
@@ -341,6 +308,7 @@ def run_agent(
     domain_version: Optional[str] = None,
     selected_tables: Optional[List[str]] = None,
     selected_docs: Optional[List[str]] = None,
+    warehouse_id: Optional[str] = None,
     on_step: Optional[Callable[[str], None]] = None,
 ) -> AgentResult:
     """Run the ontology-generation agent.
@@ -371,6 +339,7 @@ def run_agent(
         domain_name=domain_name or "",
         domain_folder=domain_folder or "",
         domain_version=domain_version or "1",
+        warehouse_id=warehouse_id or "",
         metadata=metadata or {},
     )
     logger.info("Agent context created — host=%s, registry=%s", ctx.host, ctx.registry)
@@ -381,6 +350,15 @@ def run_agent(
     )
 
     result = AgentResult(success=False)
+
+    # Generation-quality loop configuration (from options with defaults).
+    # The agent drives its own check_owl_pitfalls → fix loop; max_fix_rounds
+    # is the Python-side budget cap after which we force a final text output.
+    max_fix_rounds = int(options.get("generation_max_iterations", _DEFAULT_MAX_FIX_ROUNDS))
+    logger.info(
+        "run_agent: quality loop config — max_fix_rounds=%d",
+        max_fix_rounds,
+    )
 
     # Narrow metadata to selected tables when a subset was chosen
     if selected_tables and metadata.get("tables"):
@@ -464,8 +442,7 @@ def run_agent(
     # Agent loop
     # ------------------------------------------------------------------
     tools_supported = True
-    _owl_fix_rounds = 0          # number of pitfall-fix rounds already done
-    _MAX_OWL_FIX_ROUNDS = 2      # cap to avoid runaway retries
+    _owl_fix_rounds = 0   # pitfall-fix rounds consumed so far
 
     for iteration in range(MAX_ITERATIONS):
         logger.info(
@@ -685,11 +662,11 @@ def run_agent(
                 len(messages),
             )
         else:
-            # ---- Agent produced a text response (should be OWL) ----
+            # ---- Agent produced a text response ----
             content = extract_message_content(llm_response)
             starts_with_prefix = content.strip().startswith("@prefix")
             logger.info(
-                "Iteration %d: agent produced final text output — %d chars, starts_with_@prefix=%s",
+                "Iteration %d: agent produced text output — %d chars, starts_with_@prefix=%s",
                 iteration + 1,
                 len(content),
                 starts_with_prefix,
@@ -700,12 +677,6 @@ def run_agent(
                     iteration + 1,
                     content.strip(),
                 )
-            logger.debug(
-                "Iteration %d: full OWL output (%d chars):\n%s",
-                iteration + 1,
-                len(content),
-                content[:2000],
-            )
 
             result.steps.append(
                 AgentStep(
@@ -715,33 +686,85 @@ def run_agent(
                 )
             )
 
-            # ----------------------------------------------------------
-            # Pitfall verification — parse OWL and run structural checks.
-            # If issues are found and we still have fix rounds remaining,
-            # feed the issues back to the LLM and continue the loop.
-            # ----------------------------------------------------------
-            pitfall_feedback = _check_owl_pitfalls(content, iteration + 1)
-            if pitfall_feedback and _owl_fix_rounds < _MAX_OWL_FIX_ROUNDS:
-                _owl_fix_rounds += 1
-                notify(f"Pitfall issues found — fix round {_owl_fix_rounds}/{_MAX_OWL_FIX_ROUNDS}…")
-                messages.append({"role": "assistant", "content": content})
-                messages.append({"role": "user", "content": pitfall_feedback})
-                logger.info(
-                    "Iteration %d: %d pitfall issue(s) detected — starting fix round %d",
-                    iteration + 1,
-                    pitfall_feedback.count("**"),
-                    _owl_fix_rounds,
-                )
-                continue   # next iteration will produce fixed OWL
+            # ── External pitfall check (fast, no extra LLM call) ─────────────
+            if starts_with_prefix and _owl_fix_rounds < max_fix_rounds:
+                notify("Checking ontology quality…")
+                pf_result_json = tool_check_owl_pitfalls(ctx, turtle_text=content)
+                pf_data = _parse_pitfall_tool_result(pf_result_json)
 
+                if pf_data and "error" not in pf_data:
+                    _owl_fix_rounds += 1
+                    score = pf_data.get("score", 0)
+                    warnings = pf_data.get("warnings", [])
+                    pitfall_ids = [w["id"] for w in warnings]
+                    critical_count = sum(
+                        w["count"] for w in warnings if w["id"].startswith("P1.")
+                    )
+                    is_clean = pf_data.get("is_clean", False)
+                    round_status = "passed" if is_clean else (
+                        "challenged" if _owl_fix_rounds < max_fix_rounds
+                        else "max_rounds_reached"
+                    )
+
+                    result.iteration_summary.append({
+                        "round": _owl_fix_rounds,
+                        "score": score,
+                        "critical_count": critical_count,
+                        "pitfalls": pitfall_ids,
+                        "status": round_status,
+                    })
+                    notify(f"__iter__:{json.dumps({'round': _owl_fix_rounds, 'score': score, 'critical': critical_count, 'pitfalls': pitfall_ids, 'status': round_status, 'warnings': warnings})}")
+
+                    if not is_clean and round_status == "challenged":
+                        fix_instruction = pf_data.get("fix_instruction", "")
+                        notify(
+                            f"Fix round {_owl_fix_rounds}/{max_fix_rounds} — "
+                            f"score {score}/100, {len(warnings)} warning(s)…"
+                        )
+                        logger.info(
+                            "Iteration %d: pitfall check — score=%d, %d warning(s) → injecting fix",
+                            iteration + 1, score, len(warnings),
+                        )
+                        messages.append({"role": "assistant", "content": content})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                f"{fix_instruction}\n\n"
+                                "Output ONLY the corrected Turtle. "
+                                "Start with @prefix. No prose, no code fences."
+                            ),
+                        })
+                        continue  # next loop iteration asks the LLM to fix
+
+                    if not is_clean:
+                        notify(
+                            f"Max fix rounds ({max_fix_rounds}) reached — "
+                            "accepting best available ontology."
+                        )
+                    else:
+                        notify(f"Ontology is clean — score {score}/100 ✓")
+                    logger.info(
+                        "Iteration %d: pitfall check — score=%d, is_clean=%s, fix_round=%d/%d",
+                        iteration + 1, score, is_clean,
+                        _owl_fix_rounds, max_fix_rounds,
+                    )
+
+            # ── Accept this text as the final OWL ────────────────────────────
             result.success = True
             result.owl_content = content
             result.iterations = iteration + 1
             result.usage = total_usage
 
+            final_score = (
+                result.iteration_summary[-1]["score"]
+                if result.iteration_summary else None
+            )
             logger.info(
-                "===== AGENT COMPLETE ===== iterations=%d, prompt_tokens=%d, completion_tokens=%d, owl_chars=%d",
+                "===== AGENT COMPLETE ===== iterations=%d, fix_rounds=%d, final_score=%s, "
+                "prompt_tokens=%d, completion_tokens=%d, owl_chars=%d",
                 result.iterations,
+                _owl_fix_rounds,
+                final_score,
                 total_usage["prompt_tokens"],
                 total_usage["completion_tokens"],
                 len(content),

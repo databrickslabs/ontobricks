@@ -150,6 +150,7 @@ def run_agent(
     conversation_history: Optional[List[dict]] = None,
     session_headers: Optional[dict] = None,
     on_step: Optional[Callable[[str], None]] = None,
+    on_event: Optional[Callable[["AgentStep"], None]] = None,
     describe_depth: int = 1,
 ) -> AgentResult:
     """Run one turn of the Graph Chat agent.
@@ -278,13 +279,14 @@ def run_agent(
                     tool_name,
                 )
 
-                result.steps.append(
-                    AgentStep(
-                        step_type="tool_call",
-                        content=json.dumps(arguments, default=str),
-                        tool_name=tool_name,
-                    )
+                call_step = AgentStep(
+                    step_type="tool_call",
+                    content=json.dumps(arguments, default=str),
+                    tool_name=tool_name,
                 )
+                result.steps.append(call_step)
+                if on_event:
+                    on_event(call_step)
 
                 tool_t0 = time.time()
                 tool_result = dispatch_tool(
@@ -296,14 +298,15 @@ def run_agent(
                 )
                 tool_elapsed = int((time.time() - tool_t0) * 1000)
 
-                result.steps.append(
-                    AgentStep(
-                        step_type="tool_result",
-                        content=tool_result[:500],
-                        tool_name=tool_name,
-                        duration_ms=tool_elapsed,
-                    )
+                result_step = AgentStep(
+                    step_type="tool_result",
+                    content=tool_result[:500],
+                    tool_name=tool_name,
+                    duration_ms=tool_elapsed,
                 )
+                result.steps.append(result_step)
+                if on_event:
+                    on_event(result_step)
 
                 messages.append(
                     {
@@ -315,9 +318,10 @@ def run_agent(
         else:
             result.success = True
             result.reply = content
-            result.steps.append(
-                AgentStep(step_type="output", content=content[:500])
-            )
+            output_step = AgentStep(step_type="output", content=content[:500])
+            result.steps.append(output_step)
+            if on_event:
+                on_event(output_step)
             logger.info(
                 "===== DTWIN CHAT DONE ===== iterations=%d, reply_len=%d",
                 result.iterations,

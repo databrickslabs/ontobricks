@@ -12,7 +12,7 @@
 CONFIG := scripts/deploy.config.sh
 
 .PHONY: help install test test-cov run dev prod setup format lint clean \
-        deploy deploy-volume deploy-no-run \
+        deploy deploy-dry-run deploy-volume deploy-no-run \
         bootstrap-perms bootstrap-lakebase \
         bundle-validate bundle-summary deploy-check \
         render-app-yaml
@@ -37,6 +37,7 @@ help:
 	@echo "  Deployment (Databricks Asset Bundles — dev sandbox only):"
 	@echo "    Edit values in: $(CONFIG)"
 	@echo "    make deploy              - Deploy + start the dev sandbox app (Lakebase backend)"
+	@echo "    make deploy-dry-run      - Run ALL pre-deploy checks (preflight/validate/resources), no changes"
 	@echo "    make deploy-volume       - Deploy + start the dev sandbox app (Volume-only backend)"
 	@echo "    make deploy-no-run       - Deploy without starting the app (Lakebase target)"
 	@echo "    make render-app-yaml     - Re-render app.yaml from template + config"
@@ -108,6 +109,10 @@ deploy:
 	chmod +x scripts/deploy.sh
 	scripts/deploy.sh
 
+deploy-dry-run:
+	chmod +x scripts/deploy.sh
+	scripts/deploy.sh --dry-run
+
 deploy-volume:
 	chmod +x scripts/deploy.sh
 	scripts/deploy.sh -t dev
@@ -130,10 +135,10 @@ bootstrap-lakebase:
 	chmod +x scripts/bootstrap-lakebase-perms.sh
 	@. ./$(CONFIG) && \
 	  scripts/bootstrap-lakebase-perms.sh \
-	    -i "$$LAKEBASE_BOOTSTRAP_INSTANCE" \
-	    -b "$$LAKEBASE_BOOTSTRAP_BRANCH" \
-	    -d "$$LAKEBASE_BOOTSTRAP_DATABASE" \
-	    -s "$$LAKEBASE_BOOTSTRAP_SCHEMA" \
+	    -i "$$LAKEBASE_PROJECT" \
+	    -b "$$LAKEBASE_BRANCH" \
+	    -d "$$LAKEBASE_REGISTRY_DATABASE" \
+	    -s "$$LAKEBASE_REGISTRY_SCHEMA" \
 	    -a "$$APP_NAME" -a "$$MCP_APP_NAME"
 
 bundle-validate:

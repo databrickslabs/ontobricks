@@ -36,7 +36,7 @@
     min-width: 0;
     height: 100%;
     overflow: hidden;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: #ffffff;
     position: relative;
 }
 
@@ -217,7 +217,7 @@
 
 .map-context-header {
     padding: 10px 14px;
-    background: #f8f9fa;
+    background: #ffffff;
     border-bottom: 1px solid #e9ecef;
     display: flex;
     align-items: center;
@@ -240,7 +240,7 @@
 
 .map-context-divider {
     height: 1px;
-    background: #e9ecef;
+    background: #ffffff;
 }
 
 .map-context-item {
@@ -255,7 +255,7 @@
 }
 
 .map-context-item:hover {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .map-context-item i {

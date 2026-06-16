@@ -549,7 +549,14 @@ Returns the domain registry location (catalog, schema, volume).
 
 #### `GET /api/v1/domains`
 
-List all MCP-enabled domains in the registry.
+List all domains that have at least one **PUBLISHED** version in the registry.
+
+> **Lifecycle & API access.** Each domain version has a lifecycle status —
+> `DRAFT` → `IN-REVIEW` → `PUBLISHED`. The external API and MCP only serve data
+> for **PUBLISHED** versions; when no version is requested the **numeric-latest
+> PUBLISHED** version is used. Requesting a non-PUBLISHED version explicitly
+> (e.g. `domain_version=2`) returns an error. Multiple PUBLISHED versions may
+> coexist.
 
 ---
 
@@ -557,10 +564,12 @@ List all MCP-enabled domains in the registry.
 
 #### `GET /api/v1/domain/versions`
 
-Returns all versions for a domain in the registry, latest first.
+Returns all versions for a domain in the registry, latest first. Each version is
+annotated with its lifecycle `status` and an `is_published` flag (only PUBLISHED
+versions are data-accessible via the API/MCP).
 
 **Parameters:**
-- `project_name` (query, required): Domain name in the registry
+- `domain_name` (query, required): Domain name in the registry
 
 ---
 
@@ -2143,7 +2152,9 @@ Returns the domain registry location (catalog, schema, volume).
 GET /api/v1/domains
 ```
 
-List all MCP-enabled domains in the registry.
+List all domains that have at least one PUBLISHED version in the registry. The
+API/MCP serves the numeric-latest PUBLISHED version (see the lifecycle note
+above).
 
 #### Versions
 

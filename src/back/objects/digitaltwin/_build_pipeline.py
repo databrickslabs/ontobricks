@@ -17,7 +17,9 @@ the refresh automatically.
 
 from __future__ import annotations
 
+import re
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from back.core.errors import OntoBricksError, OperationCancelledError
@@ -36,6 +38,120 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
+
+
+def collect_domain_stats(
+    ontology: Optional[Dict[str, Any]],
+    assignment: Optional[Dict[str, Any]],
+    *,
+    constraints=None,
+    swrl_rules=None,
+    axioms=None,
+    shacl_shapes=None,
+) -> Dict[str, Any]:
+    """Ontology + mapping statistics recorded with a build run.
+
+    Mirrors the counts shown in the domain Cockpit so the build trace
+    carries the same ontology/mapping picture that was live at build
+    time. Pure and defensive: never raises; missing data yields zeros.
+    """
+    try:
+        ont = ontology or {}
+        classes = ont.get("classes", []) or []
+        properties = ont.get("properties", []) or []
+        obj_props = [p for p in properties if p.get("type") == "ObjectProperty"]
+        attr_props = [p for p in properties if p.get("type") != "ObjectProperty"]
+
+        asg = assignment or {}
+        entities = asg.get("entities", asg.get("data_source_mappings", [])) or []
+        relationships = (
+            asg.get("relationships", asg.get("relationship_mappings", [])) or []
+        )
+        excluded_ent = [m for m in entities if m.get("excluded")]
+        excluded_rel = [m for m in relationships if m.get("excluded")]
+
+        # Default constraints to the ontology-embedded list when not passed.
+        cons = constraints if constraints is not None else ont.get("constraints", [])
+
+        return {
+            "ontology": {
+                "classes": len(classes),
+                "properties": len(properties),
+                "object_properties": len(obj_props),
+                "attributes": len(attr_props),
+                "constraints": len(cons or []),
+                "swrl_rules": len(swrl_rules or []),
+                "axioms": len(axioms or []),
+                "shacl_shapes": len(shacl_shapes or []),
+            },
+            "mapping": {
+                "entity_mappings": len(entities),
+                "relationship_mappings": len(relationships),
+                "excluded_entities": len(excluded_ent),
+                "excluded_relationships": len(excluded_rel),
+                "active_entity_mappings": len(entities) - len(excluded_ent),
+                "active_relationship_mappings": (
+                    len(relationships) - len(excluded_rel)
+                ),
+            },
+        }
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _parse_iso(ts: str) -> Optional[datetime]:
+    """Lenient ISO-8601 parse that tolerates 1-2 digit fractional seconds.
+
+    Python 3.9's ``datetime.fromisoformat`` only accepts fractional
+    seconds with exactly 3 or 6 digits; timestamps like
+    ``...07.5+00:00`` would otherwise raise. We pad the fraction to 6
+    digits before parsing.
+    """
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        padded = re.sub(
+            r"\.(\d{1,6})",
+            lambda m: "." + (m.group(1) + "000000")[:6],
+            ts,
+            count=1,
+        )
+        try:
+            return datetime.fromisoformat(padded)
+        except (ValueError, TypeError):
+            return None
+
+
+def step_times_from_task(task) -> Dict[str, float]:
+    """Per-step wall-clock durations (seconds) keyed by step description.
+
+    Mirrors exactly the "steps + duration" the build UI renders from the
+    TaskManager step list, so the recorded ``phase_times`` matches what
+    the user saw during the build. Pure and defensive.
+    """
+    out: Dict[str, float] = {}
+    try:
+        steps = getattr(task, "steps", None) or []
+        for step in steps:
+            started = getattr(step, "started_at", None)
+            if not started:
+                continue
+            completed = getattr(step, "completed_at", None) or started
+            t0 = _parse_iso(started)
+            t1 = _parse_iso(completed)
+            if t0 is None or t1 is None:
+                continue
+            label = (
+                getattr(step, "description", None)
+                or getattr(step, "name", None)
+                or "step"
+            )
+            out[str(label)] = round(max(0.0, (t1 - t0).total_seconds()), 3)
+    except Exception:  # noqa: BLE001
+        return {}
+    return out
 
 
 class _BuildPipeline:
@@ -87,6 +203,10 @@ class _BuildPipeline:
         self.start_time = time.time()
         self.phase_times: Dict[str, float] = {}
         self.parts = view_table.split(".")
+        # Guards the build-run trace so a build is recorded exactly once,
+        # regardless of which terminal path (complete / empty / fail /
+        # cancel / phase-failure) is taken.
+        self._build_recorded = False
 
         self.domain_name = (domain.info or {}).get("name", "<unknown>")
 
@@ -99,6 +219,7 @@ class _BuildPipeline:
         self.triple_count: int = 0
         # Lakebase managed-synced mode flag, resolved once before _open_store.
         self._lakebase_engine_config: Dict[str, Any] = {}
+        self._graph_engine: str = ""
         self._is_lakebase_synced: bool = False
 
     # ------------------------------------------------------------------
@@ -147,6 +268,7 @@ class _BuildPipeline:
             engine = "lakebase"
             cfg = {}
         self._lakebase_engine_config = cfg
+        self._graph_engine = engine
         self._is_lakebase_synced = (
             engine == "lakebase" and cfg.get("sync_mode") == "managed_synced"
         )
@@ -241,8 +363,16 @@ class _BuildPipeline:
             logger.info(
                 "[DT-BUILD %s] aborted by cancel: %s", self.task_id, exc
             )
+            self._record_build_run("cancelled", message=str(exc))
         except Exception as exc:  # noqa: BLE001 — orchestrator final guard
             self._fail_unexpected(exc)
+        finally:
+            # Catch terminal paths that returned early via ``tm.fail_task``
+            # (phase-level failures) without going through
+            # ``_complete_task`` / ``_fail_unexpected``.
+            if not self._build_recorded:
+                status = "cancelled" if self._is_cancelled() else "error"
+                self._record_build_run(status)
 
     # ------------------------------------------------------------------
     # Phases
@@ -524,6 +654,7 @@ class _BuildPipeline:
                 },
                 message=empty_msg,
             )
+            self._record_build_run("success", message=empty_msg)
             return False
 
         t_insert = time.time()
@@ -1053,6 +1184,79 @@ class _BuildPipeline:
                 exc,
             )
 
+    def _record_build_run(
+        self, status: str, *, message: str = "", error: str = ""
+    ) -> None:
+        """Persist this build to the registry ``build_runs`` trace.
+
+        Best-effort and idempotent (guarded by ``self._build_recorded``):
+        a failed trace must never break or double-count a build. The
+        domain folder is the sanitised domain name; the version is the
+        build's resolved ``current_version``.
+        """
+        if self._build_recorded:
+            return
+        self._build_recorded = True
+        try:
+            from back.objects.registry.RegistryService import RegistryService
+            from back.objects.session import sanitize_domain_folder
+
+            folder = getattr(self.domain, "uc_domain_folder", "") or (
+                sanitize_domain_folder(self.domain_name)
+            )
+            version = (
+                getattr(self.domain_snap, "current_version", None)
+                or getattr(self.domain, "current_version", None)
+                or ""
+            )
+            now = datetime.now(timezone.utc)
+            started = datetime.fromtimestamp(self.start_time, tz=timezone.utc)
+            entry = {
+                "version": str(version),
+                "build_kind": self.build_kind,
+                "status": status,
+                "message": message,
+                "error": error,
+                "started_at": started.isoformat(),
+                "finished_at": now.isoformat(),
+                "duration_s": time.time() - self.start_time,
+                "triple_count": int(self.triple_count or 0),
+                "entity_count": len(self.entity_mappings or []),
+                "relationship_count": len(self.relationship_mappings or []),
+                "sql_chars": len(self.spark_sql or ""),
+                "graph_engine": self._graph_engine,
+                "sync_mode": (
+                    "managed_synced" if self._is_lakebase_synced else "app_managed"
+                ),
+                "view_table": self.view_table,
+                "graph_name": self.graph_name,
+                "task_id": self.task_id,
+                # Mirror the per-step durations the build UI renders from the
+                # TaskManager step list; fall back to internal phase timings.
+                "phase_times": (
+                    step_times_from_task(self.tm.get_task(self.task_id))
+                    or dict(self.phase_times)
+                ),
+                # Ontology + mapping picture live at build time (Cockpit stats).
+                "stats": collect_domain_stats(
+                    getattr(self.domain_snap, "ontology", {}),
+                    getattr(self.domain_snap, "assignment", {}),
+                    constraints=getattr(self.domain_snap, "constraints", None),
+                    swrl_rules=getattr(self.domain_snap, "swrl_rules", None),
+                    axioms=getattr(self.domain_snap, "axioms", None),
+                    shacl_shapes=getattr(self.domain_snap, "shacl_shapes", None),
+                ),
+            }
+            svc = RegistryService.from_context(self.domain, self.settings)
+            svc.record_build_run(folder, entry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[DT-BUILD %s] could not record build-run trace "
+                "(non-fatal): %s",
+                self.task_id,
+                exc,
+            )
+
     def _complete_task(self) -> None:
         duration = time.time() - self.start_time
         logger.info(
@@ -1079,6 +1283,7 @@ class _BuildPipeline:
 
         msg = f"Full rebuild: {self.triple_count} triples in {duration:.1f}s"
         self.tm.complete_task(self.task_id, result=result_data, message=msg)
+        self._record_build_run("success", message=msg)
 
     def _fail_unexpected(self, exc: Exception) -> None:
         duration = time.time() - self.start_time
@@ -1094,3 +1299,4 @@ class _BuildPipeline:
             self.tm.fail_task(self.task_id, str(exc))
         else:
             self.tm.fail_task(self.task_id, "Triple store sync failed")
+        self._record_build_run("error", error=str(exc))

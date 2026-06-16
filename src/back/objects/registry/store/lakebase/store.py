@@ -10,6 +10,9 @@ Storage layout (one Postgres schema, default ``ontobricks_registry``):
 - ``domain_permissions``— Viewer/Editor/Builder per principal/domain
 - ``schedules``         — one row per scheduled domain
 - ``schedule_runs``     — append-only, capped per domain
+- ``build_runs``        — append-only build-run trace, one row per
+                          Digital Twin build (all paths), keyed by
+                          ``(domain_id, version)``
 
 Authentication:
 - Connection params (host/port/db/user) come from ``PG*`` env vars
@@ -57,7 +60,14 @@ from back.core.errors import InfrastructureError
 from back.core.logging import get_logger
 from back.objects.registry.registry_cache import invalidate_registry_cache
 
-from ..base import DomainSummary, RegistryStore, ScheduleHistoryEntry, StoreError
+from ..base import (
+    BuildRunEntry,
+    DomainSummary,
+    RegistryStore,
+    ReviewEvent,
+    ScheduleHistoryEntry,
+    StoreError,
+)
 
 logger = get_logger(__name__)
 
@@ -92,6 +102,8 @@ _KNOWN_TABLES = frozenset(
         "domain_permissions",
         "schedules",
         "schedule_runs",
+        "build_runs",
+        "domain_review_events",
     }
 )
 
@@ -486,6 +498,23 @@ class LakebaseRegistryStore(RegistryStore):
         self._database = database or ""
         self._auth = get_lakebase_auth()
         self._registry_id: Optional[str] = None  # cached after initialize()
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS build_runs`` used to
+        # self-heal deployments created before the build-run trace existed
+        # (the full DDL only runs from the Settings "Initialize" action).
+        self._build_runs_ready = False
+        # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS status``
+        # used to self-heal deployments created before the lifecycle status
+        # column existed (same pattern as ``_build_runs_ready``).
+        self._status_column_ready = False
+        # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS
+        # review_quorum`` used to self-heal deployments created before the
+        # per-domain sign-off quorum existed (same pattern as
+        # ``_status_column_ready``).
+        self._quorum_column_ready = False
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_review_events``
+        # used to self-heal deployments created before the review/validation
+        # audit log existed (same pattern as ``_build_runs_ready``).
+        self._review_events_ready = False
 
     # ------------------------------------------------------------------
     # Identity
@@ -675,12 +704,15 @@ class LakebaseRegistryStore(RegistryStore):
 
     def list_domains_with_metadata(self) -> Tuple[bool, List[DomainSummary], str]:
         try:
+            self._ensure_domain_versions_status_column()
+            self._ensure_domains_review_quorum_column()
             psycopg, dict_row = _require_psycopg()
             with self._connect() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(
                         f"""
-                        SELECT d.id, d.folder, d.description, d.base_uri
+                        SELECT d.id, d.folder, d.description, d.base_uri,
+                               d.review_quorum
                         FROM {self._q(self._schema)}.domains d
                         WHERE d.registry_id = %s
                         ORDER BY d.folder
@@ -691,7 +723,7 @@ class LakebaseRegistryStore(RegistryStore):
                 with conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(
                         f"""
-                        SELECT v.domain_id, v.version, v.mcp_enabled,
+                        SELECT v.domain_id, v.version, v.mcp_enabled, v.status,
                                v.last_update, v.last_build, v.info, v.ontology
                         FROM {self._q(self._schema)}.domain_versions v
                         JOIN {self._q(self._schema)}.domains d ON d.id = v.domain_id
@@ -723,10 +755,12 @@ class LakebaseRegistryStore(RegistryStore):
                         "name": d["folder"],
                         "base_uri": base_uri,
                         "description": description,
+                        "review_quorum": max(1, int(d.get("review_quorum") or 1)),
                         "versions": [
                             {
                                 "version": v["version"],
                                 "active": bool(v["mcp_enabled"]),
+                                "status": v["status"] or "DRAFT",
                                 "last_update": v["last_update"] or "",
                                 "last_build": v["last_build"] or "",
                             }
@@ -751,6 +785,26 @@ class LakebaseRegistryStore(RegistryStore):
         except Exception as exc:  # noqa: BLE001
             logger.debug("domain_exists(%s) failed: %s", folder, exc)
             return False
+
+    def get_domain_quorum(self, folder: str) -> int:
+        """Per-domain review sign-off quorum (>= 1). Default ``1`` when the
+        domain is missing or the column has not been provisioned yet.
+        """
+        try:
+            self._ensure_domains_review_quorum_column()
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT review_quorum FROM {self._q(self._schema)}.domains "
+                    "WHERE registry_id = %s AND folder = %s",
+                    (self._registry(), folder),
+                )
+                row = cur.fetchone()
+            if not row or row[0] is None:
+                return 1
+            return max(1, int(row[0]))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("get_domain_quorum(%s) failed: %s", folder, exc)
+            return 1
 
     def delete_domain(self, folder: str) -> List[str]:
         try:
@@ -791,13 +845,15 @@ class LakebaseRegistryStore(RegistryStore):
         self, folder: str, version: str
     ) -> Tuple[bool, Dict[str, Any], str]:
         try:
+            self._ensure_domain_versions_status_column()
+            self._ensure_domains_review_quorum_column()
             psycopg, dict_row = _require_psycopg()
             with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     f"""
                     SELECT v.info, v.ontology, v.assignment, v.design_layout,
-                           v.metadata, v.version, v.mcp_enabled,
-                           v.last_update, v.last_build
+                           v.metadata, v.version, v.mcp_enabled, v.status,
+                           v.last_update, v.last_build, d.review_quorum
                     FROM {self._q(self._schema)}.domain_versions v
                     JOIN {self._q(self._schema)}.domains d ON d.id = v.domain_id
                     WHERE d.registry_id = %s AND d.folder = %s AND v.version = %s
@@ -809,6 +865,8 @@ class LakebaseRegistryStore(RegistryStore):
                 return False, {}, f"Version {version} not found for domain {folder}"
             info = row["info"] or {}
             info.setdefault("mcp_enabled", bool(row["mcp_enabled"]))
+            info["review_quorum"] = max(1, int(row.get("review_quorum") or 1))
+            info["status"] = row["status"] or "DRAFT"
             if row["last_update"]:
                 info["last_update"] = row["last_update"]
             if row["last_build"]:
@@ -832,6 +890,8 @@ class LakebaseRegistryStore(RegistryStore):
         self, folder: str, version: str, data: Dict[str, Any]
     ) -> Tuple[bool, str]:
         try:
+            self._ensure_domain_versions_status_column()
+            self._ensure_domains_review_quorum_column()
             info = data.get("info", {}) or {}
             ver_blob = (data.get("versions") or {}).get(version, {}) or {}
             ontology = ver_blob.get("ontology", data.get("ontology", {})) or {}
@@ -839,34 +899,44 @@ class LakebaseRegistryStore(RegistryStore):
             design = ver_blob.get("design_layout", data.get("design_layout", {})) or {}
             metadata = ver_blob.get("metadata", data.get("metadata", {})) or {}
             mcp_enabled = bool(info.get("mcp_enabled"))
+            status = info.get("status") or "DRAFT"
             last_update = info.get("last_update", "") or ""
             last_build = info.get("last_build", "") or ""
             description = info.get("description", "") or ""
             base_uri = ontology.get("base_uri", "") or ""
+            review_quorum = max(1, int(info.get("review_quorum") or 1))
 
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     f"""
                     INSERT INTO {self._q(self._schema)}.domains
-                        (registry_id, folder, description, base_uri)
-                    VALUES (%s, %s, %s, %s)
+                        (registry_id, folder, description, base_uri,
+                         review_quorum)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (registry_id, folder)
-                    DO UPDATE SET description = EXCLUDED.description,
-                                  base_uri    = EXCLUDED.base_uri,
-                                  updated_at  = now()
+                    DO UPDATE SET description   = EXCLUDED.description,
+                                  base_uri      = EXCLUDED.base_uri,
+                                  review_quorum = EXCLUDED.review_quorum,
+                                  updated_at    = now()
                     RETURNING id
                     """,
-                    (self._registry(), folder, description, base_uri),
+                    (
+                        self._registry(),
+                        folder,
+                        description,
+                        base_uri,
+                        review_quorum,
+                    ),
                 )
                 domain_id = cur.fetchone()[0]
                 cur.execute(
                     f"""
                     INSERT INTO {self._q(self._schema)}.domain_versions
                         (domain_id, version, info, ontology, assignment,
-                         design_layout, metadata, mcp_enabled,
+                         design_layout, metadata, mcp_enabled, status,
                          last_update, last_build)
                     VALUES (%s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
-                            %s::jsonb, %s::jsonb, %s, %s, %s)
+                            %s::jsonb, %s::jsonb, %s, %s, %s, %s)
                     ON CONFLICT (domain_id, version)
                     DO UPDATE SET info          = EXCLUDED.info,
                                   ontology      = EXCLUDED.ontology,
@@ -874,6 +944,7 @@ class LakebaseRegistryStore(RegistryStore):
                                   design_layout = EXCLUDED.design_layout,
                                   metadata      = EXCLUDED.metadata,
                                   mcp_enabled   = EXCLUDED.mcp_enabled,
+                                  status        = EXCLUDED.status,
                                   last_update   = EXCLUDED.last_update,
                                   last_build    = EXCLUDED.last_build,
                                   updated_at    = now()
@@ -887,6 +958,7 @@ class LakebaseRegistryStore(RegistryStore):
                         json.dumps(design),
                         json.dumps(metadata),
                         mcp_enabled,
+                        status,
                         last_update,
                         last_build,
                     ),
@@ -914,6 +986,43 @@ class LakebaseRegistryStore(RegistryStore):
             invalidate_registry_cache(self.cache_key)
             return True, ""
         except Exception as exc:  # noqa: BLE001
+            return False, str(exc)
+
+    def update_version_status(
+        self, folder: str, version: str, status: str
+    ) -> Tuple[bool, str]:
+        """Set the lifecycle ``status`` of a single (domain, version).
+
+        Targeted single-row UPDATE so a status transition never rewrites
+        the full version document. Also mirrors ``status`` into the
+        version ``info`` blob so cached reads stay consistent.
+        """
+        try:
+            self._ensure_domain_versions_status_column()
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    UPDATE {self._q(self._schema)}.domain_versions v
+                    SET status = %s,
+                        info = jsonb_set(v.info, '{{status}}', to_jsonb(%s::text)),
+                        updated_at = now()
+                    FROM {self._q(self._schema)}.domains d
+                    WHERE v.domain_id = d.id
+                      AND d.registry_id = %s AND d.folder = %s
+                      AND v.version = %s
+                    """,
+                    (status, status, self._registry(), folder, version),
+                )
+                if cur.rowcount == 0:
+                    return False, (
+                        f"Version {version} not found for domain {folder}"
+                    )
+            invalidate_registry_cache(self.cache_key)
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "update_version_status failed for %s/%s", folder, version
+            )
             return False, str(exc)
 
     # ------------------------------------------------------------------
@@ -1125,6 +1234,627 @@ class LakebaseRegistryStore(RegistryStore):
                 )
         except Exception as exc:  # noqa: BLE001
             logger.warning("append_schedule_history(%s) failed: %s", folder, exc)
+
+    # ------------------------------------------------------------------
+    # Lifecycle status column (self-heal)
+    # ------------------------------------------------------------------
+
+    def _ensure_domain_versions_status_column(self) -> bool:
+        """Lazily add ``domain_versions.status`` (+ index) if missing.
+
+        Self-heals deployments created before the lifecycle status column
+        existed: the full DDL only runs from the Settings *Initialize*
+        action. Idempotent (``ADD COLUMN IF NOT EXISTS`` /
+        ``CREATE INDEX IF NOT EXISTS``) and guarded by a per-instance flag
+        so we only pay the round-trip once per store. Best-effort: on
+        failure it logs and returns ``False`` so callers can no-op.
+        """
+        if self._status_column_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                # Check first: if the column already exists (created by
+                # bootstrap as the schema owner), skip all DDL.  Both
+                # ALTER TABLE and CREATE INDEX require table ownership in
+                # Postgres — attempting them as the SP (who doesn't own
+                # domain_versions) raises "must be owner of table …"
+                # even with IF NOT EXISTS / ADD COLUMN IF NOT EXISTS.
+                cur.execute(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'domain_versions' "
+                    "AND column_name = 'status'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._status_column_ready = True
+                    return True
+                # Column absent — attempt DDL (requires schema owner to
+                # have not yet run bootstrap-lakebase-perms.sh).
+                cur.execute(
+                    f"""
+                    ALTER TABLE {sch}.domain_versions
+                        ADD COLUMN IF NOT EXISTS status text NOT NULL
+                        DEFAULT 'DRAFT'
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_domain_versions_status
+                        ON {sch}.domain_versions(domain_id, status)
+                    """
+                )
+            self._status_column_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not add domain_versions.status column — "
+                "run `make bootstrap-lakebase` (or scripts/bootstrap-lakebase-perms.sh) "
+                "as the schema owner to apply the migration: %s",
+                exc,
+            )
+            return False
+
+    def _ensure_domains_review_quorum_column(self) -> bool:
+        """Lazily add ``domains.review_quorum`` if missing.
+
+        Self-heals deployments created before the per-domain sign-off
+        quorum existed. Same idempotent, ownership-aware pattern as
+        :meth:`_ensure_domain_versions_status_column`. Best-effort: on
+        failure it logs and returns ``False`` so callers can fall back to
+        the default quorum.
+        """
+        if self._quorum_column_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'domains' "
+                    "AND column_name = 'review_quorum'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._quorum_column_ready = True
+                    return True
+                cur.execute(
+                    f"""
+                    ALTER TABLE {sch}.domains
+                        ADD COLUMN IF NOT EXISTS review_quorum integer
+                        NOT NULL DEFAULT 1
+                    """
+                )
+            self._quorum_column_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not add domains.review_quorum column — "
+                "run `make bootstrap-lakebase` (or scripts/bootstrap-lakebase-perms.sh) "
+                "as the schema owner to apply the migration: %s",
+                exc,
+            )
+            return False
+
+    # ------------------------------------------------------------------
+    # Build-run trace (analytics)
+    # ------------------------------------------------------------------
+
+    def _ensure_build_runs_table(self) -> bool:
+        """Lazily create ``build_runs`` (+ index) if it is missing.
+
+        Self-heals deployments created before the build-run trace
+        existed: the full DDL only runs from the Settings *Initialize*
+        action, so without this an upgraded instance would have no
+        table until an admin re-ran Initialize. Idempotent (every
+        statement uses ``IF NOT EXISTS``) and guarded by a per-instance
+        flag so we only pay the round-trip once per store. Best-effort:
+        on failure (e.g. missing GRANT) it logs and returns ``False``
+        so callers can no-op instead of breaking a build.
+        """
+        if self._build_runs_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                # Check first: if the table already exists (created by
+                # bootstrap as the schema owner), skip all DDL.  CREATE
+                # INDEX requires table ownership in Postgres — running it
+                # when we don't own the table raises "must be owner of
+                # table build_runs" even with IF NOT EXISTS.
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = %s AND table_name = 'build_runs'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._build_runs_ready = True
+                    return True
+                # Table is absent — SP has CREATE ON SCHEMA so it can
+                # create the table (and will own it, allowing the index).
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {sch}.build_runs (
+                        id                  bigserial PRIMARY KEY,
+                        domain_id           uuid NOT NULL
+                                            REFERENCES {sch}.domains(id)
+                                            ON DELETE CASCADE,
+                        version             text NOT NULL,
+                        build_kind          text NOT NULL DEFAULT 'session',
+                        status              text NOT NULL,
+                        message             text NOT NULL DEFAULT '',
+                        error               text NOT NULL DEFAULT '',
+                        started_at          timestamptz NOT NULL DEFAULT now(),
+                        finished_at         timestamptz,
+                        duration_s          double precision NOT NULL DEFAULT 0,
+                        triple_count        bigint NOT NULL DEFAULT 0,
+                        entity_count        integer NOT NULL DEFAULT 0,
+                        relationship_count  integer NOT NULL DEFAULT 0,
+                        sql_chars           integer NOT NULL DEFAULT 0,
+                        graph_engine        text NOT NULL DEFAULT '',
+                        sync_mode           text NOT NULL DEFAULT '',
+                        view_table          text NOT NULL DEFAULT '',
+                        graph_name          text NOT NULL DEFAULT '',
+                        task_id             text NOT NULL DEFAULT '',
+                        phase_times         jsonb NOT NULL DEFAULT '{{}}'::jsonb,
+                        stats               jsonb NOT NULL DEFAULT '{{}}'::jsonb,
+                        created_at          timestamptz NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_build_runs_domain_version
+                        ON {sch}.build_runs(domain_id, version, started_at DESC)
+                    """
+                )
+            self._build_runs_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not create build_runs table — "
+                "run `make bootstrap-lakebase` as the schema owner to apply the migration: %s",
+                exc,
+            )
+            return False
+
+    def record_build_run(self, folder: str, entry: BuildRunEntry) -> None:
+        if not self._ensure_build_runs_table():
+            return
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.build_runs
+                        (domain_id, version, build_kind, status, message,
+                         error, started_at, finished_at, duration_s,
+                         triple_count, entity_count, relationship_count,
+                         sql_chars, graph_engine, sync_mode, view_table,
+                         graph_name, task_id, phase_times, stats)
+                    SELECT d.id, %s, %s, %s, %s, %s,
+                           COALESCE(%s::timestamptz, now()),
+                           %s::timestamptz, %s, %s, %s, %s, %s, %s, %s, %s,
+                           %s, %s, %s::jsonb, %s::jsonb
+                    FROM {sch}.domains d
+                    WHERE d.registry_id = %s AND d.folder = %s
+                    """,
+                    (
+                        str(entry.get("version", "")),
+                        str(entry.get("build_kind", "session")),
+                        str(entry.get("status", "")),
+                        str(entry.get("message", "") or ""),
+                        str(entry.get("error", "") or ""),
+                        entry.get("started_at"),
+                        entry.get("finished_at"),
+                        float(entry.get("duration_s", 0) or 0),
+                        int(entry.get("triple_count", 0) or 0),
+                        int(entry.get("entity_count", 0) or 0),
+                        int(entry.get("relationship_count", 0) or 0),
+                        int(entry.get("sql_chars", 0) or 0),
+                        str(entry.get("graph_engine", "") or ""),
+                        str(entry.get("sync_mode", "") or ""),
+                        str(entry.get("view_table", "") or ""),
+                        str(entry.get("graph_name", "") or ""),
+                        str(entry.get("task_id", "") or ""),
+                        json.dumps(entry.get("phase_times") or {}),
+                        json.dumps(entry.get("stats") or {}),
+                        self._registry(),
+                        folder,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    logger.warning(
+                        "record_build_run(%s): no domain row matched — "
+                        "build trace not stored",
+                        folder,
+                    )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("record_build_run(%s) failed: %s", folder, exc)
+
+    @staticmethod
+    def _build_run_row_to_entry(r: Dict[str, Any]) -> BuildRunEntry:
+        return {
+            "id": int(r.get("id") or 0),
+            "version": r["version"],
+            "build_kind": r["build_kind"],
+            "status": r["status"],
+            "message": r["message"] or "",
+            "error": r["error"] or "",
+            "started_at": (
+                r["started_at"].isoformat() if r.get("started_at") else ""
+            ),
+            "finished_at": (
+                r["finished_at"].isoformat() if r.get("finished_at") else ""
+            ),
+            "duration_s": float(r["duration_s"] or 0),
+            "triple_count": int(r["triple_count"] or 0),
+            "entity_count": int(r["entity_count"] or 0),
+            "relationship_count": int(r["relationship_count"] or 0),
+            "sql_chars": int(r["sql_chars"] or 0),
+            "graph_engine": r["graph_engine"] or "",
+            "sync_mode": r["sync_mode"] or "",
+            "view_table": r["view_table"] or "",
+            "graph_name": r["graph_name"] or "",
+            "task_id": r["task_id"] or "",
+            "phase_times": dict(r["phase_times"] or {}),
+            "stats": dict(r["stats"] or {}),
+        }
+
+    def load_build_runs(
+        self,
+        folder: str,
+        *,
+        version: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[BuildRunEntry]:
+        if not self._ensure_build_runs_table():
+            return []
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            clauses = ["d.registry_id = %s", "d.folder = %s"]
+            params: List[Any] = [self._registry(), folder]
+            if version:
+                clauses.append("b.version = %s")
+                params.append(version)
+            params.append(int(limit))
+            where = " AND ".join(clauses)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT b.id, b.version, b.build_kind, b.status, b.message,
+                           b.error, b.started_at, b.finished_at, b.duration_s,
+                           b.triple_count, b.entity_count, b.relationship_count,
+                           b.sql_chars, b.graph_engine, b.sync_mode,
+                           b.view_table, b.graph_name, b.task_id,
+                           b.phase_times, b.stats
+                    FROM {sch}.build_runs b
+                    JOIN {sch}.domains d ON d.id = b.domain_id
+                    WHERE {where}
+                    ORDER BY b.started_at DESC, b.id DESC
+                    LIMIT %s
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+            return [self._build_run_row_to_entry(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_build_runs(%s) failed: %s", folder, exc)
+            return []
+
+    @staticmethod
+    def _empty_analytics() -> Dict[str, Any]:
+        return {
+            "total_runs": 0,
+            "success_runs": 0,
+            "failed_runs": 0,
+            "success_rate": 0.0,
+            "avg_duration_s": 0.0,
+            "min_duration_s": 0.0,
+            "max_duration_s": 0.0,
+            "last_triple_count": 0,
+            "active_build": None,
+            "per_version": [],
+        }
+
+    def build_analytics(
+        self, folder: str, *, version: Optional[str] = None
+    ) -> Dict[str, Any]:
+        if not self._ensure_build_runs_table():
+            return self._empty_analytics()
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            scope = ["d.registry_id = %s", "d.folder = %s"]
+            scope_params: List[Any] = [self._registry(), folder]
+            if version:
+                scope.append("b.version = %s")
+                scope_params.append(version)
+            where = " AND ".join(scope)
+
+            result = self._empty_analytics()
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                # Headline aggregates.
+                cur.execute(
+                    f"""
+                    SELECT
+                        count(*)                                   AS total_runs,
+                        count(*) FILTER (WHERE b.status = 'success') AS success_runs,
+                        count(*) FILTER (WHERE b.status <> 'success') AS failed_runs,
+                        COALESCE(avg(b.duration_s)
+                                 FILTER (WHERE b.status = 'success'), 0) AS avg_duration_s,
+                        COALESCE(min(b.duration_s)
+                                 FILTER (WHERE b.status = 'success'), 0) AS min_duration_s,
+                        COALESCE(max(b.duration_s)
+                                 FILTER (WHERE b.status = 'success'), 0) AS max_duration_s
+                    FROM {sch}.build_runs b
+                    JOIN {sch}.domains d ON d.id = b.domain_id
+                    WHERE {where}
+                    """,
+                    tuple(scope_params),
+                )
+                agg = cur.fetchone() or {}
+                total = int(agg.get("total_runs") or 0)
+                success = int(agg.get("success_runs") or 0)
+                result.update(
+                    {
+                        "total_runs": total,
+                        "success_runs": success,
+                        "failed_runs": int(agg.get("failed_runs") or 0),
+                        "success_rate": (success / total) if total else 0.0,
+                        "avg_duration_s": float(agg.get("avg_duration_s") or 0),
+                        "min_duration_s": float(agg.get("min_duration_s") or 0),
+                        "max_duration_s": float(agg.get("max_duration_s") or 0),
+                    }
+                )
+
+                # Active build = latest successful run in scope.
+                cur.execute(
+                    f"""
+                    SELECT b.version, b.build_kind, b.status, b.message,
+                           b.error, b.started_at, b.finished_at, b.duration_s,
+                           b.triple_count, b.entity_count, b.relationship_count,
+                           b.sql_chars, b.graph_engine, b.sync_mode,
+                           b.view_table, b.graph_name, b.task_id,
+                           b.phase_times, b.stats
+                    FROM {sch}.build_runs b
+                    JOIN {sch}.domains d ON d.id = b.domain_id
+                    WHERE {where} AND b.status = 'success'
+                    ORDER BY b.started_at DESC, b.id DESC
+                    LIMIT 1
+                    """,
+                    tuple(scope_params),
+                )
+                active = cur.fetchone()
+                if active:
+                    entry = self._build_run_row_to_entry(active)
+                    result["active_build"] = entry
+                    result["last_triple_count"] = entry["triple_count"]
+
+                # Per-version rollup (newest version first).
+                cur.execute(
+                    f"""
+                    SELECT b.version,
+                           count(*) AS total_runs,
+                           count(*) FILTER (WHERE b.status = 'success')
+                               AS success_runs,
+                           max(b.started_at) AS last_run,
+                           (array_agg(b.status ORDER BY b.started_at DESC,
+                                      b.id DESC))[1] AS last_status,
+                           (array_agg(b.triple_count ORDER BY b.started_at DESC,
+                                      b.id DESC))[1] AS last_triple_count
+                    FROM {sch}.build_runs b
+                    JOIN {sch}.domains d ON d.id = b.domain_id
+                    WHERE {where}
+                    GROUP BY b.version
+                    ORDER BY max(b.started_at) DESC
+                    """,
+                    tuple(scope_params),
+                )
+                result["per_version"] = [
+                    {
+                        "version": r["version"],
+                        "total_runs": int(r["total_runs"] or 0),
+                        "success_runs": int(r["success_runs"] or 0),
+                        "last_status": r["last_status"] or "",
+                        "last_triple_count": int(r["last_triple_count"] or 0),
+                        "last_run": (
+                            r["last_run"].isoformat() if r.get("last_run") else ""
+                        ),
+                    }
+                    for r in cur.fetchall()
+                ]
+            return result
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("build_analytics(%s) failed: %s", folder, exc)
+            return self._empty_analytics()
+
+    # ------------------------------------------------------------------
+    # Review / validation audit log
+    # ------------------------------------------------------------------
+
+    def _ensure_review_events_table(self) -> bool:
+        """Lazily create ``domain_review_events`` (+ index) if missing.
+
+        Self-heals deployments created before the review/validation audit
+        log existed — same ownership-safe pattern as
+        :meth:`_ensure_build_runs_table`: check first, only attempt DDL
+        when the table is genuinely absent. Best-effort: on failure it
+        logs and returns ``False`` so callers no-op rather than breaking
+        a transition.
+        """
+        if self._review_events_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = %s "
+                    "AND table_name = 'domain_review_events'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._review_events_ready = True
+                    return True
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {sch}.domain_review_events (
+                        id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                        domain_id       uuid NOT NULL
+                                        REFERENCES {sch}.domains(id)
+                                        ON DELETE CASCADE,
+                        version         text NOT NULL,
+                        actor           text NOT NULL,
+                        action          text NOT NULL,
+                        from_status     text NOT NULL DEFAULT '',
+                        to_status       text NOT NULL DEFAULT '',
+                        comment         text NOT NULL DEFAULT '',
+                        meta            jsonb NOT NULL DEFAULT '{{}}'::jsonb,
+                        created_at      timestamptz NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_review_events_domain_version
+                        ON {sch}.domain_review_events
+                           (domain_id, version, created_at)
+                    """
+                )
+            self._review_events_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not create domain_review_events table — "
+                "run `make bootstrap-lakebase` as the schema owner to "
+                "apply the migration: %s",
+                exc,
+            )
+            return False
+
+    def record_review_event(
+        self,
+        folder: str,
+        version: str,
+        actor: str,
+        action: str,
+        *,
+        from_status: str = "",
+        to_status: str = "",
+        comment: str = "",
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[bool, str]:
+        if not self._ensure_review_events_table():
+            return False, "review audit log unavailable"
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.domain_review_events
+                        (domain_id, version, actor, action, from_status,
+                         to_status, comment, meta)
+                    SELECT d.id, %s, %s, %s, %s, %s, %s, %s::jsonb
+                    FROM {sch}.domains d
+                    WHERE d.registry_id = %s AND d.folder = %s
+                    """,
+                    (
+                        version,
+                        actor or "",
+                        action or "",
+                        from_status or "",
+                        to_status or "",
+                        comment or "",
+                        json.dumps(meta or {}),
+                        self._registry(),
+                        folder,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    return False, f"Domain '{folder}' not found"
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "record_review_event(%s/%s) failed: %s", folder, version, exc
+            )
+            return False, str(exc)
+
+    @staticmethod
+    def _review_row_to_event(r: Dict[str, Any]) -> ReviewEvent:
+        return {
+            "id": str(r.get("id") or ""),
+            "folder": r.get("folder", "") or "",
+            "version": r["version"],
+            "actor": r["actor"] or "",
+            "action": r["action"] or "",
+            "from_status": r["from_status"] or "",
+            "to_status": r["to_status"] or "",
+            "comment": r["comment"] or "",
+            "meta": dict(r["meta"] or {}),
+            "created_at": (
+                r["created_at"].isoformat() if r.get("created_at") else ""
+            ),
+        }
+
+    def list_review_events(
+        self, folder: str, version: Optional[str] = None
+    ) -> List[ReviewEvent]:
+        if not self._ensure_review_events_table():
+            return []
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            clauses = ["d.registry_id = %s", "d.folder = %s"]
+            params: List[Any] = [self._registry(), folder]
+            if version:
+                clauses.append("e.version = %s")
+                params.append(version)
+            where = " AND ".join(clauses)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT e.id, d.folder, e.version, e.actor, e.action,
+                           e.from_status, e.to_status, e.comment, e.meta,
+                           e.created_at
+                    FROM {sch}.domain_review_events e
+                    JOIN {sch}.domains d ON d.id = e.domain_id
+                    WHERE {where}
+                    ORDER BY e.created_at ASC, e.id ASC
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+            return [self._review_row_to_event(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("list_review_events(%s) failed: %s", folder, exc)
+            return []
+
+    def list_all_review_events(self) -> List[ReviewEvent]:
+        if not self._ensure_review_events_table():
+            return []
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT e.id, d.folder, e.version, e.actor, e.action,
+                           e.from_status, e.to_status, e.comment, e.meta,
+                           e.created_at
+                    FROM {sch}.domain_review_events e
+                    JOIN {sch}.domains d ON d.id = e.domain_id
+                    WHERE d.registry_id = %s
+                    ORDER BY e.created_at ASC, e.id ASC
+                    """,
+                    (self._registry(),),
+                )
+                rows = cur.fetchall()
+            return [self._review_row_to_event(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("list_all_review_events failed: %s", exc)
+            return []
 
     # ------------------------------------------------------------------
     # Global config

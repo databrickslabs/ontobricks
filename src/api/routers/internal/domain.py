@@ -7,9 +7,9 @@ Moved from app/frontend/project/routes.py during the front/back split.
 import io
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import StreamingResponse
 
 from shared.config.settings import get_settings, Settings
@@ -32,7 +32,7 @@ from back.objects.session import (
     get_session_manager,
     sanitize_domain_folder,
 )
-from back.objects.domain import Domain
+from back.objects.domain import Domain, SettingsService
 from api.routers.internal._permissions import filter_visible_domains
 
 logger = get_logger(__name__)
@@ -494,25 +494,69 @@ async def list_version_details(
     return p.list_version_details(p.build_registry_service())
 
 
-@router.post("/set-version-mcp")
-async def set_version_mcp(
+@router.get("/build-runs")
+async def list_build_runs(
+    version: Optional[str] = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List build runs recorded for the loaded domain (newest-first)."""
+    domain = get_domain(session_mgr)
+    p = Domain(domain, settings)
+    return p.list_build_runs_result(p.build_registry_service(), version=version, limit=limit)
+
+
+@router.get("/audit-trail")
+async def audit_trail(
+    limit: int = Query(default=500, ge=1, le=2000),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Unified audit trail (review decisions + build runs) for the loaded domain."""
+    domain = get_domain(session_mgr)
+    p = Domain(domain, settings)
+    return p.audit_trail_result(p.build_registry_service(), limit=limit)
+
+
+@router.post("/set-version-status")
+async def set_version_status(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Toggle the API/MCP flag for a specific version (only one may be active).
+    """Transition a version's lifecycle status (DRAFT / IN-REVIEW / PUBLISHED).
 
-    In the web UI, operators change this from **Registry → Browse**; this
-    endpoint remains for integrations and tests that POST JSON directly.
+    Body: ``{domain_name, version, status}``. ``domain_name`` is the target
+    domain (may differ from the loaded session domain — e.g. from Registry
+    Browse). Authorization is resolved against the *target* domain: the
+    state machine and per-transition role tiers are enforced server-side
+    by :meth:`SettingsService.set_registry_version_status_result`.
     """
     data = await request.json()
-    version = data.get("version")
-    enabled = bool(data.get("enabled", False))
-    if not version:
-        raise ValidationError("version is required")
-    domain = get_domain(session_mgr)
-    p = Domain(domain, settings)
-    return p.set_version_mcp(p.build_registry_service(), version, enabled)
+    domain_name = (data.get("domain_name") or "").strip()
+    version = (data.get("version") or "").strip()
+    new_status = (data.get("status") or "").strip()
+    if not domain_name or not version or not new_status:
+        raise ValidationError("domain_name, version and status are required")
+
+    user_role = getattr(request.state, "user_role", "") or ""
+    domain_role = SettingsService.resolve_domain_role(
+        request, domain_name, settings, app_role=user_role
+    )
+    actor_email = getattr(request.state, "user_email", "") or request.headers.get(
+        "x-forwarded-email", ""
+    )
+    return SettingsService.set_registry_version_status_result(
+        domain_name,
+        version,
+        new_status,
+        user_role=user_role,
+        user_domain_role=domain_role,
+        actor_email=actor_email,
+        session_mgr=session_mgr,
+        settings=settings,
+    )
 
 
 # ===========================================

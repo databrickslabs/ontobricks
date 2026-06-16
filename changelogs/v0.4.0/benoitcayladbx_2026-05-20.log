@@ -1,0 +1,371 @@
+## Persist active tab across entity/relationship selections
+
+### Context
+In the Ontology Designer (and in the Entities / Relationships detail panels), the
+right-hand pane has multiple tabs (Details, Attributes, Actions, Constraints for
+entities; Details, Constraints for relationships).  Previously the panel always
+reset to the "Details" tab whenever the user clicked a different entity or
+relationship, forcing the user to manually re-select their preferred tab each time.
+
+### Changes
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   - Added two module-level variables `_entityPanelActiveTab` and `_relPanelActiveTab`
+     (default `'details'`) to remember the last active tab per panel type.
+   - Updated `switchFormTab()` to write the chosen tab name into the correct
+     variable based on the parent form ID (`sharedEntityForm` or
+     `sharedRelationshipForm`).
+   - Updated the entity form HTML template (inside `renderEntityForm`) to
+     substitute the saved tab into `active` classes for both nav links and pane
+     `div`s (Details, Attributes, Actions, Constraints).
+   - Updated the relationship form HTML template (inside `renderRelationshipForm`)
+     in the same way (Details, Constraints), with a safety guard that falls back
+     to `'details'` if the stored value is not a valid relationship tab.
+
+### Modified files
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+
+---
+
+## FHIR version selection (R4, R4B, R5)
+
+### Context
+The FHIR importer was hard-coded to R5. Users may need R4 (widely deployed) or R4B
+for specific healthcare integrations. This change adds a version dropdown to the
+FHIR import UI and wires it through the full stack.
+
+### Changes
+1. `src/back/core/industry/fhir/FhirImportService.py`
+   - Added `FHIR_VERSIONS` class dict mapping version keys (`R4`, `R4B`, `R5`) to
+     their HL7 publication base URLs and display labels.
+   - Added `DEFAULT_VERSION = "R5"` constant.
+   - Added `get_fhir_versions()` static method returning `[{key, label, default}]`.
+   - Updated `_fetch_fhir_ttl(version)` to look up the base URL from `FHIR_VERSIONS`
+     and raise `ValidationError` for unknown versions. All log/error messages now
+     include the version string.
+   - Updated `_transform_fhir_to_ontobricks(graph, domain_keys, version)` to embed
+     the version in `ontology_info.name`, `ontology_info.description`, and
+     `ontology_info.version`.
+   - Updated `fetch_and_parse_fhir(domain_keys, version)` to validate, normalise
+     (`upper()`), and thread the version through all internal calls.
+
+2. `src/back/core/industry/fhir/__init__.py`
+   - Exported `get_fhir_versions`.
+
+3. `src/back/objects/ontology/Ontology.py`
+   - `import_industry_ontology(kind, domain_keys, version=None)` — added optional
+     `version` param; for FHIR it resolves to `DEFAULT_VERSION` when omitted and
+     passes it to `fetch_and_parse_fhir`. The `ont_name` and `desc_prefix` are now
+     dynamic (use the actual imported version, not hard-coded "R5").
+
+4. `src/api/routers/internal/ontology.py`
+   - Imported `get_fhir_versions`.
+   - Added `GET /ontology/fhir-versions` endpoint returning supported versions.
+   - Updated `POST /ontology/import-{kind}` to read optional `"version"` from the
+     request body and pass it to `import_industry_ontology`.
+
+5. `src/front/templates/partials/ontology/_ontology_import.html`
+   - Replaced hardcoded "R5" references with generic "FHIR" text.
+   - Added a `<select id="fhirVersionSelect">` dropdown with R4, R4B, R5 (default)
+     above the domain checkboxes.
+
+6. `src/front/static/ontology/js/ontology-import.js`
+   - Reads `fhirVersionSelect` value before the import, falls back to `"R5"`.
+   - Includes `version` in the POST body alongside `domains`.
+   - Updates the status text and success notification to include the chosen version.
+
+### Modified files
+- `src/back/core/industry/fhir/FhirImportService.py`
+- `src/back/core/industry/fhir/__init__.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/api/routers/internal/ontology.py`
+- `src/front/templates/partials/ontology/_ontology_import.html`
+- `src/front/static/ontology/js/ontology-import.js`
+
+### Test results
+44/44 FHIR importer unit tests passed.
+
+---
+
+## Expand FHIR unit-test coverage
+
+### Context
+The existing `TestFhirImportService` covered the pre-version-selection surface.
+After adding multi-version support the new code paths had no tests.
+
+### Changes
+1. `tests/units/ontology/test_industry_importers.py`
+   - **Version catalog** — `get_fhir_versions()` shape, required fields, R4/R4B/R5
+     presence, exactly-one-default invariant.
+   - **URL routing** — `_fetch_fhir_ttl(version)` calls the correct HL7 base URL
+     for each of R4, R4B, R5; unknown version raises `ValidationError`.
+   - **`ontology_info` propagation** — `_transform_fhir_to_ontobricks` embeds the
+     version string in `version`, `name`, and `description` fields; description
+     contains the matching base URL.
+   - **`fetch_and_parse_fhir` end-to-end** (mocked HTTP) — default version is R5,
+     R4 routes to R4 URL, lower-case version is normalised, unknown version raises,
+     FOUNDATION is auto-injected when omitted.
+   - **Object property extraction** — restriction with a non-primitive range
+     (`HumanName`) produces an entry in the top-level `properties` list with correct
+     `domain` and `range` fields.
+   - **Multi-domain union** — selecting CLINICAL + FINANCIAL + DIAGNOSTICS returns
+     classes from all three domains.
+   Total: **62 tests** (was 44, +18 new).
+
+### Modified files
+- `tests/units/ontology/test_industry_importers.py`
+
+### Test results
+62/62 passed.
+
+---
+
+## Replace native confirm() with custom popup in all import handlers
+
+### Context
+All four industry-ontology import handlers (FIBO, CDISC, FHIR, IOF) were using
+the browser's native `confirm()` dialog when the user clicked Import with only the
+mandatory base domain selected.  Native `confirm()` is blocked in Databricks Apps
+and is inconsistent with the rest of the application which uses `showConfirmDialog`.
+
+### Changes
+1. `src/front/static/ontology/js/ontology-import.js`
+   - Replaced `confirm(...)` → `await showConfirmDialog({...})` in the FIBO handler
+     (FND only guard).
+   - Replaced `confirm(...)` → `await showConfirmDialog({...})` in the CDISC handler
+     (Schemas only guard).
+   - Replaced `confirm(...)` → `await showConfirmDialog({...})` in the FHIR handler
+     (Foundation only guard).
+   - Replaced `confirm(...)` → `await showConfirmDialog({...})` in the IOF handler
+     (Core only guard).
+   All dialogs use the `info-circle` icon, a descriptive title, HTML-formatted body,
+   and a labelled confirm button matching the specific importer context.
+
+### Modified files
+- `src/front/static/ontology/js/ontology-import.js`
+
+### Test results
+675 passed, 1 skipped — 1 pre-existing failure in
+`tests/units/auth/test_permissions.py::TestPrincipalsCache::test_app_and_workspace_caches_are_isolated`
+(unrelated to this change: mock target `PermissionService.DatabricksClient` does
+not exist in the current codebase).
+
+---
+
+## Code review — rule compliance + documentation update
+
+### Context
+Full code review pass per `.cursorrules` following v0.4.0 feature freeze. Covered
+rule compliance, duplication, dead code, session-data audit, and documentation
+gap analysis.
+
+### Changes
+
+1. `src/api/routers/internal/home.py`
+   - Fixed import: `from back.objects.domain.HomeService import HomeService` →
+     `from back.objects.domain import HomeService` (violates `.cursor/07 §Package
+     Organisation` rule — consumers must always import from the package).
+
+2. `src/front/templates/partials/ontology/_pitfalls.html`
+   - Removed inline `<style>` block (violates `.cursor/05 §Frontend`).
+   - Removed `onclick` attributes from Run Analysis, All, and Fast Only buttons.
+
+3. `src/front/static/ontology/css/ontology-pitfalls.css` *(new)*
+   - Extracted pitfall-tooltip and results-pane height styles.
+
+4. `src/front/templates/ontology.html`
+   - Added `<link>` for `ontology-pitfalls.css`.
+
+5. `src/front/static/ontology/js/ontology-pitfalls.js`
+   - Wired `click` event listeners for the three buttons inside `init()`.
+
+6. `docs/sphinx/api/app.core.external.rst` *(new)*
+   - Parent RST page for vendored/external integrations.
+
+7. `docs/sphinx/api/app.core.external.pitfalls.rst` *(new)*
+   - Autodoc page for `back.core.external.pitfalls` (PitfallsService, runner, utils).
+
+8. `docs/sphinx/api/app.core.rst`
+   - Added `app.core.external` to the Subpackages toctree.
+
+9. `docs/sphinx/index.rst`
+   - Added `app.core.external` and `app.core.external.pitfalls` to the API Reference toctree.
+
+10. `docs/sphinx/api/app.objects.registry.rst`
+    - Added `obx_format` autodoc section (Registry OBX Export / Import).
+
+11. `docs/features.md`
+    - Added **Ontology Pitfalls Detector** feature entry.
+    - Added **Registry OBX Export / Import** feature entry.
+    - Updated industry-import list to include HL7 FHIR R4/R4B/R5.
+
+12. `docs/import-export.md`
+    - Added **OBX Export / Import (Browser UI)** section with step-by-step instructions.
+    - Updated CLI section header; removed incorrect "no UI and no HTTP endpoint" statement.
+    - Replaced old comparison table with accurate OBX UI vs CLI comparison.
+
+13. `docs/lakebase-graphdb.md`
+    - §5.1 — Updated `app_managed` description to reflect 3-object Postgres layout
+      (`bulk_load_into_sync` into `*_sync`, companion `*__app`, UNION view).
+    - §6.2 — Merged single-table and three-object tables into one unified table
+      (both modes use the same layout since v0.4.0).
+    - §6.3 — Added `app_managed` drop cascade path.
+
+14. `README.md`
+    - Fixed "one flat table per domain version" → 3-object layout description.
+    - Removed stale "v0.3" version reference from `sync_table_mode` description.
+    - Added link to `docs/lakebase-graphdb.md`.
+    - Updated industry-import list to include HL7 FHIR R4/R4B/R5.
+    - Added **Registry OBX Export / Import (UI)** section.
+    - Added **Ontology Pitfalls Detector** section with `uv sync --extra pitfalls`.
+
+15. `docs/README.md`
+    - Updated User Guide row description to mention FHIR, Pitfalls, OBX.
+    - Added topic-index rows for Lakebase GraphDB, GraphDB Integration,
+      Cohort Discovery, and Import/Export guides.
+
+### Modified files
+- `src/api/routers/internal/home.py`
+- `src/front/templates/partials/ontology/_pitfalls.html`
+- `src/front/static/ontology/css/ontology-pitfalls.css` (new)
+- `src/front/templates/ontology.html`
+- `src/front/static/ontology/js/ontology-pitfalls.js`
+- `docs/sphinx/api/app.core.external.rst` (new)
+- `docs/sphinx/api/app.core.external.pitfalls.rst` (new)
+- `docs/sphinx/api/app.core.rst`
+- `docs/sphinx/index.rst`
+- `docs/sphinx/api/app.objects.registry.rst`
+- `docs/features.md`
+- `docs/import-export.md`
+- `docs/lakebase-graphdb.md`
+- `README.md`
+- `docs/README.md`
+
+### Test result
+2032 passed, 0 failed, 80 skipped.
+
+---
+
+## Fix dependency security vulnerabilities (urllib3, gitpython, idna, strawberry-graphql)
+
+### Context
+Five Dependabot alerts were filed against `uv.lock`. Two were already covered by
+existing `[tool.uv] constraint-dependencies` entries; this change closes the
+remaining three by adding an `idna>=3.13` constraint and bumping the
+`strawberry-graphql` floor. Alerts closed:
+- urllib3 GHSA-mf9v-mfxr-j63j (decompression-bomb bypass) — was already pinned ✓
+- urllib3 GHSA-qccp-gfcp-xxvc (sensitive headers in redirects) — was already pinned ✓
+- GitPython GHSA (newline injection / RCE via core.hooksPath bypass) — was already pinned ✓
+- idna GHSA-65pc-fj4g-8rjx (bypass of CVE-2024-3651 fix) — fixed here
+- strawberry-graphql (GraphiQL exposes HTTP headers in URL) — fixed here
+
+### Changes
+
+1. `pyproject.toml`
+   - Bumped `strawberry-graphql[fastapi]` floor from `>=0.312.3` to `>=0.315.4`
+     (first release with the GraphiQL headers-in-URL fix).
+   - Added `idna>=3.13` to `[tool.uv] constraint-dependencies`
+     (3.13 closes the quadratic-time bypass of the CVE-2024-3651 mitigation).
+
+2. `uv.lock`
+   - Resolved `idna` 3.11 → 3.15.
+   - Resolved `strawberry-graphql` 0.314.3 → 0.315.4.
+
+### Modified files
+- `pyproject.toml`
+- `uv.lock`
+
+### Tests
+`uv run pytest -q` → 2237 passed, 0 failed in 343.78s.
+
+---
+
+## Fix: ontology assistant crash on first invocation — PITFALL_RULES.md excluded from deploy
+
+### Context
+The ontology assistant endpoint (`POST /ontology/assistant/chat`) raised a `FileNotFoundError`
+at module-import time because `PITFALL_RULES.md` was never synced to the Databricks App.
+The `*.md` exclusion rule in `databricks.yml` was too broad: it swept up runtime-required
+data files alongside documentation.
+
+### Changes
+1. `databricks.yml` — added `src/agents/PITFALL_RULES.md` to `sync.include` so the DAB
+   deploy uploads it even though `*.md` is globally excluded.
+
+### Modified files
+- `databricks.yml`
+
+### Tests
+No test change needed — the fix is in the deploy config.
+
+---
+
+## Fix: ontology assistant FAB requires two clicks to open on fresh page load
+
+### Context
+On first load, the popup visibility is driven by CSS (`.assistant-popup { display: none }`).
+`popup.style.display` returns `""` (no inline style), so `"" !== "none"` evaluated to `true`
+— the first click treated the popup as visible and hid it; the second click opened it.
+
+### Changes
+1. `src/front/static/ontology/js/ontology-assistant.js` line 50 — switched
+   `popup.style.display` to `getComputedStyle(popup).display` so the check reflects
+   the actual rendered state regardless of whether the value comes from CSS or an
+   inline style.
+
+### Modified files
+- `src/front/static/ontology/js/ontology-assistant.js`
+
+### Tests
+Manual verification: single click now opens the popup on fresh page load.
+
+---
+
+## Fix: PITFALL_RULES.md not synced by DAB — renamed to .txt
+
+### Context
+The `databricks.yml` `sync.include` override for `PITFALL_RULES.md` did not reliably
+override the `*.md` glob exclusion. Renamed the file to `PITFALL_RULES.txt` so it
+never matches the exclusion pattern, eliminating the need for any special include entry.
+
+### Changes
+1. `src/agents/PITFALL_RULES.md` → deleted
+2. `src/agents/PITFALL_RULES.txt` → new (same content)
+3. `src/agents/agent_ontology_assistant/engine.py` — `_PITFALL_RULES_PATH` updated to `.txt`
+4. `databricks.yml` — removed the now-unnecessary `src/agents/PITFALL_RULES.md` include entry
+
+Deployed successfully via `make deploy`.
+
+### Modified files
+- `src/agents/PITFALL_RULES.txt` (renamed from .md)
+- `src/agents/agent_ontology_assistant/engine.py`
+- `databricks.yml`
+
+### Tests
+`make deploy` → exit 0. File now present at `/app/python/source_code/src/agents/PITFALL_RULES.txt`.
+
+---
+
+## Docs: architecture diagrams added to deployment.md
+
+### Context
+The deployment guide lacked visual representations of the OntoBricks components,
+Lakebase schema layout, data flows, ports, and permission layers.
+
+### Changes
+1. `docs/deployment.md` — added new `## Architecture` section (before §1) with five diagrams:
+   - **A. Component Architecture** — full topology: two Databricks Apps, bound resources,
+     Model Serving, MLflow, MCP↔main REST, external users/Playground
+   - **B. Lakebase as Graph DB — Schema Layout** — the three Postgres schemas
+     (ontobricks_registry, ontobricks_graph, ontobricks sync), their tables, who creates
+     them, and when to run the bootstrap grants
+   - **C. Digital Twin Build — Data Flow** — source tables → SQL Warehouse → R2RML →
+     Delta VIEW → Lakebase _sync / __app tables → UNION VIEW → SPARQL
+   - **D. Network Ports** — local dev vs Databricks Apps, including Lakebase TLS / OAuth
+   - **E. Permission Layers** — all four layers (App-level, Unity Catalog, Lakebase
+     Postgres, in-app roles) with exact grants and the make target that applies each
+
+### Modified files
+- `docs/deployment.md`
+
+### Tests
+No code change — documentation only.

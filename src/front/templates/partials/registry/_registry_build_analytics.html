@@ -1,0 +1,73 @@
+<!-- Registry → Build Analytics section (build-run trace) -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-bar-chart me-2"></i>Build Analytics</h4>
+            <p class="text-muted mb-0 small">
+                Per-domain Digital Twin build history and statistics across every run
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshBuildAnalytics" title="Refresh">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-sm-6 col-md-4">
+            <label class="form-label fw-semibold small mb-1">Domain</label>
+            <select class="form-select form-select-sm" id="buildAnalyticsDomain">
+                <option value="">Loading domains...</option>
+            </select>
+        </div>
+        <div class="col-sm-6 col-md-4">
+            <label class="form-label fw-semibold small mb-1">Version</label>
+            <select class="form-select form-select-sm" id="buildAnalyticsVersion">
+                <option value="">All versions</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="row g-2 mb-3" id="buildAnalyticsCards" style="display:none;">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small">Total builds</div>
+                    <div class="h4 mb-0" id="baTotalRuns">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small">Success rate</div>
+                    <div class="h4 mb-0" id="baSuccessRate">0%</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small">Avg duration</div>
+                    <div class="h4 mb-0" id="baAvgDuration">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body py-2 px-3">
+                    <div class="text-muted small">Active build triples</div>
+                    <div class="h4 mb-0" id="baLastTriples">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="buildAnalyticsRunsContainer">
+        <div class="text-center text-muted small py-3">
+            Select a domain to view its build history.
+        </div>
+    </div>
+</div>

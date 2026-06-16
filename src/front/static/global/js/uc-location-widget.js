@@ -124,7 +124,7 @@ const UCLocationWidget = (function() {
                     </span>
                     <input type="text" class="form-control" id="${widgetId}_display" 
                            readonly placeholder="No location set" 
-                           style="background-color: #f8f9fa; cursor: pointer;"
+                           style="background-color: #ffffff; cursor: pointer;"
                            onclick="UCLocationWidget.openModal('${widgetId}')">
                     <button type="button" class="btn btn-outline-secondary" 
                             onclick="UCLocationWidget.openModal('${widgetId}')"

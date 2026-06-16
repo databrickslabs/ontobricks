@@ -2671,6 +2671,213 @@ async function toggleEntityExclusion(uri, excluded, itemType) {
 // Expose globally so the status tab can call it
 window.toggleEntityExclusion = toggleEntityExclusion;
 
+/**
+ * Returns only ObjectProperty entries from an allProperties array,
+ * using the same heuristic as buildMappingGraph().
+ */
+function _filterObjectProperties(allProperties) {
+    return allProperties.filter(prop => {
+        if (prop.type) {
+            return prop.type === 'ObjectProperty' || prop.type === 'owl:ObjectProperty';
+        }
+        if (prop.range) {
+            const range = prop.range.toLowerCase();
+            if (range.startsWith('xsd:') || range.includes('string') || range.includes('integer') ||
+                range.includes('decimal') || range.includes('date') || range.includes('boolean') ||
+                range.includes('float') || range.includes('double') || range.includes('time')) {
+                return false;
+            }
+        }
+        return true;
+    });
+}
+
+/**
+ * Auto-exclude entities and relationships that are noise:
+ *  • Unmapped entities (no sql_query)
+ *  • Orphans / pure-parent entities: not the domain or range of any ObjectProperty
+ *    (they only participate in inheritance — abstract base classes, isolated nodes)
+ * Unmapped ObjectProperties are excluded too.
+ * Already-excluded items are skipped.
+ */
+async function autoExcludeAll() {
+    const classes = MappingState.loadedOntology?.classes || [];
+    const allProperties = MappingState.loadedOntology?.properties || [];
+    const objectProperties = _filterObjectProperties(allProperties);
+
+    // Build the same node-resolution map as buildMappingGraph() so domain/range
+    // references (which may be local-names or full URIs) resolve correctly.
+    const validNodeIds = new Set(classes.map(c => c.name || c.localName));
+    const nodeIdByLower = new Map(classes.map(c => [(c.name || c.localName).toLowerCase(), c.name || c.localName]));
+    const resolveNodeId = id => {
+        if (!id) return null;
+        if (validNodeIds.has(id)) return id;
+        const lower = id.toLowerCase();
+        if (nodeIdByLower.has(lower)) return nodeIdByLower.get(lower);
+        const localPart = id.includes('#') ? id.split('#').pop() : id.includes('/') ? id.split('/').pop() : null;
+        if (localPart) {
+            if (validNodeIds.has(localPart)) return localPart;
+            if (nodeIdByLower.has(localPart.toLowerCase())) return nodeIdByLower.get(localPart.toLowerCase());
+        }
+        return null;
+    };
+
+    // Collect node IDs connected by at least one non-excluded ObjectProperty.
+    const nodesWithRelationships = new Set();
+    objectProperties.forEach(prop => {
+        if (!prop.excluded && prop.domain && prop.range) {
+            const srcId = resolveNodeId(prop.domain);
+            const tgtId = resolveNodeId(prop.range);
+            if (srcId) nodesWithRelationships.add(srcId);
+            if (tgtId) nodesWithRelationships.add(tgtId);
+        }
+    });
+
+    // Mirror the graph's "truly mapped" definition (sql_query entries only).
+    const mappedEntityUris = new Set(
+        (MappingState.config.entities || [])
+            .filter(m => m.sql_query)
+            .map(m => m.ontology_class || m.class_uri)
+            .filter(Boolean)
+    );
+    const mappedRelUris = new Set(
+        (MappingState.config.relationships || [])
+            .filter(m => m.sql_query)
+            .map(m => m.property)
+            .filter(Boolean)
+    );
+
+    // Candidate entities: not already excluded AND (unmapped OR no relationships).
+    // Entities that are both mapped AND connected stay visible.
+    const candidateEntityUris = classes
+        .filter(c => {
+            if (c.excluded) return false;
+            const isMapped = mappedEntityUris.has(c.uri);
+            const hasRelationships = nodesWithRelationships.has(c.name || c.localName);
+            return !(isMapped && hasRelationships);
+        })
+        .map(c => c.uri);
+
+    // Candidate relationships: unmapped ObjectProperties not already excluded.
+    const candidateRelUris = objectProperties
+        .filter(p => !p.excluded && !mappedRelUris.has(p.uri))
+        .map(p => p.uri);
+
+    if (candidateEntityUris.length === 0 && candidateRelUris.length === 0) {
+        showNotification('Nothing to auto-exclude', 'info', 2000);
+        return;
+    }
+
+    try {
+        const requests = [];
+        if (candidateEntityUris.length > 0) {
+            requests.push(fetch('/mapping/exclude', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uris: candidateEntityUris, excluded: true, item_type: 'entity' }),
+                credentials: 'same-origin'
+            }));
+        }
+        if (candidateRelUris.length > 0) {
+            requests.push(fetch('/mapping/exclude', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uris: candidateRelUris, excluded: true, item_type: 'relationship' }),
+                credentials: 'same-origin'
+            }));
+        }
+
+        await Promise.all(requests);
+
+        // Stamp local state so the graph refresh reads the right flags immediately.
+        candidateEntityUris.forEach(uri => {
+            let entry = (MappingState.config.entities || []).find(m => m.ontology_class === uri);
+            if (entry) { entry.excluded = true; } else { MappingState.config.entities.push({ ontology_class: uri, excluded: true }); }
+            const cls = classes.find(c => c.uri === uri);
+            if (cls) cls.excluded = true;
+        });
+        candidateRelUris.forEach(uri => {
+            let entry = (MappingState.config.relationships || []).find(m => m.property === uri);
+            if (entry) { entry.excluded = true; } else { MappingState.config.relationships.push({ property: uri, excluded: true }); }
+            const prop = objectProperties.find(p => p.uri === uri);
+            if (prop) prop.excluded = true;
+        });
+
+        const total = candidateEntityUris.length + candidateRelUris.length;
+        showNotification(`Auto-excluded ${total} item(s)`, 'success', 2500);
+        refreshMappingDesign();
+        if (typeof updateMappingCompletionStatus === 'function') updateMappingCompletionStatus();
+    } catch (error) {
+        showNotification('Auto-exclude failed: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Include (un-exclude) all currently excluded entities and relationships in bulk.
+ */
+async function includeAllExcluded() {
+    const classes = MappingState.loadedOntology?.classes || [];
+    const properties = MappingState.loadedOntology?.properties || [];
+
+    const excludedEntityUris = classes.filter(c => c.excluded).map(c => c.uri);
+    const excludedRelUris = properties.filter(p => p.excluded).map(p => p.uri);
+
+    if (excludedEntityUris.length === 0 && excludedRelUris.length === 0) {
+        showNotification('No excluded items to include', 'info', 2000);
+        return;
+    }
+
+    try {
+        const requests = [];
+        if (excludedEntityUris.length > 0) {
+            requests.push(
+                fetch('/mapping/exclude', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uris: excludedEntityUris, excluded: false, item_type: 'entity' }),
+                    credentials: 'same-origin'
+                })
+            );
+        }
+        if (excludedRelUris.length > 0) {
+            requests.push(
+                fetch('/mapping/exclude', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uris: excludedRelUris, excluded: false, item_type: 'relationship' }),
+                    credentials: 'same-origin'
+                })
+            );
+        }
+
+        await Promise.all(requests);
+
+        // Update local state
+        excludedEntityUris.forEach(uri => {
+            const entry = (MappingState.config.entities || []).find(m => m.ontology_class === uri);
+            if (entry) delete entry.excluded;
+            const cls = classes.find(c => c.uri === uri);
+            if (cls) delete cls.excluded;
+        });
+        excludedRelUris.forEach(uri => {
+            const entry = (MappingState.config.relationships || []).find(m => m.property === uri);
+            if (entry) delete entry.excluded;
+            const prop = properties.find(p => p.uri === uri);
+            if (prop) delete prop.excluded;
+        });
+
+        const total = excludedEntityUris.length + excludedRelUris.length;
+        showNotification(`${total} excluded item(s) included`, 'success', 2500);
+        refreshMappingDesign();
+        if (typeof updateMappingCompletionStatus === 'function') updateMappingCompletionStatus();
+    } catch (error) {
+        showNotification('Error including excluded items: ' + error.message, 'error');
+    }
+}
+
+window.autoExcludeAll = autoExcludeAll;
+window.includeAllExcluded = includeAllExcluded;
+
 // Initialize panel close/save buttons
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('closePanelBtn')?.addEventListener('click', closeMappingPanel);

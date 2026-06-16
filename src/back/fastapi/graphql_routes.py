@@ -47,6 +47,17 @@ def _graphql_safe_error_message(exc: BaseException) -> str:
     return "The query could not be executed."
 
 
+def _is_external_request(request: Request) -> bool:
+    """Whether the request hit the public external GraphQL mount.
+
+    Reads the raw routed path (``scope["path"]``) rather than
+    ``request.url.path``: the latter is reconstructed from the Host header and
+    could be poisoned to flip the external/internal gate (BadHost /
+    CVE-2026-48710).
+    """
+    return request.scope["path"].startswith(EXTERNAL_GRAPHQL_PUBLIC_PREFIX)
+
+
 # ------------------------------------------------------------------
 # Request / response models
 # ------------------------------------------------------------------
@@ -77,19 +88,42 @@ class GraphQLDomainsResponse(BaseModel):
 # ------------------------------------------------------------------
 
 
-def _load_domain_from_registry(domain_name, session_mgr, settings):
-    """Load a domain by name from the registry and return a DomainSession."""
+def _load_domain_from_registry(domain_name, session_mgr, settings, *, external=False):
+    """Load a domain by name from the registry and return a DomainSession.
+
+    When *external* is ``True`` (the public ``/api/v1/graphql`` mount) the
+    resolution is strict PUBLISHED-only: the session-folder shortcut is
+    skipped and only the latest PUBLISHED version is served. Internal UI
+    GraphiQL (*external* ``False``) keeps the session shortcut and falls
+    back to the latest version when nothing is open/published.
+    """
     domain = get_domain(session_mgr)
 
     svc = RegistryService.from_context(domain, settings)
     if not svc.cfg.is_configured:
         raise ValidationError("Registry not configured")
 
+    if external:
+        # Public API surface: only PUBLISHED versions are data-accessible.
+        ok, data, version, err = svc.load_published_domain_data(domain_name)
+        if not ok:
+            raise NotFoundError(err)
+        domain.clear_generated_content()
+        domain.import_from_file(data, version=version)
+        domain.domain_folder = domain_name
+        domain.save()
+        logger.info(
+            "GraphQL(external): loaded PUBLISHED domain '%s' version %s",
+            domain_name,
+            version,
+        )
+        return domain
+
     # If the user already has this registry folder open at a chosen version,
-    # keep it. Otherwise GraphQL would call load_mcp_domain_data(), which
-    # picks the newest version with mcp_enabled=True — often an older v3 while
-    # the user is on v4 — and would open the wrong graph store snapshot for
-    # subsequent Digital Twin / data-quality calls.
+    # keep it. Otherwise GraphQL would resolve to the latest PUBLISHED
+    # version — often an older v3 while the user is on v4 — and would open
+    # the wrong graph store snapshot for subsequent Digital Twin /
+    # data-quality calls.
     session_folder = (getattr(domain, "domain_folder", None) or "").strip()
     session_ver = (getattr(domain, "current_version", None) or "").strip()
     if session_folder == domain_name and session_ver:
@@ -109,17 +143,21 @@ def _load_domain_from_registry(domain_name, session_mgr, settings):
             return domain
         logger.warning(
             "GraphQL: cannot read session version %s for '%s' (%s) — "
-            "falling back to MCP-enabled / latest version",
+            "falling back to PUBLISHED / latest version",
             session_ver,
             domain_name,
             msg_session,
         )
 
-    ok, data, version, err = svc.load_mcp_domain_data(domain_name)
+    ok, data, version, err = svc.load_published_domain_data(domain_name)
     if not ok:
-        if "not found" in err.lower() or "no versions" in err.lower():
-            raise NotFoundError(err)
-        raise InfrastructureError(err)
+        # Internal UI fallback: serve the latest version even if not
+        # PUBLISHED (the UI operates on the session-loaded version).
+        ok, data, version, err = svc.load_latest_domain_data(domain_name)
+        if not ok:
+            if "not found" in err.lower() or "no versions" in err.lower():
+                raise NotFoundError(err)
+            raise InfrastructureError(err)
 
     domain.clear_generated_content()
     domain.import_from_file(data, version=version)
@@ -236,14 +274,15 @@ async def graphql_playground(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = _load_domain_from_registry(domain_name, session_mgr, settings)
+    is_external = _is_external_request(request)
+    domain = _load_domain_from_registry(
+        domain_name, session_mgr, settings, external=is_external
+    )
     _get_schema_and_context(domain, settings)
 
     display_name = (domain.info or {}).get("name", domain_name)
     api_prefix = (
-        EXTERNAL_GRAPHQL_PUBLIC_PREFIX
-        if request.url.path.startswith(EXTERNAL_GRAPHQL_PUBLIC_PREFIX)
-        else "/graphql"
+        EXTERNAL_GRAPHQL_PUBLIC_PREFIX if is_external else "/graphql"
     )
     return HTMLResponse(_graphiql_html(domain_name, display_name, api_prefix))
 
@@ -255,12 +294,16 @@ async def graphql_playground(
     "The schema is auto-generated from the domain's ontology.",
 )
 async def graphql_execute(
+    request: Request,
     domain_name: str,
     body: GraphQLRequest,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = _load_domain_from_registry(domain_name, session_mgr, settings)
+    is_external = _is_external_request(request)
+    domain = _load_domain_from_registry(
+        domain_name, session_mgr, settings, external=is_external
+    )
     schema, context = _get_schema_and_context(domain, settings)
 
     if body.depth is not None:
@@ -302,11 +345,15 @@ async def graphql_execute(
     description="Return the auto-generated GraphQL schema in SDL format.",
 )
 async def graphql_sdl(
+    request: Request,
     domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = _load_domain_from_registry(domain_name, session_mgr, settings)
+    is_external = _is_external_request(request)
+    domain = _load_domain_from_registry(
+        domain_name, session_mgr, settings, external=is_external
+    )
     schema, _ = _get_schema_and_context(domain, settings)
 
     from strawberry.printer import print_schema
@@ -322,13 +369,17 @@ async def graphql_sdl(
     "Also returns subject counts and optional search diagnostics.",
 )
 async def graphql_debug(
+    request: Request,
     domain_name: str,
     type_name: str = Query(None, description="Type to inspect (e.g. Customer)"),
     search: str = Query(None, description="Test search string (e.g. Martinez)"),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    domain = _load_domain_from_registry(domain_name, session_mgr, settings)
+    is_external = _is_external_request(request)
+    domain = _load_domain_from_registry(
+        domain_name, session_mgr, settings, external=is_external
+    )
     schema, context = _get_schema_and_context(domain, settings)
 
     from back.core.graphql import build_schema_for_domain

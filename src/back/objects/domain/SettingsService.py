@@ -32,6 +32,13 @@ from back.objects.registry import (
     invalidate_registry_cache,
     obx_format,
 )
+from back.objects.registry.version_lifecycle import (
+    check_status_transition,
+    STATUS_DRAFT,
+    STATUS_IN_REVIEW,
+    STATUS_PUBLISHED,
+)
+from back.objects.domain.version_status import clear_version_status_cache
 from back.objects.session import (
     SessionManager,
     get_domain,
@@ -856,20 +863,72 @@ class SettingsService:
             ) from e
 
     @staticmethod
-    def set_registry_version_active_result(
+    def resolve_domain_role(
+        request,
+        domain_folder: str,
+        settings: Settings,
+        *,
+        app_role: str = "",
+    ) -> str:
+        """Resolve the caller's effective role on *domain_folder*.
+
+        Unlike the session-scoped role on ``request.state.user_domain_role``
+        (which is for the *loaded* domain), this resolves the role for an
+        arbitrary target domain — needed when a Builder manages version
+        status from Registry Browse for a domain they have not loaded.
+        """
+        try:
+            from back.core.helpers import get_databricks_host_and_token
+
+            email = getattr(request.state, "user_email", "") or request.headers.get(
+                "x-forwarded-email", ""
+            )
+            domain = get_domain(SessionManager(request))
+            host, token = get_databricks_host_and_token(domain, settings)
+            user_token = request.headers.get("x-forwarded-access-token", "")
+            registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+            return permission_service.get_domain_role(
+                email,
+                host,
+                token,
+                registry_cfg,
+                settings.ontobricks_app_name,
+                domain_folder,
+                user_token=user_token,
+                app_role=app_role,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "resolve_domain_role(%s) failed: %s", domain_folder, exc
+            )
+            return ""
+
+    @staticmethod
+    def set_registry_version_status_result(
         domain_name: str,
         version: str,
-        enabled: bool,
+        new_status: str,
+        *,
+        user_role: str,
+        user_domain_role: str,
+        actor_email: str = "",
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        """Toggle the *active* (``mcp_enabled``) flag for a specific version.
+        """Transition a version's lifecycle ``status``.
 
-        Works on any domain in the registry — the domain does not need to be
-        loaded in the current session.  Only one version per domain may be
-        active; enabling one automatically disables the others.
+        Works on any domain in the registry — the domain does not need to
+        be loaded in the current session. Enforces the lifecycle state
+        machine (allowed transitions), per-transition role requirements,
+        and the DRAFT→IN-REVIEW precondition (the version must have been
+        built at least once, i.e. ``last_build`` is set).
+
+        The change is recorded in the ``domain_review_events`` audit log
+        (attributed to ``actor_email``) so direct lifecycle transitions are
+        tracked alongside the review-workflow ones.
         """
         try:
+            new_status = (new_status or "").strip().upper()
             domain = get_domain(session_mgr)
             svc = RegistryService.from_context(domain, settings)
             if not svc.cfg.is_configured:
@@ -879,39 +938,76 @@ class SettingsService:
             if version not in sorted_versions:
                 raise NotFoundError(f'Version {version} not found in "{domain_name}"')
 
-            if enabled:
-                for ver in sorted_versions:
-                    if ver == version:
-                        continue
-                    ok, data, _ = svc.read_version(domain_name, ver)
-                    if not ok:
-                        continue
-                    if data.get("info", {}).get("mcp_enabled"):
-                        data["info"]["mcp_enabled"] = False
-                        svc.write_version(domain_name, ver, json.dumps(data))
-
             ok, data, msg = svc.read_version(domain_name, version)
             if not ok:
                 raise InfrastructureError("Failed to read registry version", detail=msg)
 
-            data.setdefault("info", {})["mcp_enabled"] = enabled
-            svc.write_version(domain_name, version, json.dumps(data))
+            info = data.get("info", {})
+            current_status = (info.get("status") or "DRAFT").upper()
+            last_build = info.get("last_build", "") or ""
+
+            check_status_transition(
+                current_status,
+                new_status,
+                user_role=user_role,
+                user_domain_role=user_domain_role,
+                last_build=last_build,
+            )
+
+            ok, set_msg = svc.set_version_status(domain_name, version, new_status)
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to update version status", detail=set_msg
+                )
+
+            # Attribute the change in the audit log. Best-effort: never let a
+            # failed audit write roll back the transition itself.
+            try:
+                action = {
+                    STATUS_IN_REVIEW: "submitted",
+                    STATUS_PUBLISHED: "published",
+                    STATUS_DRAFT: "reopened",
+                }.get(new_status, "commented")
+                svc.record_review_event(
+                    domain_name,
+                    version,
+                    actor_email or "",
+                    action,
+                    from_status=current_status,
+                    to_status=new_status,
+                    comment="",
+                    meta={"source": "lifecycle"},
+                )
+            except Exception as audit_exc:  # noqa: BLE001
+                logger.warning(
+                    "audit write skipped for %s/%s status change: %s",
+                    domain_name,
+                    version,
+                    audit_exc,
+                )
 
             invalidate_registry_cache()
+            clear_version_status_cache()
 
             if (
                 domain.domain_folder == domain_name
                 and domain.current_version == version
             ):
-                domain.info["mcp_enabled"] = enabled
+                domain.info["status"] = new_status
+                domain.save()
 
-            return {"success": True, "version": version, "active": enabled}
+            return {
+                "success": True,
+                "version": version,
+                "status": new_status,
+                "previous_status": current_status,
+            }
         except OntoBricksError:
             raise
         except Exception as e:
-            logger.exception("Set registry version active failed: %s", e)
+            logger.exception("Set registry version status failed: %s", e)
             raise InfrastructureError(
-                "Set registry version active failed", detail=str(e)
+                "Set registry version status failed", detail=str(e)
             ) from e
 
     @staticmethod
@@ -1188,30 +1284,13 @@ class SettingsService:
         import os
 
         from back.core.databricks import get_lakebase_auth
+        from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
         from back.core.graphdb.lakebase.LakebaseBase import (
             default_schema,
             validate_graph_schema,
         )
 
-        auth = get_lakebase_auth()
-        port = int(os.environ.get("PGPORT", "5432") or "5432")
-        bound_db = os.environ.get("PGDATABASE", "").strip()
-        host_display = (
-            os.environ.get("PGHOST", "")
-            or os.environ.get("LAKEBASE_PROJECT", "")
-            + (
-                "/" + os.environ.get("LAKEBASE_BRANCH", "")
-                if os.environ.get("LAKEBASE_BRANCH")
-                else ""
-            )
-        )
-
-        if not auth.is_available:
-            raise ValidationError(
-                "Lakebase not available — set LAKEBASE_PROJECT + LAKEBASE_BRANCH + PGUSER "
-                "in .env (local), or bind a Databricks App postgres resource (deployed)."
-            )
-
+        # Resolve graph engine config first so we can pick the right auth.
         try:
             _, host, token, registry_cfg = SettingsService._resolve_context(
                 session_mgr, settings
@@ -1228,17 +1307,39 @@ class SettingsService:
 
         db_override = ""
         schema_raw = ""
+        branch_path = ""
         if isinstance(gcfg, dict):
             db_override = (gcfg.get("database") or "").strip()
             schema_raw = (gcfg.get("schema") or "").strip()
+            branch_path = (gcfg.get("lakebase_branch") or "").strip()
+
+        # Use the same auth selection as GraphDBFactory: BranchLakebaseAuth
+        # when lakebase_branch is configured, else the bound auth.
+        if branch_path:
+            auth = BranchLakebaseAuth(branch_path, db_override)
+        else:
+            auth = get_lakebase_auth()
+
+        port = int(os.environ.get("PGPORT", "5432") or "5432")
+        bound_db = os.environ.get("PGDATABASE", "").strip()
+        try:
+            host_display = auth.host
+        except Exception:  # noqa: BLE001
+            host_display = os.environ.get("PGHOST", "") or os.environ.get("LAKEBASE_PROJECT", "")
+
+        if not auth.is_available:
+            raise ValidationError(
+                "Lakebase not available — set LAKEBASE_PROJECT + LAKEBASE_BRANCH + PGUSER "
+                "in .env (local), or bind a Databricks App postgres resource (deployed)."
+            )
 
         try:
             schema = validate_graph_schema(schema_raw or default_schema())
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
 
-        base_db = bound_db or auth.database
-        effective_db = db_override or base_db
+        registry_db = bound_db or get_lakebase_auth().database  # PGDATABASE → registry store
+        graph_db = db_override or registry_db                    # graph_engine_config.database
 
         try:
             from back.core.graphdb.lakebase.pool import _require_psycopg
@@ -1251,7 +1352,7 @@ class SettingsService:
             ) from exc
 
         kwargs = auth.kwargs(application_name="ontobricks-graph-health")
-        kwargs["dbname"] = effective_db
+        kwargs["dbname"] = graph_db
 
         schema_exists = False
         table_count = 0
@@ -1282,31 +1383,44 @@ class SettingsService:
                         row2 = cur.fetchone()
                         table_count = int(row2[0]) if row2 else 0
         except Exception as exc:
+            # A failed connection / missing database is a configuration
+            # condition, not a server error — return a graceful result the UI
+            # renders as a warning instead of surfacing a scary 502.
             logger.warning("graph_engine_lakebase_health probe failed: %s", exc)
-            raise InfrastructureError(
-                "Lakebase health probe failed", detail=str(exc)
-            ) from exc
+            return {
+                "success": False,
+                "reason": "probe_failed",
+                "message": f"Lakebase health probe failed: {exc}",
+                "host": host_display,
+                "port": port,
+                "registry_database": registry_db,
+                "graph_database": graph_db,
+                "graph_schema": schema,
+                "schema_exists": False,
+                "tables_in_schema": 0,
+            }
 
         out: Dict[str, Any] = {
             "success": True,
             "reason": "ok",
             "host": host_display,
             "port": port,
-            "bound_database": base_db,
-            "effective_database": effective_db,
+            "registry_database": registry_db,
+            "graph_database": graph_db,
             "graph_schema": schema,
             "schema_exists": schema_exists,
             "tables_in_schema": table_count,
         }
         if schema_exists:
             out["message"] = (
-                f"Connected to database {effective_db!r}; schema {schema!r} exists "
-                f"({table_count} table(s))."
+                f"Graph DB ready: database={graph_db!r}, schema={schema!r} "
+                f"({table_count} table(s)). Registry database: {registry_db!r}."
             )
         else:
             out["message"] = (
-                f"Connected to database {effective_db!r}, but schema {schema!r} "
-                "does not exist yet — run a Digital Twin build or create the schema."
+                f"Connected to graph database {graph_db!r}, but schema {schema!r} "
+                "does not exist yet — run a Digital Twin build or create the schema. "
+                f"Registry database: {registry_db!r}."
             )
         return out
 
@@ -1472,21 +1586,30 @@ class SettingsService:
         database: str,
         _session_mgr: SessionManager,
         _settings: Settings,
+        branch_path: str = "",
     ) -> Dict[str, Any]:
-        """List Postgres schemas in a Lakebase database (using the bound instance)."""
+        """List Postgres schemas in the graph Lakebase database.
+
+        Uses :meth:`_graph_engine_auth` so it always connects to the correct
+        graph project (BranchLakebaseAuth when configured, bound auth otherwise).
+        ``branch_path`` / ``database`` from the form take priority over saved config.
+        """
         try:
-            from back.core.databricks import get_lakebase_auth
             from back.core.graphdb.lakebase.pool import _require_psycopg
 
-            auth = get_lakebase_auth()
+            auth, effective_db = SettingsService._graph_engine_auth(
+                _session_mgr, _settings,
+                form_branch_path=branch_path,
+                form_database=database,
+            )
             if not auth.is_available:
                 raise ValidationError(
                     "Lakebase resource not bound (LAKEBASE_PROJECT/LAKEBASE_BRANCH/PGUSER missing)"
                 )
             psycopg, _ = _require_psycopg()
             kwargs = auth.kwargs(application_name="ontobricks-schema-list")
-            if database:
-                kwargs["dbname"] = database
+            if effective_db:
+                kwargs["dbname"] = effective_db
             with psycopg.connect(**kwargs) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
@@ -1511,6 +1634,187 @@ class SettingsService:
             raise InfrastructureError(
                 "list Lakebase Postgres schemas failed", detail=str(exc)
             ) from exc
+
+    @staticmethod
+    def graph_engine_lakebase_provision_result(
+        params: Dict[str, Any],
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Provision a brand-new Lakebase graph DB end-to-end (admin only).
+
+        Creates the Lakebase instance/project + Postgres database + graph
+        schema and grants ``CAN_USE`` on the project plus schema privileges
+        to the app + MCP service principals — the in-app equivalent of
+        ``scripts/setup-lakebase.sh`` + ``scripts/bootstrap-lakebase-perms.sh``.
+
+        Runs in a worker thread tracked by the shared :class:`TaskManager`;
+        the route returns a ``task_id`` the UI polls via ``GET /tasks/{id}``.
+        """
+        import threading
+
+        from back.core.graphdb.lakebase.LakebaseBase import (
+            default_schema,
+            validate_graph_schema,
+        )
+        from back.core.graphdb.lakebase.provisioner import (
+            DEFAULT_BRANCH,
+            DEFAULT_CAPACITY,
+            LakebaseGraphProvisioner,
+            provision_steps,
+        )
+        from back.core.task_manager import get_task_manager
+
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        name = (params.get("name") or "").strip()
+        if not name:
+            raise ValidationError("A Lakebase instance/project name is required.")
+        database = (params.get("database") or "").strip()
+        if not database:
+            raise ValidationError("A Postgres database name is required.")
+        capacity = (params.get("capacity") or DEFAULT_CAPACITY).strip()
+        branch = (params.get("branch") or DEFAULT_BRANCH).strip()
+        try:
+            schema = validate_graph_schema(
+                (params.get("schema") or "").strip() or default_schema()
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
+        pg_user = os.environ.get("PGUSER", "").strip()
+        if not pg_user:
+            raise ValidationError(
+                "PGUSER is not set — the provisioning button only works when the "
+                "app is bound to Lakebase (Databricks App mode)."
+            )
+
+        # Apps whose service principals receive the grants: the running app
+        # first, then the MCP app (UI override -> MCP_APP_NAME env -> default).
+        app_name = (settings.ontobricks_app_name or "").strip()
+        mcp_app_name = (
+            (params.get("mcp_app_name") or "").strip()
+            or os.environ.get("MCP_APP_NAME", "").strip()
+            or "mcp-ontobricks"
+        )
+        app_names: List[str] = []
+        for candidate in (app_name, mcp_app_name):
+            if candidate and candidate not in app_names:
+                app_names.append(candidate)
+        if not app_names:
+            raise ValidationError(
+                "Could not determine the app name to grant — set ONTOBRICKS_APP_NAME."
+            )
+
+        # Resolve sync mode + UC catalog from the saved engine config so the
+        # managed_synced UC grant targets the right catalog.
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        global_config_service.load(host, token, registry_cfg, force=True)
+        saved_cfg = global_config_service.get_graph_engine_config(
+            host, token, registry_cfg
+        )
+        saved_cfg = dict(saved_cfg) if isinstance(saved_cfg, dict) else {}
+        sync_mode = (saved_cfg.get("sync_mode") or "app_managed").strip()
+        uc_catalog = ""
+        if bool(params.get("grant_uc_catalog")) and sync_mode == "managed_synced":
+            uc_catalog = (saved_cfg.get("sync_uc_catalog") or "").strip()
+
+        tm = get_task_manager()
+        task = tm.create_task(
+            name="Lakebase Graph DB Provision",
+            task_type="lakebase_provision",
+            steps=provision_steps(grant_uc=bool(uc_catalog)),
+        )
+
+        def run_provision() -> None:
+            LakebaseGraphProvisioner(
+                tm=tm,
+                task_id=task.id,
+                name=name,
+                capacity=capacity,
+                branch=branch,
+                database=database,
+                schema=schema,
+                app_names=app_names,
+                sync_mode=sync_mode,
+                uc_catalog=uc_catalog,
+                pg_user=pg_user,
+                operator_email=email,
+            ).run()
+
+        thread = threading.Thread(target=run_provision, daemon=True)
+        thread.start()
+
+        return {
+            "success": True,
+            "task_id": task.id,
+            "message": "Lakebase graph DB provisioning started",
+        }
+
+    @staticmethod
+    def _graph_engine_database(
+        session_mgr: SessionManager,
+        settings: Any,
+    ) -> str:
+        """Return the ``database`` field from the saved graph engine config.
+
+        Returns ``""`` on any failure so callers fall back gracefully.
+        """
+        try:
+            domain = get_domain(session_mgr)
+            host, token = get_databricks_host_and_token(domain, settings)
+            registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+            ge = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            return (ge.get("database") or "").strip()
+        except Exception:  # noqa: BLE001
+            return ""
+
+    @staticmethod
+    def _graph_engine_auth(
+        session_mgr: SessionManager,
+        settings: Any,
+        form_branch_path: str = "",
+        form_database: str = "",
+    ):
+        """Return the correct Lakebase auth for graph DB operations.
+
+        Mirrors the auth selection in :class:`GraphDBFactory._create_lakebase`:
+
+        * ``form_branch_path`` — explicit branch path from the request (e.g. from a
+          Connection-tab form field).  Takes priority when non-empty.
+        * Saved ``graph_engine_config.lakebase_branch`` — used when the form did not
+          supply a branch path.
+        * Bound auth (PGHOST) — fallback when no branch is configured anywhere.
+
+        Also returns the effective database name (form_database → saved config → "").
+        Returns ``(auth, database)``; raises on irrecoverable failures.
+        """
+        from back.core.databricks import get_lakebase_auth
+        from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+
+        branch_path = form_branch_path.strip()
+        database = form_database.strip()
+
+        # Load saved config to fill gaps not supplied by the form.
+        try:
+            domain = get_domain(session_mgr)
+            host, token = get_databricks_host_and_token(domain, settings)
+            registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+            ge = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            if not branch_path:
+                branch_path = (ge.get("lakebase_branch") or "").strip()
+            if not database:
+                database = (ge.get("database") or "").strip()
+        except Exception:  # noqa: BLE001
+            pass  # fall through to bound auth
+
+        if branch_path:
+            return BranchLakebaseAuth(branch_path, database), database
+        return get_lakebase_auth(), database
 
     @staticmethod
     def _lakebase_kwargs_for_branch(
@@ -1588,34 +1892,32 @@ class SettingsService:
         _session_mgr: SessionManager,
         _settings: Settings,
     ) -> Dict[str, Any]:
-        """List all user schemas, tables and views in a Lakebase database.
+        """List all user schemas, tables and views in the graph Lakebase database.
 
-        Uses ``branch_path`` (the form's current branch selection) when provided
-        so the result reflects the live form state rather than the saved config.
-        Falls back to the bound Lakebase auth when ``branch_path`` is empty.
-        Returns the Postgres ``current_user`` so the frontend can display it.
+        Uses :meth:`_graph_engine_auth` to resolve the correct Lakebase host:
+        saved ``graph_engine_config.lakebase_branch`` (BranchLakebaseAuth) when
+        configured, otherwise the bound Lakebase (registry host).
+        The ``branch_path`` / ``database`` form params take priority over saved
+        config when provided.
         """
         try:
             from back.core.graphdb.lakebase.pool import _require_psycopg
 
             psycopg, _ = _require_psycopg()
 
-            if branch_path:
-                kwargs = SettingsService._lakebase_kwargs_for_branch(
-                    branch_path, database, "ontobricks-obj-list"
+            auth, effective_db = SettingsService._graph_engine_auth(
+                _session_mgr, _settings,
+                form_branch_path=branch_path,
+                form_database=database,
+            )
+            if not auth.is_available:
+                raise ValidationError(
+                    "Lakebase not available — configure graph_engine_config.lakebase_branch "
+                    "or bind a Lakebase resource."
                 )
-            else:
-                from back.core.databricks import get_lakebase_auth
-
-                auth = get_lakebase_auth()
-                if not auth.is_available:
-                    raise ValidationError(
-                        "Lakebase resource not bound "
-                        "(LAKEBASE_PROJECT/LAKEBASE_BRANCH/PGUSER missing)"
-                    )
-                kwargs = auth.kwargs(application_name="ontobricks-obj-list")
-                if database:
-                    kwargs["dbname"] = database
+            kwargs = auth.kwargs(application_name="ontobricks-obj-list")
+            if effective_db:
+                kwargs["dbname"] = effective_db
             with psycopg.connect(**kwargs) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT current_user")
@@ -1627,60 +1929,74 @@ class SettingsService:
                                pg_catalog.pg_get_userbyid(nspowner) AS owner
                         FROM pg_catalog.pg_namespace
                         WHERE nspname NOT LIKE 'pg_%%'
-                          AND nspname NOT IN ('information_schema')
-                          AND pg_catalog.pg_get_userbyid(nspowner) = current_user
+                          AND SUBSTRING(nspname, 1, 2) != '__'
+                          AND nspname NOT IN ('information_schema', 'public')
+                          AND (
+                              pg_catalog.pg_get_userbyid(nspowner) = current_user
+                              OR has_schema_privilege(current_user, nspname, 'USAGE')
+                          )
                         ORDER BY nspname
                         """
                     )
                     schemas = [{"name": r[0], "owner": r[1]} for r in cur.fetchall()]
 
-                    cur.execute(
-                        """
-                        SELECT t.schemaname,
-                               t.tablename,
-                               pg_catalog.pg_get_userbyid(c.relowner) AS owner
-                        FROM pg_catalog.pg_tables t
-                        JOIN pg_catalog.pg_class c
-                             ON c.relname = t.tablename
-                        JOIN pg_catalog.pg_namespace n
-                             ON n.oid = c.relnamespace
-                            AND n.nspname = t.schemaname
-                        WHERE t.schemaname NOT LIKE 'pg_%%'
-                          AND t.schemaname NOT IN ('information_schema')
-                          AND pg_catalog.pg_get_userbyid(c.relowner) = current_user
-                        ORDER BY t.schemaname, t.tablename
-                        """
-                    )
+                    # Include all schemas where the SP has USAGE (covers schemas
+                    # created by the human deployer via bootstrap, where _sync and
+                    # __app tables land during builds).
+                    owned_schema_names = tuple(s["name"] for s in schemas)
+                    if owned_schema_names:
+                        cur.execute(
+                            """
+                            SELECT t.schemaname,
+                                   t.tablename,
+                                   pg_catalog.pg_get_userbyid(c.relowner) AS owner
+                            FROM pg_catalog.pg_tables t
+                            JOIN pg_catalog.pg_class c
+                                 ON c.relname = t.tablename
+                            JOIN pg_catalog.pg_namespace n
+                                 ON n.oid = c.relnamespace
+                                AND n.nspname = t.schemaname
+                            WHERE t.schemaname = ANY(%s)
+                            ORDER BY t.schemaname, t.tablename
+                            """,
+                            (list(owned_schema_names),),
+                        )
+                    else:
+                        cur.execute("SELECT NULL, NULL, NULL WHERE FALSE")
                     tables = [
                         {"schema": r[0], "name": r[1], "owner": r[2]}
                         for r in cur.fetchall()
                     ]
 
-                    cur.execute(
-                        """
-                        SELECT v.schemaname,
-                               v.viewname,
-                               pg_catalog.pg_get_userbyid(c.relowner) AS owner
-                        FROM pg_catalog.pg_views v
-                        JOIN pg_catalog.pg_class c
-                             ON c.relname = v.viewname
-                        JOIN pg_catalog.pg_namespace n
-                             ON n.oid = c.relnamespace
-                            AND n.nspname = v.schemaname
-                        WHERE v.schemaname NOT LIKE 'pg_%%'
-                          AND v.schemaname NOT IN ('information_schema')
-                          AND pg_catalog.pg_get_userbyid(c.relowner) = current_user
-                        ORDER BY v.schemaname, v.viewname
-                        """
-                    )
+                    if owned_schema_names:
+                        cur.execute(
+                            """
+                            SELECT v.schemaname,
+                                   v.viewname,
+                                   pg_catalog.pg_get_userbyid(c.relowner) AS owner
+                            FROM pg_catalog.pg_views v
+                            JOIN pg_catalog.pg_class c
+                                 ON c.relname = v.viewname
+                            JOIN pg_catalog.pg_namespace n
+                                 ON n.oid = c.relnamespace
+                                AND n.nspname = v.schemaname
+                            WHERE v.schemaname = ANY(%s)
+                            ORDER BY v.schemaname, v.viewname
+                            """,
+                            (list(owned_schema_names),),
+                        )
+                    else:
+                        cur.execute("SELECT NULL, NULL, NULL WHERE FALSE")
                     views = [
                         {"schema": r[0], "name": r[1], "owner": r[2]}
                         for r in cur.fetchall()
                     ]
 
+            rcfg = RegistryCfg.from_session(_session_mgr, _settings)
             return {
                 "success": True,
                 "current_user": current_user,
+                "registry_schema": rcfg.lakebase_schema or "ontobricks_registry",
                 "schemas": schemas,
                 "tables": tables,
                 "views": views,
@@ -1696,6 +2012,158 @@ class SettingsService:
             logger.warning("graph_engine_lakebase_objects failed: %s", exc)
             raise InfrastructureError(
                 "list Lakebase database objects failed", detail=str(exc)
+            ) from exc
+
+    @staticmethod
+    def graph_engine_lakebase_sync_objects_result(
+        database: str,
+        branch_path: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List UC Delta tables in the configured graph schema, plus Lakeflow state.
+
+        Approach:
+        1. Resolve ``sync_uc_catalog`` and ``uc_schema`` from engine config,
+           falling back to the registry catalog when the former is unset.
+        2. Call the UC REST API (``/api/2.1/unity-catalog/tables``) to enumerate
+           every table/view in that schema — works regardless of sync_mode and
+           requires no SQL warehouse.
+        3. When ``sync_mode == managed_synced``, probe every ``_sync`` table via
+           the Lakebase synced-tables API (parallel, max 4 workers) and attach
+           ``state``, ``pipeline_id``, and ``source_table`` to the result.
+        """
+        import concurrent.futures
+
+        try:
+            _, host, token, registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            gcfg = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            sync_mode = gcfg.get("sync_mode", "app_managed")
+
+            # ── Resolve UC catalog / schema ───────────────────────────────
+            sync_uc_catalog = (gcfg.get("sync_uc_catalog") or "").strip()
+            sync_uc_schema_override = (gcfg.get("sync_uc_schema") or "").strip()
+            graph_schema = (gcfg.get("schema") or "").strip()
+
+            # Fall back to registry catalog when sync_uc_catalog is not set
+            if not sync_uc_catalog:
+                rcfg = RegistryCfg.from_session(session_mgr, settings)
+                sync_uc_catalog = (rcfg.catalog or "").strip()
+
+            uc_schema = sync_uc_schema_override or graph_schema or ""
+
+            if not sync_uc_catalog or not uc_schema:
+                return {
+                    "success": True,
+                    "sync_mode": sync_mode,
+                    "uc_tables": [],
+                    "message": (
+                        "UC catalog or schema not configured "
+                        "(set graph_engine_config.sync_uc_catalog and schema)"
+                    ),
+                }
+
+            # ── List UC tables via REST API (no warehouse required) ───────
+            from databricks.sdk import WorkspaceClient
+
+            w = WorkspaceClient()
+            api = getattr(w, "api_client", None)
+            if api is None or not hasattr(api, "do"):
+                raise InfrastructureError("Databricks SDK api_client unavailable")
+
+            raw = api.do(
+                "GET",
+                "/api/2.1/unity-catalog/tables",
+                query={"catalog_name": sync_uc_catalog, "schema_name": uc_schema},
+            ) or {}
+            uc_raw_tables = raw.get("tables", []) or []
+
+            # ── For managed_synced: probe Lakeflow state per _sync table ──
+            lk_states: Dict[str, Any] = {}
+            if sync_mode == "managed_synced" and uc_raw_tables:
+                from back.core.graphdb.lakebase.SyncedTableManager import (
+                    SyncedTableManager,
+                    _to_dict,
+                )
+
+                mgr = SyncedTableManager()
+
+                def _extract_source_table(synced: Any) -> str:
+                    spec = getattr(synced, "spec", None)
+                    if spec is not None:
+                        val = getattr(spec, "source_table_full_name", "") or ""
+                        if val:
+                            return str(val)
+                    d = _to_dict(synced)
+                    return str(d.get("spec", {}).get("source_table_full_name", "") or "")
+
+                def _probe_lk(tbl_raw: Dict[str, Any]) -> None:
+                    name = tbl_raw.get("name", "")
+                    if not name.endswith("_sync"):
+                        return
+                    full_name = (
+                        tbl_raw.get("full_name")
+                        or f"{sync_uc_catalog}.{uc_schema}.{name}"
+                    )
+                    try:
+                        synced = mgr.get(full_name)
+                        if synced is None:
+                            lk_states[full_name] = {
+                                "state": "NOT_FOUND",
+                                "pipeline_id": "",
+                                "source_table": "",
+                            }
+                        else:
+                            spec = getattr(synced, "spec", None)
+                            lk_states[full_name] = {
+                                "state": SyncedTableManager._extract_state(synced) or "UNKNOWN",
+                                "pipeline_id": SyncedTableManager._extract_pipeline_id(synced),
+                                "source_table": _extract_source_table(synced),
+                            }
+                    except Exception as probe_exc:  # noqa: BLE001
+                        lk_states[full_name] = {
+                            "state": "ERROR",
+                            "pipeline_id": "",
+                            "source_table": "",
+                            "error": str(probe_exc)[:300],
+                        }
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    list(executor.map(_probe_lk, uc_raw_tables))
+
+            # ── Build response ────────────────────────────────────────────
+            uc_tables = []
+            for t in uc_raw_tables:
+                name = t.get("name", "")
+                full_name = t.get("full_name") or f"{sync_uc_catalog}.{uc_schema}.{name}"
+                table_type = str(t.get("table_type", "") or "")
+                lk = lk_states.get(full_name, {})
+                uc_tables.append({
+                    "name": name,
+                    "full_name": full_name,
+                    "table_type": table_type,
+                    "is_sync": name.endswith("_sync"),
+                    "state": lk.get("state", ""),
+                    "pipeline_id": lk.get("pipeline_id", ""),
+                    "source_table": lk.get("source_table", ""),
+                    "error": lk.get("error", ""),
+                })
+
+            return {
+                "success": True,
+                "sync_mode": sync_mode,
+                "uc_catalog": sync_uc_catalog,
+                "uc_schema": uc_schema,
+                "uc_tables": uc_tables,
+            }
+        except OntoBricksError:
+            raise
+        except Exception as exc:
+            logger.warning("graph_engine_lakebase_sync_objects failed: %s", exc)
+            raise InfrastructureError(
+                "list Lakebase sync objects failed", detail=str(exc)
             ) from exc
 
     @staticmethod
@@ -1724,37 +2192,34 @@ class SettingsService:
             return '"' + ident.replace('"', '""') + '"'
 
         if kind == "schema":
-            ddl = f"DROP SCHEMA {_q(name)} CASCADE"
+            ddl = f"DROP SCHEMA IF EXISTS {_q(name)} CASCADE"
         elif kind == "table":
             if not schema:
                 raise ValidationError("schema is required for kind=table")
-            ddl = f"DROP TABLE {_q(schema)}.{_q(name)}"
+            ddl = f"DROP TABLE IF EXISTS {_q(schema)}.{_q(name)} CASCADE"
         else:
             if not schema:
                 raise ValidationError("schema is required for kind=view")
-            ddl = f"DROP VIEW {_q(schema)}.{_q(name)}"
+            ddl = f"DROP VIEW IF EXISTS {_q(schema)}.{_q(name)} CASCADE"
 
         try:
             from back.core.graphdb.lakebase.pool import _require_psycopg
 
             psycopg, _ = _require_psycopg()
 
-            if branch_path:
-                kwargs = SettingsService._lakebase_kwargs_for_branch(
-                    branch_path, database, "ontobricks-obj-drop"
+            auth, effective_db = SettingsService._graph_engine_auth(
+                _session_mgr, _settings,
+                form_branch_path=branch_path,
+                form_database=database,
+            )
+            if not auth.is_available:
+                raise ValidationError(
+                    "Lakebase not available — configure graph_engine_config.lakebase_branch "
+                    "or bind a Lakebase resource."
                 )
-            else:
-                from back.core.databricks import get_lakebase_auth
-
-                auth = get_lakebase_auth()
-                if not auth.is_available:
-                    raise ValidationError(
-                        "Lakebase resource not bound "
-                        "(LAKEBASE_PROJECT/LAKEBASE_BRANCH/PGUSER missing)"
-                    )
-                kwargs = auth.kwargs(application_name="ontobricks-obj-drop")
-                if database:
-                    kwargs["dbname"] = database
+            kwargs = auth.kwargs(application_name="ontobricks-obj-drop")
+            if effective_db:
+                kwargs["dbname"] = effective_db
 
             with psycopg.connect(**kwargs) as conn:
                 with conn.cursor() as cur:
@@ -1771,6 +2236,213 @@ class SettingsService:
             logger.warning("graph_engine_lakebase_drop_object failed: %s", exc)
             raise InfrastructureError(
                 "Lakebase drop object failed", detail=str(exc)
+            ) from exc
+
+    @staticmethod
+    def graph_engine_lakebase_pg_roles_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List Postgres roles on the graph Lakebase branch and overlay app-user status.
+
+        Returns::
+
+            {
+                "success": True,
+                "branch_path": "projects/.../branches/...",
+                "roles": [
+                    {"email": "user@example.com", "role_id": "...",
+                     "has_superuser": True/False},
+                    ...
+                ],
+                "app_users": [
+                    {"email": "user@example.com", "display_name": "..."},
+                    ...
+                ],
+            }
+        """
+        from databricks.sdk import WorkspaceClient
+
+        auth, _ = SettingsService._graph_engine_auth(session_mgr, settings)
+        if not auth.is_available:
+            raise ValidationError(
+                "Lakebase not available — configure graph_engine_config.lakebase_branch "
+                "or bind a Lakebase resource."
+            )
+        branch_path = auth.branch_path
+        if not branch_path:
+            raise ValidationError("Could not resolve Lakebase branch path for Postgres roles API")
+
+        w = WorkspaceClient()
+        api = w.api_client
+        raw = (api.do("GET", f"/api/2.0/postgres/{branch_path}/roles") or {})
+        existing = raw.get("roles") or []
+
+        roles = []
+        for r in existing:
+            status = r.get("status") or {}
+            pg_role = str(status.get("postgres_role") or "").lower()
+            if not pg_role:
+                continue
+            role_id = (r.get("name") or "").rsplit("/", 1)[-1]
+            has_superuser = "DATABRICKS_SUPERUSER" in (status.get("membership_roles") or [])
+            roles.append({"email": pg_role, "role_id": role_id, "has_superuser": has_superuser})
+
+        # App users (best-effort — may be empty when SP has no ACL read access)
+        app_users: List[Dict[str, Any]] = []
+        try:
+            _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
+            app_name = settings.ontobricks_app_name
+            principals = permission_service.list_app_principals(host, token, app_name)
+            for u in principals.get("users", []):
+                email = (u.get("email") or "").strip()
+                if email:
+                    app_users.append({
+                        "email": email,
+                        "display_name": u.get("display_name") or email,
+                    })
+        except Exception:  # noqa: BLE001
+            pass
+
+        return {
+            "success": True,
+            "branch_path": branch_path,
+            "roles": roles,
+            "app_users": app_users,
+        }
+
+    @staticmethod
+    def graph_engine_lakebase_grant_superuser_result(
+        user_email: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Ensure *user_email* has a Postgres OAuth role and DATABRICKS_SUPERUSER membership.
+
+        Mirrors the logic of ``LakebaseGraphProvisioner._ensure_superuser_role``
+        but operates on the currently configured graph Lakebase branch.
+        Idempotent — re-granting an existing superuser is a no-op.
+        """
+        import time
+        from databricks.sdk import WorkspaceClient
+
+        user_email = (user_email or "").strip()
+        if not user_email:
+            raise ValidationError("user_email is required")
+
+        auth, _ = SettingsService._graph_engine_auth(session_mgr, settings)
+        if not auth.is_available:
+            raise ValidationError(
+                "Lakebase not available — configure graph_engine_config.lakebase_branch "
+                "or bind a Lakebase resource."
+            )
+        branch_path = auth.branch_path
+        if not branch_path:
+            raise ValidationError("Could not resolve Lakebase branch path for Postgres roles API")
+
+        w = WorkspaceClient()
+        api = w.api_client
+
+        existing = (api.do("GET", f"/api/2.0/postgres/{branch_path}/roles") or {}).get("roles") or []
+        role_map: Dict[str, Dict[str, Any]] = {}
+        for r in existing:
+            status = r.get("status") or {}
+            pg_role = str(status.get("postgres_role") or "").lower()
+            if not pg_role:
+                continue
+            role_map[pg_role] = {
+                "role_id": (r.get("name") or "").rsplit("/", 1)[-1],
+                "has_superuser": "DATABRICKS_SUPERUSER" in (status.get("membership_roles") or []),
+            }
+
+        email_lower = user_email.lower()
+        existing_role = role_map.get(email_lower)
+
+        if existing_role and existing_role.get("has_superuser"):
+            return {"success": True, "message": f"{user_email} already has DATABRICKS_SUPERUSER"}
+
+        role_id: str = (existing_role or {}).get("role_id", "")
+
+        if not role_id:
+            op = (
+                api.do(
+                    "POST",
+                    f"/api/2.0/postgres/{branch_path}/roles",
+                    body={
+                        "spec": {
+                            "identity_type": "USER",
+                            "postgres_role": user_email,
+                            "auth_method": "LAKEBASE_OAUTH_V1",
+                        }
+                    },
+                )
+                or {}
+            )
+            op_name = op.get("name") or ""
+            parts = op_name.split("/")
+            if "roles" in parts:
+                idx = parts.index("roles")
+                if idx + 1 < len(parts) and parts[idx + 1] != "operations":
+                    role_id = parts[idx + 1]
+            if not role_id:
+                raise InfrastructureError(
+                    f"Could not create Postgres role for {user_email}",
+                    detail=f"LRO name: {op_name!r}",
+                )
+            time.sleep(3.0)
+
+        api.do(
+            "PATCH",
+            f"/api/2.0/postgres/{branch_path}/roles/{role_id}?update_mask=spec.membership_roles",
+            body={"spec": {"membership_roles": ["DATABRICKS_SUPERUSER"]}},
+        )
+        logger.info("Granted DATABRICKS_SUPERUSER to %s on %s", user_email, branch_path)
+        return {"success": True, "message": f"DATABRICKS_SUPERUSER granted to {user_email}"}
+
+    @staticmethod
+    def graph_engine_drop_uc_object_result(
+        full_name: str,
+        is_sync: bool,
+        _session_mgr: SessionManager,
+        _settings: Settings,
+    ) -> Dict[str, Any]:
+        """Drop a Unity Catalog table or Lakeflow synced-table registration.
+
+        When ``is_sync=True`` the entry is a Lakeflow-managed synced table:
+        ``SyncedTableManager.delete()`` is used so both the Lakebase control-plane
+        reservation and the UC registration are cleaned up.
+
+        When ``is_sync=False`` a plain UC Delta table / view is deleted via the
+        Unity Catalog REST API.
+        """
+        if not full_name or full_name.count(".") < 2:
+            raise ValidationError(
+                "full_name must be a 3-part Unity Catalog FQN (catalog.schema.table)"
+            )
+
+        try:
+            from databricks.sdk import WorkspaceClient
+
+            w = WorkspaceClient()
+            api = getattr(w, "api_client", None)
+            if api is None or not hasattr(api, "do"):
+                raise InfrastructureError("Databricks SDK api_client unavailable")
+
+            if is_sync:
+                from back.core.graphdb.lakebase.SyncedTableManager import SyncedTableManager
+
+                mgr = SyncedTableManager()
+                mgr.delete(full_name, purge_data=True)
+            else:
+                api.do("DELETE", f"/api/2.1/unity-catalog/tables/{full_name}")
+
+            return {"success": True, "message": f"Dropped {full_name}"}
+        except OntoBricksError:
+            raise
+        except Exception as exc:
+            logger.warning("graph_engine_drop_uc_object failed: %s", exc)
+            raise InfrastructureError(
+                "Drop UC object failed", detail=str(exc)
             ) from exc
 
     @staticmethod
@@ -2396,6 +3068,65 @@ class SettingsService:
             logger.exception("get_schedule_history failed for '%s': %s", domain_name, e)
             raise InfrastructureError(
                 "Failed to load schedule history", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def get_build_runs_result(
+        domain_name: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        version: Optional[str] = None,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        """Return the build-run trace for *domain_name* (newest-first)."""
+        try:
+            domain = get_domain(session_mgr)
+            svc = RegistryService.from_context(domain, settings)
+            if not svc.cfg.is_configured:
+                raise ValidationError("Registry not configured")
+            runs = svc.load_build_runs(domain_name, version=version, limit=limit)
+            return {
+                "success": True,
+                "domain_name": domain_name,
+                "version": version,
+                "runs": runs,
+            }
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("get_build_runs failed for '%s': %s", domain_name, e)
+            raise InfrastructureError(
+                "Failed to load build runs", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def get_build_analytics_result(
+        domain_name: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        version: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return aggregate build statistics for *domain_name*."""
+        try:
+            domain = get_domain(session_mgr)
+            svc = RegistryService.from_context(domain, settings)
+            if not svc.cfg.is_configured:
+                raise ValidationError("Registry not configured")
+            analytics = svc.build_analytics(domain_name, version=version)
+            return {
+                "success": True,
+                "domain_name": domain_name,
+                "version": version,
+                "analytics": analytics,
+            }
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("get_build_analytics failed for '%s': %s", domain_name, e)
+            raise InfrastructureError(
+                "Failed to load build analytics", detail=str(e)
             ) from e
 
     @staticmethod

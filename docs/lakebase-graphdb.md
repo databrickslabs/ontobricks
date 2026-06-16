@@ -138,6 +138,36 @@ The script:
 | `--wait N` | `120` | Seconds to wait for `AVAILABLE` |
 | `--dry-run` | — | Print plan without executing |
 
+### 3.1b — One-click provisioning from Settings (in-app alternative)
+
+Admins can provision a graph DB end-to-end from the UI instead of running the
+two scripts by hand. In **Settings → Lakebase → Connection** tab there is a
+**"Create graph DB from scratch"** card: fill in the instance/project name,
+compute capacity, branch, Postgres database, graph schema, and the MCP app
+name, then click **Create graph DB**. The action runs as an async job (a
+progress bar + per-step log update live, polling `GET /tasks/{id}` like a
+Digital Twin build) and performs the same flow as
+`scripts/setup-lakebase.sh` + `scripts/bootstrap-lakebase-perms.sh`:
+
+1. Create the Lakebase instance (via the synced-tables-compatible
+   `/api/2.0/database/instances` API) and wait for `AVAILABLE`.
+2. Create the Postgres database and the graph schema.
+3. Grant `CAN_USE` on the project and `USAGE/CREATE/DML` on the schema to the
+   app **and** MCP service principals; optionally grant `ALL_PRIVILEGES` on the
+   configured UC catalog (managed-sync only).
+
+On success the chosen project/branch/database/schema are written into
+`graph_engine_config`, so the Connection pickers reflect the new target.
+
+> **Permission model (unchanged — only automated).** The button runs as the
+> app's **own service principal**, not a human. It therefore needs the SP to be
+> allowed to create Lakebase instances; if it is not, the job fails on the first
+> step with a clear message. Schema grants to the MCP SP are best-effort and
+> surfaced as warnings when the MCP Postgres role does not exist yet. In those
+> cases the shell scripts (`POST /api/2.0/database/instances` as a human owner)
+> remain the documented fallback — re-run `scripts/bootstrap-lakebase-perms.sh`
+> after the apps have connected once.
+
 ### 3.2 — After the script
 
 Copy the printed `db-…` segment into `scripts/deploy.config.sh`:
@@ -224,9 +254,12 @@ These drive the DAB deployment (edit before `make deploy`):
 | `DEFAULT_LAKEBASE_PROJECT` | Lakebase project name (final segment of `projects/<id>`) |
 | `DEFAULT_LAKEBASE_BRANCH` | Branch (e.g. `production`) |
 | `DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT` | `db-…` resource id from `list-databases` |
+| `DEFAULT_LAKEBASE_REGISTRY_DATABASE` | Postgres datname the registry schema lives in |
 | `DEFAULT_LAKEBASE_REGISTRY_SCHEMA` | Postgres schema for the registry (mirrors `LAKEBASE_SCHEMA` in `app.yaml`) |
-| `LAKEBASE_GRAPH_SCHEMA` | Graph DB Postgres schema (default `ontobricks_graph`) |
-| `LAKEBASE_SYNC_SCHEMA` | Sync Postgres schema — only required for `managed_synced` |
+
+> `deploy.config.sh` is **registry-scoped**. The graph DB schema/database
+> are configured in-app (`Settings → Graph DB` → `graph_engine_config`)
+> and may live in a different Lakebase project — they are not deploy vars.
 
 ---
 
@@ -373,8 +406,11 @@ scripts/bootstrap-lakebase-perms.sh \
   -a ontobricks-030 -a mcp-ontobricks
 ```
 
-`make deploy` (via `scripts/deploy.sh`) runs all three automatically when
-`LAKEBASE_GRAPH_SCHEMA` and `LAKEBASE_SYNC_SCHEMA` are set in `deploy.config.sh`.
+`make deploy` (via `scripts/deploy.sh`) grants the **registry** schema
+automatically. The graph and sync schemas are granted by the in-app
+"Create graph DB" flow or by running the commands above manually — they
+are not deploy vars, since the graph DB may live in a different Lakebase
+project.
 
 **What each run grants:**
 

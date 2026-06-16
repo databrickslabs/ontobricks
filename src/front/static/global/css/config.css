@@ -2,54 +2,14 @@
    Config Page Specific Styles
    ========================================================================== */
 
-/* Settings page: override sidebar-layout flex-fill defaults.
-   Most tabs have short content; only Databricks needs full-height. */
-.sidebar-content:has(#settings-section.active) {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-#settings-section.active {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-}
-
-/* By default the card does NOT stretch — short-content tabs stay compact */
-#settings-section > .content-section > .card {
-    flex: 0 1 auto;
-    overflow: visible;
-}
-
-/* Databricks tab needs the card to fill remaining height */
-#settings-section > .content-section > .card:has(#pane-databricks.active.show) {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-}
-
-#settings-section > .content-section > .card:has(#pane-databricks.active.show) > .card-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-}
-
-#settings-section > .content-section > .card:has(#pane-databricks.active.show) #settingsTabContent {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-}
-
-#pane-databricks.active.show {
-    flex: 1;
-    min-height: 0;
+/* Settings sections — each section scrolls independently within the sidebar content */
+#databricks-section.active,
+#ts-global-section.active,
+#lakebase-section.active,
+#global-section.active,
+#permissions-section.active,
+#registry-section.active,
+#health-section.active {
     overflow-y: auto;
 }
 
@@ -114,7 +74,7 @@
 }
 
 .registry-domain-table thead th {
-    background: #f8f9fa;
+    background: #ffffff;
     position: sticky;
     top: 0;
     z-index: 1;
@@ -142,7 +102,7 @@
 }
 
 .registry-version-panel td {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .registry-version-badge {
@@ -173,7 +133,7 @@
 }
 
 .schedule-history-table thead th {
-    background: #f8f9fa;
+    background: #ffffff;
     position: sticky;
     top: 0;
     z-index: 1;
@@ -216,5 +176,161 @@
 
 .settings-registry-ttl-input {
     max-width: 200px;
+}
+
+/* ==========================================================================
+   Lakebase Objects — domain cards (Objects tab)
+   ========================================================================== */
+.lk-domain-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.lk-domain-card {
+    border: 1px solid var(--db-border-light);
+    border-radius: 0.5rem;
+    background: #fff;
+    overflow: hidden;
+    transition: box-shadow 0.15s ease;
+}
+
+.lk-domain-card:hover {
+    box-shadow: var(--db-shadow-sm);
+}
+
+.lk-domain-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--db-light-gray);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+    user-select: none;
+}
+
+.lk-domain-card.lk-open .lk-domain-header {
+    border-bottom-color: var(--db-border-light);
+    background: #ffffff;
+}
+
+.lk-domain-toggle {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--db-text);
+    cursor: pointer;
+    text-align: left;
+    line-height: 1.4;
+}
+
+.lk-domain-toggle:hover {
+    color: var(--db-primary);
+}
+
+.lk-domain-toggle:focus-visible {
+    outline: 2px solid var(--db-primary);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+.lk-chevron {
+    font-size: 0.7rem;
+    color: #adb5bd;
+    flex-shrink: 0;
+    transition: transform 0.18s ease;
+}
+
+.lk-domain-card.lk-open .lk-chevron {
+    transform: rotate(90deg);
+    color: var(--db-gray-600);
+}
+
+.lk-domain-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 0.82rem;
+}
+
+.lk-domain-count {
+    font-size: 0.7rem;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.lk-domain-delete-btn {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    line-height: 1;
+    padding: 0.3rem 0.55rem;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.lk-domain-card:hover .lk-domain-delete-btn {
+    opacity: 1;
+}
+
+.lk-domain-body {
+    border-top: 0;
+}
+
+.lk-domain-body table {
+    margin-bottom: 0;
+    font-size: 0.82rem;
+}
+
+/* Lakeflow sync sub-section inside each domain card */
+.lk-sync-section {
+    background: #ffffff;
+}
+
+.lk-sync-header {
+    padding: 0.35rem 0.75rem 0.25rem;
+}
+
+.lk-sync-table td {
+    vertical-align: middle;
+    font-size: 0.8rem;
+}
+
+.lk-sync-state-badge {
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.lk-sync-badge {
+    font-size: 0.68rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.lk-sync-uc-cell {
+    font-size: 0.78rem;
+    word-break: break-all;
+}
+
+.lk-sync-source-row td {
+    background: #ffffff;
+    padding-top: 0.2rem !important;
+    padding-bottom: 0.2rem !important;
+    border-top: 0 !important;
+}
+
+.lk-sync-loading {
+    background: #ffffff;
 }
 

@@ -44,6 +44,7 @@ class DomainSummary(TypedDict, total=False):
     name: str
     base_uri: str
     description: str
+    review_quorum: int       # per-domain sign-off quorum (>= 1)
     versions: List[Dict[str, Any]]
 
 
@@ -55,6 +56,60 @@ class ScheduleHistoryEntry(TypedDict, total=False):
     message: str
     duration_s: float
     triple_count: int
+
+
+class BuildRunEntry(TypedDict, total=False):
+    """One row in a domain's build-run trace (``build_runs`` table).
+
+    Captures the full statistics of a single Digital Twin build,
+    regardless of which path triggered it (``session`` / ``api`` /
+    ``scheduled``). The grain is the tuple ``(folder, version)``; many
+    entries per tuple are expected and the most recent successful one
+    is considered the "active" build (derived at read time).
+    """
+
+    id: int                  # row id (0 for stores without a serial PK)
+    version: str
+    build_kind: str          # 'session' | 'api' | 'scheduled'
+    status: str              # 'success' | 'error' | 'cancelled'
+    message: str
+    error: str
+    started_at: str          # ISO timestamp
+    finished_at: str         # ISO timestamp
+    duration_s: float
+    triple_count: int
+    entity_count: int
+    relationship_count: int
+    sql_chars: int
+    graph_engine: str
+    sync_mode: str
+    view_table: str
+    graph_name: str
+    task_id: str
+    phase_times: Dict[str, Any]
+    stats: Dict[str, Any]
+
+
+class ReviewEvent(TypedDict, total=False):
+    """One row in the domain-version review / validation audit log.
+
+    Captures a single workflow decision or lifecycle change for the
+    tuple ``(folder, version)``. ``from_status`` / ``to_status``
+    snapshot the lifecycle transition the event drove (empty on pure
+    sign-off / comment rows). Rows are append-only and ordered by
+    ``created_at``.
+    """
+
+    id: str                  # row id (UUID string; "" for stores without one)
+    folder: str              # domain folder (populated by registry-wide reads)
+    version: str
+    actor: str               # acting user email
+    action: str              # submitted|approved|changes_requested|published|reopened|commented
+    from_status: str
+    to_status: str
+    comment: str
+    meta: Dict[str, Any]
+    created_at: str          # ISO timestamp
 
 
 class RegistryStore(ABC):
@@ -106,6 +161,14 @@ class RegistryStore(ABC):
     def domain_exists(self, folder: str) -> bool: ...
 
     @abstractmethod
+    def get_domain_quorum(self, folder: str) -> int:
+        """Return the per-domain review sign-off quorum (always >= 1).
+
+        Defaults to ``1`` for domains that predate the setting or when the
+        backend cannot resolve it. Must NOT raise.
+        """
+
+    @abstractmethod
     def delete_domain(self, folder: str) -> List[str]:
         """Delete a domain (versions + permissions + history). Returns
         a list of error messages — empty on success.
@@ -134,6 +197,14 @@ class RegistryStore(ABC):
 
     @abstractmethod
     def delete_version(self, folder: str, version: str) -> Tuple[bool, str]: ...
+
+    @abstractmethod
+    def update_version_status(
+        self, folder: str, version: str, status: str
+    ) -> Tuple[bool, str]:
+        """Set the lifecycle ``status`` (DRAFT / IN-REVIEW / PUBLISHED) of
+        a single (domain, version) without rewriting the full document.
+        """
 
     # ------------------------------------------------------------------
     # Domain-level permissions
@@ -172,6 +243,110 @@ class RegistryStore(ABC):
         self, folder: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
     ) -> None:
         """Append *entry* and trim to the last *max_entries* rows."""
+
+    # ------------------------------------------------------------------
+    # Build-run trace (analytics)
+    #
+    # One immutable row per Digital Twin build — across every path
+    # (UI session / external API / scheduler). Linked to the domain
+    # row; grain is the tuple ``(folder, version)``. Unlike
+    # ``schedule_runs`` this is *not* capped — the whole point is a
+    # full history for analytics. All methods are best-effort: a build
+    # must never fail because tracing could not be written.
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def record_build_run(self, folder: str, entry: BuildRunEntry) -> None:
+        """Append a build-run trace row for *folder*. Best-effort; must
+        NOT raise (log + swallow on failure).
+        """
+
+    @abstractmethod
+    def load_build_runs(
+        self,
+        folder: str,
+        *,
+        version: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[BuildRunEntry]:
+        """Newest-first build runs for *folder* (optionally a single
+        *version*), capped at *limit* rows. Empty list on any error.
+        """
+
+    @abstractmethod
+    def build_analytics(
+        self, folder: str, *, version: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Aggregate build statistics for *folder* (optionally scoped to
+        a single *version*).
+
+        Returns a dict with at least::
+
+            {
+              "total_runs": int,
+              "success_runs": int,
+              "failed_runs": int,
+              "success_rate": float,        # 0..1
+              "avg_duration_s": float,
+              "min_duration_s": float,
+              "max_duration_s": float,
+              "last_triple_count": int,
+              "active_build": BuildRunEntry | None,  # latest success
+              "per_version": [               # newest version first
+                {"version": str, "total_runs": int,
+                 "success_runs": int, "last_status": str,
+                 "last_triple_count": int, "last_run": str}
+              ],
+            }
+
+        Empty/zeroed dict on any error.
+        """
+
+    # ------------------------------------------------------------------
+    # Review / validation audit log
+    #
+    # Append-only history of workflow decisions and lifecycle changes
+    # per (folder, version): submit-for-review, sign-off (approve),
+    # request changes, publish, reopen, comment. Best-effort writes —
+    # a transition must never fail because the audit row could not be
+    # written (the lifecycle ``status`` on ``domain_versions`` stays
+    # the source of truth). Reads return oldest-first.
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def record_review_event(
+        self,
+        folder: str,
+        version: str,
+        actor: str,
+        action: str,
+        *,
+        from_status: str = "",
+        to_status: str = "",
+        comment: str = "",
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[bool, str]:
+        """Append a review-audit row for ``(folder, version)``.
+
+        Best-effort: returns ``(False, msg)`` instead of raising so a
+        lifecycle transition is never rolled back by a failed audit
+        write.
+        """
+
+    @abstractmethod
+    def list_review_events(
+        self, folder: str, version: Optional[str] = None
+    ) -> List[ReviewEvent]:
+        """Oldest-first review events for *folder* (optionally a single
+        *version*). Empty list on any error.
+        """
+
+    @abstractmethod
+    def list_all_review_events(self) -> List[ReviewEvent]:
+        """All review events across the registry, each enriched with its
+        ``folder``. Oldest-first. Backs the cross-domain "My Tasks"
+        worklist. Empty list on any error.
+        """
 
     # ------------------------------------------------------------------
     # Cohort schedules + history

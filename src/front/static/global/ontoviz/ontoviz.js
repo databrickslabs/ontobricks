@@ -55,6 +55,7 @@
                 isRequired: prop.isRequired || false
             }));
             this.color = options.color || null; // Use default if null
+            this.collapsed = options.collapsed || false; // Header-only display when true
             this.element = null;
         }
 
@@ -91,7 +92,8 @@
                 x: this.x,
                 y: this.y,
                 properties: this.properties,
-                color: this.color
+                color: this.color,
+                collapsed: this.collapsed
             };
         }
 
@@ -517,7 +519,7 @@
                 </div>
                 <div class="ovz-palette-content">
                     <div class="ovz-palette-section">
-                        <div class="ovz-palette-section-title">Entities (${this.entities.size})</div>
+                        <div class="ovz-palette-section-title">Entities (${this.getVisibleEntityCount()} / ${this.entities.size} visible)</div>
                         <div class="ovz-palette-items" data-section="entities">
                             ${entitiesHtml || '<div class="ovz-palette-empty">No entities</div>'}
                         </div>
@@ -668,7 +670,10 @@
             }
             // NOTE: Removed _updateRelationshipPaths() call - it was re-rendering elements
             // and losing visibility settings. Visibility toggling doesn't require path re-rendering.
-            
+
+            // Keep the status bar counters in sync with the visible set.
+            this._updateStatusBar();
+
             // Fire visibility change callback (for auto-save)
             if (!skipCallback && this.options.onVisibilityChange) {
                 this.options.onVisibilityChange(type, id, visible);
@@ -779,15 +784,65 @@
             this.statusBar.innerHTML = `
                 <div class="ovz-status-item">
                     <span class="ovz-status-dot"></span>
-                    <span>Entities: ${this.entities.size}</span>
+                    <span>Entities: ${this.getVisibleEntityCount()}</span>
                 </div>
                 <div class="ovz-status-item">
-                    <span>Relationships: ${this.relationships.size}</span>
+                    <span>Relationships: ${this.getVisibleRelationshipCount()}</span>
                 </div>
                 <div class="ovz-status-item">
-                    <span>Inheritances: ${this.inheritances.size}</span>
+                    <span>Inheritances: ${this.getVisibleInheritanceCount()}</span>
                 </div>
             `;
+        }
+
+        /** Count of entities currently visible in the view (not hidden via visibility palette). */
+        getVisibleEntityCount() {
+            let count = 0;
+            this.entities.forEach((entity, id) => {
+                if (this.visibilityState.entities.get(id) !== false) count++;
+            });
+            return count;
+        }
+
+        /**
+         * Count of relationships currently visible in the view. A relationship
+         * is visible only when its own toggle is on AND both connected entities
+         * are visible (mirrors _updateRelationshipVisibility).
+         */
+        getVisibleRelationshipCount() {
+            let count = 0;
+            this.relationships.forEach((rel, id) => {
+                const sourceVisible = this.visibilityState.entities.get(rel.sourceEntityId) !== false;
+                const targetVisible = this.visibilityState.entities.get(rel.targetEntityId) !== false;
+                const explicitlyVisible = this.visibilityState.relationships.get(id) !== false;
+                if (sourceVisible && targetVisible && explicitlyVisible) count++;
+            });
+            return count;
+        }
+
+        /**
+         * Count of inheritance links currently visible in the view. An
+         * inheritance is visible only when its own toggle is on AND both
+         * connected entities are visible (mirrors _updateInheritanceVisibility).
+         */
+        getVisibleInheritanceCount() {
+            let count = 0;
+            this.inheritances.forEach((inh, id) => {
+                const sourceVisible = this.visibilityState.entities.get(inh.sourceEntityId) !== false;
+                const targetVisible = this.visibilityState.entities.get(inh.targetEntityId) !== false;
+                const explicitlyVisible = this.visibilityState.inheritances.get(id) !== false;
+                if (sourceVisible && targetVisible && explicitlyVisible) count++;
+            });
+            return count;
+        }
+
+        /** Names of entities currently visible in the view (not hidden via visibility palette). */
+        getVisibleEntityNames() {
+            const names = [];
+            this.entities.forEach((entity, id) => {
+                if (this.visibilityState.entities.get(id) !== false) names.push(entity.name);
+            });
+            return names;
         }
 
         // ==========================================
@@ -804,6 +859,19 @@
             // Context menu
             this.container.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
+                // Select the item under the cursor so the menu targets it,
+                // even without a prior left-click.
+                const entityEl = e.target.closest('.ovz-entity');
+                const relEl = e.target.closest('[data-relationship-id]');
+                if (entityEl) {
+                    const ent = this.entities.get(entityEl.dataset.entityId);
+                    if (ent) this._selectEntity(ent);
+                } else if (relEl) {
+                    const rel = this.relationships.get(relEl.dataset.relationshipId);
+                    if (rel) this._selectRelationship(rel);
+                } else {
+                    this._clearSelection();
+                }
                 this._showContextMenu(e);
             });
 
@@ -1057,6 +1125,10 @@
             // Check if in view-only mode
             const isViewOnly = this.options.viewOnly === true;
 
+            // Collapsed entities render as a compact header-only card.
+            const isCollapsed = entity.collapsed === true;
+            if (isCollapsed) el.classList.add('ovz-collapsed');
+
             // Build properties HTML
             const showTypes = this.options.showPropertyTypes;
             const showKeys = this.options.showPropertyKeys;
@@ -1124,12 +1196,17 @@
             // Icon - clickable only in edit mode
             const iconAttr = isViewOnly ? '' : 'data-action="edit-icon" title="Click to change icon"';
 
-            el.innerHTML = `
-                <div class="ovz-entity-header">
-                    <span class="ovz-entity-icon" ${iconAttr}>${entity.icon || '📦'}</span>
-                    ${entityTitleHTML}
-                    ${entityActionsHTML}
-                </div>
+            // Collapse / expand toggle (available in both view and edit modes)
+            const collapseBtnHTML = `
+                <button class="ovz-entity-collapse-btn" data-action="toggle-collapse"
+                        title="${isCollapsed ? 'Expand entity' : 'Collapse entity'}"
+                        aria-label="${isCollapsed ? 'Expand entity' : 'Collapse entity'}">
+                    <i class="bi ${isCollapsed ? 'bi-chevron-down' : 'bi-chevron-up'}"></i>
+                </button>
+            `;
+
+            // Body sections are skipped entirely when the entity is collapsed.
+            const bodyHTML = isCollapsed ? '' : `
                 ${entity.description ? `<div class="ovz-entity-description" title="${this._escapeHtml(entity.description)}">${this._escapeHtml(entity.description)}</div>` : ''}
                 <div class="ovz-entity-body">
                     ${propertiesHTML}
@@ -1140,6 +1217,16 @@
                     <span>+ Add Property</span>
                 </div>
                 ` : ''}
+            `;
+
+            el.innerHTML = `
+                <div class="ovz-entity-header">
+                    <span class="ovz-entity-icon" ${iconAttr}>${entity.icon || '📦'}</span>
+                    ${entityTitleHTML}
+                    ${collapseBtnHTML}
+                    ${entityActionsHTML}
+                </div>
+                ${bodyHTML}
                 <div class="ovz-connector ovz-connector-left" data-connector="left"></div>
                 <div class="ovz-connector ovz-connector-right" data-connector="right"></div>
                 <div class="ovz-connector ovz-connector-top" data-connector="top"></div>
@@ -1148,6 +1235,12 @@
 
             entity.element = el;
             this.canvasInner.appendChild(el);
+
+            // Preserve hidden state across re-renders (e.g. collapse/expand-all
+            // rebuilds the element, which would otherwise resurrect a hidden entity).
+            if (this.visibilityState && this.visibilityState.entities.get(entity.id) === false) {
+                el.style.display = 'none';
+            }
 
             // Bind entity events
             this._bindEntityEvents(entity, el);
@@ -1266,6 +1359,17 @@
             el.querySelector('[data-action="edit-description"]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this._showDescriptionEditor(entity);
+            });
+
+            // Collapse / expand toggle — works in view-only and edit modes.
+            el.querySelector('[data-action="toggle-collapse"]')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                entity.collapsed = !entity.collapsed;
+                this._renderEntity(entity);
+                this._updateRelationshipPaths();
+                if (this.options.onEntityUpdate) {
+                    this.options.onEntityUpdate(entity);
+                }
             });
 
             // Property events
@@ -3732,12 +3836,29 @@
 
             let menuItems = '';
 
+            // "Hide on canvas" is a view operation, so it's available in both
+            // view-only and edit modes.
+            const hideEntityItem = `
+                    <div class="ovz-context-item" data-action="hide-entity">
+                        <span class="ovz-context-icon"><i class="bi bi-eye-slash"></i></span>
+                        <span>Hide from view</span>
+                    </div>
+            `;
+            const hideRelItem = `
+                    <div class="ovz-context-item" data-action="hide-rel">
+                        <span class="ovz-context-icon"><i class="bi bi-eye-slash"></i></span>
+                        <span>Hide from view</span>
+                    </div>
+            `;
+
             if (this.selectedEntity) {
                 if (isViewOnly) {
-                    // View-only: no editing options
-                    return; // Don't show context menu
-                }
-                menuItems = `
+                    // View-only: only the hide action is available.
+                    menuItems = hideEntityItem;
+                } else {
+                    menuItems = `
+                    ${hideEntityItem}
+                    <div class="ovz-context-divider"></div>
                     <div class="ovz-context-item" data-action="add-property">
                         <span class="ovz-context-icon">+</span>
                         <span>Add Property</span>
@@ -3752,17 +3873,21 @@
                         <span>Delete Entity</span>
                     </div>
                 `;
+                }
             } else if (this.selectedRelationship) {
                 if (isViewOnly) {
-                    // View-only: no editing options
-                    return; // Don't show context menu
-                }
-                menuItems = `
+                    // View-only: only the hide action is available.
+                    menuItems = hideRelItem;
+                } else {
+                    menuItems = `
+                    ${hideRelItem}
+                    <div class="ovz-context-divider"></div>
                     <div class="ovz-context-item ovz-danger" data-action="delete-rel">
                         <span class="ovz-context-icon">×</span>
                         <span>Delete Relationship</span>
                     </div>
                 `;
+                }
             } else {
                 if (isViewOnly) {
                     // View-only: no add entity option
@@ -3791,6 +3916,18 @@
                 switch (action) {
                     case 'add-entity-here':
                         this.addEntity({ x: pos.x, y: pos.y });
+                        break;
+                    case 'hide-entity':
+                        if (this.selectedEntity) {
+                            this._toggleItemVisibility('entity', this.selectedEntity.id, false);
+                            this._clearSelection();
+                        }
+                        break;
+                    case 'hide-rel':
+                        if (this.selectedRelationship) {
+                            this._toggleItemVisibility('relationship', this.selectedRelationship.id, false);
+                            this._clearSelection();
+                        }
                         break;
                     case 'add-property':
                         if (this.selectedEntity) {
@@ -3890,11 +4027,20 @@
             const canvasWidth = this.container.offsetWidth || 800;
             const canvasHeight = this.container.offsetHeight || 600;
 
-            // Calculate the bounding box of all entities
+            // Frame the *visible* entities. Curated business views hide part of the
+            // graph, and the hidden entities are often what anchored the original
+            // centre — measuring the bounding box over all of them would push the
+            // few visible cards off-screen, making the view look empty.
+            const visibleEntities = entityList.filter(
+                entity => this.visibilityState?.entities?.get(entity.id) !== false
+            );
+            const boxEntities = visibleEntities.length > 0 ? visibleEntities : entityList;
+
+            // Calculate the bounding box of the visible entities
             let minX = Infinity, minY = Infinity;
             let maxX = -Infinity, maxY = -Infinity;
 
-            entityList.forEach(entity => {
+            boxEntities.forEach(entity => {
                 const bounds = this._getEntityBounds(entity);
                 minX = Math.min(minX, bounds.x);
                 minY = Math.min(minY, bounds.y);
@@ -4457,6 +4603,46 @@
         }
         
         /**
+         * Collapse or expand every entity to a header-only card.
+         * @param {boolean} collapsed - true to collapse all, false to expand all.
+         */
+        setAllCollapsed(collapsed) {
+            let changed = false;
+            this.entities.forEach((entity) => {
+                if (!!entity.collapsed !== !!collapsed) {
+                    entity.collapsed = !!collapsed;
+                    this._renderEntity(entity);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                this._updateRelationshipPaths();
+                // _updateRelationshipPaths() re-renders connections from scratch,
+                // which resets their hidden state — reapply visibility afterwards
+                // so hidden entities/relationships stay hidden.
+                this._updateAllConnectionsVisibility();
+                if (this.options.onLayoutChange) {
+                    this.options.onLayoutChange(collapsed ? 'collapse-all' : 'expand-all');
+                }
+            }
+            return changed;
+        }
+
+        /** Collapse every entity to a header-only card. */
+        collapseAll() { return this.setAllCollapsed(true); }
+
+        /** Expand every entity to show its full property list. */
+        expandAll() { return this.setAllCollapsed(false); }
+
+        /** True when at least one entity is currently collapsed. */
+        hasCollapsedEntities() {
+            for (const entity of this.entities.values()) {
+                if (entity.collapsed) return true;
+            }
+            return false;
+        }
+
+        /**
          * Get current visibility state for all items
          * @returns {Object} Visibility state object with hiddenEntities, hiddenRelationships, hiddenInheritances arrays
          */
@@ -4508,10 +4694,17 @@
                 }
             });
             
+            // Collect collapsed entities by name (stable across sessions)
+            const collapsedEntities = [];
+            this.entities.forEach((entity) => {
+                if (entity.collapsed) collapsedEntities.push(entity.name);
+            });
+
             return {
                 hiddenEntities,
                 hiddenRelationships,
-                hiddenInheritances
+                hiddenInheritances,
+                collapsedEntities
             };
         }
         
@@ -4522,12 +4715,25 @@
         setVisibilityState(state) {
             if (!state) return;
             
-            const { hiddenEntities = [], hiddenRelationships = [], hiddenInheritances = [] } = state;
+            const { hiddenEntities = [], hiddenRelationships = [], hiddenInheritances = [], collapsedEntities = [] } = state;
             
             // Build name-to-id maps
             const entityNameToId = new Map();
             this.entities.forEach((entity, id) => {
                 entityNameToId.set(entity.name, id);
+            });
+
+            // Apply collapsed state first (re-renders affected nodes) so the
+            // hidden-entity pass below can re-hide the freshly rendered elements.
+            collapsedEntities.forEach(name => {
+                const id = entityNameToId.get(name);
+                if (id) {
+                    const entity = this.entities.get(id);
+                    if (entity && !entity.collapsed) {
+                        entity.collapsed = true;
+                        this._renderEntity(entity);
+                    }
+                }
             });
             
             // Build composite key map for relationships (handles duplicate names)
@@ -4616,6 +4822,8 @@
             
             // Build hidden entity names set BEFORE rendering
             const hiddenEntityNames = new Set(data.visibility?.hiddenEntities || []);
+            // Build collapsed entity names set BEFORE rendering (header-only cards)
+            const collapsedEntityNames = new Set(data.visibility?.collapsedEntities || []);
             // Build hidden relationship lookup — supports both string[] and {name,source,target}[]
             const hiddenRelRaw = data.visibility?.hiddenRelationships || [];
             const hiddenRelNameSet = new Set();
@@ -4632,6 +4840,8 @@
             if (data.entities) {
                 data.entities.forEach(entityData => {
                     const entity = Entity.fromJSON(entityData);
+                    // Collapse before first render so the card is compact immediately
+                    if (collapsedEntityNames.has(entity.name)) entity.collapsed = true;
                     this.entities.set(entity.id, entity);
                     this._renderEntity(entity);
                     

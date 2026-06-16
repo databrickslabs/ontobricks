@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.4.0</h1>
+<h1 align="center">OntoBricks 0.5.0</h1>
 
 <p align="center">
   <strong>Digital Twin Builder for Databricks</strong>
@@ -103,6 +103,15 @@ not take. Open the app and click **Settings > Registry > Initialize**
 to create the Lakebase schema; re-run `make bootstrap-lakebase` once
 afterwards so the freshly created schema picks up `USAGE/DML`.
 
+> **One-click graph DB provisioning.** Admins can stand up a brand-new graph
+> store without the shell scripts: **Settings > Lakebase > Connection** has a
+> **"Create graph DB from scratch"** button that provisions the Lakebase
+> instance + database + schema and applies all grants (app + MCP service
+> principals) as an async job with live progress. It automates
+> `scripts/setup-lakebase.sh` + `scripts/bootstrap-lakebase-perms.sh` (which
+> remain the fallback when the app SP lacks instance-creation rights). See
+> `docs/lakebase-graphdb.md` §3.1b.
+
 > **Lakebase deploy targets.** Pick a Databricks Lakebase Autoscaling
 > project + branch and a Postgres database, then set the
 > `LAKEBASE_PROJECT`, `LAKEBASE_BRANCH`,
@@ -154,8 +163,10 @@ git push origin main --tags
 ### Domain & registry (0.1.2 UX)
 
 - **Ontology Designer** — the main ontology graph view lives under **Ontology → Designer** (visual canvas + AI Assistant).
-- **Domain Cockpit (Validation)** — **Active Version** shows which registry version is exposed via **API / MCP**; it can differ from the version you have loaded in the editor.
-- **Registry → Browse** — only place to **set the Active (API/MCP) version** for a domain; **Domain → Versions** shows that status as a read-only badge.
+- **Version lifecycle (DRAFT / IN-REVIEW / PUBLISHED)** — every domain version carries a lifecycle status, shown as a colour-coded badge across the navbar, Domain Information, Registry Browse, Domain Versions and query headers. Only **DRAFT** versions are editable; the external API/GraphQL/MCP only serve the **numeric-latest PUBLISHED** version. Transitions (DRAFT ↔ IN-REVIEW → PUBLISHED, PUBLISHED → DRAFT admin-only) are enforced server-side and replace the former "Active"/`mcp_enabled` toggle.
+- **Domain Cockpit (Validation)** — **Published Version** shows which registry version is exposed via **API / MCP**; it can differ from the version you have loaded in the editor.
+- **Registry → Browse** — drives the **lifecycle status transitions** for a domain's versions; **Domain → Versions** shows that status as a read-only badge.
+- **Validation & Review workflow** — a business-user-oriented review layer on top of the lifecycle. **Registry → My Tasks** is a cross-domain worklist of versions waiting on you (submit, sign off, or publish). **Domain → Validation** shows a soft consistency-check summary, a reviewer sign-off panel and the full audit trail. Submit-for-review and Publish stay builder/admin (Publish unlocks for a builder once the **sign-off quorum** is met — a **per-domain** setting, default 1, editable on **Domain → Information → Global** — while an **admin can publish at any time, overriding the quorum**, with the override flagged in the audit trail); **sign-off** (approve / request-changes) is open to any domain member, and request-changes reopens the version to DRAFT. Every decision (with `from → to` status snapshots) is persisted append-only in the `domain_review_events` registry table.
 - **New domain** — after **New Domain**, a full-page loading overlay runs until Domain Information finishes its first load.
 - **Domain Information** — triple-store / snapshot / local graph paths update when you **commit** the domain name (blur or change) or change version (aligned with naming rules before save).
 - **Duplicate names** — **Save to Unity Catalog** is blocked if the sanitized domain name already exists in the registry (inline check + confirmation before POST).
@@ -169,15 +180,14 @@ The **graph** triple-store backend is pluggable; the abstraction (`GraphDBFactor
 
 Engine-specific options are stored as global JSON (`graph_engine_config`). For Lakebase the supported keys are **`database`** (optional override of `PGDATABASE`), **`schema`** (optional, default `ontobricks_graph`), **`sync_mode`** (`app_managed` default, or `managed_synced` to delegate bulk ingest to a Databricks Lakeflow snapshot pipeline), **`sync_table_mode`** (`snapshot` / `triggered` / `continuous` — `snapshot` is the recommended mode), **`sync_timeout_s`** (default 600), **`sync_uc_catalog`** (UC catalog the synced table is registered in; defaults to the snapshot Delta catalog when unset), and **`sync_uc_schema`** (UC schema segment for the synced-table FQN; defaults to the registry UC schema so the Lakeflow object lands in the same UC namespace as other registry artefacts). See `docs/lakebase-graphdb.md` for the full reference.
 
-> **Lakebase permission grants (three schemas).** The app service principal needs `USAGE + DML` on up to three Postgres schemas — each covered by one run of `scripts/bootstrap-lakebase-perms.sh`:
+> **Lakebase permission grants.** The app service principal needs `USAGE + DML` on each Postgres schema it touches — granted by `scripts/bootstrap-lakebase-perms.sh`:
 >
-> | Schema | When to run | Deploy config var |
+> | Schema | When to run | Who runs it |
 > |---|---|---|
-> | Registry schema (e.g. `ontobricks_registry`) | After `Settings → Registry → Initialize` | `LAKEBASE_BOOTSTRAP_SCHEMA` |
-> | Graph schema (e.g. `ontobricks_graph`) | After first Digital Twin `Build` | `LAKEBASE_GRAPH_SCHEMA` |
-> | Sync schema (e.g. `ontobricks`) | After first Lakeflow snapshot (`managed_synced` only) | `LAKEBASE_SYNC_SCHEMA` |
+> | Registry schema (e.g. `ontobricks_registry`) | After `Settings → Registry → Initialize` | `scripts/deploy.sh` automatically on every `dev-lakebase` deploy (coords: `LAKEBASE_PROJECT` / `LAKEBASE_BRANCH` / `LAKEBASE_REGISTRY_DATABASE` / `LAKEBASE_REGISTRY_SCHEMA`) |
+> | Graph schema (e.g. `ontobricks_graph`) | After first Digital Twin `Build` | The in-app "Create graph DB" flow, or a manual `bootstrap-lakebase-perms.sh` run |
 >
-> `scripts/deploy.sh` calls the bootstrap for all three automatically. If the Graph DB is on a **separate Lakebase instance** from the registry, set `LAKEBASE_GRAPH_PROJECT`, `LAKEBASE_GRAPH_BRANCH`, and `LAKEBASE_GRAPH_DATABASE` in `scripts/deploy.config.sh` so the second and third grants target the correct instance.
+> The deploy script is **registry-scoped** — it only grants on the registry schema. The graph DB is configured in-app (`Settings → Graph DB`) and may live in a **different** Lakebase project, so its grant is handled separately.
 
 > **Lakebase build performance.** When the active engine is Lakebase, the Digital Twin build streams warehouse rows in `fetchmany` batches (`SQLWarehouse.iter_rows`) and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING` (and the symmetrical `DELETE … USING` for incremental removes). The FastAPI process never holds the full graph or the full diff: snapshot CTAS and `EXCEPT` execution stay warehouse-side, the app pipes one batch at a time. There is no Volume archive thread — Postgres is the system of record for the graph.
 

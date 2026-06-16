@@ -1234,6 +1234,15 @@ def _run_scheduled_build(
     status = "error"
     message = ""
     triple_count = 0
+    # Captured for the build-run trace (see finally). Populated as the
+    # build progresses so a mid-build failure still records what it can.
+    svc = None
+    view_table = ""
+    graph_name = ""
+    ent_count = 0
+    rel_count = 0
+    sql_chars = 0
+    build_stats: Dict[str, Any] = {}
 
     try:
         scheduler = get_scheduler()
@@ -1300,6 +1309,21 @@ def _run_scheduled_build(
                 domain,
                 domain_name,
             )
+        )
+        ent_count = len(ent_mappings or [])
+        rel_count = len(rel_mappings or [])
+        sql_chars = len(sql_text or "")
+
+        # Ontology + mapping stats for the build-run trace (Cockpit picture).
+        from back.objects.digitaltwin._build_pipeline import collect_domain_stats
+
+        build_stats = collect_domain_stats(
+            getattr(domain, "ontology", {}),
+            getattr(domain, "assignment", {}),
+            constraints=getattr(domain, "constraints", None),
+            swrl_rules=getattr(domain, "swrl_rules", None),
+            axioms=getattr(domain, "axioms", None),
+            shacl_shapes=getattr(domain, "shacl_shapes", None),
         )
 
         # --- Step 2: Create VIEW ---
@@ -1406,6 +1430,46 @@ def _run_scheduled_build(
                 "Scheduled build [%s]: cannot update status — no host or registry config",
                 domain_name,
             )
+
+        # Build-run trace (analytics). Best-effort and independent from
+        # the legacy ``schedule_runs`` history written above.
+        if svc is not None:
+            try:
+                from back.objects.digitaltwin._build_pipeline import (
+                    step_times_from_task,
+                )
+
+                svc.record_build_run(
+                    domain_name,
+                    {
+                        "version": str(version),
+                        "build_kind": "scheduled",
+                        "status": status,
+                        "message": message if status == "success" else "",
+                        "error": message if status != "success" else "",
+                        "started_at": build_ts,
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
+                        "duration_s": duration,
+                        "triple_count": triple_count,
+                        "entity_count": ent_count,
+                        "relationship_count": rel_count,
+                        "sql_chars": sql_chars,
+                        "graph_engine": "",
+                        "sync_mode": "",
+                        "view_table": view_table,
+                        "graph_name": graph_name,
+                        "task_id": task.id if task else "",
+                        "phase_times": step_times_from_task(task) if task else {},
+                        "stats": build_stats,
+                    },
+                )
+            except Exception as trace_exc:  # noqa: BLE001
+                logger.warning(
+                    "Scheduled build [%s]: could not record build-run trace: %s",
+                    domain_name,
+                    trace_exc,
+                )
+
         logger.info(
             "Scheduled build [%s]: finished with status=%s in %.1fs",
             domain_name,

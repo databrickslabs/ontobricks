@@ -217,40 +217,55 @@ class TestDomainVersions:
         response = client.get("/api/v1/domain/versions?domain_name=test")
         assert response.status_code == 400
 
+    # NOTE: the route now does an early ``cfg.is_configured`` check via
+    # ``RegistryCfg.from_session`` and short-circuits with 400 if the
+    # registry isn't configured. The test session has no registry config,
+    # so we pass the catalog/schema/volume as query-string overrides
+    # (which the route honours over the session cfg). With the cfg
+    # populated, the mocked ``RegistryService`` is reached as intended.
+    _REG_QS = "&registry_catalog=c&registry_schema=s&registry_volume=v"
+
     @patch("api.routers.domains.RegistryService")
     @patch("api.routers.domains.DigitalTwin")
     def test_versions_not_found(self, mock_dt, mock_svc_cls, client):
-        mock_dt.resolve_registry.return_value = {
-            "catalog": "c",
-            "schema": "s",
-            "volume": "v",
-        }
         mock_dt.uc_from_domain.return_value = MagicMock()
         svc = MagicMock()
         svc.list_versions_sorted.return_value = []
         mock_svc_cls.return_value = svc
-        response = client.get("/api/v1/domain/versions?domain_name=no_such")
+        response = client.get(
+            f"/api/v1/domain/versions?domain_name=no_such{self._REG_QS}"
+        )
         assert response.status_code == 404
 
     @patch("api.routers.domains.RegistryService")
     @patch("api.routers.domains.DigitalTwin")
     def test_versions_success(self, mock_dt, mock_svc_cls, client):
-        mock_dt.resolve_registry.return_value = {
-            "catalog": "c",
-            "schema": "s",
-            "volume": "v",
-        }
         mock_dt.uc_from_domain.return_value = MagicMock()
         svc = MagicMock()
         svc.list_versions_sorted.return_value = ["3", "2", "1"]
+
+        # Each version carries a lifecycle status; the endpoint reads it
+        # per version to annotate the response.
+        statuses = {"3": "PUBLISHED", "2": "IN-REVIEW", "1": "DRAFT"}
+        svc.read_version.side_effect = lambda dom, ver: (
+            True,
+            {"info": {"status": statuses[ver]}},
+            "",
+        )
         mock_svc_cls.return_value = svc
-        response = client.get("/api/v1/domain/versions?domain_name=mydom")
+        response = client.get(
+            f"/api/v1/domain/versions?domain_name=mydom{self._REG_QS}"
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert data["latest_version"] == "3"
         assert len(data["versions"]) == 3
         assert data["versions"][0]["is_latest"] is True
+        assert data["versions"][0]["status"] == "PUBLISHED"
+        assert data["versions"][0]["is_published"] is True
+        assert data["versions"][2]["status"] == "DRAFT"
+        assert data["versions"][2]["is_published"] is False
 
 
 # =========================================================================

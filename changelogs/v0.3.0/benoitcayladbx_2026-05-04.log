@@ -1,0 +1,2689 @@
+## Cohort preview timeout — Lakebase connection resilience
+
+Context: User reported the cohort preview ("Compute preview" button) was
+hanging until the browser/proxy gave up. The server-side cohort engine
+itself runs in <1 ms (logs: `CohortBuilder[…]: members=6 survivors=6
+edges=0 cohorts=0 in 0ms`), yet the request took ~134 s end-to-end and
+returned a stale-looking response. Root cause traced in the live log:
+
+```
+DEBUG | LakebaseAuth.password | Minted fresh Lakebase JWT for project ontobricks-app
+DEBUG | store.load_global_config | load_global_config failed: consuming input
+       failed: could not receive data from server: Operation timed out
+SSL SYSCALL error: Operation timed out
+INFO  | timing | POST /dtwin/cohorts/dry-run → 200 (133971.1ms)
+```
+
+The Lakebase pool's `_is_alive()` only checks client-side `conn.closed`;
+when the Postgres server (or an intermediate proxy) silently dropped an
+idle connection, the pool happily handed back the zombie socket. The
+next `cur.execute()` then blocked at the OS TCP layer for ~130 s
+(`tcp_retries2` default) before raising. Worst still, when the failure
+finally surfaced, `GlobalConfigService.load()` overwrote the previously
+good cache with `_empty()`, so every subsequent endpoint that resolves
+the graph engine had to retry the slow path.
+
+This was triggered repeatedly by a single rule edit because every
+Stage 1 cohort endpoint calls `_cohort_get_store_and_graph()` →
+`get_triplestore()` → `_resolve_graph_engine()` →
+`GlobalConfigService.load()`.
+
+Changes:
+
+1. src/back/core/databricks/LakebaseAuth.py
+   - `kwargs()` and `conninfo()` now emit libpq TCP keepalives:
+     `keepalives=1, keepalives_idle=10, keepalives_interval=5,
+     keepalives_count=3`. The OS now detects a server-side socket drop
+     in ~25 s instead of ~130 s, so a dead pool entry surfaces as a
+     normal exception (which the pool then evicts) rather than a
+     multi-minute hang.
+
+2. src/back/objects/session/GlobalConfigService.py
+   - `_CACHE_TTL` bumped from 60 s → 300 s. The global config holds
+     admin-only settings (warehouse_id, default_base_uri, graph_engine,
+     etc.) that change rarely; a 5-minute cache reduces the frequency
+     of cache-miss reads against Lakebase by ~5×.
+   - Added `_STALE_CACHE_TTL = 30 minutes`. When `store.load_global_config()`
+     raises, `load()` now returns the previously-cached config (if any
+     and still inside the stale window) instead of falling back to
+     `_empty()`. This stops a single Lakebase blip from cascading into
+     dozens of slow requests across every endpoint that resolves the
+     graph engine.
+
+3. src/front/static/query/js/query-cohorts.js
+   - `CohortModule.preview()` now wraps the dry-run fetch with an
+     `AbortController` set to a 60 s budget. On timeout the user sees
+     a clear message ("Preview timed out after 60s. The graph backend
+     may be cold or busy — try again in a moment.") rendered into the
+     preview panel, instead of an indefinite hang and a generic
+     browser/proxy error.
+
+4. tests/test_lakebase_auth.py
+   - New `TestConnectionTuning` class with two regression tests pinning
+     the TCP keepalive params on both `LakebaseAuth.kwargs()` and
+     `LakebaseAuth.conninfo()`.
+
+5. tests/test_graph_engine_config.py
+   - New `TestGlobalConfigStaleWhileRevalidate` class with two
+     regression tests:
+     * a backend failure after a successful load returns the previous
+       cache (not `_empty()`),
+     * a backend failure with no prior cache still falls back to
+       `_empty()` (no behaviour change in the cold-start path).
+
+Files modified:
+  - src/back/core/databricks/LakebaseAuth.py
+  - src/back/objects/session/GlobalConfigService.py
+  - src/front/static/query/js/query-cohorts.js
+  - tests/test_lakebase_auth.py
+  - tests/test_graph_engine_config.py
+
+Tests: 1983 tests pass (1979 previous + 4 new regression tests).
+       Targeted suites:
+         tests/test_lakebase_auth.py            12 / 12
+         tests/test_graph_engine_config.py      24 / 24
+         tests/test_registry_store.py           44 / 44
+         tests/test_dtwin_cohort.py             23 / 23
+       Full suite: 1983 passed in 60.57 s.
+
+---
+
+## Cohort designer — dependent shared-class / via dropdowns
+
+Context: In the cohort rule designer's *"When are two members linked?"*
+section, the `share a <class> via <predicate>` row showed every ontology
+class and every object property regardless of whether the predicate
+actually connected the source class to the chosen shared class. Users
+could pick incoherent combinations like *"Person — assignedTo — Office"*
+that would silently produce zero edges at preview time.
+
+The dropdowns are now dependent: the `via` selector is disabled until a
+shared class is picked, and is then narrowed to object properties whose
+`domain` is the source class and `range` is the picked shared class.
+The `shared a` selector is itself narrowed to classes reachable from the
+source class. If the ontology has incomplete domain/range metadata the
+filters fall back to the broader list so the user is never locked out.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   - Added `_classNameByUri`, `_objectPropsForSource`,
+     `_compatibleSharedClasses`, `_compatibleViaProperties` helpers
+     (class-name / URI / domain / range bridging — properties carry
+     `domain`/`range` as class names per `Ontology.build_property`).
+   - `_renderLinks()` now consumes those helpers: shared-class options
+     are restricted to reachable ranges; via options are restricted to
+     properties matching `domain=source` AND `range=shared_class`.
+   - Selecting a different `shared_class` clears any stale `via` that no
+     longer matches and re-renders the row in place.
+   - Source-class change (`#cohortClassUri.onchange`) now also re-renders
+     the link rows so both filters refresh together.
+   - Disabled-state placeholder text on `via` ("pick a class first" /
+     "no compatible relationship") makes the dependency obvious.
+
+2. releasereq/cohort_design.md
+   - §6.3 expanded with an explicit "Dependent dropdowns" paragraph
+     documenting the `domain`/`range` filtering and the disabled state.
+
+3. docs/cohort_discovery.md
+   - §2 step 3 ("When are two members linked?") rewritten to describe
+     the dependent dropdowns and the disabled-until-class-picked rule.
+
+Files modified:
+  - src/front/static/query/js/query-cohorts.js
+  - releasereq/cohort_design.md
+  - docs/cohort_discovery.md
+
+Tests: 1983 passed in 59.43 s (no behavioural change in Python — pure
+       frontend tightening; cohort backend suites green:
+         tests/test_cohort_models.py             18 / 18
+         tests/test_cohort_builder.py            18 / 18
+         tests/test_dtwin_cohort.py              23 / 23
+         tests/test_agent_cohort_engine.py        3 / 3
+         tests/test_agent_cohort_tools.py        24 / 24).
+
+---
+
+## Cohort designer — Preview promoted to a third tab
+
+Context: The cohort rule designer used to render preview results in a
+separate full-width drawer below the main two-tab card (Describe / Build
+rule). The drawer competed for vertical space with the form, and
+nothing made it obvious where the dry-run output landed once the user
+hit *Preview cohorts*. The screen also wasted space showing an empty
+drawer placeholder before any preview had been run.
+
+The drawer is gone. Preview is now a first-class third tab next to
+Describe and Build rule, and `Preview cohorts` switches to it
+automatically on success. The tab label carries a badge with the cohort
+count after each run, and the pane resets to its empty placeholder
+whenever a different rule is loaded or a new draft is started.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_cohorts.html
+   - New `#cohortTabPreviewBtn` tab trigger with a `#cohortPreviewBadge`
+     count badge, third in the `cohort-nav-tabs` strip.
+   - New `#cohortTabPreview` pane hosting `#cohortPreviewBody` and the
+     `Why didn't a member end up in a cohort?` explainer (input +
+     `Explain` button + result block) — same elements as before, just
+     re-homed inside the tab.
+   - Removed the standalone `<aside id="cohortPreviewPanel">` drawer
+     and its custom close button. `closePreview()` is no longer called
+     from markup.
+   - Empty-state copy points back to the *Build rule* tab so the
+     navigation flow is self-explanatory.
+
+2. src/front/static/query/js/query-cohorts.js
+   - `_showPreviewPanel()` is now a thin alias for the new
+     `_showPreviewTab()`, which activates the Preview tab through
+     `bootstrap.Tab.getOrCreateInstance(...).show()` — same pattern as
+     the existing `_showBuildTab()` helper.
+   - `closePreview()` (still referenced by the legacy keyboard path)
+     now switches back to the Build tab instead of hiding a drawer.
+   - New `_setPreviewBadge(count)` toggles the visibility and value of
+     the tab-label badge, and `_resetPreviewPane()` restores the
+     placeholder copy + clears the explainer + disables Materialise.
+   - `preview()` now: renders the body, sets the badge to the new
+     cohort count, switches to the Preview tab, then enables
+     Materialise. Failure / timeout paths also clear the badge and
+     bring the tab to the foreground so the error is visible.
+   - `loadRule()` and `newRule()` now clear `lastPreview` and call
+     `_resetPreviewPane()` so the tab never shows stale results from
+     a different rule.
+
+3. src/front/static/query/css/query-cohorts.css
+   - Replaced the old `.cohort-preview` panel styles with two
+     tab-friendly rules: `.cohort-preview-pane { min-height: 200px }`
+     and a soft-grey `.cohort-preview-explain` background for the
+     Why-not block.
+
+4. releasereq/cohort_design.md
+   - §6.1 layout: documented the three-tab main column (Describe /
+     Build rule / Preview) and removed the obsolete "Right panel slides
+     in" wording.
+   - §6.5 renamed "Preview panel" → "Preview tab"; updated the ASCII
+     mock to show the tab strip with the badge; documented badge +
+     reset-on-rule-change behaviour.
+   - §15 step 9 wording updated ("three-tab main column ... Materialise
+     targets modal" instead of "slide-in preview").
+
+5. docs/cohort_discovery.md
+   - "right pane" references in §2 replaced with "Preview tab".
+
+Files modified:
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+  - releasereq/cohort_design.md
+  - docs/cohort_discovery.md
+
+Tests: 1983 passed in 58.13 s (full suite). Cohort + UI suites:
+         tests/test_cohort_models.py             18 / 18
+         tests/test_cohort_builder.py            18 / 18
+         tests/test_dtwin_cohort.py              23 / 23
+         tests/test_agent_cohort_engine.py        3 / 3
+         tests/test_agent_cohort_tools.py        24 / 24
+         tests/test_ui_rendering.py             101 / 101.
+
+---
+
+## Cohort designer — multi-hop linkage paths
+
+Context: The "When are two members linked?" section only supported
+single-hop togetherness predicates of the form
+`<source> —via→ <shared_class>`. To express *"two persons are linked
+when they work on projects governed by the same compliance type"* a
+user previously had to materialise a synthetic predicate
+(`:hasCompliance` on `:Person`) just to bridge the two real edges. Each
+link row was rigidly source-anchored: the only entity selectable was a
+direct neighbour of the source class.
+
+`CohortLink` now carries an ordered `path: List[CohortHop]` that the
+engine walks from the surviving members. Hop 0's source is the rule's
+class (locked), hop *i*'s source is hop *i-1*'s `target_class`, and the
+last hop's `target_class` is the "shared entity" two members must
+reach to be considered linked. Single-hop rules — the old form — are
+auto-promoted to a 1-hop path so every existing rule keeps working
+unchanged; the engine never sees the legacy fields directly.
+
+Algorithm: a uniform path-walker over the in-memory triple set. The
+edge build now does a single forward expansion per hop, accumulating
+`{terminal_uri -> {source_members}}`, and only at the terminal does it
+emit pairwise edges. For 1-hop links this is the same number of
+operations as before; for N-hop it's O(|members| × Σ|out_deg|) over
+the path, dominated by hop 0 in practice.
+
+UI: each link row is now a *path card* with one hop per line. Each
+hop renders a locked source pill (the rule's class for hop 0,
+hop *i-1*'s target otherwise), a `via` predicate dropdown, and a
+`target_class` dropdown — both filtered by the
+domain/range-aware dependent rule already in place from the previous
+release. "Add hop" appends a hop, the "+" on a hop's right removes it
+(except hop 0, which is required). The terminal hop carries a
+`shared` badge so the meaning of the path is unambiguous. Editing a
+hop propagates downstream: the next hop's source pill updates and its
+dropdowns re-filter live. A new starter template,
+*Multi-hop linkage*, seeds a fresh 2-hop path.
+
+Changes:
+
+1. src/back/core/graph_analysis/models.py
+   - New `CohortHop(via, target_class)` dataclass with `to_dict` /
+     `from_dict` round-trip + whitespace stripping.
+   - `CohortLink` gains `path: List[CohortHop]` and exposes `hops()`
+     (auto-promotes legacy `shared_class`+`via` to a 1-hop path) and
+     `terminal_class` (last hop's target). Legacy fields are kept on
+     the dataclass and round-tripped through `to_dict` / `from_dict`,
+     so older saved rules deserialise into a working `CohortLink`.
+   - `CohortRule.validate()` walks `lk.hops()` per link and emits a
+     per-hop error when `via` or `target_class` is missing.
+
+2. src/back/core/graph_analysis/__init__.py
+   - Re-exports `CohortHop` so callers can import it from the package
+     root.
+
+3. src/back/core/graph_analysis/CohortBuilder.py
+   - Replaced the per-link single-predicate scan with a unified
+     N-hop walker: `_outgoing_edge_index` (`(subject, predicate) ->
+     [object…]`), `_type_index_for_links` (target classes referenced by
+     any hop), and `_walk_path` (frontier-style breadth expansion that
+     accumulates source-member sets per terminal node).
+   - `_build_edges_from_links` now calls `_walk_path` per link and
+     emits pairwise edges from each terminal's source set; combine =
+     `any` / `all` semantics unchanged.
+   - 1-hop rules (legacy) hit the same code path with a path of
+     length 1, preserving exact behavioural parity.
+
+4. src/front/static/query/js/query-cohorts.js
+   - Generalised the dropdown helpers to take a source URI:
+     `_classByUri`, `_classLabelByUri`, `_objectPropsForSource(uri)`,
+     `_compatibleViaProperties(srcUri, targetUri)`,
+     `_compatibleTargetClasses(srcUri, viaUri)`.
+   - New `_normalizeLink(lk)` migrates legacy `{shared_class, via}` to
+     a 1-hop `path` on the fly so the renderer and the form-state are
+     uniform. Saves only ever emit `path` (legacy fields stripped).
+   - Replaced the flat link row with a path-card renderer:
+     `_renderLinkCard` builds the card chrome + Add-hop button;
+     `_renderHopRow` renders a hop with a source pill, dependent via
+     and target dropdowns, the terminal `shared` badge on the last
+     hop, and a per-hop delete button (hidden on hop 0).
+   - New action methods: `addHop(linkIdx)`, `removeHop(linkIdx, idx)`,
+     `removeLink(linkIdx)`. `addLink()` now seeds a fresh 1-hop path.
+   - Templates list gains a *Multi-hop linkage* card seeded with a
+     2-hop empty path (Person → Project → ComplianceType-shaped).
+
+5. src/front/static/query/css/query-cohorts.css
+   - New `.cohort-link-card` chrome (soft-grey card with header bar),
+     `.cohort-hop-list` (column gap), `.cohort-hop` (flex row),
+     `.cohort-hop-source` (locked source pill in primary tint),
+     `.cohort-hop-arrow`, `.cohort-hop-terminal-badge` (success-green
+     `shared` badge), `.cohort-hop-add` (subtle link button).
+
+6. src/front/templates/partials/dtwin/_query_cohorts.html
+   - Add-link button label updated from "Add shared-resource link" to
+     "Add shared-resource path" to match the path-based mental model.
+
+7. tests/test_cohort_models.py
+   - New `TestCohortHop` (round-trip, whitespace stripping).
+   - New `TestCohortLink` cases:
+     `test_legacy_single_hop_is_promoted_to_path`,
+     `test_multi_hop_path_round_trip`,
+     `test_path_takes_precedence_over_legacy_fields`.
+
+8. tests/test_cohort_builder.py
+   - New `TestMultiHopPath`:
+     * `test_two_hop_groups_by_terminal_compliance` — Person →
+       Project → ComplianceType. Two terminals (`CT-Exempt` reaching
+       Alice/Bob/Carol; `CT-Standard` reaching Dave/Eve) yield the
+       expected 3-2 cohort split.
+     * `test_two_hop_count_link_edges` — same path, 4 edges
+       (clique-of-3 + pair).
+     * `test_legacy_single_hop_still_works` — regression: legacy
+       `CohortLink(shared_class, via)` still yields the historical
+       count of 5 edges on the consulting fixture.
+     * `test_path_target_class_filters_intermediate_node` — a hop
+       whose `target_class` doesn't match the actual range of `via`
+       prunes every walk and yields zero cohorts.
+
+9. releasereq/cohort_design.md
+   - §3 mental model: "Linked when" reframed as a path; added an
+     explainer paragraph on N-hop semantics with the
+     compliance-type example.
+   - §4 schema: documented the new `CohortHop` dataclass and
+     `CohortLink.path` field; legacy `shared_class` / `via` retained
+     and clearly labelled as the back-compat surface.
+   - §6.3 UX: replaced the old single-row mock with a path-card
+     mock; documented per-hop dependent dropdowns, source-pill
+     locking, the `shared` badge, and downstream propagation when a
+     hop is edited.
+   - §9.6 algorithm: replaced the single-self-join SQL form with the
+     N-way CTE pattern + the in-memory frontier-walker pseudocode;
+     1-hop is documented as the degenerate case.
+
+10. docs/cohort_discovery.md
+    - §2 step 3 rewritten to describe shared-resource *paths* and the
+      per-hop dependent-dropdown rule.
+    - New §7.5 worked example "Compliance — Same-policy people
+      (multi-hop path)" using the Person → Project → ComplianceType
+      path.
+
+Files modified:
+  - src/back/core/graph_analysis/models.py
+  - src/back/core/graph_analysis/CohortBuilder.py
+  - src/back/core/graph_analysis/__init__.py
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - tests/test_cohort_models.py
+  - tests/test_cohort_builder.py
+  - releasereq/cohort_design.md
+  - docs/cohort_discovery.md
+
+Tests: 1992 passed in 60.10 s (1983 previous + 9 new).
+       Targeted suites:
+         tests/test_cohort_models.py             23 / 23  (+5 multi-hop)
+         tests/test_cohort_builder.py            22 / 22  (+4 multi-hop)
+         tests/test_dtwin_cohort.py              23 / 23
+         tests/test_agent_cohort_engine.py        3 / 3
+         tests/test_agent_cohort_tools.py        24 / 24
+       Full suite: 1992 passed in 60.10 s.
+
+---
+
+## Cohort engine — restore lenient type filter on path hops
+
+Context: User reported the cohort designer returning *"0 cohorts, 0 of
+6 members grouped, 0 edges, 0 ms"* on a perfectly reasonable rule
+shortly after the multi-hop refactor. Reproduced with a
+6-Person / 3-Project graph that had `:assignedTo` triples but no
+`rdf:type` triples for `:Project`. The pre-multi-hop engine produced 5
+edges + 2 cohorts on this same graph; the new engine produced zero.
+
+Root cause: the path-walker enforces `nbr in type_index[h.target_class]`
+when `target_class` is set. Previously, the legacy edge builder used
+`type_index.get(...) or None` — so an *empty* type set (no
+`rdf:type` triples at all for the target class) was coerced to `None`
+and the type filter was disabled. The multi-hop refactor kept the
+empty-set semantics, which silently filtered out every neighbour and
+yielded zero edges on graphs that don't materialise types
+(R2RML output without explicit type triples, CSV-loaded data,
+W3C-imported graphs that rely on `rdfs:domain` for typing).
+
+Fix: in `_walk_path`, treat an empty `type_index[target_class]` as
+"no filter" (`allowed = None`), matching the legacy semantics. The
+strict filter still applies whenever the type set is non-empty — so
+the *typed* multi-hop scenario (`Person → Project → ComplianceType`
+with full `rdf:type` triples) still drops walks whose intermediate
+node isn't an instance of the declared class.
+
+Changes:
+
+1. src/back/core/graph_analysis/CohortBuilder.py
+   - `_walk_path`: `allowed = type_index.get(h.target_class) or None`
+     (empty / missing entry → no filter), with an in-line docstring
+     explaining the lenient fallback and when it kicks in.
+
+2. tests/test_cohort_builder.py
+   - New `TestMultiHopPath.test_target_class_with_no_rdf_type_triples_is_lenient`
+     reproducing the user's scenario: 6 Persons + assignedTo to 3
+     Projects, no `rdf:type` for Project. Asserts 5 edges + 2 cohorts
+     (clique-of-3 bridged by Bob into {Alice, Bob, Carol, Frank}, plus
+     {Dave, Eve}). This test is RED on pre-fix code (0 edges, 0
+     cohorts) and GREEN after the fix.
+
+The strictly-typed path test
+(`test_path_target_class_filters_intermediate_node`) still passes:
+the multi-hop graph has `rdf:type ComplianceType` triples for
+CT-Exempt / CT-Standard, so the type set is non-empty and the strict
+filter is honoured.
+
+Files modified:
+  - src/back/core/graph_analysis/CohortBuilder.py
+  - tests/test_cohort_builder.py
+
+Tests: 1993 passed in 62.03 s (1992 previous + 1 regression test).
+       Targeted suites:
+         tests/test_cohort_models.py             23 / 23
+         tests/test_cohort_builder.py            23 / 23  (+1 regression)
+         tests/test_dtwin_cohort.py              23 / 23
+         tests/test_agent_cohort_engine.py        3 / 3
+         tests/test_agent_cohort_tools.py        24 / 24
+       Full suite: 1993 passed in 62.03 s.
+
+================================================================================
+
+## Cohort discovery — per-hop `where` filters on multi-hop linkage paths
+
+Context
+
+Even after the lenient-type fallback fix (above), users who had the
+*correct* multi-hop path (`Person → Project → ComplianceType`) but
+attached the descriptive constraint to rule-level compatibility
+(`value_equals(complianceTypeId = "Individual")`) still saw "0
+cohorts, 0 of N members grouped, 0 edges".
+
+Root cause: `complianceTypeId` is a property of `ComplianceType`, not
+`Person`. The compatibility section applies node filters to the
+*source class* — by Stage 3a every Person was dropped (no value for
+`:complianceTypeId`), so Stage 3b had nothing to walk. The path
+itself was fine; the constraint was just attached to the wrong class.
+
+Fix: introduce a per-hop `where` filter so users can constrain the
+hop's *target* node directly — *"… → ComplianceType where
+complianceTypeId = 'Individual'"*. Reuses the existing
+`value_equals` / `value_in` / `value_range` primitives;
+`same_value` is rejected at validation time (it's a pairwise edge
+constraint, meaningless on a single node).
+
+Changes
+
+1. src/back/core/graph_analysis/models.py
+   - `CohortHop` gains an optional `where: List[CohortCompat]` field
+     (defaults to empty list, omitted from `to_dict()` when empty so
+     existing JSON payloads round-trip unchanged).
+   - `CohortHop.from_dict` decodes the `where` array.
+   - `CohortRule.validate()` walks each hop's `where` and emits the
+     same per-primitive errors as rule-level compatibility; rejects
+     `same_value` at hop scope.
+
+2. src/back/core/graph_analysis/CohortBuilder.py
+   - New `_hop_where_attr_index(triples, links)` builds a
+     `predicate -> {subject: value}` map over the union of hop-where
+     properties. Unlike `_fetch_attrs_for_props`, it does NOT
+     restrict to the rule's source-class members — hop targets sit
+     mid-path and are instances of the hop's `target_class`.
+   - `_walk_path` accepts the hop-attr index and, after the
+     `target_class` check, rejects neighbours whose where filters
+     don't pass.
+   - New module-level `_hop_where_passes(where, node, hop_attrs)`
+     mirrors `_node_filter_passes` semantics (`allow_missing`
+     honoured; `same_value` silently skipped per validation).
+
+3. src/front/static/query/js/query-cohorts.js
+   - `_normalizeLink` ensures every hop has a `where: []` array.
+   - New `addHopWhere(linkIdx, hopIdx, type)` /
+     `removeHopWhere(linkIdx, hopIdx, whereIdx)`.
+   - `_renderHopRow` now wraps the hop in a `cohort-hop-wrap` so a
+     `_renderHopWherePane` can hang underneath it. The pane shows
+     "where this `<TargetClass>` …" plus three add buttons (equals /
+     in any / between), disabled until the hop's `target_class` is
+     set. Each filter row reuses the same property-select + value
+     widgets as rule-level compatibility, including the
+     `sample-values` picker (scoped to the hop's `target_class`).
+   - When a hop carries `where` rows, a small funnel badge
+     (`cohort-hop-where-badge`) appears next to the *shared* badge
+     to surface the filter count at a glance.
+
+4. src/front/static/query/css/query-cohorts.css
+   - `.cohort-hop-wrap`, `.cohort-hop-where`,
+     `.cohort-hop-where-pane`, `.cohort-hop-where-header`,
+     `.cohort-hop-where-list`, `.cohort-hop-where-row`,
+     `.cohort-hop-where-badge` styles. Indents the where pane under
+     the hop and gives where rows a faint background to visually
+     subordinate them to the path itself.
+
+5. tests/test_cohort_models.py
+   - `TestCohortHop`:
+     `test_default_where_is_empty_list`,
+     `test_where_round_trip`,
+     `test_where_supports_value_in_and_range`.
+   - `TestCohortRule`:
+     `test_validate_hop_where_same_value_rejected`,
+     `test_validate_hop_where_value_equals_requires_value`,
+     `test_validate_hop_where_value_in_requires_values`,
+     `test_validate_hop_where_ok`.
+
+6. tests/test_cohort_builder.py
+   - New `_multi_hop_graph_with_compliance_ids()` helper adds
+     `:complianceTypeId` literals to the existing 2-hop fixture.
+   - `TestHopWhere`:
+     - `test_terminal_where_keeps_matching_compliance` — direct
+       reproduction of the user's scenario; only the Exempt clique
+       survives, members = {Alice, Bob, Carol}, sizes = [3].
+     - `test_terminal_where_blocks_non_matching` — Standard clique
+       only, members = {Dave, Eve}, sizes = [2].
+     - `test_terminal_where_no_match_yields_zero_cohorts` —
+       descriptive negative-control: source survivors == 5 (no
+       compatibility filter on Person), but 0 edges and 0 cohorts
+       because no terminal matches. Asserts the symptom AND that the
+       source class was NOT incorrectly filtered.
+     - `test_intermediate_where_filters_mid_path` — proves the
+       filter scopes mid-path (Gold-tier Projects only).
+     - `test_value_in_at_terminal` — multi-value primitive at
+       terminal.
+     - `test_missing_value_blocks_unless_allow_missing` — strict vs
+       lenient `allow_missing` parity with rule-level filters.
+     - `test_legacy_link_unaffected_by_hop_where` — legacy 1-hop
+       regression check (5 edges, same as
+       `TestStageHelpers.test_count_link_edges`).
+
+7. releasereq/cohort_design.md
+   - §4 schema: `CohortHop.where` documented inline with rationale
+     ("attach the constraint to the hop whose target it actually
+     describes; rule-level compatibility filters the source class
+     only").
+   - §6.3 UX: new "Per-hop `where` filters" subsection with the path
+     mock, dependent-affordance rules, and the
+     "0-cohorts-on-misplaced-filter" diagnostic.
+   - §9.6 algorithm: `walk_path` pseudocode now takes
+     `hop_attrs`; "Hop-where attribute fetch" paragraph documents
+     the unrestricted index and the missing-value semantics.
+
+8. docs/cohort_discovery.md
+   - User-facing §2 step 3 now describes the hop where affordance
+     and explicitly calls out the misplaced-filter pitfall.
+   - §7.5 "Compliance" worked example rewritten to use a hop where
+     on the terminal `ComplianceType` (the user's exact scenario).
+
+Files modified
+  - src/back/core/graph_analysis/models.py
+  - src/back/core/graph_analysis/CohortBuilder.py
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+  - tests/test_cohort_models.py
+  - tests/test_cohort_builder.py
+  - releasereq/cohort_design.md
+  - docs/cohort_discovery.md
+
+Tests
+  - Targeted:
+      tests/test_cohort_models.py    30 / 30  (+7 hop-where)
+      tests/test_cohort_builder.py   30 / 30  (+7 hop-where)
+  - Full suite: 2007 passed in 60.08 s.
+
+================================================================================
+
+## Cohort discovery — per-hop path-trace diagnostic
+
+Context
+
+After fixing the lenient-type fallback and adding per-hop `where`
+filters, users could still hit "0 cohorts" without a clear next step.
+The three remaining ways for a multi-hop walk to silently collapse —
+predicate URI mismatch, target-class URI mismatch, over-constraining
+hop `where` — all produce the same symptom (0 frontier, 0 edges, 0
+cohorts) and were indistinguishable from the user's vantage point.
+
+We needed a one-click diagnostic that points at *which hop* dies and
+*why*, without requiring the user to share the rule + data sample.
+
+Changes
+
+1. src/back/core/graph_analysis/CohortBuilder.py
+   - New public `trace_paths(class_uri, links, compatibility=None)`:
+     runs Stages 1 + (optional) 3a, then walks each link's path with
+     an instrumented variant emitting per-hop counters.
+   - New static `_trace_path(out_index, type_index, hop_attrs,
+     members, hops)`: structural twin of `_walk_path`, records
+     `in_frontier / neighbours_raw / dropped_type / dropped_where /
+     out_frontier` per hop. When the frontier collapses to 0,
+     remaining hops are still emitted with all-zero rows so the UI
+     keeps one row per declared hop.
+   - New static `_count_edges_from_terminal_frontier`: re-uses
+     `_walk_path` to compute the edge count for one link
+     consistently with `_build_edges_from_links`.
+
+2. src/api/routers/internal/dtwin.py
+   - New `POST /dtwin/cohorts/preview/path-trace` endpoint, mirrors
+     the existing `/preview/edge-count` plumbing.
+
+3. src/back/objects/digitaltwin/DigitalTwin.py
+   - `cohort_path_trace(rule_dict, store, graph_name)` adapter that
+     decodes `class_uri`, `links`, `compatibility` and calls
+     `CohortBuilder.trace_paths`. Honours rule-level compatibility so
+     the trace's "starting frontier" matches the real preview's
+     Stage 3a survivor count.
+
+4. src/front/templates/partials/dtwin/_query_cohorts.html
+   - New `cohort-preview-trace` block on the Preview tab with a
+     **Trace path** button and a `#cohortTraceResult` container.
+     Shown above the existing "Why didn't a member end up in a
+     cohort?" explainer block.
+
+5. src/front/static/query/js/query-cohorts.js
+   - New `tracePaths()` method: collects the form state, POSTs the
+     `class_uri` + `links` + `compatibility` slice to the new
+     endpoint, and renders the result via `_renderTraceHtml`.
+   - New `_renderTraceHtml(data)` and `_renderTraceLink(lt, idx)`:
+     render one card per link with a per-hop table
+     (`#`, `hop`, `in`, `raw`, `drop`, `out`). The first hop with
+     `out_frontier == 0` is highlighted in red and a diagnostic
+     paragraph below the table reads off the most likely cause
+     (predicate URI mismatch, target-class mismatch, or over-
+     constraining where filter) using the dropped-counter
+     decomposition.
+   - `_resetPreviewPane()` clears the trace pane alongside the
+     explain pane when loading or starting a new rule.
+
+6. src/front/static/query/css/query-cohorts.css
+   - `.cohort-preview-trace` block with `.cohort-trace-table`
+     (compact uppercase column heads, `out`-column alignment),
+     `.cohort-trace-collapse` row tinting (`bg-danger` 6%), and
+     `.cohort-trace-diag` (left red bar + faint pink background)
+     for the diagnostic line.
+
+7. tests/test_cohort_builder.py
+   - New `TestTracePaths`:
+     - `test_healthy_path_reports_full_frontiers` — happy path
+       (5 → 3 → 2 frontiers, 4 edges).
+     - `test_compatibility_filtering_shrinks_starting_frontier` —
+       Stage 3a survivors flow into the trace's starting frontier
+       (4 of 5 Persons after `STATUS = "Exempt"`).
+     - `test_wrong_predicate_uri_pinpoints_first_hop` — first hop
+       reports `neighbours_raw == 0`; subsequent hops are padded
+       with zeros.
+     - `test_target_class_mismatch_pinpoints_offending_hop` — second
+       hop reports `dropped_type >= 2`, `out_frontier == 0`.
+     - `test_hop_where_failure_attributes_to_dropped_where` —
+       direct simulation of the user's "still 0 cohorts" scenario:
+       value mismatch on hop where puts every neighbour into
+       `dropped_where`, not `dropped_type`.
+     - `test_legacy_single_hop_link_traced` — legacy 1-hop rules get
+       a single-hop trace (no padding, edge count matches preview).
+
+8. tests/test_dtwin_cohort.py
+   - New `test_path_trace`: end-to-end through `DigitalTwin`, asserts
+     class member count, survivor count, link edge count.
+   - New `test_path_trace_pinpoints_collapse`: bad predicate URI
+     surfaces as `neighbours_raw == 0` on hop 1.
+
+9. docs/cohort_discovery.md
+   - §2 user-facing description of the *Trace path* button with the
+     four-column table semantics and the failure-mode decoder.
+   - §8 API summary: `POST /preview/path-trace` row.
+
+10. releasereq/cohort_design.md
+    - New §6.7 "Path-trace diagnostic" with the same failure-mode
+      decoder + a worked-example mock.
+
+Files modified
+  - src/back/core/graph_analysis/CohortBuilder.py
+  - src/api/routers/internal/dtwin.py
+  - src/back/objects/digitaltwin/DigitalTwin.py
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+  - tests/test_cohort_builder.py
+  - tests/test_dtwin_cohort.py
+  - docs/cohort_discovery.md
+  - releasereq/cohort_design.md
+
+Tests
+  - Targeted:
+      tests/test_cohort_builder.py   36 / 36  (+6 trace)
+      tests/test_dtwin_cohort.py     25 / 25  (+2 trace)
+  - Full suite: 2015 passed in 60.20 s.
+
+================================================================================
+
+## Cohort discovery — ontology / data URI namespace drift fix
+
+Context
+
+The path-trace diagnostic surfaced a real production bug on the
+``Consulting`` domain: the multi-hop rule
+``Person → Project → ComplianceType`` reported 6 members, 6 survivors,
+**0 edges, 0 cohorts** despite the data clearly containing 8
+PhasProject triples. The trace pinpointed it: ``raw=0`` on hop 1.
+
+Root cause (silent codebase convention):
+
+  - The ontology stores property URIs with the base_uri's separator,
+    typically ``#``: ``https://…/Consulting#PhasProject``.
+  - The R2RML loader normalises the data namespace to a ``/``-
+    terminated form: ``self.base_uri = base_uri.rstrip("/")
+    .rstrip("#") + "/"`` (R2RMLGenerator:19), so the actual triples
+    have ``https://…/Consulting/PhasProject``.
+  - SPARQL, SWRL, SHACL, Aggregate, DecisionTable, Reasoning, and
+    GraphQL engines all rewrite property URIs through this
+    translation before querying triples (canonical site:
+    ``SPARQLRuleEngine._build_uri_map``). The cohort engine was the
+    odd one out — it looked up triples by the raw ontology URI and
+    silently returned zero matches.
+  - Class URIs are unaffected (data uses the ontology form for
+    ``rdf:type``), which is why Stage 1 member listing worked but
+    Stage 3b path traversal collapsed.
+
+Discovery process
+
+  1. Path-trace diagnostic (added in the previous changelog section)
+     pinpointed ``raw=0`` on hop 1 — the predicate URI lookup hit
+     nothing.
+  2. Direct read of the live LadybugDB at
+     ``/tmp/ontobricks/Consulting_V1.lbug`` listed 8 PhasProject
+     triples — the predicate exists in the data.
+  3. Inspection of the live FastAPI session
+     (``fastapi_session/1966bee0…``) showed ontology declares the
+     same predicate with ``#`` instead of ``/``.
+  4. Cross-check against R2RMLGenerator and SPARQLRuleEngine
+     confirmed the ``#`` → ``/`` translation is a documented
+     convention applied by every other reasoner.
+
+Fix
+
+1. src/back/core/graph_analysis/CohortBuilder.py
+   - New ``_data_namespace()`` method:
+     ``base_uri.rstrip("#").rstrip("/") + "/"``, mirroring the
+     pattern from ``SPARQLRuleEngine._build_uri_map``.
+   - New ``_to_data_uri(uri)`` method: rewrites ontology-form URIs
+     starting with ``base_uri`` to data-form by replacing the
+     separator. Already-data URIs and foreign URIs are returned
+     unchanged. ``base_uri == ""`` → identity (legacy behaviour).
+   - New ``_normalized_links(links)`` and ``_normalized_compat(cc)``
+     helpers return shallow copies of links / compatibility lists
+     with property URIs rewritten. ``via`` and
+     ``hop.where[*].property`` are translated; ``target_class`` is
+     left alone (class URIs are aligned on both sides).
+   - Applied at every public entry point that hits the triple
+     index: ``build``, ``count_link_edges``, ``count_matching_nodes``,
+     ``trace_paths``, ``sample_property_values``,
+     ``explain_membership``.
+   - Removed two now-dead private helpers (``_fetch_attrs`` and
+     ``_build_edges``) which became unreferenced after the entry
+     points started decoding rules into normalised forms.
+
+2. tests/test_cohort_builder.py
+   - New ``TestOntologyDataNamespaceDrift`` (5 tests) reproducing
+     the exact production scenario:
+     - ``test_rule_via_uri_in_ontology_form_finds_data_form_edges``
+       — the canonical "rule built from dropdown finds zero edges"
+       repro; asserts non-zero post-fix.
+     - ``test_compatibility_property_uri_normalised`` — same drift
+       on rule-level compatibility filters.
+     - ``test_hop_where_property_uri_normalised`` — same drift on
+       per-hop ``where`` filters.
+     - ``test_path_trace_reflects_normalisation`` — the diagnostic
+       must show non-zero ``raw`` after the fix (otherwise the
+       trace would mislead users with a separator-aware engine).
+     - ``test_no_base_uri_means_no_normalisation`` — when ``base_uri``
+       isn't configured the engine falls back to exact matching
+       (legacy behaviour preserved).
+
+3. Live verification
+   - Loaded the production ``Consulting_V1.lbug`` directly through
+     ``LadybugFlatStore`` and ran the user's exact rule
+     (Person → PhasProject → Project → hasComplianceType →
+     ComplianceType) through the patched ``CohortBuilder``.
+   - Pre-fix: 0 cohorts, 0 edges.
+   - Post-fix: 8 edges, 1 cohort of 5 Persons grouped, 1 ungrouped.
+
+Files modified
+  - src/back/core/graph_analysis/CohortBuilder.py
+  - tests/test_cohort_builder.py
+
+Tests
+  - tests/test_cohort_builder.py   41 / 41  (+5 drift)
+  - Full suite: 2020 passed in 58.23 s.
+
+================================================================================
+
+## Cohort discovery — save UX: prune empty where rows + readable errors
+
+Context
+
+Right after the namespace-drift fix, saving a multi-hop cohort rule
+failed with a cryptic ``Save failed: {"error":"validation",
+"message":"Cohort rule validation failed","request_id":"…"}``. The
+backend log carried the actual cause —
+``Link #1 hop 2 where #1: property is required.`` — but the JSON
+shipped to the client only included ``message``; ``detail`` was
+gated on ``settings.debug`` and stripped in production.
+
+Two issues conflated:
+
+  1. The user clicked the per-hop ``+`` to add a where row but
+     hadn't yet picked a property. That empty placeholder shouldn't
+     block the save — it's form scaffolding, not a real constraint.
+  2. Even when there *is* a legitimate validation issue, the UI
+     surfaces an opaque blob with no actionable info.
+
+Fix
+
+1. src/front/static/query/js/query-cohorts.js
+   - New ``_sanitizedRulePayload()``: returns a deep copy of
+     ``this.rule`` with empty ``hop.where[*]`` and rule-level
+     ``compatibility[*]`` rows (missing or blank ``property``)
+     filtered out before the payload hits the server.
+   - New ``_readErrorMessage(response)``: parses the JSON error
+     body and surfaces ``detail`` (preferred) or ``message`` instead
+     of dumping the raw text.
+   - ``save()`` now sends the sanitised payload and renders a
+     human-readable message on failure.
+
+2. src/shared/fastapi/error_handlers.py
+   - Always expose ``detail`` for status 400 validation errors
+     (``error="validation"``). The detail describes what's wrong
+     with the *client's* submission, not internal state, so it's
+     safe to surface and necessary for actionable UI feedback.
+     Stack-trace details on 500s remain debug-gated.
+
+Why both halves
+
+The frontend prune handles the common "I clicked + then forgot"
+case silently. The backend detail exposure means future legitimate
+validation errors (e.g. missing class_uri, bad min_size) reach the
+user with a precise pointer to the offending field.
+
+Files modified
+  - src/front/static/query/js/query-cohorts.js
+  - src/shared/fastapi/error_handlers.py
+
+Tests
+  - Cohort suite: 96 / 96 passed.
+  - No new tests — the prune is defensive UX (silently drops empty
+    placeholders), and exposing ``detail`` on 400 is a config
+    change covered by manual verification on the live restart.
+
+================================================================================
+
+## Cohort discovery — tree-style multi-hop path renderer
+
+Context
+
+The previous path UI laid each hop out horizontally as a row:
+``[Source] → [via select] → [Target select] [shared] [where 2] [×]``.
+With a 2-hop or 3-hop chain it became hard to read the direction of
+the path at a glance — the source class was repeated on every row,
+the where pane lived to the right, and there was no visual cue that
+hops are sequential rather than parallel.
+
+Fix
+
+1. src/front/static/query/js/query-cohorts.js — ``_renderLinkCard``
+   and ``_renderHopRow`` rewritten to emit a vertical tree:
+     - Path opens with a single root node showing the rule's
+       ``class_uri`` chip with a "source" hint.
+     - Each hop renders two stacked rows: a ``via`` edge with the
+       predicate select and a down-arrow, then the target node
+       (chip-styled select with bullet, badges, and remove button).
+     - The terminal hop swaps the bullet circle for a flag icon
+       (``bi-flag-fill``), uses a green chip variant and masks the
+       parent vertical line below it so the path visually
+       "terminates".
+     - Where panes nest naturally under their target node, indented
+       to the right of the bullet.
+
+2. src/front/static/query/css/query-cohorts.css
+     - New ``.cohort-tree``, ``.cohort-tree-root``, ``.cohort-tree-hops``,
+       ``.cohort-tree-hop``, ``.cohort-tree-edge``, ``.cohort-tree-node``,
+       ``.cohort-tree-bullet``, ``.cohort-class-chip``,
+       ``.cohort-class-chip-root``, ``.cohort-class-chip-terminal``,
+       and ``.cohort-class-chip-select`` rules.
+     - Vertical line drawn via dashed ``border-left`` on
+       ``.cohort-tree-hops``; horizontal hop connectors drawn via
+       dashed ``::before`` on each ``.cohort-tree-hop``; terminal
+       node masks the line below itself with ``::after`` painted in
+       the body background.
+     - Target ``select`` styled to look like a chip (custom CSS-only
+       caret arrow, no native ``border``) so the chosen class reads
+       as a visual destination rather than a form input.
+     - Removed obsolete ``.cohort-hop-list``, ``.cohort-hop``,
+       ``.cohort-hop-source``, ``.cohort-hop-arrow``, and
+       ``.cohort-hop-wrap`` rules — no remaining references in
+       code or templates.
+
+Files modified
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+
+Tests
+  - Cohort suite: 96 / 96 passed (DOM restructure is rendering-only;
+    backend payload shape unchanged).
+  - Manual UI verification on the live restart: 2-hop
+    Person → Project → ComplianceType path now reads top-to-bottom
+    with clearly nested where panes.
+
+================================================================================
+
+## Cohort discovery — preview members show URI, ID, and Label
+
+Context
+
+The dry-run preview rendered each cohort member as a single line
+showing only the URI's local name (``_localName(m)``). For typed
+URIs like ``Person/2`` that meant the user only saw ``2`` — no
+human-readable label, no domain identifier (``Person/2``), no
+copyable URI. Useless when the population is anonymous (just IDs)
+and the rdfs:label data is right there in the graph.
+
+Fix
+
+1. src/back/objects/digitaltwin/DigitalTwin.py
+   - ``dry_run_cohort`` now post-processes the ``CohortResult``
+     payload through new ``_enrich_cohort_members`` helper before
+     returning. It collects the union of all member URIs, makes a
+     single ``store.get_entity_metadata`` call, and rewrites
+     ``cohorts[*].members`` from ``List[str]`` to a
+     ``List[{uri, id, label}]``.
+   - ``id`` is the local segment after the last ``/`` or ``#`` —
+     what humans read as the entity's domain identifier (e.g.
+     ``Person/2`` URI → id ``2``). When the URI has no separator,
+     ``id`` falls back to the URI itself.
+   - ``label`` is best-effort. Missing labels degrade to ``""``;
+     the UI then renders the id as the headline.
+   - Errors during the metadata fetch are swallowed (logged at
+     debug) and the original URI strings are preserved — the
+     preview must not crash on store hiccups.
+
+2. src/front/static/query/js/query-cohorts.js
+   - New ``_renderCohortMember(m)`` renders one member as a small
+     card: bold label (or id fallback) on top with a chip showing
+     the id, and the full URI underneath in a click-to-copy
+     ``<code>`` element. Backwards compatible with the legacy
+     plain-string member shape — degrades gracefully when the
+     enrichment step fails.
+   - ``_renderPreviewBody`` now wires a clipboard handler on every
+     ``[data-copy]`` URI element with a "copied ✓" flash.
+
+3. src/front/static/query/css/query-cohorts.css
+   - New ``.cohort-preview-member``, ``-headline``, ``-label``,
+     ``-id``, ``-uri`` rules for the three-row layout. The URI line
+     is small / muted by default and turns primary on hover, success
+     after a successful copy.
+
+4. tests/test_dtwin_cohort.py
+   - Three new tests in ``TestDryRunAndMaterialize``:
+     - ``test_dry_run_enriches_members_with_id_and_label`` — happy
+       path, asserts each member is a dict with the three keys and
+       the right label.
+     - ``test_dry_run_falls_back_to_empty_label_when_metadata_missing``
+       — labels missing → empty strings, dict shape preserved.
+     - ``test_dry_run_survives_metadata_fetch_failure`` — store
+       error during enrichment leaves the original URI strings
+       intact so the engine result still surfaces.
+
+Files modified
+  - src/back/objects/digitaltwin/DigitalTwin.py
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+  - tests/test_dtwin_cohort.py
+
+Tests
+  - Cohort suite: 99 / 99 passed (+3 enrichment).
+  - Full suite: 2023 / 2023 passed in 62.06 s.
+
+================================================================================
+
+## Cohort discovery — tree hop indentation: nest hops under their parent
+
+Context
+
+The first tree-renderer pass put every hop as a direct sibling of
+the rule's source node, so a 2-hop path drew both connectors off
+the same trunk:
+
+  ● Person  source
+  │
+  ├ via PhasProject ↓
+  │ ○ Project [×]
+  │
+  ├ via hasComplianceType ↓        ← wrong — should branch from
+  │ ⚑ ComplianceType [×]            Project, not Person
+
+Sequential paths are *chained*, not parallel. Hop N's source is hop
+N-1's target — the trunk should step rightward at every hop.
+
+Fix
+
+1. src/front/static/query/js/query-cohorts.js
+   - ``_renderHopRow`` now emits an empty
+     ``.cohort-tree-hops-children`` container at the end of every
+     hop's wrapper.
+   - ``_renderLinkCard`` walks the path and appends each hop into
+     the *previous* hop's children container (instead of all into
+     the root list), producing nested DOM:
+       root → hop0 → children → hop1 → children → hop2 …
+     The trunk on each level naturally indents under the parent's
+     bullet because the children container is part of the parent's
+     subtree.
+
+2. src/front/static/query/css/query-cohorts.css
+   - Trunk ``margin-left`` reduced from ``0.65rem`` to ``0.35rem``
+     so the dashed line passes through the bullet center on every
+     level.
+   - ``.cohort-tree-hops:not(:empty)`` keeps the dashed border
+     scoped to non-empty containers — the terminal hop's own
+     children container is empty and renders nothing.
+   - ``.cohort-tree-hops-children:not(:empty)`` gets a small
+     negative ``margin-top`` so the trunk visually starts from the
+     parent bullet rather than from below the where pane.
+   - Restored ``.cohort-tree-hop-terminal::after`` mask so a
+     terminal hop with a tall where pane doesn't leave a stray
+     trunk segment trailing past the flag.
+
+Result
+
+  ● Person  source
+  │
+  └ via PhasProject ↓
+    ○ Project [×]
+    │
+    └ via hasComplianceType ↓     ← now branches off Project
+      ⚑ ComplianceType  shared
+
+Files modified
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+
+Tests
+  - Cohort suite: 99 / 99 passed (DOM is rendering-only, no
+    behavioural change).
+  - Manual UI verification on the live restart: 2- and 3-hop
+    paths now indent correctly with the trunk stepping rightward
+    at each hop.
+
+============================================================
+Cohort Discovery — connect the trunk to the parent bullet
+============================================================
+
+Context
+
+After the previous tree fix the dashed trunk indented under the
+correct parent, but it still didn't *touch* the bullet — the
+children container's ``border-left`` started below the parent's
+where pane (or below the chip when there was no where pane), so
+visually:
+
+  ○ Project  [×]
+  ┊ where: hasStatus = "Active"
+  ┊
+  ┊                            ← trunk starts here, ~2rem too low
+  └─ via hasComplianceType ↓
+     ⚑ ComplianceType
+
+We need the trunk to actually originate from the Project bullet.
+Pure CSS can't compute the offset because the where pane height
+is dynamic (number of filter rows + wrap), so we measure it.
+
+Fix
+
+1. src/front/static/query/css/query-cohorts.css
+   - Combined ``.cohort-tree-hops-root::before`` and
+     ``.cohort-tree-hops-children::before`` into a single rule:
+     a dashed vertical extension positioned absolutely with
+     ``top: calc(0px - var(--cohort-trunk-up))`` and
+     ``height: var(--cohort-trunk-up)``. The variable is set by
+     JS at render time from the actually-measured offsets.
+   - ``.cohort-tree-hop::before`` (the horizontal connector) and
+     ``.cohort-tree-hop-terminal::after`` (the trunk-end mask)
+     now use ``top: var(--cohort-bullet-y, 3rem)`` so they land
+     exactly on the bullet rather than on the via row above it.
+     Connector ``width`` widened from ``0.85rem`` to ``1.35rem``
+     so it reaches the bullet center.
+   - Terminal mask widened (``left: -1.2rem; width: 0.5rem``) to
+     fully cover the 2px trunk regardless of sub-pixel rounding.
+   - Removed the now-unused ``margin-top: -0.4rem; padding-top:
+     0.5rem`` hack on ``.cohort-tree-hops-children``.
+
+2. src/front/static/query/js/query-cohorts.js
+   - New ``_relayoutCohortTrunks(root)`` helper. After every
+     ``_renderLinks()``, the next animation frame measures:
+       a) each ``.cohort-tree-hop`` bullet's y-offset from the
+          hop's top → ``--cohort-bullet-y`` (drives ::before
+          connector + ::after terminal mask),
+       b) the gap between every ``.cohort-tree-root``'s bullet
+          and its sibling ``.cohort-tree-hops-root`` →
+          ``--cohort-trunk-up`` on the hops-root,
+       c) the gap between every ``.cohort-tree-hops-children``'s
+          top and its parent hop's bullet →
+          ``--cohort-trunk-up`` on the children container.
+     CSS uses these variables to draw the missing ``::before``
+     extension straight from the bullet to the existing trunk.
+
+Result
+
+  ○ Project  [×]
+  │  where: hasStatus = "Active"
+  │
+  │                              ← trunk now starts at Project
+  └─ via hasComplianceType ↓
+     ⚑ ComplianceType  shared
+
+Even with multiple where filters or no where filters at all,
+the trunk's start point tracks the bullet exactly because the
+extension height is measured per-hop.
+
+Files modified
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+
+Tests
+  - Full suite: 1977 / 1977 passed (purely UI-layer change, no
+    backend/test impact).
+  - Manual: paths with 0, 1, 2, 3 hops and where panes of
+    varying height all show the trunk anchored on the parent
+    bullet.
+
+============================================================
+Cohort Discovery — sample-values picker modal
+============================================================
+
+Context
+
+The "list available values" button on every "equal to"
+filter (both per-hop where rows and rule-level compatibility
+rows) was firing ``window.prompt`` with a numbered text dump:
+
+  Pick a value (or paste one):
+  1. Active
+  2. Inactive
+  3. Pending
+  …
+
+That UX is jarring inside a Bootstrap-styled app, doesn't
+respect dark mode, and the user has to type the index or paste
+the value by hand.
+
+Fix
+
+1. src/front/templates/partials/dtwin/_query_cohorts.html
+   - New ``#cohortSampleValuesModal`` partial: a centered
+     Bootstrap modal with a meta line ("property on class"),
+     a filter input, a scrollable list-group of clickable
+     values, and a free-form custom-value input + Apply/Cancel
+     footer.
+
+2. src/front/static/query/js/query-cohorts.js
+   - New reusable ``_pickSampleValue({ classUri, property,
+     currentValue, metaLabel })`` async helper. Fetches up to
+     50 sample values from ``/dtwin/cohorts/sample-values``,
+     renders them as ``list-group-item`` buttons, supports
+     live filtering via the search input, and returns a
+     Promise that resolves with the chosen string (clicking an
+     item populates the custom input; Apply commits it) or
+     ``null`` on cancel / hide.
+   - Hop ``where`` row's sample button now calls
+     ``_pickSampleValue`` instead of ``window.prompt`` and
+     pre-selects the currently-set value.
+   - Rule-level ``compatibility`` row's sample button does
+     the same, against ``rule.class_uri``.
+
+3. src/front/static/query/css/query-cohorts.css
+   - ``.cohort-sample-values-list`` (max-height 18rem,
+     scroll), unified list-group-item border radius, ``.active``
+     selection highlight, and a monospace ``.cohort-sample-meta``
+     for the property/class breadcrumb.
+
+Files modified
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+
+Tests
+  - Full suite: 1977 / 1977 passed (UI-layer change).
+  - Manual: clicking the down-arrow on a where/compatibility
+    "equal to" row opens the modal, lists graph-sampled
+    values, filters live, and Apply correctly writes the
+    chosen value back into the rule.
+
+============================================================
+Cohort Discovery — drop the white "trunk-mask" stripe
+============================================================
+
+Context
+
+The terminal hop's ``::after`` pseudo painted ``--bs-body-bg``
+(``#fff``) over the trunk past the flag to fake a path-end.
+But ``.cohort-link-card`` sits on ``rgba(0,0,0,0.02)``, so the
+mask read as a *brighter* white stripe running from the flag
+to the bottom of the card — exactly what we tried to hide.
+
+Fix
+
+The right way to "stop" the trunk is to not draw it past the
+bullet in the first place — kill the mask, draw the trunk as
+a measured ``::before`` pseudo with a precise height instead
+of a fixed ``border-left``.
+
+1. src/front/static/query/css/query-cohorts.css
+   - Removed ``border-left`` from ``.cohort-tree-hops:not(:empty)``
+     and the ``.cohort-tree-hop-terminal::after`` mask entirely.
+   - ``.cohort-tree-hops:not(:empty)::before`` now draws the full
+     trunk for that nesting level, with both ``--cohort-trunk-up``
+     (extension above the container to reach the parent bullet)
+     and ``--cohort-trunk-height`` (total height ending exactly
+     at the first child hop's bullet centre) set by JS.
+   - Added ``pointer-events: none`` on the trunk pseudo so it
+     never swallows clicks on the chips it sits behind.
+
+2. src/front/static/query/js/query-cohorts.js
+   - ``_relayoutCohortTrunks`` factored its per-container logic
+     into a single ``setTrunkVars(hops, parentBullet)`` helper
+     that measures both ``up`` (gap parent-bullet → container
+     top, clamped at 0) and ``height`` (parent-bullet → first
+     child bullet). Result: the trunk lands precisely on each
+     bullet at every nesting level, and there is no overshoot.
+   - Same helper drives the root level (``.cohort-tree-root`` →
+     ``.cohort-tree-hops-root``) and every nested level
+     (``.cohort-tree-hop`` → ``.cohort-tree-hops-children``).
+
+Result
+
+  ●─── Person  source
+  │
+  └─── via PhasProject ↓
+       ○─── Project  [×]
+       │     where: hasStatus = "Active"
+       │
+       └─── via hasComplianceType ↓
+            ⚑ ComplianceType  shared        ← path ends here,
+                                              no white stripe
+                                              continues below
+
+Files modified
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+
+Tests
+  - Full suite: 1977 / 1977 passed.
+  - Manual: 1- / 2- / 3-hop paths render with the trunk ending
+    cleanly at the terminal flag, no bright stripe below it
+    regardless of where-pane height or card background.
+
+============================================================
+Cohort Discovery — promote action bar into a Run card
+============================================================
+
+Context
+
+The Preview / Materialise / Configure outputs / View JSON
+buttons used to live as a sticky action bar at the bottom of
+the Build-rule tab. That worked but had two issues:
+  - it took valuable vertical space inside the form even when
+    the user wasn't ready to run anything,
+  - it crowded the Save button, which was on the right while
+    Run actions were on the left, so users had to look in two
+    places to dispatch the rule.
+
+Fix
+
+Lift the action bar out of the Build tab and into a dedicated
+"Run" card on the right pane, sitting just above the existing
+Save card.
+
+1. src/front/templates/partials/dtwin/_query_cohorts.html
+   - Removed the ``.cohort-action-bar`` block at the end of
+     the Build tab.
+   - ``<aside class="cohort-rail">`` is no longer a single
+     card; it's a flex column holding two ``.cohort-rail-card``
+     siblings:
+       a) Run card — Preview cohorts (primary), Materialise
+          (success), an Outputs/JSON 2-button row, plus a
+          collapsing status line.
+       b) Save card — unchanged Save button + saved-rules
+          list, copy updated to point users back to the Run
+          card for materialise.
+
+2. src/front/static/query/css/query-cohorts.css
+   - ``.cohort-rail`` is now ``display: flex; flex-direction:
+     column; gap: 1rem`` so its inner cards stack with breathing
+     room.
+   - ``.cohort-rail-body`` ``max-height`` reduced from ``60vh``
+     to ``50vh`` to leave room for the new Run card without
+     scroll-fighting.
+   - ``.cohort-status-line:empty { display: none; }`` so the
+     Run card collapses cleanly when there's nothing to say.
+   - Removed ``.cohort-action-bar`` (sticky positioning rule)
+     — it has no users left.
+
+Files modified
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/static/query/css/query-cohorts.css
+
+Tests
+  - Full suite: 1977 / 1977 passed.
+  - Manual: Run card sits above Save card, all four buttons
+    fire their existing handlers; ``#cohortStatus`` still
+    receives status messages from ``_setStatus``.
+
+============================================================
+Cohort Discovery — show "Graph DB" line in section subtitle
+============================================================
+
+Context
+
+GraphQL Playground, Knowledge Graph and Graph Chat all expose
+the active backend as a second subtitle line right under the
+domain badge:
+
+  Domain: Consulting v1
+  Graph DB: Consulting_V1
+
+Cohort Discovery only printed the domain. With multi-tenant
+local Graph DB files in ``/tmp/ontobricks`` and an upcoming
+runtime switch, users need to see *which* graph their preview
+queries hit.
+
+Fix
+
+src/front/templates/partials/dtwin/_query_cohorts.html
+  - Added a second line in the ``.section-header`` subtitle
+    using the same icon (``bi-diagram-3``) and copy as the
+    other partials, server-rendered from the existing
+    ``graph_name`` template context (already plumbed for
+    ``dtwin.html``).
+  - Element id ``cohortGraphDbName`` follows the existing
+    naming pattern (``sgGraphDbName``, ``chatGraphDbName``,
+    ``graphqlGraphDbName``) so a future cross-cutting domain
+    switcher can target it the same way.
+
+Files modified
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+
+Tests
+  - Full suite: 1977 / 1977 passed.
+  - Manual: Cohort Discovery header now shows
+    ``Graph DB: Consulting_V1`` matching the other tabs.
+
+============================================================
+Cohort Discovery — remove "From template" feature
+============================================================
+
+Context
+
+The "From template" entry point (header button + modal with
+five canned rule shapes — compatible-pool, shared-pool,
+multi-hop-pool, same-attribute, value-band) was a developer
+seed feature that nobody actually uses now that the Describe
+tab (NL agent) covers the same ground with real ontology
+context. Dead surface to maintain.
+
+Fix
+
+Pure deletion across the three frontend files; no backend or
+test changes (the feature was UI-only — no endpoints, no
+persisted data, no test coverage).
+
+1. src/front/templates/partials/dtwin/_query_cohorts.html
+   - Removed the "From template" header button.
+   - Removed ``#cohortTemplatesModal`` partial.
+   - Updated the saved-rules empty-state copy: was
+     ``Click New rule or From template`` → now
+     ``Click New rule to create one``.
+
+2. src/front/static/query/js/query-cohorts.js
+   - Removed ``openTemplatesModal`` and ``_renderTemplates``
+     (~85 lines, including the inline template list).
+   - Removed the ``init()`` call to ``_renderTemplates()``.
+   - Comment heading rebranded ``Templates / JSON`` → ``JSON``.
+
+3. src/front/static/query/css/query-cohorts.css
+   - Removed ``.cohort-template-card``,
+     ``.cohort-template-card:hover``, ``.cohort-template-name``
+     (had no other users).
+
+Files modified
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+
+Tests
+  - Full suite: 1977 / 1977 passed.
+  - Manual: header now shows only the New rule button; saved-
+    rules empty state copy updated; no orphan modal in DOM.
+
+## Frontend Design System rule (`.cursor/11-frontend-design.mdc`)
+
+Context: There was no canonical document explaining the UI / styling
+conventions to Cursor and Claude Code. The only frontend guidance lived
+inside `.cursor/05-code-style-and-structure.mdc § Frontend (HTML/CSS/JS)`
+and covered structure (no inline CSS/JS, asset folder layout) but not
+visual language. Two design-token systems coexist in the codebase
+(`--db-*` for the app shell, `--ovz-*` for the OntoViz canvas) and a
+deliberate "Bootstrap colored buttons forced to grey" override lives in
+`components.css` — none of this was documented for agents, who would
+otherwise re-introduce coloured buttons or hard-coded hex values.
+
+Changes:
+
+1. .cursor/11-frontend-design.mdc
+   - New scoped rule (`globs: ["src/front/**", ...]`, priority 78)
+     codifying the design system as it actually exists. Sections:
+     coexisting `--db-*` / `--ovz-*` token systems and the no-mixing
+     rule, the colour palette table, the explicit list of where primary
+     red is allowed (and the "no coloured buttons" rule), typography
+     and iconography (system font stack, Bootstrap Icons only), layout
+     primitives (`.content-wrapper`, `.sidebar-layout`), the `ob-*` /
+     `ovz-*` component naming convention, the catalog of reusable
+     components already in the codebase (`ob-kpi-tile`,
+     `ob-loading-spinner`, `ob-breadcrumb`, etc.), the static asset
+     folder layout and area mirroring rule, the fixed CSS load order
+     (with `permissions.css` last) and `permissions.js` first-defer
+     rule, the body-class role/version gating model, an accessibility
+     baseline, and a "what NOT to do" anti-pattern list.
+
+2. CLAUDE.md
+   - Added `@./.cursor/11-frontend-design.mdc` to the canonical rules
+     import list so Claude Code inlines the new file alongside the
+     other ten `.mdc` files.
+
+3. .cursorrules
+   - Added entry "11. 11-frontend-design.mdc" to the modular rules
+     index at the top of the file.
+
+Files modified
+  - .cursor/11-frontend-design.mdc (new)
+  - CLAUDE.md
+  - .cursorrules
+
+Tests
+  - No tests run: this change touches only `.cursor/`, `CLAUDE.md`
+    and `.cursorrules`. No application code, no Python imports, no
+    template/CSS/JS modified. The post-change test routine in
+    `.cursorrules` is intended for code changes; documentation-only
+    edits to the rule corpus do not affect runtime behaviour.
+
+## Frontend Design System rule — page layout & popup policy
+
+Context: Follow-up to the previous entry in the same day. The user
+asked the rule file to (a) explicitly forbid `alert()` / `confirm()` /
+`prompt()` and require reuse of the existing modal/notification
+helpers, and (b) document the page layout that every page must
+respect, since two distinct patterns coexist in the codebase
+(sidebar-layout for app pages, standalone for landing/info pages).
+The rule file now grounds both points in the actual code:
+`showNotification` / `showConfirmDialog` / `showDeleteConfirm` /
+`DocumentPreview` already exist in `global/js/utils.js`, and the
+sidebar-layout vs. standalone split is already enforced by
+`sidebar-layout.css` and `_sidebar_nav.html`.
+
+Changes:
+
+1. .cursor/11-frontend-design.mdc
+   - Replaced the lightweight "Layout" section with a full "Page
+     Layout (mandatory skeleton)" section. Documents the obligatory
+     `base.html` chrome (navbar, breadcrumb, domain loading overlay,
+     notification centre, task tracker, help centre, UC file browser,
+     body data attributes, Bootstrap JS) with an explicit "Don't
+     reimplement" column. Provides the canonical template skeleton
+     with `extra_css` / `extra_js` blocks.
+   - Defined exactly two acceptable layouts inside `{% block content
+     %}`: Layout 1 — Sidebar layout (with full skeleton, sidebar
+     driven by `menu_config.json`, section ids, single `.active`
+     section) for ontology/mapping/dtwin/registry/domain/settings;
+     Layout 2 — Standalone content (with `.page-header`) for
+     home/about/access_denied. Banned a third pattern.
+   - Added "Section / Partial Conventions" subsection: filename
+     pattern `_<area>_<feature>.html`, no `<link>` / `<script>` in
+     section partials, no redefining the section wrapper.
+   - New "Popups, Modals, Confirmations & Notifications" section.
+     Forbids native `alert()` / `confirm()` / `prompt()`. Lists the
+     replacement helpers with a "what you want / what to use / where
+     it's defined" table. Documents the `type → toast` policy
+     including the `...`-suffix progress-message convention. Codifies
+     the Bootstrap modal skeleton (modal partial under
+     `templates/partials/<area>/_<area>_<feature>_modal.html`,
+     `bootstrap.Modal.getOrCreateInstance` over `new
+     bootstrap.Modal`, dismiss-button + Esc + backdrop consistency).
+     Lists existing reusable modals (`uc_file_browser_modal.html`,
+     `help_modal.html`, `DocumentPreview`, `showConfirmDialog`,
+     `showDeleteConfirm`) to check before adding a new one.
+   - Extended the "What NOT to Do" anti-pattern list with: native
+     popups, `new bootstrap.Modal` per open, page templates that
+     skip `{% extends "base.html" %}`, third-pattern top-level
+     markup, hand-coded sidebar nav, inline modal markup built from
+     JS string templates, `permissions.js` not loaded first-defer.
+
+Files modified
+  - .cursor/11-frontend-design.mdc
+
+Tests
+  - No tests run: documentation-only change to a Cursor rule file.
+    No application code, templates, CSS, or JS modified.
+
+## Frontend Design System rule — sidebar, breadcrumb, section actions, message bus
+
+Context: Third pass on the rule file, requested by the user, to make
+four high-impact UI invariants explicit:
+(1) sidebar behaviour (collapse, URL sync, public API, do-not patterns),
+(2) breadcrumb behaviour and style,
+(3) action buttons must live in the section's top-right header,
+(4) all user-facing messages must route through the navbar
+Notification Center. Each rule is grounded in code I read in this
+pass: `global/js/sidebar-nav.js`, `global/js/breadcrumb.js`,
+`global/css/sidebar-layout.css`, `global/css/components.css`,
+`global/js/utils.js`, plus the canonical `.section-header
+d-flex justify-content-between align-items-center` pattern used by
+~15 partials (e.g. `_ontology_entities.html`, `_registry_domains.html`).
+
+Changes:
+
+1. .cursor/11-frontend-design.mdc
+   - New "Sidebar Behaviour" section. Documents the auto-init
+     contract from `sidebar-nav.js` (`data-section` ↔ `<id>-section`
+     pairing, exactly one `.active`); state, history and keyboard
+     (URL `?section=` sync, popstate restore, `localStorage` key
+     `ontobricks-sidebar-collapsed`, default-collapsed); the
+     `sidebarSectionChanged` event as the official extension point;
+     the public API table (`switchTo`, `getActiveSection`,
+     `toggleCollapse`, `init` with `onSectionChange` /
+     `onBeforeSectionChange` veto); style rules (200/48 px width,
+     0.82rem nav-link, left-border accent, greyscale active state,
+     uppercase 0.65rem `.sidebar-title`, badge auto-wrapping);
+     disabled gates (`.sidebar-disabled`,
+     `.sidebar-requires-domain`, `.sync-requires-ready`,
+     `.view-mode-hidden`); and an explicit don'ts list (no
+     hand-coded nav, no per-link click handlers, no
+     `style.display`, no per-page localStorage, no manual
+     `--ob-chrome-height`).
+   - New "Breadcrumb Behaviour & Style" section. Documents the
+     URL-derived crumbs from `breadcrumb.js` (`_ROUTE_MAP` /
+     `_HIERARCHY` Registry → Domain → Ontology → Mapping → Digital
+     Twin); the live "active section" crumb driven by
+     `sidebarSectionChanged`; that the Domain label is read from
+     `#currentDomainName` (no extra fetch); that breadcrumb.js owns
+     `--ob-chrome-height`; the `.ob-breadcrumb` style contract
+     (light bg, bottom border, 0.8rem, bootstrap-icons `\F285`
+     chevron separator, `--bs-secondary` link colour, active crumb
+     in body colour weight 500); and the don'ts (no per-page
+     breadcrumbs, no manual `#obBreadcrumbList` mutation, no
+     separator changes, no forcing visible on single-crumb pages).
+   - New "Section Header & Top-Right Actions" section. Defines the
+     canonical skeleton `.section-header d-flex
+     justify-content-between align-items-center mb-4` with title
+     block on the left and action buttons on the right; the
+     mandatory order (icon-only utility group → secondary CTA →
+     primary CTA, rightmost = most important); use of `btn-sm`;
+     mandatory `title=` on icon-only buttons; that `<h4>` is the
+     section title level (page-level `<h1>` belongs to
+     `.page-header` on standalone pages); and the anti-patterns
+     (no floating FABs, no buttons in `.card-header`, no full-size
+     buttons, no buttons below the data, no primary CTA on the
+     left).
+   - Strengthened "Popups, Modals, Confirmations & Notifications"
+     with two non-negotiable rules at the top: (a) no native
+     popups, (b) all messages route through the navbar Notification
+     Center. Added a "Single message bus — the navbar Notification
+     Center" subsection describing the `#notifCenterDropdown`
+     infrastructure (toggle, dropdown, badge, ring buffer cap,
+     time-ago labels, mark-read on open). Added a "What goes
+     through the Notification Center" routing table mapping each
+     message source (API result, validation, background task,
+     destructive confirmation, free-text input, long-form preview)
+     to the right helper.
+   - Extended the "What NOT to Do" anti-pattern list with: per-page
+     toast/alert/status `<div>`, `console.error` as sole error
+     signal, sidebar style.display toggling, page-code writes to
+     `--ob-chrome-height`, custom per-page breadcrumbs, action
+     buttons outside `.section-header`, hand-coded sidebar items,
+     per-link click handlers on the sidebar.
+
+Files modified
+  - .cursor/11-frontend-design.mdc
+
+Tests
+  - No tests run: documentation-only change to a Cursor rule file.
+    No application code, templates, CSS, or JS modified.
+
+================================================================================
+Title: Cohort Discovery — split design (Ontology) vs. run (Digital Twin)
+================================================================================
+
+Context
+-------
+The cohort design + run UI lived together under Digital Twin → Cohorts. The
+design parts (NL Describe agent, Build form, Save) are rule-authoring
+concerns; they belong in the Ontology surface where the rest of the rule
+authoring happens (Business Rules, Axioms, SHACL). The run parts
+(rule selection, Preview, Materialise, Path trace, Explain) belong in
+Digital Twin where the user inspects the live graph.
+
+This change splits the single `_query_cohorts.html` partial into two
+focused partials backed by the same JS module, and adds a new
+"Cohorts" entry under Ontology → Advanced (below Business Rules).
+
+Changes
+-------
+1. src/front/templates/partials/_cohort_modals.html (new)
+   - Shared modals (Configure outputs, View JSON, Materialise,
+     Pick sample value). Included from both the design and run
+     partials so they stay structurally identical and there is no
+     DOM drift on which buttons trigger which modal.
+
+2. src/front/templates/partials/ontology/_ontology_cohorts.html (new)
+   - DESIGN page. Contains the Describe (NL agent) tab, the Build
+     rule tab (Identity / What / Linked-when / Compatibility /
+     Group type), and a right rail with Save + Outputs / JSON
+     shortcuts and the Saved-rules library.
+   - Header subtitle points the user to Digital Twin → Cohorts for
+     run/preview/materialise.
+
+3. src/front/templates/partials/dtwin/_query_cohorts.html (slimmed)
+   - RUN page. Replaced the tabbed Describe/Build/Preview UI with a
+     single read-only "selected rule summary" + Preview body + Path
+     trace + Explain. Right rail keeps the Run card (Preview /
+     Materialise / Outputs / JSON / status) and a Saved-rules
+     picker (no edit, just selection).
+   - Header subtitle points the user to Ontology → Advanced →
+     Cohorts to design new rules.
+
+4. src/front/templates/ontology.html
+   - Added `cohorts-section` div below `swrl-section`.
+   - Added `<link>` to `query/css/query-cohorts.css` so the design
+     surface uses the same styling as the run surface.
+   - Added `<script>` for `query/js/query-cohorts.js` after the
+     existing ontology modules.
+
+5. src/front/routes/ontology.py
+   - Now resolves the active domain session and passes
+     `domain_name`, `current_version`, and `reasoning_ctx`
+     (with `cohort_rules_count`) to the template — required by the
+     new design partial's header and saved-rules counter.
+
+6. src/front/config/menu_config.json
+   - Added a `cohorts` item to the `ontology-advanced` group,
+     placed between `swrl` (Business Rules) and `axioms`.
+   - Kept the existing `cohorts` item in `digitaltwin-advanced`
+     unchanged (still labelled "Cohorts" — context distinguishes
+     design vs. run).
+
+7. src/front/static/query/js/query-cohorts.js
+   - `_hydrateForm()`: build-form fields (`cohortRuleLabel`,
+     `cohortRuleDescription`, `cohortClassUri`, …) are now updated
+     via guarded helpers (`setVal` / `setText` / `setChecked`) so
+     the method no-ops cleanly on the run page where the form
+     doesn't exist. Also enables the `cohortPreviewBtn` once a
+     rule with a class_uri is loaded.
+   - `_collectFromForm()`: bails early if `cohortRuleLabel` is
+     absent so the loaded saved rule isn't corrupted on the run
+     page when `markDirty` / `openOutputsModal` / `openJsonModal`
+     are invoked.
+   - `_resetPreviewPane()`: emits a context-appropriate empty
+     message ("Pick a rule …" on the run page,
+     "No preview yet …" on the design page).
+   - New `_renderRuleSummary()` populates `#cohortRuleSummary` on
+     the run page with a compact card (rule name, class, link &
+     compat counts, group type, output target). No-op when the
+     element is missing.
+   - `newRule()` and `_hydrateForm()` both call
+     `_renderRuleSummary()` so the run page reflects "no rule
+     selected" / loaded rule consistently.
+
+Files modified
+  - src/front/templates/partials/_cohort_modals.html (new)
+  - src/front/templates/partials/ontology/_ontology_cohorts.html (new)
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/templates/ontology.html
+  - src/front/routes/ontology.py
+  - src/front/config/menu_config.json
+  - src/front/static/query/js/query-cohorts.js
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - tests/test_dtwin_cohort.py             28 passed
+  - tests/test_cohort_builder.py           41 passed
+  - tests/test_cohort_models.py            30 passed
+  - tests/test_agent_cohort_engine.py       3 passed
+  - tests/test_agent_cohort_tools.py       24 passed
+  - Full suite (`pytest -q`)             2023 passed in 62s
+
+================================================================================
+Title: Cohort Discovery — route Save/Delete through the navbar Notification Center
+================================================================================
+
+Context
+-------
+The cohort `save()` / `deleteRule()` flows surfaced their result via the
+inline `#cohortStatus` rail line ("Saved …", "Save failed", etc.). Every
+other save action in the app routes through the navbar Notification Center
+via `showNotification` (mapping save, domain save, business-rules save,
+settings save…), with a transient toast for non-info types. The cohort
+flow now matches that convention.
+
+Changes
+-------
+1. src/front/static/query/js/query-cohorts.js
+   - `save()`: validation, HTTP failure, network failure and success now
+     all call a new `_notify(message, type)` helper instead of the inline
+     `_setStatus`. Types are aligned with the rest of the codebase
+     (`'success' | 'error' | 'warning' | 'info'`). Inline rail is
+     cleared on entry so stale "Unsaved changes…" doesn't linger.
+   - `deleteRule()`: same change — success and failure go through
+     `_notify` (`'Cohort rule deleted'` / `'Delete failed'`).
+   - New `_notify()` thin wrapper: prefers `window.showNotification` (the
+     standard helper from `global/js/utils.js`) and falls back to
+     `console` if it's not loaded yet, so messages are never silently
+     dropped during early init.
+   - In-memory states (Drafting…, Computing preview…, Outputs configured…,
+     Unsaved changes…) keep using `_setStatus` — they're transient
+     progress hints, not save outcomes.
+
+Files modified
+  - src/front/static/query/js/query-cohorts.js
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - tests/test_dtwin_cohort.py             28 passed
+  - tests/test_cohort_builder.py           41 passed
+  - tests/test_cohort_models.py            30 passed
+  - tests/test_ui_rendering.py            101 passed
+
+================================================================================
+Title: Cohort Discovery — Outputs lives only on the run page, JSON button removed
+================================================================================
+
+Context
+-------
+After the design ↔ run split, the right rail still showed both
+"Outputs" and "JSON" buttons on the Ontology design page. The
+Outputs config (graph triples + UC table) is meaningful only at
+materialise time and belongs with the Run actions on Digital Twin.
+The "JSON" button was developer-only — not user-facing — and is
+removed entirely.
+
+Changes
+-------
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - Removed the Outputs and JSON buttons from the design rail.
+     The card now contains only the Save-rule action plus the
+     status line, with a hint pointing the user to the Digital
+     Twin run page for outputs/preview/materialise.
+
+2. src/front/templates/partials/dtwin/_query_cohorts.html
+   - Removed the JSON button. The Outputs button is now a
+     full-width control under Materialise on the Run card.
+
+3. src/front/templates/partials/_cohort_modals.html
+   - Removed the entire `#cohortJsonModal` block.
+
+4. src/front/static/query/js/query-cohorts.js
+   - Removed the `openJsonModal()` method (no callers left).
+   - `saveOutputs()` is now async and persists the rule via
+     `POST /dtwin/cohorts/rules` whenever it's called from the
+     run page (`activeRuleId` set, design form absent). On the
+     design page it still just `markDirty()`s — the user persists
+     everything together via Save rule. The success / failure
+     messages route through `_notify` (Notification Center).
+
+5. src/front/static/query/css/query-cohorts.css
+   - Removed the orphaned `.cohort-json-pre` rule.
+
+Files modified
+  - src/front/templates/partials/ontology/_ontology_cohorts.html
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/templates/partials/_cohort_modals.html
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - tests/test_dtwin_cohort.py             28 passed
+  - tests/test_cohort_builder.py           41 passed
+  - tests/test_cohort_models.py            30 passed
+  - tests/test_ui_rendering.py            101 passed
+
+================================================================================
+Title: Cohort Discovery — Save rule promoted to header, Design card removed
+================================================================================
+
+Context
+-------
+With Outputs and JSON gone, the Design card on the Ontology page held
+only a Save button + an inline status line — pure visual weight for
+no payload. Promoted Save rule next to New rule in the section header
+(matching the rest of the app's header-action convention) and dropped
+the card entirely. The status line moved into the header so the
+existing `_setStatus` calls keep rendering ("Unsaved changes…",
+"Drafting a new rule…", validation hints).
+
+Changes
+-------
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - Added a `Save rule` button to the section-header action group,
+     immediately right of the existing `New rule` button. New rule
+     is now `btn-outline-primary` and Save rule is `btn-primary`,
+     emphasising the primary action.
+   - Inlined `#cohortStatus` (small muted text, hidden when empty
+     via the existing `.cohort-status-line:empty` rule) into the
+     header so transient progress messages still appear next to
+     the actions instead of in a deleted card.
+   - Removed the entire `Design` rail card. The right pane now
+     contains only the `Saved rules` library.
+
+Files modified
+  - src/front/templates/partials/ontology/_ontology_cohorts.html
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - tests/test_dtwin_cohort.py             28 passed
+  - tests/test_ui_rendering.py            101 passed
+
+================================================================================
+Title: Cohort Discovery — drop inline status comments next to top-right buttons
+================================================================================
+
+Context
+-------
+After moving Save rule into the section header, the inline
+`#cohortStatus` span sat right next to the buttons and surfaced
+ephemeral comments like "Drafting a new rule.", "Unsaved changes.",
+"Loaded rule X." — visual noise. Real outcomes already route through
+the Notification Center.
+
+Changes
+-------
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - Removed the `#cohortStatus` span from the header action group.
+     `_setStatus()` is already defensive (it bails if the element is
+     missing), so existing call sites are silently no-op'd on the
+     design page. Save / Delete outcomes still appear in the navbar
+     Notification Center.
+
+Files modified
+  - src/front/templates/partials/ontology/_ontology_cohorts.html
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - No code path changed; UI-only template trim. Existing UI render
+    tests continue to pass (last full run: 200 cohort + UI tests).
+
+================================================================================
+Title: Cohort Discovery (DT) — saved rules to left, action buttons to header
+================================================================================
+
+Context
+-------
+The Digital Twin run page had a single right rail combining the Run
+actions and the Saved-rules picker. The user-requested layout flips
+to: rules library on the LEFT (browse → click), action buttons on
+the page top right (Outputs / Preview cohorts / Materialise), no
+inline status text. The left/right asymmetry mirrors the rest of the
+DT pages where the primary list/tree sits on the left.
+
+Changes
+-------
+1. src/front/templates/partials/dtwin/_query_cohorts.html
+   - Section header now hosts three actions on the right:
+     `Outputs` (outline-secondary), `Preview cohorts` (primary,
+     disabled until a rule with a class is loaded), and
+     `Materialise` (success, disabled until a preview exists).
+   - Removed the old `Run` rail card. Removed `#cohortStatus`
+     entirely from the run page — outcomes route through the
+     navbar Notification Center via `_notify`.
+   - Reordered the layout so the saved-rules `<aside>` is the first
+     grid child (left column) and the preview `<section>` is the
+     second (right column). Added a `cohort-layout--rail-left`
+     modifier so the existing 320 px / 1fr grid swaps direction.
+   - Updated the empty preview hint ("Pick a rule from the LEFT
+     pane …") to match the new layout.
+
+2. src/front/static/query/css/query-cohorts.css
+   - Added `.cohort-layout--rail-left` rule that swaps
+     `grid-template-columns` to `320px minmax(0, 1fr)`. The 992 px
+     breakpoint collapses both variants to a single column.
+
+3. src/front/static/query/js/query-cohorts.js
+   - `openMaterializeModal()` validation messages
+     (`Run Preview first.`, `Save the rule before materialising.`)
+     now route through `_notify('warning')` instead of `_setStatus`.
+   - `materialize()` success / failure messages route through
+     `_notify('success' | 'error')`. The inline `#cohortStatus`
+     element is gone on the run page; remaining `_setStatus` calls
+     no-op silently (the helper already guards on element presence).
+
+Files modified
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/static/query/css/query-cohorts.css
+  - src/front/static/query/js/query-cohorts.js
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - tests/test_dtwin_cohort.py             28 passed
+  - tests/test_cohort_builder.py           41 passed
+  - tests/test_ui_rendering.py            101 passed
+
+================================================================================
+Title: Cohort Discovery (DT) — view/edit deep-link from each saved rule
+================================================================================
+
+Context
+-------
+On the Digital Twin run page, clicking a saved-rule row only selects
+it for execution. The user asked for an explicit "view / edit"
+shortcut next to each rule that jumps to the design page (Ontology >
+Advanced > Cohorts) with that rule preloaded into the editor.
+
+Changes
+-------
+1. src/front/static/query/js/query-cohorts.js
+   - `_renderRulesList()`: each rule row is now a flex container
+     with a clickable `<button class="cohort-rule-item-main">` for
+     selection and, on the run page only, a small
+     `<a class="cohort-rule-edit">` icon link pointing to
+     `/ontology/?section=cohorts&rule=<id>`. The design page (which
+     IS the editor) doesn't render the link.
+   - `init()`: now reads `rule` from `location.search`. If it
+     matches a known saved rule, calls `loadRule(rule)` instead of
+     `newRule(false)` so the deep-link opens the rule preloaded in
+     the form. Falls back to a fresh draft if the param is missing
+     or stale.
+
+2. src/front/static/query/css/query-cohorts.css
+   - `.cohort-rule-item` is now a flex row (button + edit link).
+   - New `.cohort-rule-item-main` rule recreates the previous
+     full-width clickable affordance for the selection button.
+   - New `.cohort-rule-edit` rule styles the edit-link icon
+     (left border separator, hover tint).
+
+Files modified
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - tests/test_dtwin_cohort.py             28 passed
+  - tests/test_ui_rendering.py            101 passed
+
+================================================================================
+Title: Cohort Discovery (Ontology) — fix unscrollable Build form
+================================================================================
+
+Context
+-------
+On Ontology > Advanced > Cohorts, the Build-rule tab content (Identity,
+What, Linked-when, Compatibility, Group type — five vertically stacked
+sections) was getting clipped at the bottom of the viewport with no
+way to scroll. Reproduced on a small laptop window: section 5 (Group
+type tiles + Min size) sat below the fold, mouse wheel did nothing,
+and the page-level sidebar-content scrollbar didn't appear either.
+
+Root cause: `.sidebar-section.active` is `display: flex; flex-direction:
+column; height: 100%` and `.sidebar-section > .content-section` is
+`flex: 1; min-height: 0; display: flex; flex-direction: column`, so
+the cohort partial's `.content-section` is height-capped to the
+viewport. The other ontology partials work around this because they
+nest a `.card` or `.ob-tab-content` directly under `.content-section`
+— `sidebar-layout.css` has explicit `overflow-y: auto` rules for
+those. The cohort design partial uses a CSS Grid (`.cohort-layout`)
+as the direct child of `.content-section`, which has no overflow
+rule of its own, so its content overflows the flex-constrained
+parent without producing a scrollbar.
+
+The Digital Twin run page uses the same `.cohort-layout` grid and
+benefits from the same fix.
+
+Fix
+---
+1. src/front/static/query/css/query-cohorts.css
+   - `.cohort-layout` now declares `flex: 1; min-height: 0;
+     overflow-y: auto; overflow-x: hidden;`. Combined with the
+     existing flex-column `.content-section` parent, the grid now
+     fills the remaining vertical space and produces its own
+     vertical scrollbar when content exceeds it. `.cohort-rail-body`
+     keeps its independent `max-height: 50vh` scroll for the saved
+     rules list — both scroll regions coexist cleanly.
+   - The mobile breakpoint (`@media (max-width: 992px)`) is
+     unchanged: it already collapses the grid to a single column,
+     and the new flex/overflow rules apply uniformly so the same
+     scroll behaviour kicks in on narrow screens.
+
+Files modified
+  - src/front/static/query/css/query-cohorts.css
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - tests/test_cohort_models.py             30 passed
+  - tests/test_cohort_builder.py            41 passed
+  - tests/test_dtwin_cohort.py              28 passed
+  - tests/test_agent_cohort_engine.py        3 passed
+  - tests/test_agent_cohort_tools.py        24 passed
+  - Cohort suite total: 126 / 126 passed in 0.47 s.
+  - Full suite not runnable on this machine: pre-existing
+    Python 3.9 import error in src/api/routers/internal/dtwin.py
+    (`str | None` requires 3.10+) blocks any test that imports
+    the FastAPI app. The defect is unrelated to this CSS-only
+    change.
+  - Manual UI verification: on a 1280×720 viewport the Build
+    rule tab now scrolls smoothly through all five sections;
+    Describe tab is unaffected; saved-rules picker still
+    scrolls independently.
+
+## Cohort code review — safe-batch follow-ups (D1, DC1–DC5, V3, V4)
+
+Context: Code review (`code-review` skill) flagged 4 rule violations,
+3 duplication clusters, and 5 dead-code candidates in the new Cohort
+Discovery feature. This log captures the **safe batch** — duplication
+removal, dead JS code, inline-style fix, and Sphinx doc gaps. The
+deeper structural items (`__init__.py` vocabulary extraction, god-class
+`CohortService` extraction, route-level `cohort_context` Depends) are
+deliberately deferred to dedicated refactor passes.
+
+Changes:
+
+1. src/back/core/graph_analysis/CohortBuilder.py
+   - **D1 / Substitute Algorithm**: dropped the module-level
+     `_local_name(uri)` (7 LOC) and replaced its single call site
+     (`member_id` row builder) with `extract_local_name` from
+     `back.core.helpers`. The deleted variant was a verbatim copy of
+     the canonical helper.
+
+2. src/back/objects/digitaltwin/DigitalTwin.py
+   - **D1 / Inline Function**: removed the inline `_local_id(uri)`
+     defined inside `_enrich_cohort_members()`; the surrounding code
+     already imports `extract_local_name` at module level (line 16).
+
+3. src/agents/agent_cohort/tools.py
+   - **D1 / Substitute Algorithm**: dropped the local `_local_name(uri)`
+     (with its "Mirrors back.core.w3c.uri_local_name without importing
+     it" justification — no longer warranted) and rewired the four
+     call sites (`_domain_matches`, two `data_props`/`object_props`
+     name fallbacks) to `extract_local_name`. New import line.
+
+4. src/front/static/query/js/query-cohorts.js
+   - **DC1–DC5 / Remove Dead Code**: deleted four functions that
+     targeted DOM elements (`#cohortPreviewBadge`, `#cohortTabPreviewBtn`)
+     that no current template renders:
+       * `_setPreviewBadge(count)` (10 LOC)
+       * `_showPreviewTab()` (5 LOC)
+       * `_showPreviewPanel()` (3 LOC)
+       * `closePreview()` (3 LOC)
+     and the four no-op call sites inside `preview()` plus the one
+     in `_resetPreviewPane()`. Total ~25 LOC removed; behaviour
+     strictly preserved (the targeted elements never existed in the
+     final DT-run / Ontology-design split).
+   - **V3 / Frontend hygiene**: replaced `style.display = …` toggles
+     for `#cohortUCConfig` and `#cohortAgentReply` with
+     `classList.toggle('d-none', …)` / `classList.remove('d-none')`,
+     consistent with the templates' new `d-none` initial state.
+
+5. src/front/templates/partials/_cohort_modals.html
+   - **V3 / Frontend hygiene**: `cohortUCConfig` div now uses the
+     Bootstrap `d-none` utility class instead of inline
+     `style="display:none"` — see `.cursor/05 §Frontend` ("Templates
+     must NOT contain inline CSS").
+
+6. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - **V3 / Frontend hygiene**: same treatment for the
+     `cohortAgentReply` element (inline → `d-none`).
+
+7. docs/sphinx/api/app.core.graph_analysis.rst
+   - **V4 / Documentation**: added a *Cohort Builder* section
+     (`automodule:: back.core.graph_analysis.CohortBuilder`) and a
+     *Cohort Vocabulary* section that documents the public URI
+     helpers re-exported by `__init__.py` (`cohort_class_uri`,
+     `in_cohort_predicate`, `from_rule_predicate`,
+     `cohort_size_predicate`, `cohort_uri_prefix`, `cohort_uri`).
+
+8. docs/sphinx/api/agents.rst
+   - **V4 / Documentation**: added a *Cohort Discovery Agent* section
+     (engine + tools, `:exclude-members: ToolContext`), matching the
+     three-block pattern used for every other agent in the file.
+
+Files modified
+  - src/back/core/graph_analysis/CohortBuilder.py
+  - src/back/objects/digitaltwin/DigitalTwin.py
+  - src/agents/agent_cohort/tools.py
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/templates/partials/_cohort_modals.html
+  - src/front/templates/partials/ontology/_ontology_cohorts.html
+  - docs/sphinx/api/app.core.graph_analysis.rst
+  - docs/sphinx/api/agents.rst
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - Full suite: 2023 / 2023 passed in 63.53 s (Python 3.11 venv).
+
+## Cohort code review — structural follow-ups (V1, V2, D3)
+
+Context: After the safe-batch cleanup (D1, DC1–DC5, V3, V4), the
+remaining structural items from the cohort code review were applied
+in three Fowler-style refactors. Behaviour preserved end-to-end —
+all 2023 tests still pass.
+
+Changes:
+
+1. src/back/core/graph_analysis/CohortVocabulary.py (NEW)
+   - **V1 / Extract Class**: created `CohortVocabulary` (one public
+     class, PascalCase filename) that owns every cohort-related URI
+     fragment (`Cohort`, `inCohort`, `fromRule`, `cohortSize`,
+     `cohort` path) plus six builders (`cohort_class`, `in_cohort`,
+     `from_rule`, `cohort_size`, `cohort_prefix`, `cohort`). The
+     base `join(base, fragment)` helper centralises the `/` vs `#`
+     separator convention used elsewhere in the codebase.
+
+2. src/back/core/graph_analysis/__init__.py
+   - **V1 / Move Function** + thin BC wrappers per `.cursor/07
+     §__init__.py Conventions`: stripped the six top-level helpers
+     that previously held business logic. They now delegate to
+     `CohortVocabulary` and remain exported under their original
+     names (`cohort_class_uri`, `in_cohort_predicate`,
+     `from_rule_predicate`, `cohort_size_predicate`,
+     `cohort_uri_prefix`, `cohort_uri`) so external callers and
+     existing tests keep working. `CohortVocabulary` and the
+     fragment constants are also re-exported.
+
+3. src/back/core/graph_analysis/CohortBuilder.py
+   - Replaced the six bulk imports with a single
+     `from back.core.graph_analysis.CohortVocabulary import
+     CohortVocabulary` and rewrote the four call sites to use
+     `CohortVocabulary.cohort_class / from_rule / cohort_size /
+     in_cohort / cohort_prefix / cohort` -- shorter, more
+     discoverable, single source of truth.
+
+4. src/back/objects/digitaltwin/CohortService.py (NEW)
+   - **V2 / Extract Class**: lifted the entire cohort block (~520
+     LOC) out of `DigitalTwin.py` into a focused
+     :class:`CohortService` with renamed methods (`list_rules`,
+     `save_rule`, `delete_rule`, `dry_run`, `materialize`,
+     `class_stats`, `edge_count`, `node_count`, `path_trace`,
+     `sample_values`, `explain`, `suggest_uc_target`,
+     `probe_uc_write`). The redundant `cohort_` prefix is dropped
+     from the internal API; the public/legacy names live on
+     `DigitalTwin` (see #5). Constructor takes a `DomainSession`,
+     matching the rest of `back/objects/digitaltwin/`. Helpers
+     (`_builder`, `_result_to_dict`, `_enrich_members`) become
+     instance / static methods on this class.
+
+5. src/back/objects/digitaltwin/DigitalTwin.py
+   - **V2 / Replace Method with Method Object**: replaced the 460
+     LOC cohort block with 13 thin delegating wrappers (e.g.
+     `def list_cohort_rules(self): return
+     self._cohort_service().list_rules()`). The wrappers preserve
+     every previously-exposed name and signature, so routes that
+     called `DigitalTwin(domain).cohort_*` (and
+     `DigitalTwin.cohort_probe_uc_write`) keep working without
+     changes -- handy for any consumer outside this PR.
+
+6. src/back/objects/digitaltwin/__init__.py
+   - **V2**: re-exported `CohortService` so consumers can write
+     `from back.objects.digitaltwin import CohortService` (the
+     internal API now uses this directly -- see #7).
+
+7. src/api/routers/internal/dtwin.py
+   - **D3 / Introduce Parameter Object** + **Replace Function with
+     Command via FastAPI Depends**: added a `CohortEngineContext`
+     dataclass (domain, settings, store, graph_name, service) and a
+     `cohort_engine_context` FastAPI dependency that builds it once,
+     plus a tiny `cohort_json_body` dep that centralises the
+     "Body must be a JSON object" guard. Every cohort engine route
+     (`dry-run`, `materialize`, `class-stats`, `edge-count`,
+     `node-count`, `path-trace`, `sample-values`, `explain`) now
+     receives `body: dict = Depends(cohort_json_body), ctx:
+     CohortEngineContext = Depends(cohort_engine_context)`,
+     reducing each handler to its actual business call.
+   - The non-engine cohort routes (`list-rules`, `upsert-rule`,
+     `delete-rule`, `suggest-uc-target`, `probe-uc-write`) now
+     instantiate `CohortService(domain)` directly instead of
+     going through `DigitalTwin`, since they have no graph or
+     SQL coupling.
+   - Removed the bespoke `_cohort_get_store_and_graph` helper —
+     superseded by `cohort_engine_context`.
+   - **D1 / Reduce Boilerplate**: each engine handler dropped the
+     5-line `data = await request.json(); if not isinstance(data,
+     dict): raise ValidationError(...); domain =
+     get_domain(session_mgr); store, graph_name =
+     _cohort_get_store_and_graph(domain, settings)` preamble. Net
+     -60 LOC across the cohort block, with no behavioural delta.
+
+8. docs/sphinx/api/app.core.graph_analysis.rst
+   - **V1 documentation**: updated *Cohort Vocabulary* section to
+     point at the new dedicated module
+     `back.core.graph_analysis.CohortVocabulary`.
+
+9. docs/sphinx/api/app.objects.digitaltwin.rst
+   - **V2 documentation**: added a *CohortService class* section
+     between `DigitalTwin` and `Models`, with `automodule:
+     back.objects.digitaltwin.CohortService`.
+
+Files modified
+  - src/back/core/graph_analysis/CohortVocabulary.py (new)
+  - src/back/core/graph_analysis/__init__.py
+  - src/back/core/graph_analysis/CohortBuilder.py
+  - src/back/objects/digitaltwin/CohortService.py (new)
+  - src/back/objects/digitaltwin/DigitalTwin.py
+  - src/back/objects/digitaltwin/__init__.py
+  - src/api/routers/internal/dtwin.py
+  - docs/sphinx/api/app.core.graph_analysis.rst
+  - docs/sphinx/api/app.objects.digitaltwin.rst
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - Full suite: 2023 / 2023 passed in 62.37 s (Python 3.11 venv).
+  - Cohort tests touch the public surface that was preserved
+    (`DigitalTwin(domain).cohort_*`, `DigitalTwin.cohort_probe_uc_write`)
+    so no test changes were required despite the internal Extract
+    Class refactor.
+
+## Frontend polish — breadcrumb icons + flat "ob-tabs" tab style
+
+Context: Per the design polish list in `releasereq/TODO.md`, two
+visual inconsistencies needed fixing. (1) The breadcrumb's per-area
+icons (`bi-folder2-open` for Registry, `bi-box` for Domain,
+`bi-diagram-3` for Ontology, `bi-link-45deg` for Mapping, `bi-share`
+for Digital Twin, `bi-gear` for Settings) didn't match the navbar /
+sidebar icons declared in `src/front/config/menu_config.json`,
+breaking a "look once, learn it" convention across the chrome.
+(2) Most tabbed pages still used the boxed Bootstrap `nav-tabs` look,
+while the Ontology Designer right pane (`form-tabs-nav` /
+`form-tab-link` in `ontology-shared-panels.css`) had moved to a
+cleaner flat-underline style. The user asked for the underline style
+to roll out across all tabbed sections, but with the **per-page
+font sizes preserved** (DQ / Business Rules / Inference use `.small`,
+Cohort uses `0.9rem`, Domain / Settings / Import / Wizard use the
+default).
+
+Changes:
+
+1. src/front/static/global/js/breadcrumb.js
+   - `_ROUTE_MAP` icons re-aligned to `menu_config.json`:
+     `Registry → bi-archive`, `Domain → bi-folder2`,
+     `Ontology → bi-bezier2`, `Mapping → bi-shuffle`,
+     `Digital Twin → bi-box-fill`, `Settings → bi-gear-fill`.
+   - The middle "Domain" crumb (built when on
+     Ontology / Mapping / Digital Twin) also switched to
+     `bi-folder2` for the same reason.
+   - `_updateSection()` now reads the matching sidebar `<a
+     class="nav-link" data-section="…">`'s `<i class="bi …">` icon
+     and prepends it to the section crumb (last item). Previously
+     the section crumb was label-only — now it mirrors the sidebar
+     entry exactly. New `_escapeHtml(s)` helper used because we
+     switched from `textContent` to `innerHTML` to inject the icon
+     element safely.
+
+2. src/front/static/global/css/components.css
+   - New `.nav-tabs.ob-tabs` + `.nav-link` ruleset modeled after
+     `form-tabs-nav` / `form-tab-link` in
+     `ontology-shared-panels.css`. The class is a drop-in addition
+     alongside Bootstrap's `nav nav-tabs` — Bootstrap's
+     `data-bs-toggle="tab"` behaviour is untouched, only the visual
+     treatment changes (transparent bg, no rounded box, 2px
+     underline accent in `--bs-primary` for the active tab,
+     `--db-text-secondary` for inactive).
+   - Font-size is intentionally inherited so every page keeps its
+     existing sizing (`.small`, `0.9rem`, default 1 rem).
+   - `!important` is used on background / border / border-radius /
+     color so the new style wins over `main.css` `.nav-tabs` (which
+     paints the boxed look).
+   - Adjacent-sibling rule `.nav-tabs.ob-tabs + .card` neutralises
+     the Domain / Settings card's top border so the underline reads
+     as the only divider between tabs and tab body.
+
+3. src/front/templates/partials/domain/_domain_information.html
+   - Tabs ul gets `ob-tabs` and the inline `style="gap: 2px;"` is
+     dropped (replaced by the new CSS gap: 0).
+
+4. src/front/templates/settings.html
+   - Same treatment: `ob-tabs` added, inline `gap: 2px` removed.
+
+5. src/front/templates/partials/ontology/_ontology_import.html
+   - Same: `ob-tabs` added, inline gap removed.
+
+6. src/front/templates/partials/ontology/_ontology_wizard.html
+   - Same: `ob-tabs` added, inline gap removed.
+
+7. src/front/templates/partials/ontology/_ontology_dataquality.html
+   - `ob-tabs` added (existing `nav-fill small px-3 pt-3` utilities
+     preserved — the small text size stays).
+
+8. src/front/templates/partials/ontology/_ontology_business_rules.html
+   - Same as dataquality: `ob-tabs` added, `.small` preserved.
+
+9. src/front/templates/partials/ontology/_ontology_axioms.html
+   - Same as dataquality: `ob-tabs` added, `.small` preserved.
+
+10. src/front/templates/partials/dtwin/_query_dataquality.html
+    - Same as dataquality: `ob-tabs` added, `.small` preserved.
+
+11. src/front/templates/partials/dtwin/_query_reasoning.html
+    - Same as dataquality: `ob-tabs` added, `.small` preserved.
+
+12. src/front/templates/partials/ontology/_ontology_cohorts.html
+    - `ob-tabs` added alongside the existing `cohort-nav-tabs`.
+      The Describe / Build rule tabs now follow the same flat
+      underline style as the rest of the app.
+
+13. src/front/static/query/css/query-cohorts.css
+    - `.cohort-nav-tabs` ruleset trimmed to just the
+      `font-size: 0.9rem` rule that we want to preserve. The
+      redundant border / colour / padding / active-weight rules are
+      removed because they're now provided (more uniformly) by
+      `.ob-tabs` in `components.css`.
+
+Files modified:
+  - src/front/static/global/js/breadcrumb.js
+  - src/front/static/global/css/components.css
+  - src/front/static/query/css/query-cohorts.css
+  - src/front/templates/partials/domain/_domain_information.html
+  - src/front/templates/settings.html
+  - src/front/templates/partials/ontology/_ontology_import.html
+  - src/front/templates/partials/ontology/_ontology_wizard.html
+  - src/front/templates/partials/ontology/_ontology_dataquality.html
+  - src/front/templates/partials/ontology/_ontology_business_rules.html
+  - src/front/templates/partials/ontology/_ontology_axioms.html
+  - src/front/templates/partials/dtwin/_query_dataquality.html
+  - src/front/templates/partials/dtwin/_query_reasoning.html
+  - src/front/templates/partials/ontology/_ontology_cohorts.html
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - Cohort suite (`test_cohort_*`, `test_dtwin_cohort`,
+    `test_agent_cohort_*`): 126 / 126 passed in 0.31 s.
+  - Full suite (Python 3.9 local): the change is HTML/CSS/JS only,
+    no Python touched. The 189 pre-existing failures in
+    `test_permission_middleware.py`, `test_permissions.py`,
+    `test_registry.py`, `test_settings_lakebase_status.py`,
+    `test_dtwin_chat.py`, etc. are caused by a stale fixture
+    (`PermissionService.DatabricksClient` attribute missing) and by
+    PEP 604 `type | None` syntax that doesn't parse on the local
+    3.9 interpreter — both unrelated to this changeset and present
+    on `main` before these edits.
+  - No tests cover the breadcrumb HTML or the tab visual treatment,
+    so the post-edit suite count is unchanged.
+
+## Frontend design rules — document the `ob-tabs` contract
+
+Context: Right after rolling out the flat-underline tab style across
+all tabbed sections, the design system doc still described tabs as
+"Bootstrap nav-tabs, paired with `.ob-tab-content` for the bordered
+pane" and had no enforcement language. New work (or a fresh
+contributor) would happily reach for `<ul class="nav nav-tabs">`
+again and get the legacy boxed look back. The convention needed to
+become a written rule, not just a precedent in the code.
+
+Changes:
+
+1. .cursor/11-frontend-design.mdc
+   - New section *Tabs (`.ob-tabs`) — flat-underline style*
+     inserted between *Section Header & Top-Right Actions* and
+     *Component Naming*. It documents:
+     * the canonical `<ul class="nav nav-tabs ob-tabs"> + button +
+       data-bs-toggle="tab" + tab-pane` skeleton,
+     * the rule that **every** tab nav must combine
+       `nav nav-tabs` and `ob-tabs`,
+     * the icon-first label requirement,
+     * the "font-size is intentionally inherited" contract (use
+       Bootstrap `.small` for small tabs, scope one-off sizes to
+       an area class — never override colour/padding/border in
+       per-area files),
+     * the catalogued `ob-tabs` combinations actually used by the
+       codebase (Domain / Settings / Import / Wizard / DQ /
+       Business Rules / Axioms / DT-DataQuality / DT-Inference),
+     * the card-wrapping rule (drop `border-top-0 rounded-top-0`
+       because `.nav-tabs.ob-tabs + .card` already neutralises the
+       seam), and
+     * an anti-patterns list (no bare nav-tabs, no pills, no
+       per-area `.nav-link` redeclarations, no inline gap/font
+       overrides, no hand-rolled tab JS, no edits to the legacy
+       `.nav-tabs` block in `main.css`).
+   - The *Component Naming* table now lists `ob-tabs` alongside
+     `ob-tab-content` in the `ob-*` examples row.
+   - The *Reusable Components Catalog* "Tabs" entry was rewritten
+     to point to the new section instead of saying "Bootstrap
+     nav-tabs". The legacy `.ob-tab-content` entry is kept but
+     framed as the rare-case fallback.
+   - The *What NOT to Do* checklist gains an entry: "Bare
+     `<ul class="nav nav-tabs">` (no `ob-tabs`), pill tabs, or
+     per-area redeclaration of `.nav-link` / `.nav-link.active`
+     styles."
+
+Files modified:
+  - .cursor/11-frontend-design.mdc
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - Doc-only change. No test execution. The frontend test suite
+    has no rule against the previous wording either, so no new
+    test is needed beyond the rule itself.
+
+## ob-tabs — bake white background + cohort-page padding into the class
+
+Context: After standardising the underline tab style, the visual
+"finish" still differed across pages because each template
+re-applied padding (`px-3 pt-2` on Cohorts, `px-3 pt-3` on DQ /
+Business Rules / Axioms / DT-DataQuality / DT-Inference) and the
+white tab strip only appeared when the tabs sat inside a `.card`.
+The user picked the **Ontology > Cohorts** tab strip — white
+background, `px-3 pt-2` padding, 2px primary underline — as the
+single reference and asked us to bake it into the contract.
+
+Changes:
+
+1. src/front/static/global/css/components.css
+   - `.nav-tabs.ob-tabs` now sets `background: #fff` and
+     `padding: 0.5rem 1rem 0` (the `px-3 pt-2` equivalent) by
+     default. The strip looks like the Cohorts header out of the
+     box, regardless of whether it is wrapped in a `.card`,
+     `.card-body p-0`, or sits directly in a section.
+   - The CSS comment block was rewritten to call out the new
+     contract (white bg + baked padding + "do not re-apply
+     `px-3 pt-2` / `px-3 pt-3`").
+
+2. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - Dropped redundant `px-3 pt-2` from the tab `<ul>`.
+
+3. src/front/templates/partials/ontology/_ontology_dataquality.html
+   - Dropped `px-3 pt-3` (now baked in as `pt-2`-equivalent).
+
+4. src/front/templates/partials/ontology/_ontology_business_rules.html
+   - Same: `px-3 pt-3` removed.
+
+5. src/front/templates/partials/ontology/_ontology_axioms.html
+   - Same: `px-3 pt-3` removed.
+
+6. src/front/templates/partials/dtwin/_query_dataquality.html
+   - Same: `px-3 pt-3` removed; `flex-shrink-0` kept (still
+     needed inside the flex card body).
+
+7. src/front/templates/partials/dtwin/_query_reasoning.html
+   - Same as above.
+
+8. .cursor/11-frontend-design.mdc
+   - *Tabs (`.ob-tabs`) — flat-underline style* section updated
+     to:
+     * call out the Ontology > Cohorts page as the canonical
+       reference,
+     * document the baked-in white background and padding,
+     * trim the catalogued combinations (`px-3 pt-3` is gone;
+       the active list is `mb-0`, `nav-fill small`, and
+       `nav-fill small flex-shrink-0`),
+     * add a new rule "do not re-apply spacing utilities on the
+       tab `<ul>` — the padding is already baked in",
+     * extend the anti-patterns list with the same point.
+
+Files modified:
+  - src/front/static/global/css/components.css
+  - src/front/templates/partials/ontology/_ontology_cohorts.html
+  - src/front/templates/partials/ontology/_ontology_dataquality.html
+  - src/front/templates/partials/ontology/_ontology_business_rules.html
+  - src/front/templates/partials/ontology/_ontology_axioms.html
+  - src/front/templates/partials/dtwin/_query_dataquality.html
+  - src/front/templates/partials/dtwin/_query_reasoning.html
+  - .cursor/11-frontend-design.mdc
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - HTML/CSS-only change. The cohort suite (`test_cohort_*`,
+    `test_dtwin_cohort`, `test_agent_cohort_*`) still passes
+    (126 / 126 in 0.31 s). Same pre-existing 3.9 collection
+    errors as before in `test_external_api`, `test_help_api`,
+    `test_routes`, `test_ui_rendering` (PEP 604 syntax) — not
+    related to this changeset.
+
+
+─────────────────────────────────────────────────────────────────
+Section: ob-tabs head — rounded corners + grey outline + full-page fill
+─────────────────────────────────────────────────────────────────
+
+Context
+  Follow-up on the ob-tabs visual contract. User feedback:
+    1. The tab "head" should look like the Ontology > Information
+       card-header — rounded corners and a grey outline, **not**
+       a flat strip flush against a card border.
+    2. Tabs + body together should fill the page from below the
+       section header to the bottom of the viewport, exactly like
+       the single card on Ontology > Information (no short
+       free-floating cards leaving white space underneath).
+  Both bullets needed to apply globally to every page that uses
+  `ob-tabs`, while keeping the existing baked-in background /
+  padding contract intact.
+
+Changes
+  1. `src/front/static/global/css/components.css`
+     - Promoted `.nav-tabs.ob-tabs` from a flat strip to a
+       card-header look:
+         * `border: 1px solid var(--db-border)` on top / left /
+           right (the "grey line"),
+         * `border-bottom-width: 2px` for the underline (grey
+           baseline that turns primary under the active tab),
+         * `border-top-left-radius` / `border-top-right-radius`
+           = `var(--bs-card-border-radius, 0.375rem)` for the
+           rounded angles,
+         * bottom corners explicitly squared so the strip mates
+           cleanly with the body below.
+     - Added a parent-aware "drop the outer border when nested"
+       block: `.card-body > .nav-tabs.ob-tabs`,
+       `.card-header > .nav-tabs.ob-tabs`,
+       `.card > .nav-tabs.ob-tabs` strip the new top / left /
+       right borders + radius so the strip doesn't double-border
+       the outer card (cohorts / dq / business-rules / axioms
+       still look correct).
+     - Generalised the adjacent-sibling rule from
+       `.nav-tabs.ob-tabs + .card` to also cover
+       `+ .ob-tab-content` and `+ .tab-content`, with
+       `border-top-left-radius / border-top-right-radius: 0
+       !important` so the body's top corners square up to meet
+       the strip.
+     - Added a new `ob-tabs-wrap` flex-column utility for the
+       full-height pattern. When dropped as a direct child of
+       `.content-section`, it grows to fill (`flex: 1`,
+       `min-height: 0`, `overflow: hidden`); inside, the strip
+       gets `flex-shrink: 0` and the body
+       (`.tab-content` / `.ob-tab-content` / `.card`) gets
+       `flex: 1 + overflow-y: auto`. Available for templates
+       that need the fill behaviour deeper in the markup.
+  2. `src/front/templates/partials/domain/_domain_information.html`
+     - Dropped the now-redundant `border-top-0 rounded-top-0`
+       utility classes from the `<div class="card">` that
+       follows the tabs — the adjacent-sibling rule handles this
+       with `!important`.
+  3. `src/front/templates/settings.html`
+     - Same cleanup: removed `border-top-0 rounded-top-0` from
+       the settings tab body card.
+  4. `.cursor/11-frontend-design.mdc`
+     - Rewrote the "Tabs (`ob-tabs`)" section to describe the new
+       card-header look: rounded top corners, grey outline,
+       parent-aware nested behaviour, generalised adjacent-sibling
+       rule (cards + ob-tab-content + tab-content all get their
+       top border + corners neutralised).
+     - Added a new "Full-height pattern" rule with two recipes:
+         (a) place tabs + body as direct children of
+             `.content-section` (relies on existing
+             `sidebar-layout.css` flex chain),
+         (b) wrap them in `<div class="ob-tabs-wrap">` when (a)
+             is not available.
+     - Extended the anti-patterns list:
+         * "do not re-apply `border-top-0 rounded-top-0` on the
+           card after `ob-tabs`" (the rule handles it),
+         * "no short, free-floating tabs-cards that don't reach
+           the bottom — use the full-height pattern".
+
+Files modified
+  - src/front/static/global/css/components.css
+  - src/front/templates/partials/domain/_domain_information.html
+  - src/front/templates/settings.html
+  - .cursor/11-frontend-design.mdc
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - Pure HTML/CSS visual contract change. The cohort suite
+    (`test_cohort_*`, `test_dtwin_cohort`, `test_agent_cohort_*`)
+    still passes (126 / 126). Pre-existing PEP-604 collection
+    errors on Python 3.9 in `test_external_api`, `test_help_api`,
+    `test_routes`, `test_ui_rendering` are unrelated to this
+    changeset.
+  - App restart verified (port 8000, Uvicorn up).
+
+
+─────────────────────────────────────────────────────────────────
+Section: ob-tabs head — keep rounded corners even nested in card
+─────────────────────────────────────────────────────────────────
+
+Context
+  Follow-up on the ob-tabs card-header look. The previous nested
+  override (`.card-body > .nav-tabs.ob-tabs { border-radius: 0 }`)
+  squared the corners when the strip sat inside another card —
+  e.g. on Ontology > Cohorts, DQ, Business Rules, Axioms,
+  DT > DataQuality, DT > Inference. User wants every tab head to
+  show rounded angles consistently, like the standalone Ontology
+  > Import strip.
+
+Changes
+  1. `src/front/static/global/css/components.css`
+     - In the nested override block, removed the `border-radius: 0`
+       declaration. Only the duplicate borders (top / left /
+       right) are dropped now; the rounded top corners stay.
+     - When the parent card has `overflow: hidden` (Bootstrap
+       default), the strip's rounded corners coincide with the
+       card's outer radius and read as a single rounded shape.
+  2. `.cursor/11-frontend-design.mdc`
+     - Updated the "inside a card" paragraph to say the rounded
+       top corners are now **kept** in nested contexts. Removed
+       the line about dropping the radius.
+
+Files modified
+  - src/front/static/global/css/components.css
+  - .cursor/11-frontend-design.mdc
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - Pure CSS visual contract change. No code path affected.
+    Cohort suite still green (126 / 126 from previous run).
+
+
+─────────────────────────────────────────────────────────────────
+Section: ob-tabs head — unified font size (0.9rem)
+─────────────────────────────────────────────────────────────────
+
+Context
+  Final ob-tabs polish. Before this change, font-size on the tab
+  head varied by page: Settings/Domain/Wizard/Import used the
+  default ~1rem; DQ / Business Rules / Axioms / DT-DataQuality /
+  DT-Inference used Bootstrap's `.small` (~0.875em); Cohorts
+  used a bespoke `.cohort-nav-tabs` rule (0.9rem). User asked
+  for one consistent size everywhere.
+
+Changes
+  1. `src/front/static/global/css/components.css`
+     - Added `font-size: 0.9rem` to `.nav-tabs.ob-tabs .nav-link`.
+       This becomes the unified tab-head size across the app.
+     - Updated the head comment block: removed the "font-size is
+       intentionally inherited" paragraph; replaced with a note
+       that font-size is now baked in and `.small` should not be
+       re-applied on the `<ul>`.
+  2. `src/front/static/query/css/query-cohorts.css`
+     - Deleted the now-empty `.cohort-nav-tabs .nav-link
+       { font-size: 0.9rem }` rule. The bespoke modifier is gone.
+  3. Templates: stripped the `.small` modifier from every page
+     that used it, since `0.9rem` is now the default. Stripped
+     `cohort-nav-tabs` from the cohorts ul (no longer adds
+     anything).
+       - `src/front/templates/partials/ontology/_ontology_dataquality.html`
+       - `src/front/templates/partials/ontology/_ontology_business_rules.html`
+       - `src/front/templates/partials/ontology/_ontology_axioms.html`
+       - `src/front/templates/partials/dtwin/_query_dataquality.html`
+       - `src/front/templates/partials/dtwin/_query_reasoning.html`
+       - `src/front/templates/partials/ontology/_ontology_cohorts.html`
+  4. `.cursor/11-frontend-design.mdc`
+     - Updated the "Cataloged combinations" list to drop `.small`
+       from the dq / business-rules / axioms / dt entries and to
+       call out the new baked-in font size.
+     - Added an anti-pattern: do not re-apply `.small` (or any
+       font-size override) on the `<ul>` or `.nav-link`.
+
+Files modified
+  - src/front/static/global/css/components.css
+  - src/front/static/query/css/query-cohorts.css
+  - src/front/templates/partials/ontology/_ontology_dataquality.html
+  - src/front/templates/partials/ontology/_ontology_business_rules.html
+  - src/front/templates/partials/ontology/_ontology_axioms.html
+  - src/front/templates/partials/dtwin/_query_dataquality.html
+  - src/front/templates/partials/dtwin/_query_reasoning.html
+  - src/front/templates/partials/ontology/_ontology_cohorts.html
+  - .cursor/11-frontend-design.mdc
+  - changelogs/v0.3.0/2026-05-04.log
+
+Tests
+  - Pure CSS / template visual contract change. Cohort suite
+    still green (126 / 126 from previous run). No code path
+    affected.

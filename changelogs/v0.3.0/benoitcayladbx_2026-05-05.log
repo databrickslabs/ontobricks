@@ -1,0 +1,1121 @@
+## Cohort designer — clearer step 3 & 4 labels
+
+Context: User feedback on Ontology → Advanced → Cohorts: the label
+"3) When are two members linked? (optional)" did not convey what the
+section actually expects (multi-hop **paths** of object-properties
+between two members, with optional per-hop **where** conditions and
+ANY/ALL combination). The same critique applied to "4) Compatibility
+policies" — the term "policies" is jargon and the four primitives
+(same_value / value_equals / value_in / value_range) were not hinted
+at the section level. Both titles now read as plain English and carry
+a short explainer that mirrors the design doc's §6.3.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - Step 3: title changed from "When are two members linked?" to
+     "Link members via a shared entity"; added a `form-text small
+     text-muted` paragraph below explaining the N-hop path model
+     (with a concrete `Person → assignedTo → Project → governedBy →
+     ComplianceType` example), per-hop `where` conditions, and the
+     ANY/ALL combine semantics. Calls out that skipping the section
+     treats every pair as linked.
+   - Step 4: title changed from "Compatibility policies" to
+     "Conditions every member must satisfy"; added a `form-text
+     small text-muted` paragraph naming the four constraint shapes
+     in plain English (same value of …, equal to, in any of, between
+     min and max) and stating the empty default (every step-2
+     instance qualifies).
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+
+Tests: `uv run pytest -q` → 2023 passed in 68.31s.
+
+## Cohort designer — replace "class" terminology with "entity"
+
+Context: Follow-up on the same Ontology → Advanced → Cohorts surface.
+"Class" is the OWL/RDF technical term and confused business users who
+think of the ontology as a graph of *entities*. The internal data
+model still uses `class_uri` / `target_class` / `_classByUri` (RDF
+field names that show up in the JSON contract and in REST routes —
+renaming them would be a breaking change), but every user-facing
+string in the cohort designer and the run page now says "entity".
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - Section 2 label: "Group instances of class" → "Group instances of
+     entity". Empty option in the dropdown: "— select a class —" →
+     "— select an entity —".
+2. src/front/static/query/js/query-cohorts.js
+   - `_populateClassSelect` placeholder option matches the template
+     ("— select an entity —").
+   - Save validation toast: "A label and a class are required." →
+     "A label and an entity are required.".
+   - Path-builder fallback root chip label: `'class?'` → `'entity?'`.
+   - Per-hop `via` dropdown disabled hint: "pick previous class first"
+     → "pick previous entity first".
+   - Per-hop `target_class` dropdown empty option: "— class —" →
+     "— entity —".
+   - Terminal-hop tooltip on the `shared` badge: "…reach the same
+     instance of this class" → "…of this entity".
+   - Compatibility empty-state: "every member of the class is
+     eligible." → "every member of the entity is eligible.".
+   - Sample-values modal `metaLabel` for rule-level constraints:
+     "on rule class" → "on rule entity".
+   - `_pickSampleValue` guard: "Pick a target class and property
+     first." → "Pick a target entity and property first.".
+   - Trace explainer collapsing-on-target diagnostic: "The hop's
+     target class URI…" → "The hop's target entity URI…".
+   - Explain (Why?/Why not?) fallback reason: "Not in target class."
+     → "Not in target entity.".
+
+Note: Internal identifiers (`class_uri`, `target_class`,
+`_classByUri`, the `/dtwin/cohorts/preview/class-stats` endpoint, the
+`<code>target_class</code>` JSON-field hint in the trace diagnostic)
+intentionally keep the RDF wording — they are part of the persistent
+JSON contract and the public REST API.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- src/front/static/query/js/query-cohorts.js
+
+Tests: `uv run pytest -q` → 2023 passed in 66.57s.
+
+## Makefile — extract APP_NAME variable
+
+Context: The dev sandbox app name `ontobricks-030` was hard-coded in
+five places in the root `Makefile` (help text x2, two `deploy*` echo
+banners, and the literal positional argument to
+`scripts/bootstrap-app-permissions.sh`). Promote it to a single
+overridable variable so spinning up a parallel sandbox (e.g.
+`ontobricks-040`) is a one-liner: `make APP_NAME=ontobricks-040
+deploy`. As a side effect, fix the stale `ontobricks-020` reference
+in the deployment-section comment.
+
+Changes:
+
+1. Makefile
+   - Add `APP_NAME ?= ontobricks-030` near the top, with a comment
+     documenting the CLI/env override pattern.
+   - `help` target: substitute `$(APP_NAME)` in the two `deploy` and
+     `deploy-volume` lines.
+   - Deployment-section comment: replace stale `ontobricks-020` with
+     a generic "$(APP_NAME) (default: ontobricks-030)" mention.
+   - `deploy`, `deploy-volume`, `bootstrap-perms` echo banners now
+     reference `$(APP_NAME)`.
+   - `bootstrap-perms` recipe: the literal `ontobricks-030` arg to
+     `scripts/bootstrap-app-permissions.sh` becomes `$(APP_NAME)`;
+     the sibling `mcp-ontobricks` arg is left as-is (separate MCP
+     server name, out of scope).
+
+Modified files:
+- Makefile
+
+Tests: `uv run pytest -q` → 2023 passed in 66.21s. Smoke: `make help`
+and `make APP_NAME=ontobricks-040 help` both render the substituted
+value.
+
+## bootstrap-app-permissions.sh — env-overridable APP_NAME / MCP_APP_NAME
+
+Context: Mirror the Makefile change in
+`scripts/bootstrap-app-permissions.sh`. The script's `DEFAULT_APPS`
+array hard-coded the sandbox app pair `("ontobricks-030"
+"mcp-ontobricks")`, which forced anyone running the script directly
+(without positional args) to edit it to target a parallel sandbox.
+The default list now reads from env vars whose names match the
+Makefile's `$(APP_NAME)`, keeping `make bootstrap-perms` and direct
+invocation in sync.
+
+Changes:
+
+1. scripts/bootstrap-app-permissions.sh
+   - Add `APP_NAME="${APP_NAME:-ontobricks-030}"` and
+     `MCP_APP_NAME="${MCP_APP_NAME:-mcp-ontobricks}"` near the top
+     of the resolution block, so callers can override either via env
+     without editing the script.
+   - `DEFAULT_APPS=("$APP_NAME" "$MCP_APP_NAME")` instead of two
+     literals.
+   - Update the comment block to document the env-override pattern
+     and call out that positional args still win when provided
+     (preserves the existing `make bootstrap-perms` call signature
+     `scripts/bootstrap-app-permissions.sh $(APP_NAME)
+     mcp-ontobricks`).
+   - Update the `# Usage:` block to add two env-var examples.
+
+Modified files:
+- scripts/bootstrap-app-permissions.sh
+
+Tests: `uv run pytest -q` → 2023 passed in 64.99s. Smoke:
+`bash -n scripts/bootstrap-app-permissions.sh` → syntax OK.
+
+## Deployment — single source of truth (deploy.config.sh + app.yaml.template)
+
+Context: User asked for one place to set every deployment value (app
+names, DAB target, SQL warehouse, registry coords, Lakebase
+project/branch/database, app.yaml runtime fallbacks) and run the
+deployment from. Previously these were spread across `Makefile`,
+`scripts/deploy.sh`, `scripts/bootstrap-app-permissions.sh`,
+`scripts/bootstrap-lakebase-perms.sh`, `databricks.yml`'s `variables:`
+block, and `app.yaml`'s `env:` block — and the dev sandbox app name
+was even inconsistent (`ontobricks-020` in databricks.yml + deploy.sh
++ Lakebase bootstrap defaults vs. `ontobricks-030` in the Makefile +
+SP-perms bootstrap defaults), meaning `make bootstrap-perms` was
+silently targeting a different app than `make deploy`.
+
+This change consolidates everything into two new files plus a small
+renderer, fixes the app-name drift, and turns `app.yaml` into a
+generated artifact so it can never drift from the config again.
+
+Changes:
+
+1. scripts/deploy.config.sh (new, executable)
+   - Single source of truth, sourced by `scripts/deploy.sh` and the
+     Makefile `bootstrap-*` targets. Four sections:
+     1. Apps: `APP_NAME` / `MCP_APP_NAME` + DAB resource keys.
+     2. DAB target: `DAB_TARGET` (`dev` / `dev-lakebase`).
+     3. DAB variable overrides: `WAREHOUSE_ID`,
+        `REGISTRY_CATALOG/SCHEMA/VOLUME`,
+        `LAKEBASE_PROJECT/BRANCH/DATABASE_RESOURCE_SEGMENT/REGISTRY_SCHEMA`
+        and the `LAKEBASE_BOOTSTRAP_*` triplet for the psql GRANT
+        script.
+     4. App runtime fallbacks: `APP_*` variables templated into
+        `app.yaml`. Default to the section-3 values where it makes
+        sense (e.g. `APP_LAKEBASE_SCHEMA=${LAKEBASE_REGISTRY_SCHEMA}`).
+   - Every variable uses `${VAR:-default}` so env overrides win.
+
+2. app.yaml.template (new)
+   - Copy of the previous `app.yaml` with `${VAR}` placeholders for
+     every static value (warehouse fallback, catalog, schema,
+     triplestore table, registry catalog/schema/volume, Lakebase
+     schema, MLflow URI). Carries a "GENERATED FILE" banner so
+     anyone editing it is steered to `deploy.config.sh` instead.
+
+3. scripts/_render-app-yaml.py (new, executable)
+   - Tiny stdlib-only renderer (`string.Template.substitute`, NOT
+     `safe_substitute` — fail loudly on missing variables). Reads
+     `app.yaml.template`, writes `app.yaml`. Called by `deploy.sh`
+     before the bundle deploy and by `make render-app-yaml`.
+
+4. .gitignore + git rm --cached app.yaml
+   - `app.yaml` is now generated; only `app.yaml.template` is
+     tracked. Added to `.gitignore` with a comment pointing at the
+     renderer and config.
+
+5. scripts/deploy.sh (refactored)
+   - Step 0 sources `deploy.config.sh` (mandatory; missing config
+     aborts the deploy).
+   - Step 2 calls `python3 scripts/_render-app-yaml.py` to produce
+     `app.yaml` from template + env (skippable via
+     `--skip-app-yaml`).
+   - DAB variable overrides composed from the config and passed to
+     `databricks bundle validate/deploy/run` as `--var=` flags so
+     `databricks.yml`'s `variables:` defaults stay declarative.
+   - Resource keys (`APP_RESOURCE_KEY`, `MCP_APP_RESOURCE_KEY`) come
+     from the config too — no more hard-coded literals.
+   - Bootstrap steps export `APP_NAME` / `MCP_APP_NAME` and pass the
+     `LAKEBASE_BOOTSTRAP_*` flags so sub-scripts inherit the same
+     values without arg drift. New `--no-bootstrap` flag short-
+     circuits steps 8 + 9 for partial deploys.
+   - Header banner prints the resolved config (target, app, MCP app,
+     registry path, Lakebase project) so the operator sees what's
+     about to ship before validation runs.
+   - Help text now points at `deploy.config.sh` as the place to edit.
+   - Lakebase-target detection switched from `== "dev-lakebase"` to
+     `== *lakebase*` so any future `*-lakebase` target inherits the
+     GRANT bootstrap.
+
+6. scripts/bootstrap-lakebase-perms.sh
+   - `INSTANCE` / `DATABASE` / `SCHEMA` defaults now read from env
+     (`${INSTANCE:-…}` / etc.) so `deploy.sh` and `make
+     bootstrap-lakebase` can drive them from `deploy.config.sh`.
+   - Default APPS array reads `APP_NAME` / `MCP_APP_NAME` from env
+     with `ontobricks-030` / `mcp-ontobricks` fallbacks.
+   - Doc comments updated to reflect the new config-driven flow.
+
+7. databricks.yml — app-name unification
+   - Renamed `resources.apps.ontobricks_dev_app.name` from
+     `ontobricks-020` → `ontobricks-030`. Same in
+     `workspace.root_path` (`/.bundle/ontobricks-030/<target>`) and
+     in three header/inline comments. The `variables:` block keeps
+     its defaults — `deploy.sh` passes `--var=` overrides on top.
+
+8. Makefile — slimmed down
+   - Removed the `APP_NAME` make-variable (now lives in
+     `deploy.config.sh`). The `deploy*` targets just call
+     `scripts/deploy.sh` (no `-t` flag — DAB_TARGET comes from the
+     config; only `deploy-volume` overrides to `-t dev` on the CLI).
+   - Added `make render-app-yaml` for re-rendering without deploying.
+   - `bootstrap-perms` and `bootstrap-lakebase` targets now source
+     `$(CONFIG)` and let env vars drive the sub-scripts (no more
+     hard-coded positional args).
+   - `bundle-validate` composes `--var=` flags from the config so
+     it validates with the actual deployment values.
+   - `deploy-check` updated to verify `app.yaml.template` and
+     `scripts/deploy.config.sh` exist (instead of `app.yaml`).
+   - Help text reads `Edit values in: scripts/deploy.config.sh` so
+     newcomers know where to go.
+
+Modified files:
+- .gitignore
+- Makefile
+- app.yaml (untracked; was committed, now gitignored — `git rm --cached`)
+- app.yaml.template (new)
+- databricks.yml
+- scripts/_render-app-yaml.py (new)
+- scripts/bootstrap-lakebase-perms.sh
+- scripts/deploy.config.sh (new)
+- scripts/deploy.sh
+
+Tests: `uv run pytest -q` → 2023 passed in 65.97s.
+Smoke:
+- `bash -n` on every touched shell script → OK.
+- `make help` renders the new "Edit values in: …" line.
+- `make render-app-yaml` produces an `app.yaml` whose `value:` /
+  `valueFrom:` lines match the previously-committed `app.yaml`
+  byte-for-byte; only comment punctuation/wording differs (added a
+  "GENERATED FILE" banner + minor punctuation cleanup).
+- Env override smoke: `export APP_NAME=ontobricks-040;
+  . scripts/deploy.config.sh` → `APP_NAME=ontobricks-040`,
+  defaults restored without override.
+- `scripts/deploy.sh -h` prints the new orchestrator overview.
+
+## Cohort designer — move "Saved rules" pane to the left
+
+Context: User feedback on Ontology → Advanced → Cohorts: the "Saved
+rules" library was rendered as a right-hand rail, which was
+inconsistent with the Digital Twin → Cohorts run page (where the same
+rail already sits on the left, via the existing
+`cohort-layout--rail-left` CSS modifier). Aligning the design surface
+with the run surface makes the saved-rules picker land in the same
+spot on both pages.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - Add the `cohort-layout--rail-left` modifier class to the
+     `.cohort-layout` grid container so the 320px column is the
+     first track instead of the last.
+   - Reorder the two grid children: move the
+     `<aside class="cohort-rail">` (saved rules card with
+     `#cohortRulesList` / `#cohortRulesCount` / `#cohortRulesEmpty`)
+     before the `<section class="cohort-tabs-wrap card">` (Describe
+     / Build rule tabs). All element IDs and JS contracts are
+     unchanged; this is a pure DOM reorder + class flip.
+   - Update the surrounding HTML comments from "Right pane" to
+     "Left pane".
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+
+Tests: `uv run pytest -q` → 2023 passed in 65.85s.
+
+## scripts/ — drop orphaned test wrappers + stale report artifacts
+
+Context: Audit of `scripts/` after the `deploy.sh` / `deploy.config.sh`
+/ `_render-app-yaml.py` refactor. Two scripts had zero references
+anywhere in the repo (Makefile, README, `docs/**`, `.cursor/**`,
+`.github/workflows/**`, `pyproject.toml`, `src/**`, `tests/**`):
+
+- `scripts/run_tests.sh` — fancy markdown-report wrapper around
+  `pytest`. Functionally superseded by `make test` (and `make
+  test-cov` for coverage), which is what every doc — `README.md`,
+  `docs/development.md`, `docs/deployment.md`, `docs/INFO.md`,
+  `docs/get-started.md` — already tells users to run.
+- `scripts/test_UI.sh` — 2-layer report wrapper around
+  `tests/test_ui_rendering.py` (HTML rendering) plus `tests/e2e/`
+  (Playwright). Both are auto-discovered by plain `pytest` and
+  already part of the standard `make test` run (Layer 1 + Layer 2 =
+  2023 tests in ~66s incl. Chromium).
+
+Their only "users" were two stale generated reports under
+`tests/reports/` from 2026-02-25 (snapshot when the suite was 306
+tests at 33% coverage — current is 2023 tests). Those reports were
+the only things in the directory, and their `Report generated by
+…` footer pointed at the now-removed scripts.
+
+Changes:
+
+1. scripts/run_tests.sh — deleted.
+2. scripts/test_UI.sh — deleted.
+3. tests/reports/2026-02-25_11-06-00_tests_reports.md — deleted
+   (orphan artifact, footer referenced removed `run_tests.sh`).
+4. tests/reports/2026-02-25_11-32-55_ui_tests_report.md — deleted
+   (orphan artifact, footer referenced removed `test_UI.sh`).
+5. tests/reports/ — removed (directory was empty after the two
+   stale reports).
+
+No Makefile changes needed: `make test` / `make test-cov` already
+exist and cover the use case. No doc changes needed: every
+mention of "how to run tests" in `docs/development.md`,
+`docs/deployment.md`, `README.md`, etc. invokes `pytest` or `make
+test` directly — none referenced the deleted shell wrappers.
+
+Out of scope (flagged for a separate cleanup pass): `README.md`
+§"Registry Import / Export (CLI)" and `docs/import-export.md`
+document `scripts/registry_transfer.sh`,
+`src/cli/registry_transfer.py`, and
+`src/back/objects/registry/transfer.py` — none of which exist on
+disk. Either the feature was never landed or was removed without a
+doc sweep; needs a product decision (implement vs. drop the doc
+section) before touching.
+
+Modified files:
+- scripts/run_tests.sh (deleted)
+- scripts/test_UI.sh (deleted)
+- tests/reports/2026-02-25_11-06-00_tests_reports.md (deleted)
+- tests/reports/2026-02-25_11-32-55_ui_tests_report.md (deleted)
+- tests/reports/ (directory removed)
+
+Tests: `uv run pytest -q` → 2023 passed in 67.72s.
+
+## scripts/deploy.config.sh — extract DEFAULT_* literals to a single block
+
+Context: `scripts/deploy.config.sh` had every default value buried
+inside its `export FOO="${FOO:-literal}"` line, which made scanning
+the file for "what is this project's default warehouse / catalog /
+Lakebase project" require reading through 80 lines of
+section-by-section commentary. To change a default permanently you
+also had to find the right line in the right section.
+
+Refactor: collect every literal default into a new section 0
+(`DEFAULT_*` plain assignments) at the top of the file. The exports
+in sections 1-4 now follow a uniform shape:
+
+  export FOO="${FOO:-$DEFAULT_FOO}"
+
+This means: env-overridable wins, otherwise fall back to the section
+0 default. The `DEFAULT_*` block is the single literal-value source.
+Editing a default permanently is now a 1-line edit at the top of the
+file; the export lines themselves carry only the conceptual
+documentation (what the variable does, what consumes it).
+
+Three "tracking" variables — `LAKEBASE_BOOTSTRAP_INSTANCE`,
+`LAKEBASE_BOOTSTRAP_SCHEMA`, `APP_LAKEBASE_SCHEMA` — keep their
+existing chained-default behaviour (they intentionally inherit from
+`LAKEBASE_PROJECT` / `LAKEBASE_REGISTRY_SCHEMA`), so they reference
+the live exported value rather than a `DEFAULT_*` literal. Comment
+on each one explains the intent.
+
+Verification: `bash -c '. ./scripts/deploy.config.sh && env'` before
+vs. after produces the same 25 resolved values for every variable
+the file exports (APP_*, MCP_*, DAB_TARGET, WAREHOUSE_ID,
+REGISTRY_*, LAKEBASE_*, APP_REGISTRY_*, APP_LAKEBASE_SCHEMA,
+APP_MLFLOW_TRACKING_URI, APP_TRIPLESTORE_TABLE,
+APP_DATABRICKS_*, APP_SQL_WAREHOUSE_FALLBACK,
+LAKEBASE_BOOTSTRAP_*). Env override path also verified:
+`APP_NAME=ontobricks-040 bash -c '. ./scripts/deploy.config.sh
+&& echo $APP_NAME'` → `ontobricks-040` (caller wins, defaults
+ignored, exactly as before).
+
+Changes:
+
+1. scripts/deploy.config.sh
+   - Add section 0 "Defaults" — 22 `DEFAULT_*` plain assignments
+     (no `export`, no `:-` fallback) grouped to mirror sections 1-4
+     for easy scanning.
+   - Sections 1-4: replace literal defaults inside every export
+     with `$DEFAULT_<NAME>` references.
+   - Update header comment block:
+     * Add section 0 to the section index.
+     * Document the new "edit DEFAULT_* in section 0" workflow.
+     * Update "To add a new variable" checklist (now 4 steps:
+       `DEFAULT_NAME` line + matching `export` + optional
+       `databricks.yml` `--var=` + optional `app.yaml.template`
+       placeholder).
+   - The three tracking exports (LAKEBASE_BOOTSTRAP_INSTANCE,
+     LAKEBASE_BOOTSTRAP_SCHEMA, APP_LAKEBASE_SCHEMA) keep their
+     `${VAR:-$OTHER_VAR}` chained-default form with an inline
+     comment explaining why they don't use `DEFAULT_*`.
+
+Modified files:
+- scripts/deploy.config.sh
+
+Tests: `uv run pytest -q` → 2023 passed in 66.87s. Smoke:
+`bash -n scripts/deploy.config.sh` → syntax OK; resolved-value
+diff (before/after sourcing) → identical for all 25 exports.
+
+## Cohort explain — robust class-URI matching across namespace drift
+
+Context: Production bug reported on the `Consulting` domain — the
+cohort preview produces sensible cohorts, but clicking **Explain
+membership** on one of those member URIs returns:
+
+> 'https://databricks-ontology.com/Consulting/Person/9' is not an
+> instance of 'https://databricks-ontology.com/Consulting#Person' in
+> the graph.
+
+Root cause: `CohortBuilder._members_of_class` did a strict equality
+check `t.object == rule.class_uri`. The codebase already documents
+that R2RML and W3C-import paths normalise URIs into the *data*
+namespace (`base_uri.rstrip('#') + '/'`), and properties were already
+translated via `_to_data_uri`, but **class URIs on `rdf:type` triples
+were assumed to keep the ontology form**. That assumption holds for
+the `R2RMLGenerator` path (which preserves `rr:class` verbatim) but
+not for the loader paths the user is on, where the rdf:type object
+landed in data form (`…/Consulting/Person`). Consequence: the
+explain view's class membership lookup silently missed every
+candidate, even when the same rule's preview produced cohorts (the
+preview path benefits from `_walk_path`'s lenient type-fallback,
+which silently treats an empty type-index as "no filter" — the
+membership check has no such fallback because it's a hard gate).
+
+The fix mirrors how the engine already handles property URIs: at
+lookup time, compare `rdf:type` objects against **every plausible
+URI form** of the rule's class — ontology form, data form, and the
+raw form as supplied. Same treatment for hop `target_class` lookups
+in `_type_index_for_links` so multi-hop walks are equally robust.
+
+Bonus: the "not in class" branch of `explain_membership` now emits
+a diagnostic reason instead of the bare *not an instance* string —
+it inspects the target subject in the loaded triples and reports
+one of three precise failure modes: *typed as &lt;X&gt; not &lt;Y&gt;*,
+*exists but has no rdf:type triple*, or *URI not seen in the graph*.
+This turns the previously opaque message into actionable advice
+("pick the matching class in step 2", "check your R2RML mapping",
+"check the URI you pasted").
+
+Frontend: `query-cohorts.js` `explain()` now syncs the form into
+`this.rule` via `_collectFromForm()` before posting (mirrors what
+`preview()` already does). Without this, an explain run right after
+the user tweaked the form would post a stale rule and the new
+diagnostic would describe a configuration the user no longer has on
+screen.
+
+Changes:
+
+1. src/back/core/graph_analysis/CohortBuilder.py
+   - Add `_to_ontology_uri(uri)` — inverse of `_to_data_uri`: rewrite
+     a data-namespace URI back to ontology form using the configured
+     `base_uri` separator (`#` if `base_uri` ends with `#`, `/`
+     otherwise). Foreign and already-ontology URIs are returned as-is.
+   - Add `_class_uri_variants(class_uri)` — returns the set
+     `{class_uri, _to_data_uri(class_uri), _to_ontology_uri(class_uri)}`
+     filtered to non-empty values. Single source of truth for the
+     "every form a class might be stored under" lookup table.
+   - `_members_of_class`: replace `t.object == class_uri` with
+     `t.object in variants`. Behavior preserved when `base_uri` is
+     unset (variants collapses to `{class_uri}` → exact match,
+     matches the legacy semantics already covered by
+     `test_no_base_uri_means_no_normalisation`).
+   - `_type_index_for_links`: drop `@staticmethod`, build a reverse
+     `variant -> {canonical class URIs}` map, route every
+     `rdf:type` triple into every canonical bucket whose variant set
+     contains the triple's object. Keeps the index keyed by the
+     rule-side `target_class` so callers (`_walk_path`,
+     `_trace_path`) need no change. Documented inline.
+   - `explain_membership`: replace the bare "not an instance of"
+     string with `_explain_missing_member`, which inspects the loaded
+     triples for the target subject and emits one of three diagnostic
+     branches: (a) **typed-as** — the target has rdf:type triples to
+     a class set that doesn't include the rule's, report the actual
+     types and tell the user to pick the matching class or fix the
+     triples; (b) **untyped** — the target appears as a subject but
+     has no rdf:type triple, tell the user cohort matching needs an
+     explicit type and point at R2RML / loader; (c) **unknown URI**
+     — the target was never seen as a subject, tell the user to
+     check case / encoding / trailing slash and confirm Preview saw
+     it.
+   - Update the URI-namespace-normalisation header comment to call
+     out the class-URI drift explicitly (was previously claiming
+     "Class URIs are NOT translated" — true for the R2RML emitter,
+     misleading for the broader loader landscape).
+
+2. src/front/static/query/js/query-cohorts.js
+   - `explain()`: call `_collectFromForm()` (guarded by a
+     `typeof === 'function'` and a sentinel-element existence check
+     so a partial form doesn't crash) before serialising
+     `this.rule` into the POST body. Mirrors `preview()`'s flow.
+     The new diagnostic strings render fine in the existing
+     `#cohortExplainResult .text-muted small` container — no CSS
+     change needed.
+
+3. tests/test_cohort_builder.py
+   - `TestNamespaceDrift._drifted_graph_data_form_types`: new fixture
+     mirroring the user's real-world graph — rdf:type triples,
+     property predicates, and instance subject URIs all in data
+     namespace (e.g. `…/Consulting/Person/Alice` typed as
+     `…/Consulting/Person`).
+   - `test_members_of_class_matches_data_form_rdf_type`: rule with
+     `…#Person` resolves three members from data-form rdf:type
+     triples — the regression test for the user's bug.
+   - `test_members_of_class_matches_mixed_rdf_type`: a graph with
+     both forms of rdf:type present resolves the union — guards
+     against regressions in the variant set.
+   - `test_explain_membership_resolves_data_form_target`: end-to-end
+     reproducer — explain on a data-form target URI with an
+     ontology-form rule class URI returns `in_class=True`, no
+     `reason` field.
+   - `test_explain_diagnoses_wrong_type` and
+     `test_explain_diagnoses_unknown_uri`: exercise the two
+     non-success branches of `_explain_missing_member` and assert
+     the reason string contains the actionable substrings
+     (`typed as`, `not found`).
+
+Modified files:
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/front/static/query/js/query-cohorts.js
+- tests/test_cohort_builder.py
+
+Tests: `uv run pytest -q` → 2028 passed in 71.04s (5 new cohort
+tests under `TestNamespaceDrift`; full cohort module: 46/46 green).
+
+## Cohort outputs modal — visible feedback for Auto-pick + Test write
+
+Context: User feedback on Digital Twin → Cohorts → **Configure
+outputs**: clicking **Auto-pick** or **Test write access** "doesn't
+seem to have any effects (no messages back)". Both buttons were
+swallowing every failure mode silently:
+
+- `suggestUCTarget()`: `try { … } catch { /* noop */ }` plus an
+  unconditional `data.catalog || ''` write into the input fields.
+  When the API returned the OntoBricks error envelope (`{error,
+  message, detail, request_id}` from
+  :func:`shared.fastapi.error_handlers.register_exception_handlers`,
+  e.g. 500 if no domain was loaded), `data.catalog` was `undefined`
+  → the inputs got cleared to empty strings and no message was
+  shown anywhere.
+- `probeUCTarget()`: rendered `(data.checks || []).map(...).join('')`
+  into `#cohortUCProbeResult`. When the API returned an error
+  envelope (no `checks` array — e.g. `InfrastructureError(
+  "Databricks credentials not configured")` → 500), the result was
+  the empty string → the result div got wiped. The catch branch
+  only fired on network errors (HTTP-level errors don't throw from
+  `fetch`).
+
+Both buttons therefore looked dead on every common failure path
+(no Databricks client, no domain selected, server hiccup). The
+fix turns each handler into a four-state state machine — *idle →
+working → success | error* — with a visible state in every branch.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   - New `_renderProbeStatus(html)` / `_renderProbeWorking(label)` /
+     `_renderProbeError(prefix, data, fallback)` helpers writing
+     into the existing `#cohortUCProbeResult` div. The error helper
+     understands the OntoBricks error envelope and surfaces both
+     `message` (always) and `detail` (when present, in a small
+     `<code>` block) so the user sees *why* the call failed, not
+     just *that* it failed.
+   - New `_ucFetch(url, init)` wrapper that always returns
+     `{ok, status, data}`, parsing the JSON body even on non-2xx
+     so the error envelope is available to the renderer.
+   - `suggestUCTarget()` rewritten:
+     * Renders a "Working…" line with a Bootstrap spinner before
+       the request.
+     * On success, fills the three input fields and renders
+       a green "Picked `<fq>`" line with the backend-supplied
+       `provenance` ("settings" / "metadata" / "registry" /
+       "fallback"); also fires a success `_notify` toast.
+     * On HTTP error or thrown network error, renders the error
+       envelope inline AND fires an error toast.
+   - `probeUCTarget()` rewritten:
+     * Validates the three inputs before firing the request (was
+       previously sending blanks to the backend, which then 5xx'd
+       with a confusing message).
+     * Working spinner with the resolved fully-qualified name
+       being probed.
+     * On success, renders a one-line headline (✅ "Write access
+       looks good." / ❗ "Write access has issues — see below.")
+       above the per-check rows that were already there.
+     * Empty-`checks` edge case (server returned 200 + malformed
+       envelope) now surfaces as a warning instead of a wiped div.
+     * Toast for both success ("Write access OK") and the error /
+       warning paths.
+
+Modified files:
+- src/front/static/query/js/query-cohorts.js
+
+Tests: `uv run pytest -q` → 2028 passed in 69.44s (no Python
+change, JS-only fix). The four-state UI is exercisable manually
+via Digital Twin → Cohorts → Configure outputs → enable "Unity
+Catalog table" → Auto-pick / Test write access.
+
+## Cohort outputs modal — fix `[object Object]` in Auto-pick provenance
+
+Context: Follow-up bug from the previous Auto-pick / Test write fix.
+The success line read e.g.
+``Picked benoit_cayla.ontobricks.cohorts_consulting ([object Object])``
+because :meth:`CohortService.suggest_uc_target` returns ``provenance``
+as a **dict** (one entry per resolved field — ``{"catalog": "first
+source table", "schema": "first source table"}``) and the JS
+stringified it via the default ``Object.prototype.toString`` →
+``[object Object]``. The same bug affected the toast.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   - New `_formatProvenance(provenance)` helper that handles both
+     shapes the backend can return:
+     * a string ("registry"/"fallback"/etc.) — passed through;
+     * a dict — rendered as ``"from <source>"`` when every entry
+       has the same source, or ``"catalog from X, schema from Y"``
+       when they diverge; the empty-dict case collapses to an
+       empty string so the trailing ``()`` disappears.
+   - `suggestUCTarget()`: drop the ``provenance = ''`` default
+     destructure (which was lying — the field is rarely a string),
+     route the value through `_formatProvenance` before injecting
+     it into the success line.
+
+Modified files:
+- src/front/static/query/js/query-cohorts.js
+
+Tests: `uv run pytest -q` → 28/28 in `tests/test_dtwin_cohort.py`
+(the suggest-target backend tests already cover both
+single-source and mixed-source provenance dicts).
+
+## DatabricksAuth — disable CloudFetch in Apps mode
+
+Context: Production deploy of the dev sandbox app crashed during
+``DigitalTwin.run_build_task`` whenever the triplestore VIEW grew
+past the inline-results threshold:
+
+```
+Failed to read from VIEW benoit_cayla.ontobricks_020.triplestore_bigcustomers_V1:
+HTTP request failed: HTTPSConnectionPool(host='us-west-2.storage.cloud.databricks.com',
+port=443): … [Errno 111] Connection refused
+```
+
+Root cause: the `databricks-sql-connector` defaults to **CloudFetch**.
+Past a row/byte threshold the warehouse stops streaming results back
+through the Thrift channel and instead returns a presigned URL on
+``*.storage.cloud.databricks.com``; the client then opens a fresh
+HTTPS connection to that internal storage host to download chunks.
+The Databricks Apps network sandbox can't reach that host on 443
+(``Connection refused``), so the very first chunk download dies and
+the whole query fails. Local PAT runs always worked because a laptop
+has open egress.
+
+Small VIEWs / single-row probes never hit this code path (their
+results stay inline), which is why ``test_connection`` was green and
+why the bug only surfaced on real workloads like the bigcustomers
+build.
+
+Fix: when running inside a Databricks App, pass
+``use_cloud_fetch=False`` to ``databricks.sql.connect(...)``. The
+connector then keeps the inline Thrift result protocol on every
+query, going through the workspace endpoint we are already
+authenticated against. Local-dev PAT mode keeps CloudFetch enabled
+for performance — the flag is only set when ``is_app_mode`` is true.
+
+Changes:
+
+1. src/back/core/databricks/DatabricksAuth.py
+   - `get_sql_connection_params()`: when `self.is_app_mode`, set
+     `params["use_cloud_fetch"] = False` before adding the access
+     token. PAT path is unchanged. Updated the docstring with the
+     network-sandbox rationale so the next person reading the file
+     understands why local dev and Apps differ.
+
+Modified files:
+- src/back/core/databricks/DatabricksAuth.py
+
+Tests: `uv run pytest -q` → 2028 passed in 66.27s (no behaviour
+change in PAT/local-dev mode; the new `use_cloud_fetch=False` only
+applies when `DATABRICKS_APP_PORT` is set, which is not the case in
+CI). Smoke: `python -c "from back.core.databricks.DatabricksAuth
+import DatabricksAuth; …"` → params dict carries
+`use_cloud_fetch=False` only when `DATABRICKS_APP_PORT` is set.
+
+## Cohort designer — enforce camelCase rule names
+
+Context: Cohort rule names previously accepted free-form text
+("Exempt staffing pool"). The label was slugged to `exempt_staffing_pool`
+for the registry id, which forked the human-facing name from the
+identifier and made downstream consumers (URL params, UC table
+suffixes, registry keys, Stage 2 agent prompts) carry two slightly
+different strings for the same rule. The form now constrains the
+rule name to camelCase (alphanumeric only, starting with a letter),
+which is also a valid identifier — so `id = label` and there is one
+canonical name across the stack.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   - New `_toCamelCase(s)` helper: splits on any non-alphanumeric run,
+     capitalises each segment's first character, drops a leading-digit
+     prefix. Used for paste handling and for normalising labels from
+     the Stage 2 NL agent.
+   - New `_isValidRuleName(s)` helper enforcing
+     `^[A-Za-z][A-Za-z0-9]*$`.
+   - `_hookLabelInput()`: `input` event strips invalid characters live
+     (with cursor preservation) instead of slugging into a parallel id.
+     New `paste` handler camelizes the pasted text in-place so a user
+     can paste "Exempt staffing pool" and land on "ExemptStaffingPool".
+     The displayed `cohortRuleId` echoes `rule.label` directly for new
+     rules — no more slug fork.
+   - `_collectFromForm()`: `r.id = r.label` for new rules (was
+     `_slug(r.label)`).
+   - `save()`: validation now rejects labels that don't match
+     `_isValidRuleName`, with a toast pointing at the camelCase
+     example, in addition to the existing "label and entity required"
+     check.
+   - `_applyRuleFromAgent()`: agent-generated labels get camelized
+     before being applied so the form starts in a valid state and the
+     id stays consistent.
+   - Removed `_slug()` (only call site was the now-replaced label hook
+     + form collector).
+
+2. src/front/templates/partials/ontology/_ontology_cohorts.html
+   - Section 1 "Rule name" input: placeholder updated to
+     `e.g. ExemptStaffingPool`. Added `pattern="[A-Za-z][A-Za-z0-9]*"`,
+     `autocomplete="off"`, `spellcheck="false"`, and a `title` tooltip
+     so the browser-native validation popup matches the JS message.
+     Added a small `form-text` helper line under the input describing
+     the format with a `<code>ExemptStaffingPool</code>` example.
+
+Existing rules with non-camelCase labels are not auto-migrated — they
+keep displaying as-is when loaded, and the validator only fires on
+save. Editing such a rule will surface the camelCase requirement at
+that point, which preserves backward compatibility for read-only
+viewing.
+
+Modified files:
+- src/front/static/query/js/query-cohorts.js
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+
+Tests: `uv run pytest -q` → 2028 passed in 65.62s (no Python-side
+behaviour change; this is a frontend-only constraint that the backend
+already accepts via the existing `CohortRule.validate()` checks on
+non-empty `id` and `label`).
+
+## Cohort outputs — rule-scoped predicate + rule-scoped UC table
+
+Context: With camelCase rule names now enforced (previous section),
+two follow-ups make the **Configure outputs** flow self-describing
+about which rule produced each cohort artefact:
+
+1. The graph membership predicate switches from a single global
+   `:inCohort` to a per-rule `:inCohort<RuleId>` (e.g.
+   `<base>/inCohortExemptStaffingPool`). Multiple cohort rules can
+   now co-exist in the same graph without sharing a predicate column,
+   and SPARQL queries that target one rule's memberships no longer
+   need to filter by `cohort` URI prefix on top of the predicate.
+2. The Auto-pick UC target now proposes `cohorts_<snake_rule_name>`
+   instead of the previous domain-level `cohorts_<domain_slug>`. A
+   rule named `ExemptStaffingPool` lands on
+   `cohorts_exempt_staffing_pool`, which is what the user actually
+   wants (one Delta table per rule, named after the rule).
+
+Changes:
+
+1. src/back/core/graph_analysis/CohortVocabulary.py
+   - `in_cohort(base_uri, rule_id="")` now accepts an optional rule
+     id and returns `<base>/inCohort<RuleId>`. Spaces in `rule_id`
+     are stripped defensively (rule ids are camelCase by form
+     constraint, but legacy ids with hyphens/underscores still
+     produce valid URI fragments). Empty `rule_id` falls back to the
+     historic single-predicate form for documentation / introspection
+     callers; production materialise / delete paths always pass an
+     id. Updated the module docstring `Vocabulary` block accordingly.
+
+2. src/back/core/graph_analysis/CohortBuilder.py
+   - `materialize_to_graph()` and `_build_cohort_triples()` now pass
+     `rule.id` to `CohortVocabulary.in_cohort(...)`. The membership
+     triple's predicate is rule-scoped, and `delete_cohort_triples()`
+     receives the same rule-scoped predicate so a re-materialise only
+     wipes the rule's own membership rows (the URI-prefix branch
+     already scoped by rule, but the predicate branch did not).
+   - Comment update in the cleanup pass to mention `inCohort<RuleId>`.
+
+3. src/back/objects/digitaltwin/CohortService.py
+   - New `_snake_case(name)` static helper: splits camelCase /
+     PascalCase boundaries (`ExemptStaffingPool` →
+     `exempt_staffing_pool`, `URLPathUsers` → `url_path_users`),
+     collapses non-alphanumeric runs into `_`, trims edges. Returns
+     `""` on empty input so callers can fall back to the existing
+     domain slug.
+   - `suggest_uc_target(settings, rule_name="")`: when `rule_name` is
+     non-empty, the suggested `table_name` becomes
+     `cohorts_<snake(rule_name)>`. Otherwise the existing
+     `cohorts_<domain_slug>` fallback kicks in. Updated the docstring
+     priority list.
+
+4. src/back/objects/digitaltwin/DigitalTwin.py
+   - `cohort_suggest_uc_target(settings=None, rule_name="")` now
+     forwards the rule name to the service. Docstring documents the
+     new behaviour.
+
+5. src/api/routers/internal/dtwin.py
+   - `GET /cohorts/uc/suggest-target` now accepts an optional
+     `rule_name` query parameter (FastAPI default `""`) and forwards
+     it. The endpoint stays callable without the parameter for
+     backward compat with any external scripts.
+
+6. src/front/static/query/js/query-cohorts.js
+   - `suggestUCTarget()` now reads the active rule's label/id and
+     appends it as `?rule_name=<encoded>` so the backend can build
+     the rule-scoped table name. When no rule is selected (e.g. a
+     fresh draft with no name yet) the call falls back to the old
+     query-less URL.
+   - Materialise-confirmation modal: the per-rule predicate is shown
+     in the description (`<code>:inCohort<RuleId></code>`), so the
+     user sees exactly what will be written before clicking
+     Materialise.
+
+7. src/front/templates/partials/_cohort_modals.html
+   - Configure-outputs modal: graph-triples helper now reads
+     "Writes `:inCohort<RuleName>` triples..." and the UC-table
+     helper notes that Auto-pick proposes
+     `cohorts_<rule_name>` so the user understands the suggestion
+     before clicking it.
+
+8. docs/cohort_discovery.md
+   - "Configure outputs" section: describes the new
+     `?rule_name=` parameter on the suggest endpoint and the
+     `cohorts_<snake_rule_name>` proposal shape. The Idempotency
+     section calls out the rule-scoped predicate explicitly so the
+     `DELETE FROM` SQL example matches what the engine now emits.
+
+Tests:
+
+9. tests/test_cohort_models.py
+   - New `TestCohortVocabularyInCohort` class with four cases:
+     happy-path camelCase rule id, defensive whitespace stripping,
+     legacy unparameterised form, and `#`-terminated base URI.
+
+10. tests/test_cohort_builder.py
+    - `test_materialize_to_graph_inserts_expected_triples` now
+      asserts that every membership triple uses
+      `<base>/inCohort<rule.id>`, that the legacy `<base>/inCohort`
+      predicate is absent, and that `delete_cohort_triples` was
+      invoked with the rule-scoped predicate.
+
+11. tests/test_dtwin_cohort.py
+    - Three new cases under `TestUCTarget`:
+      `test_suggest_target_uses_rule_name_for_table` (camelCase →
+      snake_case), `test_suggest_target_handles_acronym_in_rule_name`
+      (`URLPathUsers` → `url_path_users`), and
+      `test_suggest_target_falls_back_to_domain_when_rule_missing`
+      (no `rule_name` → `cohorts_<domain_slug>`).
+
+Modified files:
+- src/back/core/graph_analysis/CohortVocabulary.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/back/objects/digitaltwin/CohortService.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/query/js/query-cohorts.js
+- src/front/templates/partials/_cohort_modals.html
+- docs/cohort_discovery.md
+- tests/test_cohort_models.py
+- tests/test_cohort_builder.py
+- tests/test_dtwin_cohort.py
+
+Backward-compat note: existing graphs that still hold the old
+`<base>/inCohort` membership triples will not be cleaned up by a
+re-materialise (the new `delete_cohort_triples` predicate filter
+won't match). Cohort discovery is a v0.3.0 feature that hasn't been
+deployed externally, so a manual one-off `DELETE FROM ... WHERE
+predicate = '<base>/inCohort'` is the documented migration path
+rather than runtime detection (which would slow every materialise on
+a clean graph).
+
+Tests: `uv run pytest -q` → 2035 passed in 64.94s (was 2028 — the
+seven new vocabulary / suggest-target / membership-predicate cases).
+
+## Cohort outputs — render the actual rule name in helper hints
+
+Context: The Configure-outputs modal still showed the literal
+placeholders `:inCohort<RuleName>` and `cohorts_<rule_name>` even
+when a rule was selected. The user expects the hints to show the
+*actual* predicate / table that will be written for the active rule,
+so the modal becomes a true preview rather than abstract syntax.
+
+Changes:
+
+1. src/front/templates/partials/_cohort_modals.html
+   - Wrapped the two helper-text snippets in `<code>` elements with
+     stable ids (`#cohortGraphPredHint` and `#cohortUcTableHint`)
+     so the JS can rewrite their `textContent` when the modal opens.
+     Default copy keeps the placeholder form so the modal still
+     reads sensibly when no rule is loaded.
+
+2. src/front/static/query/js/query-cohorts.js
+   - New `_toSnakeCase(s)` helper that mirrors the backend
+     `CohortService._snake_case` (Python) regex pair: splits a
+     lowercase/digit-to-uppercase boundary, splits a trailing-acronym
+     boundary (`URLPathUsers` → `url_path_users`), then lowercases and
+     collapses non-alphanumeric runs into `_`. Documented as a mirror
+     so the two stay in sync if the backend evolves.
+   - New `_refreshOutputHints()` reads `this.rule.label` /
+     `this.rule.id` and rewrites the two `<code>` hints to
+     `:inCohortExemptStaffingPool` and
+     `cohorts_exempt_staffing_pool` (using the snake-case helper),
+     falling back to the placeholders when the rule has no name yet.
+   - `openOutputsModal()` calls `_refreshOutputHints()` after seeding
+     the form so the hints always match the rule the user is about
+     to configure. No backend round-trip — the values are derived
+     locally and match what `/cohorts/uc/suggest-target?rule_name=…`
+     and the materialise pipeline produce.
+
+Modified files:
+- src/front/templates/partials/_cohort_modals.html
+- src/front/static/query/js/query-cohorts.js
+
+Tests: `uv run pytest -q` → 2035 passed in 65.50s (no Python-side
+behaviour change; the hints are computed in JS from values the
+backend already returns).
+
+## Cohort preview — clickable entity badge linking to the graph
+
+Context: The Preview pane listed each cohort member as a plain label
++ id chip + a long URI rendered as bold(-ish) `<code>` text. Two
+problems: (1) there was no obvious way to jump from a member to its
+node in the knowledge graph -- users had to copy the URI and paste
+it into the SigmaGraph focus box; (2) the URI dominated the line
+visually even though it's just metadata. The badge below promotes
+the entity name into a navigable affordance and demotes the URI to
+small, muted info text.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   - `_renderCohortMember(m)` now emits a clickable pill badge
+     (`<a class="cohort-preview-member-badge">`) instead of the old
+     plain label span.      The badge carries a `bi-diagram-3` icon, the
+     entity headline (label ⟂ id ⟂ uri fallback chain), and a
+     hover-revealed `bi-arrow-right-short` chevron. The href is
+     `/dtwin/?section=sigmagraph&focus=<encoded uri>` -- the same
+     deep-link pattern `Domain.cross_domain_redirect_url` mints and
+     `query.js#_switchDomainForBridge` already uses, so the badge
+     opens the existing Sigma graph focused on that member without
+     needing any new route. The link does an *in-page* navigation
+     (no `target="_blank"`) so the user stays inside the Digital
+     Twin shell rather than spawning a tab.
+   - When a member somehow lacks a URI (defensive -- the backend
+     always enriches today), the badge renders as a non-clickable
+     muted span via `cohort-preview-member-badge-disabled` instead
+     of producing an empty `href`.
+   - The URI line below is preserved (click-to-copy still works via
+     the unchanged `_renderPreviewBody` handler) but its tooltip
+     copy now reads "Entity URI -- click to copy" so the role is
+     unambiguous next to the new badge.
+
+2. src/front/static/query/css/query-cohorts.css
+   - New `.cohort-preview-member-badge{,:hover,:focus-visible}` rule:
+     pill shape, primary-tinted background, light border, no
+     underline; hover/focus deepens the tint and adds a subtle
+     shadow so it reads as a button.
+   - New `.cohort-preview-member-badge-arrow` rule fades the
+     external-link icon in on hover/focus only -- keeps the resting
+     state clean.
+   - New `.cohort-preview-member-badge-disabled` style for
+     URI-less members (muted, no cursor).
+   - `.cohort-preview-member-uri` is dialed down: smaller font
+     (`0.66rem` from `0.7rem`), `opacity: 0.75` at rest, full opacity
+     on hover, with a comment explaining that the URI is purely
+     informational now that the badge owns the action.
+   - `.cohort-preview-member-headline` switched from
+     `align-items: baseline` to `align-items: center` so the badge
+     pill aligns vertically with the id chip.
+   - Removed the orphan `.cohort-preview-member-label` rule (the
+     class was dropped from the markup above, no other references).
+
+Modified files:
+- src/front/static/query/js/query-cohorts.js
+- src/front/static/query/css/query-cohorts.css
+
+Tests: `uv run pytest -q` → 2035 passed in 65.90s (frontend-only
+visual / link change; no backend behaviour or contract touched).
+
+## Cohort preview — single-line member layout
+
+Context: After the badge change, each cohort member still spanned
+two visual lines (badge above, URI block below). Compacted to one
+line per member with the URI inlined in parentheses next to the
+badge -- denser preview, easier to scan.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   - `_renderCohortMember(m)`: dropped the inner
+     `<div class="cohort-preview-member-headline">` wrapper. The
+     `<li>` itself is now the flex row (class
+     `cohort-preview-member-row`) carrying badge → optional id chip →
+     URI span. The URI is wrapped in literal parentheses (`(http://...)`)
+     and rendered as an inline `<span class="cohort-preview-member-uri">`
+     instead of a block-level `<code>`. The `data-copy` attribute is
+     unchanged so the existing click-to-copy handler in
+     `_renderPreviewBody` still picks it up.
+
+2. src/front/static/query/css/query-cohorts.css
+   - New `.cohort-preview-member-row{...}` rule: same flex/align/gap
+     properties the old `.cohort-preview-member-headline` rule had,
+     applied to the `<li>` directly. Comment notes that
+     `flex-wrap: wrap` lets long URIs spill onto a second visual line
+     within the same row instead of overflowing horizontally.
+   - `.cohort-preview-member-uri`: switched from `display: block` to
+     `display: inline`, dropped `margin-top`, kept the muted
+     0.66rem / 0.75-opacity styling and the hover/copied transitions.
+   - Removed the now-orphan `.cohort-preview-member-headline` rule
+     (the wrapping div is gone from the markup).
+
+Modified files:
+- src/front/static/query/js/query-cohorts.js
+- src/front/static/query/css/query-cohorts.css
+
+Tests: not re-run -- this is a CSS/markup tweak with no Python
+touchpoint; the previous run on the same branch (2035 passed in
+65.90s) covers the surrounding code paths unchanged.
+
+## Cohort run page — drop redundant rule-id chip from summary card
+
+Context: On Digital Twin → Cohorts the rule summary card showed the
+bolded rule label on the left and the raw rule id (e.g.
+`consultant_teams_staffed_on_the_same_project_with_matching_compliance_type`)
+as a small `text-muted` `<code>` chip on the right. For legacy rules
+whose id is a snake-cased slug of the label, the chip read like a
+cryptic "second name" and added no information. Removed.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   - `_renderRuleSummary()`: dropped the
+     `<code class="small text-muted">${r.id}</code>` element from the
+     title row. The flanking `<div class="d-flex
+     justify-content-between align-items-start">` wrapper became
+     pointless (only one child left) and was flattened to a plain
+     `<div>`. The free-form `description` field stays as the muted
+     tail of the title line. Comment added explaining the rationale
+     so the next reader doesn't reinstate the chip.
+
+Modified files:
+- src/front/static/query/js/query-cohorts.js
+
+Tests: not re-run -- pure markup deletion with no behaviour change
+and no Python touchpoint.
+
+## Cohort run page — show both outputs in the rule recap
+
+Context: When a rule was configured with *both* graph triples and a
+UC table (the common production case), the rule summary card on the
+Digital Twin → Cohorts run page only displayed the UC table FQN
+(e.g. `benoit_cayla.ontobricks.cohorts_staffing001`) -- the graph
+half silently disappeared. The old branch was a binary
+``ucCfg.table_name ? <code>fq</code> : "graph triples only"``,
+which only had two states even though the underlying flags
+(`output.graph` and `output.uc_table`) are independent.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   - `_renderRuleSummary()`: replaced the binary ``ucCell`` ternary
+     with an enumeration of all four states. Computes
+     `graphOn = r.output?.graph !== false` (matches the
+     `openOutputsModal` checkbox default) and
+     `ucOn = !!(ucCfg && ucCfg.table_name)`, then composes a
+     "graph triples + UC `<fq>`" string by pushing each enabled sink
+     into an array and joining with ` + `. When both flags are
+     disabled the cell renders a muted "no outputs" badge so the
+     user notices the rule won't write anything. Comment explains
+     the four-state model so the next reader doesn't reintroduce
+     the binary branch.
+
+Modified files:
+- src/front/static/query/js/query-cohorts.js
+
+Tests: not re-run -- presentation-only change in the summary card
+with no Python touchpoint and no contract change.

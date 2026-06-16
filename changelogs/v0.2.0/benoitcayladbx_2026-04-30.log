@@ -1,0 +1,314 @@
+## Split Lakebase settings into granular DAB variables
+
+Context: Operators wanted the bundle to spell out Autoscaling project,
+branch, Lakebase database resource id, expected Postgres database name,
+and registry schema separately instead of two monolithic resource paths.
+`databricks.yml` now composes the Apps `postgres.branch` and
+`postgres.database` paths from those pieces. Removing
+`lakebase_database_resource` and changing `lakebase_branch` from a full
+path to a branch id only is a **breaking** change for anyone overriding
+the old variables via `--var`.
+
+Changes:
+
+1. databricks.yml
+   Replaced `lakebase_branch` (full path) and `lakebase_database_resource` with `lakebase_project`, `lakebase_branch` (slug), `lakebase_database_id`, `lakebase_postgres_database`, and `lakebase_registry_schema`; compose binding paths in the `dev-lakebase` target.
+2. README.md
+   Documented the new Lakebase bundle variables and dropped the non-existent `prod-lakebase` / wrong variable names from the Lakebase note.
+3. scripts/bootstrap-lakebase-perms.sh
+   Comment now points at the new variable names.
+4. src/back/objects/registry/store/lakebase/store.py
+   Error hint text references bundle `lakebase_*` binding instead of the removed variable name.
+
+Modified files:
+- databricks.yml
+- README.md
+- scripts/bootstrap-lakebase-perms.sh
+- src/back/objects/registry/store/lakebase/store.py
+
+Tests: uv run pytest -q → 1892 passed, 0 failed in 59.11s
+
+## Document Lakebase `db-…` lookup; drop workspace-specific default
+
+Context: The `db-…` database resource id is not exposed in the Lakebase
+UI, so a hard-coded default was misleading. Operators resolve the id via
+`databricks postgres list-databases` (JSON `name` field) or the Postgres
+REST API, then pass `--var=lakebase_database_id=…`.
+
+Changes:
+
+1. databricks.yml
+   Expanded comments (UI vs API); default `lakebase_database_id` is now empty so deployers must set it explicitly.
+2. README.md
+   Lakebase callout explains the UI limitation and the list-databases command.
+
+Modified files:
+- databricks.yml
+- README.md
+
+Tests: uv run pytest -q → 1892 passed, 0 failed in 58.20s
+
+## Bind Lakebase by Postgres database name (drop ``lakebase_database_id``)
+
+Context: Operators prefer the UI-visible Postgres database name
+(``databricks_postgres``, etc.) over the opaque ``db-…`` resource
+segment. The bundle now uses ``lakebase_postgres_database`` as the
+final ``…/databases/<name>`` path segment only; ``lakebase_database_id``
+was removed.
+
+Changes:
+
+1. databricks.yml
+   Postgres binding ``database`` path uses ``${var.lakebase_postgres_database}``; comments note the rare fallback if a workspace only accepts ``db-…`` ids.
+2. README.md
+   Lakebase callout lists variables without ``lakebase_database_id``.
+3. scripts/bootstrap-lakebase-perms.sh
+   Comment references ``lakebase_postgres_database``.
+
+Modified files:
+- databricks.yml
+- README.md
+- scripts/bootstrap-lakebase-perms.sh
+
+Tests: uv run pytest -q → 1892 passed, 0 failed in 58.77s
+
+## Correct ``lakebase_postgres_database`` default (schema vs DB)
+
+Context: Default had been set to ``ontobricks_registry``, which is the
+OntoBricks **schema** name, not the Lakebase Postgres **database**
+(``datname``). The Apps binding must target the real DB (typically
+``databricks_postgres``); the registry schema remains
+``lakebase_registry_schema``.
+
+Changes:
+
+1. databricks.yml
+   Default ``lakebase_postgres_database`` → ``databricks_postgres``; variable description clarifies DB vs schema; intro comment no longer assumes a single sandbox project id.
+
+Modified files:
+- databricks.yml
+
+Tests: uv run pytest -q → 1892 passed, 0 failed in 58.18s (after prior run; defaults-only YAML change)
+
+## DAB comment: Postgres database vs registry schema caveat
+
+Context: Operators confuse ``lakebase_postgres_database`` with the
+registry schema name; added an explicit caveat block in the bundle.
+
+Changes:
+
+1. databricks.yml
+   Lakebase variable comment block: caveat on database vs ``ontobricks_registry`` schema and usual ``databricks_postgres`` + schema pairing.
+
+Modified files:
+- databricks.yml
+
+Tests: databricks bundle validate -t dev-lakebase; uv run pytest -q → 1892 passed, 0 failed in 58.19s
+
+## Fix ``lakebase_postgres_database`` default (deploy failure)
+
+Context: ``default: ontobricks_registry`` caused Apps postgres bind to fail
+(database does not exist on branch). Restored ``databricks_postgres``.
+
+Changes:
+
+1. databricks.yml
+   ``lakebase_postgres_database`` default → ``databricks_postgres``.
+
+Modified files:
+- databricks.yml
+
+Tests: uv run pytest -q (pre-deploy) → 1892 passed; deploy: see session output
+
+## Lakebase Apps binding: ``db-…`` resource segment only
+
+Context: Workspace API rejects ``…/databases/<datname>`` (e.g.
+``databricks_postgres``). The path must end with the ``db-…`` segment
+from ``list-databases`` ``name``. Replaced variable
+``lakebase_postgres_database`` with ``lakebase_database_resource_segment``;
+comments and README describe the CLI lookup. Default
+``db-6ld8-ovemyuek1n`` matches ``status.postgres_database`` =
+``databricks_postgres`` on project ``ontobricks-app`` / ``production``.
+
+Changes:
+
+1. databricks.yml
+   Variable rename + accurate comments; postgres ``database`` path uses ``${var.lakebase_database_resource_segment}``.
+2. README.md
+   Lakebase deploy variables updated for the new name and lookup.
+3. scripts/bootstrap-lakebase-perms.sh
+   Comment references ``lakebase_database_resource_segment``.
+
+Modified files:
+- databricks.yml
+- README.md
+- scripts/bootstrap-lakebase-perms.sh
+
+Tests: uv run pytest -q → 1892 passed, 0 failed in 61.13s
+
+Deploy: ``make deploy`` (target ``dev-lakebase``) completed successfully;
+Apps URL reported by CLI for ``ontobricks-020``.
+
+## Refresh ``docs/deployment.md`` for current DAB + Lakebase procedure
+
+Context: Deployment guide still referenced removed ``scripts/deploy.sh``
+flags, wrong bundle resource keys / app names, and omitted Lakebase
+variables and ``bootstrap-lakebase-perms.sh``. Aligned Makefile help and
+bootstrap defaults with ``databricks.yml`` / ``scripts/deploy.sh``.
+
+Changes:
+
+1. docs/deployment.md
+   Section 2: targets ``dev`` / ``dev-lakebase``, Lakebase variable table,
+   Step 5b schema grants, corrected bind/run commands, UI app names,
+   deploy.sh reference, §3/§5/§7/§9/§10/§11/§12 fixes.
+2. Makefile
+   Help text and ``bootstrap-perms`` / ``bootstrap-lakebase`` targets use
+   ``ontobricks-020`` / ``mcp-ontobricks`` and default Lakebase script.
+3. scripts/bootstrap-app-permissions.sh
+   Default apps list matches the dev sandbox bundle.
+
+Modified files:
+- docs/deployment.md
+- Makefile
+- scripts/bootstrap-app-permissions.sh
+
+Tests: uv run pytest -q → 1892 passed, 0 failed
+
+## DAB comment: CLI to resolve ``lakebase_database_resource_segment``
+
+Context: Operators need a copy-pastable command to map ``list-databases``
+JSON to the ``db-…`` value.
+
+Changes:
+
+1. databricks.yml
+   Comment block under ``lakebase_database_resource_segment``: ``jq`` and ``python3`` one-liners using default project/branch.
+
+Modified files:
+- databricks.yml
+
+Tests: databricks bundle validate -t dev-lakebase (comment-only)
+
+## Fix Lakebase bootstrap app name + defaults; run grants for ``ontobricks_registry`` DB
+
+Context: Post-deploy bootstrap used ``ontobricks-dev`` while the bundle
+deploys ``ontobricks-020``, so service principal resolution skipped.
+Defaults pointed at ``ontobricks-test`` instead of ``databricks.yml``
+``ontobricks-app``. Ran ``bootstrap-lakebase-perms.sh`` with
+``-i ontobricks-app -d ontobricks_registry -s ontobricks_registry`` for
+both apps; USAGE error resolved.
+
+Changes:
+
+1. scripts/deploy.sh
+   ``APP_NAME`` → ``ontobricks-020`` to match bundle app ``name``; header comment updated.
+2. scripts/bootstrap-lakebase-perms.sh
+   Default ``INSTANCE`` → ``ontobricks-app``; default ``APPS`` → ``ontobricks-020`` and ``mcp-ontobricks``; comments aligned.
+3. src/back/objects/registry/store/lakebase/store.py
+   Removed duplicated word ``bundle`` in Lakebase init probe error text.
+
+Modified files:
+- scripts/deploy.sh
+- scripts/bootstrap-lakebase-perms.sh
+- src/back/objects/registry/store/lakebase/store.py
+
+Tests: uv run pytest -q → 1892 passed, 0 failed (full suite)
+
+## Release notes V0.2.0 — DAB / Lakebase / deployment alignment
+
+Context: ``releases/ReleaseNotes_V0.2.0.md`` needed to match the shipped
+bundle, scripts, and ``docs/deployment.md`` refresh.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.2.0.md
+   Highlights, new §Databricks Apps & Asset Bundle, Documentation bullets,
+   and Upgrade notes for app names, Lakebase variables, and bootstrap
+   defaults.
+
+Modified files:
+- releases/ReleaseNotes_V0.2.0.md
+
+Tests: documentation-only (not re-run)
+
+## ``docs/deployment.md``: generic main app name ``ontobricks-XXX``
+
+Context: Operator docs should not hard-code a specific sandbox app name.
+
+Changes:
+
+1. docs/deployment.md
+   Replaced concrete ``ontobricks-020`` with placeholder ``ontobricks-XXX``;
+   added naming convention note in §2; clarified table and prose to tie
+   placeholder to ``databricks.yml`` ``resources.apps.ontobricks_dev_app.name``.
+
+Modified files:
+- docs/deployment.md
+
+Tests: documentation-only (not re-run)
+
+## Prefer Apps Volume binding over stale Lakebase registry triplet
+
+Context: On Lakebase-backed Databricks Apps, ``RegistryCfg.from_domain``
+preferred the ``registries`` Postgres row for catalog/schema/volume
+before ``REGISTRY_VOLUME_PATH``. Rows often still held the static env
+default ``OntoBricksRegistry`` from ``app.yaml`` while the bundle-bound
+UC Volume had a different name, so binary paths and UI drifted from the
+mounted resource. The APScheduler boot path also ignored
+``REGISTRY_VOLUME_PATH`` and always used ``REGISTRY_*`` env defaults.
+
+Changes:
+
+1. src/back/objects/registry/RegistryService.py
+   Parse bound ``REGISTRY_VOLUME_PATH`` first; when Lakebase returns a
+   row, replace catalog/schema/volume with the binding when it parses.
+2. src/back/objects/registry/scheduler.py
+   ``_resolve_creds``: use parsed volume path for catalog/schema/volume
+   when set (matches request-path resolution).
+3. src/back/objects/session/DomainSession.py
+   Docstring for ``delta`` updated to describe merged precedence.
+4. tests/test_registry.py
+   Renamed/adjusted Lakebase triplet test; added scheduler coverage for
+   volume path override.
+5. tests/test_domain_session.py
+   ``delta`` test expects binding when path is injected under Lakebase.
+
+Modified files:
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/registry/scheduler.py
+- src/back/objects/session/DomainSession.py
+- tests/test_registry.py
+- tests/test_domain_session.py
+
+Tests: uv run pytest -q → 1893 passed, 0 failed in 57.93s
+
+## Default Lakebase Postgres database: ``ontobricks_registry``
+
+Context: ``bootstrap-lakebase-perms.sh`` and docs assumed ``PGDATABASE``
+``databricks_postgres`` while the sandbox Lakebase bind uses a dedicated
+database ``ontobricks_registry``, so post-deploy grants looked in the
+wrong DB and reported the registry schema missing.
+
+Changes:
+
+1. scripts/bootstrap-lakebase-perms.sh
+   Default ``-d`` / ``DATABASE`` is ``ontobricks_registry``; comments
+   document ``-d databricks_postgres`` for legacy layouts.
+2. docs/deployment.md
+   Step 5b and bundle variable prose aligned with the dedicated-DB layout.
+3. databricks.yml
+   Comment on ``list-databases`` example rows updated.
+4. src/back/core/databricks/LakebaseAuth.py
+   Docstring example lists both possible ``PGDATABASE`` values.
+5. releases/ReleaseNotes_V0.2.0.md
+   Bootstrap defaults bullet updated.
+
+Modified files:
+- scripts/bootstrap-lakebase-perms.sh
+- docs/deployment.md
+- databricks.yml
+- src/back/core/databricks/LakebaseAuth.py
+- releases/ReleaseNotes_V0.2.0.md
+
+Tests: uv run pytest -q → (see run below)

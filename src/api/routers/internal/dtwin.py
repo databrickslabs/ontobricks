@@ -38,6 +38,55 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/dtwin", tags=["Query"])
 
+# Canonical rdf:type predicate. Neighbour expansion must preserve type
+# triples so the graph viewer can group/colour expanded nodes by their
+# declared entity type rather than their raw identifier (issue #52).
+_RDF_TYPE_URI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+
+
+def _is_type_predicate(predicate: str) -> bool:
+    """Return True for ``rdf:type`` predicates (full URI or ``#type``/``/type``)."""
+    if not predicate:
+        return False
+    return (
+        predicate == _RDF_TYPE_URI
+        or predicate.endswith("#type")
+        or predicate.endswith("/type")
+    )
+
+
+def _filter_neighbor_triples(
+    rows: list[dict[str, str]],
+    visited: set[str],
+    limit: int,
+) -> list[dict[str, str]]:
+    """Reduce raw store rows to the triples the graph viewer can render.
+
+    A triple is kept when its object is a literal, when its object URI is
+    part of *visited* (so edges have both endpoints rendered), or when it is
+    an ``rdf:type`` triple. Type triples are preserved even though the class
+    URI is never in *visited*: the front-end groups and colours nodes by
+    their declared type, so dropping them makes freshly expanded nodes fall
+    back to identifier-based grouping with random colours (issue #52).
+    """
+    triples: list[dict[str, str]] = []
+    seen: set = set()
+    for r in rows:
+        s = r.get("subject", "") or ""
+        p = r.get("predicate", "") or ""
+        o = r.get("object", "") or ""
+        key = (s, p, o)
+        if key in seen:
+            continue
+        is_uri_obj = o.startswith("http://") or o.startswith("https://")
+        if is_uri_obj and o not in visited and not _is_type_predicate(p):
+            continue
+        seen.add(key)
+        triples.append({"subject": s, "predicate": p, "object": o})
+        if len(triples) >= limit:
+            break
+    return triples
+
 
 # ===========================================
 # Query Execution
@@ -854,20 +903,18 @@ async def sync_info(
         )
         return out
 
-    async def _dt_exist():
-        t_s = _t.monotonic()
-        # Build section must reflect the live state of Lakebase: never serve a
-        # stale `lakebase_table_exists=False` left behind by a previous timeout.
-        out = await dt.get_or_fetch_dt_existence(settings, force_refresh=True)
-        logger.debug(
-            "sync_info: dt existence took %.0fms", (_t.monotonic() - t_s) * 1000
-        )
-        return out
+    # DT existence is served cache-first so the Build page paints instantly.
+    # The live probe is a cold SQL-warehouse / Lakebase wake-up that used to
+    # block this endpoint for tens of seconds; it now runs off the request path.
+    # The frontend confirms the live state with a non-blocking follow-up to
+    # `/dtwin/sync/dt-existence` whenever `dt_existence_pending` is set.
+    cached_existence = dt.get_ts_cache("dt_existence")
+    dt_exist = cached_existence or dt.pending_dt_existence(settings)
+    dt_existence_pending = True
 
-    _, ts_status, dt_exist = await asyncio.gather(
+    _, ts_status = await asyncio.gather(
         _schedule_sync(),
         _graph_status(),
-        _dt_exist(),
     )
 
     if domain.last_build and domain.last_build != last_build:
@@ -889,6 +936,7 @@ async def sync_info(
         "triplestore_status": ts_status,
         "domain_info": domain_info_data,
         "dt_existence": dt_exist,
+        "dt_existence_pending": dt_existence_pending,
         "changes": {"needs_rebuild": needs_rebuild},
     }
 
@@ -1585,6 +1633,190 @@ async def dtwin_assistant_chat(
     }
 
 
+@router.post("/assistant/chat/stream")
+async def dtwin_assistant_chat_stream(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Stream a single Graph Chat turn using Server-Sent Events.
+
+    Sends one SSE event per agent step as it happens, then a final
+    ``done`` event with the complete reply.  The session cache is
+    updated server-side after the stream closes, identical to the
+    blocking ``POST /assistant/chat`` endpoint.
+
+    Event shapes::
+
+        data: {"type": "step",  "step_type": "tool_call",   "tool_name": "...", "content": "..."}
+        data: {"type": "step",  "step_type": "tool_result", "tool_name": "...", "duration_ms": 123}
+        data: {"type": "done",  "reply": "...",  "tools": [...], "usage": {...}, "iterations": N}
+        data: {"type": "error", "message": "..."}
+    """
+    import asyncio
+    import json as _json
+    import os
+
+    from fastapi.responses import StreamingResponse
+    from api.routers.internal._helpers import map_route_errors
+    from back.core.helpers import get_databricks_host_and_token
+    from agents.agent_dtwin_chat import run_agent as run_chat_agent
+    from agents.engine_base import AgentStep
+
+    data = await request.json()
+    user_message = (data.get("message") or "").strip()
+    client_history = data.get("history") or []
+    describe_depth = max(1, min(int(data.get("depth") or 1), 5))
+
+    if not user_message:
+        raise ValidationError("No message provided")
+
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    chat_cache = _chat_cache(session_mgr)
+    limit = _chat_clamp_limit(chat_cache.get("limit", _CHAT_DEFAULT_LIMIT))
+
+    saved_history = chat_cache["history"].get(domain_key) or []
+    history = saved_history if saved_history else client_history
+
+    host, token = get_databricks_host_and_token(domain, settings)
+    if not host or not token:
+        raise ValidationError("Databricks credentials not configured")
+
+    llm_endpoint = (domain.info or {}).get("llm_endpoint", "") or ""
+    if not llm_endpoint:
+        llm_endpoint = _auto_discover_llm_endpoint(domain, settings)
+    if not llm_endpoint:
+        raise ValidationError(
+            "No LLM serving endpoint available. Please set one in Domain Settings.",
+        )
+
+    reg = DigitalTwin.resolve_registry(session_mgr, settings)
+    registry_params = {
+        "registry_catalog": reg.get("catalog") or "",
+        "registry_schema": reg.get("schema") or "",
+        "registry_volume": reg.get("volume") or "",
+    }
+
+    app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+    base_url = f"http://localhost:{app_port}"
+    session_cookies = dict(request.cookies or {})
+
+    _FORWARDED_HEADER_PREFIXES = ("x-forwarded-", "x-real-")
+    _FORWARDED_EXTRA_HEADERS = {"x-csrf-token", "referer"}
+    session_headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower().startswith(_FORWARDED_HEADER_PREFIXES)
+        or k.lower() in _FORWARDED_EXTRA_HEADERS
+    }
+
+    domain_name = _chat_resolve_domain_name(domain)
+
+    logger.info(
+        "GraphChat/stream: user_message=%s, domain=%s, endpoint=%s",
+        user_message[:80],
+        domain_name,
+        llm_endpoint,
+    )
+
+    loop = asyncio.get_event_loop()
+    event_queue: asyncio.Queue = asyncio.Queue()
+
+    def _on_event(step: AgentStep) -> None:
+        """Forward an AgentStep from the sync thread to the async generator."""
+        asyncio.run_coroutine_threadsafe(event_queue.put(step), loop).result(timeout=10)
+
+    async def _run_agent_task() -> None:
+        try:
+            with map_route_errors("Graph Chat stream agent failed", logger):
+                result = await asyncio.to_thread(
+                    run_chat_agent,
+                    host=host,
+                    token=token,
+                    endpoint_name=llm_endpoint,
+                    base_url=base_url,
+                    domain_name=domain_name,
+                    registry_params=registry_params,
+                    session_cookies=session_cookies,
+                    session_headers=session_headers,
+                    user_message=user_message,
+                    conversation_history=history,
+                    describe_depth=describe_depth,
+                    on_event=_on_event,
+                )
+            await event_queue.put(("done", result))
+        except Exception as exc:
+            await event_queue.put(("error", str(exc)))
+
+    agent_task = asyncio.create_task(_run_agent_task())
+
+    async def _generate():
+        try:
+            while True:
+                item = await event_queue.get()
+
+                if isinstance(item, tuple):
+                    kind, payload = item
+                    if kind == "done":
+                        agent_result = payload
+                        # Update session cache exactly like the blocking endpoint
+                        prior = list(history)
+                        if prior and prior[-1].get("role") == "user" and (
+                            prior[-1].get("content") or ""
+                        ).strip() == user_message.strip():
+                            prior = prior[:-1]
+                        prior.append({"role": "user", "content": user_message})
+                        prior.append({"role": "assistant", "content": agent_result.reply or ""})
+                        chat_cache["history"][domain_key] = _chat_trim(prior, limit)
+                        _chat_save_cache(session_mgr, chat_cache)
+
+                        tool_calls = [
+                            {"name": s.tool_name, "duration_ms": s.duration_ms}
+                            for s in agent_result.steps
+                            if s.step_type == "tool_result"
+                        ]
+                        yield "data: " + _json.dumps({
+                            "type": "done",
+                            "reply": agent_result.reply or "",
+                            "tools": tool_calls,
+                            "iterations": agent_result.iterations,
+                            "usage": agent_result.usage,
+                            "success": agent_result.success,
+                        }) + "\n\n"
+                        break
+
+                    else:  # error
+                        yield "data: " + _json.dumps({
+                            "type": "error",
+                            "message": payload,
+                        }) + "\n\n"
+                        break
+
+                elif isinstance(item, AgentStep):
+                    yield "data: " + _json.dumps({
+                        "type": "step",
+                        "step_type": item.step_type,
+                        "tool_name": item.tool_name,
+                        "content": item.content,
+                        "duration_ms": item.duration_ms,
+                    }) + "\n\n"
+
+        finally:
+            if not agent_task.done():
+                agent_task.cancel()
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @router.get("/assistant/history")
 async def dtwin_assistant_history_get(
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1916,22 +2148,7 @@ async def dtwin_neighbors(
 
         rows = store.get_triples_for_subjects(query_table, list(visited))
 
-        triples: list[dict[str, str]] = []
-        seen: set = set()
-        for r in rows:
-            s = r.get("subject", "") or ""
-            p = r.get("predicate", "") or ""
-            o = r.get("object", "") or ""
-            key = (s, p, o)
-            if key in seen:
-                continue
-            is_uri_obj = o.startswith("http://") or o.startswith("https://")
-            if is_uri_obj and o not in visited:
-                continue
-            seen.add(key)
-            triples.append({"subject": s, "predicate": p, "object": o})
-            if len(triples) >= limit:
-                break
+        triples = _filter_neighbor_triples(rows, visited, limit)
 
         return {
             "success": True,

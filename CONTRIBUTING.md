@@ -368,6 +368,48 @@ uv run pytest tests/test_home_service.py -q
 uv run pytest -v
 ```
 
+### Live integration (deployed Databricks App)
+
+Two suites can run against a **deployed** OntoBricks instance instead of an
+in-process server. Both mint a workspace OAuth token from the active Databricks
+CLI profile, so log in once:
+
+```bash
+databricks auth login --profile fevm-ontobricks-int \
+  --host https://fevm-ontobricks-int.cloud.databricks.com
+```
+
+**HTTP/JSON-RPC smoke** (`tests/live_integration/`):
+
+```bash
+export ONTOBRICKS_LIVE_BASE=https://ontobricks-030-<workspace-id>.aws.databricksapps.com
+export ONTOBRICKS_LIVE_MCP_BASE=https://mcp-ontobricks-<workspace-id>.aws.databricksapps.com
+export DATABRICKS_CONFIG_PROFILE=fevm-ontobricks-int
+uv run pytest tests/live_integration/ -v -m live_integration --no-cov
+```
+
+**Live e2e — the same Playwright user-journey flows, against the deployed app:**
+
+```bash
+export ONTOBRICKS_LIVE_BASE=https://ontobricks-030-<workspace-id>.aws.databricksapps.com
+export DATABRICKS_CONFIG_PROFILE=fevm-ontobricks-int
+uv run pytest tests/e2e/ -v --no-cov
+```
+
+When `ONTOBRICKS_LIVE_BASE` is set the e2e suite starts no local server: the
+Playwright browser context carries an `Authorization: Bearer` header (so the
+Apps gateway authenticates every request) and a route handler corrects the
+deployed app's wrong-host trailing-slash redirects. Environment-specific tests
+(assume the local admin/no-auth server) and durable-mutating tests are
+auto-skipped. Opt into the mutating ones with — **CAUTION, the int workspace is
+shared**:
+
+```bash
+ONTOBRICKS_LIVE_ALLOW_MUTATING=1 uv run pytest tests/e2e/ -v --no-cov
+```
+
+Unset `ONTOBRICKS_LIVE_BASE` to run e2e the normal way (local uvicorn subprocess).
+
 ### Writing Tests
 
 - Place tests in the `tests/` directory

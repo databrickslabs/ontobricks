@@ -1,0 +1,107 @@
+/* Domain → Audit trail: unified review + build timeline */
+
+.audit-timeline {
+    position: relative;
+    padding-left: 0.5rem;
+}
+
+.audit-item {
+    position: relative;
+    display: flex;
+    gap: 0.75rem;
+    padding-bottom: 1.1rem;
+}
+
+/* connecting vertical line between markers */
+.audit-item:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 15px;
+    top: 32px;
+    bottom: -4px;
+    width: 2px;
+    background: var(--db-border, #e0e0e0);
+}
+
+.audit-marker {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    background: var(--db-bg-secondary, #f5f6f8);
+    border: 1px solid var(--db-border, #e0e0e0);
+    color: var(--db-text-muted, #666);
+    z-index: 1;
+}
+
+.audit-marker-review {
+    color: #fff;
+    background: var(--db-primary, #ff3621);
+    border-color: var(--db-primary, #ff3621);
+}
+
+.audit-marker-build {
+    color: var(--db-text, #1e1e1e);
+    background: #fff;
+}
+
+.audit-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: var(--db-bg-secondary, #f5f6f8);
+    border: 1px solid var(--db-border, #e0e0e0);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem;
+}
+
+.audit-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+}
+
+.audit-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.audit-chip {
+    font-size: 0.7rem;
+    font-family: var(--bs-font-monospace, monospace);
+    background: #fff;
+    border: 1px solid var(--db-border, #e0e0e0);
+    border-radius: 4px;
+    padding: 0 0.35rem;
+    color: var(--db-text-muted, #666);
+}
+
+.audit-time {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--db-text-muted, #666);
+    white-space: nowrap;
+}
+
+.audit-details {
+    padding: 0.05rem 0.4rem;
+    line-height: 1.2;
+}
+
+.audit-comment {
+    margin-top: 0.35rem;
+    font-size: 0.9rem;
+    color: var(--db-text, #1e1e1e);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.audit-meta {
+    margin-top: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--db-text-muted, #666);
+}

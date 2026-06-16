@@ -1,0 +1,801 @@
+## Convert PDFs (and other binary docs) for ontology generation via `ai_parse_document`
+
+Context: Uploaded documents could be PDFs/Office/images (the upload input has no
+type filter and the UI previews them), but the OWL-generator and business-rules
+agents read documents through `tool_read_document`, which did a raw UTF-8 decode
+and returned `"Binary file – cannot read as text"` for any binary file. As a
+result, PDFs uploaded by users never actually fed ontology generation. This
+change converts binary documents to markdown on the fly, at read time, using the
+Databricks `ai_parse_document` SQL function on the configured SQL warehouse, with
+a graceful fallback to the previous behaviour when no warehouse is available.
+
+Changes:
+
+1. src/agents/tools/context.py
+   Added `warehouse_id: str = ""` to `ToolContext` so document tools can reach a
+   SQL warehouse for binary parsing. Empty means "no warehouse" (binary docs are
+   skipped, no regression for text docs).
+2. src/agents/tools/documents.py
+   - Added `_PARSEABLE_BINARY_EXT` (pdf/png/jpg/jpeg/docx/doc/pptx/ppt) and
+     `_file_extension` helper.
+   - Added `_parse_binary_document(ctx, file_path)`: builds a `DatabricksClient`
+     from `(host, token, warehouse_id)` and runs
+     `SELECT to_json(ai_parse_document(content, map('version', '2.0'))) FROM READ_FILES(<path>, format => 'binaryFile')`
+     (output schema pinned to v2.0),
+     then extracts markdown via `_extract_markdown_from_parsed`. Verified live
+     against the workspace: `ai_parse_document` returns output schema v2.0 where
+     text lives in `document.elements[].content` (figures expose an AI
+     `description`) and `document.pages[]` carries only `id`/`image_uri`. The
+     extractor prefers elements, then falls back to page `content`, then a
+     top-level markdown blob. Returns `None` (caller falls back) when no
+     warehouse is set or the
+     query/parse fails or yields nothing. Caches parsed text per file path on the
+     context to avoid re-parsing within a single agent run.
+   - Refactored truncation/payload into `_doc_payload(...)` and branched
+     `tool_read_document`: parseable binary extensions go through the parser
+     (returning `parsed_with: "ai_parse_document"`), unknown-extension binaries
+     fall back to the parser on UTF-8 decode failure, and plain text keeps the
+     existing decode path. Updated the `read_document` tool description.
+3. src/agents/agent_owl_generator/engine.py
+   `run_agent` accepts `warehouse_id` and sets it on the `ToolContext`.
+4. src/agents/agent_business_rules_generator/engine.py
+   `run_agent` accepts `warehouse_id` and sets it on the `ToolContext` (shares the
+   same document tool).
+5. src/back/objects/ontology/Ontology.py
+   `generate_with_agent` and `generate_rules_with_agent` accept `warehouse_id`
+   and forward it to the respective agent `run_agent`.
+6. src/api/routers/internal/ontology.py
+   Imported `resolve_warehouse_id`; `/ontology/wizard/generate-async` and
+   `/ontology/business-rules/generate-async` resolve the warehouse and pass it
+   into the agent calls.
+7. tests/units/agents/test_documents_tool.py (new)
+   Covers `_extract_markdown_from_parsed` (pages/elements/markdown/empty), text
+   files unchanged, binary-without-warehouse error, binary-with-warehouse parse
+   (mocked `DatabricksClient.execute_query`), per-run caching, truncation, and
+   warehouse-failure fallback.
+8. docs/data-access.md
+   Documented binary-document conversion via `ai_parse_document`, the warehouse
+   requirement, and the supported formats.
+
+Modified files:
+- src/agents/tools/context.py
+- src/agents/tools/documents.py
+- src/agents/agent_owl_generator/engine.py
+- src/agents/agent_business_rules_generator/engine.py
+- src/back/objects/ontology/Ontology.py
+- src/api/routers/internal/ontology.py
+- tests/units/agents/test_documents_tool.py (new)
+- docs/data-access.md
+
+Verification: confirmed `ai_parse_document` end-to-end on the live workspace
+(warehouse "OntoBricks Engine") — `DESCRIBE FUNCTION EXTENDED ai_parse_document`
+reports version 2.0 / Since 4.0.0, and parsing a generated test PDF via
+`SELECT to_json(ai_parse_document(content)) FROM READ_FILES(<volume>, format => 'binaryFile')`
+returned the expected `document.elements[0].content` text (confidence 0.997).
+
+Tests: python -m pytest tests/units -q → 2131 passed, 15 skipped.
+
+---
+
+## Refactor — extract the binary-document parser into its own class/module
+
+Context: The `ai_parse_document` extraction logic lived inline in
+`src/agents/tools/documents.py`, mixing the UC-volume document-reading tools
+with the extraction engine. Extracted it into a dedicated, swappable class so a
+different extractor (alternative parser, OCR service, pre-extracted sidecars)
+can be dropped in later without touching the document tools. Pure refactor — no
+behavioural change.
+
+Refactoring applied (Fowler): Extract Class + Move Function; module-level
+functions sharing state converted to a class (per `.cursor/07` conventions, one
+public class per file).
+
+Changes:
+
+1. src/agents/tools/document_parser.py (new)
+   New `AiParseDocumentExtractor` class. Public swap contract:
+   `SUPPORTED_EXTENSIONS`, `supports(extension)`, and
+   `extract(ctx, file_path) -> Optional[str]`. Holds the v2.0-pinned warehouse
+   query (`OUTPUT_SCHEMA_VERSION = "2.0"`), the per-`ToolContext` cache, and the
+   `_extract_text` schema extraction (elements-first, page/markdown fallbacks)
+   moved verbatim from `documents.py`.
+2. src/agents/tools/documents.py
+   Removed the inline `_PARSEABLE_BINARY_EXT`, `_extract_markdown_from_parsed`,
+   and `_parse_binary_document`. Added a module-level `_EXTRACTOR =
+   AiParseDocumentExtractor()` and routed `tool_read_document` through
+   `_EXTRACTOR.supports(...)` / `_EXTRACTOR.extract(...)` (both the
+   parseable-extension branch and the UTF-8-decode-failure fallback).
+3. tests/units/agents/test_document_parser.py (new)
+   Direct tests for the extractor: `supports`, no-warehouse, pinned-v2 query,
+   context caching, query-failure and empty-text fallbacks, and `_extract_text`
+   schema cases.
+4. tests/units/agents/test_documents_tool.py
+   Dropped the extraction-schema tests (moved to the new file); kept the
+   tool-level tests, which now exercise the extractor transparently.
+
+Modified files:
+- src/agents/tools/document_parser.py (new)
+- src/agents/tools/documents.py
+- tests/units/agents/test_document_parser.py (new)
+- tests/units/agents/test_documents_tool.py
+
+Tests: python -m pytest tests/units -q → 2137 passed, 15 skipped in 13.83s.
+
+---
+
+## Refactor — promote the document extractor to a generic core Databricks class
+
+Context: `ai_parse_document` extraction is Databricks-specific and useful beyond
+the agents (services, jobs). Moved the extractor out of the agent layer into a
+generic, reusable class in `back/core/databricks` and made the agent document
+tool a thin caller. Pure refactor — no behavioural change.
+
+Refactoring applied (Fowler): Move Class + Move Function; the agent-only
+`AiParseDocumentExtractor` is replaced by the generic
+`back.core.databricks.DocumentExtractor`.
+
+Changes:
+
+1. src/back/core/databricks/DocumentExtractor.py (new)
+   Generic `DocumentExtractor` class (Databricks-specific, agent-independent).
+   Constructor takes a `DatabricksClient` or `(host, token, warehouse_id)`;
+   `from_credentials(...)` builds the client lazily. Public surface:
+   `SUPPORTED_EXTENSIONS`, `OUTPUT_SCHEMA_VERSION = "2.0"`, `supports()`,
+   `file_extension()`, `is_available()`,
+   `extract(file_path, cache=None) -> Optional[str]`, and
+   `extract_text_from_parsed(parsed)` (elements-first, page/markdown fallbacks).
+   Query pins the schema: `ai_parse_document(content, map('version','2.0'))`.
+2. src/back/core/databricks/__init__.py
+   Exported `DocumentExtractor`.
+3. src/agents/tools/document_parser.py (deleted)
+   Removed the agent-only extractor class — superseded by the core class.
+4. src/agents/tools/documents.py
+   Imports `DocumentExtractor` from `back.core.databricks`; added a small
+   `_extract_binary_document(ctx, file_path)` helper that gates on
+   `ctx.warehouse_id`, builds the extractor via `from_credentials`, and passes a
+   per-`ToolContext` cache dict. `tool_read_document` uses
+   `DocumentExtractor.supports/file_extension`.
+5. tests/units/core/test_document_extractor.py (new)
+   Full coverage of the core class (supports/extension, availability, pinned-v2
+   query, caching, query-failure / empty-text / bad-JSON fallbacks, and
+   `extract_text_from_parsed` schema cases).
+6. tests/units/agents/test_document_parser.py (deleted)
+   Superseded by the core test; agent tool tests remain in
+   `test_documents_tool.py` and exercise the core extractor transparently.
+
+Modified files:
+- src/back/core/databricks/DocumentExtractor.py (new)
+- src/back/core/databricks/__init__.py
+- src/agents/tools/document_parser.py (deleted)
+- src/agents/tools/documents.py
+- tests/units/core/test_document_extractor.py (new)
+- tests/units/agents/test_document_parser.py (deleted)
+- docs/data-access.md
+
+Tests: python -m pytest tests/units -q → 2139 passed, 15 skipped in 14.17s.
+
+## "New Assistant" — guided Business View creation from selected entities + neighbours
+
+Context: Business Views (the Visual Ontology Designer) only offered a blank
+"Create View" that hides every entity, leaving the curator to reveal nodes one
+by one from the palette. This adds a "New Assistant" button that bootstraps a
+view from a chosen set of seed entities plus their ontology neighbours, with a
+1–3 hop depth control. Frontend-only: no backend changes were needed since
+`/domain/design-views/*` already persists per-view `visibility` and OntoViz
+`fromJSON` honours `hiddenEntities` / `hiddenRelationships` / `hiddenInheritances`.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design.html
+   Added the `#newAssistantBtn` ("New Assistant", magic icon) to the Business
+   Views toolbar, between the view CRUD group and the "Create Group" button.
+2. src/front/static/global/js/ontology-design.js
+   - Extracted `_buildFreshDesignLayout(visibleNames=null)` from
+     `loadFromOntologyFresh` (DRY): builds entities/relationships/inheritances
+     from `OntologyState` and computes visibility. `null` hides everything
+     (legacy fresh-view behaviour, `hiddenInheritances` kept empty); a Set keeps
+     only that subset visible and hides the rest (entities, relationships, and
+     inheritances). `loadFromOntologyFresh` now delegates to it.
+   - Added `_computeOntologyNeighborhood(seedNames, depth)`: builds an
+     undirected adjacency from object properties (domain↔range) and inheritance
+     (child↔parent), resolves URI-or-name domain/range values, and BFS-expands
+     the seeds by `depth` hops (1–3).
+   - Added `showNewAssistantDialog()`: Bootstrap modal with a name field, a
+     searchable/select-all checkbox list of all entities, and a 1/2/3-hop depth
+     selector. On confirm it creates the view (`/domain/design-views/create`),
+     refreshes the list, switches to it (`/domain/design-views/switch`), renders
+     the curated subset via `_buildFreshDesignLayout(visible)` and persists it
+     (`/domain/design-views/save-current`).
+   - Wired `#newAssistantBtn` in `initViewManagement`; disabled it for
+     read-only versions in `refreshViewList`.
+3. src/front/static/global/css/permissions.css
+   Added `#newAssistantBtn` to the read-only/viewer disabled-button list.
+4. src/front/static/global/css/ontology.css
+   Added `.ob-assistant-entity-list` (scrollable, max-height 320px) and a
+   pointer cursor for `.assistant-entity-row`.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design.html
+- src/front/static/global/js/ontology-design.js
+- src/front/static/global/css/permissions.css
+- src/front/static/global/css/ontology.css
+
+Tests: python -m pytest tests/units -q → 2139 passed, 15 skipped in 21.25s
+(feature is frontend-only; suite confirms no backend regressions).
+
+## Collapse / expand entities in Business Views
+
+Context: Dense Business Views can be hard to read when every entity shows its
+full property list. This adds the ability to collapse an entity to a compact
+header-only card (and expand it back), both per-entity and for the whole view.
+Collapse state is persisted per view via `visibility.collapsedEntities`, which
+already round-trips through `/domain/design-views/save-current` and the OntoViz
+`toJSON`/`fromJSON` visibility plumbing — so no backend change was required.
+
+Changes:
+
+1. src/front/static/global/ontoviz/ontoviz.js
+   - `Entity`: added a `collapsed` field (constructor + `toJSON`).
+   - `_renderEntity`: added an always-visible chevron toggle (`▾`/`▸`,
+     `data-action="toggle-collapse"`) in the entity header; when collapsed the
+     card adds `.ovz-collapsed` and skips the description/body/inherited/
+     add-property sections while keeping the connectors so relationships still
+     attach.
+   - `_bindEntityEvents`: toggle handler flips `collapsed`, re-renders, updates
+     relationship paths, and fires `onEntityUpdate` (auto-save).
+   - `getVisibilityState`/`setVisibilityState`: persist & restore
+     `collapsedEntities` (by name); collapse is applied before the hidden pass
+     so hidden re-rendered nodes stay hidden.
+   - `fromJSON`: collapse flagged entities before first render (no flicker).
+   - New public API: `setAllCollapsed(bool)`, `collapseAll()`, `expandAll()`,
+     `hasCollapsedEntities()`.
+2. src/front/static/global/ontoviz/css/ontoviz-entity.css
+   Styles for `.ovz-entity-collapse-btn` and the `.ovz-collapsed` header-only
+   card (no bottom border, full radius).
+3. src/front/templates/partials/ontology/_ontology_design.html
+   Added the `#toggleCollapseAllBtn` ("Collapse all / Expand all") toolbar
+   button.
+4. src/front/static/global/js/ontology-design.js
+   - `toggleCollapseAllEntities()` + `_syncCollapseAllButton()`: bulk
+     collapse/expand with a state-aware label.
+   - Wired `#toggleCollapseAllBtn` in `initViewManagement`; the label is
+     refreshed whenever a view finishes loading (in `showOntologyDesignerLoading`).
+
+Modified files:
+- src/front/static/global/ontoviz/ontoviz.js
+- src/front/static/global/ontoviz/css/ontoviz-entity.css
+- src/front/templates/partials/ontology/_ontology_design.html
+- src/front/static/global/js/ontology-design.js
+
+Tests: python -m pytest tests/units -q → 2139 passed, 15 skipped in 23.70s
+(feature is frontend-only; suite confirms no backend regressions).
+
+## Business Views toolbar: icon-only buttons (tooltips instead of labels)
+
+Context: Follow-up UI tweak — the new "New Assistant" and "Collapse all /
+Expand all" toolbar buttons carried text labels, making the toolbar crowded.
+Stripped the labels so both are icon-only, with the wording moved into the
+`title` tooltip (consistent with the existing create/rename/delete icons).
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design.html
+   `#newAssistantBtn` and `#toggleCollapseAllBtn` now render the icon only
+   (removed the `me-1` spacing and label text); descriptive text moved to
+   `title`.
+2. src/front/static/global/js/ontology-design.js
+   `_syncCollapseAllButton()` swaps the icon only (no label) and keeps the
+   state-aware tooltip on `title`.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design.html
+- src/front/static/global/js/ontology-design.js
+
+Tests: not re-run — markup/JS-only label removal, no logic change
+(suite last green at 2139 passed, 15 skipped).
+
+## Allow deleting the last Business View
+
+Context: A domain's last Business View could not be deleted — the trash button
+was disabled and the backend rejected it with "Cannot delete the last view".
+Since the designer already has an empty-state ("No View Selected" → Create
+View), the restriction was unnecessary. Now any view, including the last one,
+can be deleted; deleting the last view falls back to the empty state.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   `delete_design_view`: removed the `len(views) <= 1` guard. After deletion,
+   `current_view` becomes the first remaining view, or `None` when none remain.
+   Returns the recomputed `views` list and `current_view`.
+2. src/front/static/global/js/ontology-design.js
+   - `refreshViewList`: delete button is now disabled only when there are no
+     views (dropped the `views.length <= 1` condition).
+   - `showDeleteViewDialog`: added a warning note when deleting the last view,
+     and the confirm handler now clears the canvas + shows the empty state when
+     `current_view` comes back null (instead of calling `switchToView(null)`).
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/front/static/global/js/ontology-design.js
+
+Tests: python -m pytest tests/units -q → 2139 passed, 15 skipped in 21.66s.
+
+## Fix: empty Business-View state — dropdown, ontology wipe on delete, Create Group
+
+Context: After enabling deletion of the last Business View, three problems
+surfaced in the no-views state:
+(1) the view dropdown showed a stray "null"/placeholder entry;
+(2) deleting the last view wiped the ontology — clearing the canvas fires
+OntoViz `onEntityDelete`/`onRelationshipDelete` callbacks, each scheduling an
+auto-save, and the debounced `syncDesignToOntology` then wrote the now-empty
+canvas back over `OntologyState.config.classes` (so "New Assistant" reported
+"No entities available in the ontology yet");
+(3) "Create Group" stayed enabled with no view open.
+
+Changes:
+
+1. src/front/static/global/js/ontology-design.js
+   - `refreshViewList`: when there are no views, the dropdown is now emptied
+     (`innerHTML = ''`) and disabled instead of showing a placeholder option.
+   - `refreshViewList`: `#createGroupFromViewBtn` is disabled when no view is
+     open (operates on the current view's entities).
+   - Delete confirm handler (no-views branch): cancel any pending auto-save,
+     reset `layoutDirty`, and set `isLoadingData = true` around
+     `ontologyDesigner.clear()` so the delete callbacks can't trigger a sync
+     that overwrites the ontology. This is the root-cause fix for the wipe.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+
+Tests: python -m pytest tests/units -q → 2139 passed, 15 skipped in 14.16s.
+
+## Disable view-scoped controls when no Business View is selected
+
+Context: With the empty (no-views) state now reachable, the View/Edit mode
+toggle and the Collapse-all button stayed active even though there was no
+canvas to act on. Rename/Delete were already gated.
+
+Changes:
+
+1. src/front/static/global/js/ontology-design.js
+   `refreshViewList`: disable `#viewModeBtn`, `#editModeBtn` (View/Edit toggle)
+   and `#toggleCollapseAllBtn` when no view is selected; they re-enable once a
+   view exists.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+
+Tests: python -m pytest tests/units -q → 2139 passed, 15 skipped in 14.13s.
+
+## View/Edit toggle: icon-only buttons
+
+Context: Match the icon-only toolbar style — dropped the "View"/"Edit" text
+labels from the mode toggle; the eye/pencil icons remain with their existing
+tooltips.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design.html
+   `#viewModeBtn` (eye) and `#editModeBtn` (pencil) now render the icon only
+   (removed `me-1` and the labels); wording stays in `title`.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design.html
+
+Tests: not re-run — static markup label removal, no logic change.
+
+## Assistant: no orphan neighbours, collapse-by-default, rounder collapse button
+
+Context: Follow-ups on the New Assistant + collapse features:
+(1) assistant-built views showed disconnected "orphan" entities;
+(2) the per-entity collapse toggle looked like a square;
+(3) request to have assistant views start collapsed.
+
+Changes:
+
+1. src/front/static/global/js/ontology-design.js
+   - `_buildFreshDesignLayout`: resolve inheritance child/parent via
+     `_resolveEntityId` (same robust name/URI/case handling as relationships)
+     so inheritance links render even when a parent is stored as a URI — a
+     source of orphan nodes.
+   - Added `_layoutConnectedNames(layout, visibleSet)`: returns visible names
+     that participate in at least one rendered edge (relationship or
+     inheritance) with both endpoints visible.
+   - New Assistant flow: after computing the neighbourhood, build a probe
+     layout and drop any neighbour that would render disconnected (seeds are
+     always kept), eliminating "orphans that don't make sense".
+   - New Assistant flow: the created view now starts with every entity
+     collapsed (`visibility.collapsedEntities = [...visible]`), and the
+     Collapse-all toggle label is synced afterwards.
+2. src/front/static/global/ontoviz/css/ontoviz-entity.css
+   `.ovz-entity-collapse-btn` is now a round (border-radius 50%), smaller,
+   muted toggle that brightens on entity hover — no longer a square.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/front/static/global/ontoviz/css/ontoviz-entity.css
+
+Tests: python -m pytest tests/units -q → 2139 passed, 15 skipped in 14.05s.
+
+## Entity collapse toggle: use a Bootstrap icon instead of a unicode chevron
+
+Context: The per-entity collapse/expand toggle used a unicode glyph (▾/▸).
+Replaced it with a Bootstrap Icons chevron for a cleaner, consistent look.
+
+Changes:
+
+1. src/front/static/global/ontoviz/ontoviz.js
+   `_renderEntity`: the collapse button now renders `<i class="bi
+   bi-chevron-up">` when expanded and `bi-chevron-down` when collapsed.
+2. src/front/static/global/ontoviz/css/ontoviz-entity.css
+   `.ovz-entity-collapse-btn` font-size bumped 10px → 12px for icon legibility.
+
+Modified files:
+- src/front/static/global/ontoviz/ontoviz.js
+- src/front/static/global/ontoviz/css/ontoviz-entity.css
+
+Tests: not re-run — icon/markup-only change, no logic affected.
+
+## Fix: collapse toggle rendered as a native square button (stale @import CSS)
+
+Context: The entity collapse toggle still showed as a default square HTML
+button instead of a bare icon. Root cause: `.ovz-entity-collapse-btn` styles
+lived in `ontoviz-entity.css`, which `ontoviz.css` pulls via `@import` WITHOUT a
+cache-busting `?v=` — so browsers served the stale file (predating the toggle),
+the class had no styling, and the `<button>` fell back to native chrome. The
+main `ontoviz.css` is itself loaded with `?v={{ asset_version }}`.
+
+Changes:
+
+1. src/front/static/global/ontoviz/css/ontoviz.css
+   Inlined the `.ovz-entity-collapse-btn` (round, transparent, hover-reveal),
+   `.ovz-entity-header .ovz-entity-actions`, and `.ovz-collapsed` rules into the
+   cache-busted main stylesheet — same pattern already used for the read-only
+   rules ("inlined here to avoid caching issues with @import").
+2. src/front/static/global/ontoviz/css/ontoviz-entity.css
+   Removed the duplicated collapse-button / collapsed-card block (now in
+   ontoviz.css).
+
+Modified files:
+- src/front/static/global/ontoviz/css/ontoviz.css
+- src/front/static/global/ontoviz/css/ontoviz-entity.css
+
+Tests: not re-run — CSS-only relocation, no logic affected.
+
+## Entity header background set to light red
+
+Context: Styling tweak — entity cards now use a light red header background.
+
+Changes:
+
+1. src/front/static/global/ontoviz/css/ontoviz.css
+   Added a `.ovz-entity-header { background: #fdeaea; }` rule (inlined in the
+   cache-busted main stylesheet rather than overriding the @import'd variable).
+
+Modified files:
+- src/front/static/global/ontoviz/css/ontoviz.css
+
+Tests: not re-run — CSS-only change.
+
+## Right-click to hide entities and relationships on the canvas
+
+Context: Users wanted to hide entities and relationships directly from the
+Business View canvas without opening the visibility palette popup. Previously
+the right-click context menu only exposed editing actions (Add Property,
+Duplicate, Delete) and was suppressed entirely in view-only mode — so a
+business view (which is view-only) had no canvas-level way to hide an element.
+
+Changes:
+
+1. src/front/static/global/ontoviz/ontoviz.js
+   - `contextmenu` handler: now selects the entity (`.ovz-entity`) or
+     relationship (`[data-relationship-id]`) under the cursor before opening the
+     menu, so right-click targets the hovered element without a prior left-click
+     (clears selection when right-clicking empty canvas).
+   - `_showContextMenu()`: added a "Hide from view" item (eye-slash icon) for
+     both entities and relationships. The hide action is treated as a view
+     operation, so it is available in view-only mode (where the menu used to
+     return early) as well as edit mode (above the editing actions).
+   - Context-menu click handler: wired `hide-entity` and `hide-rel` actions to
+     `_toggleItemVisibility(type, id, false)` (the same path used by the
+     visibility palette), which fires `onVisibilityChange` for autosave and lets
+     elements be re-shown from the palette. Selection is cleared after hiding.
+
+Modified files:
+- src/front/static/global/ontoviz/ontoviz.js
+
+Tests: uv run pytest (excluding tests/property + tests/e2e, which fail to
+collect due to a missing `hypothesis` dev dependency unrelated to this change):
+2416 passed, 16 skipped, 1 pre-existing failure
+(tests/live_integration/test_app_smoke.py — requires a running server). Change
+is frontend-only JS; no Python touched.
+
+## Fix: collapse/expand-all resurrected hidden entities and relationships
+
+Context: After hiding an entity or relationship (via the visibility palette or
+the new right-click "Hide from view"), clicking the global collapse/expand-all
+toolbar button made the hidden elements reappear. Root cause: `setAllCollapsed`
+calls `_renderEntity` / `_updateRelationshipPaths`, which rebuild the DOM
+elements from scratch. Hiding only sets `style.display = 'none'` on the existing
+element (visibility lives in `visibilityState`, not in the rebuilt markup), so
+the freshly rendered elements came back visible.
+
+Changes:
+
+1. src/front/static/global/ontoviz/ontoviz.js
+   - `_renderEntity()`: after appending the rebuilt element, reapply
+     `display:none` when `visibilityState.entities.get(id) === false`, so any
+     re-render path preserves the hidden state.
+   - `setAllCollapsed()`: after `_updateRelationshipPaths()` (which re-renders
+     connections), call `_updateAllConnectionsVisibility()` to reapply hidden
+     relationship/inheritance state.
+
+Modified files:
+- src/front/static/global/ontoviz/ontoviz.js
+
+Tests: not re-run — frontend-only JS fix building on the suite run above
+(2416 passed). No Python touched.
+
+## Domain status lifecycle (DRAFT / IN-REVIEW / PUBLISHED)
+
+Context: Domain versions previously used a single "Active" (`mcp_enabled`)
+toggle to pick which version the API/MCP served, with editability gated only by
+"is this the latest version". This introduces a proper lifecycle status per
+version — `DRAFT` → `IN-REVIEW` → `PUBLISHED` — that gates editability, gates
+API/MCP data access (only PUBLISHED is served, numeric-latest wins), and is
+surfaced as a colour-coded badge everywhere a domain+version is shown. The
+"Active" toggle is retired; the `mcp_enabled` column is left dormant for a later
+migration.
+
+State machine (enforced server-side):
+- DRAFT → IN-REVIEW: admin or builder; precondition: version has been built
+  (`last_build` set). Locks editing.
+- IN-REVIEW → DRAFT: admin or builder. Re-enables editing.
+- IN-REVIEW → PUBLISHED: admin or builder.
+- PUBLISHED → DRAFT: admin only (reversible publish).
+- No direct DRAFT → PUBLISHED. New versions are always created as DRAFT.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/schema.sql
+   Added `status text NOT NULL DEFAULT 'DRAFT' CHECK (status IN
+   ('DRAFT','IN-REVIEW','PUBLISHED'))` to `domain_versions` plus
+   `idx_domain_versions_status (domain_id, status)`.
+2. src/back/objects/registry/store/lakebase/store.py
+   - New `_ensure_domain_versions_status_column()` self-heal (mirrors
+     `_ensure_build_runs_table`), guarded by `_status_column_ready`, called
+     lazily from read/write/list paths.
+   - `read_version`/`write_version`/`list_domains_with_metadata` now select /
+     persist / expose `status`.
+   - New targeted `update_version_status(folder, version, status)` (single-row
+     UPDATE + `jsonb_set` on `info.status`, no full-document rewrite).
+3. src/back/objects/registry/store/base.py
+   Added the `update_version_status` abstract method to the store contract.
+4. src/back/objects/registry/version_lifecycle.py (new)
+   Single source of truth for the state machine: `VALID_STATUSES`,
+   `ALLOWED_TRANSITIONS`, `is_editable`, and `check_status_transition(...)`
+   (raises `ValidationError` / `AuthorizationError`).
+5. src/back/objects/registry/RegistryService.py
+   - `find_published_version` / `load_published_domain_data` (numeric-latest
+     PUBLISHED, no fallback); `find_mcp_version` kept as a thin alias;
+     `load_mcp_domain_data` removed.
+   - New `set_version_status(folder, version, status)` delegating to the store.
+6. src/back/objects/session/DomainSession.py
+   `status` round-trips through `get_empty_domain`, `export_for_save`,
+   `import_from_file` (defaults DRAFT).
+7. src/back/objects/domain/Domain.py
+   New versions and first-saves force DRAFT; `list_version_details`,
+   `get_version_status` (adds `status` + `published_version`) and
+   `get_domain_info` surface `status`. Retired `set_version_mcp`.
+8. src/back/objects/domain/payload.py
+   `get_domain_info` includes `status`.
+9. src/back/objects/domain/SettingsService.py
+   Replaced `set_registry_version_active_result` with
+   `set_registry_version_status_result` (validates transition + role +
+   build precondition, updates session + caches). Added `resolve_domain_role`
+   to resolve the caller's role against the *target* domain.
+10. src/back/objects/digitaltwin/DigitalTwin.py
+    `resolve_domain`: explicit version rejected unless PUBLISHED; omitted
+    version resolves via `load_published_domain_data`.
+11. src/back/fastapi/graphql_routes.py
+    `_load_domain_from_registry(external=...)`: the external `/api/v1/graphql`
+    mount is strict PUBLISHED-only (no session shortcut); internal GraphiQL
+    keeps the session shortcut with a latest fallback.
+12. src/api/routers/domains.py
+    `/domain/versions` annotates each version with `status` + `is_published`;
+    `/domains` lists domains with ≥1 PUBLISHED version (via the resolver).
+13. src/api/routers/internal/domain.py
+    Replaced `/set-version-mcp` with `/set-version-status` (target-domain
+    authorization resolved in the handler).
+14. src/api/routers/internal/settings.py
+    Removed the `.../versions/{version}/active` endpoint.
+15. src/shared/fastapi/main.py
+    PermissionMiddleware status edit-gate: blocks mutating edits on
+    `/ontology/`, `/mapping/`, domain metadata/layout/document saves, and
+    DT build/sync when the session version is not DRAFT (non-mutating
+    compute/validate/generate endpoints stay open). `/domain/set-version-status`
+    added to the domain-scoped exceptions.
+16. Frontend:
+    - version-check.js: `window.versionStatus`, adds `read-only-status` /
+      `read-only-version` when locked, and a `.js-version-status-badge`
+      populator reused across templates.
+    - permissions.js `canEditOntology()` also requires DRAFT.
+    - permissions.css: `read-only-status` build-button gate.
+    - navbar.js: lifecycle badge next to the domain name + dropdown header.
+    - registry.js: Browse rows show a status badge and transition buttons
+      (replacing "Set Active"); `setRegistryVersionStatus` POSTs the new
+      endpoint.
+    - domain-versions.js + `_domain_versions.html`: "Status" column + badge.
+    - `_domain_information.html` and the dtwin/ontology query headers carry the
+      `.js-version-status-badge`.
+17. Tests:
+    - tests/units/registry/test_version_lifecycle.py (new) — state machine.
+    - tests/units/registry/test_registry_published.py (new) — resolver + alias
+      + `set_version_status`.
+    - tests/units/registry/test_registry_store.py — `update_version_status`
+      round-trip + fake-store status field.
+    - tests/units/api/test_external_api.py — `/domain/versions` status
+      annotation.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/version_lifecycle.py (new)
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/payload.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/domains.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- src/shared/fastapi/main.py
+- src/front/static/global/js/version-check.js
+- src/front/static/global/js/permissions.js
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/permissions.css
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/domain/_domain_versions.html
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/dtwin/_query_graphql.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- tests/units/registry/test_version_lifecycle.py (new)
+- tests/units/registry/test_registry_published.py (new)
+- tests/units/registry/test_registry_store.py
+- tests/units/api/test_external_api.py
+
+Tests: uv run pytest tests --ignore=tests/property --ignore=tests/e2e
+--ignore=tests/live_integration -q → 2445 passed, 16 skipped. (property/e2e
+fail to collect due to a pre-existing missing `hypothesis`/py3.10 dev-env
+issue; live_integration requires a deployed app.)
+
+## Lifecycle status badge readability fix
+
+Context: The DRAFT/IN-REVIEW/PUBLISHED badges rendered pale Bootstrap text
+(`text-warning`/`text-info`/`text-success`) on the matching pale `*-subtle`
+backgrounds, so the label was barely legible. Switched the badge font to black
+(`text-dark`) across every badge map while keeping the colour-coded backgrounds
+and borders.
+
+Changes:
+1. src/front/static/global/js/navbar.js — `DOMAIN_STATUS_BADGE` text → text-dark.
+2. src/front/static/global/js/version-check.js — `VERSION_STATUS_BADGE` text →
+   text-dark.
+3. src/front/static/domain/js/domain-versions.js — `STATUS_MAP` text → text-dark.
+4. src/front/static/registry/js/registry.js — `STATUS_BADGE` text → text-dark,
+   plus the domain-level "Published vN" mini-badge.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/version-check.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/registry/js/registry.js
+
+Tests: not re-run — frontend-only CSS-class change, no Python touched (suite
+last green at 2445 passed above).
+
+## Lakebase 0.4 → 0.5 upgrade SQL script
+
+Context: The lifecycle feature adds `domain_versions.status` + a CHECK
+constraint + an index. The app self-heals the column and index lazily on first
+read, but it does not add the CHECK constraint and does not backfill PUBLISHED
+from the retired `mcp_enabled` flag. Provided a one-shot, idempotent psql script
+so operators can fully migrate an existing 0.4.x Lakebase registry (and keep the
+previously "active" version exposed on the API/MCP).
+
+Changes:
+1. scripts/upgrade_lakebase_0.4_To_0.5.sql (new) — idempotent migration:
+   adds `status` column, the `domain_versions_status_check` constraint (guarded
+   via `pg_constraint`), the `idx_domain_versions_status` index; backfills
+   `mcp_enabled=true → status='PUBLISHED'`; mirrors status into the `info`
+   JSONB blob; prints a status distribution summary. Schema is configurable via
+   `-v reg_schema=...` (defaults to `ontobricks_registry`). `mcp_enabled` left
+   dormant (no drop).
+
+Modified files:
+- scripts/upgrade_lakebase_0.4_To_0.5.sql (new)
+
+Tests: n/a — standalone SQL migration script, no application code touched.
+
+## Fix: PUBLISHED domains had their Knowledge Graph query UI disabled
+
+Context: Reported on the "Contact Center" domain — a PUBLISHED version showed
+every Knowledge Graph filter/search control greyed out, so graph exploration
+was impossible. Root cause: PUBLISHED/IN-REVIEW now adds `read-only-version` to
+`<body>`, and the generic form-field gate in permissions.css disables all
+`input`/`select`/`textarea`. Its "keep search/filter/query interactive"
+exemptions are (a) case-sensitive id substring matches that miss mixed-case ids
+like `sgFilterValue` / `sgSearchValue`, and (b) don't cover `<select>` or
+checkbox controls — which is exactly what the Sigma graph Filter/View tabs use.
+The Digital Twin page is a read/analysis surface that never edits the domain
+design, so the whole page should stay interactive; real mutations are still
+enforced server-side by `PermissionMiddleware`.
+
+Changes:
+1. src/front/templates/base.html — added `data-page="{% block page_id %}{%
+   endblock %}"` to `<body>` so pages can self-identify.
+2. src/front/templates/dtwin.html — sets `{% block page_id %}digitaltwin{%
+   endblock %}`.
+3. src/front/static/global/css/permissions.css — the generic read-only
+   form-field gate now excludes `body[data-page="digitaltwin"]`, so the Digital
+   Twin's filter/search/query/reasoning/cohort controls stay usable on
+   PUBLISHED/IN-REVIEW versions and for viewers. The Build/sync status gate
+   (`body.read-only-status #syncStartBtn`) is unaffected and still blocks builds
+   on non-DRAFT versions.
+4. Status-badge readability: the static `.js-version-status-badge` placeholders
+   in the dtwin/ontology/domain templates used the pale `text-warning` initial
+   class; switched to `text-dark` to match the runtime badges.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/templates/dtwin.html
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_graphql.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- src/front/templates/partials/domain/_domain_information.html
+
+Tests: not re-run — frontend-only (template/CSS) change, no Python touched.
+
+## Tests: status-change orchestration + endpoint coverage
+
+Context: The lifecycle state machine (`test_version_lifecycle.py`) and the
+PUBLISHED resolver / store delegation (`test_registry_published.py`,
+`test_registry_store.py`) were covered, but the orchestration that wires them
+together (`SettingsService.set_registry_version_status_result`) and the HTTP
+endpoint (`POST /domain/set-version-status`) were not. Added unit tests for both.
+
+Changes:
+1. tests/units/settings/test_settings_version_status.py (new) — 17 tests for
+   `set_registry_version_status_result`: happy-path transitions
+   (DRAFT→IN-REVIEW builder, IN-REVIEW→PUBLISHED builder, PUBLISHED→DRAFT
+   admin), status normalisation, every state-machine rejection (build
+   precondition, role tiers, illegal/no-op/unknown status), not-found version,
+   registry-not-configured, store-failure → InfrastructureError, no
+   store/cache side effects on rejection, and session-sync behaviour (loaded
+   vs unloaded target domain) plus cache invalidation.
+2. tests/units/api/test_set_version_status_endpoint.py (new) — 5 tests for the
+   endpoint: required-field validation (missing/blank domain_name/version/
+   status) and that the handler resolves the role against the *target* domain
+   (seeded with the app role) and forwards both roles to the orchestration.
+
+Modified files:
+- tests/units/settings/test_settings_version_status.py (new)
+- tests/units/api/test_set_version_status_endpoint.py (new)
+
+Tests: uv run pytest tests --ignore=tests/property --ignore=tests/e2e
+--ignore=tests/live_integration -q → 2467 passed, 16 skipped (+22 new).

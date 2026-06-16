@@ -1,0 +1,481 @@
+## Digital Twin → Graph Chat: natural-language chat with the knowledge graph
+
+Context: The MCP server already exposes knowledge-graph tools
+(`list_entity_types`, `describe_entity`, `get_graphql_schema`,
+`query_graphql`, `get_status`) that any LLM client (Cursor, Claude
+Desktop, Databricks Playground) can use to converse with a Digital
+Twin. Power-users of the OntoBricks web UI asked for the same
+capability without leaving the app.
+
+This change adds a new **Graph Chat** entry under Digital Twin →
+Navigation. The chatbot calls the same external REST surface as the
+MCP server (`/api/v1/digitaltwin/...`, `/graphql/{domain}`) plus the
+internal SPARQL executor (`/dtwin/execute`) and renders the LLM's
+reply inline in the panel -- no floating FAB, full-height section.
+
+Changes:
+
+Frontend (menu + UI + assets):
+1. src/front/config/menu_config.json — new `chat` item (label
+   "Graph Chat", icon `bi-chat-dots`) inserted after `graphql` under
+   Digital Twin → Data/Navigation.
+2. src/front/templates/partials/dtwin/_query_chat.html (NEW) — section
+   header with domain / graph badges and a "Switch domain" button,
+   the `.graph-chat-container` wrapper (messages + suggestions +
+   textarea + send + clear). Re-uses the `.assistant-*` class family.
+3. src/front/templates/dtwin.html — new `#chat-section` sidebar panel
+   that includes the partial, plus `<link>` + `<script defer>` tags
+   for the new CSS/JS.
+4. src/front/static/query/css/query-chat.css (NEW) — full-height
+   layout and spacing that inlines the chat inside the panel instead
+   of anchoring it above a FAB.
+5. src/front/static/query/js/query-chat.js (NEW) — embedded chat
+   controller (no drag/FAB). Captures `sidebarSectionChanged` to
+   lazy-init on first show. Posts `{message, history}` to
+   `/dtwin/assistant/chat`, renders the reply as Markdown, exposes a
+   collapsible "Tools used" trace, and supports Enter / Shift+Enter
+   + Clear chat.
+
+Backend (agent + context + endpoint):
+6. src/agents/tools/context.py — extended `ToolContext` with four
+   Graph-Chat-only fields: `dtwin_base_url`, `dtwin_session_cookies`,
+   `dtwin_registry_params`, `dtwin_domain_name`.
+7. src/agents/tools/graph_formatting.py (NEW) — shared formatting
+   helpers (`local_name`, `pretty_predicate`, `format_find_response`,
+   `format_graphql_response`, `format_sparql_rows`) extracted from
+   the MCP server logic so the new agent renders identical
+   LLM-friendly text. The MCP server is left untouched because it is
+   packaged as a standalone wheel without `agents/` on its path.
+8. src/agents/agent_dtwin_chat/__init__.py (NEW) — re-exports
+   `run_agent` and `AgentResult`.
+9. src/agents/agent_dtwin_chat/tools.py (NEW) — six tools:
+   - `list_entity_types` → GET /api/v1/digitaltwin/stats
+   - `describe_entity`   → GET /api/v1/digitaltwin/triples/find
+   - `get_status`        → GET /api/v1/digitaltwin/status
+   - `get_graphql_schema`→ GET /graphql/{domain}/schema
+   - `query_graphql`     → POST /graphql/{domain}
+   - `run_sparql`        → POST /dtwin/execute (internal route; same
+     session cookie forwarded; mutating SPARQL keywords -- DROP,
+     DELETE, INSERT, CREATE, CLEAR, LOAD, COPY, MOVE, ADD -- are
+     rejected client-side).
+   Every call uses a loopback `httpx.Client` bound to
+   `dtwin_base_url` with the user's session cookies.
+10. src/agents/agent_dtwin_chat/engine.py (NEW) — clone of the
+    ontology-assistant engine: same `MAX_ITERATIONS=12`, same
+    `call_serving_endpoint` / `dispatch_tool` / `accumulate_usage`
+    helpers from `engine_base`, same `@trace_agent` span. Ships its
+    own `SYSTEM_PROMPT` describing the knowledge-graph tools and the
+    "domain is pre-selected" contract so the LLM never tries to
+    list/select domains.
+11. src/api/routers/internal/dtwin.py — new `POST /dtwin/assistant/chat`.
+    Resolves domain + registry (`DigitalTwin.resolve_registry`),
+    reads the LLM endpoint via `require_serving_llm`, computes the
+    loopback base URL (`DATABRICKS_APP_PORT`/`PORT`/8000), forwards
+    the caller's session cookies to the agent, runs
+    `agent_dtwin_chat.run_agent` off-thread, and returns
+    `{success, reply, tools[], iterations, usage}`.
+
+Files:
+
+Modified:
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/agents/tools/context.py
+- src/api/routers/internal/dtwin.py
+
+New:
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/static/query/css/query-chat.css
+- src/front/static/query/js/query-chat.js
+- src/agents/tools/graph_formatting.py
+- src/agents/agent_dtwin_chat/__init__.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/agents/agent_dtwin_chat/engine.py
+
+Notes:
+- SPARQL execution intentionally uses the internal `/dtwin/execute`
+  route rather than an external alias -- that route resolves the
+  active domain from the user session and already enforces the same
+  warehouse / auth guards the UI relies on.
+- The MCP server's formatters remain in place; migrating it to
+  `agents/tools/graph_formatting.py` would require adding `agents/`
+  to the MCP wheel and is tracked as a follow-up.
+
+## Graph Chat: forward X-Forwarded-* headers on loopback (deployed 302 fix)
+
+Bug: in the deployed Databricks App, Graph Chat reported
+"HTTP 302 — the server returned a redirect" when calling the internal
+`/dtwin/graphql/schema` / `/dtwin/graphql/execute` / `/dtwin/execute`
+routes. Root cause: the agent's loopback HTTPX client forwarded the
+user's session cookies but not the Databricks-injected
+`X-Forwarded-*` identity headers, so `PermissionMiddleware` resolved
+the internal call as anonymous and 302-redirected it to
+`/access-denied?reason=app`. Locally, `is_databricks_app()` returns
+False and the middleware short-circuits to admin, masking the issue.
+
+Fix: capture the incoming request's `X-Forwarded-*` / `X-Real-*` /
+`X-CSRF-Token` / `Referer` headers in `dtwin_assistant_chat` and
+thread them through `run_chat_agent(..., session_headers=...)` →
+`ToolContext.dtwin_session_headers` → the loopback `httpx.Client`.
+Also disabled redirect-following so a future 3xx is raised as a clear
+error rather than silently resolved.
+
+Files:
+- src/agents/tools/context.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/api/routers/internal/dtwin.py
+
+## Graph Chat: all tools now use session-aware internal routes
+
+Bug (follow-up): after fixing the 302 redirect, Graph Chat still
+returned `"no versions found for domain <name>"` when asking for the
+status / stats / entity search, because `tool_get_status`,
+`tool_list_entity_types` and `tool_describe_entity` still hit the
+public `/api/v1/digitaltwin/{status,stats,triples/find}` routes which
+resolve the domain through the registry and require a published
+version.
+
+Fix: re-pointed the three remaining tools at the session-aware
+internal equivalents so Graph Chat works against any in-session
+domain, published or not:
+
+- `tool_list_entity_types` → `GET /dtwin/sync/stats`
+- `tool_get_status`        → `GET /dtwin/sync/status`
+- `tool_describe_entity`   → `GET /dtwin/triples/find` (new route,
+  mirrors the public one but resolves the domain from the user
+  session instead of the registry).
+
+Files:
+- src/agents/agent_dtwin_chat/tools.py
+- src/api/routers/internal/dtwin.py
+
+## Code review hardening: layering, error handling, dedup, class-first
+
+Follow-up to the `full_rules` code review that inventoried 1475 tests
+plus audit findings across logging, error handling, layering, class-first
+policy, duplication, and dead code. Implements the safe, low-risk subset
+(items A–J). All 1491 tests pass (up from 1475: `networkx` venv refresh
+restored `tests/test_community_detector.py`).
+
+Layering (rule §2.2: HTML routes serve pages only, JSON lives under
+`api/routers/internal/`):
+- Moved `src/front/routes/help.py` → `src/api/routers/internal/help.py`.
+  The file was 100% JSON/binary endpoints (`/api/help/docs`,
+  `/api/help/docs/{slug}`, `/api/help/docs/images/{name}`,
+  `/api/help/docs/screenshots/{name}`) — no `TemplateResponse` ever.
+  URL paths are unchanged, so `front/static/global/js/help-docs.js`
+  keeps working.
+- Updated `_docs_dir()` to account for the new depth
+  (`src/api/routers/internal/` → four `dirname` hops to repo root).
+- Registered the router in `api/routers/internal/__init__.py` and
+  removed it from `front/routes/__init__.py`.
+
+Error handling (rule §7: never leak `str(e)` to clients, never
+log-and-swallow):
+- `src/api/routers/internal/dtwin.py` — the "ontology is empty"
+  branch of the GraphQL schema endpoint now raises `ValidationError`
+  instead of returning `{"success": False, ...}`, matching the
+  sibling error path two lines below.
+- `src/back/core/w3c/shacl/SHACLService.py` — `run_inference` and
+  `validate_graph` no longer put `str(exc)` into the `error` /
+  `report_text` fields returned to clients; they log with
+  `exc_info=True` and expose a generic, sanitized message.
+- `src/back/core/databricks/DashboardService.py.get_dashboard_parameters`
+  — replaces `{"error": str(exc)}` with a generic message; HTTP
+  errors report only the status code to callers.
+- `src/back/core/triplestore/TripleStoreBackend.py` — `transitive_closure`
+  and `symmetric_expand` now log failures at WARNING with
+  `exc_info=True` instead of silently swallowing at DEBUG level; the
+  fallback-to-empty-list behaviour is preserved for callers that
+  expect a best-effort result.
+- `src/agents/tools/sql.py` — added `exc_info=True` on the SQL tool
+  error log. `str(exc)` is kept in the tool output by design: agent
+  tools must surface the error text to the LLM so it can retry.
+
+Class-first (rule §10.1 / §10.3: one public class per file named
+after the class; no loose module-level state):
+- `src/back/objects/registry/service.py` →
+  `src/back/objects/registry/RegistryService.py`.
+- `src/back/objects/registry/permissions.py` →
+  `src/back/objects/registry/PermissionService.py`.
+- Updated every internal import that bypassed the package re-exports
+  (`scheduler.py`, `session/DomainSession.py`, `agents/tools/documents.py`),
+  plus the `mock.patch` target strings in `tests/test_permissions.py`
+  and the Cursor rules example in `.cursor/07-project-conventions.mdc`.
+- `src/back/objects/domain/version_status.py` — wrapped the TTL cache
+  in a `VersionStatusCache` class with `get` / `set` / `clear` /
+  `snapshot` methods. The four module-level helpers now delegate to
+  a singleton so the existing `back.objects.domain` public surface
+  is unchanged; the private `_version_status_cache` dict is still
+  exported as an alias to the class store for the expiration
+  simulation in `tests/test_version_status_cache.py`.
+
+Duplication / Extract Function:
+- `src/back/objects/session/DomainSession.py` — extracted
+  `_sanitized_ontology_for_hash()` and `_sha256_json()` so
+  `_config_snapshot()` and `_split_snapshots()` no longer copy-paste
+  the ontology sanitation + JSON-sort-SHA routine. Promoted the
+  local `import copy, hashlib, json` out of the method bodies into
+  the module imports.
+- `src/agents/tools/graph_formatting.py` — `local_name()` now
+  delegates to `back.core.w3c.rdf_utils.uri_local_name` and adds a
+  single fallback line so the formatter still renders the raw URI
+  (instead of an empty string) when the URI ends in a bare `#` or
+  `/`. The MCP sidecar (`src/mcp-server/server/app.py`) keeps its
+  own copy intentionally — it ships as an independent wheel with
+  only `server/` on its Python path (see docstring).
+
+Deps / environment:
+- `pyproject.toml` already declares `networkx>=3.0`; no change
+  needed. Refreshing the local venv with `uv pip install networkx`
+  restores `tests/test_community_detector.py` collection (16 tests).
+
+Evaluated but deliberately not changed (risk outweighs the benefit):
+- `back.core.reasoning.SPARQLRuleEngine._resolve_term` vs.
+  `back.core.w3c.sparql.SparqlTranslator._resolve_term` — superficial
+  similarity only; the two helpers take different parameter shapes
+  (`(term, prefixes)` vs. `(term, base_uri, uri_map)`), use different
+  namespace sources, and have different fallbacks for unresolved
+  names. Extracting a shared core would either bloat the signature or
+  break one of the two behaviours.
+- `api/routers/internal/ontology.py` `/swrl/validate` and `/rules/validate`
+  returning `{"success": false, "valid": false, "errors": [...]}` —
+  kept as-is. These endpoints report validation outcomes, not request
+  failures; the structured `errors` payload is the useful return value
+  and is the documented contract for the client-side validator UI.
+- `api/routers/internal/domain.py` `current_user` returning
+  `{"success": false, "email": ""}` when no Databricks client — this
+  is a benign "no identity resolvable" fallback consumed by the UI,
+  not an error condition.
+- `src/mcp-server/server/app.py` logging via `logging.getLogger(__name__)`
+  — the MCP server is a standalone Databricks App with its own
+  `pyproject.toml` / `requirements.txt` and does not import from
+  `back.core.*`; the central `get_logger()` policy only applies to
+  the main OntoBricks FastAPI app.
+
+Files:
+
+Modified:
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/version_status.py
+- src/agents/tools/graph_formatting.py
+- src/back/core/w3c/shacl/SHACLService.py
+- src/back/core/databricks/DashboardService.py
+- src/back/core/triplestore/TripleStoreBackend.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/__init__.py
+- src/front/routes/__init__.py
+- src/back/objects/registry/__init__.py
+- src/back/objects/registry/scheduler.py
+- src/agents/tools/sql.py
+- src/agents/tools/documents.py
+- .cursor/07-project-conventions.mdc
+- tests/test_permissions.py
+- tests/test_registry.py
+- tests/test_permission_middleware.py
+
+Renamed (git mv):
+- src/back/objects/registry/service.py → src/back/objects/registry/RegistryService.py
+- src/back/objects/registry/permissions.py → src/back/objects/registry/PermissionService.py
+- src/front/routes/help.py → src/api/routers/internal/help.py
+
+===
+2026-04-22 -- Test campaign completeness pass (additive only)
+
+Context: audit of the test campaign revealed the E2E layer was limited
+to read-only navigation / visibility smoke tests (45 tests, Playwright)
+and several features had no E2E coverage at all.  This pass adds 74
+new tests without modifying any production code.
+
+New tests (all additive):
+
+- tests/e2e/test_registry_flows.py (4)
+  Playwright smoke for the previously-uncovered /registry page.
+
+- tests/e2e/test_resolve_flows.py (3)
+  Contract tests for /resolve and /resolve/{uri:path} — missing URI
+  raises ValidationError, valid URI performs a redirect, path variant
+  does not 5xx on unknown URIs.
+
+- tests/e2e/test_access_denied_flows.py (5)
+  Covers /access-denied default + reason=app|domain|bootstrap +
+  unknown-reason fallback.
+
+- tests/e2e/test_dtwin_flows.py (7)
+  Parametrized sidebar-switch test across every dtwin section declared
+  in templates/dtwin.html (insight, dataquality, reasoning, sigmagraph,
+  graphql, chat).  Adds a chat-panel-has-input assertion that catches
+  accidental UI regressions in the Graph Chat panel.
+
+- tests/e2e/test_help_modal_flows.py (8)
+  Verifies the shared Help Center modal is injected on every page, the
+  navbar toggle opens it, the default Welcome section is active, and
+  the dynamic /api/help/docs endpoint is callable end-to-end.  Includes
+  security assertions (unknown slug → 404, bad image name → 404).
+
+- tests/e2e/test_permissions_flows.py (4)
+  CSRF double-submit-cookie enforcement (wrong X-CSRF-Token yields 403
+  with {"error":"csrf"}) and /api/* bypass confirmation.  Sanity checks
+  the /access-denied and /settings pages render in admin mode.
+
+- tests/e2e/test_write_flows.py (4)
+  First end-to-end write-flow in the campaign:
+  * POST /settings/save (host only) → GET /settings/current round-trip.
+  Plus route-contract tests for three endpoints whose happy path needs
+  a live UC Volume — the contract tests prove the route is mounted,
+  parses JSON, honours CSRF and returns an OntoBricksError-shaped JSON
+  payload on infrastructure failure (never an uncaught 5xx / HTML).
+
+- tests/test_help_api.py (13)
+  Direct TestClient integration tests for the new
+  api/routers/internal/help.py router: index structure, slug
+  uniqueness, unknown slug → 404, known slug round-trip, path-traversal
+  and bad-filename rejection, unknown-subdir safety.
+
+- tests/test_agent_dtwin_chat.py (25)
+  First unit-test coverage for src/agents/agent_dtwin_chat/tools.py
+  (Graph Chat).  Swaps httpx.MockTransport into chat_tools._client to
+  exercise every tool handler in isolation:
+  * list_entity_types / get_status / get_graphql_schema happy paths
+    and failure payloads.
+  * describe_entity input validation + depth clamping + parameter
+    forwarding.
+  * query_graphql missing-query and bad-JSON-variables guards.
+  * run_sparql mutating-query refusal (DROP/DELETE/INSERT/CLEAR/CREATE,
+    case-insensitive), empty-query guard, non-integer limit guard,
+    happy-path row formatting.
+  * Static consistency: TOOL_DEFINITIONS and TOOL_HANDLERS have the
+    same names and every definition declares the OpenAI tool schema
+    shape.
+
+E2E harness fix (tests/e2e/conftest.py):
+- Strip CSRF_DISABLED from the subprocess env before launching uvicorn.
+  The unit-test conftest forces CSRF_DISABLED=1 so TestClient tests do
+  not need tokens, but the E2E subprocess is meant to mirror real
+  deployment where CSRF is live.  Removing the override lets
+  test_permissions_flows.py actually exercise the CSRF rejection
+  branch; write-flow tests already attach the token from the cookie
+  so they continue to pass.
+
+Test results:
+- Unit/integration: 1530 passed (was 1491 -- added 39 new tests).
+- E2E (Playwright):   80 passed (was 45 -- added 35 new tests).
+- Total:            1610 passed, 0 failed, 0 skipped (Python 3.11,
+  pytest 9.0.2, Playwright/Chromium).
+
+Coverage gains:
+- /registry, /resolve, /access-denied pages now exercised via browser.
+- Help Center (new internal API + modal) fully covered at integration
+  and browser layers.
+- Graph Chat agent (previously zero tests) now has 25 unit tests.
+- CSRF double-submit protection now validated end-to-end.
+- First real write-flow round-trip in the E2E campaign.
+- Digital Twin sidebar parity across all six sections.
+
+Files:
+
+Added:
+- tests/e2e/test_registry_flows.py
+- tests/e2e/test_resolve_flows.py
+- tests/e2e/test_access_denied_flows.py
+- tests/e2e/test_dtwin_flows.py
+- tests/e2e/test_help_modal_flows.py
+- tests/e2e/test_permissions_flows.py
+- tests/e2e/test_write_flows.py
+- tests/test_help_api.py
+- tests/test_agent_dtwin_chat.py
+
+Modified:
+- tests/e2e/conftest.py
+
+===
+2026-04-22 -- Digital Twin: actionable VIEW error diagnostics
+
+Problem:
+A deployed-app user reported a sync failure surfacing the generic message
+"The database reported an error that does not match a known column-resolution
+pattern. Verify your source tables and column mappings." The real underlying
+Databricks error was PERMISSION_DENIED (service principal missing MANAGE on a
+stale TABLE occupying the target VIEW name from a prior materialized-mode
+build), but diagnose_view_error() only recognized UNRESOLVED_COLUMN shapes and
+swallowed everything else into a generic fallback.
+
+Fix:
+- DigitalTwin.diagnose_view_error() now recognizes two additional error
+  families produced by the Databricks SQL engine and returns actionable text:
+    * PERMISSION_DENIED -> explains MANAGE/SELECT grants needed by the app SP
+      and calls out the "stale TABLE blocking CREATE OR REPLACE VIEW" case.
+    * TABLE_OR_VIEW_NOT_FOUND -> names the missing 3-part identifier and
+      advises verifying catalog/schema/table + SELECT grants.
+- For any unrecognized shape, the fallback now includes a truncated (<=500
+  chars) raw DB message so admins can act without having to dig in server
+  logs first. The full message is still logged at WARNING via logger.warning.
+
+Tests (additive):
+- tests/test_dtwin_service.py:TestDiagnoseViewError (5 new cases)
+    * permission_denied_is_recognised
+    * table_or_view_not_found_is_recognised
+    * unresolved_column_with_mapping_context (regression guard)
+    * unknown_error_includes_raw_detail
+    * unknown_error_truncates_very_long_detail
+
+Modified:
+- src/back/objects/digitaltwin/DigitalTwin.py (diagnose_view_error only)
+- tests/test_dtwin_service.py
+
+===
+2026-04-22 -- Deployment guide: Unity Catalog grants for the app SP
+
+Motivation:
+The previous deployment guide covered warehouse/volume resource bindings and
+the in-app RBAC model, but said nothing about the Unity Catalog privileges the
+app's service principal needs on the registry catalog/schema, the registry
+volume, and the source tables referenced by R2RML mappings. Missing UC grants
+are the most common cause of Digital Twin sync failures (surfaced today as
+PERMISSION_DENIED or TABLE_OR_VIEW_NOT_FOUND from CREATE OR REPLACE VIEW).
+
+Added (docs/deployment.md):
+- New top-level section "3. Unity Catalog Permissions for the Service
+  Principal" (sub-sections 3.1-3.7):
+    3.1 Operation matrix mapping every UC-touching runtime action to the
+        UC privilege it needs (SHOW/DESCRIBE, SELECT on sources, CREATE
+        OR REPLACE VIEW, incremental snapshot CREATE TABLE + DROP, fallback
+        DATABRICKS_TRIPLESTORE_TABLE CREATE/DELETE/INSERT, Volume I/O,
+        and the optional REST create-volume call).
+    3.2 Copy-paste SQL for registry catalog/schema grants (minimum viable
+        set + short ALL PRIVILEGES variant for dev).
+    3.3 Copy-paste SQL for source-table grants (per-table and schema-wide
+        patterns).
+    3.4 Explicit list of grants the app does NOT need (MODIFY on sources,
+        MANAGE on registry schema/catalog).
+    3.5 "Stale TABLE blocking CREATE OR REPLACE VIEW" pitfall with the
+        exact DROP TABLE remediation (the real cause of the user-reported
+        sync failure).
+    3.6 SP ID discovery guidance (client-id vs app-alias email).
+    3.7 Verification queries (SHOW GRANTS / SHOW TABLES / SHOW VOLUMES).
+- Prerequisites table in section 2 now cross-links to section 3.
+- Troubleshooting section (now 11): two new entries, one for the
+  PERMISSION_DENIED "Failed to create VIEW" flow and one for
+  TABLE_OR_VIEW_NOT_FOUND, each linking back to the relevant 3.x section.
+  Existing "Connection Errors" bullet now links to section 3.
+- Full Deployment Checklist (now 10): added step 10 for UC grants.
+- New Workspace Checklist (in 5): added a UC-grants step.
+
+Renumbering:
+- Sections 3-11 renumbered to 4-12 with zero cross-reference impact (the
+  file contains no "see section N" links). The TOC-like Overview table
+  continues to work unchanged because it doesn't reference section numbers.
+
+Other docs:
+- docs/README.md: the "Deployment" row in the doc map now mentions UC
+  grants explicitly.
+
+No code changes in this entry. The Sphinx guide page at
+docs/sphinx/guides/deployment.md is a thin {include} of the canonical
+docs/deployment.md, so the Sphinx build picks up the new section without
+further edits.
+
+Modified:
+- docs/deployment.md
+- docs/README.md

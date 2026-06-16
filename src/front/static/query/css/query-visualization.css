@@ -93,7 +93,7 @@
 
 .filter-pane .card-header {
     padding: 0.4rem 0.75rem;
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .filter-pane .card-body {
@@ -133,7 +133,7 @@
     align-items: center;
     gap: 0.3rem;
     padding: 0.2rem 0.5rem;
-    background: #e9ecef;
+    background: #ffffff;
     border: 1px solid #dee2e6;
     border-radius: 20px;
     font-size: 0.75rem;
@@ -219,7 +219,7 @@
 
 .entity-detail-section {
     margin-bottom: 0.6rem;
-    background: #f8f9fa;
+    background: #ffffff;
     border: 1px solid #e9ecef;
     border-radius: 6px;
     padding: 0.55rem 0.65rem;
@@ -371,7 +371,7 @@
 }
 
 .graph-context-menu .ctx-item:hover {
-    background: #e9ecef;
+    background: #ffffff;
 }
 
 .graph-context-menu .ctx-item i {

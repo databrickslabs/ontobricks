@@ -154,6 +154,8 @@ class Domain:
             "base_uri_auto": self._s.ontology.get("base_uri_auto", None),
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
+            "status": self._s.info.get("status", "DRAFT"),
+            "review_quorum": self._s.info.get("review_quorum", 1),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -175,6 +177,7 @@ class Domain:
                 "table_name": delta.get("table_name", ""),
             },
             "stats": self.get_domain_stats(),
+            "precision_score": self._s.precision_score,
         }
 
     def get_domain_stats(self) -> Dict[str, int]:
@@ -263,6 +266,12 @@ class Domain:
                 "mcp_enabled": data.get(
                     "mcp_enabled", self._s.info.get("mcp_enabled", False)
                 ),
+                "review_quorum": self._coerce_quorum(
+                    data.get(
+                        "review_quorum",
+                        self._s.info.get("review_quorum", 1),
+                    )
+                ),
             }
         )
 
@@ -291,7 +300,16 @@ class Domain:
             "base_uri_auto": self._s.ontology.get("base_uri_auto", None),
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
+            "review_quorum": self._s.info.get("review_quorum", 1),
         }
+
+    @staticmethod
+    def _coerce_quorum(raw: Any) -> int:
+        """Normalise a quorum value to an integer >= 1."""
+        try:
+            return max(1, int(raw))
+        except (TypeError, ValueError):
+            return 1
 
     def get_domain_template_data(self) -> Dict[str, Any]:
         """Get project data for template rendering.
@@ -314,6 +332,7 @@ class Domain:
             "author": self._s.info.get("author", ""),
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
+            "review_quorum": self._s.info.get("review_quorum", 1),
             "delta": delta,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,
@@ -393,6 +412,74 @@ class Domain:
     def build_registry_service(self) -> RegistryService:
         """Build a RegistryService from the current domain session."""
         return RegistryService.from_context(self._s, self._require_settings())
+
+    def list_build_runs_result(
+        self,
+        svc: RegistryService,
+        *,
+        version: Optional[str] = None,
+        limit: int = 200,
+    ) -> Dict[str, Any]:
+        """List recorded build runs for the loaded domain (newest-first)."""
+        try:
+            if not svc.cfg.is_configured:
+                raise ValidationError("Registry not configured")
+            folder = self._s.uc_domain_folder
+            if not folder:
+                raise ValidationError("Domain not saved to registry")
+            runs = svc.load_build_runs(folder, version=version, limit=limit)
+            return {
+                "success": True,
+                "domain_folder": folder,
+                "version": version,
+                "current_version": self._s.current_version,
+                "versions": svc.list_versions_sorted(folder),
+                "runs": runs,
+            }
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("List build runs failed: %s", e)
+            raise InfrastructureError(
+                "Failed to load build runs", detail=str(e)
+            ) from e
+
+    def audit_trail_result(
+        self,
+        svc: RegistryService,
+        *,
+        limit: int = 500,
+    ) -> Dict[str, Any]:
+        """Unified activity feed for the loaded domain (all versions).
+
+        Merges two registry streams so the frontend can interleave them
+        into one timeline: review/validation decisions (status switches
+        with their comments) and the build-run history (runs + results).
+        Both streams (plus the available ``versions`` list) are returned
+        raw; the UI sorts and filters by version client-side, defaulting
+        the version dropdown to ``current_version``.
+        """
+        try:
+            if not svc.cfg.is_configured:
+                raise ValidationError("Registry not configured")
+            folder = self._s.uc_domain_folder
+            if not folder:
+                raise ValidationError("Domain not saved to registry")
+            return {
+                "success": True,
+                "domain_folder": folder,
+                "current_version": self._s.current_version,
+                "versions": svc.list_versions_sorted(folder),
+                "events": svc.list_review_events(folder),
+                "runs": svc.load_build_runs(folder, limit=limit),
+            }
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("Audit trail failed: %s", e)
+            raise InfrastructureError(
+                "Failed to load audit trail", detail=str(e)
+            ) from e
 
     async def _bridge_domain_for_entity_uri(self, entity_uri: str) -> Optional[str]:
         """Resolve which registry domain folder owns *entity_uri* (async)."""
@@ -502,7 +589,32 @@ class Domain:
             ok, versions, msg = svc.list_versions(domain_name)
             if not ok:
                 raise InfrastructureError("Failed to list domain versions", detail=msg)
-            return {"success": True, "versions": versions}
+            # Best-effort per-version lifecycle status, so callers (e.g. the
+            # Load-Domain modal) can label versions DRAFT / IN-REVIEW /
+            # PUBLISHED. Sourced from the cached domain metadata; never fatal.
+            version_status: Dict[str, str] = {}
+            try:
+                ok2, details, _ = svc.list_domain_details_cached()
+                if ok2:
+                    for d in details:
+                        if d.get("name") != domain_name:
+                            continue
+                        for v in d.get("versions", []) or []:
+                            if isinstance(v, dict) and v.get("version"):
+                                version_status[str(v["version"])] = (
+                                    v.get("status") or "DRAFT"
+                                )
+                        break
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "version status lookup failed for %s", domain_name,
+                    exc_info=True,
+                )
+            return {
+                "success": True,
+                "versions": versions,
+                "version_status": version_status,
+            }
         except OntoBricksError:
             raise
         except Exception as e:
@@ -543,6 +655,7 @@ class Domain:
                             "version": ver,
                             "description": "",
                             "mcp_enabled": False,
+                            "status": "DRAFT",
                             "is_active": ver == latest,
                             "is_current": ver == self._s.current_version,
                             "error": _msg,
@@ -556,6 +669,7 @@ class Domain:
                         "version": ver,
                         "description": info.get("description", ""),
                         "mcp_enabled": info.get("mcp_enabled", False),
+                        "status": info.get("status", "DRAFT"),
                         "author": info.get("author", ""),
                         "last_update": info.get("last_update", ""),
                         "is_active": ver == latest,
@@ -577,58 +691,6 @@ class Domain:
                 "List version details failed", detail=str(e)
             ) from e
 
-    def set_version_mcp(
-        self, svc: RegistryService, version: str, enabled: bool
-    ) -> Dict[str, Any]:
-        """Toggle the ``mcp_enabled`` flag for a single version.
-
-        Only one version may have ``mcp_enabled=True`` at a time.  When
-        *enabled* is ``True`` any other version that currently has the flag
-        is updated to ``False`` first.
-        """
-        try:
-            folder = self._s.uc_domain_folder
-            if not folder:
-                raise ValidationError("Domain not saved to registry")
-
-            sorted_versions = svc.list_versions_sorted(folder)
-            if version not in sorted_versions:
-                raise NotFoundError(f"Version {version} not found")
-
-            if enabled:
-                for ver in sorted_versions:
-                    if ver == version:
-                        continue
-                    ok, data, _ = svc.read_version(folder, ver)
-                    if not ok:
-                        continue
-                    info = data.get("info", {})
-                    if info.get("mcp_enabled"):
-                        info["mcp_enabled"] = False
-                        data["info"] = info
-                        svc.write_version(folder, ver, json.dumps(data))
-
-            ok, data, msg = svc.read_version(folder, version)
-            if not ok:
-                if msg and "not found" in msg.lower():
-                    raise NotFoundError(msg)
-                raise InfrastructureError(
-                    "Failed to read domain version from registry", detail=msg
-                )
-
-            data.setdefault("info", {})["mcp_enabled"] = enabled
-            svc.write_version(folder, version, json.dumps(data))
-
-            if version == self._s.current_version:
-                self._s.info["mcp_enabled"] = enabled
-
-            return {"success": True, "version": version, "mcp_enabled": enabled}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("set_version_mcp failed: %s", e)
-            raise InfrastructureError("set_version_mcp failed", detail=str(e)) from e
-
     def save_domain_to_uc(self, svc: RegistryService) -> Dict[str, Any]:
         """Save domain into the registry Volume under /domains/<name>/V{ver}/V{ver}.json."""
         try:
@@ -644,6 +706,11 @@ class Domain:
                 )
             version = self._s.current_version or "1"
             export_data = self._s.export_for_save()
+            # A brand-new domain always starts as DRAFT; an overwrite of an
+            # existing version preserves whatever status the session carries.
+            if is_new_domain:
+                export_data.setdefault("info", {})["status"] = "DRAFT"
+                self._s.info["status"] = "DRAFT"
             content = json.dumps(export_data, indent=2)
             ok, message = svc.write_version(folder, version, content)
 
@@ -754,8 +821,12 @@ class Domain:
             ts_stats.pop("dt_existence", None)
             self._s.triplestore.pop("_ts_cache_timestamp", None)
             self._s.save()
-            status = "Latest" if is_latest else "Read-only"
-            msg = f"Domain loaded: {domain_name} v{version} ({status})"
+            # Editability is driven by lifecycle status (DRAFT), not by
+            # whether this is the latest version: an older DRAFT version is
+            # still fully editable.
+            lifecycle = (self._s.info.get("status") or "DRAFT").upper()
+            label = "editable" if lifecycle == "DRAFT" else f"{lifecycle}, read-only"
+            msg = f"Domain loaded: {domain_name} v{version} ({label})"
             return {
                 "success": True,
                 "message": msg,
@@ -797,7 +868,11 @@ class Domain:
             parts = current_version.split(".")
             new_version = str(int(parts[0]) + 1) if parts else "2"
             self._s.current_version = new_version
+            # New versions always start their lifecycle as DRAFT, regardless
+            # of the status of the version they were branched from.
+            self._s.info["status"] = "DRAFT"
             export_data = self._s.export_for_save()
+            export_data.setdefault("info", {})["status"] = "DRAFT"
             exported_entities = len(
                 export_data.get("versions", {})
                 .get(new_version, {})
@@ -900,12 +975,15 @@ class Domain:
             # is exposed separately via ``active_version`` so the Cockpit
             # tile can show what's actually live on the API/MCP surface.
             is_active = is_latest
+            status = self._s.info.get("status", "DRAFT")
             result = {
                 "success": True,
                 "version": version,
                 "is_active": is_active,
                 "is_latest": is_latest,
                 "active_version": active_version,
+                "published_version": active_version,
+                "status": status,
                 "available_versions": available_versions,
                 "has_registry": has_registry,
                 "registry": (
@@ -1044,16 +1122,17 @@ class Domain:
                 raise ValidationError("No views exist")
             if view_name not in design_layout["views"]:
                 raise NotFoundError(f'View "{view_name}" not found')
-            if len(design_layout["views"]) <= 1:
-                raise ValidationError("Cannot delete the last view")
             del design_layout["views"][view_name]
+            # Deleting the last view is allowed: the UI falls back to the empty
+            # state (current_view becomes None) until a new view is created.
+            remaining = list(design_layout["views"].keys())
             if design_layout.get("current_view") == view_name:
-                design_layout["current_view"] = list(design_layout["views"].keys())[0]
+                design_layout["current_view"] = remaining[0] if remaining else None
             self._s._data["design_layout"] = design_layout
             self._s.save()
             return {
                 "success": True,
-                "views": list(design_layout["views"].keys()),
+                "views": remaining,
                 "current_view": design_layout["current_view"],
             }
         except OntoBricksError:

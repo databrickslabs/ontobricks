@@ -502,7 +502,7 @@ function displayMetadataPreview(metadata) {
                 <td class="meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}">
                     <span class="badge bg-secondary">${columnCount}</span>
                 </td>
-                <td class="table-comment-cell meta-cursor-pointer" data-meta-action="edit-comment" data-table-index="${index}">
+                <td class="table-comment-cell meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}">
                     <span class="table-comment-text" id="tableComment_${index}">${tableComment || '<span class="text-muted fst-italic">Click to add description...</span>'}</span>
                 </td>
             </tr>
@@ -514,62 +514,6 @@ function displayMetadataPreview(metadata) {
     
     updateSelectionCount();
     updateSelectAllCheckbox();
-}
-
-function editTableCommentInline(tableIndex, event) {
-    event.stopPropagation();
-    
-    if (!metadataCache || !metadataCache.tables || !metadataCache.tables[tableIndex]) {
-        return;
-    }
-    
-    const table = metadataCache.tables[tableIndex];
-    const cell = event.currentTarget;
-    const currentComment = table.comment || table.description || '';
-    
-    // Replace cell content with input
-    const safeVal = currentComment.replace(/"/g, '&quot;');
-    cell.innerHTML = `
-        <input type="text" class="form-control form-control-sm" 
-               value="${safeVal}" 
-               autofocus>
-    `;
-    
-    const input = cell.querySelector('input');
-    input.addEventListener('blur', function () {
-        saveTableCommentInline(tableIndex, input.value);
-    });
-    input.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter') input.blur();
-        if (ev.key === 'Escape') cancelTableCommentEdit(tableIndex);
-    });
-    input.focus();
-    input.select();
-}
-
-function saveTableCommentInline(tableIndex, newComment) {
-    if (!metadataCache || !metadataCache.tables || !metadataCache.tables[tableIndex]) {
-        return;
-    }
-    
-    // Update the cache
-    metadataCache.tables[tableIndex].comment = newComment;
-    metadataCache.tables[tableIndex].description = newComment;
-    
-    // Update the display
-    const commentSpan = document.getElementById(`tableComment_${tableIndex}`);
-    const cell = commentSpan ? commentSpan.parentElement : document.querySelector(`tr[data-table-index="${tableIndex}"] .table-comment-cell`);
-    
-    if (cell) {
-        cell.innerHTML = `<span class="table-comment-text" id="tableComment_${tableIndex}">${newComment || '<span class="text-muted fst-italic">Click to add description...</span>'}</span>`;
-    }
-    
-    // Auto-save the comment change
-    saveMetadataChanges(true);
-}
-
-function cancelTableCommentEdit(tableIndex) {
-    displayMetadataPreview(metadataCache);
 }
 
 function toggleTableSelection(tableName, isChecked) {
@@ -1098,7 +1042,6 @@ async function updateMetadataFromUC() {
             else if (act === 'confirm-ds-change') confirmDataSourceChange();
             else if (act === 'table-details') showTableDetails(parseInt(t.getAttribute('data-table-index'), 10));
             else if (act === 'open-ds-modal') openChangeDataSourceModal(parseInt(t.getAttribute('data-table-index'), 10));
-            else if (act === 'edit-comment') editTableCommentInline(parseInt(t.getAttribute('data-table-index'), 10), e);
         });
 
         root.addEventListener('change', function (e) {

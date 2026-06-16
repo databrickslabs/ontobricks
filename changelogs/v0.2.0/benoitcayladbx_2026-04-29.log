@@ -1,0 +1,178 @@
+## Redeploy dev (target dev-lakebase): refresh Lakebase database resource ID after recreating ontobricks-test
+
+Context: the user requested a dev redeploy. The first `make deploy` (target
+`dev-lakebase`) failed because the Lakebase project `ontobricks-test`
+referenced in `databricks.yml` had been deleted, so terraform could not
+create the `mcp_ontobricks_app` postgres resource binding (`branches/
+production does not exist`). After the user recreated the project, a
+second deploy then failed with two follow-up errors: (1) the existing
+`mcp-ontobricks` app was unmanaged by this bundle's terraform state,
+(2) the registry volume `benoit_cayla.ontobricks_deployed_test.
+registry_test` did not exist in Unity Catalog. Fixed all three, both
+apps are now `RUNNING` and `/healthz` returns 200.
+
+Changes:
+
+1. `databricks.yml` — bumped the default `lakebase_database_resource`
+   variable from the deleted `db-tvs3-r0yrbvtunp` to the new
+   `db-1vw1-34ir9n3vrn` of the recreated `ontobricks-test` project
+   (database `databricks_postgres`, branch `production`). Branch path
+   was unchanged.
+
+2. Bundle bind (one-shot, no source change) — bound the existing
+   `mcp-ontobricks` app to this bundle's terraform state via
+   `databricks bundle deployment bind mcp_ontobricks_app mcp-ontobricks
+   -t dev-lakebase --auto-approve`. Equivalent to running
+   `scripts/deploy.sh --bind` for the MCP app, which the script does
+   not currently cover (it only binds `ontobricks_dev_app`).
+
+3. Unity Catalog volume (one-shot, no source change) — created the
+   missing `benoit_cayla.ontobricks_deployed_test.registry_test`
+   MANAGED volume that the dev app's `WRITE_VOLUME` resource expects.
+
+4. `make deploy` (target `dev-lakebase`) succeeded:
+   - `ontobricks-dev` → RUNNING, https://ontobricks-dev-2508734981122804.aws.databricksapps.com (`/healthz` → 200)
+   - `mcp-ontobricks` → RUNNING, https://mcp-ontobricks-2508734981122804.aws.databricksapps.com (refreshed via `bundle run mcp_ontobricks_app -t dev-lakebase`)
+   - App self-permissions bootstrap: ✓ `CAN_MANAGE` granted to ontobricks-dev SP.
+   - Lakebase schema permissions bootstrap: skipped — the
+     `ontobricks_registry` schema does not yet exist in
+     `databricks_postgres`. Expected on a freshly recreated project;
+     re-run `scripts/bootstrap-lakebase-perms.sh -a ontobricks-dev`
+     after initialising the registry from Settings > Registry >
+     Initialize.
+
+Modified files:
+- `databricks.yml`
+
+Tests: `uv run pytest -q` → **1892 passed** in 62.4s (run pre-deploy
+per the deploy skill's pre-flight gate; no source code changed in this
+deploy beyond the bundle config above, so tests were not re-run after
+the deploy).
+
+Follow-ups for the user:
+- Open the OntoBricks app → **Settings > Registry > Initialize** to
+  create the `ontobricks_registry` schema in Lakebase.
+- Then re-run `scripts/bootstrap-lakebase-perms.sh -a ontobricks-dev`
+  to grant USAGE/DML/sequence privileges to the app's service
+  principal.
+- Confirm the `sql-warehouse` and `volume` resource bindings in
+  **Compute > Apps > ontobricks-dev > Resources** (DAB cannot bind
+  these — must be done in the UI per README.md).
+
+## Cockpit: "Active Version" now reflects the MCP-enabled version
+
+Context: with V1 toggled as the API/MCP-active version and V2 loaded
+in-session, the Cockpit's "Active Version" tile incorrectly displayed
+v2. Root cause was in `Domain.get_version_status`, which returned
+`is_active = is_latest` and the front-end then rendered
+`available_versions[0]` (the latest version) on the tile. This
+conflated two semantically distinct concepts: "loaded version is the
+latest" (used by `version-check.js` to gate the read-only body class
+that hides write-controls + the wizard sidebar) versus "version
+exposed via API/MCP" (what the Cockpit tile is meant to advertise).
+
+Changes:
+
+1. `src/back/objects/domain/Domain.py` — `Domain.get_version_status`
+   now also calls `RegistryService.find_mcp_version(folder)` and
+   returns the result as a new `active_version` field. `is_active`
+   keeps its legacy meaning (`is_latest`) so the read-only body class
+   in `version-check.js` and all its CSS gates (incl. the
+   `view-mode-hidden` wizard link) continue to behave correctly.
+
+2. `src/front/static/domain/js/domain-validation.js` —
+   `updateVersionTiles` now renders the Active Version tile from
+   `vs.active_version` (falling back to "None" when no version is
+   MCP-enabled). The "(not loaded)" suffix appears when the loaded
+   version differs from the MCP-active one.
+
+Modified files:
+- `src/back/objects/domain/Domain.py`
+- `src/front/static/domain/js/domain-validation.js`
+
+Tests: `uv run pytest -q` → **1892 passed** in 57.7s. (First run
+showed 3 spurious e2e failures from a transient mid-edit state where
+`is_active` had been broadened beyond `is_latest` and the wizard
+sidebar was therefore hidden by the read-only-version body class;
+fixed before commit.)
+
+## Silence GitGuardian "Generic Database Assignment" false positive
+in Lakebase auth tests
+
+Context: GitGuardian alert **32279171** (commit `a3b55be`) flagged the
+`autoscaling_pg_env` fixture in `tests/test_lakebase_auth.py` as a
+"Generic Database Assignment" — the realistic-looking Lakebase
+hostname (`ep-damp-art-d1l8gclo.…`) plus a UUID-shaped `PGUSER` set
+together as `PGHOST` / `PGPORT` / `PGDATABASE` / `PGUSER` was enough
+to fingerprint it as a credential block, even though every value was
+synthetic test data. `tests/test_settings_lakebase_tier.py` reused
+the same hostname and was affected by the same shape.
+
+Changes:
+
+1. `tests/test_lakebase_auth.py` — extracted the synthetic Lakebase
+   values to module-level constants (`_FAKE_PGHOST`, `_FAKE_PGHOST_RO`,
+   `_FAKE_PGUSER`, `_FAKE_PROJECT_ID`, `_FAKE_PG_TOKEN`) with a header
+   comment that explicitly calls out their fixture-only role and
+   references the GitGuardian alert ID. Renamed the host slug from
+   `ep-damp-art-d1l8gclo` → `ep-test-fake1234` so it cannot be
+   mistaken for a real endpoint, and switched the all-zero UUID for
+   `PGUSER`. Every line that the scanners had been matching now
+   carries both `# pragma: allowlist secret` (detect-secrets) and
+   `# ggignore` (ggshield) markers.
+
+2. `tests/test_settings_lakebase_tier.py` — same hostname rename
+   (`ep-damp-art-d1l8gclo` → `ep-test-fake1234`) on the `HOST` /
+   `RO_HOST` class constants, with the same dual-pragma markers.
+
+Modified files:
+- `tests/test_lakebase_auth.py`
+- `tests/test_settings_lakebase_tier.py`
+
+Tests: `uv run pytest -q` → **1892 passed** in 68.1s. Touched tests
+also re-run in isolation (`tests/test_lakebase_auth.py
+tests/test_settings_lakebase_tier.py` → 20 passed).
+
+Follow-up for the user: dismiss GitGuardian alert **32279171** as a
+false positive. Future scans on the renamed values + inline pragmas
+should not re-trigger.
+
+## Patch GitPython transitive vuln (GHSA-rpm5-65cw-6hj4 / SNYK-PYTHON-GITPYTHON-16298057)
+
+Context: SCA scan flagged GitPython 3.1.46 (pulled in transitively by
+`mlflow-skinny`) as vulnerable to CWE-78 command injection via the
+`upload_pack` / `receive_pack` kwargs on `Repo.clone_from`,
+`Remote.fetch`, `Remote.pull`, `Remote.push`. GitPython's blocklist
+runs before Python normalises `_` → `-`, so underscore-form kwargs
+bypass the `allow_unsafe_options=False` guard. Affected range
+`[3.1.30, 3.1.47)`; fix is 3.1.47+. The OntoBricks codebase does not
+import `git` directly (no `from git import …` anywhere under `src/`),
+so we are not exposed in our own paths, but the vulnerable wheel was
+still in `uv.lock`.
+
+Changes:
+
+1. `pyproject.toml` — added `gitpython>=3.1.47` to
+   `[tool.uv].constraint-dependencies` (next to the existing `mako` /
+   `pygments` constraints) so the resolver is forced onto a patched
+   build without making it a real direct dependency. Kept GitPython
+   transitive via `mlflow-skinny`.
+
+2. `uv.lock` — regenerated via `uv lock`; resolver bumped
+   `gitpython 3.1.46 → 3.1.47`. No other packages moved. `numpy 2.4.0
+   yanked` warning is unrelated and pre-existing.
+
+Modified files:
+- `pyproject.toml`
+- `uv.lock`
+
+Tests: `uv run pytest -q` → **1892 passed** in 63.9s.
+
+Follow-up — second GitPython advisory covered by the same pin:
+GHSA-x2qx-6953-8485 / CVE-2026-42284 ("Argument injection via
+`multi_options` shlex.split bypass in `_clone()` / `Submodule.update`")
+lists affected `<= 3.1.44`, patched `>= 3.1.47`. The constraint added
+above already locks 3.1.47, so no further pyproject/lock change is
+needed. We also have no code-path exposure: no `clone_from`,
+`Repo.clone`, `Submodule.update`, or `multi_options` calls under
+`src/` (the only matches for "Submodule" are docstring prose).

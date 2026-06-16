@@ -1,0 +1,407 @@
+## Settings: spinner while Graph DB tab loads
+
+Context: Opening Settings → Graph DB triggered server fetches without visible progress; users saw stale or incomplete UI until requests finished.
+
+Changes:
+
+1. `src/front/templates/settings.html`
+   Added a loading banner with Bootstrap spinner and status text above the Graph DB form.
+2. `src/front/static/config/js/settings.js`
+   Introduced `setGraphDbTabLoading`, show banner for the whole `shown.bs.tab` sequence, and await `loadLadybugFiles` when Ladybug is selected so the spinner covers the file list fetch.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+Tests: `uv run pytest -q` → 2150 passed, 80 skipped in 23.83s
+
+## Managed sync: UC catalog fallback uses Registry (Settings) before domain.delta
+
+Context: When ``graph_engine_config.sync_uc_catalog`` was empty, the synced
+table FQN used ``domain.delta.catalog`` (often a personal UC catalog such as
+``benoit_cayla``). Operators expect the same Unity Catalog as **Settings →
+Registry** (Volume triplet), not the per-domain Delta catalog.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+   New ``resolve_sync_uc_fallback_catalog(domain, settings, delta_cfg)``:
+   prefer ``RegistryCfg.from_domain`` catalog, else ``delta_cfg["catalog"]``.
+   Docstring for ``synced_uc_name`` updated.
+2. ``src/back/objects/digitaltwin/_build_pipeline.py``
+   ``_apply_via_synced_pipeline`` uses the helper for ``fallback_catalog``.
+3. ``src/back/objects/registry/scheduler.py``
+   ``_apply_synced_pipeline`` / ``_write_graph_triples`` take ``domain`` and
+   ``settings`` so scheduled builds use the same resolution.
+4. ``docs/graphdb-integration.md``
+   Document fallback order for synced UC FQN.
+5. ``tests/test_lakebase_flat_store.py``
+   ``TestResolveSyncUcFallbackCatalog``.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+- ``src/back/objects/digitaltwin/_build_pipeline.py``
+- ``src/back/objects/registry/scheduler.py``
+- ``docs/graphdb-integration.md``
+- ``tests/test_lakebase_flat_store.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2152 passed, 80 skipped in 23.51s
+
+## Managed sync: auto-create Unity Catalog schema before synced-table registration
+
+Context: Error ``Schema 'catalog.graph_schema' does not exist`` refers to
+**Unity Catalog**, not Postgres/Lakebase. Operators created the PG schema but
+not the UC metastore schema; ``create_synced_database_table`` fails until
+``CREATE SCHEMA catalog.graph_schema`` exists in UC.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/_sync_uc_schema.py``
+   ``ensure_uc_schema_for_synced_table_fqn`` runs
+   ``CREATE SCHEMA IF NOT EXISTS`` via the warehouse for the parent of the
+   three-part synced-table UC name.
+2. ``src/back/objects/digitaltwin/_build_pipeline.py``
+   Call helper immediately before ``SyncedTableManager.ensure``.
+3. ``src/back/objects/registry/scheduler.py``
+   Same for scheduled builds (passes ``src`` / ``DatabricksClient``).
+4. ``docs/graphdb-integration.md``
+   Pipeline steps updated.
+5. ``tests/test_sync_uc_schema.py``
+   DDL invocation and validation tests.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/_sync_uc_schema.py`` (new)
+- ``src/back/objects/digitaltwin/_build_pipeline.py``
+- ``src/back/objects/registry/scheduler.py``
+- ``docs/graphdb-integration.md``
+- ``tests/test_sync_uc_schema.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2154 passed, 80 skipped in 23.79s
+
+## SQL Warehouse: commit UC DDL so synced-table API sees new schemas
+
+Context: After ``CREATE SCHEMA IF NOT EXISTS`` via the warehouse, Lakebase
+``create_synced_database_table`` could still report Unity Catalog schema missing
+if the driver left an open transaction without committing metadata updates.
+
+Changes:
+
+1. ``src/back/core/databricks/SQLWarehouse.py``
+   ``execute_statement`` calls ``conn.commit()`` when supported after DDL/DML.
+2. ``src/back/core/graphdb/lakebase/_sync_uc_schema.py``
+   Failures from ``execute_statement`` raise ``InfrastructureError`` with the
+   attempted SQL and a grants hint.
+3. ``tests/test_sql_warehouse.py``, ``tests/test_sync_uc_schema.py``
+   Coverage for commit and wrapped errors.
+
+Modified files:
+- ``src/back/core/databricks/SQLWarehouse.py``
+- ``src/back/core/graphdb/lakebase/_sync_uc_schema.py``
+- ``tests/test_sql_warehouse.py``
+- ``tests/test_sync_uc_schema.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2155 passed, 80 skipped in 23.51s
+
+## Managed sync: tolerate concurrent Lakeflow updates + pin UC catalog via env
+
+Context: ``pipelines.start_update`` fails when an active pipeline update is
+already running (overlap between initial provisioning and ``trigger_refresh``).
+Operators also want synced-table registration under one Unity Catalog
+namespace with Volume/registry conventions.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/SyncedTableManager.py``
+   ``trigger_refresh`` catches the active-update conflict, logs, returns empty
+   ``update_id``, and ``trigger_and_wait`` polls until ``ONLINE``.
+2. ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+   ``resolve_sync_uc_fallback_catalog`` honors ``ONTBRICKS_SYNC_UC_CATALOG``
+   before Registry/Delta when ``sync_uc_catalog`` JSON is empty.
+3. ``docs/graphdb-integration.md``, ``src/front/templates/settings.html``
+   Document FQN layout and env/catalog pinning.
+4. ``tests/test_synced_table_manager.py``, ``tests/test_lakebase_flat_store.py``
+   Regression tests.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/SyncedTableManager.py``
+- ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+- ``docs/graphdb-integration.md``
+- ``src/front/templates/settings.html``
+- ``tests/test_synced_table_manager.py``
+- ``tests/test_lakebase_flat_store.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2157 passed, 80 skipped in 23.44s
+
+## Managed sync: wait on Lakeflow pipeline idle (not only synced-table status)
+
+Context: Builds reported progress while **Lakeflow / Pipelines** showed no
+completion — synced-table ``detailed_state`` can race ahead of the underlying
+snapshot pipeline, so OntoBricks returned ``ONLINE`` before visible pipeline work.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/SyncedTableManager.py``
+   ``wait_for_completion`` calls ``pipelines.wait_get_pipeline_idle`` once a
+   ``pipeline_id`` exists, then polls until ``ONLINE`` / ``ONLINE_NO_PENDING_UPDATE``.
+2. ``docs/graphdb-integration.md``
+   Build pipeline step documents Lakeflow idle wait.
+3. ``tests/test_synced_table_manager.py``
+   Assertions for idle wait + robust fake clock for timeout test.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/SyncedTableManager.py``
+- ``docs/graphdb-integration.md``
+- ``tests/test_synced_table_manager.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2158 passed, 80 skipped in 23.19s
+
+## Managed sync: wait on ``get_update(update_id)`` + ``full_refresh`` on trigger
+
+Context: ``wait_get_pipeline_idle`` could return while the synced table was still
+reporting ``ONLINE`` from the **previous** snapshot — so ``start_update`` had
+queued a run but OntoBricks treated the pipeline as idle and finished the build
+with **no visible Lakeflow activity** for that refresh.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/SyncedTableManager.py``
+   ``trigger_refresh`` calls ``start_update`` with ``full_refresh=True`` and
+   ``cause=API_CALL``. ``trigger_and_wait`` passes the returned ``update_id`` into
+   ``wait_for_completion``, which polls ``pipelines.get_update`` until
+   ``COMPLETED`` / failure before falling back to idle-wait + synced-table poll.
+2. ``docs/graphdb-integration.md``
+   Step 5 updated.
+3. ``tests/test_synced_table_manager.py``
+   Assertions for ``full_refresh`` / ``get_update`` path.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/SyncedTableManager.py``
+- ``docs/graphdb-integration.md``
+- ``tests/test_synced_table_manager.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2159 passed, 80 skipped in 24.29s
+
+## Managed sync: document UC path vs Registry Volume schema + build logs
+
+Context: Operators searched **Catalog** under the Registry Volume
+``catalog.schema`` triplet; synced tables register under the **same catalog**
+(fallback) but the UC **schema segment** is ``graph_engine_config.schema``
+(default ``ontobricks_graph``), not ``RegistryCfg.schema``.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/LakebaseBase.py``
+   Property ``graph_schema`` documents PG + UC middle segment.
+2. ``src/back/objects/digitaltwin/_build_pipeline.py``,
+   ``src/back/objects/registry/scheduler.py``
+   INFO log line prints resolved synced-table UC FQN and schema/catalog sources.
+3. ``docs/graphdb-integration.md``, ``src/front/templates/settings.html``
+   Explain Explorer layout vs Registry triplet.
+4. ``tests/test_build_pipeline_streaming.py``
+   Mock ``graph_schema`` / ``sync_uc_catalog`` on fake store.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/LakebaseBase.py``
+- ``src/back/objects/digitaltwin/_build_pipeline.py``
+- ``src/back/objects/registry/scheduler.py``
+- ``docs/graphdb-integration.md``
+- ``src/front/templates/settings.html``
+- ``tests/test_build_pipeline_streaming.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2159 passed, 80 skipped in 23.63s
+
+## Managed sync: create union view only after Lakeflow materializes ``__sync``
+
+Context: ``CREATE OR REPLACE VIEW ... FROM <graph>__sync`` ran immediately after
+``create_synced_database_table`` but the ``__sync`` Postgres relation does not
+exist until the snapshot pipeline runs, causing
+``relation \"...__sync\" does not exist``.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+   ``ensure_synced_companion`` / ``ensure_synced_union_view`` split;
+   ``ensure_synced_layout`` calls both (compat).
+2. ``src/back/objects/digitaltwin/_build_pipeline.py``,
+   ``src/back/objects/registry/scheduler.py``
+   Companion before ``trigger_and_wait``; union view after sync completes.
+3. ``docs/graphdb-integration.md``
+   Pipeline step numbering.
+4. ``tests/test_lakebase_flat_store.py``,
+   ``tests/test_build_pipeline_streaming.py``
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+- ``src/back/objects/digitaltwin/_build_pipeline.py``
+- ``src/back/objects/registry/scheduler.py``
+- ``docs/graphdb-integration.md``
+- ``tests/test_lakebase_flat_store.py``
+- ``tests/test_build_pipeline_streaming.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2160 passed, 80 skipped in 23.76s
+
+## Release backlog: domain save UX + dependency security bumps
+
+Context: ``releasereq/TODO.md`` asked for short user-facing save messages (no
+registry volume path in toasts) and resolution of Dependabot-style alerts on
+Mako, GitPython, and python-multipart.
+
+Changes:
+
+1. ``src/back/objects/domain/Domain.py``
+   ``save_domain_to_uc`` returns ``"Domain saved"``; ``create_new_domain_version``
+   omits the UC path from ``message``; full registry paths logged at INFO.
+2. ``pyproject.toml``
+   ``python-multipart>=0.0.27``; ``constraint-dependencies`` raise Mako to
+   ``>=1.3.12`` and GitPython to ``>=3.1.49`` (hooksPath / config_writer fixes;
+   re-run security scan when **3.1.50+** lands on your index if alert #26 persists).
+3. ``uv.lock``
+   Resolved ``python-multipart`` 0.0.27, ``mako`` 1.3.12, ``gitpython`` 3.1.49.
+
+Modified files:
+- ``src/back/objects/domain/Domain.py``
+- ``pyproject.toml``
+- ``uv.lock``
+- ``changelogs/v0.3.0/2026-05-10.log``
+- ``releasereq/TODO.md``
+
+Tests: ``uv run pytest -q`` → 2163 passed, 80 skipped in 24.19s
+
+## Lakebase graph schema: always Registry Volume ``schema`` when set
+
+Context: Synced tables stayed under ``….<graph_engine_config.schema>.…``
+(e.g. ``ontobricks_graph``) while operators expected ``catalog.<registry_volume_schema>``
+from Settings → Registry. UC synced registration must match Lakebase Postgres
+``search_path``.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+   ``resolve_lakebase_graph_schema`` prefers ``RegistryCfg.schema`` over JSON schema.
+2. ``src/back/core/graphdb/GraphDBFactory.py``
+   Wire Lakebase store construction through the resolver.
+3. ``src/back/core/graphdb/lakebase/LakebaseBase.py``
+   Docstrings for ``validate_engine_config_keys`` / ``graph_schema``.
+4. ``docs/graphdb-integration.md``, ``src/front/templates/settings.html``
+   Operator guidance; build/scheduler log wording.
+5. ``tests/test_lakebase_flat_store.py``, ``tests/test_graphdb_factory.py``
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+- ``src/back/core/graphdb/GraphDBFactory.py``
+- ``src/back/core/graphdb/lakebase/LakebaseBase.py``
+- ``src/back/objects/digitaltwin/_build_pipeline.py``
+- ``src/back/objects/registry/scheduler.py``
+- ``docs/graphdb-integration.md``
+- ``src/front/templates/settings.html``
+- ``tests/test_lakebase_flat_store.py``
+- ``tests/test_graphdb_factory.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2163 passed, 80 skipped in 24.35s
+
+## Lakebase managed-sync: `_sync` suffix instead of `__sync`
+
+Context: The Lakeflow-backed Postgres table used the identifier suffix ``__sync``.
+Operators asked for no ``__sync`` segment; the synced physical name now ends with
+a single underscore + ``sync`` (e.g. ``g_v1_sync``), distinct from the union view
+``g_v1`` and companion ``g_v1__app``. Existing deployments retain old UC/PG
+objects until re-provisioned or migrated manually.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/_companion_ddl.py``
+   ``synced_phy`` returns ``{base}_sync`` instead of ``{base}__sync``.
+2. ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+   Docstrings/comments refer to the ``_sync`` table.
+3. ``src/back/objects/digitaltwin/_build_pipeline.py``
+   Pipeline docstring updated for union/companion ordering wording.
+4. ``docs/graphdb-integration.md``, ``README.md``, ``docs/sphinx/api/app.core.graphdb.lakebase.rst``
+   Layout + UC FQN documentation aligned with ``_sync``.
+5. ``tests/test_lakebase_flat_store.py``, ``tests/test_build_pipeline_streaming.py``, ``tests/test_sync_uc_schema.py``
+   Expected FQN / SQL fragments updated.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/_companion_ddl.py``
+- ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+- ``src/back/objects/digitaltwin/_build_pipeline.py``
+- ``docs/graphdb-integration.md``
+- ``README.md``
+- ``docs/sphinx/api/app.core.graphdb.lakebase.rst``
+- ``tests/test_lakebase_flat_store.py``
+- ``tests/test_build_pipeline_streaming.py``
+- ``tests/test_sync_uc_schema.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2163 passed, 80 skipped in 23.57s
+
+## Lakebase graph: Postgres database aligns with Registry ``lakebase_database``
+
+Context: Knowledge Graph search and API triple queries use ``get_triplestore`` →
+``GraphDBFactory`` with ``graph_engine_config.database`` only. Operators who set
+**Settings → Registry** ``lakebase_database`` (non-default logical DB on the
+Lakebase instance) had the **registry** store on that DB while **graph** triples
+still used ``PGDATABASE`` — builds appeared to succeed but queries hit an empty
+schema in the wrong database.
+
+Changes:
+
+1. ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+   New ``resolve_lakebase_graph_database``: explicit ``graph_engine_config.database``
+   wins; else ``RegistryCfg.lakebase_database``; else empty (auth default).
+2. ``src/back/core/graphdb/GraphDBFactory.py``
+   ``_create_lakebase`` wires the resolver (including ``SyncedTableManager`` logical DB).
+3. ``src/back/core/graphdb/lakebase/LakebaseBase.py``
+   ``validate_engine_config_keys`` docstring for ``database``.
+4. ``docs/graphdb-integration.md``, ``docs/sphinx/api/app.core.graphdb.lakebase.rst``
+   Configuration / triad schema wording.
+5. ``tests/test_lakebase_flat_store.py``, ``tests/test_graphdb_factory.py``
+   Unit coverage for resolver + factory kwargs.
+
+Modified files:
+- ``src/back/core/graphdb/lakebase/LakebaseFlatStore.py``
+- ``src/back/core/graphdb/GraphDBFactory.py``
+- ``src/back/core/graphdb/lakebase/LakebaseBase.py``
+- ``docs/graphdb-integration.md``
+- ``docs/sphinx/api/app.core.graphdb.lakebase.rst``
+- ``tests/test_lakebase_flat_store.py``
+- ``tests/test_graphdb_factory.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2167 passed, 80 skipped in 24.08s
+
+## Knowledge Graph API: seed / filter SQL uses backend relation id
+
+Context: ``GET …/triples/find`` and ``GET …/triples`` built raw ``WHERE`` fragments
+with ``effective_graph_name(domain)`` embedded as the SQL table name. Lakebase
+stores rows under ``physical_table_id`` (``safe_identifier`` + lower), which
+**differs** from the logical name when the domain folder name contains characters
+PostgreSQL cannot use unquoted (e.g. hyphens). The BFS CTE used ``_sql_relation``
+for the main join but the **seed** subqueries still pointed at a non-existent
+relation → empty results or ``does not exist``.
+
+Changes:
+
+1. ``src/api/routers/digitaltwin.py``
+   ``dt_triples_find`` / ``dt_triples`` use ``store._sql_relation(table)`` inside
+   hand-built subqueries; logical ``table`` unchanged for store method arguments.
+2. ``src/api/routers/internal/dtwin.py``
+   Session ``/triples/find`` mirror of the same fix.
+3. ``tests/test_lakebase_flat_store.py``
+   ``TestLakebaseSqlRelation`` documents logical vs physical naming.
+
+Modified files:
+- ``src/api/routers/digitaltwin.py``
+- ``src/api/routers/internal/dtwin.py``
+- ``tests/test_lakebase_flat_store.py``
+- ``changelogs/v0.3.0/2026-05-10.log``
+
+Tests: ``uv run pytest -q`` → 2168 passed, 80 skipped in 25.20s

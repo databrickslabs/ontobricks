@@ -1,0 +1,585 @@
+## Consolidate dependency source to pyproject
+
+Context: `requirements.txt` duplicated `pydantic-settings>=2.1.0` while the
+same dependency was already declared in `pyproject.toml`. This cleanup keeps
+`pyproject.toml` as the single source of truth for Python dependencies and
+leaves `requirements.txt` as a bootstrap entrypoint for `uv` only.
+
+Changes:
+
+1. requirements.txt
+   Removed explicit `pydantic-settings` pin and retained `uv` bootstrap only.
+
+Modified files:
+- requirements.txt
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2111 passed in 64.03s (0:01:04)
+
+## Ensure Apps install pyproject dependencies
+
+Context: Databricks Apps startup failed with `ModuleNotFoundError: rdflib`.
+The build step installs `requirements.txt`; after reducing it to only `uv`,
+the runtime no longer had guaranteed project dependencies available at startup.
+This keeps `pyproject.toml` as the source of truth while ensuring build-time
+dependency installation in Apps.
+
+Changes:
+
+1. requirements.txt
+   Added editable local project install (`-e ".[lakebase]"`) so pip resolves all dependencies from `pyproject.toml`.
+
+Modified files:
+- requirements.txt
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2111 passed in 63.99s (0:01:03)
+## Databricks startup dependency hardening (ontobricks-030)
+
+### Context
+Deployment of `ontobricks-030` failed at startup with `ModuleNotFoundError: No module named 'pydantic_settings'` reported from Databricks app logs. Added a bootstrap dependency safeguard so startup environments install `pydantic-settings` even before project sync.
+
+### Changes
+1. Updated `requirements.txt` to include `pydantic-settings>=2.1.0` alongside `uv` to harden Databricks runtime bootstrap dependency availability.
+
+### Modified files
+- `requirements.txt`
+
+### Test result
+- `uv run pytest -q` -> **PASS** (`2111 passed`)
+- `make deploy` -> **FAIL** (app `ontobricks-030` still crashes during startup; Databricks reports "app crashed unexpectedly", details in `/logz`)
+
+## Tighten deploy payload (exclude docs/markdown)
+
+### Context
+Deployment should upload only runtime artifacts. Excluded all documentation and markdown content from Databricks bundle sync for both the main app and MCP app.
+
+### Changes
+1. Updated `databricks.yml` sync exclusions to add `docs/` and `"*.md"`.
+2. Updated root `.databricksignore` to exclude `docs/` and `*.md`.
+3. Updated `src/mcp-server/.databricksignore` to exclude `docs/` and `*.md`.
+
+### Modified files
+- `databricks.yml`
+- `.databricksignore`
+- `src/mcp-server/.databricksignore`
+
+### Test result
+- `uv run pytest -q` -> **PASS** (`2111 passed`)
+- `make deploy` -> **FAIL** (app `ontobricks-030` still crashes at startup)
+- Deployed workspace payload check -> **PASS** (`md_count=0`, `docs_count=0`)
+- Cross-app impact check -> **PASS** (all existing apps remain `RUNNING/SUCCEEDED`; only `ontobricks-030` is `UNAVAILABLE/FAILED`)
+
+## Harden deploy bootstrap and resource validation
+
+Context: Deployments had recurring runtime issues from mismatched app names,
+missing MCP-to-main app ACL grants, Lakebase grants targeting the wrong branch
+endpoint, and no explicit verification that Databricks app resources matched
+`deploy.config` values. This change makes these checks/enforcements automatic
+for future deployments.
+
+Changes:
+
+1. scripts/deploy.config.sh
+   Corrected MCP app default name to `mcp-ontobricks` and added `LAKEBASE_BOOTSTRAP_BRANCH` (defaulting to `LAKEBASE_BRANCH`) for branch-accurate Lakebase permission bootstrap.
+2. scripts/bootstrap-app-permissions.sh
+   Added reusable SP/ACL helpers and automatic cross-app grant (`CAN_USE` from MCP SP to main app) after self `CAN_MANAGE` grants.
+3. scripts/bootstrap-lakebase-perms.sh
+   Added `--branch` support and changed endpoint resolution to use the configured project+branch path instead of first available branch endpoint.
+4. scripts/deploy.sh
+   Passed bootstrap branch to Lakebase perms script and added post-deploy resource-binding verification for both apps (warehouse, volume, and postgres branch/database on lakebase targets).
+
+Modified files:
+- scripts/deploy.config.sh
+- scripts/bootstrap-app-permissions.sh
+- scripts/bootstrap-lakebase-perms.sh
+- scripts/deploy.sh
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2111 passed in 250.51s (0:04:10)
+
+## Add CloudFetch capability signal to /health
+
+Context: The `/health` readiness payload did not expose whether CloudFetch was
+usable from the current runtime, making it hard to understand why large-result
+reads could degrade in Databricks Apps. This adds a dedicated probe with clear
+diagnostic details (disabled by config, missing dependency, or runtime probe
+failure).
+
+Changes:
+
+1. src/shared/fastapi/health.py
+   Added `databricks.cloudfetch` readiness check, including:
+   - prerequisite validation (`warehouse_id`, credentials, `pyarrow`);
+   - effective `use_cloud_fetch` configuration status;
+   - lightweight SQL probe with `use_cloud_fetch=True` and bounded timeout;
+   - actionable status details while keeping `/health` responsive.
+
+Modified files:
+- src/shared/fastapi/health.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2111 passed in 64.51s (0:01:04)
+
+## Add explicit Lakebase permission checks to /health
+
+Context: `/health` reported Lakebase availability but did not expose a
+dedicated permission verdict for schema/table/sequence grants, which made
+grant issues harder to diagnose quickly during app bootstrap and registry
+operations.
+
+Changes:
+
+1. src/shared/fastapi/health.py
+   Added new `lakebase.permissions` probe that validates:
+   - schema grants (`USAGE`, `CREATE`);
+   - table grants (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) across schema tables;
+   - sequence grants (`USAGE`, `SELECT`, `UPDATE`) across schema sequences.
+   It surfaces actionable error details and points operators to
+   `scripts/bootstrap-lakebase-perms.sh` when grants are missing.
+2. tests/test_health.py
+   Added unit tests for the new Lakebase permission probe and updated
+   readiness-shape assertions to require `lakebase.permissions`.
+
+Modified files:
+- src/shared/fastapi/health.py
+- tests/test_health.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2114 passed in 63.11s (0:01:03)
+
+## Fix Lakebase permission probe SQL placeholder escaping
+
+Context: The new `lakebase.permissions` health probe initially raised a psycopg
+placeholder error at runtime because PostgreSQL `format('%I.%I', ...)` tokens
+must be escaped as `%%I` in psycopg query strings.
+
+Changes:
+
+1. src/shared/fastapi/health.py
+   Escaped `%I` placeholders in table/sequence privilege aggregation SQL so the
+   probe executes correctly in live `/health` calls.
+
+Modified files:
+- src/shared/fastapi/health.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2114 passed in 64.42s (0:01:04)
+
+## Align CloudFetch probe with settings-based warehouse resolution
+
+Context: `/health` could report `SQL warehouse not configured — CloudFetch not
+probed` even when warehouse settings were configured via OntoBricks settings,
+because the CloudFetch probe used `DatabricksAuth()` directly (env-first) while
+the warehouse probe used `get_databricks_client(...)` (settings-aware).
+
+Changes:
+
+1. src/shared/fastapi/health.py
+   Unified client resolution for `databricks.warehouse` and
+   `databricks.cloudfetch` checks via `_build_health_client(settings)`, and
+   made both probes read warehouse/auth from the same settings-aware client.
+
+Modified files:
+- src/shared/fastapi/health.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2114 passed in 64.11s (0:01:04)
+
+## Fix running step duration timezone drift
+
+Context: During Digital Twin builds, running-step elapsed durations could show
+values like `2h 0m` immediately (in red) even for freshly started steps. This
+was caused by timezone-naive task timestamps emitted by the backend and parsed
+in browsers with a different local timezone.
+
+Changes:
+
+1. src/back/core/task_manager/TaskManager.py
+   Emitted task and step timestamps in UTC-aware ISO format (`+00:00`) via a
+   shared `_now_iso()` helper instead of naive `datetime.now().isoformat()`.
+2. src/back/core/task_manager/models.py
+   Switched `Task.created_at` to UTC-aware ISO format and hardened
+   `duration_seconds()` to tolerate mixed legacy/new naive/aware timestamps.
+3. tests/test_task_manager.py
+   Added regression coverage for mixed timezone timestamp handling.
+
+Modified files:
+- src/back/core/task_manager/TaskManager.py
+- src/back/core/task_manager/models.py
+- tests/test_task_manager.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2115 passed in 64.82s (0:01:04)
+
+## Track background Ladybug archive as navbar task
+
+Context: During Digital Twin builds, the archive/upload phase continues in a
+background thread after the main build task completes. Users had no live task
+visibility for that asynchronous archive operation in the navbar task tracker.
+
+Changes:
+
+1. src/back/objects/digitaltwin/DigitalTwin.py
+   Created a dedicated `registry_archive` TaskManager task for background
+   archive work. The async archive thread now starts/completes/fails this task,
+   and main build results include `archive_task_id`.
+2. src/front/static/global/js/task-tracker.js
+   Added task-type route mapping for `registry_archive` to the Digital Twin
+   sync page.
+3. src/front/static/query/js/query-sync.js
+   Updated exported build logs to include archive background task id when
+   available.
+
+Modified files:
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/front/static/global/js/task-tracker.js
+- src/front/static/query/js/query-sync.js
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2115 passed in 65.84s (0:01:05)
+
+## Gate CloudFetch with runtime capability checks
+
+Context: CloudFetch was forced off in SQL connection params, which prevented
+using it even when runtime/network prerequisites were available. The goal is
+to enable CloudFetch only when it is actually usable from the current runtime
+instead of relying on a static flag.
+
+Changes:
+
+1. src/back/core/databricks/DatabricksAuth.py
+   Added `can_use_cloud_fetch()` with:
+   - prerequisite checks (`host`, `warehouse_id`, credentials, `pyarrow`);
+   - best-effort CloudFetch storage host derivation from workspace host;
+   - lightweight network reachability probe (DNS + TCP:443);
+   - short TTL cache and env overrides (`DATABRICKS_DISABLE_CLOUD_FETCH`,
+     `DATABRICKS_FORCE_CLOUD_FETCH`).
+   `get_sql_connection_params()` now sets `use_cloud_fetch` from this runtime
+   capability check.
+2. tests/test_auth.py
+   Updated SQL param tests to pin CloudFetch capability via mocks and added
+   unit coverage for CloudFetch capability success/failure prerequisites.
+
+Modified files:
+- src/back/core/databricks/DatabricksAuth.py
+- tests/test_auth.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `pytest` -> 2118 passed in 63.36s (0:01:03)
+
+## Replace CloudFetch params-only check with real runtime probe
+
+Context: The CloudFetch readiness check was bailing out early with
+"CloudFetch disabled by SQL connection params (use_cloud_fetch=False)"
+whenever ``get_sql_connection_params`` had ``use_cloud_fetch=False``,
+hiding whether CloudFetch could actually work at runtime. The previous
+runtime "capability check" was a static network reachability probe on a
+hard-coded storage host pattern (``*.storage.cloud.databricks.com``),
+which did not reflect actual workspace egress behaviour and skipped
+non-AWS workspaces.
+
+Changes:
+
+1. src/back/core/databricks/DatabricksAuth.py
+   - Added ``probe_cloud_fetch_capability()`` that actually issues a
+     bounded ``SELECT 1`` with ``use_cloud_fetch=True`` and caches the
+     ``(capable, reason)`` outcome at the class level for ~5 minutes.
+   - Added ``cloud_fetch_status(force=False)`` for diagnostic callers
+     that want both the verdict and the reason.
+   - ``can_use_cloud_fetch()`` now reads cached probe outcome (or env
+     overrides), defaulting conservatively (False in Apps mode, True
+     locally) without triggering side-effecting probes from
+     ``get_sql_connection_params``.
+   - Replaced socket-reachability probe (``getaddrinfo`` + TCP/443 to a
+     derived ``*.storage.cloud.databricks.com`` host) with the real SQL
+     probe path.
+2. src/shared/fastapi/health.py
+   - ``_check_cloud_fetch`` now always calls
+     ``DatabricksAuth.probe_cloud_fetch_capability()`` and surfaces the
+     real ``(status, reason)``, so ``/health`` reports the actual probe
+     outcome instead of the connection-param flag.
+3. tests/conftest.py
+   - Set ``DATABRICKS_DISABLE_CLOUD_FETCH=1`` and unset
+     ``DATABRICKS_FORCE_CLOUD_FETCH`` in the autouse env so SQL probes
+     in tests do not perform live ``databricks.sql.connect`` calls with
+     ``use_cloud_fetch=True`` against the unreachable test host.
+4. tests/test_auth.py
+   - Updated CloudFetch capability tests to cover the new SQL-probe
+     path (success/failure), env override behaviour
+     (``DATABRICKS_FORCE_CLOUD_FETCH`` /
+     ``DATABRICKS_DISABLE_CLOUD_FETCH``), Apps-mode conservative
+     default, and the missing-pyarrow prerequisite path.
+   - Extended ``_clear_databricks_env`` to clear the new CloudFetch env
+     overrides for isolated tests.
+5. tests/test_health.py
+   - Restored simple readiness shape assertions; the new conftest env
+     ensures probes run quickly.
+
+Modified files:
+- src/back/core/databricks/DatabricksAuth.py
+- src/shared/fastapi/health.py
+- tests/conftest.py
+- tests/test_auth.py
+- tests/test_health.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `pytest` -> 2043 passed, 80 skipped in 22.78s
+
+## Add global CloudFetch toggle in Settings
+
+Context: Operators needed an explicit Settings → Global control to enable or
+disable CloudFetch at runtime instead of relying only on environment variables.
+This adds a persisted global toggle (default enabled) and wires it into SQL
+client behavior.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Added a new Global tab switch (`cloudFetchEnabled`) labeled "Enable
+   CloudFetch for SQL queries", default checked.
+2. src/front/static/config/js/settings.js
+   Added load/save wiring for the new toggle via `/settings/get-cloud-fetch`
+   and `/settings/save-cloud-fetch`; included in the global Save flow.
+3. src/api/routers/internal/settings.py
+   Added API endpoints to read and persist the global CloudFetch setting.
+4. src/back/objects/domain/SettingsService.py
+   Added `get_cloud_fetch_result` and `save_cloud_fetch_result` methods with
+   admin guard on writes.
+5. src/back/objects/session/GlobalConfigService.py
+   Added `use_cloud_fetch` persistence/read helpers and defaulted the global
+   config key to `True`.
+6. src/back/core/databricks/DatabricksClient.py
+   Added optional `use_cloud_fetch` constructor argument and forwarded it to
+   `DatabricksAuth`.
+7. src/back/core/databricks/DatabricksAuth.py
+   Added support for settings-driven CloudFetch enable/disable and changed
+   default fallback behavior to enabled (unless explicitly disabled).
+8. src/back/core/helpers/DatabricksHelpers.py
+   Added `resolve_use_cloud_fetch` and passed the resolved value when building
+   Databricks clients from domain/settings context.
+9. src/back/core/helpers/__init__.py
+   Re-exported `resolve_use_cloud_fetch`.
+10. tests/test_auth.py and tests/test_routes.py
+    Updated CloudFetch default behavior tests and added route coverage for the
+    new settings endpoint.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/databricks/DatabricksAuth.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- tests/test_auth.py
+- tests/test_routes.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2043 passed, 80 skipped in 23.25s
+
+## Remove unreachable "Open" link from task completion notifications
+
+Context: The navbar notification raised after a Digital Twin build completion
+included an `Open` link that could point to an inaccessible route in some
+contexts. To avoid broken navigation from notifications, terminal task toasts
+are now text-only.
+
+Changes:
+
+1. src/front/static/global/js/task-tracker.js
+   Removed the code that appends `<a ...>Open</a>` to terminal task
+   notifications in `notifyTaskTransition`.
+
+Modified files:
+- src/front/static/global/js/task-tracker.js
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2043 passed, 80 skipped in 23.29s
+
+## Harden KG search against non-JSON upstream errors
+
+Context: In deployed Apps, KG search could fail with `Unexpected token 'u'...`
+when `/dtwin/sync/filter` returned plain-text upstream/proxy errors (instead of
+JSON). The Sigma graph UI always called `response.json()`, which masked the
+real backend issue behind a JSON parse exception.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Added `_parseJsonResponse(resp, contextLabel)` to safely parse response
+   bodies, handle HTTP errors, and report readable messages when the backend
+   returns non-JSON text.
+2. src/front/static/query/js/query-sigmagraph.js
+   Replaced direct `await resp.json()` calls in KG preview/expand/focus search
+   flows with the safe parser helper.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2043 passed, 80 skipped in 23.31s
+
+## Reduce KG search hangs in deployed app
+
+Context: Knowledge Graph search on deployed Apps could run for several minutes
+with the UI stuck on "Searching..." when preview expansion scanned too many
+subjects. We need bounded server work and a deterministic client timeout.
+
+Changes:
+
+1. src/api/routers/internal/dtwin.py
+   Preview phase now requests at most `max_preview + 1` seed subjects from the
+   graph backend so the API can detect capping without unbounded scans.
+2. src/back/core/triplestore/TripleStoreBackend.py
+   Extended `find_seed_subjects` with optional `limit` parameter.
+3. src/back/core/graphdb/ladybugdb/LadybugFlatStore.py
+   Implemented `limit` in Cypher queries and optimized the
+   `(entity_type + value)` path to search first, then type-filter the matched
+   subset (avoids materializing huge typed-subject sets).
+4. src/front/static/query/js/query-sigmagraph.js
+   Added `_fetchWithTimeout` with abort support and applied timeouts to KG
+   preview and expand requests, so users get a clear timeout message instead of
+   an indefinite spinner.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/back/core/triplestore/TripleStoreBackend.py
+- src/back/core/graphdb/ladybugdb/LadybugFlatStore.py
+- src/front/static/query/js/query-sigmagraph.js
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2043 passed, 80 skipped in 24.08s
+
+## Mitigate deployed KG expansion 502 errors
+
+Context: Users still hit `Graph expansion failed (502)` in deployed Apps after
+search, which indicates the expansion workload can exceed gateway/runtime limits
+for large neighborhoods.
+
+Changes:
+
+1. src/api/routers/internal/dtwin.py
+   Tightened expansion budget for Databricks Apps:
+   - depth capped to 3 in app mode;
+   - max entities capped to 3000 in app mode;
+   - triple fetch now runs in batches (250 subjects per batch in app mode)
+     instead of a single large query;
+   - added a fetch time budget (40s in app mode) that returns capped partial
+     results rather than letting the request run until gateway failure.
+2. src/front/static/query/js/query-sigmagraph.js
+   Improved 502 handling for expansion requests with a specific actionable
+   message telling users to reduce Depth/Max entities and retry.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/front/static/query/js/query-sigmagraph.js
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2043 passed, 80 skipped in 23.36s
+
+## Right-click "Expand neighbours" on graph nodes
+
+Context: Users want to enrich the displayed knowledge graph by expanding a
+selected entity in place rather than re-running a full SPARQL query. Adding a
+right-click action that pulls the induced N-hop subgraph from the backend and
+merges it into the existing visualisation. Default depth is 2 hops so a single
+click reveals not just direct neighbours but also their immediate connections,
+which is what users typically want when exploring a node.
+
+Changes:
+
+1. src/api/routers/internal/dtwin.py
+   New `GET /dtwin/neighbors` endpoint. BFS-expands a seed URI by `depth`
+   hops (default 2, max 5) using the existing `expand_entity_neighbors` /
+   `get_triples_for_subjects` triplestore primitives, and returns the
+   induced subgraph triples (objects pointing outside the visited set are
+   filtered out so the front-end never renders dangling edges).
+2. src/front/static/query/js/query-sigmagraph.js
+   - Added "Expand neighbours (2 hops)" entry to the node right-click menu
+     (hidden for super-/cluster nodes); wired the dispatcher so it calls
+     the new `SigmaGraph.expandHop(seedUri)` method.
+   - `SigmaGraph.expandHop()` fetches the new endpoint, de-duplicates rows
+     against `lastQueryResults`, rebuilds `d3NodesData`/`d3LinksData` via
+     `buildGraph`, refreshes the Sigma view, highlights newly-added nodes
+     for 6s, and frames the camera around them.
+3. tests/test_routes.py
+   Added smoke tests for the new endpoint covering the missing-URI and
+   no-domain paths.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/front/static/query/js/query-sigmagraph.js
+- tests/test_routes.py
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2045 passed, 80 skipped in 24.22s
+
+## Right-pane Depth default + non-blocking expand spinner
+
+Context: The default Depth in the right pane was 3, biasing both the search
+expansion and the new right-click "Expand neighbours" action toward larger
+neighbourhoods than necessary. Lowered to 2. While the right-click expansion
+is in flight, users had no visual feedback besides a transient toast — added
+a small floating spinner pinned to the top-right of the graph canvas that
+does not block interaction with the rest of the UI.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   - Default value for `#sgFilterDepth` slider and `#sgFilterDepthValue`
+     label changed from 3 to 2.
+   - Added `#sgExpandSpinner` element (Bootstrap small spinner + label),
+     hidden by default, inside `#sgContainer` so it positions over the
+     graph canvas.
+2. src/front/static/query/css/query-sigmagraph.css
+   New `.sg-expand-spinner` rule: absolute top-right inside the graph
+   container, semi-transparent rounded card, `pointer-events: none` so
+   it never intercepts clicks.
+3. src/front/static/query/js/query-sigmagraph.js
+   - `SigmaGraph.expandHop()` now reads the current slider value as the
+     default depth (still falls back to 2 when missing), shows
+     `#sgExpandSpinner` while fetching, and hides it in a `finally` block.
+     Replaced the blocking "Expanding…" toast with the spinner.
+   - Right-click "Expand neighbours" menu label now reflects the current
+     slider value (e.g. "Expand neighbours (2 hops)" / "(3 hops)").
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/css/query-sigmagraph.css
+- src/front/static/query/js/query-sigmagraph.js
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2045 passed, 80 skipped in 24.16s
+
+## Code-review pass on the expand-neighbours feature — docs only
+
+Context: Code review per `.cursorrules` of the right-click "Expand neighbours"
+feature shipped earlier today. Compliance with `src/.coding_rules.md` is good
+(no rule violations found, no dead code, no new session fields). Two follow-up
+candidates were *proposed but not implemented* per the review skill's "propose
+first" rule (see review summary in chat). Documentation was the only gap and
+is updated below.
+
+Changes:
+
+1. docs/user-guide.md
+   Added a "Right-click on a node (Expand neighbours)" section under
+   "Knowledge Graph (Sidebar)" that describes the depth slider behaviour,
+   the non-blocking spinner, and the highlight + camera-zoom UX.
+2. README.md
+   New bullet under "Knowledge Graph Features" pointing at the new
+   right-click expand action.
+
+Modified files:
+- docs/user-guide.md
+- README.md
+- changelogs/v0.3.0/2026-05-07.log
+
+Tests: `uv run pytest -q` -> 2045 passed, 80 skipped in 24.10s
+Sphinx: `scripts/build_docs.sh` -> built successfully, no new warnings
+(pre-existing myst xref warnings in `development.md`/`get-started.md`
+remain unrelated).
+

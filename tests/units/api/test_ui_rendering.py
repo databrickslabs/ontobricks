@@ -122,6 +122,13 @@ class TestBaseTemplate:
         html = _html(client, path)
         assert any("utils.js" in src for src in _script_srcs(html))
 
+    @pytest.mark.parametrize("path", ["/", "/domain"])
+    def test_review_modals_assets_loaded(self, client, path):
+        """Shared review comment/chat popups must be available on every page."""
+        html = _html(client, path)
+        assert any("review-modals.js" in src for src in _script_srcs(html))
+        assert "review-modals.css" in html
+
     def test_navbar_has_domain_dropdown(self, client):
         html = _html(client, "/")
         assert _find(_tags(html), id_="domainDropdown") is not None
@@ -176,11 +183,18 @@ class TestHomePage:
         assert _find(_tags(html), id_="sessionPanel") is not None
         assert _find(_tags(html), id_="homeDomainName") is not None
 
-    def test_stat_items(self, client):
+    def test_kpi_band(self, client):
         html = _html(client, "/")
-        assert _find(_tags(html), id_="classCount") is not None
-        assert _find(_tags(html), id_="propCount") is not None
-        assert _find(_tags(html), id_="mappingCount") is not None
+        assert _find(_tags(html), id_="kpiEntities") is not None
+        assert _find(_tags(html), id_="kpiRelationships") is not None
+        assert _find(_tags(html), id_="kpiMappings") is not None
+        assert _find(_tags(html), id_="kpiQuality") is not None
+        assert _find(_tags(html), id_="kpiStatus") is not None
+        assert _find(_tags(html), id_="kpiVersion") is not None
+
+    def test_domain_gateway(self, client):
+        html = _html(client, "/")
+        assert _find(_tags(html), id_="domainGateway") is not None
 
     def test_quick_links(self, client):
         html = _html(client, "/")
@@ -204,11 +218,10 @@ class TestSettingsPage:
         html = _html(client, "/settings")
         assert "Settings" in _title_text(html)
 
-    def test_tabs_present(self, client):
+    def test_sidebar_sections_present(self, client):
         html = _html(client, "/settings")
-        tags = _tags(html)
-        assert _find(tags, id_="tab-databricks") is not None
-        assert _find(tags, id_="tab-global") is not None
+        assert 'id="databricks-section"' in html
+        assert 'id="global-section"' in html
 
     def test_host_display(self, client):
         html = _html(client, "/settings")
@@ -230,7 +243,7 @@ class TestSettingsPage:
 
     def test_save_all_button(self, client):
         html = _html(client, "/settings")
-        assert _find(_tags(html), id_="btnSaveAllSettings") is not None
+        assert 'btn-save-settings' in html
 
     def test_graph_db_lakebase_health_block_present(self, client):
         html = _html(client, "/settings")
@@ -382,11 +395,19 @@ class TestDomainPage:
         assert found, f"Sidebar link for section '{section}' not found"
 
     @pytest.mark.parametrize(
-        "section_id", ["information-section", "metadata-section", "validation-section"]
+        "section_id",
+        ["information-section", "metadata-section", "validation-section",
+         "runs-section", "audit-section"],
     )
     def test_section_div_exists(self, client, section_id):
         html = _html(client, "/domain")
         assert _find(_tags(html), id_=section_id) is not None
+
+    def test_audit_section_link_and_script(self, client):
+        html = _html(client, "/domain")
+        tags = _tags(html)
+        assert any(t == "a" and a.get("data-section") == "audit" for t, a in tags)
+        assert any("domain-audit.js" in src for src in _script_srcs(html))
 
 
 # =====================================================

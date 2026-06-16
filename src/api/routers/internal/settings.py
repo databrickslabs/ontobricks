@@ -6,7 +6,9 @@ Moved from app/frontend/settings/routes.py during the front/back split.
 
 import json
 
-from fastapi import APIRouter, Request, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Request, Depends, Query
 
 from shared.config.settings import get_settings, Settings
 from shared.config.constants import DEFAULT_BASE_URI
@@ -280,26 +282,6 @@ async def delete_registry_version(
     return config_service.delete_registry_version_result(
         domain_name,
         version,
-        session_mgr,
-        settings,
-    )
-
-
-@router.post("/registry/domains/{domain_name}/versions/{version}/active")
-async def set_registry_version_active(
-    domain_name: str,
-    version: str,
-    request: Request,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Set or clear the Active flag on a version in the registry."""
-    data = await request.json()
-    enabled = bool(data.get("enabled", False))
-    return config_service.set_registry_version_active_result(
-        domain_name,
-        version,
-        enabled,
         session_mgr,
         settings,
     )
@@ -866,13 +848,14 @@ async def get_graph_engine_lakebase_pg_databases(
 @router.get("/graph-engine/lakebase-pg-schemas")
 async def get_graph_engine_lakebase_pg_schemas(
     database: str = "",
+    branch_path: str = "",
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     """List Postgres schemas in a Lakebase database."""
     with map_route_errors("graph engine Lakebase PG schemas", logger):
         return config_service.graph_engine_lakebase_pg_schemas_result(
-            database, session_mgr, settings
+            database, session_mgr, settings, branch_path=branch_path
         )
 
 
@@ -895,6 +878,44 @@ async def get_graph_engine_lakebase_objects(
         )
 
 
+@router.get("/graph-engine/lakebase-sync-objects")
+async def get_graph_engine_lakebase_sync_objects(
+    database: str = "",
+    branch_path: str = "",
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Unity Catalog / Lakeflow synced-table registrations for the Lakebase graph.
+
+    Only meaningful when ``sync_mode == managed_synced``.  Probes each ``_sync``
+    Postgres table against the Databricks synced-tables API in parallel and returns
+    state + pipeline_id for each entry.
+    """
+    with map_route_errors("graph engine Lakebase sync objects", logger):
+        return config_service.graph_engine_lakebase_sync_objects_result(
+            database, branch_path, session_mgr, settings
+        )
+
+
+@router.post("/graph-engine/drop-uc-object")
+async def post_graph_engine_drop_uc_object(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Drop a Unity Catalog table or Lakeflow synced-table registration.
+
+    Body: ``{ "full_name": "catalog.schema.table", "is_sync": true|false }``
+    """
+    with map_route_errors("drop UC object", logger):
+        data = await request.json()
+        full_name = (data.get("full_name") or "").strip()
+        is_sync = bool(data.get("is_sync", False))
+        return config_service.graph_engine_drop_uc_object_result(
+            full_name, is_sync, session_mgr, settings
+        )
+
+
 @router.post("/graph-engine/lakebase-drop-object")
 async def post_graph_engine_lakebase_drop_object(
     request: Request,
@@ -910,8 +931,68 @@ async def post_graph_engine_lakebase_drop_object(
             name=data.get("name", ""),
             database=data.get("database", ""),
             branch_path=data.get("branch_path", ""),
-            session_mgr=session_mgr,
-            settings=settings,
+            _session_mgr=session_mgr,
+            _settings=settings,
+        )
+
+
+@router.get(
+    "/graph-engine/lakebase-pg-roles",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def get_graph_engine_lakebase_pg_roles(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Postgres roles on the graph Lakebase branch + overlay app-user status (admin only)."""
+    with map_route_errors("graph engine Lakebase pg roles", logger):
+        return config_service.graph_engine_lakebase_pg_roles_result(session_mgr, settings)
+
+
+@router.post(
+    "/graph-engine/lakebase-grant-superuser",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def post_graph_engine_lakebase_grant_superuser(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Grant DATABRICKS_SUPERUSER to a user on the graph Lakebase branch (admin only).
+
+    Body: ``{ "user_email": "user@example.com" }``
+    """
+    with map_route_errors("graph engine Lakebase grant superuser", logger):
+        data = await request.json()
+        user_email = (data.get("user_email") or "").strip()
+        return config_service.graph_engine_lakebase_grant_superuser_result(
+            user_email, session_mgr, settings
+        )
+
+
+@router.post(
+    "/graph-engine/lakebase-provision",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def post_graph_engine_lakebase_provision(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Provision a new Lakebase graph DB from scratch (admin only, async).
+
+    Creates the Lakebase instance/project + Postgres database + graph schema
+    and grants the app + MCP service principals. Returns a ``task_id`` the UI
+    polls via ``GET /tasks/{id}``.
+
+    Body: ``{ name, capacity, branch, database, schema, mcp_app_name,
+    grant_uc_catalog }``.
+    """
+    data = await request.json()
+    email, _dn, user_token, _ur, _udr = _settings_request_identity(request)
+    with map_route_errors("provision Lakebase graph DB", logger):
+        return config_service.graph_engine_lakebase_provision_result(
+            data, email, user_token, session_mgr, settings
         )
 
 
@@ -971,6 +1052,33 @@ async def get_schedule_history(
 async def scheduler_status():
     """Diagnostic: return the APScheduler internal state (running, jobs, next-run times)."""
     return config_service.scheduler_status_payload()
+
+
+@router.get("/build-runs/{domain_name}")
+async def get_build_runs(
+    domain_name: str,
+    version: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the build-run trace for a domain (newest-first, optional version)."""
+    return config_service.get_build_runs_result(
+        domain_name, session_mgr, settings, version=version, limit=limit
+    )
+
+
+@router.get("/build-analytics/{domain_name}")
+async def get_build_analytics(
+    domain_name: str,
+    version: Optional[str] = Query(default=None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return aggregate build statistics for a domain (optional version)."""
+    return config_service.get_build_analytics_result(
+        domain_name, session_mgr, settings, version=version
+    )
 
 
 @router.delete("/schedules/{domain_name}")

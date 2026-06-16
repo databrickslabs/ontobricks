@@ -1,0 +1,115 @@
+## Fix: Mapping Import buttons not triggering file picker (v0.4.0)
+
+### Context
+On the Mapping → Import page, clicking "From Local File" or "From Unity Catalog" had no effect.
+The event listeners in `mapping-import.js` were attached with `document.getElementById(...)` at
+script-load time, but the script tag appears in the template *before* the HTML partials that
+render the buttons — so all three `getElementById` calls returned `null`, the optional-chaining
+`?.addEventListener()` silently no-oped, and no listeners were ever registered.
+
+### Changes
+
+1. `src/front/static/mapping/js/mapping-import.js`
+   - Wrapped all three event-listener registrations (`#importR2rmlLocalBtn`,
+     `#importR2rmlUCBtn`, `#importR2rmlFileInput`) inside a `DOMContentLoaded` handler so
+     they execute only after the full DOM is available.
+
+### Modified files
+- `src/front/static/mapping/js/mapping-import.js`
+
+### Test results
+- `tests/units/mapping/` — 62 passed in 0.56 s
+
+---
+
+## Remove: "From Unity Catalog" button from Mapping Import (v0.4.0)
+
+### Context
+The "From Unity Catalog" button and its handler have been removed from the Mapping → Import page
+per product decision.
+
+### Changes
+
+1. `src/front/templates/partials/mapping/_mapping_import.html`
+   - Removed the `#importR2rmlUCBtn` button element.
+2. `src/front/static/mapping/js/mapping-import.js`
+   - Removed the `UCFileDialog.open()` click handler for `#importR2rmlUCBtn`.
+3. `src/front/static/global/css/permissions.css`
+   - Removed the `#importR2rmlUCBtn` entry from the read-only/viewer disable rule.
+
+### Modified files
+- `src/front/templates/partials/mapping/_mapping_import.html`
+- `src/front/static/mapping/js/mapping-import.js`
+- `src/front/static/global/css/permissions.css`
+
+### Test results
+- `tests/units/mapping/` — 62 passed
+
+---
+
+## Remove: "From Unity Catalog" buttons from Ontology Import (v0.4.0)
+
+### Context
+Removed "From Unity Catalog" buttons from both OWL and RDFS import tabs in Ontology → Import,
+consistent with the same removal already done in Mapping → Import.
+Also applied the `DOMContentLoaded` fix to `ontology-import.js` (same root cause as the
+mapping import timing bug fixed earlier today).
+
+### Changes
+
+1. `src/front/templates/partials/ontology/_ontology_import.html`
+   - Removed `#importOwlUCBtn` from the OWL tab.
+   - Removed `#importRdfsUCBtn` from the RDFS tab.
+   - Updated section subtitle to drop the "Unity Catalog" mention.
+2. `src/front/static/ontology/js/ontology-import.js`
+   - Removed `UCFileDialog.open()` handlers for `#importOwlUCBtn` and `#importRdfsUCBtn`.
+   - Wrapped all event-listener registrations in `DOMContentLoaded` (timing fix).
+3. `src/front/static/global/css/permissions.css`
+   - Removed `#importOwlUCBtn` and `#importRdfsUCBtn` from the read-only/viewer disable rule.
+
+### Modified files
+- `src/front/templates/partials/ontology/_ontology_import.html`
+- `src/front/static/ontology/js/ontology-import.js`
+- `src/front/static/global/css/permissions.css`
+
+### Test results
+- `tests/units/mapping/` — 62 passed
+
+---
+
+## Fix: R2RML import fails for ontobricks-generated files (v0.4.0)
+
+### Context
+Importing a `.ttl` R2RML file exported from one OntoBricks instance into another failed with
+multiple failure modes:
+1. **`Cannot read properties of null (reading 'ontology_class')`** — `R2RMLParser._extract_triples_map`
+   only built the entity dict when `rr:tableName` was present. OntoBricks generates `rr:sqlQuery`
+   (not `rr:tableName`), so the entity stayed `None`, got appended to the list, and the JS crashed.
+2. **Attributes not imported** — the predicateObjectMap loop only handled rdfs:label and
+   object-template (relationships). Plain `rr:column` attribute mappings were silently dropped.
+3. **Relationships imported with wrong field names** — `_extract_relationship` returned
+   `source_column`/`target_column`, but the whole backend/UI stack expects
+   `source_id_column`/`target_id_column`.
+4. **Relationships missing context fields** — `source_class`, `source_class_label`,
+   `target_class_label`, `source_table`, `target_table`, `direction`, `attribute_mappings`
+   were all absent from the returned relationship dict.
+
+### Changes
+
+1. `src/back/core/w3c/r2rml/R2RMLParser.py`
+   - `_extract_triples_map`: changed entity-build condition from `and table` to
+     `and (table or sql_query)`; added `sql_query` and `attribute_mappings` fields to entity dict.
+   - `_extract_triples_map`: added attribute collection branch for `rr:column` predicateObjectMaps
+     that are not rdfs:label and have no object template.
+   - `_extract_triples_map`: extract `source_class_name` from the subject template regex
+     `r"/([^/]+)/\{[^}]+\}$"` to pass source class context to relationships.
+   - `_extract_relationship`: renamed `source_column`→`source_id_column`,
+     `target_column`→`target_id_column`; added `source_class`, `source_class_label`,
+     `target_class_label`, `source_table`, `target_table`, `direction`, `attribute_mappings`.
+   - `extract_mappings`: added `entity is not None` guard before appending.
+
+### Modified files
+- `src/back/core/w3c/r2rml/R2RMLParser.py`
+
+### Test results
+- `tests/units/mapping/` + `tests/units/` (mapping/R2RML scope) — 130 passed, 23 skipped

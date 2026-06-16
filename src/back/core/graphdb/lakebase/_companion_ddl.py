@@ -84,8 +84,30 @@ def ensure_synced(cur: Any, schema: str, synced: str) -> None:
 
 
 def drop_synced(cur: Any, synced: str) -> None:
-    """Drop the *_sync bulk-data table (app_managed cleanup path)."""
-    cur.execute(f"DROP TABLE IF EXISTS {synced}")
+    """Drop the *_sync bulk-data table (app_managed cleanup path).
+
+    Uses a DO block to skip the DROP when the current session does not own the
+    table.  This prevents ``PSQLException: must be owner of table`` when a
+    previous ``managed_synced`` build left behind a ``_sync`` table created by
+    Lakeflow under a different service principal, and the next build runs in
+    ``app_managed`` mode (e.g. after a config change or a transient mode-
+    resolution fallback).
+    """
+    bare = synced.split(".")[-1].strip('"')
+    cur.execute(
+        "DO $$ BEGIN "
+        "  IF EXISTS ("
+        "    SELECT 1 FROM pg_class c "
+        "    JOIN pg_namespace n ON n.oid = c.relnamespace "
+        f"    WHERE c.relname = {bare!r} "
+        "      AND n.nspname = ANY(current_schemas(false)) "
+        "      AND c.relkind = 'r' "
+        "      AND pg_has_role(session_user, c.relowner, 'MEMBER')"
+        "  ) THEN "
+        f"    EXECUTE 'DROP TABLE IF EXISTS {synced}'; "
+        "  END IF; "
+        "END $$"
+    )
 
 
 def ensure_companion(cur: Any, schema: str, companion: str) -> None:
@@ -141,7 +163,8 @@ def ensure_union_view(
         "    JOIN pg_namespace n ON n.oid = c.relnamespace "
         f"    WHERE c.relname = {bare_name!r} "
         "      AND n.nspname = ANY(current_schemas(false)) "
-        "      AND c.relkind = 'r'"
+        "      AND c.relkind = 'r' "
+        "      AND pg_has_role(session_user, c.relowner, 'MEMBER')"
         "  ) THEN "
         f"    EXECUTE 'DROP TABLE IF EXISTS {view} CASCADE'; "
         "  END IF; "

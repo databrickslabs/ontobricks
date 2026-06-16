@@ -1,0 +1,389 @@
+## Ontology Validation & Review workflow (Registry → My Tasks + Domain → Validation)
+
+> Reconstructed from the codebase — the original verbatim entry was lost when an
+> untracked `2026-06-08.log` was overwritten by a fast-forward pull.
+
+**Context**: Business users needed a way to validate ontology versions: run soft
+consistency checks, sign off through a review workflow, and keep an auditable trail
+of who decided what. Built on top of the existing `DRAFT -> IN-REVIEW -> PUBLISHED`
+version lifecycle (extend, not replace). Decisions: builder/admin can submit & publish,
+any domain member can sign off, publish is **quorum**-gated (`review_quorum`), and the
+consistency checks are advisory (**soft** gate). Every decision and lifecycle change is
+persisted (with a status snapshot) to a new registry table.
+
+**Changes**:
+1. `src/back/objects/registry/store/lakebase/schema.sql` — new `domain_review_events`
+   table (append-only audit log) with `actor`, `action`, `from_status`, `to_status`,
+   `comment`, `meta`, `created_at` + `idx_review_events_domain_version`.
+2. `src/back/objects/registry/store/base.py` — `ReviewEvent` TypedDict and the
+   `record_review_event` / `list_review_events` / `list_all_review_events` abstract
+   methods on `RegistryStore`.
+3. `src/back/objects/registry/store/lakebase/store.py` — Lakebase implementation +
+   `_ensure_review_events_table()` self-heal (mirrors the `build_runs` pattern);
+   `domain_review_events` added to `_KNOWN_TABLES`.
+4. `src/back/objects/registry/RegistryService.py` — thin wrappers delegating to the store.
+5. `src/back/objects/registry/ReviewService.py` (new) — stateless workflow orchestrator:
+   `my_tasks`, `review_detail`, `submit`, `signoff`, `publish`, `reopen` plus helpers
+   (`_summarize`, `_pending_actions`, `_resolve_roles`, quorum/role checks). Approvals reset
+   on resubmit / change-request / publish.
+6. `src/back/objects/registry/__init__.py` — lazy `ReviewService` export via `__getattr__`
+   to avoid a registry↔session import cycle.
+7. `src/api/routers/internal/review.py` (new) + `__init__.py` — `/review` router:
+   `GET /my-tasks`, `GET /{folder}/{version}`, and POST `submit|signoff|publish|reopen`,
+   resolving the caller's role against the *target* domain.
+8. `src/front/config/menu_config.json` — Registry → Review → "My Tasks" and Domain →
+   "Validation" menu items.
+9. `src/front/templates/registry.html` + `partials/registry/_registry_my_tasks.html` (new)
+   + `static/registry/js/registry-my-tasks.js` (new) + css — cross-domain worklist with
+   context-aware actions.
+10. `src/front/templates/domain.html` + `partials/domain/_domain_review.html` (new) +
+    `static/domain/js/domain-review.js` (new) + css, wired via `domain.js` — per-version
+    Validation workspace: status banner with quorum progress, soft consistency-check summary
+    (`/validate/detailed`), action buttons, and the audit timeline.
+11. Tests: `tests/units/registry/test_review_service.py` (new),
+    `tests/units/registry/test_registry_store.py` (review-event round-trips),
+    `tests/units/api/test_review_endpoints.py` (new).
+12. Docs: `README.md` + `docs/user-guide.md` — Validation & Review workflow section.
+
+**Test result**: full `tests/units` suite green (review service, store, and endpoint tests pass).
+
+---
+
+## My Tasks worklist surfaced on the Home page
+
+> Reconstructed from the codebase — original verbatim entry lost in the same overwrite.
+
+**Context**: Make pending review actions visible immediately on landing, as a new section
+just below "Current domain".
+
+**Changes**:
+1. `src/front/templates/home.html` — `extra_css` includes `registry-my-tasks.css`; new
+   `#homeTasksSection` (hidden by default) with `#homeTasksContainer` placed right after
+   `#sessionPanel`; loads the new script.
+2. `src/front/static/home/js/home-tasks.js` (new) — fetches `/review/my-tasks`, reveals the
+   section only when tasks exist, renders the compact worklist, and wires inline actions
+   (Submit / Publish with confirm; "Review & sign off" loads the domain and deep-links to
+   Domain → Validation). Fails closed (section stays hidden) if the review API is unavailable
+   so the home page is never blocked.
+
+**Modified files**:
+- `src/front/templates/home.html`
+- `src/front/static/home/js/home-tasks.js` (new)
+
+**Test result**: `pytest tests/units/api tests/units/domain` -> 367 passed (includes
+`test_ui_rendering.py`, which renders `home.html`). No backend changes.
+
+---
+
+## Review comments — per-transition comment prompt + chat-style history viewer
+
+**Context**: The review/validation workflow already persists a `comment` on every event
+(`domain_review_events`), but the UI only collected one on sign-off; all other status switches
+(submit / publish / reopen) went through a plain confirm dialog with no note, and there was no
+way to read the full comment thread from the worklists. This adds a comment popup to *every*
+status switch and a chat-style "all comments" viewer reachable from the task lists.
+
+**Changes**:
+1. `src/front/static/global/js/review-modals.js` (new) — shared `window.ReviewModals` helper,
+   loaded globally. `promptComment(opts)` returns a `Promise<{confirmed, comment}>` (confirm
+   dialog with an attached, optionally-required comment textarea); `showComments(folder, version)`
+   fetches `/review/{folder}/{version}` and renders the full event history as chat bubbles
+   (actor avatar, action label, `from -> to` transition chip, timestamp, comment body).
+2. `src/front/static/global/css/review-modals.css` (new) — styling for the chat bubbles/avatars,
+   using existing `--db-*` custom properties.
+3. `src/front/templates/base.html` — load the shared CSS (after `help-modal.css`) and the shared
+   JS (after `utils.js`, defer) so all three surfaces (home, registry, domain) share one impl.
+4. `src/front/static/domain/js/domain-review.js` — submit / publish / reopen now open
+   `ReviewModals.promptComment` (comment persisted to the audit trail); approve / request-changes
+   reuse the same prompt (request-changes requires a comment). Removed the bespoke in-page
+   sign-off modal wiring (`openSignoffModal` / `submitSignoff` / `signoffModal`).
+5. `src/front/templates/partials/domain/_domain_review.html` — removed the now-unused
+   `#reviewSignoffModal` markup.
+6. `src/front/static/registry/js/registry-my-tasks.js` and
+   `src/front/static/home/js/home-tasks.js` — added a per-row "comments" button
+   (`ReviewModals.showComments`) and switched the inline `transition()` from `showConfirmDialog`
+   to `ReviewModals.promptComment`, forwarding the typed comment in the POST body.
+7. `src/api/routers/internal/review.py` — import `ReviewService` directly from its submodule
+   (`back.objects.registry.ReviewService`) instead of the lazily re-exported package attribute,
+   removing a test-collection-order fragility (the submodule name shadowed the re-exported class).
+8. `tests/units/registry/test_review_service.py` — added comment-persistence tests for every
+   status switch (`test_submit_persists_comment`, `test_signoff_approve_persists_comment`,
+   `test_signoff_request_changes_persists_comment`, `test_publish_persists_comment`,
+   `test_reopen_persists_comment`) plus `test_review_detail_surfaces_events_with_comments`
+   (the data source for the chat viewer).
+9. `tests/units/api/test_ui_rendering.py` — added `test_review_modals_assets_loaded` asserting the
+   shared `review-modals.js` / `review-modals.css` are wired into base.html on every page.
+
+**Modified files**:
+- `src/front/static/global/js/review-modals.js` (new)
+- `src/front/static/global/css/review-modals.css` (new)
+- `src/front/templates/base.html`
+- `src/front/static/domain/js/domain-review.js`
+- `src/front/templates/partials/domain/_domain_review.html`
+- `src/front/static/registry/js/registry-my-tasks.js`
+- `src/front/static/home/js/home-tasks.js`
+- `src/api/routers/internal/review.py`
+- `tests/units/registry/test_review_service.py`
+- `tests/units/api/test_ui_rendering.py`
+
+**Test result**: `pytest tests/units --ignore=tests/property` -> 2275 passed, 11 skipped
+(8 new tests). `node --check` clean on all four JS files. Review endpoint tests pass in any
+collection order.
+
+---
+
+## Domain -> Audit trail (unified review comments + build runs)
+
+**Context**: Status-change comments lived only inside the per-version Validation timeline and the
+build-run history lived in its own Runs page. Users wanted a single domain-wide activity feed that
+interleaves both: every status switch (with its comment) and every build run + result.
+
+**Changes**:
+1. `src/back/objects/domain/Domain.py` — added `audit_trail_result(svc, *, limit)`: merges the
+   review/validation event log (`list_review_events`, all versions) with the build-run history
+   (`load_build_runs`) for the loaded domain and returns both streams raw (UI interleaves/sorts).
+2. `src/api/routers/internal/domain.py` — new `GET /domain/audit-trail` endpoint (limit-capped)
+   delegating to `Domain.audit_trail_result`.
+3. `src/front/config/menu_config.json` — new "Audit trail" item (`id: audit`, `bi-journal-text`)
+   under Domain -> Management, after Runs.
+4. `src/front/templates/partials/domain/_domain_audit.html` (new) — header, All / Status & comments
+   / Builds filter pills, and a timeline container.
+5. `src/front/static/domain/js/domain-audit.js` (new) — fetches `/domain/audit-trail`, builds one
+   newest-first timeline of review events (action, `from -> to` chip, comment, actor) and build runs
+   (status, version, triples/duration/engine, message/error), with client-side filtering. Build
+   entries reuse the run-details popup via `window.showRunDetailsObj`.
+6. `src/front/static/domain/css/domain-audit.css` (new) — timeline marker/line/card styling.
+7. `src/front/static/domain/js/domain-runs.js` — refactored `showRunDetails(idx)` into a reusable
+   `showRunDetailsObj(run)` (exposed on `window`) so the audit timeline opens the same modal.
+8. `src/front/templates/domain.html` — new `#audit-section` div, plus the audit CSS/JS includes.
+9. `src/front/static/domain/js/domain.js` — load the audit trail when its section is activated.
+10. `tests/units/domain/test_domain_service.py` — `TestAuditTrail` (merge shape, folder/limit
+    forwarding, configured-registry and saved-domain guards).
+11. `tests/units/api/test_ui_rendering.py` — `runs-section` / `audit-section` div checks and
+    `test_audit_section_link_and_script` (sidebar link + `domain-audit.js` load).
+
+**Modified files**:
+- `src/back/objects/domain/Domain.py`
+- `src/api/routers/internal/domain.py`
+- `src/front/config/menu_config.json`
+- `src/front/templates/partials/domain/_domain_audit.html` (new)
+- `src/front/static/domain/js/domain-audit.js` (new)
+- `src/front/static/domain/css/domain-audit.css` (new)
+- `src/front/static/domain/js/domain-runs.js`
+- `src/front/templates/domain.html`
+- `src/front/static/domain/js/domain.js`
+- `tests/units/domain/test_domain_service.py`
+- `tests/units/api/test_ui_rendering.py`
+
+**Test result**: `pytest tests/units --ignore=tests/property` -> 2282 passed, 11 skipped
+(7 new tests). `node --check` clean on all touched JS files.
+
+**Fix (same day)**: opening a build's details from the Audit trail froze the screen (dark backdrop,
+no dialog). The run-details modal lived inside `#runs-section`, which is `display:none` whenever
+another section is active, so Bootstrap showed the backdrop but the dialog stayed invisible. Moved
+`#runDetailsModal` out of `partials/domain/_domain_runs.html` to page level in `domain.html` (outside
+any `.sidebar-section`) so it opens correctly from both Runs and Audit trail.
+- `src/front/templates/domain.html`
+- `src/front/templates/partials/domain/_domain_runs.html`
+
+**Deploy migration (same day)**: the `domain_review_events` table only existed in `schema.sql` and the
+app's runtime self-heal. Added it to the idempotent owner-run migration block in
+`scripts/bootstrap-lakebase-perms.sh` (Step 2b), which `scripts/deploy.sh` runs on every Lakebase
+deploy — so redeploys provision the table reliably as the schema owner rather than relying on the
+app SP's runtime CREATE. Verified via `make deploy`: both apps RUNNING and the migration logged
+"schema migrations applied (domain_versions.status, build_runs, domain_review_events)" with
+`domain_review_events` created fresh.
+- `scripts/bootstrap-lakebase-perms.sh`
+
+---
+
+## Audit trail & Runs — version dropdown filter
+
+**Context**: Both the Audit trail and Runs sections showed every version at once. Users wanted to
+filter by version, defaulting to the current version.
+
+**Changes**:
+1. `src/back/objects/domain/Domain.py` — `audit_trail_result` and `list_build_runs_result` now also
+   return `versions` (`list_versions_sorted`) and `current_version` so the UI can build a dropdown.
+2. `src/front/templates/partials/domain/_domain_audit.html` and `_domain_runs.html` — added a
+   `<select>` version filter (defaults to "All versions", JS pre-selects the current version).
+3. `src/front/static/domain/js/domain-audit.js` — fetches all versions once and filters the merged
+   timeline (events + runs) client-side by the selected version; dropdown defaults to current.
+4. `src/front/static/domain/js/domain-runs.js` — extracted `_renderRunsTable()` + `_populateRunsVersions()`;
+   the table filters the cached runs client-side by the selected version (default current).
+5. `tests/units/domain/test_domain_service.py` — `test_returns_versions_for_dropdown`.
+
+**Modified files**:
+- `src/back/objects/domain/Domain.py`
+- `src/front/templates/partials/domain/_domain_audit.html`
+- `src/front/templates/partials/domain/_domain_runs.html`
+- `src/front/static/domain/js/domain-audit.js`
+- `src/front/static/domain/js/domain-runs.js`
+- `tests/units/domain/test_domain_service.py`
+
+**Test result**: `pytest tests/units --ignore=tests/property` -> 2283 passed, 11 skipped.
+`node --check` clean on both JS files.
+
+---
+
+## Per-domain review sign-off quorum
+
+**Context**: The review **sign-off quorum** (how many distinct approvals are required before an
+IN-REVIEW version can be published) was a single registry-wide value stored in `global_config`
+under `review_quorum`, with no UI to change it. It should instead be a **per-domain** policy,
+set when a domain is created and editable on the Domain Information / Global page. Decision:
+store it as a typed column on the `domains` table (domain-scoped, one value for all versions),
+default `1`; no backfill of the old global key (it becomes dead).
+
+**Changes**:
+1. `src/back/objects/registry/store/lakebase/schema.sql` — added `review_quorum integer NOT NULL
+   DEFAULT 1 CHECK (review_quorum >= 1)` to the `domains` table.
+2. `src/back/objects/registry/store/lakebase/store.py` — new `_ensure_domains_review_quorum_column()`
+   lazy self-heal migration (mirrors the `status` column pattern); `get_domain_quorum(folder)`;
+   `read_version` now returns `info.review_quorum`; `write_version` persists the column from
+   `info.review_quorum` in the `domains` UPSERT; `list_domains_with_metadata` returns
+   `review_quorum` per domain.
+3. `src/back/objects/registry/store/base.py` — added abstract `get_domain_quorum(folder)` and
+   `review_quorum` to the `DomainSummary` TypedDict.
+4. `src/back/objects/registry/ReviewService.py` — `_quorum(svc, folder)` now reads the per-domain
+   value (`store.get_domain_quorum`); `my_tasks` resolves quorum per-domain from the domain list
+   and no longer returns a single top-level `quorum`; `review_detail`/`publish` pass the folder;
+   removed the dead `_QUORUM_KEY` global-config constant.
+5. `src/back/objects/session/DomainSession.py` — `get_empty_domain`, `export_for_save`, and
+   `import_from_file` now carry `review_quorum` (default 1, clamped >= 1).
+6. `src/back/objects/domain/Domain.py` — `save_domain_info` accepts/clamps `review_quorum`
+   (new `_coerce_quorum` helper); `get_domain_info` and `get_domain_template_data` expose it.
+7. `src/front/templates/partials/domain/_domain_information.html` — new "Sign-off quorum" number
+   input on the Global tab.
+8. `src/front/static/domain/js/domain.js` — `loadDomainInfo`/`saveDomainInfo` load and send
+   `review_quorum`.
+9. `src/front/static/global/js/navbar.js` — `saveDomainInfoBeforeSave` includes `review_quorum`
+   so it persists to the registry on save-to-uc.
+10. `src/front/static/registry/js/registry-my-tasks.js` — dropped the now-unused global `quorum`
+    render argument (each task already carries its own `required`).
+11. `tests/units/registry/test_review_service.py` — mock `store.get_domain_quorum` instead of
+    `load_global_config`.
+12. `tests/units/registry/test_registry_store.py` — `_InMemoryStore.get_domain_quorum`.
+13. `tests/units/domain/test_domain_service.py` — quorum save/clamp/default tests.
+14. `README.md`, `docs/user-guide.md` — quorum documented as per-domain (Domain → Information →
+    Global).
+
+**Modified files**:
+- `src/back/objects/registry/store/lakebase/schema.sql`
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/registry/store/base.py`
+- `src/back/objects/registry/ReviewService.py`
+- `src/back/objects/session/DomainSession.py`
+- `src/back/objects/domain/Domain.py`
+- `src/front/templates/partials/domain/_domain_information.html`
+- `src/front/static/domain/js/domain.js`
+- `src/front/static/global/js/navbar.js`
+- `src/front/static/registry/js/registry-my-tasks.js`
+- `tests/units/registry/test_review_service.py`
+- `tests/units/registry/test_registry_store.py`
+- `tests/units/domain/test_domain_service.py`
+- `README.md`
+- `docs/user-guide.md`
+
+**Test result**: `pytest tests/units` -> 2242 passed, 15 skipped.
+
+**Migration note**: existing Lakebase deployments self-heal the new column on first read/write
+(`ADD COLUMN IF NOT EXISTS`, owner-aware). Because the `domains` table already exists,
+`schema.sql`'s `CREATE TABLE IF NOT EXISTS` does NOT add the column on redeploy, so the
+deploy-time migration was added to `scripts/bootstrap-lakebase-perms.sh`
+(`ALTER TABLE domains ADD COLUMN IF NOT EXISTS review_quorum integer NOT NULL DEFAULT 1`,
+run as the schema owner). Run `make bootstrap-lakebase` to apply it to an already-deployed
+instance. The old registry-wide `review_quorum` in `global_config` is no longer read.
+
+> Deployed to `fe-vm-bcayla-demos` (apps `ontobricks-050` + `mcp-ontobricks-050`) on 2026-06-09;
+> Lakebase `domains.review_quorum` migration applied; both apps RUNNING, UI `/healthz` 200.
+
+---
+
+## Admin can publish regardless of the sign-off quorum
+
+**Context**: Publishing an IN-REVIEW version was gated by the sign-off quorum for everyone,
+including admins. Admins should be able to drive any lifecycle transition — including publish —
+without being blocked by the quorum, so a domain is never stuck waiting on sign-offs.
+
+**Changes**:
+1. `src/back/objects/registry/ReviewService.py` — new `_is_admin(user_role, user_domain_role)`
+   helper (app-level OR domain-level admin). `publish` now bypasses the quorum check for admins
+   and records `quorum_override` in the `published` event meta. `review_detail` returns
+   `can_publish` for admins even when the quorum is not met, plus a top-level `publish_override`
+   flag. `_pending_actions` (My Tasks) surfaces the Publish action for admins below quorum.
+2. `src/front/static/domain/js/domain-review.js` — when `publish_override` is set, the Validation
+   panel shows an "Admin override" warning and a `Publish (override quorum)` button.
+3. `tests/units/registry/test_review_service.py` — `test_publish_blocked_until_quorum` now uses a
+   non-admin builder; added `test_publish_admin_overrides_quorum`,
+   `test_publish_domain_admin_overrides_quorum`, `test_pending_actions_builder_no_publish_below_quorum`,
+   `test_pending_actions_admin_publish_below_quorum`, `test_review_detail_admin_can_publish_below_quorum`.
+4. `README.md`, `docs/user-guide.md` — documented the admin quorum override.
+
+**Modified files**:
+- `src/back/objects/registry/ReviewService.py`
+- `src/front/static/domain/js/domain-review.js`
+- `tests/units/registry/test_review_service.py`
+- `README.md`
+- `docs/user-guide.md`
+
+**Test result**: `pytest tests/units` -> 2247 passed, 15 skipped. `node --check` clean.
+
+---
+
+## Fix: version filter dropdowns disabled on read-only domains (Runs / Audit trail)
+
+**Context**: On a read-only domain version (status IN-REVIEW or PUBLISHED, or an older/inactive
+version → `body.read-only-version`), the **Version** filter `<select>` on **Domain → Runs** and
+**Domain → Audit trail** was greyed out and unusable. Those dropdowns only filter a read-only
+timeline by version — they don't mutate anything — so they must stay interactive for readers.
+
+**Root cause**: The catch-all read-only gate in `permissions.css` disables every `<select>` except
+an explicit allow-list (`#domainVersionSelect`, `#loadDomainSelect`, `#loadVersionSelect`). The
+two filters (`#auditVersionFilter`, `#runsVersionFilter`) weren't listed, and the sibling
+`[id*="filter"]` input exemption is case-sensitive (lowercase), so it would not have matched the
+capital-F ids regardless.
+
+**Changes**:
+1. `src/front/static/global/css/permissions.css` — added `:not(#auditVersionFilter)` and
+   `:not(#runsVersionFilter)` to the read-only `select` gate, and documented them in the
+   exemption-list comment.
+
+**Modified files**:
+- `src/front/static/global/css/permissions.css`
+
+**Test result**: CSS-only change; no test suite impact.
+
+---
+
+## Track the user behind every status change (direct lifecycle transitions)
+
+**Context**: The review workflow (Submit / Approve / Request changes / Publish / Reopen) already
+records who did what in `domain_review_events` (actor + action + from→to + timestamp + comment).
+But the **direct lifecycle dropdown** (`POST /domain/set-version-status`, used from Registry →
+Browse / Domain → Versions) changed the status **without** writing an audit row, so those changes
+were not attributed to any user.
+
+**Changes**:
+1. `src/api/routers/internal/domain.py` — `set_version_status` endpoint now resolves the caller's
+   email (`request.state.user_email` / `x-forwarded-email`) and forwards it as `actor_email`.
+2. `src/back/objects/domain/SettingsService.py` — `set_registry_version_status_result` accepts
+   `actor_email` and, after a successful transition, records a `domain_review_events` row
+   (best-effort; never rolls back the transition). The target status maps to the action tag:
+   IN-REVIEW→`submitted`, PUBLISHED→`published`, DRAFT→`reopened`; `meta.source="lifecycle"`
+   distinguishes these from review-workflow rows.
+3. `tests/units/settings/test_settings_version_status.py` — `_run` passes `actor_email`; added
+   `test_status_change_records_actor_in_audit_log`,
+   `test_publish_status_change_maps_to_published_action`,
+   `test_reopen_status_change_maps_to_reopened_action`.
+
+**Modified files**:
+- `src/api/routers/internal/domain.py`
+- `src/back/objects/domain/SettingsService.py`
+- `tests/units/settings/test_settings_version_status.py`
+
+**Test result**: `pytest tests/units` -> 2250 passed, 15 skipped.
+
+**Note**: attribution relies on the forwarded user identity. Running locally (no
+`x-forwarded-email`) the actor is empty, exactly like the review-workflow sign-offs; deployed as a
+Databricks App the email is populated and every transition is attributed.

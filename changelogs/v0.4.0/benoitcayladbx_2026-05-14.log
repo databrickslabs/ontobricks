@@ -1,0 +1,130 @@
+## Fix: Lakebase ghost control-plane state blocks synced table creation (deployed App)
+
+### Context
+
+In the deployed Databricks App, building a Digital Twin domain that uses
+Lakebase managed-synced mode was always blocking at step "Registering synced
+table in Unity Catalog".  The Lakebase synced-table object was **never
+created**, and the build eventually timed out with:
+
+  "Synced table was created (or already existed) but is not visible via GET
+  after 240s."
+
+Root cause investigation revealed a **Lakebase control-plane ghost reservation**:
+the internal Lakebase service tracked `ontobricks_graph_demo.cust360auto_v4_sync`
+(and `consulting_v1_sync`) as "destination already in use" even though:
+- `GET /api/2.0/database/synced_tables/{name}` returned 404
+- `DELETE /api/2.0/database/synced_tables/{name}` returned 404
+- The Postgres table did not exist in any database
+- `__db_system.table_pipeline_id` had no matching entry (after manual cleanup)
+
+The ghost state was created when a previous LOCAL build registered these synced
+tables successfully, and then the UC registration was subsequently deleted
+outside of the synced-tables DELETE API (e.g. domain reset, UC DROP TABLE),
+leaving the control-plane reservation orphaned.
+
+The previous `_is_already_exists` check matched the ghost-state error
+("Destination table X already exists in schema Y") as a normal 409, causing
+the build to silently enter the 240-second visibility timeout loop instead of
+detecting and recovering from the actual condition.
+
+### Changes
+
+1. **`src/back/core/graphdb/lakebase/SyncedTableManager.py`**
+   - Added `_is_ghost_control_plane_state(exc)` static method to precisely
+     identify the "Destination table already exists in schema" error from the
+     Lakebase control plane.
+   - Updated `_is_already_exists()` to explicitly exclude ghost-state errors
+     so they are no longer swallowed.
+   - Added `_GHOST_FALLBACK_SUFFIXES = ("_b", "_c", "_d")` class constant.
+   - Refactored `ensure()` to iterate candidate UC names (primary, then `_b`,
+     `_c`, `_d` fallbacks) when ghost state is detected.  On each ghost-state
+     hit, it first tries `DELETE` (which succeeds when this principal owns the
+     reservation); if DELETE clears it, re-CREATE is attempted immediately.
+     If all candidates are exhausted, a clear `InfrastructureError` with full
+     diagnostic guidance is raised (no more silent 240-second wait).
+   - `ensure()` now returns the synced-table object whose `.name` reflects the
+     **actual** UC FQN used (may differ from the requested name on fallback).
+
+2. **`src/back/objects/digitaltwin/_build_pipeline.py`**
+   - Step 3 now captures the `ensure()` return value and extracts
+     `actual_synced_uc` from it.
+   - Step 5 (`trigger_and_wait`) and step 6 (`ensure_synced_union_view`) both
+     use `actual_synced_uc` / `_actual_synced_phy` so downstream DDL targets
+     the correct Postgres table even when a fallback name was used.
+
+3. **`src/back/core/graphdb/lakebase/LakebaseFlatStore.py`**
+   - `ensure_synced_union_view()` gained an optional `synced_phy_override`
+     keyword argument; when supplied it overrides the default `synced_phy(name)`
+     derivation so the union view references the correct fallback table.
+
+4. **`tests/test_build_pipeline_streaming.py`**
+   - `_synced_pipe()` fixture updated: `mgr.ensure.return_value` now carries
+     a `.name` matching `synced_uc` so the pipeline does not misdetect a
+     fallback and the `ensure_synced_union_view` assertion matches the new
+     `synced_phy_override=None` keyword call.
+
+### Modified files
+
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `tests/test_build_pipeline_streaming.py`
+
+### Test results
+
+```
+tests/test_synced_table_manager.py  23 passed
+tests/test_lakebase_auth.py         12 passed
+tests/test_build_pipeline_streaming.py  5 passed (3 pre-existing failures
+                                         in TestResolveLakebaseMode excluded)
+```
+All relevant tests pass.  The 3 `TestResolveLakebaseMode` failures are
+pre-existing and unrelated to this change (mock path bug in the test).
+
+---
+
+## Fix: SQL warehouse not found in catalog dropdown despite being configured
+
+### Context
+
+After configuring the SQL Warehouse in Settings → Databricks, the UC catalog
+dropdown in Settings → Managed Sync still showed
+"Configure a SQL warehouse under Settings → Databricks first."
+
+Root cause: `GlobalConfigService.set_warehouse_id()` silently fails when the
+Lakebase registry is not yet fully initialized or the `RegistryCfg.catalog /
+schema` are empty (common on a fresh deploy). The save returns `(False, msg)`
+but the UI still shows "Configuration saved". Later, `get_warehouse_id()` reads
+from the Lakebase `global_config` table (not from the domain session), so it
+returns `""` and the dropdown guard fires.
+
+Secondary issue: `dtwin.py` used Python 3.10+ `str | None` syntax which caused
+`TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'` on
+Python 3.9, breaking all app-startup-dependent tests.
+
+### Changes
+
+1. **`src/back/objects/domain/SettingsService.py`**
+   - `graph_engine_uc_catalogs`: changed `_` to `domain` in `_resolve_context`
+     destructure; added fallback `domain.databricks.get("warehouse_id")` when
+     global config returns empty.
+   - `graph_engine_uc_schemas`: same fallback pattern.
+   - Upgraded both silent `logger.info` calls (when global config save fails) to
+     `logger.warning` so failures are visible in the app log.
+
+2. **`src/api/routers/internal/dtwin.py`**
+   - Changed `str | None` → `Optional[str]` in `dtwin_triples_find` signature.
+   - Added `Optional` to `from typing import` line.
+
+### Modified files
+
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/dtwin.py`
+
+### Test results
+
+```
+164 passed in 67.80s
+```
+All tests pass including app-startup tests that were previously broken.

@@ -127,7 +127,7 @@ OntoBricks uses Lakebase Postgres (Autoscaling) as **both** its registry store (
 ║  Schema: ontobricks   (optional — managed_synced sync mode only)                       ║
 ║  Lakeflow synced tables — Lakebase mirror of the UC Delta triplestore VIEW              ║
 ║  Created by: first Lakeflow snapshot on a managed_synced domain                        ║
-║  Granted by: make bootstrap-lakebase  (set LAKEBASE_SYNC_SCHEMA in deploy.config.sh)   ║
+║  Granted by: manual bootstrap-lakebase-perms.sh -s <sync_schema> (managed_synced)      ║
 ╚══════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -328,10 +328,6 @@ LAKEBASE_DATABASE=ontobricks_registry    # Postgres database (datname)
 LAKEBASE_SCHEMA=ontobricks_registry      # Postgres schema for the registry
 PGUSER=you@example.com                   # Your Databricks email locally; SP id in Apps
 # PGHOST / PGPORT / PGDATABASE are auto-injected by the Apps platform — do not set here
-
-# Optional
-DATABRICKS_CATALOG=main
-DATABRICKS_SCHEMA=default
 
 # MLflow — persist agent traces to your workspace (recommended)
 MLFLOW_TRACKING_URI=databricks
@@ -559,14 +555,16 @@ binding is wired correctly. `scripts/deploy.sh` calls
 `dev-lakebase` target (you can re-run it manually any time — it is
 idempotent).
 
-OntoBricks uses **up to three Postgres schemas** that each need a
-GRANT bootstrap. `scripts/deploy.sh` walks through them automatically:
+The deploy script is **registry-scoped**: it bootstraps only the
+**registry** schema. The graph DB is configured in-app
+(`Settings → Graph DB`) and may live in a **different** Lakebase
+project, so its grant is handled by the in-app "Create graph DB" flow
+or a manual `bootstrap-lakebase-perms.sh` run.
 
-| Schema | When to bootstrap | Variable in `scripts/deploy.config.sh` |
-|--------|-------------------|----------------------------------------|
-| Registry (`ontobricks_registry`) | After **Settings → Registry → Initialize** has created the schema | `LAKEBASE_BOOTSTRAP_SCHEMA` (tracks `LAKEBASE_REGISTRY_SCHEMA`) |
-| Graph DB (`ontobricks_graph`) | After the **first Digital Twin Build** has created the schema | `LAKEBASE_GRAPH_SCHEMA` |
-| Sync (e.g. `ontobricks`) | After the **first Lakeflow snapshot** has created the schema — only when `graph_engine_config.sync_mode = managed_synced` | `LAKEBASE_SYNC_SCHEMA` (leave empty to skip) |
+| Schema | When to bootstrap | Who runs it |
+|--------|-------------------|-------------|
+| Registry (`ontobricks_registry`) | After **Settings → Registry → Initialize** has created the schema | `deploy.sh` automatically (`LAKEBASE_REGISTRY_SCHEMA` in `deploy.config.sh`) |
+| Graph DB (`ontobricks_graph`) | After the **first Digital Twin Build** has created the schema | In-app "Create graph DB" flow, or manual run with the graph project/branch/database |
 
 The script grants:
 
@@ -588,22 +586,22 @@ scripts/bootstrap-lakebase-perms.sh \
   -a ontobricks-XXX \
   -a mcp-ontobricks
 
-# Graph schema (same instance, run after first Build)
+# Graph schema (run after first Build — use the graph DB's own
+# project/branch/database, which MAY differ from the registry)
 scripts/bootstrap-lakebase-perms.sh \
-  -i "<lakebase_project>" -b "<lakebase_branch>" \
-  -d ontobricks_registry -s ontobricks_graph \
+  -i "<graph_project>" -b "<graph_branch>" \
+  -d "<graph_database>" -s ontobricks_graph \
   -a ontobricks-XXX -a mcp-ontobricks
 ```
 
-If the Graph DB lives on a **different** Lakebase project/branch/database
-than the registry, set `LAKEBASE_GRAPH_PROJECT` / `LAKEBASE_GRAPH_BRANCH` /
-`LAKEBASE_GRAPH_DATABASE` in `scripts/deploy.config.sh` so the second and
-third grants target the correct instance.
+The registry grant uses `LAKEBASE_PROJECT` / `LAKEBASE_BRANCH` /
+`LAKEBASE_REGISTRY_DATABASE` from `deploy.config.sh`; only the `-s`
+schema name changes if you grant additional schemas in the same database.
 
 If your Lakebase instance still uses the shared default database
 **`databricks_postgres`** (older single-DB layouts) with the registry
 schema **`ontobricks_registry`** inside it, pass **`-d databricks_postgres`**
-and set `LAKEBASE_BOOTSTRAP_DATABASE=databricks_postgres` in
+and set `LAKEBASE_REGISTRY_DATABASE=databricks_postgres` in
 `scripts/deploy.config.sh`.
 
 ### Step 6 — Start the apps
@@ -696,12 +694,6 @@ env:
   # Static fallback warehouse ID for MCP / session-less API calls.
   - name: DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT
     value: "${APP_SQL_WAREHOUSE_FALLBACK}"
-
-  # ── Unity Catalog defaults ─────────────────────────────────────
-  - name: DATABRICKS_CATALOG
-    value: "${APP_DATABRICKS_CATALOG}"
-  - name: DATABRICKS_SCHEMA
-    value: "${APP_DATABRICKS_SCHEMA}"
 
   # ── Triple store fallback (Delta) ──────────────────────────────
   - name: DATABRICKS_TRIPLESTORE_TABLE

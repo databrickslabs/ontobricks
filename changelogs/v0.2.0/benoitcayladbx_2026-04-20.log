@@ -1,0 +1,383 @@
+## Fix stale session state leaking between domain switches
+
+Context: When switching domains (e.g. from the Knowledge Graph page), groups,
+design layout, mappings, triplestore config, and other characteristics from the
+previously loaded domain could persist into the newly loaded domain. The root
+cause was that `import_from_file` only replaced session sections that existed
+in the incoming data — missing sections were left untouched.
+
+Changes:
+1. src/back/objects/session/DomainSession.py — Added `import copy` at module
+   level and a full content-section reset at the top of `import_from_file()`.
+   Before overlaying new data, ontology, assignment, design_layout,
+   domain info, metadata, and triplestore are reset to empty defaults.
+   Removed the now-redundant triplestore cleanup at the bottom of the method.
+
+Modified files:
+- src/back/objects/session/DomainSession.py
+
+Test result: 1531 passed
+
+## Add full-page loading spinner when switching domains from Knowledge Graph
+
+Context: Switching domains from the Knowledge Graph page (graph switcher or
+bridge navigation) did not show the full-page "Loading {domain}..." overlay,
+leaving the user with no visual feedback during the slow load.
+
+Changes:
+1. src/front/static/query/js/query.js — Added showDomainLoading / hideDomainLoading
+   calls to `_switchDomainForBridge` so bridge-based domain switches show the
+   overlay with the domain name.
+2. src/front/static/query/js/query-sigmagraph.js — Added showDomainLoading /
+   hideDomainLoading calls to `_graphSwitcherSelect` so the graph switcher
+   modal also triggers the full-page overlay alongside the inline spinner.
+
+Modified files:
+- src/front/static/query/js/query.js
+- src/front/static/query/js/query-sigmagraph.js
+
+Test result: 1531 passed
+
+## Show loading spinner when clicking Cross-Domain Bridge links
+
+Context: The previous spinner work covered the graph switcher modal and the
+client-side `_switchDomainForBridge` URL-parameter flow, but cross-domain
+Bridge links in the entity details panel go through `/resolve?uri=...&domain=...`.
+That route performs a server-side domain switch (slow) and then returns a 302
+redirect — during this wait the browser shows a blank loading state and no
+JavaScript can run, so the "Loading {domain}..." overlay never appeared.
+
+Fix: render an inline `onclick` handler on each bridge anchor that invokes
+`showDomainLoading('Loading {target_domain}...')` synchronously before the
+navigation starts. The overlay remains visible while the browser waits for the
+`/resolve` response and the subsequent redirect to the Knowledge Graph page.
+
+Changes:
+1. src/front/static/query/js/query-entity-details.js — Bridges rendered in
+   the entity details panel now include an `onclick` attribute that calls
+   `showDomainLoading` with the target domain name.
+2. src/front/static/query/js/query-sigmagraph.js — Same `onclick`-triggered
+   overlay on bridges rendered inside the SigmaGraph entity details section.
+3. src/front/static/query/js/query-sigmagraph.js — Right-click node context
+   menu "Bridges" path: the delegated click handler that did
+   `window.location.href = url` now extracts the target domain from the
+   resolve URL and calls `showDomainLoading('Loading {domain}...')` before
+   navigating. This was the third bridge entry-point and the reason the
+   overlay was still missing for users using the right-click menu.
+
+Modified files:
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+
+Test result: 1531 passed
+
+## Add in-app Help Center (navbar Help icon with comprehensive documentation)
+
+Context: Users had no in-app documentation — to understand how to use
+OntoBricks they had to leave the app for the docs/ folder or the user guide
+on GitHub. Added a Help icon on the right side of the navbar that opens a
+large, tabbed Help Center modal covering starter guide, step-by-step
+workflow, feature guide, FAQ, troubleshooting, keyboard shortcuts, glossary
+and external resources. The modal includes a live search input that filters
+sections and highlights matching text.
+
+Changes:
+1. src/front/templates/partials/layout/help_modal.html — New Bootstrap
+   modal partial with a left rail (Welcome, Starter Guide, Workflow,
+   Feature Guide, FAQ, Troubleshooting, Shortcuts, Glossary, Resources) and
+   a content area. Includes a pipeline diagram, quick-access cards, step
+   cards for the 4-click starter flow, a workflow accordion, a feature
+   grid, a FAQ accordion, troubleshooting entries, a shortcuts table, a
+   glossary and a resources grid with links to W3C standards, industry
+   ontologies and Databricks documentation.
+2. src/front/static/global/css/help-modal.css — Styles for the two-pane
+   modal (sidebar + content), hero block, quick-access cards, pipeline
+   diagram, step cards, feature cards, accordions, troubleshoot entries,
+   glossary, tables, search-match highlight, responsive collapse.
+3. src/front/static/global/js/help-modal.js — Controller that wires the
+   navbar Help icon (#helpCenterToggle) to open the Bootstrap modal,
+   switches sections from the left rail and jump-links, implements a
+   debounced live search that filters sections and highlights matches
+   (with an empty-state panel), and exposes a window.HelpCenter API.
+4. src/front/templates/base.html — Added the help-modal CSS/JS includes,
+   the Help navbar icon (bi-question-circle) to the right-side utility
+   links (just before Settings), and the modal partial include.
+5. src/front/config/menu_config.json — Added a "help" utility_link entry
+   to keep utility icons declarative/consistent with the existing pattern.
+
+Modified files:
+- src/front/templates/partials/layout/help_modal.html (new)
+- src/front/static/global/css/help-modal.css (new)
+- src/front/static/global/js/help-modal.js (new)
+- src/front/templates/base.html
+- src/front/config/menu_config.json
+
+Test result: 1515 passed (1 pre-existing collection error in
+test_community_detector.py due to missing networkx in the local venv — not
+related to this change).
+
+## Refresh About page to reflect current product scope
+
+Context: The About page still described OntoBricks as a "visual R2RML
+mapping tool," which no longer matches the product. OntoBricks is now a
+Digital Twin Builder for Databricks covering ontology management,
+mapping, knowledge-graph materialization, OWL/SWRL/SHACL reasoning, an
+auto-generated GraphQL API, LLM agents, and MCP integration.
+
+Changes:
+1. src/front/templates/about.html — Rewrote the About page content:
+   - Updated tagline to "Digital Twin Builder for Databricks" and
+     described the 4-click LLM-driven pipeline.
+   - Added a "Core Capabilities" card covering Ontology Management,
+     Mapping, Digital Twin, and Reasoning & Quality.
+   - Added a "4-Click Pipeline" card (Import Metadata / Generate
+     Ontology / Auto-Map / Synchronize).
+   - Refreshed the Technology Stack card: Python 3.10+, FastAPI,
+     RDFLib, OWL-RL, Strawberry GraphQL, Databricks SDK, LadybugDB,
+     MCP, Jinja2, Bootstrap 5.3, Graphology/Sigma.js, Unity Catalog,
+     SQL Warehouse, UC Volume registry.
+   - Added sidebar cards for LLM Agents (OWL generator, auto-assign,
+     icon assign, AI Assistant, SQL Wizard) and MCP Integration.
+   - Expanded Resources with OWL 2, SHACL, and MCP links; added
+     rel="noopener" to all external links.
+   - Updated status badge from "Development" to "Active".
+
+Modified files:
+- src/front/templates/about.html
+
+Test result: 1470 passed (tests/e2e and tests/test_community_detector.py
+skipped; the latter has a pre-existing `networkx` import failure
+unrelated to this change).
+
+## Help Center: switch palette from blue to red/black
+
+Context: The newly-added Help Center used a navy-blue palette
+(#1b3a57 / #2c5282 header, blue soft cards, amber troubleshoot banners)
+that clashed with OntoBricks' brand colors. Reworked the palette to use
+black (#1a1a1a / #0f0f0f) and red (#dc2626 / #b91c1c / #7f1d1d) throughout.
+
+Changes:
+1. src/front/static/global/css/help-modal.css
+   - Header gradient: black → dark red (#0f0f0f → #1a1a1a → #b91c1c).
+   - Sidebar nav: dark-grey hover background with red icon; active item
+     now black with a red left accent bar and light-red icon.
+   - Section headings: red underline accent; in-content links in red.
+   - Hero block: black/dark-red gradient with a solid red icon tile and
+     a red glow ring.
+   - Quick-access cards: soft-red hover shadow and border.
+   - Pipeline steps: red top accent, black badge with red ring, red arrows.
+   - Starter step cards: red left border, black badge with red ring.
+   - Feature-icon gradient: black → red.
+   - Accordions (Workflow / FAQ): active header is black with a red
+     bottom accent; bodies get a red left border.
+   - Troubleshoot items: red left border on a soft-red background; the
+     previously amber warning icons are overridden to red.
+   - Glossary: red dot bullet, red left border, black terms.
+   - `kbd` styling: black background with a red bottom border.
+   - Search match highlight: soft-red chip with dark-red bold text.
+   - Alerts inside the modal (`.alert-info`, `.alert-primary`,
+     `.alert-warning`) re-tinted to fit the red/black palette.
+   - Navbar `#helpCenterToggle` hover tints the icon light-red.
+   - Soft utility classes: `.bg-soft-primary` → soft red, `.bg-soft-info`
+     → deeper red-tint, `.bg-soft-success` → black card with red icon.
+
+Modified files:
+- src/front/static/global/css/help-modal.css
+
+Test result: 1515 passed (the pre-existing
+tests/test_community_detector.py collection error from missing networkx
+in the local venv is unrelated).
+
+## Help Center: remove black-to-red gradients, use solid red
+
+Context: Follow-up request — the red/black gradients in the Help Center
+header, hero block, and feature-icon tiles were visually noisy. Replaced
+all three gradients with a single solid red (#b91c1c for large
+surfaces, #dc2626 for icon tiles).
+
+Changes:
+1. src/front/static/global/css/help-modal.css
+   - `.help-modal-header`: gradient → solid #b91c1c.
+   - `.help-hero`: gradient → solid #b91c1c with a solid #7f1d1d border
+     and fully-white text/lead copy.
+   - `.help-feature-icon`: gradient → solid #dc2626.
+
+Modified files:
+- src/front/static/global/css/help-modal.css
+
+Test result: 1515 passed.
+
+## Help Center Starter Guide: add optional "Import Documents" step and
+## rewrite mapping step (manual or Auto-Map)
+
+Context: Follow-up on the Help Center. The Starter Guide did not mention
+that users can optionally attach documents (PDFs, schemas, data
+dictionaries) to a domain before generating the ontology — yet the
+Wizard uses these documents as additional LLM context. The mapping step
+also presented Auto-Map as the only option, hiding the manual workflow.
+
+Changes:
+1. src/front/templates/partials/layout/help_modal.html
+   - Added a new optional step between steps 2 and 3: "Import Documents"
+     with a dashed badge and an "Optional" tag. Points to
+     Domain → Documents and explains the impact on LLM generation.
+   - Rewrote step 3 ("Generate the Ontology") to note that the LLM is
+     grounded in the imported metadata and documents.
+   - Rewrote step 4 ("Auto-Map & Sync" → "Map your data & Sync") to
+     describe both paths: manual mapping via Designer/Manual views, or
+     letting an agent do it via Auto-Map. Sync instructions unchanged.
+2. src/front/static/global/css/help-modal.css
+   - New `.help-step-optional` modifier (dashed left border, soft grey
+     background).
+   - New `.help-step-badge-optional` (hollow white badge with a dashed
+     red border and a red plus icon).
+   - New `.help-optional-tag` pill style (soft-red rounded "OPTIONAL"
+     label used in the step title).
+
+Modified files:
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/global/css/help-modal.css
+
+Test result: 1515 passed.
+
+## Help Center: lock modal height (no resize when switching menu items)
+
+Context: The Help Center modal resized vertically depending on the
+active section's content, because Bootstrap's `modal-dialog-scrollable`
+only caps the max-height. Switching from a short section (e.g. Welcome)
+to a tall one (e.g. FAQ) made the whole window jump. The user asked for
+a fixed window height.
+
+Changes:
+1. src/front/static/global/css/help-modal.css
+   - `.help-modal .modal-content`: forced `height: 88vh` (in addition to
+     `max-height: 88vh`) so the dialog keeps a constant size.
+   - `.help-modal .modal-body`: pinned with `flex: 1 1 auto; min-height: 0;
+     padding: 0; overflow: hidden;` to pass the height down to the
+     scrollable inner pane.
+   - `.help-modal-body`: `height: 100%; min-height: 0; overflow: hidden;`
+     (replaces the former min-/max-height pair).
+   - `.help-sidebar` and `.help-content`: added `min-height: 0;` so
+     their own `overflow-y: auto;` works inside the flex container.
+
+Net effect: the modal is always 88vh tall; the left rail and the content
+panel scroll independently; switching sections never changes the outer
+window size.
+
+Modified files:
+- src/front/static/global/css/help-modal.css
+
+Test result: 1515 passed.
+
+## Help Center: use OntoBricks logo in title and welcome hero
+
+Context: The Help Center used the generic Bootstrap `bi-life-preserver`
+icon in both the modal title and the Welcome hero. Replaced both with
+the OntoBricks favicon.svg so the popup is visually on-brand.
+
+Changes:
+1. src/front/templates/partials/layout/help_modal.html
+   - Modal title: `<i class="bi bi-life-preserver">` replaced with an
+     `<img src=".../global/img/favicon.svg">` inside a small white
+     rounded tile (`.help-title-logo`) so the colorful logo stays
+     legible on the red header.
+   - Welcome hero: the icon tile now contains the favicon SVG instead of
+     the life-preserver glyph.
+2. src/front/static/global/css/help-modal.css
+   - `.help-hero-icon`: background changed from solid red to white, with
+     a soft white outer glow, so the multi-colored logo stays visible.
+   - `.help-hero-icon img`: enforced 48x48 so the logo scales correctly.
+   - New `.help-title-logo` class: 32x32 white rounded tile used for
+     the header title logo.
+
+Modified files:
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/global/css/help-modal.css
+
+Test result: 1515 passed.
+
+## Help Center: fix double vertical scrollbar in tall sections (Starter Guide)
+
+Context: In tall sections such as Starter Guide, the Help Center showed
+two vertical scrollbars side-by-side: one from Bootstrap's
+`modal-dialog-scrollable` (which enables `overflow-y: auto` on
+`.modal-body`) and one from our `.help-content` inner pane. We manage
+scrolling ourselves on `.help-content`, so Bootstrap's scroll on the
+body was redundant and visually wrong.
+
+Changes:
+1. src/front/templates/partials/layout/help_modal.html
+   - Removed the `modal-dialog-scrollable` class from the dialog.
+     Scrolling is now handled exclusively by `.help-content`.
+2. src/front/static/global/css/help-modal.css
+   - Reinforced `.help-modal .modal-body` with
+     `overflow: hidden !important` and added an explicit
+     `.help-modal .modal-body, .help-modal .help-modal-body
+     { overflow-x: hidden !important; overflow-y: hidden !important; }`
+     rule so no ancestor of `.help-content` ever renders a scrollbar.
+
+Result: a single vertical scrollbar on the content pane only, in every
+section (Welcome, Starter Guide, Workflow, FAQ, etc.).
+
+Modified files:
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/global/css/help-modal.css
+
+Test result: 1515 passed.
+
+## Help Center: remove horizontal scroll from the Welcome pipeline
+
+Context: The "OntoBricks pipeline" strip on the Welcome tab used
+`overflow-x: auto` with a 150px min-width per step, which meant the
+five-step pipeline (Registry → Domain → Ontology → Mapping → Digital
+Twin) produced a horizontal scrollbar on realistic content widths.
+
+Changes:
+1. src/front/static/global/css/help-modal.css
+   - `.help-pipeline`: dropped `overflow-x: auto`, added
+     `flex-wrap: wrap` and `overflow-x: hidden`. The pipeline now wraps
+     onto multiple lines instead of scrolling horizontally.
+   - `.help-step`: `flex: 1 1 140px` with `min-width: 0` so each card
+     can shrink below its ideal basis, tighter padding (0.6rem 0.7rem),
+     smaller font (0.82rem, line-height 1.25), and
+     `overflow-wrap: anywhere` + `word-break: break-word` to safely
+     break long labels.
+   - Added `.help-step > div { min-width: 0; flex: 1 1 auto; }` so the
+     inner text column can shrink too.
+   - `.help-step small`: smaller (0.72rem) and in a calmer grey.
+
+Result: the pipeline always fits within the content pane — it wraps to
+a second row on narrow widths but never scrolls sideways.
+
+Modified files:
+- src/front/static/global/css/help-modal.css
+
+Test result: 1515 passed.
+
+## Help Center: remove grey borders from Workflow/FAQ accordions
+
+Context: The accordions in the Step-by-Step Workflow and FAQ sections
+still showed Bootstrap's default grey 1px borders around each item and
+between the header and body, which fought visually with the red left
+border already applied to the accordion body.
+
+Changes:
+1. src/front/static/global/css/help-modal.css
+   - `.help-accordion`: overrode Bootstrap's accordion border CSS vars
+     (`--bs-accordion-border-color: transparent`,
+     `--bs-accordion-border-width: 0`) and zeroed the container border.
+   - `.help-accordion .accordion-item`: removed border, transparent
+     background, added a 0.4rem bottom margin so items stay visually
+     separated without grey lines.
+   - Rounded corners restored with explicit `border-radius: 8px` on
+     first/last items and on `.accordion-button`.
+   - `.help-accordion .accordion-button` and `.accordion-collapse`:
+     `border: 0` to suppress the remaining grey hairlines.
+
+Result: a cleaner look where the only accents are the red left-border
+on the body and the red bottom-accent on the active header.
+
+Modified files:
+- src/front/static/global/css/help-modal.css
+
+Test result: 1515 passed.

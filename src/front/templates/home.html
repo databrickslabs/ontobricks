@@ -2,6 +2,11 @@
 
 {% block title %}OntoBricks - Home{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry-my-tasks.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='home/css/home.css') }}?v={{ asset_version }}">
+{% endblock %}
+
 {% block content %}
 <!-- JS: /static/home/js/home.js -->
 <!-- Hero Section -->
@@ -10,10 +15,10 @@
         <img src="{{ url_for('static', filename='global/img/ontobricks-icon.svg') }}?v=2" alt="OntoBricks" width="56" height="56" class="me-2 align-middle">
         OntoBricks <span class="ob-home-brand-version">v{{ app_version }}</span>
     </h1>
-    <p class="tagline">Transform your Databricks data into a semantic knowledge graph using RDF, OWL, and R2RML standards</p>
+    <p class="tagline">Explore and govern your organization's knowledge &mdash; one trusted, connected view of your business data.</p>
 </div>
 
-<!-- Domain management -->
+<!-- Current Domain - KPI / health band -->
 <div class="domain-panel" id="sessionPanel">
     <div class="domain-header">
         <h5><i class="bi bi-folder2-open"></i> Current Domain: <span id="homeDomainName">Loading...</span></h5>
@@ -22,130 +27,63 @@
             <a href="/about" class="quick-link-sm"><i class="bi bi-info-circle"></i> About</a>
         </div>
     </div>
-    
-    <!-- Session Stats -->
-    <div class="session-stats">
-        <div class="stat-item">
-            <div class="stat-icon" id="taxonomyIcon"><i class="bi bi-diagram-3"></i></div>
-            <div class="stat-value" id="classCount">-</div>
-            <div class="stat-label">Entities</div>
+
+    <!-- KPI band -->
+    <div class="home-kpi-band">
+        <div class="ob-kpi-tile tile-muted" id="kpiEntitiesTile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-diagram-3"></i></div>
+            <div class="ob-kpi-tile-value" id="kpiEntities">-</div>
+            <div class="ob-kpi-tile-label">Entities</div>
         </div>
-        <div class="stat-item">
-            <div class="stat-icon" id="propsIcon"><i class="bi bi-arrow-left-right"></i></div>
-            <div class="stat-value" id="propCount">-</div>
-            <div class="stat-label">Relationships</div>
+        <div class="ob-kpi-tile tile-muted" id="kpiRelationshipsTile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-arrow-left-right"></i></div>
+            <div class="ob-kpi-tile-value" id="kpiRelationships">-</div>
+            <div class="ob-kpi-tile-label">Relationships</div>
         </div>
-        <div class="stat-item">
-            <div class="stat-icon" id="mappingIcon"><i class="bi bi-link-45deg"></i></div>
-            <div class="stat-value" id="mappingCount">-</div>
-            <div class="stat-label">Mappings</div>
+        <div class="ob-kpi-tile tile-muted" id="kpiMappingsTile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-link-45deg"></i></div>
+            <div class="ob-kpi-tile-value" id="kpiMappings">-</div>
+            <div class="ob-kpi-tile-label">Mappings</div>
         </div>
-    </div>
-    
-    <!-- Domain actions -->
-    <div class="domain-actions">
-        <button type="button" class="domain-btn new" data-action="newDomain">
-            <i class="bi bi-file-earmark-plus"></i>
-            <span>New</span>
-        </button>
-        <a href="/domain/" class="domain-btn manage">
-            <i class="bi bi-folder-symlink"></i>
-            <span>Manage</span>
-        </a>
-        <a href="/domain/?section=metadata" class="domain-btn">
-            <i class="bi bi-database"></i>
-            <span>Data Sources</span>
-        </a>
-        <!-- Save Button -->
-        <button type="button" class="domain-btn" data-action="domainSave">
-            <i class="bi bi-cloud-upload"></i>
-            <span>Save</span>
-        </button>
-        <!-- Load Button -->
-        <button type="button" class="domain-btn" data-action="domainLoad">
-            <i class="bi bi-cloud-download"></i>
-            <span>Load</span>
-        </button>
+        <div class="ob-kpi-tile tile-muted" id="kpiQualityTile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-patch-check"></i></div>
+            <div class="ob-kpi-tile-value" id="kpiQuality">-</div>
+            <div class="ob-kpi-tile-label">Quality</div>
+        </div>
+        <div class="ob-kpi-tile tile-muted" id="kpiStatusTile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-flag"></i></div>
+            <div class="ob-kpi-tile-value" id="kpiStatus">-</div>
+            <div class="ob-kpi-tile-label">Status</div>
+        </div>
+        <div class="ob-kpi-tile tile-muted" id="kpiVersionTile">
+            <div class="ob-kpi-tile-icon"><i class="bi bi-tag"></i></div>
+            <div class="ob-kpi-tile-value" id="kpiVersion">-</div>
+            <div class="ob-kpi-tile-label">Version</div>
+        </div>
     </div>
     <div id="domainStatus" class="domain-status hidden-initial"></div>
 </div>
 
-<!-- Workflow Steps -->
+<!-- All Domains - the open door -->
 <div class="workflow-section">
-    <h5><i class="bi bi-signpost-split"></i> Workflow</h5>
-    <div class="workflow-cards">
-        <!-- Step 1: Ontology -->
-        <div class="workflow-card taxonomy">
-            <span class="step-badge">Step 1</span>
-            <div class="card-icon"><i class="bi bi-diagram-3-fill"></i></div>
-            <h4>Design Ontology</h4>
-            <p>Define your ontology classes and properties. Create the semantic structure for your data.</p>
-            <div>
-                <span class="card-status" id="taxonomyCardStatus">
-                    <i class="bi bi-circle"></i> Not started
-                </span>
-            </div>
-            <div class="card-actions">
-                <a href="/ontology/" class="card-action">Open Designer <i class="bi bi-arrow-right"></i></a>
-                <button type="button" class="card-reset-btn" data-action="resetTaxonomy" title="Reset Ontology">
-                    <i class="bi bi-arrow-counterclockwise"></i> Reset
-                </button>
-            </div>
-        </div>
-        
-        <!-- Step 2: Mapping -->
-        <div class="workflow-card mapping">
-            <span class="step-badge">Step 2</span>
-            <div class="card-icon"><i class="bi bi-link-45deg"></i></div>
-            <h4>Map Data Sources</h4>
-            <p>Connect your Databricks tables to ontology classes. Define relationships and generate R2RML.</p>
-            <div>
-                <span class="card-status" id="mappingCardStatus">
-                    <i class="bi bi-circle"></i> Not started
-                </span>
-            </div>
-            <div class="card-actions">
-                <a href="/mapping/" class="card-action">Open Mapping <i class="bi bi-arrow-right"></i></a>
-                <button type="button" class="card-reset-btn" data-action="resetMapping" title="Reset Mapping">
-                    <i class="bi bi-arrow-counterclockwise"></i> Reset
-                </button>
-            </div>
-        </div>
-        
-        <!-- Step 3: Digital Twin -->
-        <div class="workflow-card query">
-            <span class="step-badge">Step 3</span>
-            <div class="card-icon"><i class="bi bi-box-fill"></i></div>
-            <h4>Digital Twin</h4>
-            <p>Synchronize your knowledge graph to a triple store, run quality checks, and explore data visually.</p>
-            <div>
-                <span class="card-status" id="queryCardStatus">
-                    <i class="bi bi-circle"></i> Ready when mapped
-                </span>
-            </div>
-            <div class="card-actions">
-                <a href="/dtwin/" class="card-action">Open Digital Twin <i class="bi bi-arrow-right"></i></a>
-            </div>
+    <h5><i class="bi bi-grid-3x3-gap"></i> All Domains</h5>
+    <div id="domainGateway" class="ob-domain-grid">
+        <div class="ob-domain-grid-loading text-muted">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+            <span>Loading domains...</span>
         </div>
     </div>
 </div>
 
-<!-- Info Cards -->
-<div class="info-cards">
-    <div class="info-card">
-        <h6><i class="bi bi-file-earmark-code"></i> OWL Ontology</h6>
-        <p>Define classes and properties using the W3C Web Ontology Language standard for rich semantic expressiveness.</p>
-    </div>
-    <div class="info-card">
-        <h6><i class="bi bi-database"></i> R2RML Mapping</h6>
-        <p>Map relational tables to RDF using the W3C R2RML standard. Execute directly on Databricks via Spark SQL.</p>
-    </div>
-    <div class="info-card">
-        <h6><i class="bi bi-box"></i> Digital Twin</h6>
-        <p>Sync your knowledge graph to a triple store, validate data quality, and explore entities visually.</p>
+<!-- My Tasks (review worklist) -->
+<div class="workflow-section" id="homeTasksSection" style="display:none;">
+    <h5><i class="bi bi-inbox"></i> My Tasks</h5>
+    <div class="domain-panel">
+        <div id="homeTasksContainer"></div>
     </div>
 </div>
 
 <!-- Home page JavaScript (extracted from template) -->
 <script src="{{ url_for('static', filename='home/js/home.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='home/js/home-tasks.js') }}?v={{ asset_version }}"></script>
 {% endblock %}

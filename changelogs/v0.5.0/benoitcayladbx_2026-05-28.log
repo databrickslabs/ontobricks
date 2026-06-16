@@ -1,0 +1,44 @@
+## Graph Chat — Streaming (SSE) [v0.5.0 · 2026-05-28]
+
+### Context
+The Graph Chat agent loop (up to 12 LLM iterations with tool calls) was fully blocking:
+the entire agent turn completed server-side before a single byte was returned to the browser.
+Users stared at a static "Thinking…" placeholder for the full duration.
+
+### Changes
+
+1. **`src/agents/agent_dtwin_chat/engine.py`**
+   - Added `on_event: Optional[Callable[[AgentStep], None]]` parameter to `run_agent()`.
+   - `on_event` is called for each `tool_call`, `tool_result`, and final `output` step as they happen.
+   - Existing `on_step` string callback kept for backward compatibility.
+
+2. **`src/api/routers/internal/dtwin.py`**
+   - Added `POST /dtwin/assistant/chat/stream` SSE endpoint.
+   - Uses `asyncio.Queue` + `asyncio.run_coroutine_threadsafe` to bridge the sync agent thread to the async generator.
+   - Streams `step` events (tool calls and results) as the agent iterates, then a final `done` event with the complete reply, tool trace, usage, and iterations.
+   - Session cache (`_chat_cache`) updated identically to the blocking endpoint after the stream completes.
+   - Error conditions yield an `error` event with the exception message.
+
+3. **`src/front/static/query/js/query-chat.js`**
+   - Replaced the blocking `fetch('/dtwin/assistant/chat')` with a streaming `fetch('/dtwin/assistant/chat/stream')`.
+   - Added `createStreamingBubble()` — renders a bot bubble immediately with a live step indicator.
+   - Added `updateStreamingBubble()` — updates the status text on each incoming `step` event.
+   - Added `finalizeStreamingBubble()` — replaces the placeholder with the fully rendered Markdown reply and tool trace on `done`.
+   - Added `errorStreamingBubble()` — turns the bubble into an error state.
+   - Added `_consumeStream()` — consumes the `ReadableStream` via a `TextDecoder`, parses SSE frames delimited by `\n\n`.
+   - Removed now-redundant `showThinking()`/`hideThinking()` calls from `sendMessage()`.
+
+4. **`src/front/static/query/css/query-chat.css`**
+   - Added `.graph-chat-stream-steps` and `.graph-chat-stream-status` styles for the live step indicator shown inside the streaming bubble.
+
+### Modified files
+- `src/agents/agent_dtwin_chat/engine.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-chat.js`
+- `src/front/static/query/css/query-chat.css`
+
+### Test results
+```
+491 passed, 11 skipped in 1.18s
+```
+All unit tests pass (ontology + agents suites).

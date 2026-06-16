@@ -1,0 +1,78 @@
+# Pre-commit hooks for OntoBricks — closes gap #8 (no pre-commit hooks).
+#
+# Install once: `uv run pre-commit install`
+# Run manually:  `uv run pre-commit run --all-files`
+# Disable a hook for one commit: `SKIP=hook-id git commit ...`
+#
+# Hook selection rationale (see CNS §3.6 G0):
+# - black: formatter — matches CI lint job.
+# - ruff: fast lint — also matches CI when M3.P1 lands.
+# - end-of-file-fixer / trailing-whitespace: noise reduction.
+# - check-yaml / check-toml: catches malformed config before push.
+# - detect-private-key / detect-secrets: prevents credential leaks.
+# - check-added-large-files: blocks accidental DAB artefact commits.
+# - mypy: type check on changed files only (full mypy is M3.P1).
+# - changelog-presence (local hook): if src/ or tests/ changed, require a changelogs/ diff.
+# - conventional-commits-title (local hook): PR title check (advisory locally, hard in CI).
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+        exclude: ^(databricks\.yml|app\.yaml|\.github/workflows/.*\.ya?ml)$  # allow GH templating
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+  - repo: https://github.com/psf/black
+    rev: 25.9.0
+    hooks:
+      - id: black
+        args: ["--line-length=100"]
+        files: ^(src|tests)/.*\.py$
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: ["--fix", "--exit-non-zero-on-fix"]
+        files: ^(src|tests)/.*\.py$
+
+  # Local hooks — implemented in scripts/ so they have access to repo context.
+  - repo: local
+    hooks:
+      - id: changelog-presence
+        name: Changelog presence — if src/ or tests/ changed, require a changelogs/ entry
+        entry: scripts/pre-commit/check-changelog-presence.sh
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: forbid-gsd-imports
+        name: Forbid gsd-* references (CNS §3.12 anti-pattern)
+        entry: scripts/pre-commit/forbid-gsd-imports.sh
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+
+# Suggested `uv add --group dev pre-commit` once this lands.
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+# Skip auto-detected venv contents.
+exclude: |
+  (?x)^(
+    \.venv/.*|
+    \.uv/.*|
+    \.git/.*|
+    .*\.egg-info/.*|
+    htmlcov/.*|
+    dist/.*|
+    build/.*
+  )$

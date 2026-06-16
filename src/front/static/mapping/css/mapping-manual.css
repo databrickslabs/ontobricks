@@ -79,7 +79,7 @@
 }
 
 .manual-tree-node-content:hover {
-    background: #f0f0f0;
+    background: #ffffff;
 }
 
 .manual-tree-node-content.selected {
@@ -89,13 +89,13 @@
 
 /* Root nodes (Assigned / Not Assigned) */
 .manual-tree-node.root-node > .manual-tree-node-content {
-    background: #f8f9fa;
+    background: #ffffff;
     font-weight: 600;
     cursor: default;
 }
 
 .manual-tree-node.root-node > .manual-tree-node-content:hover {
-    background: #f0f1f2;
+    background: #ffffff;
 }
 
 /* Category nodes (Entities / Relationships) */
@@ -106,7 +106,7 @@
 }
 
 .manual-tree-node.category-node > .manual-tree-node-content:hover {
-    background: #f5f5f5;
+    background: #ffffff;
 }
 
 /* Item nodes - clickable */
@@ -218,7 +218,7 @@
     font-size: 0.75rem;
     padding: 2px 8px;
     border-radius: 10px;
-    background: #e9ecef;
+    background: #ffffff;
     color: #495057;
     margin-left: 8px;
 }

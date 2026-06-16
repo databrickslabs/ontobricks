@@ -295,6 +295,146 @@
     }
 
     // =====================================================
+    // Streaming bubble helpers
+    // =====================================================
+
+    /**
+     * Create a bot message bubble in "streaming" mode.
+     * Returns an object with { div, stepsEl, bodyEl } for live updates.
+     */
+    function createStreamingBubble() {
+        const container = messagesEl();
+        if (!container) return null;
+        hideWelcome();
+
+        const div = document.createElement('div');
+        div.className = 'assistant-msg bot-msg';
+        div.id = 'chatStreamingBubble';
+
+        const avatar = document.createElement('div');
+        avatar.className = 'assistant-msg-avatar';
+        avatar.innerHTML = OB_ICON_SVG;
+
+        const body = document.createElement('div');
+        body.className = 'assistant-msg-body';
+
+        // Live step tracker shown while the agent is running
+        const stepsEl = document.createElement('div');
+        stepsEl.className = 'graph-chat-stream-steps';
+        stepsEl.innerHTML =
+            '<div class="assistant-thinking-dots"><span></span><span></span><span></span></div>' +
+            '<span class="graph-chat-stream-status">Starting…</span>';
+        body.appendChild(stepsEl);
+
+        div.appendChild(avatar);
+        div.appendChild(body);
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+
+        return { div, stepsEl, bodyEl: body };
+    }
+
+    /**
+     * Update the streaming bubble with a step event received from the SSE stream.
+     */
+    function updateStreamingBubble(bubble, event) {
+        if (!bubble) return;
+        const { stepsEl } = bubble;
+        if (!stepsEl) return;
+        const container = messagesEl();
+
+        const statusEl = stepsEl.querySelector('.graph-chat-stream-status');
+        if (event.step_type === 'tool_call') {
+            if (statusEl) statusEl.textContent = 'Calling ' + (event.tool_name || 'tool') + '…';
+        } else if (event.step_type === 'tool_result') {
+            if (statusEl) statusEl.textContent = (event.tool_name || 'tool') + ' done (' + (event.duration_ms || 0) + ' ms)';
+        }
+        if (container) container.scrollTop = container.scrollHeight;
+    }
+
+    /**
+     * Replace the streaming bubble's placeholder with the final rendered reply.
+     */
+    function finalizeStreamingBubble(bubble, event) {
+        if (!bubble) return;
+        const { stepsEl, bodyEl } = bubble;
+
+        // Remove the live-steps placeholder
+        if (stepsEl && stepsEl.parentNode === bodyEl) {
+            bodyEl.removeChild(stepsEl);
+        }
+
+        // Render the final markdown reply
+        const reply = event.reply || '(no reply)';
+        bodyEl.innerHTML = renderMarkdown(reply);
+        enhanceEntityLinks(bodyEl);
+
+        if (Array.isArray(event.tools) && event.tools.length) {
+            bodyEl.appendChild(buildToolTrace(event.tools));
+        }
+
+        const container = messagesEl();
+        if (container) container.scrollTop = container.scrollHeight;
+    }
+
+    /**
+     * Turn the streaming bubble into an error state.
+     */
+    function errorStreamingBubble(bubble, message) {
+        if (!bubble) return;
+        const { stepsEl, bodyEl, div } = bubble;
+        if (stepsEl && stepsEl.parentNode === bodyEl) {
+            bodyEl.removeChild(stepsEl);
+        }
+        div.className = 'assistant-msg bot-msg error-msg';
+        div.querySelector('.assistant-msg-avatar').style.background = 'var(--bs-danger, #dc3545)';
+        div.querySelector('.assistant-msg-avatar').innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i>';
+        bodyEl.textContent = message;
+    }
+
+    // =====================================================
+    // SSE stream consumer
+    // =====================================================
+
+    async function _consumeStream(bubble, response) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                // SSE events are delimited by double newlines
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop(); // last incomplete chunk
+
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (!line.startsWith('data:')) continue;
+                    let event;
+                    try {
+                        event = JSON.parse(line.slice(5).trim());
+                    } catch (_) { continue; }
+
+                    if (event.type === 'step') {
+                        updateStreamingBubble(bubble, event);
+                    } else if (event.type === 'done') {
+                        return event; // caller handles finalization
+                    } else if (event.type === 'error') {
+                        throw new Error(event.message || 'Agent error');
+                    }
+                }
+            }
+        } finally {
+            reader.releaseLock();
+        }
+        return null;
+    }
+
+    // =====================================================
     // API call
     // =====================================================
 
@@ -315,10 +455,10 @@
         appendMessage('user', text);
         conversationHistory.push({ role: 'user', content: text });
 
-        showThinking();
+        const bubble = createStreamingBubble();
 
         try {
-            const response = await fetch('/dtwin/assistant/chat', {
+            const response = await fetch('/dtwin/assistant/chat/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -329,25 +469,31 @@
                 credentials: 'same-origin',
             });
 
-            hideThinking();
-            const data = await response.json();
+            if (!response.ok || !response.body) {
+                const errData = await response.json().catch(() => ({}));
+                const msg = (errData && (errData.message || errData.detail))
+                    || ('Request failed (' + response.status + ')');
+                errorStreamingBubble(bubble, msg);
+                return;
+            }
 
-            if (response.ok && data.success) {
-                appendMessage('assistant', data.reply || '(no reply)', {
-                    tools: data.tools || [],
-                });
+            const doneEvent = await _consumeStream(bubble, response);
+
+            if (doneEvent) {
+                finalizeStreamingBubble(bubble, doneEvent);
                 conversationHistory.push({
                     role: 'assistant',
-                    content: data.reply || '',
+                    content: doneEvent.reply || '',
                 });
             } else {
-                const msg = (data && (data.message || data.detail))
-                    || ('Request failed (' + response.status + ')');
-                appendError(msg);
+                errorStreamingBubble(bubble, 'Stream ended without a final response.');
             }
         } catch (err) {
-            hideThinking();
-            appendError('Network error: ' + err.message);
+            if (bubble) {
+                errorStreamingBubble(bubble, 'Network error: ' + err.message);
+            } else {
+                appendError('Network error: ' + err.message);
+            }
         } finally {
             isSending = false;
             const inp2 = inputEl();

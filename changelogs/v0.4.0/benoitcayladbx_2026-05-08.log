@@ -1,0 +1,56 @@
+## Add Lakebase GraphDB engine (Postgres)
+
+Context: Pluggable graph backend alongside LadybugDB. Admins pick **Settings → Graph DB**: internal Ladybug (`.lbug` + optional Volume sync) or **Lakebase** flat triple tables on the App-bound Postgres instance (`graph_engine` / `graph_engine_config`). Factory-only dispatch keeps engines mutually exclusive; SQL-only path uses existing `TripleStoreBackend` defaults + `SWRLSQLTranslator`.
+
+Changes:
+
+1. `src/back/core/graphdb/lakebase/__init__.py`
+   Export Lakebase modules and `LAKEBASE_AVAILABLE` when `psycopg` is present.
+2. `src/back/core/graphdb/lakebase/pool.py`
+   Process-wide pool for graph workloads with JWT-aware Lakebase auth.
+3. `src/back/core/graphdb/lakebase/LakebaseBase.py`
+   Schema/engine JSON validation, `GraphDBBackend` wiring, physical table ids + `search_path`.
+4. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   DDL, CRUD, `VACUUM ANALYZE` optimize; inherits SQL graph helpers from `TripleStoreBackend`.
+5. `src/back/core/graphdb/GraphDBFactory.py`
+   `_create_lakebase` branch and availability flag.
+6. `src/back/core/graphdb/__init__.py`
+   `GRAPHDB_AVAILABLE` includes Lakebase.
+7. `src/back/core/triplestore/TripleStoreFactory.py`
+   Graph backend availability when Ladybug or Lakebase is installable.
+8. `src/back/core/triplestore/TripleStoreBackend.py`
+   `_sql_relation` / `sql_table_reference` for Postgres-friendly generated SQL.
+9. `src/back/objects/session/GlobalConfigService.py`
+   `ALLOWED_GRAPH_ENGINES` includes `lakebase`; validate engine config keys on save.
+10. `src/front/templates/settings.html` / `src/front/static/config/js/settings.js`
+    Lakebase option, DB/schema panel, save flow (`finally` disable reset, lakebase config POST feedback).
+11. `src/back/fastapi/graphql_routes.py`
+    Neutral infrastructure error message when graph backend is unreachable.
+12. Reasoning / DigitalTwin paths (feature branch)
+    SQL vs Cypher branching using `GraphDBBackend.is_cypher_backend` and `sql_table_reference` where applicable.
+13. `tests/test_lakebase_flat_store.py` (new) and extensions to graph engine / factory / triplestore tests.
+14. `docs/sphinx/api/app.core.graphdb.rst`, `docs/graphdb-integration.md`, `README.md`
+    Document Lakebase engine and config shape.
+
+Modified files:
+- `src/back/core/graphdb/lakebase/__init__.py`
+- `src/back/core/graphdb/lakebase/pool.py`
+- `src/back/core/graphdb/lakebase/LakebaseBase.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/core/graphdb/__init__.py`
+- `src/back/core/triplestore/TripleStoreFactory.py`
+- `src/back/core/triplestore/TripleStoreBackend.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/fastapi/graphql_routes.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `tests/test_graph_engine_config.py`
+- `tests/test_graphdb_factory.py`
+- `tests/test_triplestore_factory.py`
+- `tests/test_lakebase_flat_store.py`
+- `docs/sphinx/api/app.core.graphdb.rst`
+- `docs/graphdb-integration.md`
+- `README.md`
+
+Tests: `uv run pytest -q` → 2070 passed, 80 skipped in 24.74s

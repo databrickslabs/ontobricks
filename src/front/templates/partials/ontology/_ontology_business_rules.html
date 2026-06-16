@@ -6,10 +6,17 @@
         <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Business Rules</h4>
         <p class="text-muted mb-0 small">Define inference and business rules across multiple rule paradigms</p>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-primary ontology-edit-btn" id="brAddBtn"
-            data-br-action="add-rule">
-        <i class="bi bi-plus-lg me-1"></i> Add Rule
-    </button>
+    <div class="btn-group btn-group-sm ontology-edit-btn">
+        <button type="button" class="btn btn-outline-primary" id="brAddBtn"
+                data-br-action="add-rule">
+            <i class="bi bi-plus-lg me-1"></i> Add Rule
+        </button>
+        <button type="button" class="btn btn-outline-success" id="brAutoGenBtn"
+                data-br-action="auto-generate"
+                title="Auto-generate SWRL, Decision Table, SPARQL and Aggregate rules from your documents and ontology design">
+            <i class="bi bi-stars me-1"></i> Auto-generate
+        </button>
+    </div>
 </div>
 
 <div class="card h-100">
@@ -169,6 +176,18 @@
                                     <div class="text-muted small fst-italic py-2" id="swrlIfEmpty">
                                         Click entities or relationships on the graph
                                     </div>
+                                </div>
+                                <div class="swrl-conditions mt-2" id="swrlConditionsWrap">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <span class="text-muted small">
+                                            <i class="bi bi-sliders2 me-1"></i>Attribute conditions
+                                        </span>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                                                data-swrl-action="addConditionRow" title="Add an attribute condition (e.g. loyaltyPoints &ge; 1000)">
+                                            <i class="bi bi-plus-lg"></i>
+                                        </button>
+                                    </div>
+                                    <div id="swrlConditions"></div>
                                 </div>
                             </div>
                             <div class="text-center my-2">
@@ -441,6 +460,56 @@
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success btn-sm" data-br-action="agg-save">
                     <i class="bi bi-check-lg me-1"></i>Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Auto-generate Review Modal ═══ -->
+<div class="modal fade" id="brSuggestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-stars me-2 text-success"></i>Review Auto-generated Business Rules
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    These rules were proposed by the AI from your uploaded documents and ontology design.
+                    Select the ones you want to keep &mdash; they are validated and added without overwriting existing rules.
+                </div>
+                <div id="brSuggestLoading" class="text-center py-4">
+                    <div class="spinner-border spinner-border-sm text-secondary me-2"></div>
+                    <span id="brSuggestProgress">Generating business rules&hellip;</span>
+                </div>
+                <div id="brSuggestError" class="text-danger text-center py-4" style="display:none"></div>
+                <div id="brSuggestEmpty" class="text-muted text-center py-4" style="display:none">
+                    <i class="bi bi-emoji-neutral me-1"></i>
+                    No business rules could be proposed. Try adding documents or enriching the ontology design.
+                </div>
+                <div id="brSuggestList" style="display:none">
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                        <span class="small text-muted fw-semibold" id="brSuggestCount"></span>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none"
+                                    data-br-action="suggest-select-all">Select all</button>
+                            <span class="text-muted">·</span>
+                            <button class="btn btn-link btn-sm p-0 text-decoration-none"
+                                    data-br-action="suggest-select-none">None</button>
+                        </div>
+                    </div>
+                    <div id="brSuggestItems"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="brSuggestAcceptBtn"
+                        data-br-action="suggest-accept" style="display:none">
+                    <i class="bi bi-check-lg me-1"></i> Add selected rules
                 </button>
             </div>
         </div>

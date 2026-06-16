@@ -111,10 +111,6 @@ DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
 DATABRICKS_TOKEN=dapi1234567890abcdef
 DATABRICKS_SQL_WAREHOUSE_ID=abc123def456
 
-# Unity Catalog (Optional — defaults the table picker)
-DATABRICKS_CATALOG=main
-DATABRICKS_SCHEMA=default
-
 # Registry Volume — required if you want the binary-artefact volume
 # to be available in local dev. The volume must already exist in UC.
 REGISTRY_CATALOG=<your-catalog>
@@ -464,8 +460,6 @@ OntoBricks uses environment variables for configuration, making it easy to deplo
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABRICKS_CATALOG` | Default catalog to use | `main` |
-| `DATABRICKS_SCHEMA` | Default schema to use | `default` |
 | `SECRET_KEY` | Secret key for session encryption | Random (dev only) |
 | `DATABRICKS_APP_PORT` | Port the application listens on | `8000` |
 | `REGISTRY_VOLUME_PATH` | Full volume path injected by the Databricks App `volume` resource (`/Volumes/<catalog>/<schema>/<volume>`). When set, overrides the three `REGISTRY_*` variables below. | *(from volume resource)* |
@@ -526,8 +520,6 @@ DATABRICKS_TOKEN=dapi1234567890abcdef...
 DATABRICKS_SQL_WAREHOUSE_ID=abc123def456...
 
 ## Optional Configuration
-DATABRICKS_CATALOG=main
-DATABRICKS_SCHEMA=default
 SECRET_KEY=your-secret-key-here
 DATABRICKS_APP_PORT=8000
 
@@ -661,8 +653,6 @@ For fields that are automatically configured.
 DATABRICKS_HOST=https://my-workspace.cloud.databricks.com
 DATABRICKS_TOKEN=dapi1234567890abcdef
 DATABRICKS_SQL_WAREHOUSE_ID=abc123
-DATABRICKS_CATALOG=main
-DATABRICKS_SCHEMA=default
 SECRET_KEY=dev-secret-key
 DATABRICKS_APP_PORT=8000
 
@@ -678,8 +668,6 @@ DATABRICKS_SQL_WAREHOUSE_ID=<from sql-warehouse resource>
 REGISTRY_VOLUME_PATH=<from volume resource, e.g. /Volumes/catalog/schema/volume>
 
 ## Set via app.yaml env section
-DATABRICKS_CATALOG=main
-DATABRICKS_SCHEMA=default
 MLFLOW_TRACKING_URI=databricks
 DATABRICKS_APP_PORT=8000
 

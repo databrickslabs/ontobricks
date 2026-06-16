@@ -1,0 +1,295 @@
+## Refactor permission management: app-level from Databricks, domain-level via Teams matrix
+
+Context: Previously, the app maintained its own `.permissions.json` file that
+duplicated Databricks App principals and added an internal role column.
+Domain-level permissions were managed from a dropdown on the Settings page
+next to a flat per-principal list. This was confusing, redundant, and did not
+scale to real teams.
+
+The new model:
+1. App-level access is driven directly by Databricks App permissions
+   (`list_app_principals`). No local `.permissions.json`. A user can access
+   the application iff they are an App admin (`CAN_MANAGE`) OR they (or one of
+   their groups) appear in the App principals. Admins bypass all further
+   checks.
+2. Domain-level access is strictly explicit: only members of a domain's team
+   (entry in `.domain_permissions.json`) can access that domain. No entry
+   means no access — no implicit minimum role.
+3. The new Registry → Teams page is a matrix UI (principals × domains) with
+   per-cell role selectors (—, Viewer, Editor, Builder), dirty-state tracking,
+   and a single batch Save button.
+
+Changes:
+
+Backend (permissions + service):
+1. src/back/objects/registry/permissions.py
+   - Removed all `.permissions.json` I/O: `_PERMISSIONS_FILENAME`,
+     `load_permissions`, `save_permissions`, `list_entries`,
+     `add_or_update_entry`, `remove_entry`, `_permissions_path`, and the
+     associated cache.
+   - Added `ROLE_APP_USER` and exported it via `registry/__init__.py`.
+   - `get_user_role()` now returns `ROLE_ADMIN` / `ROLE_APP_USER` / `ROLE_NONE`
+     based on `is_admin` and Databricks App principals (users + resolved
+     group memberships via SCIM).
+   - `get_domain_role()` simplified: admin bypasses all checks, otherwise the
+     role is exactly what is in `.domain_permissions.json` for that principal,
+     or `ROLE_NONE` if absent. No more `min_role` floor.
+   - Added `save_domain_permissions_batch(changes, ...)` that groups changes
+     by domain and applies them transactionally per domain, returning
+     `{success, saved, failed}`.
+2. src/back/objects/registry/service.py — Removed `permissions_file_path()`.
+3. src/back/objects/registry/__init__.py — Export `ROLE_APP_USER`.
+4. src/back/objects/domain/SettingsService.py
+   - Dropped `list_permissions_result`, `add_permission_result`,
+     `delete_permission_result`.
+   - `list_app_principals_result()` returns `{users, groups}` from App
+     permissions, used by both the read-only Permissions page and the Teams
+     matrix rows. `list_principals_result` now aliases it.
+   - `build_teams_matrix_result()` returns `{domains, principals, assignments}`
+     for the matrix UI.
+   - `save_teams_batch_result(changes, ...)` validates input and delegates to
+     `permission_service.save_domain_permissions_batch`.
+
+Backend (routes + middleware):
+5. src/api/routers/internal/settings.py
+   - Removed `POST /settings/permissions` and
+     `DELETE /settings/permissions/{principal}`.
+   - `GET /settings/permissions` now returns `{users, groups}` (read-only).
+   - Added `GET /settings/teams` (matrix payload) and `POST /settings/teams`
+     (batch save).
+6. src/shared/fastapi/main.py — `PermissionMiddleware` updated:
+   - `ROLE_NONE` at the app level now redirects to `/access-denied?reason=app`.
+   - New `_DOMAIN_SCOPED_PREFIXES` (`/domain/`, `/ontology/`, `/mapping/`,
+     `/dtwin/`) are gated on `user_domain_role != ROLE_NONE` for non-admins;
+     denial redirects to `/access-denied?reason=domain`.
+   - Viewer write-method block now applies only inside domain-scoped routes.
+   - `/settings/teams` added to admin-only prefixes.
+
+Frontend:
+7. src/front/templates/settings.html — Removed Domain-Level Permissions block
+   and the Role column; the Permission List is now a read-only "App
+   Principals" table with an informational banner pointing to Registry → Teams
+   for per-domain roles.
+8. src/front/static/config/js/permissions.js — Rewritten as a single
+   read-only `loadPermissionsList()` that renders `{users, groups}`.
+9. src/front/config/menu_config.json — Added `teams` item under
+   Registry → Domains.
+10. src/front/templates/registry.html — Loads the new Teams partial, CSS, and
+    JS.
+11. src/front/templates/partials/registry/_registry_teams.html (NEW) — Header,
+    refresh/save buttons with dirty badge, non-admin warning, principal and
+    domain search inputs, and the matrix container.
+12. src/front/static/registry/css/registry-teams.css (NEW) — Sticky headers
+    and principal column, dirty-cell styling, compact color-coded role
+    selectors, filter hide/show classes, empty-state.
+13. src/front/static/registry/js/registry-teams.js (NEW) — Matrix rendering,
+    dirty-state map, unsaved-changes guards on refresh + `beforeunload`,
+    batch save, principal/domain filters, `sidebarSectionChanged`
+    integration.
+14. src/front/routes/home.py — `/access-denied` accepts a `reason` query
+    parameter and passes `user_role` / `user_domain_role` to the template.
+15. src/front/templates/access_denied.html — Different messaging for
+    `reason=app` vs `reason=domain`.
+
+Tests:
+16. tests/test_permissions.py — Removed legacy `.permissions.json` tests.
+    Updated `TestGetUserRole` for the new admin/app-user/none model and
+    `TestGetDomainRole` for the strict "entry or none" behavior. Added
+    `TestSaveDomainPermissionsBatch` covering add/update/remove across
+    domains, partial failures, and invalid inputs.
+17. tests/test_permission_middleware.py — Added `ROLE_APP_USER` cases for
+    admin-only routes and a new `TestDomainScopedRoutes` class covering:
+    app-user denied on domain routes without a team role, viewer GET allowed
+    / POST blocked, editor POST allowed, admin bypass, and app-user allowed
+    on non-domain routes.
+18. tests/test_settings_domain_permissions.py — Removed
+    `TestAppLevelRoleValidation`. Added `TestListAppPrincipals`,
+    `TestBuildTeamsMatrix`, and `TestSaveTeamsBatch`.
+19. tests/test_registry.py — Dropped `test_permissions_file_path` since
+    `permissions_file_path()` no longer exists.
+
+Modified files:
+- src/back/objects/registry/permissions.py
+- src/back/objects/registry/service.py
+- src/back/objects/registry/__init__.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/shared/fastapi/main.py
+- src/front/templates/settings.html
+- src/front/static/config/js/permissions.js
+- src/front/config/menu_config.json
+- src/front/templates/registry.html
+- src/front/routes/home.py
+- src/front/templates/access_denied.html
+- tests/test_permissions.py
+- tests/test_permission_middleware.py
+- tests/test_settings_domain_permissions.py
+- tests/test_registry.py
+
+New files:
+- src/front/templates/partials/registry/_registry_teams.html
+- src/front/static/registry/css/registry-teams.css
+- src/front/static/registry/js/registry-teams.js
+
+Test result: 1530 passed
+
+## First-deploy bootstrap: detect + fix app SP self-permission chicken-and-egg
+
+Context: On a freshly-deployed Databricks App, the app's own service
+principal is not granted any permission on the app it runs. As a result,
+`GET /api/2.0/permissions/apps/{name}` returns 403 when the middleware
+tries to read the ACL, `list_app_principals` silently returns empty, and
+the first request — even from a `CAN_MANAGE` deployer — is redirected to
+`/access-denied?reason=app`. The only fix was to manually grant the SP
+CAN_MANAGE on its own app, which is non-obvious and happens every time
+the app is re-created.
+
+Changes:
+
+1. scripts/bootstrap-app-permissions.sh (NEW) — idempotent helper that
+   resolves each app's `service_principal_client_id` via
+   `databricks apps get` and calls `databricks apps update-permissions`
+   to grant `CAN_MANAGE` on itself. Defaults to both `ontobricks` and
+   `mcp-ontobricks`; accepts app name(s) as arguments. Safe to re-run.
+2. scripts/deploy.sh — runs the bootstrap script automatically after
+   `bundle run`, so a standard `make deploy` leaves the app fully
+   accessible on first load. The existing MCP → main cross-grant step
+   was renumbered from 7 to 8.
+3. Makefile — added `make bootstrap-perms` target for manual invocation
+   (e.g., when deploying via `databricks bundle deploy` directly).
+4. src/back/core/databricks/WorkspaceService.py — `list_app_principals`
+   now records the HTTP status code of the REST call on
+   `self._last_app_permissions_status` (exposed as a read-only
+   property). 403 is no longer indistinguishable from an empty ACL.
+5. src/back/core/databricks/DatabricksClient.py — forwards the new
+   `last_app_permissions_status` property from the underlying
+   `WorkspaceService`.
+6. src/back/objects/registry/permissions.py — `PermissionService` now
+   inspects the status after every `list_app_principals` call and sets
+   `_app_principals_forbidden = True` when it was 403. Exposed via
+   `is_app_principals_forbidden()`. `clear_principals_cache()` also
+   clears the flag.
+7. src/shared/fastapi/main.py — `PermissionMiddleware` imports
+   `permission_service` and, when blocking a `ROLE_NONE` request,
+   consults `is_app_principals_forbidden()`. If true, redirects to
+   `/access-denied?reason=bootstrap` (instead of `reason=app`) and logs
+   a warning pointing at the bootstrap script.
+8. src/front/routes/home.py — `/access-denied` accepts the new
+   `reason=bootstrap` value; invalid reasons fall back to `app`.
+9. src/front/templates/access_denied.html — dedicated message for
+   `reason=bootstrap` with a `make bootstrap-perms` snippet and a
+   brief explanation of the chicken-and-egg problem.
+10. README.md — added a "First deploy only" callout under the Deploy
+    section pointing at `make deploy` (auto) and `make bootstrap-perms`
+    (manual fallback).
+11. docs/deployment.md — rewrote the "How Admin Detection Works"
+    section to be accurate about SP self-permission requirements and
+    added a new "First-Deploy Bootstrap" subsection.
+
+Tests:
+
+12. tests/test_permissions.py — added `TestAppPrincipalsBootstrap`
+    (4 tests) covering: 200 clears the flag, 403 sets it, non-403
+    errors (e.g. 500) do not set it, and `clear_principals_cache`
+    resets it.
+13. tests/test_permission_middleware.py — added two tests under
+    `TestRoleEnforcement`: HTML request with `ROLE_NONE` +
+    non-forbidden principals → 302 with `reason=app`; HTML request
+    with `ROLE_NONE` + `is_app_principals_forbidden=True` → 302 with
+    `reason=bootstrap`.
+
+Modified files:
+- src/back/core/databricks/WorkspaceService.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/objects/registry/permissions.py
+- src/shared/fastapi/main.py
+- src/front/routes/home.py
+- src/front/templates/access_denied.html
+- scripts/deploy.sh
+- Makefile
+- README.md
+- docs/deployment.md
+- tests/test_permissions.py
+- tests/test_permission_middleware.py
+
+New files:
+- scripts/bootstrap-app-permissions.sh
+
+Test result: 1536 passed
+
+## Tasks panel shows only running tasks; finished ones move to Notifications
+
+Context: The navbar's hourglass "Background Tasks" dropdown showed both
+active tasks and a "Recent" section with completed / failed / cancelled
+tasks.  Users complained that finished work stayed pinned in Tasks even
+when it was no longer actionable, duplicating what the bell already
+surfaces for many flows.
+
+Changes:
+1. src/front/static/global/js/task-tracker.js — `fetchTasks()` now
+   detects active → terminal transitions by diffing the previous
+   `trackedTasks` snapshot against the fresh payload, then calls
+   `NotificationCenter.add(...)` once per transition.  After the diff,
+   `trackedTasks` is filtered down to active tasks only (pending /
+   running) so the dropdown only ever shows in-flight work.
+2. Added `notifyTaskTransition(task)` helper — formats the message
+   (bold task name, error detail for failures, optional "Open" link for
+   task types in `TASK_TYPE_URLS`) and picks the bell type (success for
+   completed, error for failed, warning for cancelled).
+3. `updateTaskDropdown()` — dropped the entire "Recent" section and
+   the "Clear all" button.  Empty state reads "No active tasks".
+4. `renderTaskItem()` — simplified to the active-only path; removed
+   the "navigate to result" click handler, the trash button, and the
+   `task-item-clickable` hover styling (only the Cancel button remains
+   for running tasks).
+5. Removed now-dead helpers: `deleteTask()`, `clearCompletedTasks()`,
+   `navigateToTask()` and their `window.*` exports.  The backend
+   endpoints they used (`POST /tasks/clear-completed`,
+   `GET /tasks/{id}`) remain intact for future callers.
+
+Behavior notes:
+- Transition detection is snapshot-based, so stale terminal tasks left
+  over from before the page was loaded are never notified (only the
+  ones we actually observed moving from active to terminal fire a
+  bell entry).
+- The server-side `TaskManager` is unchanged; terminal tasks still age
+  out via `_max_tasks = 100` and `_cleanup_old_tasks()`.
+- `NotificationCenter.add(...)` is used directly so completions only
+  populate the bell and flash the icon — no toast spam for every
+  finished task.
+
+Modified files:
+- src/front/static/global/js/task-tracker.js
+
+Test result: 1536 passed
+
+---
+
+### Fix: "Update from UC" refreshed every loaded table instead of the checked ones
+
+Symptom: in the Domain › Metadata view, checking one row in the data-
+sources list and clicking **Update from UC** still refreshed every
+loaded table.
+
+Root cause: `updateMetadataFromUC()` in
+`src/front/static/domain/js/domain-metadata.js` built the request body
+from `metadataCache.tables.map(t => t.name)` unconditionally, so the
+checkbox state (`tableSelections`, which was wired only to "Remove
+Selected Tables") was ignored. The `/domain/metadata/update-async`
+backend already honors `table_names` when it is a non-empty list, so
+the fix is entirely frontend.
+
+Change:
+- `updateMetadataFromUC()` now reads `tableSelections` and sends only
+  the checked rows when any are checked; when nothing is checked, it
+  falls back to the previous "update all" behavior.
+- The info notification now distinguishes "Updating N selected
+  table(s)…" from "Updating all N table(s)…".
+- Helper text in `_domain_metadata.html` and the
+  column-header / button tooltips were updated so users understand
+  the checkbox column now drives both "Update from UC" and "Remove
+  Selected Tables".
+
+Modified files:
+- src/front/static/domain/js/domain-metadata.js
+- src/front/templates/partials/domain/_domain_metadata.html

@@ -1,0 +1,93 @@
+# 2026-05-12 — Test Foundations (T-M0) + sample slices of T-M1 + T-M3
+
+## T-M0: Test foundations under CNS
+
+**Context:** OntoBricks has ~75 test files / ~1900 cases but no coverage gate, no factory pattern, no per-package thresholds, no MCP integration tests, no LLM eval harness. Section 9 of the methodology plan (Cursor-Native Superpowers, v2) calls for a comprehensive test strategy with a 90% line / 80% branch gate. This change lands the foundations (T-M0 phases P1–P6) that the rest of the testing milestones depend on.
+
+**Changes:**
+
+1. `changelogs/README.md` — new directory + format spec; closes gap #2.
+2. `changelogs/2026-05-12.log` — this file; seeds the directory.
+3. `pyproject.toml` — added `[tool.pytest.ini_options]` markers, `[tool.coverage.run]`, `[tool.coverage.report]` sections; added testing dev-deps (`hypothesis`, `syrupy`, `pytest-cov`, `testcontainers`, `pytest-mock`, `pytest-benchmark`).
+4. `pytest.ini` — extended marker list with `e2e`, `eval`, `mcp`, `db`, `spark`, `external`, `property`, `contract`.
+5. `tests/fixtures/factories/__init__.py` + 5 factory builders — `OntologyFactory`, `R2RMLMappingFactory`, `TripleFactory`, `DomainFactory`, `ShaclShapeFactory`. Each is a dataclass-based builder with sensible defaults that replaces inline sample dicts.
+6. `tests/fixtures/factories/databricks/__init__.py` + 5 mocks — `MockSQLWarehouse`, `MockUCCatalog`, `MockVolume`, `MockFoundationModelClient`, `lakebase_pg_fixture` (testcontainers wrapper).
+7. `tests/fixtures/mlflow.py` — `captured_traces` fixture with `InMemoryTraceSink` for span-tree assertions.
+8. `tests/fixtures/mcp_client.py` — `InProcessMCPClient` for exercising MCP tools without HTTP.
+9. `tests/fixtures/http.py` — `agent_mock_transport` factory generalising the pattern from `test_agent_dtwin_chat.py` to all 5 agents.
+10. `tests/fixtures/redaction.py` — `redacted_caplog` that rejects log records matching JWT/secret regexes; required for `db`-marked tests.
+11. `tests/conftest.py` — wired the new fixtures into the top-level conftest so they're available globally; preserved existing fixtures unchanged.
+12. `scripts/check_coverage.py` — parses `coverage.xml`, enforces per-package floors from `ci/coverage_thresholds.yaml`, exits 1 with a violation table on failure.
+13. `ci/coverage_thresholds.yaml` — per-package thresholds matching §9.1 of the plan.
+14. `.github/workflows/ci.yml` — added `coverage-gate` job (G1-pkg), `mcp-test` job (G1c), `nightly` workflow with property + E2E.
+15. `.github/workflows/nightly.yml` — Hypothesis property tests + Playwright E2E + smoke probe against `https://fevm-ontobricks-int.cloud.databricks.com/`.
+
+## T-M1.P1 sample: SHACL parser/generator/service unit tests
+
+**Context:** `src/back/core/w3c/shacl/` (3 modules) had **zero** direct unit tests despite SHACL being a first-class W3C standard used in the reasoning pipeline. Lands a representative set of unit tests proving the SHACL factory + redaction patterns work end-to-end.
+
+**Changes:**
+
+1. `tests/back/core/w3c/shacl/__init__.py` — package marker.
+2. `tests/back/core/w3c/shacl/test_shacl_parser.py` — `SHACLParser` tests covering shape parsing, target-class extraction, constraint extraction (cardinality, pattern, datatype), and malformed-input failure modes.
+3. `tests/back/core/w3c/shacl/test_shacl_generator.py` — `SHACLGenerator` tests covering shape-to-Turtle roundtrip, multi-constraint shapes, and prefix handling.
+4. `tests/back/core/w3c/shacl/test_shacl_service.py` — `SHACLService` tests using `ShaclShapeFactory`.
+
+## T-M3 sample: MCP integration test harness
+
+**Context:** `src/mcp-server/server/app.py` (1071 LOC, 40+ tools) had **zero** tests despite being the most public-facing surface. Lands the harness skeleton + representative tool tests proving the in-process client pattern works.
+
+**Changes:**
+
+1. `tests/mcp/__init__.py` — package marker.
+2. `tests/mcp/conftest.py` — module-scoped `mcp_client` and `mcp_app` fixtures.
+3. `tests/mcp/integration/__init__.py` — package marker.
+4. `tests/mcp/integration/test_tool_schemas.py` — parametrised over all registered tools; asserts each has a valid JSON schema with input + output types declared.
+5. `tests/mcp/integration/test_smoke_tools.py` — happy-path invocation of `list_domains`, `list_entity_types`, `describe_entity`, `search_entities`, `find_triples` against an in-process MCP app with mocked OntoBricks REST backend.
+
+## Files modified
+
+- `changelogs/README.md` (new)
+- `changelogs/2026-05-12.log` (new)
+- `pyproject.toml`
+- `pytest.ini`
+- `tests/conftest.py`
+- `tests/fixtures/factories/__init__.py` (new)
+- `tests/fixtures/factories/ontology_factory.py` (new)
+- `tests/fixtures/factories/mapping_factory.py` (new)
+- `tests/fixtures/factories/triple_factory.py` (new)
+- `tests/fixtures/factories/domain_factory.py` (new)
+- `tests/fixtures/factories/shacl_factory.py` (new)
+- `tests/fixtures/factories/databricks/__init__.py` (new)
+- `tests/fixtures/factories/databricks/sql_warehouse_mock.py` (new)
+- `tests/fixtures/factories/databricks/uc_metadata_mock.py` (new)
+- `tests/fixtures/factories/databricks/volumes_mock.py` (new)
+- `tests/fixtures/factories/databricks/fma_endpoint_mock.py` (new)
+- `tests/fixtures/factories/databricks/lakebase_pg_fixture.py` (new)
+- `tests/fixtures/mlflow.py` (new)
+- `tests/fixtures/mcp_client.py` (new)
+- `tests/fixtures/http.py` (new)
+- `tests/fixtures/redaction.py` (new)
+- `scripts/check_coverage.py` (new)
+- `ci/coverage_thresholds.yaml` (new)
+- `.github/workflows/ci.yml`
+- `.github/workflows/nightly.yml` (new)
+- `tests/back/core/w3c/shacl/__init__.py` (new)
+- `tests/back/core/w3c/shacl/test_shacl_parser.py` (new)
+- `tests/back/core/w3c/shacl/test_shacl_generator.py` (new)
+- `tests/back/core/w3c/shacl/test_shacl_service.py` (new)
+- `tests/mcp/__init__.py` (new)
+- `tests/mcp/conftest.py` (new)
+- `tests/mcp/integration/__init__.py` (new)
+- `tests/mcp/integration/test_tool_schemas.py` (new)
+- `tests/mcp/integration/test_smoke_tools.py` (new)
+
+## Tests
+
+Run results captured at land time:
+
+```
+uv run pytest tests/fixtures/ tests/back/core/w3c/shacl/ tests/mcp/ -v
+```
+
+See the run summary in `tests/reports/`.

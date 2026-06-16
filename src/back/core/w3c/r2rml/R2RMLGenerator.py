@@ -259,11 +259,9 @@ class R2RMLGenerator:
         subject_map = BNode()
         g.add((triples_map, self.rr.subjectMap, subject_map))
 
-        # Template for subject URI - ALWAYS use taxonomy base URI
-        class_name = (
-            self._extract_local_name(class_uri) if class_uri else (class_label or table)
-        )
-        class_name = self._sanitize_name(class_name)
+        # Template for subject URI - ALWAYS use taxonomy base URI.
+        # Shared with relationship mapping so subject/object URIs match.
+        class_name = self._entity_uri_name(class_uri, class_label, table)
 
         g.add(
             (
@@ -563,6 +561,20 @@ class R2RMLGenerator:
             result = entity_lookup.get(table)
         return result or {}
 
+    def _entity_uri_name(self, class_uri: str, class_label: str, table: str) -> str:
+        """Compute the class-name segment of an entity's subject URI template.
+
+        Single source of truth shared by ``_add_entity_mapping`` and
+        ``_resolve_class_name`` so that relationship subject/object URIs land in
+        the *exact* same namespace as the entity TriplesMap subject URIs
+        (issue #48). Mirrors: local name of the class URI, else the class
+        label, else the table name.
+        """
+        name = (
+            self._extract_local_name(class_uri) if class_uri else (class_label or table)
+        )
+        return self._sanitize_name(name)
+
     def _resolve_class_name(
         self,
         class_from_entity: str,
@@ -571,24 +583,34 @@ class R2RMLGenerator:
         entity: Dict,
         table: str,
     ) -> str:
-        """Resolve the actual entity class name for a URI template.
+        """Resolve the entity class name used in a relationship URI template.
 
-        Returns the real entity name (e.g. 'Customer', 'Contract') by trying
-        multiple sources. Never returns generic placeholders like 'Source' or 'Target'.
+        Returns the real entity name (e.g. 'Customer', 'Contract'). Never
+        returns generic placeholders like 'Source' or 'Target'.
 
         Priority:
-        1. Entity's ontology_class_label (from matched entity mapping — most reliable)
-        2. Extract local name from resolved class URI (entity lookup or config)
-        3. Class label from relationship config
-        4. Extract local name from class_uri directly
-        5. Table name
+        1. Matched entity mapping — mirror ``_add_entity_mapping`` *exactly*
+           (local name of the entity's ontology_class URI, else its label,
+           else its table) so relationship triples share the entity namespace.
+        2. No entity matched — extract local name from the resolved class URI.
+        3. Class label from the relationship config.
+        4. Extract local name from class_uri directly.
+        5. Table name.
         """
-        # Priority 1: Entity's own label (e.g. "Customer") — most reliable
-        entity_label = entity.get("ontology_class_label", "")
-        if entity_label:
-            return self._sanitize_name(entity_label)
+        # Priority 1: a matched entity — reproduce its subject-URI class name
+        # byte-for-byte. This is the fix for issue #48: previously the entity
+        # label was preferred here, but entities derive the URI from the class
+        # URI's local name, so labels that differ from the local name produced
+        # mismatched (unlinked) namespaces.
+        if entity:
+            return self._entity_uri_name(
+                entity.get("ontology_class", ""),
+                entity.get("ontology_class_label", ""),
+                entity.get("table") or entity.get("table_name", ""),
+            )
 
-        # Priority 2: Extract from resolved class URI (from entity lookup + config fallback)
+        # No entity matched — resolve from the relationship config / ontology.
+        # Priority 2: Extract from resolved class URI (config fallback)
         if class_from_entity:
             name = self._extract_local_name(class_from_entity)
             if name:

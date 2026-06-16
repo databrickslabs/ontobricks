@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS domains (
     folder          text NOT NULL,
     description     text NOT NULL DEFAULT '',
     base_uri        text NOT NULL DEFAULT '',
+    -- Per-domain review sign-off quorum: how many distinct approvals are
+    -- required before an IN-REVIEW version can be published. Always >= 1.
+    review_quorum   integer NOT NULL DEFAULT 1
+                    CHECK (review_quorum >= 1),
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (registry_id, folder)
@@ -66,6 +70,9 @@ CREATE TABLE IF NOT EXISTS domain_versions (
     metadata        jsonb NOT NULL DEFAULT '{}'::jsonb,
     -- Hot fields denormalised from ``info`` for cheap listing queries.
     mcp_enabled     boolean NOT NULL DEFAULT false,
+    -- Lifecycle status gating editability and API access.
+    status          text NOT NULL DEFAULT 'DRAFT'
+                    CHECK (status IN ('DRAFT', 'IN-REVIEW', 'PUBLISHED')),
     last_update     text NOT NULL DEFAULT '',
     last_build      text NOT NULL DEFAULT '',
     created_at      timestamptz NOT NULL DEFAULT now(),
@@ -77,6 +84,8 @@ CREATE INDEX IF NOT EXISTS idx_domain_versions_domain
     ON domain_versions(domain_id);
 CREATE INDEX IF NOT EXISTS idx_domain_versions_mcp
     ON domain_versions(domain_id) WHERE mcp_enabled;
+CREATE INDEX IF NOT EXISTS idx_domain_versions_status
+    ON domain_versions(domain_id, status);
 
 -- ----------------------------------------------------------------
 -- Domain-level permissions (Viewer / Editor / Builder per principal)
@@ -132,3 +141,71 @@ CREATE TABLE IF NOT EXISTS schedule_runs (
 
 CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
     ON schedule_runs(registry_id, domain_name, run_ts DESC);
+
+-- ----------------------------------------------------------------
+-- Build-run trace (one immutable row per Digital Twin build, all
+-- paths: UI session / external API / scheduler). Linked to the
+-- domain row; grain is the tuple (domain_id, version). Many rows per
+-- tuple are expected — the "active" build for a (domain, version) is
+-- the most recent successful row by ``started_at`` (derived, no flag).
+-- Powers the registry Build Analytics panel.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS build_runs (
+    id                  bigserial PRIMARY KEY,
+    domain_id           uuid NOT NULL
+                        REFERENCES domains(id) ON DELETE CASCADE,
+    version             text NOT NULL,
+    build_kind          text NOT NULL DEFAULT 'session',  -- session|api|scheduled
+    status              text NOT NULL,                    -- success|error|cancelled
+    message             text NOT NULL DEFAULT '',
+    error               text NOT NULL DEFAULT '',
+    started_at          timestamptz NOT NULL DEFAULT now(),
+    finished_at         timestamptz,
+    duration_s          double precision NOT NULL DEFAULT 0,
+    triple_count        bigint NOT NULL DEFAULT 0,
+    entity_count        integer NOT NULL DEFAULT 0,
+    relationship_count  integer NOT NULL DEFAULT 0,
+    sql_chars           integer NOT NULL DEFAULT 0,
+    graph_engine        text NOT NULL DEFAULT '',
+    sync_mode           text NOT NULL DEFAULT '',
+    view_table          text NOT NULL DEFAULT '',
+    graph_name          text NOT NULL DEFAULT '',
+    task_id             text NOT NULL DEFAULT '',
+    phase_times         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    stats               jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_build_runs_domain_version
+    ON build_runs(domain_id, version, started_at DESC);
+
+-- ----------------------------------------------------------------
+-- Domain-version review / validation audit log (append-only).
+-- One immutable row per workflow decision or lifecycle change:
+-- submit-for-review, business-user sign-off (approve), request
+-- changes, publish, reopen, or a free-text comment. ``from_status``
+-- / ``to_status`` snapshot the lifecycle transition the event drove
+-- ('' on pure sign-off / comment rows). The grain is the tuple
+-- (domain_id, version); many rows per tuple are expected — together
+-- they form the full validation history surfaced in the Domain
+-- Validation page and the Registry "My Tasks" worklist.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS domain_review_events (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id       uuid NOT NULL
+                    REFERENCES domains(id) ON DELETE CASCADE,
+    version         text NOT NULL,
+    actor           text NOT NULL,
+    action          text NOT NULL
+                    CHECK (action IN ('submitted', 'approved',
+                                      'changes_requested', 'published',
+                                      'reopened', 'commented')),
+    from_status     text NOT NULL DEFAULT '',   -- lifecycle status before the event
+    to_status       text NOT NULL DEFAULT '',   -- lifecycle status after the event
+    comment         text NOT NULL DEFAULT '',
+    meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_events_domain_version
+    ON domain_review_events(domain_id, version, created_at);

@@ -1,0 +1,245 @@
+## Fix MCP server pointing at the wrong OntoBricks app
+
+Context: deployed MCP server's ``list_domains`` tool was returning
+"No domains found in the registry." even though the
+``ontobricks-020`` app exposes seven MCP-enabled domains via
+``/api/v1/domains``.
+
+Investigation (verified live against the deployed apps):
+
+1. The MCP server's ``list_domains`` tool forwards the bound
+   Volume coordinates (``REGISTRY_VOLUME_PATH``) as
+   ``registry_catalog`` / ``registry_schema`` / ``registry_volume``
+   query params on every ``/api/v1/...`` call. Those overrides win
+   inside ``DigitalTwin.resolve_registry``, re-targeting the main
+   app at the catalog/schema/volume the MCP is bound to.
+2. The MCP's ``app.yaml`` had ``ONTOBRICKS_URL`` pointing at the
+   *legacy* ``ontobricks-…`` deployment, whose session-default
+   registry resolves to ``benoit_cayla.ontobricks_deployed.registry``.
+   The current canonical app is ``ontobricks-020-…``, bound to
+   ``benoit_cayla.ontobricks_020.registry``.
+3. Forwarding ``registry_schema=ontobricks_020`` to the legacy app
+   silently re-pointed it at a Volume that holds two domain folders
+   (``contactcenter``, ``cust360auto``) of which neither has any
+   ``mcp_enabled`` version → empty list → the MCP message above.
+4. Pointing the MCP at ``ontobricks-020-…`` makes the override
+   match the main app's session default, so the call returns the
+   seven MCP-enabled domains as expected.
+
+Changes:
+
+1. src/mcp-server/app.yaml
+   Updated ``ONTOBRICKS_URL`` from
+   ``https://ontobricks-2508734981122804.aws.databricksapps.com``
+   to
+   ``https://ontobricks-020-2508734981122804.aws.databricksapps.com``
+   so the MCP companion talks to the same app whose UC Volume
+   binding it shares. Added an inline note explaining that any
+   future drift between this URL and the bound Volume will
+   silently re-route the main app at the wrong registry.
+
+Modified files:
+- src/mcp-server/app.yaml
+
+Deploy:
+- ``databricks bundle deploy -t dev-lakebase`` (no source change
+  on the main app; only the MCP picks up the new env var)
+- ``databricks bundle run mcp_ontobricks_app -t dev-lakebase`` to
+  restart the MCP container so the new ``ONTOBRICKS_URL`` is
+  loaded into the process environment.
+
+Verification (live against the deployed apps):
+- MCP ``/`` health reports
+  ``ontobricks_url: https://ontobricks-020-…databricksapps.com``
+  and ``registry: /Volumes/benoit_cayla/ontobricks_020/registry``.
+- Reproducing the MCP's exact GET against the new URL with the
+  override params returns ``success: true`` with seven domains
+  (``bookstore``, ``contactcenter``, ``cust360auto``,
+  ``monorganisation``, ``predictivemaintenance``, ``suplychain``,
+  ``transport``).
+
+Tests: ``uv run pytest -q`` → 1893 passed in 59.08s.
+
+Follow-up (deferred, recommended):
+- Make the MCP's ``_registry_params()`` opt-in or treat
+  ``REGISTRY_VOLUME_PATH`` as a *fallback* — call the main app's
+  ``/api/v1/digitaltwin/registry`` first and only override when
+  that endpoint reports the registry is unconfigured. Today any
+  binding drift between the two apps silently re-routes the main
+  app to a possibly empty Volume instead of failing loud.
+
+----------------------------------------------------------------
+Title: MCP server — observable startup + per-request HTTP logging
+
+Context: After the URL/permission fix above, a follow-up incident
+(see "Lakebase rebind incident" below) showed the MCP was returning
+opaque error strings to the LLM ("502 Bad Gateway", "401
+Unauthorized") with no way to see, inside the deployed Apps log
+stream, *what URL it called*, *with which params*, *and what came
+back*. The MCP's own ``logger.info(...)`` calls in
+``server/app.py`` were dropped because no logging configuration was
+applied at startup — uvicorn only configures its access/error
+loggers, leaving the project's loggers at WARNING.
+
+Changes:
+1. ``src/mcp-server/server/main.py`` — add ``_configure_logging()``
+   helper (called from ``main()`` before ``uvicorn.run``) that
+   installs a single stream handler at the level requested by
+   ``MCP_LOG_LEVEL`` (default ``INFO``). Sets ``logging.getLogger
+   ("server").setLevel(level)`` so every module under
+   ``server.*`` is captured, and pins ``httpx`` to ``WARNING`` to
+   avoid noisy per-request DEBUG lines from the underlying client.
+2. ``src/mcp-server/server/app.py`` — ``_get(client, path, params)``
+   now logs ``GET <full_url> params=<params>`` *before* the call,
+   the response status *after*, and on 4xx/5xx adds a 500-char body
+   excerpt at ``WARNING``. This is what surfaced the
+   ``infrastructure / permission denied for schema
+   ontobricks_registry`` line during the Lakebase rebind incident
+   below — without it, the deployed app would just have surfaced
+   ``HTTPStatusError`` strings.
+3. ``src/mcp-server/server/app.py`` — ``_get_auth_headers`` now
+   logs (at DEBUG) whether the M2M OAuth token came from cache and
+   how old the cached token is, so ``401`` symptoms can be
+   bisected against token freshness without redeploying.
+4. ``src/mcp-server/server/app.py`` — ``create_mcp_server`` now
+   emits a one-line "Env snapshot" at startup capturing
+   ``REGISTRY_VOLUME_PATH``, ``REGISTRY_CATALOG/SCHEMA/VOLUME``,
+   ``DATABRICKS_HOST``, presence of ``DATABRICKS_CLIENT_ID/SECRET``
+   (boolean only — never the secret value), and
+   ``DATABRICKS_SQL_WAREHOUSE_ID``. With this, the very first log
+   line of every Apps deploy tells you exactly which main app the
+   MCP is bound to and which registry override it will forward.
+5. ``src/mcp-server/server/app.py`` — ``list_domains`` now logs
+   ``Tool list_domains called`` on entry and the resolved
+   ``base_url + path + override_params`` immediately before the
+   HTTP call, so every tool invocation has a clean audit trail in
+   the log stream.
+
+Modified files:
+- src/mcp-server/server/main.py
+- src/mcp-server/server/app.py
+
+Deploy:
+- ``databricks bundle deploy -t dev-lakebase
+   --var=registry_schema=ontobricks_020`` (the bundle's default
+  ``ontobricks_030`` schema does not exist in this workspace —
+  override at the CLI rather than mutate ``databricks.yml`` so the
+  user's source-controlled defaults are preserved).
+- ``databricks bundle run mcp_ontobricks_app -t dev-lakebase
+   --var=registry_schema=ontobricks_020`` to restart the MCP
+  container with the new logging config in place.
+
+Verification:
+- New first log line on the MCP after restart reads:
+  ``Env snapshot — REGISTRY_VOLUME_PATH='…' REGISTRY_CATALOG=''
+   REGISTRY_SCHEMA='' REGISTRY_VOLUME='' DATABRICKS_HOST='…'
+   DATABRICKS_CLIENT_ID=set DATABRICKS_CLIENT_SECRET=set
+   DATABRICKS_SQL_WAREHOUSE_ID='…'``
+- Calling ``tools/call list_domains`` against the deployed MCP
+  via curl returns the seven expected domains (``bookstore`` …
+  ``transport``) and emits ``Tool list_domains called`` →
+  ``GET https://ontobricks-020-…/api/v1/domains params={…}`` →
+  ``→ 200`` in the Apps log stream.
+
+Tests: ``uv run pytest -q`` → 1893 passed in 65.56s.
+
+----------------------------------------------------------------
+Title: Lakebase rebind incident — ``ontobricks-020`` postgres
+       binding accidentally migrated v030 → production restore
+
+Context: While redeploying the MCP for the URL fix above, the
+``databricks bundle deploy -t dev-lakebase`` command was run with
+the bundle's default ``lakebase_branch: v030``. That default
+silently *rewrote* the ``ontobricks-020`` ``postgres:`` resource
+binding from ``projects/ontobricks-app/branches/production/...`` to
+``projects/ontobricks-app/branches/v030/...``. The running app
+process kept its old PG env vars (process restart didn't happen
+yet) but token minting now keys off the new resource binding, so
+``/api/v1/domains`` started returning HTTP 502 with
+``Lakebase connection failed: password authentication failed for
+user '<sp-client-id>'``. (This was only visible *because* of the
+new MCP request/response logging from the change above, otherwise
+the user would just have seen the bare ``502 Bad Gateway`` from
+the LLM tool layer.) Bisecting the bundle's two Lakebase branches
+with ``databricks postgres list-endpoints`` confirmed that
+``v030`` resolves to ``ep-floral-meadow-d1y55ilx`` (a brand-new,
+empty endpoint created by my own deploy) while ``production``
+resolves to ``ep-young-bread-d1f2p5nq`` (where the real registry
+data lives).
+
+Fix:
+1. Re-deployed the bundle with ``--var=lakebase_branch=production
+   --var=registry_schema=ontobricks_020`` to revert the
+   ``ontobricks-020`` postgres binding to ``branches/production``.
+   Did **not** edit ``databricks.yml`` — the bundle's defaults are
+   the user's source of truth and the override stays at the CLI.
+2. Restarted ``ontobricks-020`` via
+   ``databricks bundle run ontobricks_dev_app -t dev-lakebase
+   --var=lakebase_branch=production --var=registry_schema=
+   ontobricks_020`` so the process picks up the restored
+   ``PGHOST = ep-young-bread-d1f2p5nq`` env var.
+3. Restarted ``mcp-ontobricks`` with the same ``--var`` overrides
+   for parity (it does not depend on the binding directly but its
+   resource block is declared symmetrically and we wanted the
+   bundle state and the running state to match).
+4. ``scripts/bootstrap-lakebase-perms.sh`` could not be reused as-
+   is here: it walks ``projects/<inst>/branches`` in API order and
+   takes the *first* endpoint, which is ``v030`` for this
+   instance. We instead executed the same GRANT block manually
+   against the ``production`` endpoint
+   (``ep-young-bread-d1f2p5nq``):
+
+   ::
+
+      ENDPOINT_PATH=projects/ontobricks-app/branches/production/endpoints/primary
+      PGPASSWORD=$(databricks api post /api/2.0/postgres/credentials \\
+        --json "{\\"endpoint\\":\\"$ENDPOINT_PATH\\"}" \\
+        | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"token\"])')
+      psql "host=ep-young-bread-d1f2p5nq.database.us-west-2.cloud.databricks.com \\
+            port=5432 user=$PGUSER dbname=ontobricks_registry sslmode=require" <<SQL
+      GRANT USAGE, CREATE ON SCHEMA "ontobricks_registry" TO "<sp-client-id>";
+      GRANT SELECT, INSERT, UPDATE, DELETE
+        ON ALL TABLES IN SCHEMA "ontobricks_registry" TO "<sp-client-id>";
+      GRANT USAGE, SELECT, UPDATE
+        ON ALL SEQUENCES IN SCHEMA "ontobricks_registry" TO "<sp-client-id>";
+      ALTER DEFAULT PRIVILEGES IN SCHEMA "ontobricks_registry"
+        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "<sp-client-id>";
+      ALTER DEFAULT PRIVILEGES IN SCHEMA "ontobricks_registry"
+        GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO "<sp-client-id>";
+      SQL
+
+   This was repeated for both service principals
+   ``cf03a7b1-4c1e-4904-b333-ebcfbc425116`` (``ontobricks-020``)
+   and ``a99b4987-2c5a-48b5-a578-c4a39a0feb0d`` (``mcp-ontobricks``).
+
+Modified files: none — pure infrastructure restore. No source
+files were touched as part of this restore step.
+
+Verification:
+- ``GET /api/v1/domains`` directly against the main app returns
+  the 7 expected domains (no ``error: infrastructure``).
+- Same call with the MCP's full override
+  ``?registry_catalog=benoit_cayla&registry_schema=ontobricks_020
+   &registry_volume=registry`` returns the same 7 domains, proving
+  the override path is healthy.
+- End-to-end ``tools/call list_domains`` via the deployed MCP
+  returns the 7-domain table to the LLM client.
+
+Tests: ``uv run pytest -q`` → 1893 passed in 65.56s.
+
+Follow-up (deferred, recommended):
+- ``scripts/bootstrap-lakebase-perms.sh`` should accept a
+  ``-b/--branch`` flag (or grant on *all* endpoints across *all*
+  branches under the project) instead of taking the first branch
+  the API returns. Today, when the project has more than one
+  branch (``v030``, ``production``), the script silently grants
+  on the wrong endpoint and the operator only finds out when the
+  app starts hitting ``permission denied for schema …``.
+- The bundle's ``lakebase_branch`` default in ``databricks.yml``
+  currently says ``v030`` while the live binding for
+  ``ontobricks-020`` is ``production``. Any future
+  ``databricks bundle deploy -t dev-lakebase`` without
+  ``--var=lakebase_branch=production`` will silently rebind the
+  app again. Either align the default to ``production`` or split
+  the dev-lakebase target so the var has a less surprising
+  fallback.

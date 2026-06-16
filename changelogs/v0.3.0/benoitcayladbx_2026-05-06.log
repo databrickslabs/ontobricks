@@ -1,0 +1,779 @@
+## Async tasks — measured duration in navbar + START/END logs
+
+Context: Long-running operations tracked by the in-memory `TaskManager`
+(ontology generation, auto-mapping, metadata load, triplestore sync,
+quality checks, etc.) had no visible elapsed time. The navbar hourglass
+showed only "5m ago" against `created_at` and the bell completion toast
+gave no idea how long the run took. Logs printed `Task X started` /
+`Task X completed: …` with no consistent START/END marker and no
+duration, making it hard to grep `ontobricks.log` for performance
+regressions.
+
+The fix wires a single source-of-truth duration through the model, the
+log lines and the UI:
+
+- Backend exposes `Task.duration_seconds()` (live for running/pending,
+  frozen at `completed_at − started_at` for terminal tasks) and
+  serialises it in `Task.to_dict()` so every consumer of `GET /tasks/`
+  sees the same number the logs print.
+- TaskManager rewrites its lifecycle log lines to a `START task <id>
+  [<type>] — <name>` / `END task <id> [<type>] <verb> in <duration>`
+  pattern at INFO level, easy to grep with `grep -E "START task|END
+  task"`.
+- The navbar hourglass dropdown now shows a live ticking elapsed time
+  for running rows (1 s timer, no extra polling) and the bell completion
+  toast appends `(in 1m 23s)` next to the task name.
+
+Changes:
+
+1. src/back/core/task_manager/models.py
+   - `Task.duration_seconds()` — new computed method. Uses
+     `started_at → completed_at` when both are set, falls back to
+     `created_at` if the worker never called `start_task`, and uses
+     `now` as the right-hand side for active tasks so the UI can show
+     a live timer. Returns `None` only when no usable timestamp exists,
+     never negative (clamped to 0).
+   - `Task.to_dict()` — extended with `"duration_seconds": <float|None>`
+     so the field is part of the public JSON shape returned by
+     `GET /tasks/` and `GET /tasks/{id}`.
+
+2. src/back/core/task_manager/TaskManager.py
+   - New module-level helper `_format_duration(seconds)` returning
+     compact strings: `"450ms"`, `"2.40s"`, `"1m 23.5s"`, `"1h 5m"`.
+   - `start_task` log line rewritten to `START task <id> [<type>] —
+     <name>: <message>` (or `... (step 1/N: <step>)` when the task has
+     steps). Same INFO level as before.
+   - `complete_task` log line rewritten to `END task <id> [<type>]
+     completed in <duration> — <message>`.
+   - `fail_task` keeps its existing `logger.error(... failed after
+     <duration>: <error>)` for visibility but additionally emits the
+     unified `END task <id> [<type>] failed in <duration>` INFO line so
+     a single `grep "END task"` finds every terminal transition.
+   - `cancel_task` log line rewritten to `END task <id> [<type>]
+     cancelled in <duration>`.
+
+3. src/front/static/global/js/task-tracker.js
+   - New helpers `formatDuration(startISO, endISO)`,
+     `computeTaskDuration(task)` and `formatSeconds(seconds)` shared
+     by the active-task panel and the bell. They prefer the
+     server-supplied `duration_seconds` when present so the value
+     shown in the UI matches the value the backend logged, and fall
+     back to client-side computation otherwise.
+   - `renderTaskItem` — the right-column label now shows the live
+     elapsed time for running rows (`<small data-task-elapsed>` so the
+     ticker can target it) and keeps `getTimeAgo(created_at)` for
+     pending rows.
+   - `tickRunningDurations()` — re-renders only the small
+     `data-task-elapsed` text nodes once per second from `initTaskTracker`,
+     so the timer advances visibly between the 3 s active polls
+     without re-fetching.
+   - `notifyTaskTransition` — completed / failed / cancelled bell
+     toasts append `(in <duration>)` next to the task name.
+   - `formatDuration` is exposed on `window.formatTaskDuration` for
+     other modules.
+
+4. tests/test_task_manager.py
+   - `TestDuration`: covers `_format_duration` bucket boundaries,
+     monotonic growth of pending/running durations, frozen duration
+     after `complete_task`, and presence of `duration_seconds` in
+     `to_dict()`.
+   - `TestStartEndLogging`: a `task_logs` fixture attaches the caplog
+     handler directly to `ontobricks.core.task_manager.TaskManager`
+     (the `ontobricks` logger has `propagate=False` once
+     `LogManager.setup` has run, which it does in the full suite via
+     other tests) and asserts the four lifecycle paths emit the
+     expected START/END markers with `completed in` / `failed in` /
+     `cancelled in` substrings.
+
+Modified files:
+- src/back/core/task_manager/models.py
+- src/back/core/task_manager/TaskManager.py
+- src/front/static/global/js/task-tracker.js
+- tests/test_task_manager.py
+
+Tests: `pytest -q` → **2044 passed in 69.10s** (was 2035 + 9 new
+duration / logging assertions). `tests/test_task_manager.py` alone:
+**42 passed in 0.20s**.
+
+## Mapping diagnostics — verify SELECT permissions on every source table
+
+Context: Mapping diagnostics validated entity / relationship JSON and
+parsed SQL columns, but never asked the warehouse whether the **app's
+own principal** could actually read the source tables. In production
+(Databricks Apps mode) the app runs as an OAuth service principal that
+needs explicit `SELECT` on each Unity Catalog table referenced by the
+mapping; missing grants surfaced only later as opaque
+`PERMISSION_DENIED` failures during VIEW creation in the Digital Twin
+build. The fix adds a third diagnostic section that runs a
+non-destructive `SELECT * FROM … LIMIT 0` against every distinct
+source table and reports OK / missing-SELECT / not-found per table.
+
+The extension reuses the existing accordion / KPI / `{check, status,
+detail}` shape — both backend payload and frontend rendering — so the
+new section is visually indistinguishable from the existing entity and
+relationship sections, and the global Total / Passed / Warnings /
+Errors KPI tiles already at the top of the page now include the
+per-table results.
+
+Changes:
+
+1. src/back/objects/mapping/Mapping.py
+   - `_FQN_TABLE_RE` and `_extract_fqn_from_sql(sql)` — regex helper
+     that pulls every `catalog.schema.table` triple out of `FROM` /
+     `JOIN` clauses (with or without backticks). Two-part references
+     are intentionally skipped because they depend on the warehouse's
+     default catalog/schema and cannot be probed unambiguously.
+   - `_split_table_ref(value)` — parse `cat.sch.tbl` strings (the
+     `source_table` / `target_table` columns on relationships) into a
+     3-tuple, returning `None` for shorter names.
+   - `_collect_source_tables()` — aggregates every distinct triple
+     across non-excluded entities (explicit `catalog`+`schema`+`table`
+     plus FQNs in `sql_query`) and relationships (`source_table` /
+     `target_table` plus FQNs in `sql_query`), keeping a deduplicated
+     list of human-readable referrers (`Entity: Person`,
+     `Rel: assignedTo (source)`, `Rel: foo (sql)`) so the UI can show
+     *why* each table is being checked.
+   - `_classify_sql_error(exc)` — maps a warehouse exception message
+     to `(status, detail)`, distinguishing `PERMISSION_DENIED`,
+     `TABLE_OR_VIEW_NOT_FOUND`, `SCHEMA_NOT_FOUND`,
+     `CATALOG_NOT_FOUND`, and a generic "Probe failed" fallback. We
+     match on message substrings because the SDK does not expose
+     typed Databricks error codes.
+   - `_run_permission_checks(client)` — for each unique triple runs
+     ``SELECT * FROM `cat`.`sch`.`tbl` LIMIT 0`` (zero rows fetched,
+     full SELECT permission path exercised) and produces a
+     `{table, referenced_by, status, check: "select", detail}` row.
+     When `client` is `None` (no warehouse configured / local dev
+     without PAT) returns a single `warning` advisory row so the UI
+     explains why the section is empty rather than appearing broken.
+   - `run_diagnostics(self, *, client=None)` — keyword-only `client`
+     param, top-level `permissions` list added to the response, and
+     the global `summary` rolls in the new ok / warnings / errors
+     counts plus the row count in `total`.
+
+2. src/api/routers/internal/mapping.py
+   - `/mapping/diagnostics` route now depends on `Settings`, calls
+     `get_databricks_client(domain, settings)` and runs the (blocking)
+     diagnostics in a thread via the existing `run_blocking` helper so
+     concurrent slow warehouse calls do not stall the FastAPI event
+     loop.
+
+3. src/front/templates/partials/mapping/_mapping_diagnostics.html
+   - Third accordion item "Source table permissions" with
+     `bi-shield-lock` icon, badge `#diagPermBadge`, and body
+     container `#diagPermissionsBody`.
+
+4. src/front/static/mapping/js/mapping-diagnostics.js
+   - `_renderPermissionRow(perm)` — same collapsible card shape as
+     entities/relationships, with table FQN as the label, comma-
+     separated referrers as the truncated meta string, and the inner
+     `<table.diag-checks-table>` row reusing the existing
+     `_STATUS_ICON` palette.
+   - `runDiagnostics()` reads `data.permissions || []`, fills the new
+     body and updates the badge using the existing `_updateBadge`
+     helper (so the badge colour matches worst-row severity).
+
+5. tests/test_mapping_service.py
+   - `_mock_domain` extended with an `ontology` kwarg + always sets
+     `domain.ontology = {}` so the diagnostics path's
+     `domain.ontology or {}` does not iterate over a MagicMock.
+   - `TestExtractFqnFromSql`: backticked / `JOIN` / 2-part-skipped /
+     empty input.
+   - `TestSplitTableRef`: 3-part / backticked / short-returns-None.
+   - `TestCollectSourceTables`: explicit triple, excluded entity
+     skipped, relationship `source_table` / `target_table`,
+     `sql_query` extraction, deduplicated referrers.
+   - `TestClassifySqlError`: PERMISSION_DENIED, TABLE_OR_VIEW_NOT_FOUND,
+     other.
+   - `TestRunPermissionChecks`: `client=None` → warning row,
+     no-tables → empty list, success path asserts the executed SQL is
+     `SELECT … LIMIT 0` against the back-ticked FQN, error path
+     classified as missing-SELECT.
+   - `TestRunDiagnosticsPermissionsSection`: response shape, summary
+     rolls up OKs and errors from the new section.
+
+Modified files:
+- src/back/objects/mapping/Mapping.py
+- src/api/routers/internal/mapping.py
+- src/front/templates/partials/mapping/_mapping_diagnostics.html
+- src/front/static/mapping/js/mapping-diagnostics.js
+- tests/test_mapping_service.py
+
+Tests: `pytest -q` → **2067 passed in 66.27s** (was 2044 + 23 new
+extraction / classification / probe / integration assertions, minus
+the previous 21 reflected as +21 above). `tests/test_mapping_service.py`
+alone: **37 passed in 0.27s** (was 16).
+
+## /health — real readiness probes; /health/detailed retired
+
+Context: ``GET /health`` returned a hard-coded ``{"status":"healthy"}``
+JSON dump with no behind-the-scenes verification of *anything*, so an
+app that had lost its registry Volume binding, was missing
+``CREATE VIEW`` on the registry schema, had no ``USAGE`` on the
+Lakebase Postgres schema, or had run out of space in ``/tmp`` would
+still report itself as healthy. The reciprocal route
+``/health/detailed`` was a slightly more verbose copy of the same lie.
+Operators (and load-balancer health probes) had no way to tell
+whether the app could actually reach the dependencies it needs to
+run. The user listed the precise checks they wanted in
+``releasereq/TODO.md``: registry Volume, registry catalog/schema
+write permissions for view materialisation, Lakebase, ``/tmp``
+write+space; plus "any other permissions needed".
+
+This change replaces the static endpoint with a real readiness probe
+that exercises every external dependency the app actually uses, and
+removes ``/health/detailed`` because the new payload covers the same
+information in a single response. The route still returns HTTP 200
+even when individual checks fail — external probes should look at
+the top-level ``status`` (``ok`` / ``warning`` / ``error``) and
+``summary.errors`` fields, so a single flickering dependency does
+not yank the app out of rotation.
+
+Probes implemented (in order):
+
+1. **runtime** — Python + OntoBricks version (informational, always
+   ``ok``).
+2. **filesystem.tmp** — ``os.access`` write check, write+delete of a
+   sentinel, ``shutil.disk_usage`` thresholds (warn <1 GB,
+   error <100 MB).
+3. **filesystem.session_dir** — same probe against
+   ``settings.session_dir`` (``/tmp/ontobricks_session`` in Apps,
+   ``./fastapi_session`` in dev).
+4. **filesystem.log_dir** — resolved from ``LogManager.instance().log_path``.
+5. **databricks.auth** — ``DatabricksAuth.has_valid_auth`` plus, in
+   App mode, an active OAuth token mint via
+   ``get_oauth_token`` so a bad ``DATABRICKS_CLIENT_ID``/
+   ``CLIENT_SECRET`` fails here rather than in the next warehouse
+   call.
+6. **databricks.warehouse** — ``SQLWarehouse.test_connection``
+   (``SELECT 1`` against the configured warehouse).
+7. **registry.cfg** — ``RegistryCfg.from_domain(None, settings)``,
+   asserts catalog/schema/volume are all resolved.
+8. **registry.volume_read** — ``VolumeFileService.list_directory``
+   on ``/Volumes/cat/sch/vol``.
+9. **registry.volume_write** — writes a sentinel
+   ``.health_check_<uuid>.txt`` then deletes it (real PUT through
+   the same Files API the registry uses for ``.global_config.json``).
+10. **registry.uc_schema_ddl** — ``CREATE OR REPLACE VIEW
+    `cat`.`sch`.`_ontobricks_health_<uuid>` AS SELECT 1`` then
+    ``DROP VIEW IF EXISTS``. This exercises the exact permission
+    path the Digital-Twin build uses to materialise views, so a
+    missing ``CREATE`` / ``USE_SCHEMA`` grant fails at startup
+    rather than mid-build.
+11. **lakebase** — when ``PG*`` env vars are bound, builds a
+    ``LakebaseRegistryStore`` and calls ``init_status()``;
+    ``no_usage`` / ``connect_failed`` map to ``error``,
+    ``no_registries_table`` / ``no_registry_row`` map to
+    ``warning`` (schema reachable, just not bootstrapped),
+    ``ok`` maps to ``ok``. When PG\* env vars are absent the
+    probe returns ``ok`` with "Lakebase not bound — registry uses
+    Volume backend" so users on Volume backends do not see a
+    spurious failure.
+
+Each probe runs through ``_safely_run`` which wraps the body in a
+``try/except`` and times it, so one broken probe never breaks the
+whole response — the failure is shown next to the green checks
+with a ``duration_ms`` and a clear detail message.
+
+The whole readiness function is synchronous so individual probes can
+make blocking SDK calls without ``await``; the FastAPI route wraps
+it in the existing ``run_blocking`` helper so concurrent slow probes
+do not stall the event loop.
+
+Changes:
+
+1. src/shared/fastapi/health.py
+   - Full rewrite. Module-level constants ``_OK`` / ``_WARNING`` /
+     ``_ERROR`` and a ``_SEVERITY_RANK`` table for the worst-of
+     roll-up.
+   - ``_safely_run(name, label, fn)`` runs each probe with timing
+     and exception capture.
+   - One private ``_check_*`` per probe (filesystem, auth, warehouse,
+     registry cfg / volume read / volume write / UC DDL, Lakebase).
+     Helpers depend on ``Settings`` (passed in) and the existing
+     ``DatabricksAuth`` / ``DatabricksClient`` / ``VolumeFileService``
+     / ``LakebaseRegistryStore`` / ``RegistryCfg.from_domain``
+     plumbing — no new clients introduced.
+   - ``run_readiness_checks(settings=None)`` aggregates and rolls
+     up; ``health_check`` route hands off to ``run_blocking`` and
+     returns ``{status, version, service, framework, summary, checks}``.
+   - ``/health/detailed`` route removed.
+
+2. tests/test_routes.py
+   - ``TestHealthRoutes.test_health_check`` rewritten for the new
+     shape: asserts the per-check schema (``name``, ``label``,
+     ``status``, ``detail``, ``duration_ms``) and the top-level
+     fields rather than the old static ``"healthy"`` literal.
+   - ``test_detailed_health`` renamed to
+     ``test_detailed_health_removed``, asserts ``404`` so the
+     retirement is enforced.
+
+3. tests/test_health.py (new)
+   - Unit coverage with mocked dependencies so the probes run on
+     CI machines with no Databricks credentials.
+   - ``TestSafelyRun``: status passthrough + exception capture.
+   - ``TestCheckDirectoryWritable``: ok / creates-missing / warn-
+     below-threshold / error-below-critical (uses ``patch.object``
+     on ``shutil.disk_usage`` so the test does not depend on real
+     free space).
+   - ``TestCheckDatabricksAuth``: app-mode-missing-creds / local-
+     mode-missing-token / local-mode-with-PAT.
+   - ``TestCheckWarehouse``: no-client / no-warehouse-id / OK /
+     error.
+   - ``TestCheckRegistryCfg``: resolved / missing-is-warning.
+   - ``TestCheckRegistryVolumeReadWrite``: read OK + skipped, write
+     OK with cleanup, write failure → error, write-OK-but-cleanup-
+     failed → warning. Asserts the sentinel path is rooted at
+     ``/Volumes/cat/sch/vol/``.
+   - ``TestCheckRegistryUcSchemaDdl``: skipped-when-no-warehouse,
+     CREATE/DROP success (asserts both statements ran and the SQL
+     contained the back-ticked FQN), CREATE failure → error, DROP
+     failure → warning.
+   - ``TestCheckLakebase``: PG*-not-bound, initialised → ok,
+     ``no_usage`` → error, ``no_registries_table`` → warning.
+   - ``TestRunReadinessChecks``: response shape (mandatory keys
+     + presence of every probe the user asked for), worst-of
+     roll-up by forcing ``_check_tmp`` to ``error``.
+
+4. docs/deployment.md
+   - "Health checks" bullet rewritten to describe the readiness
+     probe's payload and explain why HTTP 200 is intentional even
+     for ``status: error`` responses.
+
+5. docs/development.md
+   - ``TestHealthRoutes`` row updated to mention the readiness
+     probe and the retirement of ``/health/detailed``.
+
+6. releasereq/TODO.md
+   - Marked the four bullet points in the user's wishlist as done.
+
+Modified files:
+- src/shared/fastapi/health.py
+- tests/test_routes.py
+- tests/test_health.py (new)
+- docs/deployment.md
+- docs/development.md
+- releasereq/TODO.md
+
+Tests: `pytest -q` → **2097 passed in 64.12s** (was 2067 + 30 new
+probe + aggregator + route assertions).
+``tests/test_health.py tests/test_routes.py::TestHealthRoutes`` alone:
+**32 passed in 0.55s**.
+
+## Fix — credential helpers crash on `domain=None`
+
+Context: After the `/health` rewrite landed, the `databricks.warehouse`
+probe failed with `'NoneType' object has no attribute 'databricks'`
+even though the warehouse was correctly configured. Trace pointed at
+`DatabricksHelpers.get_databricks_client(None, settings)` →
+`domain.databricks.get(...)` — the helper assumed the HTTP request
+lifecycle where a `DomainSession` is always present, but the readiness
+probe (and any future session-less caller — MCP, scheduled jobs)
+legitimately passes `domain=None`. `RegistryCfg.from_domain` already
+handled the case; `DatabricksHelpers` had not been updated.
+
+Three call sites blew up: `get_databricks_client`,
+`get_databricks_host_and_token`, and `resolve_warehouse_id`. All
+three now read the session config through a single
+`_domain_databricks(domain)` helper that returns `{}` for
+`domain is None` (or for a domain with no `databricks` attr), so the
+existing fallthrough to `Settings`/env vars just works.
+
+Changes:
+
+1. src/back/core/helpers/DatabricksHelpers.py
+   - New module-level `_domain_databricks(domain)` returning
+     `getattr(domain, "databricks", None) or {}`, or `{}` when
+     `domain is None`.
+   - `resolve_warehouse_id`: replaced
+     `domain.databricks.get("warehouse_id", "")` with
+     `_domain_databricks(domain).get("warehouse_id", "")`.
+   - `get_databricks_host_and_token`: replaced the two
+     `domain.databricks.get(...)` reads with a single
+     `dbcfg = _domain_databricks(domain)` upfront.
+   - `get_databricks_client`: same — `dbcfg.get("host"|"token")` now
+     accepts `domain=None`.
+
+2. tests/test_helpers.py
+   - `TestGetDatabricksHostAndToken.test_none_domain_falls_back_to_settings`:
+     `get_databricks_host_and_token(None, settings)` returns the
+     normalized Settings host + PAT.
+   - New `TestNoneDomainSafety` class with three regression tests:
+     `get_databricks_client(None, settings)`, `get_databricks_credentials(None, settings)`,
+     and the no-creds variant returning `None`. Pins the contract so
+     this regression cannot recur silently.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- tests/test_helpers.py
+
+Tests: `pytest -q` → **2101 passed in 65.64s** (was 2097 + 4 new
+`domain=None` regression assertions).
+`tests/test_helpers.py tests/test_health.py tests/test_routes.py::TestHealthRoutes`
+together: **43 passed in 7.89s**. After the fix, the readiness probe's
+`databricks.warehouse` row reports the warehouse's actual reachability
+status instead of the `'NoneType'` traceback.
+
+
+## Settings → Health tab
+
+Context: After the `/health` rewrite earlier today, the readiness probe
+returns a rich payload (overall status + per-check status / detail /
+duration_ms for ~8 dependencies — `/tmp`, session dir, log dir,
+Databricks auth, SQL warehouse, registry config, registry UC volume
+read+write, registry UC schema DDL, Lakebase). Until now the only way
+to consume that payload was a raw JSON GET on `/health`. The user
+asked for an in-app surface so admins can run readiness checks from
+the UI in one click.
+
+Wired a new admin-only **Health** tab into the Settings page that
+calls `GET /health`, drops the same KPI tiles used by Mapping
+Diagnostics (Total / Passed / Warnings / Errors) and renders the
+checks list as a sortable table (errors first, warnings second, ok
+last) with status icon, label, name, detail and per-check duration.
+Detail strings >200 chars collapse into a `<details>` to keep the
+table compact.
+
+Changes:
+
+1. src/front/templates/partials/settings/_settings_health.html (new)
+   - First file under the new `partials/settings/` directory. Header
+     alert explains the probe semantics and links readers back to
+     `GET /health` for external uptime probes. KPI tiles row reuses
+     the global `ob-kpi-tile` / `tile-accent-*` classes loaded by
+     `base.html` so no extra CSS is needed. Empty state placeholder
+     spinner is shown until the first fetch resolves.
+
+2. src/front/templates/settings.html
+   - New `<li id="tab-health-wrapper">` nav-link inside the existing
+     `{% if user_role == 'admin' %}` block (placed after Registry,
+     so non-admins see no extra tab). New `<div id="pane-health">`
+     `tab-pane` includes the partial. New
+     `<script src=".../settings-health.js">` added to `extra_js`
+     under the same admin guard.
+
+3. src/front/static/config/js/settings-health.js (new)
+   - Lazy-loads on `shown.bs.tab` of `#tab-health` (mirroring the
+     Graph DB tab pattern) so the eight backend probes do not run
+     for every Settings page open. Manual **Refresh** button hooks
+     into the same `loadHealth()` entry point. Renders the overall
+     status pill, KPI tiles, and a per-check table with severity
+     ordering (`error` → `warning` → `ok`). Long detail strings
+     collapse into `<details>`, durations render as a muted ms badge.
+
+4. tests/test_routes.py
+   - New `TestSettingsRoutes.test_settings_page_includes_health_tab`
+     asserts the rendered `/settings` HTML contains `id="tab-health"`,
+     `id="pane-health"`, `id="healthKpiTiles"` and the
+     `settings-health.js` asset reference. Pins both the tab
+     registration and the partial wiring so a future refactor cannot
+     drop the tab silently.
+
+Modified files:
+- src/front/templates/partials/settings/_settings_health.html (new)
+- src/front/templates/settings.html
+- src/front/static/config/js/settings-health.js (new)
+- tests/test_routes.py
+
+Tests: `pytest -q` → **2102 passed in 66.62s** (was 2101 + 1 new
+settings-page assertion). `tests/test_routes.py::TestSettingsRoutes`
+on its own: **6 passed in 0.53s**.
+
+## Domain / Build — live "Building Digital Twin" log panel
+
+Context: When users clicked **Build** on the Domain / Build page they
+got a single thin progress bar with one tiny status line. Long phases
+(reading triples, writing triples in batches, archiving the graph)
+all looked identical from the outside, with no per-step timing and no
+visibility into what was actually happening for the 30–120 s the
+build runs. Customers asked for a "what is it doing right now?"
+panel — non-technical, chronological, with timings.
+
+The fix adds a dedicated **Building Digital Twin** card directly
+below the Digital Twin card. It appears on Build click and grows
+row-by-row as the backend reports each phase. Each row shows the
+phase description, a status icon, and a per-step elapsed time;
+inside the running row a live sub-message shows fine-grained
+progress like "Written 4500/15000 triples…". The information was
+already produced by `TaskManager.advance_step` / `update_progress`
+and exposed via `GET /tasks/{id}` — it just had no UI surface.
+
+The change also fixes a pre-existing alignment bug between the
+seeded step list and the actual execution: when the user forced a
+**Full rebuild**, the backend skipped the *Checking source tables*
+phase but `advance_step` still walked the step array by one, so the
+"Creating view…" message landed in a row labelled "Checking source
+tables". A new `TaskManager.skip_step()` marks unused phases as
+`skipped` (greyed-out, "Not needed for this build") and keeps the
+labels honest. Same logic when there's no snapshot yet — the
+*Detecting what changed* row is correctly skipped on first build.
+
+Changes:
+
+1. src/back/core/task_manager/TaskManager.py
+   - New `skip_step(task_id, message=None)` method. Marks the
+     current step's `status="skipped"` with `started_at` and
+     `completed_at` set to `now` (so the duration is "instant"),
+     then advances `current_step` exactly like `advance_step`. Keeps
+     the step array and the actual execution flow aligned even when
+     phases are conditionally skipped.
+   - `complete_task` no longer overwrites `skipped` steps with
+     `completed`. The terminal sweep that filled in any leftover
+     non-completed step now skips both `completed` *and* `skipped`,
+     preserving the row's true history.
+
+2. src/back/objects/digitaltwin/DigitalTwin.py
+   - `run_build_task` calls `tm.skip_step(...)` for the *gate*
+     phase when the user forced a full rebuild from the start, and
+     for the *diff* phase when no snapshot exists or fallback to
+     full has been decided. Each skip carries a short, plain-English
+     reason ("Full rebuild requested — skipping change check",
+     "No previous snapshot — full rebuild instead") that the panel
+     surfaces under the row.
+   - The "Applying changes to LadybugDB graph…" message becomes
+     "Applying changes to the knowledge graph…" — same
+     instrumentation point, just less internal-jargony in the UI.
+
+3. src/api/routers/internal/dtwin.py
+   - The seven seeded step descriptions on `/dtwin/sync/start` are
+     rewritten to non-technical phrasing: "Preparing mappings and
+     generating queries", "Checking source tables for new data",
+     "Creating the Digital Twin view", "Detecting what changed
+     since last build", "Updating the knowledge graph", "Saving a
+     snapshot for next time", "Backing up the graph to the
+     registry". The `name` slugs (used in logs) are unchanged.
+
+4. src/front/templates/partials/dtwin/_query_sync.html
+   - New `#syncBuildLogCard` rendered just above the existing
+     `#syncResultCard` (i.e. directly below the Digital Twin
+     target card). Hidden by default (`d-none`); contains a header
+     with title, live status badge, total duration, and a
+     dismiss-X, plus a `#syncBuildLogList` container the JS fills
+     with one row per step.
+
+5. src/front/static/query/js/query-sync.js
+   - `showBuildLog()` reveals the card and resets it when the user
+     clicks Build, with a single "Waiting for the build to start…"
+     placeholder until the first poll arrives.
+   - `renderBuildLog(task)` is called from `monitorSyncTask` after
+     each poll. It iterates `task.steps`, picks an icon/colour for
+     each status (`pending`/`running`/`completed`/`skipped`/
+     `failed`) and renders a 3-column row: icon | description (+
+     optional sub-detail) | time. The running row's sub-detail is
+     `task.message`, so users see live counters like "Inserted
+     7400/15000 triples…" as the backend updates.
+   - `_renderStepTime` produces a frozen `formatDuration(start,
+     end)` for terminal/skipped rows and a `data-step-elapsed`
+     timer for the running row. `_ensureBuildLogTicker` registers a
+     1 s `setInterval` (idempotent) that updates only the running
+     row's text node, so the timer ticks visibly between the slower
+     1.5 s polling cadence with negligible cost.
+   - `hideBuildLog()` is wired to the X button. The card also
+     auto-resumes if the user navigates away mid-build and comes
+     back: on `DOMContentLoaded` we read `SYNC_TASK_KEY` from
+     `sessionStorage` and re-attach the monitor.
+
+6. src/front/static/query/css/query-sync.css
+   - New rules for `#syncBuildLogCard .sync-build-row` — a 3-column
+     CSS grid (24px icon | 1fr body | auto time), 6 px radius,
+     subtle background tint per status (blue=running, green=done,
+     red=failed, default=pending, opacity-0.7 for skipped). Tabular
+     numerals on the time column so the digits don't shift while the
+     timer ticks.
+
+7. tests/test_task_manager.py
+   - Five new test cases covering `skip_step`:
+     `test_skip_step_marks_skipped_and_advances`,
+     `test_skip_step_no_steps`,
+     `test_skip_step_nonexistent`,
+     `test_complete_preserves_skipped_status` (regression guard for
+     the `complete_task` change),
+     and `test_skip_step_in_to_dict` (the JSON shape the API
+     serves to the frontend).
+
+Modified files:
+- src/back/core/task_manager/TaskManager.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/css/query-sync.css
+- tests/test_task_manager.py
+
+Tests: `make test` → **2107 passed in 64.80s** (was 2102 + 5 new
+`skip_step` cases). `tests/test_task_manager.py` on its own:
+**46 passed in 0.27s**.
+
+## Domain / Build — export the live build log to a .log file
+
+Context: The Building Digital Twin panel added earlier today shows
+each phase live, but the data was trapped in the DOM — users who
+wanted to share a slow build with us had to screenshot the panel
+or copy-paste row by row. Asked for a one-click way to dump the
+log to a text file.
+
+The new **Export** button sits in the panel header next to the
+total-duration label and the dismiss-X. It becomes enabled the
+moment the first poll lands (so the user can save mid-build) and
+stays enabled after the build finishes, so they can come back to
+the page and grab the log even after the wall timer stopped
+ticking. Output is plain text — no JSON, no CSV — so it pastes
+straight into a Slack thread or a JIRA comment.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sync.html
+   - New `#syncBuildLogExport` button (`btn-outline-secondary`,
+     `bi-download` icon, "Export" label) inserted between the
+     total-duration small text and the existing X dismiss button.
+     Starts `disabled` so it can't be clicked before any data has
+     been rendered.
+
+2. src/front/static/query/js/query-sync.js
+   - New module-local `_syncBuildLogLastTask` cache. `showBuildLog`
+     resets it to `null` and disables the button; `renderBuildLog`
+     stores the latest poll payload and re-enables the button. We
+     keep the last task around for the lifetime of the section, so
+     hitting Export after the build has finished still works.
+   - New `exportBuildLog()` builds a UTF-8 `Blob`, derives the
+     filename from `task.started_at` (`digital-twin-build_<iso
+     timestamp>.log`), and triggers the download via a transient
+     `<a>` element + `URL.revokeObjectURL` cleanup.
+   - New `_formatBuildLogAsText(task)` produces a three-block log:
+     a header with task ID / name / status / created /
+     started / completed / total duration / progress / last
+     message / error; a `Steps` block with one entry per step
+     showing `[NN] STATUS  description`, the started/completed
+     timestamps, the duration (or live elapsed for the running
+     row) and the running detail message; and a `Result` block
+     with the relevant fields from `task.result` (build mode,
+     skipped reason, triple count, diff added/removed, view table,
+     graph name, server-reported duration). Footer logs the
+     export timestamp. Box-drawing horizontal rules separate the
+     blocks for readability.
+   - DOMContentLoaded handler now also wires `#syncBuildLogExport`
+     → `exportBuildLog`, alongside the existing hide-button wire.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+
+Tests: `make test` → **2107 passed in 66.46s** (no test count
+change — this is pure FE plumbing with no Python surface area).
+
+## Digital Twin build — fast gzip, background Volume archive, optional skip
+
+Context: The final *Backing up the graph to the registry* phase was the
+dominant wall-clock cost on large graphs: ``tarfile`` at gzip level 9
+buffered the entire archive in RAM, then a single UC Files API upload
+blocked ``complete_task`` — the UI showed "running" for minutes after
+the graph was already correct under ``/tmp/ontobricks``.  Users also
+asked for a way to skip the Volume upload when iterating locally.
+
+The fix has three parts:
+
+1. **Fast gzip** — ``GraphSyncService.sync_to_volume`` now calls
+   ``tarfile.open(..., mode="w:gz", compresslevel=1)`` (default),
+   with timing logs split between compress and upload.  The static
+   helper ``upload_to_volume`` forwards ``compresslevel`` (default
+   ``1``).
+
+2. **Background archive** — For session builds with
+   ``archive_to_registry=True`` (default), after the snapshot step the
+   worker calls ``advance_step`` into the archive row, starts a
+   **daemon** ``threading.Thread`` that runs the existing
+   ``Domain.sync_ladybug_to_volume`` + existence-cache update, then
+   immediately calls the new ``TaskManager.complete_current_step`` so
+   the archive row shows **completed** while the upload continues.
+   ``complete_task`` runs right after; the completion message appends
+   *"Registry backup continues in the background."*  The task result
+   dict gains ``archive_to_registry`` and ``archive_background: true``.
+
+3. **Checkbox** — Under *Build mode* on Domain / Build, a new
+   **Archive graph to registry** checkbox (default **on**) posts
+   ``archive_to_registry`` in the ``POST /dtwin/sync/start`` JSON body.
+   When **off**, ``run_build_task`` ``advance_step`` + ``skip_step``
+   marks the archive row as skipped with a plain-English reason; the
+   result dict includes ``archive_skipped: true``.  External REST
+   builds expose the same flag on ``BuildRequest`` (Pydantic default
+   ``True``) for forward compatibility even though the API build path
+   does not execute the session-only archive block today.
+
+Supporting change: ``TaskManager.complete_current_step`` marks the
+current running step completed and increments ``current_step`` without
+starting the next step — the missing primitive for "UI phase done,
+async work continues".
+
+Changes:
+
+1. src/back/core/graphdb/ladybugdb/GraphSyncService.py
+   - ``sync_to_volume(..., compresslevel=1)`` — docstring explains the
+     trade-off; structured log lines for archive size / compress time /
+     upload time.
+   - ``upload_to_volume(..., compresslevel=1)`` passes the kwarg through.
+
+2. src/back/core/task_manager/TaskManager.py
+   - New ``complete_current_step(task_id, message=None)``.
+
+3. src/back/objects/digitaltwin/DigitalTwin.py
+   - ``run_build_task(..., *, archive_to_registry=True)`` — session-only
+     archive branch rewritten per above; ``result_data`` extended;
+     completion message suffix when archiving.
+
+4. src/api/routers/internal/dtwin.py
+   - Reads ``archive_to_registry`` from JSON (default ``True``) and
+     passes it into ``run_build_task``.
+
+5. src/api/routers/digitaltwin.py
+   - ``BuildRequest.archive_to_registry`` field + pass-through to
+     ``run_build_task``.
+
+6. src/front/templates/partials/dtwin/_query_sync.html
+   - ``#syncArchiveToRegistry`` checkbox + short help text (same RBAC
+     disable pattern as build mode radios).
+
+7. src/front/static/query/js/query-sync.js
+   - ``startTripleStoreSync`` posts ``archive_to_registry``;
+     ``_formatBuildLogAsText`` documents archive skip / background in
+     the exported Result block.
+
+8. tests/test_task_manager.py
+   - Three tests for ``complete_current_step``.
+
+9. tests/test_ladybug_sync.py
+   - ``test_sync_uses_fast_gzip_compresslevel`` patches
+     ``tarfile.open`` to assert ``compresslevel=1``.
+
+Modified files:
+- src/back/core/graphdb/ladybugdb/GraphSyncService.py
+- src/back/core/task_manager/TaskManager.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/digitaltwin.py
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/static/query/js/query-sync.js
+- tests/test_task_manager.py
+- tests/test_ladybug_sync.py
+
+Tests: `make test` → **2111 passed in 68.44s** (was 2107 + 4 new).
+
+## Build log UI — honest timing for background registry archive
+
+Context: After moving the LadybugDB → Volume upload into a daemon thread,
+the archive ``TaskStep`` is marked completed in the same millisecond it
+is started (``complete_current_step`` immediately after ``advance_step``).
+The Domain / Build log panel therefore showed **0ms** next to *Backing up
+the graph to the registry*, which looked like a bug even though the
+heavy work was still running asynchronously.
+
+The fix is presentation-only: when ``step.name === "archive"`` and
+``task.result.archive_background`` is true, the time column shows
+**Continues after build** (with a tooltip) instead of a misleading
+duration, a short explanatory line appears under the step title, and the
+exported ``.log`` replaces the bogus duration line with an explicit note
+that the registry copy continues in the background.
+
+Modified files:
+- src/front/static/query/js/query-sync.js
+
+Tests: `make test` → **2111 passed in 66.89s** (unchanged count).

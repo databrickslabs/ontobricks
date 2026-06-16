@@ -104,7 +104,14 @@ yet no `rdfs:subPropertyOf` link is declared between them. This check flags cand
 worth reviewing for a missing sub-property relationship.
 
 **Rule:** When naming new properties, check whether an existing property already covers a
-more general form of the same relationship, and declare the sub-property link if appropriate.
+more general form of the same relationship. If so, EITHER declare `rdfs:subPropertyOf` between
+them, OR merge them into one general property. Never leave similar property names without an
+explicit hierarchy link.
+
+**Concrete examples:**
+- `hasAddress` + `hasBillingAddress` → add `hasBillingAddress rdfs:subPropertyOf hasAddress`
+- `contains` + `containsLineItem` → add `containsLineItem rdfs:subPropertyOf contains`
+- `hasId` + `hasOrderId` + `hasCustomerId` → merge into `hasId` (domain distinguishes usage)
 
 ---
 
@@ -127,8 +134,15 @@ A property name encodes its range type (e.g., `hasPersonName`, `containsEvent`).
 the range in the label couples naming to structure: renaming or changing the range requires
 renaming the property, and it conflates two distinct modelling concerns.
 
-**Rule:** Property names should express the relationship semantics only. Do not embed the
-range class name inside the property name.
+**Rule:** Property names must express only the relationship verb/semantics. NEVER embed the
+range class name inside the property name. The range is declared separately via `rdfs:range`.
+
+**Concrete fix — strip the range word:**
+- `hasPersonName` → `hasName` (range `xsd:string` declared on the property)
+- `containsEvent` → `contains` (range `Event` declared on the property)
+- `hasOrderDate` → `hasDate`
+- `includesProduct` → `includes`
+- `hasCustomerEmail` → `hasEmail`
 
 ---
 
@@ -138,8 +152,14 @@ A property name encodes its domain class (e.g., `personHasName`, `orderContainsI
 fragility as P3.2: naming should express the relationship semantics, not repeat structural
 information already captured by `rdfs:domain` declarations.
 
-**Rule:** Property names should express the relationship semantics only. Do not embed the
-domain class name inside the property name.
+**Rule:** Property names must express only the relationship verb/semantics. NEVER embed the
+domain class name inside the property name. The domain is declared separately via `rdfs:domain`.
+
+**Concrete fix — strip the domain word:**
+- `personHasName` → `hasName`
+- `orderContainsItem` → `containsItem`
+- `customerHasAddress` → `hasAddress`
+- `invoiceHasDate` → `hasDate`
 
 ---
 

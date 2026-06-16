@@ -1,0 +1,393 @@
+## Cohort Discovery — Stage 1 (deterministic engine, UI, persistence, materialisation)
+
+Context: New Digital-Twin feature for business-friendly cohort
+discovery — group entities that travel together using rule-based
+linkage (shared resources via predicates) and compatibility constraints
+(same-value, value-equals, value-in, value-range). The feature is
+purely additive: the existing reasoning engines (OWL 2 RL, SWRL, SPARQL
+CONSTRUCT, Decision Tables, Aggregate Rules) are untouched. Cohort
+rules live in their own slot (`ontology.cohort_rules`) and are
+versioned through the existing registry (Volume + Lakebase). Stage 2
+(NL agent → CohortRule JSON) reuses every Stage 1 endpoint as its
+toolbox — no parallel pipeline.
+
+Design spec: `releasereq/cohort_design.md` (canonical).
+User docs: `docs/cohort_discovery.md` (4 worked examples).
+
+Changes:
+
+1. src/back/core/graph_analysis/models.py
+   - Added `CohortLink`, `CohortCompat`, `CohortUCTarget`, `CohortOutput`,
+     `CohortRule`, `CohortGroup`, `CohortStats`, `CohortResult`
+     dataclasses with `to_dict`/`from_dict` round-trip and
+     `CohortRule.validate()` returning a list of human-readable errors.
+   - Exported `COHORT_COMPAT_TYPES`, `COHORT_GROUP_TYPES`,
+     `COHORT_LINKS_COMBINE` constants.
+
+2. src/back/core/graph_analysis/__init__.py
+   - Added cohort vocabulary fragments (`COHORT_CLASS_FRAGMENT`,
+     `IN_COHORT_FRAGMENT`, `FROM_RULE_FRAGMENT`, `COHORT_SIZE_FRAGMENT`,
+     `COHORT_PATH_FRAGMENT`) plus URI helpers (`cohort_class_uri`,
+     `in_cohort_predicate`, `from_rule_predicate`,
+     `cohort_size_predicate`, `cohort_uri_prefix`, `cohort_uri`).
+
+3. src/back/core/graph_analysis/CohortBuilder.py (new)
+   - Backend-agnostic engine — pulls all triples through
+     `store.query_triples(graph_name)` (single call that works on
+     Delta + Spark SQL and LadybugDB + Cypher) then runs the six-stage
+     pipeline in pure Python (Stages 1–6 mirror the design spec).
+   - `build(rule)` — full pipeline, returns `CohortResult`.
+   - Per-stage helpers consumed by live counters: `count_class_members`,
+     `count_link_edges`, `count_matching_nodes`, `sample_property_values`,
+     `explain_membership` (Why? / Why not?).
+   - `materialize_to_graph(rule, result)` — duck-typed
+     `delete_cohort_triples` (idempotent) + `insert_triples`.
+   - `materialize_to_uc(rule, result, client, target, …)` — CREATE TABLE
+     IF NOT EXISTS partitioned by `rule_id`, DELETE the rule's
+     partition, chunked INSERT (5K rows per chunk).
+   - Content-hash cohort URIs: `<base>/cohort/<rule_id>/c-sha256(sorted(members))[:8]`.
+
+4. src/back/core/triplestore/TripleStoreBackend.py
+   - Added `delete_cohort_triples(table, prefix, in_cohort_predicate)`
+     with default SQL implementation (single DELETE covering both
+     cohort-entity triples and `:inCohort` membership triples).
+
+5. src/back/core/graphdb/ladybugdb/LadybugFlatStore.py
+   - Cypher override of `delete_cohort_triples` — two `MATCH ... DELETE`
+     passes (subject prefix + membership-by-object-prefix) on the flat
+     `Triple` node table.
+
+6. src/back/objects/session/DomainSession.py
+   - `get_empty_domain()` now includes `cohort_rules: []` next to
+     `aggregate_rules`.
+   - Added `cohort_rules` property + setter mirroring the existing
+     rule-list properties.
+   - `export_for_save()` includes `cohort_rules` in the ontology export
+     so registry persistence (Volume V<N>.json + Lakebase JSONB) works
+     out of the box without schema migration.
+
+7. src/back/objects/digitaltwin/DigitalTwin.py
+   - Added cohort domain methods at the end of the class:
+     CRUD (`list_cohort_rules`, `save_cohort_rule`, `delete_cohort_rule`),
+     dry-run + materialise (`dry_run_cohort`, `materialize_cohort`),
+     live-preview helpers (`cohort_class_stats`, `cohort_edge_count`,
+     `cohort_node_count`, `cohort_sample_values`, `cohort_explain`),
+     UC target helpers (`cohort_suggest_uc_target` with provenance,
+     `cohort_probe_uc_write` 3-step read-only probe).
+
+8. src/api/routers/internal/dtwin.py
+   - Added 13 endpoints under `/dtwin/cohorts/*` (listed in
+     `docs/cohort_discovery.md` §8). Builder-role guarded: rule
+     upsert, delete, materialise. Read-only: dry-run, preview
+     counters, sample-values, explain, UC suggest/probe.
+
+9. src/front/config/menu_config.json
+   - Added `cohorts` item to the Digital Twin → Advanced group
+     (icon: `bi-people-fill`).
+
+10. src/front/templates/dtwin.html
+    - Added `query-cohorts.css` link, `cohorts-section` include
+      block, `query-cohorts.js` script tag.
+
+11. src/front/routes/dtwin.py
+    - Added `cohort_rules_count` to `reasoning_ctx`.
+
+12. src/front/templates/partials/dtwin/_query_cohorts.html (new)
+    - 5-section form (Identity, What, Linked when, Compatibility,
+      Group type) with sticky action bar, left rail (saved rules),
+      right preview pane (cohorts + Why? / Why not? input), and
+      three Bootstrap modals (Templates, Configure outputs with UC
+      probe, View JSON, Materialise confirmation).
+
+13. src/front/static/query/js/query-cohorts.js (new)
+    - `CohortModule` — form state, debounced live counters
+      (class-stats, edge-count, node-count), sample-values picker,
+      dry-run + preview rendering, save/delete/materialise round-
+      trips, UC target Auto-pick + Test write access, four built-in
+      templates, JSON view modal.
+
+14. src/front/static/query/css/query-cohorts.css (new)
+    - 3-column grid (rail / form / preview), step badges, counter
+      pills, group-type tiles with `:has(input:checked)` styling,
+      sticky action bar, preview panel + probe rows.
+
+15. tests/test_cohort_models.py (new) — 18 tests covering
+    validation, round-trip, edge cases (`value_in` empty list,
+    `value_range` requires bound, `min_size` lower bound, etc.).
+
+16. tests/test_cohort_builder.py (new) — 18 tests covering all six
+    pipeline stages, content-hash URI stability, `links_combine`
+    union vs intersection, no-links → complete graph on survivors,
+    strict (clique) vs connected modes, min_size filter, empty
+    graph, `explain_membership` (in/out cases), graph + UC
+    materialisation (DELETE-then-INSERT idempotency).
+
+17. tests/test_dtwin_cohort.py (new) — 23 tests covering CRUD
+    (upsert, delete unknown, persistence into `export_for_save`
+    payload), dry-run + materialise, live-preview helpers, UC
+    target suggest (domain-settings → metadata → registry
+    fallback), `cohort_probe_uc_write` (no client, missing input,
+    catalog missing, full happy path with compatible existing
+    table, table-missing fallback to grants).
+
+18. docs/cohort_discovery.md (new) — user/developer reference:
+    mental model, 5-section UX walkthrough, output destinations
+    (graph triples + UC Delta), persistence in both registry
+    backends, 6-stage algorithm summary (deferring details to
+    `releasereq/cohort_design.md`), idempotency guarantees, four
+    worked examples (consulting, healthcare, manufacturing,
+    education), API summary, Stage 2 outlook.
+
+19. README.md
+    - Added bullet under "Knowledge Graph Features" describing
+      cohort discovery and linking to `docs/cohort_discovery.md`.
+
+Files modified:
+  - src/back/core/graph_analysis/models.py
+  - src/back/core/graph_analysis/__init__.py
+  - src/back/core/graph_analysis/CohortBuilder.py (new)
+  - src/back/core/triplestore/TripleStoreBackend.py
+  - src/back/core/graphdb/ladybugdb/LadybugFlatStore.py
+  - src/back/objects/session/DomainSession.py
+  - src/back/objects/digitaltwin/DigitalTwin.py
+  - src/api/routers/internal/dtwin.py
+  - src/front/config/menu_config.json
+  - src/front/templates/dtwin.html
+  - src/front/routes/dtwin.py
+  - src/front/templates/partials/dtwin/_query_cohorts.html (new)
+  - src/front/static/query/js/query-cohorts.js (new)
+  - src/front/static/query/css/query-cohorts.css (new)
+  - tests/test_cohort_models.py (new)
+  - tests/test_cohort_builder.py (new)
+  - tests/test_dtwin_cohort.py (new)
+  - docs/cohort_discovery.md (new)
+  - README.md
+
+Tests: All 1872 tests pass (0 failures, 0 errors). 59 new tests
+added across the three cohort test files.
+
+
+## Cohort Discovery — Stage 2 (natural-language rule-generation agent)
+
+Context: Stage 2 of the Cohort Discovery feature. A dedicated agent
+(`agents/agent_cohort/`) translates free-text prompts like *"find
+consultants who can be staffed together — exempts only with exempts"*
+into a validated `CohortRule` JSON. The agent reuses every Stage 1
+endpoint as its toolbox (no parallel pipeline) and never writes — the
+user reviews and saves the proposed rule in the existing form. UI
+adds a single-line prompt input above the cohorts page with a
+collapsible agent trace (tool calls, durations, iterations, tokens).
+
+Design spec: `releasereq/cohort_design.md` §12.
+User docs: `docs/cohort_discovery.md` §9.
+
+Changes:
+
+1. src/agents/agent_cohort/__init__.py (new)
+   - Stage 2 agent package; exports `run_agent` and `AgentResult`.
+
+2. src/agents/agent_cohort/tools.py (new)
+   - Six tools wired to existing Stage 1 endpoints:
+     `list_classes` (compact ontology summary), `list_properties_of`
+     (data + object properties for a class, filtered by domain),
+     `count_class_members` (live class instance count),
+     `sample_values_of` (distinct property values, limit clamped to
+     30), `propose_rule` (client-side `CohortRule.validate()`; on
+     success parks the canonical dict on `ToolContext.metadata`),
+     `dry_run` (cluster body trimmed to top 5 sizes for prompt
+     economy).
+   - All read-only except `propose_rule`, which only validates.
+
+3. src/agents/agent_cohort/engine.py (new)
+   - One-shot agent loop mirroring `agent_dtwin_chat/engine.py`
+     (same retry, trace decorator, OpenAI-compatible schema). Adds
+     `AgentResult.proposed_rule` populated from `ctx.metadata`.
+   - System prompt enforces the 7-step workflow (introspect → propose
+     → optionally dry-run once → terse markdown reply) and forbids
+     write-side intent. 10-iteration cap.
+
+4. src/api/routers/internal/dtwin.py
+   - Added `POST /dtwin/cohorts/agent` route (right after the cohort
+     UC probe routes). Body: `{prompt, history?}`. Response:
+     `{success, rule, reply, tools, iterations, usage}`. Reuses
+     `_chat_resolve_domain_name` and `_auto_discover_llm_endpoint`.
+     Forwards session cookies + Databricks-Apps `X-Forwarded-*`
+     headers so loopback tool calls authenticate as the same user.
+   - No write-side dependency declared (the agent does not save
+     anything; saving still goes through the BUILDER-protected
+     `POST /cohorts/rules`).
+
+5. src/front/templates/partials/dtwin/_query_cohorts.html
+   - Added the *Cohort Discovery agent* banner above the form: a
+     full-width prompt input + *Generate rule* button, with a
+     collapsible agent trace section. Pressing Enter triggers the
+     run.
+
+6. src/front/static/query/js/query-cohorts.js
+   - Added `runAgent()`, `_renderAgentTrace()`, `_applyRuleFromAgent()`.
+     Hits `POST /dtwin/cohorts/agent`, hydrates the form with the
+     proposed rule (as a draft — no `activeRuleId` is set), and
+     renders the tool-call list with durations.
+
+7. src/front/static/query/css/query-cohorts.css
+   - Added `.cohort-agent-banner` (dashed primary border, light tint)
+     and `.cohort-agent-trace` (scrollable 220px max-height list).
+
+8. tests/test_agent_cohort_tools.py (new)
+   - 19 unit tests, one block per tool. Uses `httpx.MockTransport` to
+     swap out the loopback HTTP client. Covers happy path, missing
+     args, backend failure, HTTP error surfaces, limit clamping, and
+     the deterministic offline behaviour of `propose_rule` (parks
+     valid rules on `ctx.metadata`, surfaces validation errors,
+     refuses non-dict inputs).
+
+9. tests/test_agent_cohort_engine.py (new)
+   - 3 integration tests that script the LLM through
+     `unittest.mock.patch` and verify: full round-trip yields
+     `AgentResult.proposed_rule` matching the rule the LLM proposed;
+     invalid `propose_rule` arguments leave `proposed_rule=None`;
+     LLM failures are surfaced via `result.error`.
+
+10. docs/cohort_discovery.md
+    - Replaced the *Stage 2 (planned)* section with the shipped
+      version: tool table, workflow, API contract, UX walkthrough,
+      and safety guarantees.
+
+Files modified:
+  - src/agents/agent_cohort/__init__.py (new)
+  - src/agents/agent_cohort/tools.py (new)
+  - src/agents/agent_cohort/engine.py (new)
+  - src/api/routers/internal/dtwin.py
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/static/query/js/query-cohorts.js
+  - src/front/static/query/css/query-cohorts.css
+  - tests/test_agent_cohort_tools.py (new)
+  - tests/test_agent_cohort_engine.py (new)
+  - docs/cohort_discovery.md
+
+Tests: All 1974 tests pass (0 failures, 0 errors). 22 new tests
+added across the two Stage 2 test files (19 tools + 3 engine).
+
+
+## Cohort Discovery — Stage 2 fix: list_properties_of returned empty arrays
+
+Context: User report. Prompt *"group consultants that could be staffed
+as a team — Staffed together is defined at the project level, Exempt
+is only Staffed with Exempt"* triggered the agent to comment *"The
+property listings are returning empty despite the class metadata
+showing property counts. This may be a loading/indexing issue. Let me
+try common property URI patterns and propose the rule…"* and then
+hallucinate URIs.
+
+Root causes (two independent shape bugs in
+`agents/agent_cohort/tools.py::tool_list_properties_of`):
+
+1. **dataProperties URIs missing** — wizard / RDFS-only / industry
+   importer flows store `{"name": "status", "label": "..."}` entries
+   without a `uri` key. The tool's `if not uri: continue` silently
+   dropped them, leaving the class report `data_property_count=2` but
+   `data_properties=[]`.
+2. **rdfs:domain stripped to local name** — `OntologyParser` (and
+   wizard ontologies) store `domain: "Consultant"` (local name, often
+   lowercased) rather than the full class URI. The tool's strict
+   `domain != class_uri` filter dropped *every* object property,
+   leaving `object_properties=[]` even when the OWL graph was
+   well-formed.
+
+Fix:
+
+1. src/agents/agent_cohort/tools.py
+   - Added `_local_name(uri)` and `_ensure_uri(node, base_uri)`
+     helpers; the latter synthesises `{base_uri}{name}` when an entry
+     lacks `uri`/`iri`/`id`.
+   - Added `_domain_matches(prop_domain, class_uri)` — accepts full
+     URI, local-name, or case-insensitive local-name match.
+   - `tool_list_properties_of` now:
+       * synthesises URIs (flags entries with `uri_synthesised: true`),
+       * supplements `data_properties` with global `DatatypeProperty`
+         entries whose domain matches via `_domain_matches`,
+       * filters object properties via `_domain_matches`,
+       * **falls back** to the full object-property list flagged with
+         `domain_unknown: true` when no property's `domain` resolves
+         (mirroring the cohort form's permissive picker, which already
+         shows all object properties without domain filtering).
+   - Response now also returns the resolved `base_uri` for client
+     debugging.
+
+2. src/agents/agent_cohort/engine.py
+   - Updated the system prompt's step-4 guidance: when
+     `object_properties_domain_unknown=true` the agent should pick by
+     label/name rather than guessing; when both arrays are empty it
+     should ask the user instead of fabricating URIs.
+
+3. tests/test_agent_cohort_tools.py
+   - 5 new regression tests under `TestListPropertiesOf`:
+     * `test_owl_parser_local_name_domain_is_matched` — domain stored
+       as `"Consultant"` matches `class_uri` ending in `/Consultant`.
+     * `test_lowercased_domain_is_matched` — `domain: "consultant"`.
+     * `test_missing_uri_is_synthesised_from_base` — entries with only
+       `name` / `localName` get a synthesised URI flagged accordingly.
+     * `test_no_matching_domain_falls_back_to_all_object_properties` —
+       fallback path with `domain_unknown: true`.
+     * `test_global_datatype_props_supplement_class_block` — global
+       `DatatypeProperty` entries with matching domain land in
+       `data_properties` even when absent from `class.dataProperties`.
+
+Files modified:
+  - src/agents/agent_cohort/tools.py
+  - src/agents/agent_cohort/engine.py
+  - tests/test_agent_cohort_tools.py
+
+Tests: All 1979 tests pass (0 failures, 0 errors). 5 new regression
+tests added.
+
+
+## Cohort Discovery — UI restructure: tabs + right pane
+
+Context: User-requested layout change. The cohort page now has two
+tabs (Describe | Build rule) and a dedicated right pane (outside the
+tabs) hosting the *Save rule* button + saved-rules list. Saving is
+always reachable regardless of which tab is active. Preview becomes a
+full-width drawer below the layout.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_cohorts.html
+   - Wrapped the main content in a `nav-tabs` + `tab-content` block:
+     * Tab 1 *Describe* — the NL agent prompt panel (no longer a top
+       banner). Includes a one-line caption telling users to switch
+       to *Build rule* afterwards.
+     * Tab 2 *Build rule* — sections 1–5 + the action bar (Preview /
+       Materialise / Configure outputs / View JSON / status). The
+       Save button is removed from the action bar.
+   - Replaced the left rail with a right pane (`.cohort-rail`) that
+     contains: a full-width primary *Save rule* button at the top,
+     followed by the *Saved rules* header + list. Counter and list
+     ids unchanged so JS keeps working.
+   - Moved the Preview pane out of `.cohort-layout` into a sibling
+     `<aside>` immediately below, displayed full-width when active.
+
+2. src/front/static/query/css/query-cohorts.css
+   - `.cohort-layout` switched from `240px 1fr 480px` to
+     `minmax(0, 1fr) 320px` (main + right pane). Single column under
+     992px.
+   - Removed the old `.cohort-preview` grid override (now rendered
+     full-width as an inline-flow card).
+   - Added `.cohort-tabs-wrap`, `.cohort-nav-tabs`, `.cohort-tab-content`
+     for tab styling.
+   - Softened the `.cohort-agent-banner` border (it's now inside the
+     Describe tab, not a hero banner).
+
+3. src/front/static/query/js/query-cohorts.js
+   - Added `_showBuildTab()` helper using `bootstrap.Tab.getOrCreateInstance`.
+   - Auto-switches to *Build rule* after:
+     * the agent proposes a rule (`_applyRuleFromAgent`),
+     * the user clicks a saved rule (`loadRule`),
+     * the user picks a template.
+
+Files modified:
+  - src/front/templates/partials/dtwin/_query_cohorts.html
+  - src/front/static/query/css/query-cohorts.css
+  - src/front/static/query/js/query-cohorts.js
+
+Tests: All 1979 tests pass (UI-only change; no Python tests needed).

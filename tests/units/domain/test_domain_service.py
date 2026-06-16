@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import MagicMock
 from back.objects.domain import Domain
+from back.core.errors import ValidationError
 
 
 def _mock_domain(
@@ -92,6 +93,27 @@ class TestSaveDomainInfo:
         Domain(domain).save_domain_info({"base_uri": "http://new.org#"})
         assert domain.ontology["base_uri"] == "http://new.org#"
 
+    def test_save_review_quorum(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"review_quorum": 3})
+        assert domain.info["review_quorum"] == 3
+        assert result["review_quorum"] == 3
+
+    def test_review_quorum_clamped_to_minimum_one(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info({"review_quorum": 0})
+        assert domain.info["review_quorum"] == 1
+
+    def test_review_quorum_invalid_falls_back_to_one(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info({"review_quorum": "abc"})
+        assert domain.info["review_quorum"] == 1
+
+    def test_review_quorum_defaults_when_absent(self):
+        domain = _mock_domain()
+        result = Domain(domain).get_domain_info()
+        assert result["info"]["review_quorum"] == 1
+
 
 class TestGetDomainTemplateData:
     def test_returns_fields(self):
@@ -100,3 +122,56 @@ class TestGetDomainTemplateData:
         assert data["name"] == "Test"
         assert data["has_ontology"] is True
         assert data["has_mapping"] is False
+
+
+class TestAuditTrail:
+    def _svc(self, events, runs, configured=True, versions=("2", "1")):
+        svc = MagicMock()
+        svc.cfg.is_configured = configured
+        svc.list_review_events.return_value = events
+        svc.load_build_runs.return_value = runs
+        svc.list_versions_sorted.return_value = list(versions)
+        return svc
+
+    def test_merges_review_events_and_build_runs(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        events = [{"action": "submitted", "comment": "go", "created_at": "t1"}]
+        runs = [{"id": 1, "status": "success", "started_at": "t2"}]
+        result = Domain(domain).audit_trail_result(
+            self._svc(events, runs), limit=10
+        )
+        assert result["success"] is True
+        assert result["domain_folder"] == "test_domain"
+        assert result["events"] == events
+        assert result["runs"] == runs
+
+    def test_returns_versions_for_dropdown(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        domain.current_version = "2"
+        result = Domain(domain).audit_trail_result(
+            self._svc([], [], versions=("2", "1"))
+        )
+        assert result["versions"] == ["2", "1"]
+        assert result["current_version"] == "2"
+
+    def test_passes_folder_and_limit_to_store(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        svc = self._svc([], [])
+        Domain(domain).audit_trail_result(svc, limit=42)
+        svc.list_review_events.assert_called_once_with("test_domain")
+        svc.load_build_runs.assert_called_once_with("test_domain", limit=42)
+
+    def test_requires_configured_registry(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        with pytest.raises(ValidationError):
+            Domain(domain).audit_trail_result(self._svc([], [], configured=False))
+
+    def test_requires_saved_domain(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = ""
+        with pytest.raises(ValidationError):
+            Domain(domain).audit_trail_result(self._svc([], []))

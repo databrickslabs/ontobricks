@@ -1,0 +1,124 @@
+name: Nightly (G3 — property tests + E2E + external smoke)
+
+on:
+  schedule:
+    # 02:00 UTC every day
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  property:
+    name: Property tests (Hypothesis, W3C translators)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run property-based tests
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_TOKEN: test-token
+          DATABRICKS_SQL_WAREHOUSE_ID: test-warehouse
+          SECRET_KEY: test-secret-key
+        run: |
+          uv run pytest tests/ -m property -v --tb=short \
+            --hypothesis-seed=0 \
+            --hypothesis-show-statistics
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Install Playwright browsers
+        run: uv run playwright install --with-deps chromium
+
+      - name: Run E2E suite
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_TOKEN: test-token
+          DATABRICKS_SQL_WAREHOUSE_ID: test-warehouse
+          SECRET_KEY: test-secret-key
+        run: uv run pytest tests/e2e/ -m e2e -v --tb=short
+
+  external-smoke:
+    name: External smoke probe (fevm-ontobricks-int)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # External tier — only on schedule, never on PR. Requires repository secrets.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Smoke probe against integration workspace
+        env:
+          # The integration test environment, per project §5/§9 of the methodology plan.
+          ONTOBRICKS_INT_URL: https://fevm-ontobricks-int.cloud.databricks.com
+          DATABRICKS_HOST: ${{ secrets.ONTOBRICKS_INT_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.ONTOBRICKS_INT_TOKEN }}
+          DATABRICKS_SQL_WAREHOUSE_ID: ${{ secrets.ONTOBRICKS_INT_WAREHOUSE_ID }}
+          SECRET_KEY: ${{ secrets.ONTOBRICKS_INT_SECRET_KEY }}
+        run: |
+          # Probe MCP server health endpoint + a representative tool call.
+          # If the workspace isn't reachable or auth fails, the run is reported but no PR is gated.
+          uv run pytest tests/ -m external -v --tb=short || echo "external probe failed (non-blocking)"
+
+  open-issue-on-failure:
+    name: Open issue on regression
+    runs-on: ubuntu-latest
+    needs: [property, e2e, external-smoke]
+    if: failure()
+    steps:
+      - uses: actions/checkout@v6
+      - name: Create or update tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue list --label nightly-failure --state open --json number --jq '.[0].number' > /tmp/issue || true
+          if [ -s /tmp/issue ]; then
+            num=$(cat /tmp/issue)
+            gh issue comment "$num" --body "Nightly run failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          else
+            gh issue create --label nightly-failure \
+              --title "Nightly tests failed ($(date -u +%Y-%m-%d))" \
+              --body "Failure: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi

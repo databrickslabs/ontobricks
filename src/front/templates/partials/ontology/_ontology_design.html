@@ -10,10 +10,10 @@
                 <!-- Edit/View Mode Toggle -->
                 <div class="btn-group btn-group-sm me-2" id="designModeToggle">
                     <button type="button" class="btn btn-outline-primary active" id="viewModeBtn" title="View Only - layout changes allowed">
-                        <i class="bi bi-eye me-1"></i>View
+                        <i class="bi bi-eye"></i>
                     </button>
                     <button type="button" class="btn btn-outline-primary" id="editModeBtn" title="Edit Mode - full editing">
-                        <i class="bi bi-pencil me-1"></i>Edit
+                        <i class="bi bi-pencil"></i>
                     </button>
                 </div>
                 <span class="text-muted">|</span>
@@ -32,6 +32,14 @@
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="newAssistantBtn"
+                        title="New Assistant — build a Business View from selected entities and their ontology neighbours">
+                    <i class="bi bi-magic"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleCollapseAllBtn"
+                        title="Collapse all entities in this view">
+                    <i class="bi bi-arrows-collapse"></i>
+                </button>
                 <span class="text-muted">|</span>
                 <button type="button" class="btn btn-sm btn-outline-warning" id="createGroupFromViewBtn"
                         onclick="createGroupFromView()" title="Create a Knowledge Graph group from this view's entities">

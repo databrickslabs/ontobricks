@@ -35,6 +35,13 @@
             <button class="btn btn-sm btn-outline-secondary" id="mappingMapRefresh" title="Refresh Designer" onclick="refreshMappingDesign()">
                 <i class="bi bi-arrow-clockwise"></i>
             </button>
+            <div class="vr mx-1"></div>
+            <button class="btn btn-sm btn-outline-warning" id="mappingAutoExclude" title="Auto-exclude: unmapped, orphan, and pure-parent entities (no object-property relationships)" onclick="autoExcludeAll()">
+                <i class="bi bi-magic"></i> Auto-Exclude
+            </button>
+            <button class="btn btn-sm btn-outline-success" id="mappingIncludeExcluded" title="Include all excluded entities and relationships" onclick="includeAllExcluded()">
+                <i class="bi bi-eye"></i> Include excluded
+            </button>
         </div>
     </div>
     

@@ -7,6 +7,7 @@ window.DataQualityModule = {
     ontologyClasses: [],
     ontologyProperties: [],
     _shaclPanelOpen: false,
+    _suggestions: [],
 
     CATEGORIES: [
         { id: 'completeness', label: 'Completeness', icon: 'bi-check2-all',   badge: 'bg-info' },
@@ -651,6 +652,21 @@ window.DataQualityModule = {
             const elMax = document.getElementById('dqParamMaxCount');
             if (elMin) elMin.value = params['sh:minCount'] ?? '';
             if (elMax) elMax.value = params['sh:maxCount'] ?? '';
+        } else if (cat === 'consistency') {
+            const typeEl = document.getElementById('dqParamConsistencyType');
+            if (params['sh:datatype']) {
+                if (typeEl) { typeEl.value = 'sh:datatype'; this.onConsistencyTypeChange(); }
+                const dt = document.getElementById('dqParamDatatype');
+                if (dt) {
+                    // params stores "xsd:string" — strip the "xsd:" prefix for the select value
+                    const dtVal = (params['sh:datatype'] || '').replace(/^xsd:/, '');
+                    dt.value = dtVal || params['sh:datatype'];
+                }
+            } else if (params['sh:class']) {
+                if (typeEl) { typeEl.value = 'sh:class'; this.onConsistencyTypeChange(); }
+                const tgt = document.getElementById('dqParamTargetType');
+                if (tgt) tgt.value = params['sh:class'];
+            }
         } else if (cat === 'conformance') {
             if (params['sh:pattern']) {
                 const el = document.getElementById('dqParamConformanceType');
@@ -664,6 +680,22 @@ window.DataQualityModule = {
                 this.onConformanceTypeChange();
                 const v = document.getElementById('dqParamHasValue');
                 if (v) v.value = params['sh:hasValue'];
+            } else if (params['sh:minInclusive'] !== undefined || params['sh:maxInclusive'] !== undefined) {
+                const el = document.getElementById('dqParamConformanceType');
+                if (el) el.value = 'sh:minInclusive';
+                this.onConformanceTypeChange();
+                const min = document.getElementById('dqParamRangeMin');
+                const max = document.getElementById('dqParamRangeMax');
+                if (min && params['sh:minInclusive'] !== undefined) min.value = params['sh:minInclusive'];
+                if (max && params['sh:maxInclusive'] !== undefined) max.value = params['sh:maxInclusive'];
+            } else if (params['sh:minLength'] !== undefined || params['sh:maxLength'] !== undefined) {
+                const el = document.getElementById('dqParamConformanceType');
+                if (el) el.value = 'sh:minLength';
+                this.onConformanceTypeChange();
+                const min = document.getElementById('dqParamLenMin');
+                const max = document.getElementById('dqParamLenMax');
+                if (min && params['sh:minLength'] !== undefined) min.value = params['sh:minLength'];
+                if (max && params['sh:maxLength'] !== undefined) max.value = params['sh:maxLength'];
             }
         }
     },
@@ -899,6 +931,168 @@ window.DataQualityModule = {
         } catch (e) {
             console.error('[DataQuality] Import error:', e);
             showNotification('Error importing SHACL: ' + (e.message || e), 'error');
+        }
+    },
+
+    // --- Cleanup stale rules ---
+
+    async cleanupShapes() {
+        if (window.isActiveVersion === false) return;
+
+        const confirmed = await showConfirmDialog({
+            title: 'Clean up rules',
+            message: 'This will remove all rules whose target class or property no longer exists in the ontology. Continue?',
+            confirmText: 'Clean up',
+            confirmClass: 'btn-warning',
+            icon: 'brush',
+        });
+        if (!confirmed) return;
+
+        try {
+            const resp = await fetch('/ontology/dataquality/cleanup', {
+                method: 'POST',
+                credentials: 'same-origin',
+            });
+            const data = await resp.json();
+            if (data.success) {
+                this.shapes = data.shapes || [];
+                this.renderAll();
+                showNotification(
+                    data.removed > 0
+                        ? `Removed ${data.removed} stale rule(s)`
+                        : 'All rules are up to date — nothing removed',
+                    data.removed > 0 ? 'success' : 'info',
+                );
+            } else {
+                showNotification(data.message || 'Cleanup failed', 'error');
+            }
+        } catch (e) {
+            console.error('[DataQuality] Cleanup error:', e);
+            showNotification('Error during cleanup: ' + (e.message || e), 'error');
+        }
+    },
+
+    // --- Auto-generate rules from ontology ---
+
+    async openSuggestModal() {
+        const loadingEl = document.getElementById('dqSuggestLoading');
+        const emptyEl = document.getElementById('dqSuggestEmpty');
+        const listEl = document.getElementById('dqSuggestList');
+        const acceptBtn = document.getElementById('dqSuggestAcceptBtn');
+
+        if (loadingEl) loadingEl.style.display = '';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (listEl) listEl.style.display = 'none';
+        if (acceptBtn) acceptBtn.style.display = 'none';
+
+        this._suggestions = [];
+        new bootstrap.Modal(document.getElementById('dqSuggestModal')).show();
+
+        try {
+            const resp = await fetch('/ontology/dataquality/suggest', { credentials: 'same-origin' });
+            const data = await resp.json();
+            if (loadingEl) loadingEl.style.display = 'none';
+
+            if (!data.success) {
+                showNotification(data.message || 'Suggestion failed', 'error');
+                return;
+            }
+
+            this._suggestions = data.suggestions || [];
+
+            if (this._suggestions.length === 0) {
+                if (emptyEl) emptyEl.style.display = '';
+                return;
+            }
+
+            if (listEl) listEl.style.display = '';
+            if (acceptBtn) acceptBtn.style.display = '';
+
+            const countEl = document.getElementById('dqSuggestCount');
+            if (countEl) countEl.textContent = `${this._suggestions.length} rule(s) suggested`;
+
+            this._renderSuggestions();
+        } catch (e) {
+            if (loadingEl) loadingEl.style.display = 'none';
+            console.error('[DataQuality] Suggest error:', e);
+            showNotification('Error fetching suggestions: ' + (e.message || e), 'error');
+        }
+    },
+
+    _renderSuggestions() {
+        const container = document.getElementById('dqSuggestItems');
+        if (!container) return;
+        container.innerHTML = this._suggestions.map((s, i) => {
+            const cat = this.CATEGORIES.find(c => c.id === s.category) || this.CATEGORIES[0];
+            const paramsStr = s.parameters
+                ? JSON.stringify(s.parameters).slice(0, 80)
+                : '';
+            return `
+            <label for="dqSuggestChk_${i}"
+                   class="d-flex align-items-start gap-3 border rounded px-3 py-2 mb-2 cursor-pointer
+                          dq-suggest-item"
+                   style="cursor:pointer">
+                <input class="form-check-input flex-shrink-0 mt-1" type="checkbox"
+                       id="dqSuggestChk_${i}" data-suggest-idx="${i}" checked>
+                <div class="flex-grow-1 min-w-0">
+                    <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                        <span class="badge ${cat.badge} bg-opacity-75">
+                            <i class="bi ${cat.icon} me-1"></i>${cat.label}
+                        </span>
+                        ${s.target_class
+                            ? `<span class="text-muted small fw-semibold">${this._escHtml(s.target_class)}</span>`
+                            : ''}
+                        ${s.property_path
+                            ? `<span class="text-muted small">· ${this._escHtml(s.property_path)}</span>`
+                            : ''}
+                    </div>
+                    <div class="small fw-medium text-body">${this._escHtml(s.message || s.label || s.id)}</div>
+                    <div class="text-muted small mt-1">
+                        <code class="text-secondary">${this._escHtml(s.shacl_type)}</code>
+                        ${paramsStr ? `<span class="ms-1">— ${this._escHtml(paramsStr)}</span>` : ''}
+                    </div>
+                </div>
+            </label>`;
+        }).join('');
+    },
+
+    selectAllSuggestions(checked) {
+        document.querySelectorAll('[data-suggest-idx]').forEach(el => { el.checked = checked; });
+    },
+
+    async acceptSuggestions() {
+        const selected = [];
+        document.querySelectorAll('[data-suggest-idx]').forEach(el => {
+            if (el.checked) {
+                const idx = parseInt(el.dataset.suggestIdx, 10);
+                if (this._suggestions[idx]) selected.push(this._suggestions[idx]);
+            }
+        });
+
+        if (selected.length === 0) {
+            showNotification('No rules selected', 'warning');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/ontology/dataquality/accept-suggestions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ shapes: selected }),
+            });
+            const data = await resp.json();
+            if (data.success) {
+                this.shapes = data.shapes || [];
+                this.renderAll();
+                bootstrap.Modal.getInstance(document.getElementById('dqSuggestModal'))?.hide();
+                showNotification(`Added ${data.added} rule(s)`, 'success');
+            } else {
+                showNotification(data.message || 'Accept failed', 'error');
+            }
+        } catch (e) {
+            console.error('[DataQuality] Accept error:', e);
+            showNotification('Error accepting suggestions: ' + (e.message || e), 'error');
         }
     },
 };

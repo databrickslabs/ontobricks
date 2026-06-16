@@ -1,0 +1,72 @@
+name: Changelog presence gate (M3.P2 — closes gap #9)
+
+# Any PR that touches src/ or tests/ must include a matching changelogs/ diff.
+# .cursorrules: "After ANY code change, update the changelog in /changelogs/."
+#
+# Bypass: label the PR with `no-changelog`. CI then logs a warning instead of failing.
+# Use sparingly: typo fixes, README-only changes, CI-config-only changes.
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changelog:
+    name: Changelog presence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect bypass label
+        id: label
+        run: |
+          labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          if echo "$labels" | grep -q '"no-changelog"'; then
+            echo "bypass=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bypass=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check that changelogs/ is touched
+        if: steps.label.outputs.bypass == 'false'
+        run: |
+          set -e
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          changed=$(git diff --name-only "$base" "$head")
+
+          touches_code=false
+          touches_changelog=false
+
+          while IFS= read -r f; do
+            case "$f" in
+              src/*|tests/*)     touches_code=true ;;
+              changelogs/*)      touches_changelog=true ;;
+            esac
+          done <<<"$changed"
+
+          if [ "$touches_code" = "true" ] && [ "$touches_changelog" = "false" ]; then
+            echo "::error::PR changed src/ or tests/ but did not touch changelogs/."
+            echo ""
+            echo "Fix: add an entry to changelogs/$(date -u +%Y-%m-%d).log per changelogs/README.md."
+            echo "Bypass (sparingly): apply the 'no-changelog' label to this PR."
+            exit 1
+          fi
+          echo "Changelog gate: pass."
+
+      - name: Bypass label active
+        if: steps.label.outputs.bypass == 'true'
+        run: |
+          echo "::warning::Changelog gate bypassed via 'no-changelog' label. Reviewer should confirm this is appropriate."

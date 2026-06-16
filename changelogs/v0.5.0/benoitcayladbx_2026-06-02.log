@@ -1,0 +1,103 @@
+## Fix R2RML import URI mismatch (hash vs slash) so mappings apply
+
+Context: After importing an R2RML mapping file, the import reported success
+and persisted the mappings, but they showed as "Not Mapped" in the Mapping
+Designer / Manual page and the knowledge graph could not be built. Root cause:
+ontology entity/property URIs are hash-terminated (e.g.
+`https://example.com/MyOntology#Capacity`) while imported R2RML class/predicate
+URIs are slash-separated (`.../Capacity`), and every designer join uses exact
+string equality. Diagnostics and re-export worked because they iterate the
+stored assignment directly. Fix normalizes imported URIs to the ontology's
+canonical URIs at import time, by local name (exact-case then case-insensitive),
+so all downstream consumers (designer, diagnostics, export, KG build) agree.
+
+Changes:
+
+1. src/back/objects/mapping/Mapping.py
+   Added `_canonicalize_imported_uris` (static) and called it from
+   `parse_r2rml` to rewrite imported `ontology_class` / `property` URIs to the
+   loaded ontology's canonical URIs via local-name lookup; unmatched URIs and
+   the no-ontology case are left untouched.
+2. tests/units/mapping/test_mapping_service.py
+   Added `TestParseR2rmlUriNormalization` covering slash→hash rewrite for
+   entity class and relationship property URIs, unmatched-URI passthrough, and
+   the empty-ontology no-op.
+
+Modified files:
+- src/back/objects/mapping/Mapping.py
+- tests/units/mapping/test_mapping_service.py
+
+Tests: uv run pytest -q → 2411 passed in 188.33s
+
+## Add build-run tracing (analytics) to the registry
+
+Context: Builds (Digital Twin triple-store materializations) left no durable
+trace — manual/API builds only existed as in-memory TaskManager tasks, and the
+scheduler kept a thin, capped `schedule_runs` history with limited stats. There
+was no way to analyse build history (durations, counts, success rate) per
+domain/version after the fact. This adds a new append-only `build_runs` table in
+the Lakebase registry that records one immutable row per build across every path
+(UI session, external API, scheduler), linked to the `domains` row and keyed by
+the tuple `(domain_id, version)`. Many rows per tuple are expected; the "active"
+build for a `(domain, version)` is derived as the most recent successful run by
+`started_at` (no flag). The table self-heals on upgraded deployments via a lazy
+`CREATE TABLE IF NOT EXISTS` guard, so no manual re-Initialize is needed. A read
+API and a registry "Build Analytics" panel surface the history and aggregates.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/schema.sql
+   Added the `build_runs` table (FK `domain_id -> domains(id)` ON DELETE CASCADE,
+   version + build_kind + status + timings + counts + engine/sync + jsonb
+   phase_times/stats) and `idx_build_runs_domain_version` index.
+2. src/back/objects/registry/store/base.py
+   Added `BuildRunEntry` TypedDict and three abstract methods —
+   `record_build_run`, `load_build_runs`, `build_analytics`.
+3. src/back/objects/registry/store/lakebase/store.py
+   Implemented the three methods with psycopg3 plus a guarded
+   `_ensure_build_runs_table()` (lazy idempotent CREATE for old deployments);
+   registered `build_runs` in `_KNOWN_TABLES` and the module docstring.
+4. src/back/objects/registry/RegistryService.py
+   Added thin facade wrappers `record_build_run` / `load_build_runs` /
+   `build_analytics` delegating to the store (best-effort on write).
+5. src/back/objects/digitaltwin/_build_pipeline.py
+   Record a build-run trace exactly once per build via a `_record_build_run`
+   helper wired into `_complete_task` (success), the empty-view early-complete,
+   `_fail_unexpected` (error), the cancel path, and a `finally` guard for
+   phase-level failures; resolve folder/version/engine/counts from pipeline state.
+6. src/back/objects/registry/scheduler.py
+   Record a `scheduled` build-run in `_run_scheduled_build`'s finally block
+   (independent of the legacy `schedule_runs` write).
+7. src/back/objects/domain/SettingsService.py
+   Added `get_build_runs_result` and `get_build_analytics_result`.
+8. src/api/routers/internal/settings.py
+   Added `GET /settings/build-runs/{domain}` and
+   `GET /settings/build-analytics/{domain}` (optional `version`, `limit`).
+9. src/front/config/menu_config.json
+   Added a "Build Analytics" item to the registry Automation group.
+10. src/front/templates/partials/registry/_registry_build_analytics.html,
+    src/front/static/config/js/build-analytics.js,
+    src/front/templates/registry.html
+    New panel (domain + version selectors, summary cards, runs table with the
+    active build highlighted) and its wiring/script include.
+11. tests/units/registry/test_registry_store.py
+    Implemented the new methods on the in-memory fake and added contract tests
+    for round-trip ordering, version filtering, analytics aggregation, and the
+    empty-domain case.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/back/objects/registry/scheduler.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/front/config/menu_config.json
+- src/front/templates/partials/registry/_registry_build_analytics.html
+- src/front/static/config/js/build-analytics.js
+- src/front/templates/registry.html
+- tests/units/registry/test_registry_store.py
+
+Tests: uv run pytest -q → 2415 passed in 185.37s

@@ -752,6 +752,35 @@ class DigitalTwin:
             )
         return result
 
+    def pending_dt_existence(self, settings) -> Dict[str, Any]:
+        """Cheap, non-blocking existence skeleton for the first page paint.
+
+        Resolves only artefact *names* (from config, no network round-trip) and
+        leaves every existence flag as ``None`` with ``pending=True``. The Build
+        page renders this instantly, then confirms the live Lakebase/UC state via
+        a non-blocking follow-up to ``/dtwin/sync/dt-existence``. This keeps the
+        cold SQL-warehouse / Lakebase wake-up entirely off the request path.
+        """
+        from back.core.helpers import effective_graph_name, effective_view_table
+
+        domain = self._domain
+        return {
+            "view_exists": None,
+            "graph_engine": DigitalTwin.resolve_graph_engine(domain, settings),
+            "graph_has_data": None,
+            "lakebase_table_exists": None,
+            "lakebase_synced_uc_exists": None,
+            "lakebase_check_error": None,
+            "view_table": effective_view_table(domain),
+            "graph_name": effective_graph_name(domain),
+            "graph_display": "",
+            "last_update": domain.last_update or None,
+            "last_built": domain.last_build or None,
+            "view_check_error": None,
+            "triple_count": 0,
+            "pending": True,
+        }
+
     # ------------------------------------------------------------------
     # Schedule sync (instance method)
     # ------------------------------------------------------------------
@@ -868,7 +897,15 @@ class DigitalTwin:
         """Live checks for SQL view, snapshot table, and graph artefacts.
 
         Lakebase: Postgres triple table existence/count (no Volume archive).
+
+        The three live checks — SQL-warehouse view existence, Lakebase Postgres
+        table existence/count, and UC synced-table existence — are independent
+        network round-trips and run concurrently, so the slowest probe (not
+        their sum) bounds the latency. On a cold SQL warehouse or a sleeping
+        Lakebase instance this collapses three serial wake-ups into one.
         """
+        import asyncio
+
         from back.core.helpers import (
             effective_graph_name,
             effective_view_table,
@@ -899,45 +936,11 @@ class DigitalTwin:
             "triple_count": 0,
         }
 
-        async def _check_view() -> tuple[Optional[bool], Optional[str]]:
-            if not view_table:
-                return None, "No view name resolved (domain.delta.catalog/schema/name missing)"
-            if "." not in view_table:
-                return None, f"Resolved view name is not fully qualified: {view_table}"
-            try:
-                view_store = get_triplestore(domain, settings, backend="view")
-                if not view_store:
-                    return None, (
-                        "No SQL warehouse available "
-                        "(set domain.databricks.sql_warehouse_id or settings.databricks_warehouse_id)"
-                    )
-                exists = await run_blocking(view_store.table_exists, view_table)
-                logger.info(
-                    "DT existence: VIEW %s -> exists=%s", view_table, exists
-                )
-                return exists, None
-            except Exception as e:
-                logger.warning(
-                    "DT existence: VIEW %s check failed: %s", view_table, e
-                )
-                return None, f"View check failed: {e}"
-
-        view_ok, view_err = await _check_view()
-
-        result["view_exists"] = view_ok
-        result["view_check_error"] = view_err
-
-        exists_tbl: Optional[bool] = None
-        cnt = 0
-        display = ""
-        lk_database = ""
+        # --- Resolve config without needing a Postgres connection (sync) ---
+        lk_sync_mode = "app_managed"
         lk_schema = ""
         lk_table = ""
-        lk_sync_mode = "app_managed"
-        lk_synced_uc = ""
-        lk_check_error: Optional[str] = None
-
-        # --- Resolve config without needing a Postgres connection ---
+        lk_synced_uc_cfg = ""
         try:
             from back.core.triplestore import TripleStoreFactory
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
@@ -965,77 +968,137 @@ class DigitalTwin:
                     catalog = resolve_sync_uc_fallback_catalog(domain, settings)
                 uc_schema = lk_schema  # always equals the graph schema
                 if catalog and uc_schema:
-                    lk_synced_uc = f"{catalog}.{uc_schema}.{synced_phy(graph_name)}"
+                    lk_synced_uc_cfg = f"{catalog}.{uc_schema}.{synced_phy(graph_name)}"
         except Exception as e:
             logger.warning("DT existence: lakebase config resolution failed: %s", e)
 
-        # --- Live Postgres check (optional — enriches display, may be unavailable) ---
-        try:
-            graph_store = get_triplestore(domain, settings, backend="graph")
-            if graph_store:
-                lk_schema_live = getattr(graph_store, "graph_schema", "") or ""
-                tbl_fn = getattr(graph_store, "physical_table_id", None)
-                lk_table_live = tbl_fn(graph_name) if callable(tbl_fn) else ""
-                db_fn = getattr(graph_store, "_effective_database_display", None)
-                lk_database = db_fn() if callable(db_fn) else ""
-                if lk_schema_live:
-                    lk_schema = lk_schema_live
-                if lk_table_live:
-                    lk_table = lk_table_live
-                if getattr(graph_store, "is_synced", False) and not lk_synced_uc:
-                    try:
-                        fallback_cat = resolve_sync_uc_fallback_catalog(domain, settings)
-                        lk_synced_uc = graph_store.synced_uc_name(
-                            graph_name, fallback_catalog=fallback_cat
-                        )
-                    except Exception:
-                        pass
-                exists_tbl = await run_blocking(graph_store.table_exists, graph_name)
-                if exists_tbl:
-                    gs = await run_blocking(graph_store.get_status, graph_name)
-                    cnt = int(gs.get("count", 0) or 0)
-                    dbpart = str(gs.get("database") or "").strip()
-                    schpart = str(gs.get("schema") or "").strip()
-                    if dbpart:
-                        lk_database = dbpart
-                    if schpart:
-                        lk_schema = schpart
-                    parts = [p for p in (dbpart, schpart, lk_table) if p]
-                    display = " · ".join(parts) if parts else lk_table
-        except Exception as e:
-            logger.warning("DT existence: lakebase graph check failed: %s", e)
-            lk_check_error = str(e)
-        result["triple_count"] = cnt
-        # Preserve the tri-state: True=present, False=absent, None=unknown
-        # (probe failed/timed out). Caller must NOT cache unknown results.
-        if exists_tbl is None:
-            result["graph_has_data"] = None
-        else:
-            result["graph_has_data"] = bool(exists_tbl and cnt > 0)
-        result["lakebase_table_exists"] = exists_tbl
-        result["lakebase_check_error"] = lk_check_error
-        result["graph_display"] = display or ""
-        result["lakebase_database"] = lk_database
-        result["lakebase_schema"] = lk_schema
-        result["lakebase_table"] = lk_table
-        result["lakebase_sync_mode"] = lk_sync_mode
-        result["lakebase_synced_uc"] = lk_synced_uc
+        # --- Probe 1: SQL view existence (SQL warehouse) ---
+        async def _view_probe():
+            if not view_table:
+                return None, "No view name resolved (domain.delta.catalog/schema/name missing)"
+            if "." not in view_table:
+                return None, f"Resolved view name is not fully qualified: {view_table}"
+            try:
+                view_store = get_triplestore(domain, settings, backend="view")
+                if not view_store:
+                    return None, (
+                        "No SQL warehouse available "
+                        "(set domain.databricks.sql_warehouse_id or settings.databricks_warehouse_id)"
+                    )
+                exists = await run_blocking(view_store.table_exists, view_table)
+                logger.info("DT existence: VIEW %s -> exists=%s", view_table, exists)
+                return exists, None
+            except Exception as e:
+                logger.warning("DT existence: VIEW %s check failed: %s", view_table, e)
+                return None, f"View check failed: {e}"
 
-        # Check whether the UC synced table actually exists in Unity Catalog
-        if lk_synced_uc:
+        # --- Probe 2: live Lakebase Postgres check (enriches display) ---
+        async def _postgres_probe():
+            data = {
+                "exists_tbl": None,
+                "cnt": 0,
+                "display": "",
+                "lk_database": "",
+                "lk_schema": lk_schema,
+                "lk_table": lk_table,
+                "lk_synced_uc": "",
+                "lk_check_error": None,
+            }
+            try:
+                from back.core.graphdb.lakebase.LakebaseFlatStore import (
+                    resolve_sync_uc_fallback_catalog,
+                )
+
+                graph_store = get_triplestore(domain, settings, backend="graph")
+                if graph_store:
+                    lk_schema_live = getattr(graph_store, "graph_schema", "") or ""
+                    tbl_fn = getattr(graph_store, "physical_table_id", None)
+                    lk_table_live = tbl_fn(graph_name) if callable(tbl_fn) else ""
+                    db_fn = getattr(graph_store, "_effective_database_display", None)
+                    if lk_schema_live:
+                        data["lk_schema"] = lk_schema_live
+                    if lk_table_live:
+                        data["lk_table"] = lk_table_live
+                    if callable(db_fn):
+                        data["lk_database"] = db_fn() or ""
+                    if getattr(graph_store, "is_synced", False) and not lk_synced_uc_cfg:
+                        try:
+                            fallback_cat = resolve_sync_uc_fallback_catalog(domain, settings)
+                            data["lk_synced_uc"] = graph_store.synced_uc_name(
+                                graph_name, fallback_catalog=fallback_cat
+                            )
+                        except Exception:
+                            pass
+                    exists_tbl = await run_blocking(graph_store.table_exists, graph_name)
+                    data["exists_tbl"] = exists_tbl
+                    if exists_tbl:
+                        gs = await run_blocking(graph_store.get_status, graph_name)
+                        data["cnt"] = int(gs.get("count", 0) or 0)
+                        dbpart = str(gs.get("database") or "").strip()
+                        schpart = str(gs.get("schema") or "").strip()
+                        if dbpart:
+                            data["lk_database"] = dbpart
+                        if schpart:
+                            data["lk_schema"] = schpart
+                        parts = [p for p in (dbpart, schpart, data["lk_table"]) if p]
+                        data["display"] = " · ".join(parts) if parts else data["lk_table"]
+            except Exception as e:
+                logger.warning("DT existence: lakebase graph check failed: %s", e)
+                data["lk_check_error"] = str(e)
+            return data
+
+        # --- Probe 3: UC synced-table existence (SQL warehouse) ---
+        async def _uc_probe(uc_fqn):
+            if not uc_fqn:
+                return None
             try:
                 view_store_uc = get_triplestore(domain, settings, backend="view")
                 if view_store_uc:
-                    uc_exists = await run_blocking(view_store_uc.table_exists, lk_synced_uc)
-                    result["lakebase_synced_uc_exists"] = uc_exists
+                    exists = await run_blocking(view_store_uc.table_exists, uc_fqn)
                     logger.info(
-                        "DT existence: synced UC table %s -> exists=%s",
-                        lk_synced_uc, uc_exists,
+                        "DT existence: synced UC table %s -> exists=%s", uc_fqn, exists
                     )
+                    return exists
             except Exception as e:
                 logger.warning(
-                    "DT existence: synced UC table %s check failed: %s", lk_synced_uc, e
+                    "DT existence: synced UC table %s check failed: %s", uc_fqn, e
                 )
+            return None
+
+        view_res, pg, uc_cfg_exists = await asyncio.gather(
+            _view_probe(),
+            _postgres_probe(),
+            _uc_probe(lk_synced_uc_cfg),
+        )
+
+        view_ok, view_err = view_res
+        result["view_exists"] = view_ok
+        result["view_check_error"] = view_err
+
+        result["triple_count"] = pg["cnt"]
+        # Preserve the tri-state: True=present, False=absent, None=unknown
+        # (probe failed/timed out). Caller must NOT cache unknown results.
+        if pg["exists_tbl"] is None:
+            result["graph_has_data"] = None
+        else:
+            result["graph_has_data"] = bool(pg["exists_tbl"] and pg["cnt"] > 0)
+        result["lakebase_table_exists"] = pg["exists_tbl"]
+        result["lakebase_check_error"] = pg["lk_check_error"]
+        result["graph_display"] = pg["display"] or ""
+        result["lakebase_database"] = pg["lk_database"]
+        result["lakebase_schema"] = pg["lk_schema"]
+        result["lakebase_table"] = pg["lk_table"]
+        result["lakebase_sync_mode"] = lk_sync_mode
+
+        lk_synced_uc = lk_synced_uc_cfg or pg["lk_synced_uc"] or ""
+        result["lakebase_synced_uc"] = lk_synced_uc
+
+        if lk_synced_uc_cfg:
+            # FQN known from config — its probe already ran in the gather above.
+            result["lakebase_synced_uc_exists"] = uc_cfg_exists
+        elif lk_synced_uc:
+            # FQN discovered live via Postgres — confirm with a follow-up probe.
+            result["lakebase_synced_uc_exists"] = await _uc_probe(lk_synced_uc)
 
         return result
 
@@ -2886,13 +2949,16 @@ class DigitalTwin:
                 if "not found" in msg.lower():
                     raise NotFoundError(msg)
                 raise InfrastructureError(msg)
+            if data.get("info", {}).get("status") != "PUBLISHED":
+                raise ValidationError(
+                    f"Version {domain_version} of domain '{domain_name}' is not "
+                    f"PUBLISHED; the API only serves PUBLISHED versions"
+                )
             version = domain_version
         else:
-            ok, data, version, err = svc.load_mcp_domain_data(domain_name)
+            ok, data, version, err = svc.load_published_domain_data(domain_name)
             if not ok:
-                if "not found" in err.lower() or "no versions" in err.lower():
-                    raise NotFoundError(err)
-                raise InfrastructureError(err)
+                raise NotFoundError(err)
         domain.clear_generated_content()
         domain.import_from_file(data, version=version)
         domain.domain_folder = domain_name

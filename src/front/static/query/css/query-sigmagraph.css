@@ -218,7 +218,7 @@
 
 .sg-filter-pane .card-header {
     padding: 0.4rem 0.75rem;
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 .sg-filter-pane .card-body {
@@ -245,6 +245,12 @@
     white-space: nowrap;
     z-index: 100;
     display: none;
+}
+
+/* Search / filter info banners: dark-grey accent instead of Bootstrap info blue */
+#sgSearchInfo .text-info,
+#sgGraphFilterInfo .text-info {
+    color: var(--db-primary) !important;
 }
 
 /* Floating info bubble for right-click expand outcomes (no-op cases) */
@@ -289,7 +295,7 @@
 .sg-seed-table th {
     position: sticky;
     top: 0;
-    background: #f8f9fa;
+    background: #ffffff;
     z-index: 1;
     border-bottom: 2px solid #dee2e6;
 }
@@ -313,7 +319,7 @@
 }
 
 #sgSeedPreviewModal .modal-footer {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 /* Data cluster panel */
@@ -334,12 +340,12 @@
     padding: 0.25rem 0.4rem;
     border: 1px solid #e9ecef;
     border-radius: 6px;
-    background: #f8f9fa;
+    background: #ffffff;
     transition: background 0.15s;
 }
 
 .sg-cluster-chip:hover {
-    background: #e9ecef;
+    background: #ffffff;
 }
 
 .sg-cluster-dot {
@@ -377,7 +383,7 @@
 }
 
 #sgContextMenu .ctx-item:hover {
-    background: #e9ecef;
+    background: #ffffff;
 }
 
 #sgContextMenu .ctx-item i {
@@ -457,7 +463,7 @@
 }
 
 #sgNodeContextMenu .ctx-item:hover {
-    background: #e9ecef;
+    background: #ffffff;
 }
 
 #sgNodeContextMenu .ctx-item i {

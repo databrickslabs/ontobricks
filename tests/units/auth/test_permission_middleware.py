@@ -48,6 +48,9 @@ def _make_request(method="GET", path="/", email="user@test.com", headers=None):
     req.method = method
     req.url = MagicMock()
     req.url.path = path
+    # Mirror a real ASGI request: middleware reads the raw routed path from
+    # scope["path"] (BadHost-safe), not the Host-reconstructed url.path.
+    req.scope = {"path": path}
     req.state = State()
     _headers = {
         "x-forwarded-email": email,

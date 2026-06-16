@@ -683,6 +683,10 @@ class Mapping:
         parser = R2RMLParser(r2rml_content)
         entity_mappings, relationship_mappings = parser.extract_mappings()
 
+        self._canonicalize_imported_uris(
+            entity_mappings, relationship_mappings, domain.ontology or {}
+        )
+
         domain.assignment["entities"] = entity_mappings
         domain.assignment["relationships"] = relationship_mappings
         domain.assignment["r2rml_output"] = r2rml_content
@@ -693,6 +697,60 @@ class Mapping:
             "entities": entity_mappings,
             "relationships": relationship_mappings,
         }
+
+    @staticmethod
+    def _canonicalize_imported_uris(
+        entity_mappings: List[Dict[str, Any]],
+        relationship_mappings: List[Dict[str, Any]],
+        ontology: Dict[str, Any],
+    ) -> None:
+        """Rewrite imported R2RML class/predicate URIs to the ontology's URIs.
+
+        An R2RML file may reference the ontology through a different separator
+        (slash vs hash) or namespace than the loaded ontology. The mapping
+        designer joins mappings to entities/properties by exact URI, so without
+        this pass an imported mapping persists but never appears applied.
+
+        Matching is by local name, preferring an exact-case hit and falling
+        back to a case-insensitive one. Unmatched URIs are left untouched.
+        Mutates the mapping dicts in place.
+        """
+        if not ontology:
+            return
+
+        def _index(items: Optional[List[Dict[str, Any]]]) -> Tuple[Dict, Dict]:
+            exact: Dict[str, str] = {}
+            lower: Dict[str, str] = {}
+            for item in items or []:
+                uri = item.get("uri")
+                if not uri:
+                    continue
+                local = uri_local_name(uri)
+                if local:
+                    exact.setdefault(local, uri)
+                    lower.setdefault(local.lower(), uri)
+            return exact, lower
+
+        cls_exact, cls_lower = _index(ontology.get("classes"))
+        prop_exact, prop_lower = _index(ontology.get("properties"))
+
+        def _resolve(uri: Optional[str], exact: Dict, lower: Dict) -> Optional[str]:
+            if not uri:
+                return uri
+            local = uri_local_name(uri)
+            if not local:
+                return uri
+            if local in exact:
+                return exact[local]
+            return lower.get(local.lower(), uri)
+
+        for ent in entity_mappings:
+            ent["ontology_class"] = _resolve(
+                ent.get("ontology_class"), cls_exact, cls_lower
+            )
+
+        for rel in relationship_mappings:
+            rel["property"] = _resolve(rel.get("property"), prop_exact, prop_lower)
 
     def get_mapping_stats(self) -> Dict[str, int]:
         domain = self._domain

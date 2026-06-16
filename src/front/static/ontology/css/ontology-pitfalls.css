@@ -1,2 +1,3 @@
 .pitfall-tooltip .tooltip-inner { max-width: 320px; text-align: left; font-size: .8rem; }
 #pitfalls-results-pane { overflow-y: auto; max-height: calc(100vh - 280px); }
+.pf-progress-md { height: 20px; }

@@ -321,7 +321,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         ]);
 
         if (statusData && statusData.success) {
-            updateVersionStatusUI(statusData.is_active, statusData.version, statusData.has_registry);
+            // Editability depends only on lifecycle status (DRAFT), not on
+            // whether this is the latest version. Older DRAFT versions edit.
+            const editable = (statusData.status || 'DRAFT') === 'DRAFT';
+            updateVersionStatusUI(editable, statusData.version, statusData.has_registry);
             populateVersionDropdown(statusData.available_versions, statusData.version);
             const sf = statusData.domain_folder || statusData.project_folder;
             if (sf) {

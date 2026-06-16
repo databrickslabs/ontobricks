@@ -12,7 +12,7 @@
     flex: 1;
     min-width: 0;
     position: relative;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: #ffffff;
     overflow: hidden;
 }
 
@@ -59,7 +59,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #fafbfc;
+    background: #ffffff;
 }
 
 /* ── IF / THEN headings ── */
@@ -136,6 +136,24 @@
     color: #fff;
 }
 
+/* ── Attribute conditions ── */
+
+.swrl-conditions .swrl-condition-row .form-select,
+.swrl-conditions .swrl-condition-row .form-control {
+    font-size: .75rem;
+    padding: 2px 6px;
+    min-width: 0;
+}
+
+.swrl-conditions .swrl-condition-row .form-select {
+    background-position: right .35rem center;
+    padding-right: 1.3rem;
+}
+
+.swrl-conditions .swrl-condition-row {
+    flex-wrap: nowrap;
+}
+
 /* ── SWRL preview block ── */
 
 .swrl-preview-block {
@@ -176,7 +194,7 @@
     align-items: center;
     transition: background .1s;
 }
-.swrl-ctx-item:hover { background: #f1f5f9; }
+.swrl-ctx-item:hover { background: #ffffff; }
 
 .swrl-ctx-if { color: #0d6efd; }
 .swrl-ctx-if:hover { background: #e8f0fe; }
@@ -185,7 +203,7 @@
 .swrl-ctx-then:hover { background: #fce8e8; }
 
 .swrl-ctx-remove { color: #6c757d; }
-.swrl-ctx-remove:hover { background: #f8f9fa; }
+.swrl-ctx-remove:hover { background: #ffffff; }
 
 /* ── Graph node selection highlights ── */
 

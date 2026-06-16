@@ -1,0 +1,175 @@
+/* ==========================================================================
+   Home Page — business-user landing
+   - KPI / health band for the current domain (reuses shared .ob-kpi-tile)
+   - "All Domains" gateway grid (.ob-domain-card)
+   - "Build & Manage" header layout
+   All colours via --db-* tokens (see 11-frontend-design.mdc).
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   KPI / health band (inside the Current Domain panel)
+   -------------------------------------------------------------------------- */
+.home-kpi-band {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 992px) {
+    .home-kpi-band {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .home-kpi-band {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* The status / version tiles carry a badge in place of a numeric value. */
+.home-kpi-band .ob-kpi-tile-value .badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   All Domains — the open door
+   -------------------------------------------------------------------------- */
+.ob-domain-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.ob-domain-grid-loading,
+.ob-domain-grid-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 2rem 1rem;
+    font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.ob-domain-grid-empty .ob-domain-empty-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    background: var(--db-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background var(--db-transition, 0.2s ease);
+}
+
+.ob-domain-grid-empty .ob-domain-empty-cta:hover {
+    background: var(--db-primary-dark);
+}
+
+.ob-domain-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.1rem 1.25rem;
+    background: #ffffff;
+    border: 2px solid var(--db-border);
+    border-radius: 14px;
+    text-align: left;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    width: 100%;
+}
+
+.ob-domain-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--db-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.1));
+    border-color: var(--db-primary);
+}
+
+.ob-domain-card.is-current {
+    border-color: var(--db-primary);
+    background: var(--db-primary-light, rgba(73, 80, 87, 0.1));
+    box-shadow: var(--db-shadow-primary, 0 4px 16px rgba(73, 80, 87, 0.18));
+}
+
+.ob-domain-card.is-current .ob-domain-card-icon {
+    background: var(--db-primary);
+    color: #fff;
+}
+
+.ob-domain-card-top {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.ob-domain-card-icon {
+    width: 2.1rem;
+    height: 2.1rem;
+    flex: 0 0 auto;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--db-primary-light, rgba(73, 80, 87, 0.1));
+    color: var(--db-primary);
+    font-size: 1.1rem;
+}
+
+.ob-domain-card-name {
+    font-weight: 600;
+    color: var(--db-text);
+    font-size: 0.95rem;
+    word-break: break-word;
+    line-height: 1.2;
+}
+
+.ob-domain-card-current-badge {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    color: var(--db-primary);
+}
+
+.ob-domain-card-footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ob-domain-card-footer .ob-domain-version {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.8rem;
+}
+
+.ob-domain-card-open {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--db-primary);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+}
+
+.ob-domain-card-open:hover {
+    background: var(--db-primary-dark);
+}

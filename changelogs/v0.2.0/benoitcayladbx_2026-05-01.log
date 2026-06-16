@@ -1,0 +1,19 @@
+## Avoid GitGuardian false positives in Lakebase auth tests
+
+Context: GitGuardian flagged ``tests/test_lakebase_auth.py`` (PR #13,
+"Generic Database Assignment") because fixture strings mimicked real
+Lakebase hostnames (``*.database.*.cloud.databricks.com``) together with
+``PGDATABASE`` / ``PGUSER`` assignments.
+
+Changes:
+
+1. tests/test_lakebase_auth.py
+   Replaced synthetic ``PGHOST``/read-replica hosts with
+   ``*.example.invalid`` names, ``PGDATABASE`` with an obvious test-only
+   name, and non-UUID ``PGUSER``/token placeholders so scanners no longer
+   match production-like connection material.
+
+Modified files:
+- tests/test_lakebase_auth.py
+
+Tests: uv run pytest -q → 1893 passed, 0 failed in 61.29s

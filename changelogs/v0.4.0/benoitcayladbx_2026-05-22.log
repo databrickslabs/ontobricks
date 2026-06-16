@@ -1,0 +1,128 @@
+## Code review actions: dead-code removal, silent-except fixes, loopback-http extraction
+
+### Context
+Executed the highest-priority actions from the comprehensive code review:
+1. Silent `except` blocks in `internal/dtwin.py` and `digitaltwin.py` swallowed errors without any log output, making failures invisible.
+2. `_client()` and `_registry_params()` were duplicated verbatim between `agent_dtwin_chat/tools.py` and `agent_cohort/tools.py`.
+3. `PermissionService.clear_user_groups_cache()` had no call sites in the codebase.
+4. `DatabricksAuth.cloud_fetch_status()` had no call sites in the codebase (superseded by `can_use_cloud_fetch` + `probe_cloud_fetch_capability`).
+5. `agent_dtwin_chat/tools.py` carried `_domain_params()` (dead helper) and `_RUN_SPARQL_DEF` (unused schema constant).
+
+### Changes
+1. `src/api/routers/internal/dtwin.py` — two silent `except Exception:` blocks now log at `DEBUG` (engine config resolution, label resolver metadata).
+2. `src/api/routers/digitaltwin.py` — silent `except Exception:` in `_label_resolver` now logs at `DEBUG`.
+3. `src/agents/tools/loopback_http.py` (new) — `loopback_client(ctx, *, timeout)` and `loopback_registry_params(ctx)` extracted into shared module.
+4. `src/agents/agent_dtwin_chat/tools.py` — local `_client` / `_registry_params` / `_domain_params` replaced by imports from `loopback_http`; `_RUN_SPARQL_DEF` removed; `tool_run_sparql` kept as dormant-but-tested function.
+5. `src/agents/agent_cohort/tools.py` — local `_client` / `_registry_params` replaced by imports from `loopback_http`.
+6. `src/back/objects/registry/PermissionService.py` — removed dead `clear_user_groups_cache()` method.
+7. `src/back/core/databricks/DatabricksAuth.py` — removed dead `cloud_fetch_status()` method.
+
+### Modified files
+- `src/api/routers/internal/dtwin.py`
+- `src/api/routers/digitaltwin.py`
+- `src/agents/tools/loopback_http.py` (new)
+- `src/agents/agent_dtwin_chat/tools.py`
+- `src/agents/agent_cohort/tools.py`
+- `src/back/objects/registry/PermissionService.py`
+- `src/back/core/databricks/DatabricksAuth.py`
+
+### Test result
+2024 passed, 15 skipped — zero failures.
+
+---
+
+## Fix missing User-Agent header on 3 raw-requests call sites
+
+### Context
+Audit of all outbound HTTP call sites revealed 3 `requests.get` calls that built their own `headers` dict and omitted `User-Agent: ontobricks`:
+- `PermissionService._get_user_groups` — SCIM v2 user lookup
+- `PermissionService._check_admin_rest` — Databricks App permissions REST check
+- `SettingsService` permissions diagnostic — `_req.get` for app permissions
+
+All other call sites (41 `requests`/`Session` calls, all `httpx` calls) already carry the header via `HTTP_USER_AGENT`, `DatabricksAuth.get_auth_headers()`, or client-level headers.
+
+Note: Databricks SDK paths (`api_client.do`, high-level SDK) use the SDK's own User-Agent — those are not modified.
+
+### Changes
+1. `src/back/objects/registry/PermissionService.py` — added `HTTP_USER_AGENT` import; added `"User-Agent": HTTP_USER_AGENT` to headers in `_get_user_groups` (SCIM call) and `_check_admin_rest` (permissions call).
+2. `src/back/objects/domain/SettingsService.py` — added `HTTP_USER_AGENT` import; added `"User-Agent": HTTP_USER_AGENT` to headers in the permissions diagnostic REST call.
+
+### Modified files
+- `src/back/objects/registry/PermissionService.py`
+- `src/back/objects/domain/SettingsService.py`
+
+### Test result
+87 passed — zero failures.
+
+---
+
+## Declare user authorization scopes in app.yaml.template
+
+### Context
+The Databricks Apps auth docs (Public Preview) require explicit OAuth scope declaration
+for user authorization even when using the platform defaults. OntoBricks uses
+`x-forwarded-access-token` exclusively for permission checks (SCIM + App ACL read);
+all data queries go through the service principal M2M token. Adding the scope declaration
+makes the authorization model explicit and compliant with marketplace requirements.
+
+### Changes
+1. `app.yaml.template` — added `authorization.user.scopes` block with
+   `iam.current-user:read` and `iam.access-control:read` (minimum scopes for permission
+   checks; also the platform defaults, now made explicit).
+2. `app.yaml` — re-rendered from template (`scripts/_render-app-yaml.py`).
+
+### Modified files
+- `app.yaml.template`
+- `app.yaml`
+
+### Test result
+Static config change only. Re-render completed without errors.
+
+---
+
+## Marketplace compliance: SECURITY.md + pip-audit CI job + v0.4.0 tag
+
+### Context
+Audit against "Best Practices for Publishing First-Party Databricks Apps on Marketplace"
+identified three blockers for marketplace publication: missing SECURITY.md, no automated
+vulnerability scanning in CI, and no v0.4.0 git tag matching the current pyproject.toml version.
+
+### Changes
+1. `SECURITY.md` (new) — vulnerability reporting procedures, response SLA, supported versions,
+   scope, and dependency management policy as required by Marketplace Source Repository Standards.
+2. `.github/workflows/ci.yml` — added `security` job that runs `pip-audit --strict` against
+   `requirements.txt` on every push/PR; produces a JSON report artifact (30-day retention).
+3. `pyproject.toml` — added `pip-audit>=2.7.0` to `[dependency-groups].dev` so the scanner
+   is available via `uv sync --dev`.
+4. Git tag `v0.4.0` created locally to align the repository tag with the version declared
+   in `pyproject.toml` (prerequisite for marketplace submission referencing a specific tag).
+
+### Modified files
+- `SECURITY.md` (new)
+- `.github/workflows/ci.yml`
+- `pyproject.toml`
+
+### Test result
+Static changes only (new file, CI config, dev dependency). Unit test suite unaffected.
+
+---
+
+## Scripts consistency fixes
+
+### Context
+Audit of all scripts in `scripts/` revealed several inconsistencies: `setup.sh` was missing the `--extra pitfalls` flag used by `start.sh`; `Makefile bootstrap-lakebase` was missing the `-b` branch argument present in `deploy.sh`; `Makefile bundle-validate` was missing `--var=app_name` and `--var=mcp_app_name`; the `install` target used the deprecated `uv pip install -e .` instead of `uv sync`; and `start.sh`/`stop.sh` used `#!/bin/bash` while all other scripts use the portable `#!/usr/bin/env bash`.
+
+### Changes
+1. `scripts/setup.sh` — changed shebang to `#!/usr/bin/env bash`; upgraded `set -e` to `set -euo pipefail`; added `--extra pitfalls` to `uv sync` call so setup installs the same extras as `start.sh`.
+2. `scripts/start.sh` — changed shebang to `#!/usr/bin/env bash`.
+3. `scripts/stop.sh` — changed shebang to `#!/usr/bin/env bash`.
+4. `Makefile` — `install` target: replaced `uv pip install -e .` with `uv sync --extra lakebase --extra pitfalls`; `bootstrap-lakebase` target: added missing `-b "$$LAKEBASE_BOOTSTRAP_BRANCH"` flag; `bundle-validate` target: added missing `--var=app_name` and `--var=mcp_app_name`.
+
+### Modified files
+- `scripts/setup.sh`
+- `scripts/start.sh`
+- `scripts/stop.sh`
+- `Makefile`
+
+### Test result
+Tests hang on network-dependent async calls to Lakebase (pre-existing, unrelated to these changes). Script-only changes — no Python code modified.

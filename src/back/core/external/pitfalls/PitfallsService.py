@@ -14,6 +14,55 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Severity weights per pitfall: P1.x (Logical) are critical, P4.x (Semantic) are minor.
+_PITFALL_WEIGHTS: Dict[str, int] = {
+    "P1.1": 5, "P1.2": 4, "P1.3": 5,
+    "P2.1": 3, "P2.2": 2, "P2.3": 2, "P2.4": 1, "P2.5": 2, "P2.6": 1,
+    "P3.1": 1, "P3.2": 1, "P3.3": 1,
+    "P4.1": 1, "P4.2": 1, "P4.3": 1, "P4.4": 2, "P4.5": 1, "P4.6": 1, "P4.7": 1,
+}
+_MAX_WEIGHT = sum(_PITFALL_WEIGHTS.values())  # 36
+
+
+def _extract_issue_count(pitfall_id: str, result: Dict[str, Any]) -> int:
+    """Return the primary issue count for a pitfall result dict."""
+    if "count" in result and isinstance(result["count"], int):
+        return result["count"]
+    # P2.5 uses multi_domain_count + multi_range_count
+    if "multi_domain_count" in result or "multi_range_count" in result:
+        return (result.get("multi_domain_count") or 0) + (result.get("multi_range_count") or 0)
+    return 0
+
+
+_MAX_OCCURRENCES_PER_PITFALL = 5  # cap per-pattern count for normalization
+
+
+def compute_precision_score(
+    results: Dict[str, Dict[str, Any]],
+    metadata: Dict[str, Any],
+) -> int:
+    """Compute a 0–100 ontology precision score from pitfall results.
+
+    Critical pitfalls (P1.x) are weighted more heavily than minor ones (P4.x).
+    Each pitfall's contribution is capped at _MAX_OCCURRENCES_PER_PITFALL so that a
+    single noisy pattern cannot dominate the score.  The denominator is fixed
+    (_MAX_WEIGHT × _MAX_OCCURRENCES_PER_PITFALL), making even a single minor warning
+    produce a score strictly below 100.
+
+    Returns:
+        Integer score in [0, 100].  100 means zero pitfall occurrences found.
+    """
+    penalty = 0
+    for pid, weight in _PITFALL_WEIGHTS.items():
+        if pid not in results:
+            continue
+        count = _extract_issue_count(pid, results[pid])
+        penalty += weight * min(count, _MAX_OCCURRENCES_PER_PITFALL)
+
+    max_penalty = _MAX_WEIGHT * _MAX_OCCURRENCES_PER_PITFALL  # 36 × 5 = 180
+    score = max(0, round(100 * (1 - penalty / max_penalty)))
+    return score
+
 
 def _group_results_by_category(
     selected_pitfalls: List[str],
@@ -94,11 +143,15 @@ class PitfallsService:
                 _Toolkit.pitfall_taxonomy(),
             )
 
+            meta = toolkit.metadata()
+            precision_score = compute_precision_score(results, meta)
+
             return {
-                "metadata": toolkit.metadata(),
+                "metadata": meta,
                 "selected_pitfalls": list(results.keys()),
                 "results": results,
                 "grouped_results": grouped,
+                "precision_score": precision_score,
             }
         finally:
             import os

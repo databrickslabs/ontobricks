@@ -1,0 +1,165 @@
+## Ship docs/ in Databricks deploy bundle for Help Center
+
+Context: The in-app Help Center lists documentation from a hardcoded catalog
+but serves markdown from `docs/` on disk. `.databricksignore` and `databricks.yml`
+previously excluded the entire `docs/` tree (and all `*.md`), so every
+`/api/help/docs/{slug}` call returned HTTP 404 in deployed Databricks Apps —
+including Product.
+
+Changes:
+
+1. `.databricksignore`
+   Include `docs/` for Help Center runtime; exclude Sphinx `_build/` output and
+   root/repo-meta markdown only (no blanket `*.md` / `*.txt`).
+2. `databricks.yml`
+   Add explicit `docs/**` sync include; replace blanket `docs/` + `*.md`
+   excludes with targeted root markdown and Sphinx build exclusions.
+3. `docs/deployment.md`
+   Document that `docs/` is now shipped for in-app Help Center support.
+
+Modified files:
+- `.databricksignore`
+- `databricks.yml`
+- `docs/deployment.md`
+- `changelogs/v0.4.0/2026-05-26.log`
+
+Tests: uv run pytest -q → 2337 passed in 435.64s
+
+## Add Help Center online-docs regression tests
+
+Context: Before redeploying the docs/ bundle fix, add automated checks so every
+catalogued Help Center entry returns HTTP 200 (not 404) and deploy config keeps
+shipping `docs/` to Databricks.
+
+Changes:
+
+1. `tests/units/api/test_help_api.py`
+   Assert all catalogued slugs return 200 with non-empty markdown; verify doc
+   files and referenced `images/` assets exist on disk and are served; guard
+   `.databricksignore` / `databricks.yml` against re-excluding `docs/`.
+2. `tests/e2e/help/test_help_modal_flows.py`
+   Add live-server smoke test that every catalogued doc loads with HTTP 200.
+3. `tests/e2e/README.md`
+   Update Help Center e2e coverage description.
+
+Modified files:
+- `tests/units/api/test_help_api.py`
+- `tests/e2e/help/test_help_modal_flows.py`
+- `tests/e2e/README.md`
+- `changelogs/v0.4.0/2026-05-26.log`
+
+Tests: uv run pytest -q → 2357 passed in 485.47s
+
+## Add telco Radio QoS degradation sample dataset
+
+Context: Mobile operator POC entry use case for Autonomous Network maturity
+(Radio QoS degradation). Needed a small, self-contained dataset covering RAN
+inventory, KPIs, alarms, config events, NOC tickets, and field interventions
+with correlated degradation scenarios for ontology mapping demos.
+
+Changes:
+
+1. `data/telco/generate_data.py`
+   Generator for 7 telco tables with 7 seeded degraded cells and cross-table
+   correlation (KPI anomalies, alarms, events, tickets, interventions).
+2. `data/telco/README.md`
+   Dataset documentation: schema, maturity mapping, ontology hints, load steps.
+3. `data/telco/create_databricks_tables.py`
+   Databricks CLI CTAS loader for Unity Catalog schema `telco_radio_qos`.
+4. `data/telco/load_data.py`
+   Databricks notebook loader plus analytical views for cell health and open incidents.
+
+Modified files:
+- `data/telco/generate_data.py`
+- `data/telco/README.md`
+- `data/telco/create_databricks_tables.py`
+- `data/telco/load_data.py`
+- `changelogs/v0.4.0/2026-05-26.log`
+
+Tests: uv run pytest -q → 2357 passed in 355.39s
+
+## Load telco dataset into benoit_cayla.telco
+
+Context: Deploy the Radio QoS sample dataset to Unity Catalog for ontology
+mapping and POC demos. Schema renamed from `telco_radio_qos` to `telco`.
+
+Changes:
+
+1. `data/telco/create_databricks_tables.py`
+   Set Unity Catalog schema to `telco`.
+2. `data/telco/load_data.py`
+   Align notebook loader schema with `telco`.
+3. `data/telco/README.md`
+   Update default catalog.schema reference.
+
+Modified files:
+- `data/telco/create_databricks_tables.py`
+- `data/telco/load_data.py`
+- `data/telco/README.md`
+- `changelogs/v0.4.0/2026-05-26.log`
+
+Tests: not re-run (catalog deploy only; no application code changed)
+
+## Add telco ontology generation PDF
+
+Context: Ontology Designer / OWL generator needs an unstructured business
+description document for the Radio QoS telco POC, consistent with other
+sample datasets (healthcare, transport, customer).
+
+Changes:
+
+1. `data/telco/unstructured/radio_qos_ontology_brief.md`
+   Business description with entity model, relationships, maturity mapping,
+   and explicit OWL class/property guidance for ontology generation.
+2. `data/telco/unstructured/radio_qos_ontology_brief.pdf`
+   Rendered PDF (12-page ontology input document).
+3. `data/telco/unstructured/pdf.css`
+   Print stylesheet for PDF generation.
+4. `data/telco/README.md`
+   Reference the unstructured ontology document.
+
+Modified files:
+- `data/telco/unstructured/radio_qos_ontology_brief.md`
+- `data/telco/unstructured/radio_qos_ontology_brief.pdf`
+- `data/telco/unstructured/pdf.css`
+- `data/telco/README.md`
+- `changelogs/v0.4.0/2026-05-26.log`
+
+Tests: not re-run (documentation / sample data only)
+
+## Fix empty mapping attribute dropdown for OWL-generated classes
+
+Context: In Mapping → Mapping tab, clicking a SQL column header opens a menu
+with ID/Label plus ontology attributes. RadioCell showed "No attributes" while
+the SQL preview had many columns. The OWL generator often declares datatype
+properties via owl:Restriction on the class without rdfs:domain; OntologyParser
+only collected attributes from rdfs:domain, so classes loaded with empty
+dataProperties.
+
+Changes:
+
+1. `src/back/core/w3c/owl/OntologyParser.py`
+   Also derive class dataProperties from owl:Restriction axioms (including
+   intersectionOf lists with blank-node members).
+2. `src/back/objects/ontology/Ontology.py`
+   Add sync/finalize helpers to merge datatype properties onto classes after
+   OWL ingest.
+3. `src/back/objects/session/DomainSession.py`
+   Finalize class attributes on every domain load/migration.
+4. `src/front/static/ontology/js/ontology-information.js`
+   Merge parser and domain-based attributes when importing OWL in the UI.
+5. `src/agents/agent_owl_generator/engine.py`
+   Require rdfs:domain on DatatypeProperty in the generator prompt.
+6. `tests/units/ontology/test_owl_parser.py`
+   Regression test for restriction-only datatype properties.
+
+Modified files:
+- `src/back/core/w3c/owl/OntologyParser.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/back/objects/session/DomainSession.py`
+- `src/front/static/ontology/js/ontology-information.js`
+- `src/agents/agent_owl_generator/engine.py`
+- `tests/units/ontology/test_owl_parser.py`
+- `changelogs/v0.4.0/2026-05-26.log`
+
+Tests: uv run pytest -q → 2358 passed in 347.41s

@@ -169,6 +169,62 @@ class TestRelationshipMapping:
         assert "hasOrder" in r2rml
         assert "Rel_" in r2rml
 
+    def test_relationship_uris_match_entity_uris_when_label_differs(self):
+        """Regression for issue #48.
+
+        When a class label differs from the local name of its class URI, the
+        entity subject URI (built from the URI local name) and the relationship
+        subject/object URIs (previously built from the label) must still share
+        the same namespace, otherwise BFS expansion finds no edges.
+        """
+        base = "http://test.org/ontology/"
+        gen = R2RMLGenerator(base)
+        mapping_config = {
+            "entities": [
+                {
+                    # local name "Cust" != label "Customer"
+                    "ontology_class": "http://test.org/ontology#Cust",
+                    "ontology_class_label": "Customer",
+                    "sql_query": "SELECT * FROM customers",
+                    "id_column": "customer_id",
+                    "attribute_mappings": {},
+                },
+                {
+                    # local name "Ord" != label "Order"
+                    "ontology_class": "http://test.org/ontology#Ord",
+                    "ontology_class_label": "Order",
+                    "sql_query": "SELECT * FROM orders",
+                    "id_column": "order_id",
+                    "attribute_mappings": {},
+                },
+            ],
+            "relationships": [
+                {
+                    "property": "http://test.org/ontology#hasOrder",
+                    "property_label": "hasOrder",
+                    "sql_query": "SELECT customer_id, order_id FROM orders",
+                    "source_class": "http://test.org/ontology#Cust",
+                    "source_class_label": "Customer",
+                    "target_class": "http://test.org/ontology#Ord",
+                    "target_class_label": "Order",
+                    "source_id_column": "customer_id",
+                    "target_id_column": "order_id",
+                    "direction": "forward",
+                }
+            ],
+        }
+        r2rml = gen.generate_mapping(mapping_config)
+
+        # Entity subject URIs use the URI local name, not the label.
+        assert f"{base}Cust/" in r2rml
+        assert f"{base}Ord/" in r2rml
+        # Relationship subject/object URIs must use the SAME namespace.
+        assert f"{base}Cust/{{customer_id}}" in r2rml
+        assert f"{base}Ord/{{order_id}}" in r2rml
+        # And must NOT fall back to the label namespace (the bug).
+        assert f"{base}Customer/" not in r2rml
+        assert f"{base}Order/" not in r2rml
+
 
 class TestConvenienceFunction:
     def test_generate_r2rml_from_config(self):

@@ -1,0 +1,460 @@
+# v0.5.0 — 2026-06-09 — benoitcayladbx
+
+## Move workflow actions to the Validation workspace; admin "Back to Draft" everywhere
+
+**Context**: As an admin, the "Back to Draft" action was available on the Registry → Browse
+page (via the per-version lifecycle buttons) but not on the Domain → Validation (review/sign-off)
+page, where the "reopen" action was restricted to PUBLISHED versions and app-admins only. This was
+inconsistent. The Browse page also duplicated the full workflow (Submit / Back to Draft / Publish /
+Unpublish), competing with the Validation workspace as a second place to drive the lifecycle. The
+Browse view should instead just hand off to the Validation workspace, loading the domain/version
+first when needed.
+
+**Changes**:
+1. `src/back/objects/registry/ReviewService.py` — `reopen()` now sends **IN-REVIEW or PUBLISHED**
+   versions back to DRAFT (was PUBLISHED-only) and authorizes via `_is_admin` (app-level **or**
+   domain-level admin) instead of the app-admin-only `user_role != ROLE_ADMIN` check. The recorded
+   `reopened` event uses the actual `from_status`. `review_detail.actions.can_reopen` is now
+   `status in (IN-REVIEW, PUBLISHED) and is_admin`.
+2. `src/api/routers/internal/review.py` — updated the `reopen` endpoint docstring to reflect the
+   broadened transition.
+3. `src/front/static/domain/js/domain-review.js` — relabeled the reopen control to **"Back to
+   Draft"** (icon `arrow-counterclockwise`) and updated its confirmation dialog copy.
+4. `src/front/static/registry/js/registry.js` — removed the per-version lifecycle buttons
+   (`statusButtons`) and the `setRegistryVersionStatus` handler from the Browse view. Each version
+   now exposes a single **"Validate"** button (`openVersionInValidation`) that loads the version
+   from Unity Catalog when it is not already current and jumps to `/domain/?section=review` (the
+   Validation workspace), the single place to drive the review workflow.
+5. `tests/units/registry/test_review_service.py` — added `test_reopen_in_review_to_draft_by_admin`,
+   `test_reopen_domain_admin_allowed`, `test_reopen_rejected_from_draft`,
+   `test_review_detail_admin_can_reopen_in_review`, `test_review_detail_builder_cannot_reopen`, and
+   strengthened `test_reopen_published_to_draft` to assert `from_status`.
+
+**Modified files**:
+- `src/back/objects/registry/ReviewService.py`
+- `src/api/routers/internal/review.py`
+- `src/front/static/domain/js/domain-review.js`
+- `src/front/static/registry/js/registry.js`
+- `tests/units/registry/test_review_service.py`
+
+**Test result**: `uv run pytest tests/units` -> 2311 passed.
+
+## Reshape the Validation page with a lifecycle diagram
+
+**Context**: The Validation (review/sign-off) workspace presented the workflow as a flat
+status banner + actions + audit list. Users asked for a visual lifecycle diagram showing the
+possible steps as boxes, the current status, and the people involved at each stage.
+
+**Changes**:
+1. `src/front/static/domain/js/domain-review.js` — added a `lifecycleDiagram(d)` block rendered
+   between the (now slimmed) status banner and the consistency/actions/timeline columns. It draws
+   three connected stage boxes — **Draft → In Review → Published** — with forward "Submit" /
+   "Publish" arrows. The current stage is highlighted ("you are here"), completed stages get a
+   green check, upcoming stages are dimmed. Each box surfaces the people involved, derived from the
+   review events: Draft shows who sent it back (changes requested / reopened), In Review shows the
+   submitter + sign-off chips with the live `X/quorum` progress bar, Published shows the publisher.
+   Added helpers `stageBox`, `flowArrow`, `progressBar` (moved out of the banner), `peopleLine`,
+   `mutedLine`, `personChip` (initials avatar), `initialsOf`, `shortName`, `lastActorFor`,
+   `latestEventFor`. The status banner no longer duplicates the progress bar.
+2. `src/front/static/domain/css/domain-review.css` — added styles for `.review-flow`,
+   `.review-stage` (is-done / is-current / is-todo states), `.review-stage-badge/-icon/-label/-now`,
+   `.review-people` / `.review-person` / `.review-avatar` chips, and `.review-arrow`. Responsive:
+   the row stacks vertically with rotated arrows below the `lg` breakpoint.
+
+**Modified files**:
+- `src/front/static/domain/js/domain-review.js`
+- `src/front/static/domain/css/domain-review.css`
+
+**Test result**: `uv run pytest tests/units` -> 2311 passed (frontend-only change; no Python tests
+cover the rendered markup).
+
+## Move review actions into the header; drop the "Your actions" card
+
+**Context**: Follow-up to the Validation reshape. The "Your actions" card duplicated chrome and
+pushed the buttons low on the page. Requested: surface the action buttons top-right of the header
+and fold the contextual notices (admin override, sign-off-blocked, etc.) into the header banner
+next to the status / domain / version.
+
+**Changes**:
+1. `src/front/static/domain/js/domain-review.js` — removed `actionsCard(d)`. Split its logic into
+   `actionButtons(d)` (returns just the workflow buttons: Submit / Approve / Request changes /
+   Publish [or override] / Back to Draft) and `actionNotes(d)` (returns the contextual messages:
+   submit-blocked reason, "you have signed off", the **admin override** warning, and the
+   "publishing unlocks once N sign-off(s)…" hint). `statusBanner(d)` now lays out status badge +
+   domain + version on the left, the action buttons on the top-right, and the notes underneath —
+   so everything lives in the header. `render()` no longer emits the actions card; the left column
+   under the lifecycle diagram now holds only the consistency checks.
+
+**Modified files**:
+- `src/front/static/domain/js/domain-review.js`
+
+**Test result**: `uv run pytest tests/units` -> 2311 passed (frontend-only change).
+
+## Fix: review comment box disabled in read-only states
+
+**Context**: Clicking "Back to Draft" (and Publish) on an IN-REVIEW / PUBLISHED version opens the
+`ReviewModals.promptComment` dialog, but its comment textarea was greyed out and not editable. Those
+statuses put the page in `read-only-version`, and the blanket read-only rule in `permissions.css`
+disables every `textarea`. The audit-note box must always be editable — it is the only way to attach
+a comment to the very transition that leaves the read-only state.
+
+**Changes**:
+1. `src/front/static/global/css/permissions.css` — exempted `textarea[data-rm-comment]` (the review
+   workflow comment box) from the read-only `textarea` disabling rule, alongside the existing
+   version-filter exemptions. Updated the explanatory comment.
+
+**Modified files**:
+- `src/front/static/global/css/permissions.css`
+
+**Test result**: `uv run pytest tests/units` -> 2311 passed (frontend-only change).
+
+## Home → My Tasks jumps to Validation instead of inline actions
+
+**Context**: Like the Registry → Browse change, the Home page "My Tasks" worklist should hand off
+to the Validation workspace rather than drive the workflow (submit / publish) inline.
+
+**Changes**:
+1. `src/front/static/home/js/home-tasks.js` — replaced the per-task action buttons (and the
+   `actionButton` / `onAction` / `transition` machinery) with a single **"Validate"** button
+   (`bi-ui-checks`, matching Browse) that loads the domain/version from Unity Catalog and jumps to
+   `/domain/?section=review`. The comments button is kept; the column header is now "Review".
+
+**Modified files**:
+- `src/front/static/home/js/home-tasks.js`
+
+**Test result**: `uv run pytest tests/units` -> 2311 passed (frontend-only change).
+
+## Load-Domain modal shows lifecycle status instead of "Latest / Read-Only"
+
+**Context**: The navbar "Load Domain from registry" popup labelled each version `(Latest)` /
+`(Read-Only)`. Requested: show the actual lifecycle status (Draft / In Review / Published) instead.
+
+**Changes**:
+1. `src/back/objects/domain/Domain.py` — `list_domain_versions_result` now also returns a
+   `version_status` map ({version: status}), sourced best-effort from `list_domain_details_cached()`
+   (cached registry metadata; never fatal). `versions` (string list) is unchanged for back-compat.
+2. `src/front/static/global/js/navbar.js` — `loadVersionsForDomainFromRegistry` labels each option
+   `v<ver> — <status>` using the new map (added `statusLabel()` mapping DRAFT/IN-REVIEW/PUBLISHED to
+   Draft/In Review/Published). Dropped the index-based "(Latest)"/"(Read-Only)" wording.
+
+**Modified files**:
+- `src/back/objects/domain/Domain.py`
+- `src/front/static/global/js/navbar.js`
+
+**Test result**: `uv run pytest tests/units` -> 2311 passed.
+
+## Consistent status colors everywhere: Draft=yellow, In Review=blue, Published=green
+
+**Context**: Status badges were inconsistent. The navbar / Browse / Versions / version-check used the
+canonical subtle scheme (Draft yellow, In Review blue, Published green), but the Validation page,
+Home tasks and Registry tasks used a solid scheme (grey Draft, **yellow** In Review). The lifecycle
+diagram also highlighted the current stage in brand red, so a current Draft stage looked red.
+
+**Changes**:
+1. `src/front/static/domain/js/domain-review.js`, `src/front/static/home/js/home-tasks.js`,
+   `src/front/static/registry/js/registry-my-tasks.js` — `statusBadge()` now uses the shared
+   convention `bg-warning-subtle`/`bg-info-subtle`/`bg-success-subtle` (+ `border`), matching the
+   navbar/Browse badges. Draft is now yellow (was grey), In Review blue (was yellow).
+2. `src/front/static/domain/js/domain-review.js` — lifecycle stage boxes now carry a `tone`
+   (draft/inreview/published); `stageBox()` adds a `tone-*` class.
+3. `src/front/static/domain/css/domain-review.css` — replaced the red (`--db-primary`) current-stage
+   highlight and the green done-stage highlight with per-tone CSS variables, so each stage's border,
+   icon, badge and "you are here" label follow its status color (Draft yellow / In Review blue /
+   Published green). State (current/done/todo) now only controls emphasis (ring, border width,
+   opacity, badge icon).
+
+**Modified files**:
+- `src/front/static/domain/js/domain-review.js`
+- `src/front/static/domain/css/domain-review.css`
+- `src/front/static/home/js/home-tasks.js`
+- `src/front/static/registry/js/registry-my-tasks.js`
+
+**Test result**: `uv run pytest tests/units` -> 2311 passed (frontend-only change).
+
+## Move "Ontology Precision Score" from Domain → Information to Domain → Cockpit
+
+**Context**: The Ontology Precision Score belongs with the other readiness metrics in the Cockpit,
+not on the Information/Global settings tab.
+
+**Changes**:
+1. `src/front/templates/partials/domain/_domain_information.html` — removed the precision-score row
+   from the Global tab.
+2. `src/front/static/domain/js/domain-information.js` — removed `_renderPrecisionScore` and its call
+   in the info-load path.
+3. `src/front/templates/partials/domain/_domain_validation.html` — added an "Ontology Precision
+   Score" card (full-width, header label + progress bar + hint) in the Cockpit, before the Digital
+   Twin row.
+4. `src/front/static/domain/js/domain-validation.js` — added `loadPrecisionScore()` (fetches
+   `/domain/info`) + `renderPrecisionScore()`, called from `loadValidationDetails()` so it refreshes
+   with the rest of the cockpit. Shows "Not analyzed" with a grey bar when no score exists yet.
+
+**Modified files**:
+- `src/front/templates/partials/domain/_domain_information.html`
+- `src/front/static/domain/js/domain-information.js`
+- `src/front/templates/partials/domain/_domain_validation.html`
+- `src/front/static/domain/js/domain-validation.js`
+
+**Test result**: `uv run pytest tests/units` -> 2311 passed (frontend-only change).
+
+## Editability driven by lifecycle status only (any DRAFT version is editable)
+
+**Context**: The old rule made *older* versions read-only even when they were DRAFT — editing
+was only allowed on the *latest* version. The requirement is now: editability depends solely on
+the lifecycle status. **Only a DRAFT version can be edited, whatever the version is** (an older
+DRAFT version is fully editable). The server-side write-gate was already status-only
+(`PermissionMiddleware` blocks edits unless status == DRAFT); the "older version is read-only"
+restriction lived entirely in the frontend, which keyed read-only off `is_active` (= is-latest).
+
+**Changes**:
+1. `src/front/static/global/js/version-check.js` — read-only is now driven solely by status:
+   `editable = (versionStatus === 'DRAFT')`. Dropped the `!is_active` (older-version) condition.
+   Repurposed `window.isActiveVersion` to mean "editable" (DRAFT) instead of "is latest", so the
+   ~40 design-surface gates that key off it allow editing of older DRAFT versions. When not
+   editable, both `read-only-status` and `read-only-version` are added to `<body>` and the navbar
+   note reads "This version is <STATUS> (read-only). Set it back to DRAFT to make changes."
+2. `src/front/static/domain/js/domain-information.js` — `updateVersionStatusUI(...)` is now fed
+   `(statusData.status === 'DRAFT')` instead of `statusData.is_active`, so the Global-tab form
+   fields enable for any DRAFT version.
+3. `src/front/static/domain/js/domain-actions.js` — `updateVersionStatus(...)` renamed its first
+   param to `editable` and is fed `(data.status === 'DRAFT')`; the read-only banner message now
+   says "Set it back to Draft to make changes." instead of "Load the latest version".
+4. `src/front/static/global/js/permissions.js` — updated the `canEditOntology` doc comment to
+   reflect that `isActiveVersion === false` now means "not editable (not DRAFT)".
+5. `src/back/objects/domain/Domain.py` — the load-from-UC confirmation message now labels the
+   loaded version by lifecycle status (`editable` vs `<STATUS>, read-only`) instead of
+   `Latest`/`Read-only` based on is-latest. The create-new-version guard (must load latest first)
+   is unchanged, since creating a version is a separate operation from editing.
+
+**Modified files**:
+- `src/front/static/global/js/version-check.js`
+- `src/front/static/domain/js/domain-information.js`
+- `src/front/static/domain/js/domain-actions.js`
+- `src/front/static/global/js/permissions.js`
+- `src/back/objects/domain/Domain.py`
+
+**Test result**: `uv run pytest tests/units/auth/test_permission_middleware.py
+tests/units/domain/test_version_status_cache.py tests/units/settings/test_settings_version_status.py
+tests/units/api/test_set_version_status_endpoint.py` -> 226 passed.
+
+## Fix: review sign-offs not counted in local dev (stuck at 0/N)
+
+**Context**: When approving an IN-REVIEW version locally, the sign-off count stayed at "0/1"
+even though the APPROVED event appeared in the audit trail, so quorum was never reached. Root
+cause: in local / PAT dev there is no `x-forwarded-email` proxy header, so `request.state.user_email`
+was empty. Review events were recorded with an empty `actor`, and `ReviewService._summarize`
+intentionally skips empty actors (`if key and key not in seen`) — so the approval never counted.
+(In a deployed Databricks App the proxy header carries the identity, so this only bit local dev.)
+
+**Changes**:
+1. `src/back/core/databricks/__init__.py` — added `get_local_user_email()` (cached, `lru_cache`):
+   best-effort resolves the developer's e-mail via SCIM `/Me` once per process for local / PAT mode.
+2. `src/shared/fastapi/main.py` — `PermissionMiddleware` now, in the local-dev branch, populates
+   `request.state.user_email` from `get_local_user_email()` when the proxy header is absent. This
+   fixes audit attribution everywhere (sign-offs, status changes, `get_user_email`) in local dev.
+
+Note: this attributes *new* sign-offs. Approvals recorded earlier with an empty actor stay
+uncounted; re-approve to register a counted sign-off. Reaching quorum enables the Publish action
+but does not auto-publish — publishing remains a deliberate builder/admin step.
+
+**Modified files**:
+- `src/back/core/databricks/__init__.py`
+- `src/shared/fastapi/main.py`
+
+**Test result**: `uv run pytest tests/units/auth/test_permission_middleware.py
+tests/units/registry/test_review_service.py` -> 234 passed.
+
+---
+
+## Fix: curated business views render empty after Back-to-Draft / on an older DRAFT version
+
+**Context**: After sending a version Back to Draft (or loading an older version that is now
+editable), the Ontology Designer canvas appeared empty for *business views* specifically — the
+core ontology and the navbar were fine. Investigation confirmed there was **no server-side data
+loss**: the stored views still held all entities and their `visibility.hiddenEntities` lists
+(e.g. `Support` = 15 entities, 9 hidden -> 6 visible). The blank canvas was purely a client-side
+render problem with two contributing causes:
+1. A curated view is rendered with `center: false`, so the visible subset stayed at its original
+   wide-circle positions while the now-hidden entities (which anchored the centre) were removed —
+   leaving the few visible cards off-screen, i.e. an apparently empty canvas.
+2. `loadOntologyIntoDesigner` entered the merge branch on `OntologyState.config` being truthy
+   alone; right after a reload `config.classes` can still be empty, producing a zero-entity
+   merged layout (a genuinely blank canvas).
+
+**Changes**:
+1. `src/front/static/global/ontoviz/ontoviz.js` — `centerDiagram()` now computes its bounding box
+   over the **visible** entities only (falling back to all when none are visible), so centring a
+   curated business view frames the cards that are actually shown instead of centring around
+   hidden anchors.
+2. `src/front/static/global/js/ontology-design.js` — `loadOntologyIntoDesigner()`:
+   - resolves `classes`/`properties` up-front and guards the merge branch on `classes.length > 0`
+     (not just `config` truthiness), so an empty/not-yet-loaded `OntologyState` falls through to
+     the saved-layout-only render instead of building a zero-entity layout;
+   - both `fromJSON` calls now pass `center: _layoutHasHidden` — curated views (any hidden
+     entities) are re-framed into view, while full views keep their exact saved positions.
+
+**Modified files**:
+- `src/front/static/global/ontoviz/ontoviz.js`
+- `src/front/static/global/js/ontology-design.js`
+
+**Test result**: `uv run pytest -q --ignore=tests/property --ignore=tests/e2e` -> 2532 passed,
+17 skipped (frontend-only change; `tests/property` and `tests/e2e` skipped due to pre-existing
+env issues: `hypothesis` not installed and a 3.9-only syntax in `tests/e2e/conftest.py`).
+
+---
+
+## Complete validation/review test coverage (my_tasks, summarize resets, reopen endpoint)
+
+**Context**: Audited the Validation & Review workflow (`ReviewService` + `/review` router +
+version lifecycle) for test gaps. The orchestration, state machine and sign-off paths were already
+well covered, but a few deterministic behaviors had no unit tests: the cross-domain `my_tasks()`
+worklist logic (only its API delegation was tested), the approval-reset rule in `_summarize` for
+the `published` / `reopened` rounds, the publish audit `meta.quorum_override == False` path when the
+quorum is met by a non-admin builder, and the `POST /review/{folder}/{version}/reopen` endpoint
+plumbing. No production code changed — tests only.
+
+**Changes**:
+1. `tests/units/registry/test_review_service.py` — added `my_tasks()` coverage:
+   `test_my_tasks_empty_when_registry_not_configured`, `test_my_tasks_lists_draft_submit_action`,
+   `test_my_tasks_in_review_lists_review_and_publish_for_admin`,
+   `test_my_tasks_skips_versions_without_pending_actions`,
+   `test_my_tasks_sorts_newest_activity_first`, `test_my_tasks_raises_when_domain_listing_fails`
+   (with `_my_tasks_svc` / `_call_my_tasks` helpers that drive the admin role short-circuit so the
+   worklist logic runs without the Databricks permission lookup).
+2. `tests/units/registry/test_review_service.py` — added `_summarize` reset coverage
+   `test_summarize_resets_approvals_on_publish`, `test_summarize_resets_approvals_on_reopen`, and the
+   publish-meta case `test_publish_meta_records_no_override_when_quorum_met`. Imported
+   `ACTION_REOPENED` and `InfrastructureError`.
+3. `tests/units/api/test_review_endpoints.py` — added `test_reopen_delegates`, asserting target-domain
+   role resolution and argument forwarding for the previously untested `reopen` handler.
+
+**Modified files**:
+- `tests/units/registry/test_review_service.py`
+- `tests/units/api/test_review_endpoints.py`
+
+**Test result**: `uv run pytest tests/units` -> **2321 passed** (was 2311; +10 new tests). The full
+default suite shows 41 pre-existing failures unrelated to this change: the `tests/mcp/integration`
+suite leaves the asyncio event loop closed, which then breaks subsequent async tests on untouched
+files (`test_review_endpoints.py`, `test_set_version_status_endpoint.py`) — all of which pass in
+isolation and within `tests/units`.
+
+---
+
+## Patch six Dependabot vulnerabilities (pyarrow, starlette, aiohttp, strawberry-graphql)
+
+**Context**: Six GitHub Dependabot alerts (#31–#36) flagged vulnerable transitive/direct
+dependencies pinned in `uv.lock`. Bumped each to its first fixed release and re-resolved the
+lockfile. The starlette one (BadHost / CVE-2026-48710) is the only code-relevant case: it poisons
+`request.url.path` via a malformed Host header, bypassing path-based auth. The framework upgrade
+fixes it, and as defense-in-depth we also switched every security-sensitive path check to read the
+raw routed path (`request.scope["path"]`) per the advisory's durable-fix recommendation.
+
+Advisories addressed:
+- `pyarrow` 23.0.0 -> 23.0.1 — Arrow C++ IPC use-after-free (CVE-2026-25087 / GHSA-rgxp-2hwp-jwgg).
+  The Python binding never exposed the affected `PreBufferMetadata` API; bump silences the alert (#36).
+- `starlette` 0.50.0 -> 1.2.1 — BadHost missing Host-header validation (CVE-2026-48710 /
+  GHSA-86qp-5c8j-p5mr) (#35). Required bumping `fastapi` (0.128.0 -> 0.136.3) for Starlette 1.0+ support.
+- `aiohttp` 3.13.5 -> 3.14.0 (transitive via mlflow) — CookieJar.load() pickle RCE (CVE-2026-34993 /
+  GHSA-jg22-mg44-37j8) and per-request cookie leak on cross-origin redirect (CVE-2026-47265 /
+  GHSA-hg6j-4rv6-33pg) (#31, #32).
+- `strawberry-graphql` 0.315.4 -> 0.316.0 — MaxAliasesLimiter fragment-spread bypass (CVE-2026-47707 /
+  GHSA-fr49-mhgj-crfc) and circular-fragment DOS in QueryDepthLimiter (#33, #34).
+
+**Changes**:
+1. `pyproject.toml` — bumped direct floors `pyarrow>=23.0.1`, `starlette>=1.0.1`,
+   `strawberry-graphql>=0.315.7`, `fastapi>=0.129.0`; added `aiohttp>=3.14.0` to
+   `[tool.uv].constraint-dependencies` (transitive). Each pin carries a CVE/GHSA comment.
+2. `uv.lock` — re-resolved (`uv lock`); 5 packages updated as listed above.
+3. `src/shared/fastapi/csrf.py` — CSRF bypass-prefix check reads `request.scope["path"]`
+   instead of `request.url.path` (BadHost durable fix).
+4. `src/back/objects/session/FileSessionMiddleware.py` — session bypass-prefix check reads
+   `request.scope["path"]`.
+5. `src/shared/fastapi/main.py` — `PermissionMiddleware` permission bypass-prefix check reads
+   `request.scope["path"]`.
+6. `src/back/fastapi/graphql_routes.py` — added `_is_external_request()` helper (dedupes 4
+   identical external/internal gate checks) reading `request.scope["path"]`; replaced all 4 call sites.
+7. `tests/units/auth/test_permission_middleware.py` — `_make_request()` now also sets
+   `req.scope = {"path": path}` so the mock mirrors a real ASGI request (the middleware reads the
+   raw routed path from `scope["path"]`). Without this the mock returned a `MagicMock` for the path.
+
+**Modified files**:
+- `pyproject.toml`
+- `uv.lock`
+- `src/shared/fastapi/csrf.py`
+- `src/back/objects/session/FileSessionMiddleware.py`
+- `src/shared/fastapi/main.py`
+- `src/back/fastapi/graphql_routes.py`
+- `tests/units/auth/test_permission_middleware.py`
+
+**Test result**: full suite `uv run pytest -q` -> **2771 passed, 17 skipped, 41 failed**. The 41
+failures are pre-existing and unrelated: the `tests/mcp/integration` suite leaves the asyncio event
+loop closed, cascading into the async endpoint tests (`test_review_endpoints.py`,
+`test_set_version_status_endpoint.py`) — both confirmed **12 passed** in isolation. The 195
+`test_permission_middleware.py` tests pass after the `scope` fix.
+
+---
+
+## Finish the BadHost sweep: audit every remaining `request.url.path` user
+
+**Context**: Follow-up to the Dependabot/starlette BadHost fix above. That change hardened the
+security-sensitive path checks (PermissionMiddleware, CSRFMiddleware, FileSessionMiddleware, GraphQL
+external/internal gate). This task audited the *entire* API/middleware surface for any other code
+still deriving a path or URL from the Host header (`request.url.path`, `request.url_for`, redirect
+builders) and aligned the stragglers with the durable fix. The full sweep found only two remaining
+`request.url.path` users; everything else was a false positive: template `url_for('static', …)`
+returns a relative `/static/...` path, `resolve.py` redirects to an internally-computed app path
+(not Host-derived), and the `base_url` references in `dtwin.py` / agents / mcp-server are
+loopback/httpx client bases rather than request-derived values.
+
+**Changes**:
+1. `src/shared/fastapi/timing.py` — `RequestTimingMiddleware` now reads the raw routed path
+   (`request.scope["path"]`) for its `_SKIP_PREFIXES` `startswith` decision instead of
+   `request.url.path`. Same poisonable pattern as the already-fixed middlewares (not a security
+   boundary, but a poisoned Host could otherwise flip the static/health skip logic and log an
+   attacker-controlled path).
+2. `src/shared/fastapi/error_handlers.py` — the unhandled-exception handler logs
+   `request.scope["path"]` instead of `request.url.path`, so the error log records the true routed
+   path and not a Host-reconstructed one.
+
+**Modified files**:
+- `src/shared/fastapi/timing.py`
+- `src/shared/fastapi/error_handlers.py`
+
+**Test result**: `uv run pytest tests/units` -> **2321 passed** (no behavioral change to tested
+paths; both touched files are logging/skip-only middleware with no dedicated unit tests).
+
+---
+
+## Business Views: count and group from *visible* entities, not the full ontology
+
+**Context**: In the Visual Ontology Designer (Business Views) the entity counter showed the total
+number of ontology classes merged into the layout rather than the entities actually visible in the
+curated view. A `Support` view with 6 visible entities (9 hidden) displayed "Entities: 15", and
+clicking *Create Group* proposed all 15 entities instead of the 6 belonging to the view. A view
+stores every ontology class in `layout.entities[]` and hides the non-members via
+`visibility.hiddenEntities`, so any counter built from `entities.size` over-counts.
+
+**Changes**:
+1. `src/front/static/global/ontoviz/ontoviz.js`
+   - Added `getVisibleEntityCount()`, `getVisibleRelationshipCount()`,
+     `getVisibleInheritanceCount()`, and `getVisibleEntityNames()` helpers that respect
+     `visibilityState`. The relationship/inheritance counters apply the full visibility rule
+     (`sourceVisible && targetVisible && explicitlyVisible`), mirroring
+     `_updateRelationshipVisibility` / `_updateInheritanceVisibility`, so links whose endpoint
+     entities are hidden are not counted.
+   - `_updateStatusBar()` now reports the visible counts (headline now matches the canvas).
+   - Visibility palette section title now shows "Entities (visible / total visible)".
+   - `_toggleItemVisibility()` refreshes the status bar so counters stay live when entities are
+     shown/hidden or "Hide from view" is used.
+2. `src/front/static/global/js/ontology-design.js`
+   - `createGroupFromView()` now builds group members from `getVisibleEntityNames()` (visible-only),
+     with a graceful fallback to the previous full list if the helper is unavailable.
+
+**Modified files**:
+- `src/front/static/global/ontoviz/ontoviz.js`
+- `src/front/static/global/js/ontology-design.js`
+
+**Test result**: `uv run pytest -q` -> **2771 passed, 17 skipped, 41 failed** in 256.62s. The 41
+failures are the same pre-existing, unrelated set documented in earlier sections of this file
+(`tests/mcp/integration` leaves the asyncio event loop closed, cascading into
+`test_review_endpoints.py` / `test_set_version_status_endpoint.py`). This change is frontend-only
+(OntoViz canvas JS), which has no Python test coverage, so the failing set is unchanged by it.

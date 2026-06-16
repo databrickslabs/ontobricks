@@ -31,6 +31,7 @@ from back.objects.registry.obx_format import CURRENT_OBX_FORMAT_VERSION
 __all__ = [
     "RegistryCfg",
     "RegistryService",
+    "ReviewService",
     "PermissionService",
     "permission_service",
     "ROLE_ADMIN",
@@ -56,7 +57,20 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    """Lazy-import scheduler (APScheduler) so tests and minimal envs can import RegistryCfg."""
+    """Lazy-import scheduler (APScheduler) so tests and minimal envs can import RegistryCfg.
+
+    ``ReviewService`` is also lazy: it imports ``back.objects.session`` at
+    module load, and the ``session`` package imports
+    ``back.objects.registry.registry_cache`` during its own init — so
+    importing it eagerly here would create a fragile import cycle.
+    """
+    if name == "ReviewService":
+        from back.objects.registry.ReviewService import (
+            ReviewService as _ReviewService,
+        )
+
+        globals()["ReviewService"] = _ReviewService
+        return _ReviewService
     if name == "BuildScheduler":
         from back.objects.registry.scheduler import BuildScheduler as _BuildScheduler
 

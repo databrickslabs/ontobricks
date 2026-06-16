@@ -43,11 +43,6 @@ env:
     valueFrom: sql-warehouse
   - name: DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT
     value: "${APP_SQL_WAREHOUSE_FALLBACK}"
-  # Default catalog/schema for ad-hoc Unity Catalog operations.
-  - name: DATABRICKS_CATALOG
-    value: "${APP_DATABRICKS_CATALOG}"
-  - name: DATABRICKS_SCHEMA
-    value: "${APP_DATABRICKS_SCHEMA}"
   # Default fully-qualified Delta triple store table (catalog.schema.table).
   # Used as fallback when no domain session is active (e.g. MCP API calls).
   - name: DATABRICKS_TRIPLESTORE_TABLE

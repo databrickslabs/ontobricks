@@ -14,7 +14,7 @@
                 Design rules in <em>Ontology → Advanced → Cohorts</em><br>
                 <i class="bi bi-folder2-open"></i>
                 Domain: <code class="text-primary">{{ domain_name }}</code>
-                <span class="badge bg-secondary bg-opacity-50 cohort-fs-tiny">v{{ current_version }}</span><br>
+                <span class="badge bg-secondary bg-opacity-50 cohort-fs-tiny">v{{ current_version }}</span> <span class="js-version-status-badge badge border bg-warning-subtle text-dark border-warning" style="font-size:0.6rem;">Draft</span><br>
                 <i class="bi bi-diagram-3"></i>
                 Graph DB:
                 <code id="cohortGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
@@ -22,6 +22,7 @@
         </div>
         <div class="d-flex align-items-center gap-2">
             <button class="btn btn-sm btn-outline-secondary"
+                    id="cohortOutputsBtn"
                     onclick="CohortModule.openOutputsModal()"
                     title="Configure outputs (graph triples, UC table)">
                 <i class="bi bi-sliders me-1"></i>Outputs

@@ -103,6 +103,26 @@ body[data-domain-role="editor"] [data-requires="editor"] {
 }
 
 /* ==========================================================================
+   Lifecycle status read-only mode (IN-REVIEW / PUBLISHED)
+
+   A domain version is only editable while its lifecycle status is DRAFT.
+   When ``checkVersionStatus`` finds a non-DRAFT status it adds BOTH
+   ``read-only-status`` and ``read-only-version`` to <body>, so all the
+   write-surface gates below (which key off ``read-only-version``) apply
+   uniformly. ``read-only-status`` is kept as a distinct marker for
+   status-specific UI (messaging) and to additionally gate the Build /
+   sync action, which is otherwise builder-gated rather than version-gated.
+   ========================================================================== */
+
+/* --- Digital Twin Build/sync: blocked unless the version is DRAFT. */
+body.read-only-status #syncStartBtn,
+body.read-only-status [data-sync-action="start-triple-store-sync"] {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* ==========================================================================
    Older-version (inactive version) read-only mode
 
    When ``checkVersionStatus`` finds the loaded version is no longer
@@ -121,7 +141,6 @@ body:is(.read-only-version, .role-viewer) #loadMetadataConfirmBtn,
 body:is(.read-only-version, .role-viewer) #updateMappingsBtn,
 body:is(.read-only-version, .role-viewer) [data-meta-action="clear-metadata"],
 body:is(.read-only-version, .role-viewer) [data-meta-action="open-ds-modal"],
-body:is(.read-only-version, .role-viewer) [data-meta-action="edit-comment"],
 body:is(.read-only-version, .role-viewer) [data-meta-action="table-details"],
 body:is(.read-only-version, .role-viewer) [data-meta-action="update-from-uc"],
 body:is(.read-only-version, .role-viewer) [data-meta-action="remove-selected-tables"],
@@ -150,19 +169,23 @@ body:is(.read-only-version, .role-viewer) .iof-domain-cb,
 /* --- Mapping > Import: R2RML imports. */
 body:is(.read-only-version, .role-viewer) #importR2rmlLocalBtn,
 body:is(.read-only-version, .role-viewer) #importR2rmlFileInput,
-/* --- Mapping > Designer / Manual: reset, auto-map, save. */
+/* --- Mapping > Designer / Manual: reset, auto-map, save, bulk
+       exclude/include. */
 body:is(.read-only-version, .role-viewer) #resetPanelBtn,
 body:is(.read-only-version, .role-viewer) #autoMapPanelBtn,
 body:is(.read-only-version, .role-viewer) #savePanelBtn,
 body:is(.read-only-version, .role-viewer) #manualResetBtn,
 body:is(.read-only-version, .role-viewer) #manualAutoMapBtn,
 body:is(.read-only-version, .role-viewer) #manualSavePanelBtn,
+body:is(.read-only-version, .role-viewer) #mappingAutoExclude,
+body:is(.read-only-version, .role-viewer) #mappingIncludeExcluded,
 /* --- Ontology > Business Views: CRUD buttons (top toolbar) + the
        empty-state "Create View" CTA shown when no view exists. */
 body:is(.read-only-version, .role-viewer) #createViewBtn,
 body:is(.read-only-version, .role-viewer) #renameViewBtn,
 body:is(.read-only-version, .role-viewer) #deleteViewBtn,
 body:is(.read-only-version, .role-viewer) #createGroupFromViewBtn,
+body:is(.read-only-version, .role-viewer) #newAssistantBtn,
 body:is(.read-only-version, .role-viewer) #emptyStateCreateViewBtn,
 /* --- Ontology > Entity Groups: "New Group" CTA. */
 body:is(.read-only-version, .role-viewer) #newGroupBtn,
@@ -170,6 +193,35 @@ body:is(.read-only-version, .role-viewer) #newGroupBtn,
 body:is(.read-only-version, .role-viewer) .dq-shape-card .btn-group button,
 /* --- Save Domain navbar item: still rendered, but neutralised. */
 body:is(.read-only-version, .role-viewer) #menuSaveDomain {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* --- Cohorts: a read-only domain blocks creating, editing and
+       materialising cohort rules. Unlike most write surfaces these gates
+       must also fire on the Digital Twin run page (which is otherwise
+       exempt from the generic form-field rule below), because the
+       Materialise / Configure-outputs actions persist into the domain.
+       The saved-rules picker and the read-only Preview / Trace / Explain
+       actions stay interactive so a locked version remains inspectable.
+       Several of these controls are rendered dynamically by
+       ``query-cohorts.js`` (``.cohort-*`` classes) — class gates cover
+       them regardless of when they are inserted. */
+body:is(.read-only-version, .role-viewer) #cohortNewBtn,
+body:is(.read-only-version, .role-viewer) #cohortSaveBtn,
+body:is(.read-only-version, .role-viewer) #cohortAddPathBtn,
+body:is(.read-only-version, .role-viewer) #cohortAddConstraintBtn,
+body:is(.read-only-version, .role-viewer) #cohortOutputsBtn,
+body:is(.read-only-version, .role-viewer) #cohortMaterializeBtn,
+body:is(.read-only-version, .role-viewer) .cohort-link-del,
+body:is(.read-only-version, .role-viewer) .cohort-hop-add,
+body:is(.read-only-version, .role-viewer) .cohort-hop-del,
+body:is(.read-only-version, .role-viewer) .cohort-hop-where-add,
+body:is(.read-only-version, .role-viewer) .cohort-hop-where-del,
+body:is(.read-only-version, .role-viewer) .cohort-hop-where-sample,
+body:is(.read-only-version, .role-viewer) .cohort-row-del,
+body:is(.read-only-version, .role-viewer) .cohort-sample {
     pointer-events: none !important;
     opacity: 0.5 !important;
     cursor: not-allowed !important;
@@ -194,12 +246,39 @@ body:is(.read-only-version, .role-viewer) .view-mode-hidden {
        (navbar → Load Domain). Viewers must still be able to navigate
        between domains and pick a version to load — without this, the
        Load button stays disabled because the select can't be focused.
+     - ``#auditVersionFilter`` / ``#runsVersionFilter`` version filters on
+       Domain → Audit trail / Runs. These only filter the read-only
+       timeline by version; a reader on an IN-REVIEW / PUBLISHED version
+       must still be able to switch the filter. (The ``[id*="filter"]``
+       input exemption above is case-sensitive and would not match the
+       capital-F ids, so they are listed explicitly.)
+     - ``textarea[data-rm-comment]`` the review-workflow comment box
+       (ReviewModals.promptComment). Every status switch — including the
+       admin "Back to Draft" / Publish on an IN-REVIEW or PUBLISHED
+       version — opens this modal to capture an audit note, so the box
+       must stay editable precisely when the domain is read-only.
 
    Any future "navigation" select / input should be added here rather
-   than to a per-page override. */
-body:is(.read-only-version, .role-viewer) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect),
-body:is(.read-only-version, .role-viewer) textarea,
-body:is(.read-only-version, .role-viewer) select:not(#domainVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect) {
+   than to a per-page override.
+
+   The Digital Twin page (``body[data-page="digitaltwin"]``) is excluded
+   wholesale: it is a read / analysis surface (SPARQL/insights, graph
+   exploration + filter/search, data quality, reasoning, cohort
+   discovery) that never edits the domain *design*. Its filter controls
+   are a mix of <select> / checkbox / mixed-case ``sgFilterValue`` inputs
+   that the per-input exemptions above can't reliably catch, and a
+   PUBLISHED/IN-REVIEW domain (now ``read-only-version``) must stay fully
+   queryable. Real mutations are still enforced server-side by
+   ``PermissionMiddleware``.
+
+   ``.pitfall-chk`` (Ontology > Pitfalls pattern checkboxes) are exempt:
+   running a pitfalls analysis is a read-only operation (the backend
+   ``/ontology/pitfalls/analyze`` endpoint is status-open), so a reader on
+   a PUBLISHED/IN-REVIEW version must still be able to pick which patterns
+   to check and run the analysis. */
+body:is(.read-only-version, .role-viewer):not([data-page="digitaltwin"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk),
+body:is(.read-only-version, .role-viewer):not([data-page="digitaltwin"]) textarea:not([data-rm-comment]),
+body:is(.read-only-version, .role-viewer):not([data-page="digitaltwin"]) select:not(#domainVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not(#runsVersionFilter) {
     pointer-events: none !important;
     background-color: #e9ecef !important;
     opacity: 0.7 !important;
@@ -225,8 +304,10 @@ body:is(.read-only-version, .role-viewer) .btn.disabled {
    colour / sizing live here (rule §4: no inline CSS in templates).
    ========================================================================== */
 
+/* ``!important`` so this beats Bootstrap's ``.d-flex`` on the same element —
+   otherwise the raw ``ROLE`` placeholder leaks before/without JS resolution. */
 #roleNavBadgeItem {
-    display: none;
+    display: none !important;
 }
 
 #roleNavBadgeItem.is-visible {
@@ -234,7 +315,7 @@ body:is(.read-only-version, .role-viewer) .btn.disabled {
 }
 
 #roleNavBadge {
-    background-color: #dc3545;
+    background-color: #343a40;
     color: #fff;
     padding: 0.4rem 0.75rem;
     font-size: 0.75rem;

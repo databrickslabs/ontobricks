@@ -110,6 +110,8 @@ class DesignStatusResponse(BaseModel):
 class VersionInfo(BaseModel):
     version: str
     is_latest: bool = False
+    status: str = "DRAFT"
+    is_published: bool = False
 
 
 class VersionsResponse(BaseModel):
@@ -216,12 +218,28 @@ async def list_domain_versions(
         raise NotFoundError(f"No versions found for domain '{domain_name}'")
 
     latest = versions_sorted[0]
+
+    def _status_for(version: str) -> str:
+        ok, data, _ = svc.read_version(domain_name, version)
+        if not ok:
+            return "DRAFT"
+        return (data.get("info", {}).get("status") or "DRAFT").upper()
+
+    versions = []
+    for v in versions_sorted:
+        status = _status_for(v)
+        versions.append(
+            VersionInfo(
+                version=v,
+                is_latest=(v == latest),
+                status=status,
+                is_published=(status == "PUBLISHED"),
+            )
+        )
     return VersionsResponse(
         success=True,
         domain_name=domain_name,
-        versions=[
-            VersionInfo(version=v, is_latest=(v == latest)) for v in versions_sorted
-        ],
+        versions=versions,
         latest_version=latest,
     )
 

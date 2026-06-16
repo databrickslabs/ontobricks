@@ -97,7 +97,6 @@ class TestSettings:
 
         s = Settings(_env_file=None)
         assert s.secret_key == "dev-secret-key-change-in-prod"
-        assert s.databricks_catalog == "main"
         assert s.registry_volume == "OntoBricksRegistry"
         assert s.session_max_age == 86400
 

@@ -185,7 +185,91 @@ _DOMAIN_SCOPED_EXCEPTIONS = (
     "/domain/list-projects",
     "/domain/list-versions",
     "/domain/load-from-uc",
+    # Authorization is resolved against the *target* domain inside the
+    # handler (a Builder may manage status for a domain they have not
+    # loaded), so it must not be gated by the *session* domain's role.
+    "/domain/set-version-status",
 )
+
+# ----------------------------------------------------------------------
+# Lifecycle status edit-gate
+# ----------------------------------------------------------------------
+# A domain version's content is only editable while its lifecycle status
+# is ``DRAFT``. Once it moves to ``IN-REVIEW`` or ``PUBLISHED`` the
+# mutating endpoints below are blocked server-side (authoritative) for
+# *all* roles. Read / query / generate / validate endpoints stay open so
+# a locked version can still be browsed, queried and inspected.
+
+# Write methods on these prefixes are pure model-editing surfaces.
+_STATUS_GATE_EDIT_PREFIXES = (
+    "/ontology/",
+    "/mapping/",
+)
+
+# Specific mutating endpoints outside the editing prefixes (domain
+# metadata/layout saves, document uploads, Digital-Twin build/sync, and
+# reasoning materialisation) that persist into the loaded version.
+_STATUS_GATE_EDIT_PATHS = (
+    "/domain/save",
+    "/domain/info",
+    "/domain/import",
+    "/domain/reset",
+    "/domain/clear",
+    "/domain/config",
+    "/domain/map-layout",
+    "/domain/save-to-uc",
+    "/domain/design-views/create",
+    "/domain/design-views/rename",
+    "/domain/design-views/delete",
+    "/domain/metadata/",
+    "/domain/documents/",
+    "/dtwin/sync/",
+    "/dtwin/reasoning/materialize",
+)
+
+# Non-mutating POST endpoints that live under an editing prefix but only
+# compute / validate / generate suggestions (no persistence). These stay
+# open regardless of status so a locked version remains fully inspectable.
+_STATUS_GATE_OPEN_SUFFIXES = (
+    "/generate",
+    "/generate-owl",
+    "/generate-async",
+    "/generate-sql",
+    "/parse-owl",
+    "/parse-rdfs",
+    "/parse-r2rml",
+    "/load-owl-file",
+    "/validate",
+    "/validate-sql",
+    "/test-query",
+    "/tables",
+    "/table-columns",
+    "/schema-context",
+    "/analyze",
+    "/chat",
+    "/invoke",
+    "/probe-write",
+)
+
+# Status values that allow editing the version content.
+_STATUS_EDITABLE = "DRAFT"
+
+
+def _is_status_gated_edit(path: str, method: str) -> bool:
+    """True when *path*/*method* mutates the loaded version's content."""
+    if method not in _VIEWER_BLOCKED_METHODS:
+        return False
+    if any(path.endswith(suffix) for suffix in _STATUS_GATE_OPEN_SUFFIXES):
+        return False
+    if "/wizard/" in path:
+        return False
+    if any(path.startswith(p) for p in _STATUS_GATE_EDIT_PREFIXES):
+        return True
+    if any(
+        path == p or path.startswith(p) for p in _STATUS_GATE_EDIT_PATHS
+    ):
+        return True
+    return False
 
 
 class PermissionMiddleware(BaseHTTPMiddleware):
@@ -228,11 +312,21 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         request.state.user_email = email
 
         if not is_databricks_app():
+            # Local / PAT dev has no proxy identity header, so resolve the
+            # developer's e-mail once via SCIM /Me. Without this, audit
+            # attribution (review sign-offs, status changes) records an
+            # empty actor and sign-off counts stay stuck at 0/N.
+            if not email:
+                from back.core.databricks import get_local_user_email
+
+                request.state.user_email = get_local_user_email()
             request.state.user_role = "admin"
             request.state.user_domain_role = "admin"
             return await call_next(request)
 
-        path = request.url.path
+        # Raw routed path, not request.url.path: the latter is reconstructed
+        # from the Host header and could be poisoned (BadHost / CVE-2026-48710).
+        path = request.scope["path"]
 
         if any(path.startswith(p) for p in _PERM_BYPASS_PREFIXES):
             request.state.user_role = ""
@@ -318,7 +412,36 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                     )
                 return RedirectResponse("/", status_code=302)
 
+        # Lifecycle status edit-gate (applies to all roles, admins
+        # included): block mutating edits unless the loaded version is
+        # DRAFT. Locked versions must be set back to DRAFT to edit.
+        if _is_status_gated_edit(path, request.method):
+            status = self._session_version_status(request)
+            if status and status != _STATUS_EDITABLE:
+                return self._forbidden_json(
+                    request,
+                    f"This version is {status}; set it back to DRAFT to edit.",
+                )
+
         return await call_next(request)
+
+    @staticmethod
+    def _session_version_status(request: Request) -> str:
+        """Lifecycle status of the request's session-loaded domain version.
+
+        Returns ``"DRAFT"`` (editable) when no domain is loaded or the
+        status cannot be resolved, so a transient error never blocks an
+        edit on a legitimately editable version.
+        """
+        try:
+            from back.objects.session import get_domain, SessionManager
+
+            session_mgr = SessionManager(request)
+            domain = get_domain(session_mgr)
+            return (domain.info or {}).get("status", "DRAFT") or "DRAFT"
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("could not resolve session version status: %s", exc)
+            return "DRAFT"
 
     @staticmethod
     def _forbidden_json(request: Request, message: str) -> JSONResponse:

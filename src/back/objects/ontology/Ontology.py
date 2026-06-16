@@ -6,6 +6,7 @@ operations that persist to the session; use static methods for pure transforms.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Set
 
 from back.core.logging import get_logger
@@ -30,6 +31,9 @@ if TYPE_CHECKING:
         AgentResult as IconAssignAgentResult,
     )
     from agents.agent_owl_generator.engine import AgentResult
+    from agents.agent_business_rules_generator.engine import (
+        AgentResult as BusinessRulesAgentResult,
+    )
     from back.objects.session.DomainSession import DomainSession
 
 IndustryKind = Literal["fibo", "cdisc", "iof", "fhir"]
@@ -74,6 +78,7 @@ class Ontology:
         guidelines: str = "",
         options: Optional[Dict[str, Any]] = None,
         selected_docs: Optional[List[str]] = None,
+        warehouse_id: str = "",
         on_step: Optional[Callable[[str], None]] = None,
     ) -> "AgentResult":
         """Run ``agent_owl_generator`` for this project (blocking).
@@ -110,35 +115,111 @@ class Ontology:
             domain_version=s.current_version,
             selected_tables=selected_tables,
             selected_docs=list(selected_docs or []),
+            warehouse_id=warehouse_id or "",
             on_step=on_step,
         )
 
-    def agent_ontology_context(self) -> Dict[str, Any]:
-        """Ontology snapshot for agents: entities (classes + attributes) + object-property rels."""
+    def generate_rules_with_agent(
+        self,
+        *,
+        host: str,
+        token: str,
+        endpoint_name: str,
+        options: Optional[Dict[str, Any]] = None,
+        guidelines: str = "",
+        selected_docs: Optional[List[str]] = None,
+        warehouse_id: str = "",
+        on_step: Optional[Callable[[str], None]] = None,
+    ) -> "BusinessRulesAgentResult":
+        """Run ``agent_business_rules_generator`` for this project (blocking).
+
+        Feeds the live ontology design (classes/attributes + relationships) and
+        the domain's uploaded documents to the agent, which proposes SWRL,
+        decision-table, SPARQL, and aggregate rules for the user to review.
+
+        Typical use: call from a background thread; poll task status from HTTP.
+        """
+        from agents.agent_business_rules_generator import run_agent
+
+        s = self._domain
+        ont = s.ontology
+        base_uri = (
+            ont.get("base_uri")
+            or ont.get("info", {}).get("base_uri")
+            or DEFAULT_BASE_URI
+        )
+        return run_agent(
+            host=host,
+            token=token,
+            endpoint_name=endpoint_name,
+            registry=dict(s.registry),
+            ontology_design=self.agent_ontology_context(connected_only=True),
+            base_uri=base_uri,
+            options=options or {},
+            guidelines=guidelines or "",
+            domain_name=s.info.get("name", ""),
+            domain_folder=s.domain_folder,
+            domain_version=s.current_version,
+            selected_docs=list(selected_docs or []),
+            warehouse_id=warehouse_id or "",
+            on_step=on_step,
+        )
+
+    def agent_ontology_context(
+        self, connected_only: bool = False
+    ) -> Dict[str, Any]:
+        """Ontology snapshot for agents: entities (classes + attributes) + object-property rels.
+
+        Args:
+            connected_only: When True, drop entities that do not participate in
+                any business relationship (object property) as domain or range.
+                Entities related only through inheritance — or not at all — are
+                excluded so the consuming agent never references them.
+        """
         s = self._domain
         classes = s.get_classes()
         properties = s.get_properties()
-        return {
-            "entities": [
-                {
-                    "name": c.get("name", ""),
-                    "uri": c.get("uri", ""),
-                    "attributes": [
-                        dp.get("name", "") for dp in c.get("dataProperties", [])
-                    ],
-                }
-                for c in classes
-            ],
-            "relationships": [
-                {
-                    "name": p.get("name", ""),
-                    "domain": p.get("domain", ""),
-                    "range": p.get("range", ""),
-                }
-                for p in properties
-                if p.get("type") in ("ObjectProperty", "owl:ObjectProperty", None)
-            ],
-        }
+
+        relationships = [
+            {
+                "name": p.get("name", ""),
+                "domain": p.get("domain", ""),
+                "range": p.get("range", ""),
+            }
+            for p in properties
+            if p.get("type") in ("ObjectProperty", "owl:ObjectProperty", None)
+        ]
+
+        def _local(ref: str) -> str:
+            return ref.rsplit("#", 1)[-1].rsplit("/", 1)[-1] if ref else ""
+
+        entities = [
+            {
+                "name": c.get("name", ""),
+                "uri": c.get("uri", ""),
+                "attributes": [
+                    dp.get("name", "") for dp in c.get("dataProperties", [])
+                ],
+            }
+            for c in classes
+        ]
+
+        if connected_only:
+            endpoints: Set[str] = set()
+            for rel in relationships:
+                for ref in (rel["domain"], rel["range"]):
+                    if ref:
+                        endpoints.add(ref.lower())
+                        endpoints.add(_local(ref).lower())
+            entities = [
+                e
+                for e in entities
+                if (e["name"] and e["name"].lower() in endpoints)
+                or (e["uri"] and e["uri"].lower() in endpoints)
+                or (e["uri"] and _local(e["uri"]).lower() in endpoints)
+            ]
+
+        return {"entities": entities, "relationships": relationships}
 
     def assign_icons_with_agent(
         self,
@@ -192,6 +273,62 @@ class Ontology:
                 prop["localName"] = prop["name"]
 
         return config
+
+    @staticmethod
+    def sync_class_data_properties(config: Dict[str, Any]) -> None:
+        """Ensure ``classes[].dataProperties`` includes datatype attributes.
+
+        Merges datatype properties declared on ``config['properties']`` (when
+        they carry a ``domain``) into the matching class.  Idempotent.
+        """
+        classes = config.get("classes", [])
+        properties = config.get("properties", [])
+        if not classes:
+            return
+
+        by_name = {c.get("name"): c for c in classes if c.get("name")}
+
+        for prop in properties:
+            prop_type = prop.get("type", "")
+            if prop_type == "ObjectProperty":
+                continue
+            if prop_type not in ("DatatypeProperty", "Property", ""):
+                continue
+
+            domain = prop.get("domain", "")
+            if not domain:
+                continue
+
+            cls = by_name.get(domain)
+            if not cls:
+                continue
+
+            pname = prop.get("name") or prop.get("localName")
+            if not pname:
+                continue
+
+            data_props = cls.setdefault("dataProperties", [])
+            if any(p.get("name") == pname for p in data_props):
+                continue
+
+            data_props.append(
+                {
+                    "name": pname,
+                    "localName": prop.get("localName", pname),
+                    "label": prop.get("label", pname),
+                    "uri": prop.get("uri", ""),
+                }
+            )
+
+    @staticmethod
+    def finalize_class_attributes(config: Dict[str, Any]) -> None:
+        """Sync datatype properties onto classes and propagate inheritance."""
+        from back.core.w3c.owl.OntologyParser import OntologyParser
+
+        Ontology.sync_class_data_properties(config)
+        classes = config.get("classes", [])
+        if classes:
+            OntologyParser._propagate_inherited_properties(classes)
 
     @staticmethod
     def get_ontology_stats(config: Dict[str, Any]) -> Dict[str, int]:
@@ -652,6 +789,185 @@ class Ontology:
             errors.append("Rule consequent is required")
         return errors
 
+    # Matches a SWRL atom ``[prefix:]Name(args)`` — e.g. ``Customer(?c)``,
+    # ``holds(?c, ?ct)``, ``swrlb:greaterThanOrEqual(?lp, 1000)``.
+    _SWRL_ATOM_RE = re.compile(r"(?:(\w+):)?([A-Za-z_]\w*)\s*\(([^)]*)\)")
+    # Namespaced atoms with these prefixes are SWRL builtins / datatypes, not
+    # ontology terms, so they are never checked for existence.
+    _SWRL_BUILTIN_PREFIXES = frozenset({"swrlb", "xsd", "rdf", "rdfs", "owl", "sqwrl"})
+
+    @staticmethod
+    def swrl_reference_errors(
+        rule: Dict[str, Any],
+        class_names: Set[str],
+        property_names: Set[str],
+    ) -> List[str]:
+        """Return errors for SWRL atoms referencing terms absent from the ontology.
+
+        ``class_names`` / ``property_names`` are sets of lowercased local names.
+        EVERY class and property atom — in both the antecedent AND the
+        consequent — must already exist in the ontology. Inventing a new
+        consequent class (e.g. a "derived subtype") is NOT allowed: a rule may
+        only classify an instance into an existing ontology class. Namespaced
+        builtins (``swrlb:``, ``xsd:``…) are ignored.
+        """
+
+        def _atoms(text: str):
+            for m in Ontology._SWRL_ATOM_RE.finditer(text or ""):
+                prefix = (m.group(1) or "").lower()
+                name = m.group(2)
+                args = [a.strip() for a in m.group(3).split(",") if a.strip()]
+                yield prefix, name, args
+
+        errors: List[str] = []
+        for part in ("antecedent", "consequent"):
+            for prefix, name, args in _atoms(rule.get(part, "")):
+                if prefix:
+                    continue
+                if len(args) <= 1:
+                    if name.lower() not in class_names:
+                        errors.append(f"{part} references unknown entity '{name}'")
+                elif name.lower() not in property_names:
+                    errors.append(
+                        f"{part} references unknown relationship/property '{name}'"
+                    )
+
+        # Tautology gate: a rule whose consequent only restates atoms already
+        # present in the antecedent infers nothing (e.g. "… → Invoice(?i)" when
+        # "Invoice(?i)" is already in the IF). Reject it. Builtin/datatype atoms
+        # (prefixed) are ignored — only ontology class/property atoms count.
+        def _norm(text: str):
+            return {
+                (name.lower(), tuple(args))
+                for prefix, name, args in _atoms(text)
+                if not prefix
+            }
+
+        ant = _norm(rule.get("antecedent", ""))
+        con = _norm(rule.get("consequent", ""))
+        if con and con.issubset(ant):
+            errors.append(
+                "consequent only repeats the antecedent and infers nothing new"
+            )
+        return errors
+
+    @staticmethod
+    def _ref_local_name(term: str):
+        """Return ``(checkable, local_name)`` for a SPARQL/CURIE term.
+
+        ``checkable`` is False for variables, literals, full URIs and terms in a
+        builtin namespace (``rdf:``, ``owl:``…) — those are never ontology terms.
+        """
+        t = (term or "").strip()
+        if not t or t.startswith("?") or t == "a":
+            return False, ""
+        if t[0] in "\"'+-" or t[0].isdigit():
+            return False, ""
+        if t.startswith("<") and t.endswith(">"):
+            return False, ""
+        if ":" in t and not t.lower().startswith("http"):
+            prefix, local = t.split(":", 1)
+            if prefix.lower() in Ontology._SWRL_BUILTIN_PREFIXES:
+                return False, ""
+            return True, local
+        return True, t
+
+    @staticmethod
+    def decision_table_reference_errors(
+        rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
+    ) -> List[str]:
+        """Flag a decision table referencing unknown classes/properties.
+
+        Target class, every input-column property and the output-column
+        property must already exist in the ontology.
+        """
+        errors: List[str] = []
+        target = rule.get("target_class", "")
+        if target and target.lower() not in class_names:
+            errors.append(f"target class '{target}' does not exist in the ontology")
+        for col in rule.get("input_columns", []) or []:
+            prop = (col or {}).get("property", "")
+            if prop and prop.lower() not in property_names:
+                errors.append(f"input column references unknown property '{prop}'")
+        out_prop = (rule.get("output_column") or {}).get("property", "")
+        if out_prop and out_prop.lower() not in property_names:
+            errors.append(f"output column references unknown property '{out_prop}'")
+        return errors
+
+    @staticmethod
+    def aggregate_reference_errors(
+        rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
+    ) -> List[str]:
+        """Flag an aggregate rule referencing unknown classes/properties.
+
+        Both ``target_class`` and ``result_class`` must already exist, as must
+        the grouped/aggregated properties.
+        """
+        errors: List[str] = []
+        for cls_field in ("target_class", "result_class"):
+            cls = rule.get(cls_field, "")
+            if cls and cls.lower() not in class_names:
+                errors.append(f"{cls_field} '{cls}' does not exist in the ontology")
+        for field in ("group_by_property", "aggregate_property"):
+            prop = rule.get(field, "")
+            if prop and prop.lower() not in property_names:
+                errors.append(f"{field} references unknown property '{prop}'")
+        return errors
+
+    @staticmethod
+    def sparql_reference_errors(
+        rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
+    ) -> List[str]:
+        """Flag a CONSTRUCT rule referencing unknown terms.
+
+        In BOTH the CONSTRUCT head and the WHERE pattern, predicates must be
+        known properties and ``a``/``rdf:type`` objects must be known classes.
+        No new (invented) class may be asserted in the CONSTRUCT head.
+        """
+        from back.core.reasoning.constants import CONSTRUCT_RE, TRIPLE_PATTERN_RE
+
+        errors: List[str] = []
+        query = rule.get("query", "") or ""
+        m = CONSTRUCT_RE.search(query)
+        if not m:
+            return errors  # structural validator already reports a bad shape
+        for part in (m.group(1), m.group(2)):  # CONSTRUCT head, then WHERE
+            for _s, p, o in TRIPLE_PATTERN_RE.findall(part):
+                is_type = p == "a" or p.lower() == "rdf:type"
+                if is_type:
+                    ok, local = Ontology._ref_local_name(o)
+                    if ok and local.lower() not in class_names:
+                        errors.append(f"query references unknown entity '{local}'")
+                else:
+                    ok, local = Ontology._ref_local_name(p)
+                    if ok and local.lower() not in property_names:
+                        errors.append(
+                            f"query references unknown relationship/property '{local}'"
+                        )
+        return errors
+
+    @staticmethod
+    def rule_reference_errors(
+        key: str,
+        rule: Dict[str, Any],
+        class_names: Set[str],
+        property_names: Set[str],
+    ) -> List[str]:
+        """Dispatch existence validation for any of the four rule-list types."""
+        if key == "swrl_rules":
+            return Ontology.swrl_reference_errors(rule, class_names, property_names)
+        if key == "decision_tables":
+            return Ontology.decision_table_reference_errors(
+                rule, class_names, property_names
+            )
+        if key == "sparql_rules":
+            return Ontology.sparql_reference_errors(rule, class_names, property_names)
+        if key == "aggregate_rules":
+            return Ontology.aggregate_reference_errors(
+                rule, class_names, property_names
+            )
+        return []
+
     @staticmethod
     def merge_icon_suggestions(
         entity_names: List[str], icons: Dict[str, str]
@@ -1033,6 +1349,8 @@ class Ontology:
                 "groups": groups or [],
             }
         )
+        Ontology.sync_class_data_properties(self._domain.ontology)
+        Ontology.finalize_class_attributes(self._domain.ontology)
         self._domain.save()
         return resolved_name
 

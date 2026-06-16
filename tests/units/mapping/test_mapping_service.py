@@ -290,6 +290,70 @@ class TestCollectSourceTables:
         assert result[("c", "s", "t")] == ["Entity: X"]
 
 
+_R2RML_SLASH = """
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix ont: <https://example.com/MyOntology/> .
+
+<#CapacityMap> a rr:TriplesMap ;
+    rr:logicalTable [ rr:tableName "main.bronze.capacity" ] ;
+    rr:subjectMap [
+        rr:template "https://example.com/MyOntology/Capacity/{id}" ;
+        rr:class ont:Capacity
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate ont:value ;
+        rr:objectMap [ rr:column "value_col" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate ont:relatedTo ;
+        rr:objectMap [ rr:template "https://example.com/MyOntology/Other/{oid}" ]
+    ] .
+"""
+
+
+def _hash_ontology():
+    base = "https://example.com/MyOntology#"
+    return {
+        "base_uri": base,
+        "classes": [{"name": "Capacity", "uri": base + "Capacity"}],
+        "properties": [{"name": "relatedTo", "uri": base + "relatedTo"}],
+    }
+
+
+class TestParseR2rmlUriNormalization:
+    def test_entity_class_uri_rewritten_to_ontology_hash_uri(self):
+        domain = _mock_domain(ontology=_hash_ontology())
+        result = Mapping(domain).parse_r2rml(_R2RML_SLASH)
+        entity = result["entities"][0]
+        assert (
+            entity["ontology_class"]
+            == "https://example.com/MyOntology#Capacity"
+        )
+
+    def test_relationship_property_uri_rewritten_to_ontology_hash_uri(self):
+        domain = _mock_domain(ontology=_hash_ontology())
+        result = Mapping(domain).parse_r2rml(_R2RML_SLASH)
+        rel = result["relationships"][0]
+        assert rel["property"] == "https://example.com/MyOntology#relatedTo"
+
+    def test_unmatched_uri_is_left_unchanged(self):
+        # 'value' is not declared as a property in the ontology -> kept as-is.
+        domain = _mock_domain(ontology=_hash_ontology())
+        result = Mapping(domain).parse_r2rml(_R2RML_SLASH)
+        # The entity's attribute predicate stays slash-keyed; the class still
+        # resolves. Unmatched relationship/class URIs must survive untouched.
+        rel = result["relationships"][0]
+        assert rel["property"].endswith("relatedTo")
+
+    def test_no_ontology_keeps_imported_uris(self):
+        domain = _mock_domain(ontology={})
+        result = Mapping(domain).parse_r2rml(_R2RML_SLASH)
+        assert (
+            result["entities"][0]["ontology_class"]
+            == "https://example.com/MyOntology/Capacity"
+        )
+
+
 class TestClassifySqlError:
     def test_permission_denied(self):
         status, detail = Mapping._classify_sql_error(

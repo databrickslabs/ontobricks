@@ -771,6 +771,31 @@ class RegistryService:
         invalidate_registry_cache(self.cache_key)
         return True, ""
 
+    # -- build-run trace (analytics) ---------------------------------
+
+    def record_build_run(self, folder: str, entry: dict) -> None:
+        """Persist a build-run trace row for *folder* (best-effort).
+
+        Never raises — a failed trace must not break a build. See
+        :meth:`RegistryStore.record_build_run`.
+        """
+        try:
+            self._store.record_build_run(folder, entry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("record_build_run(%s) raised: %s", folder, exc)
+
+    def load_build_runs(
+        self, folder: str, *, version: Optional[str] = None, limit: int = 100
+    ) -> list:
+        """Newest-first build runs for *folder* (optionally one version)."""
+        return self._store.load_build_runs(folder, version=version, limit=limit)
+
+    def build_analytics(
+        self, folder: str, *, version: Optional[str] = None
+    ) -> dict:
+        """Aggregate build statistics for *folder* (optionally one version)."""
+        return self._store.build_analytics(folder, version=version)
+
     # -- load domain from registry (stateless) -----------------------
 
     def load_latest_domain_data(self, folder: str) -> Tuple[bool, dict, str, str]:
@@ -786,32 +811,95 @@ class RegistryService:
             return False, {}, latest, msg
         return True, data, latest, ""
 
-    def find_mcp_version(self, folder: str) -> Tuple[Optional[str], dict]:
-        """Find the version with ``mcp_enabled=True`` for *folder*.
+    def find_published_version(self, folder: str) -> Tuple[Optional[str], dict]:
+        """Find the numeric-latest ``PUBLISHED`` version for *folder*.
+
+        The API/MCP surface serves the highest-numbered version whose
+        lifecycle ``status`` is ``PUBLISHED``. Multiple PUBLISHED versions
+        may coexist; this returns the most recent one.
 
         Returns ``(version_str, data_dict)`` or ``(None, {})`` when no
-        version has the flag set.
+        version is PUBLISHED.
         """
         for ver in self.list_versions_sorted(folder):
             ok, data, _ = self.read_version(folder, ver)
             if not ok:
                 continue
-            if data.get("info", {}).get("mcp_enabled"):
+            if data.get("info", {}).get("status") == "PUBLISHED":
                 return ver, data
         return None, {}
 
-    def load_mcp_domain_data(self, folder: str) -> Tuple[bool, dict, str, str]:
-        """Load the MCP-enabled version for *folder*.
+    # Backwards-compatible alias. The old "MCP-enabled" flag has been
+    # replaced by the lifecycle ``status``; "the MCP version" now means
+    # "the latest PUBLISHED version".
+    def find_mcp_version(self, folder: str) -> Tuple[Optional[str], dict]:
+        return self.find_published_version(folder)
 
-        Falls back to the latest version when no version has
-        ``mcp_enabled`` set.
+    def load_published_domain_data(
+        self, folder: str
+    ) -> Tuple[bool, dict, str, str]:
+        """Load the numeric-latest PUBLISHED version for *folder*.
+
+        Unlike :meth:`load_latest_domain_data` there is **no fallback** to
+        a non-PUBLISHED version — the API/MCP surface only serves data for
+        PUBLISHED versions.
 
         Returns ``(ok, data_dict, version_str, error_msg)``.
         """
-        ver, data = self.find_mcp_version(folder)
+        ver, data = self.find_published_version(folder)
         if ver:
             return True, data, ver, ""
-        return self.load_latest_domain_data(folder)
+        return (
+            False,
+            {},
+            "",
+            f'No PUBLISHED version available for domain "{folder}"',
+        )
+
+    def set_version_status(
+        self, folder: str, version: str, status: str
+    ) -> Tuple[bool, str]:
+        """Set the lifecycle ``status`` of a single (domain, version)."""
+        ok, msg = self._store.update_version_status(folder, version, status)
+        if ok:
+            invalidate_registry_cache(self.cache_key)
+        return ok, msg
+
+    # -- review / validation audit log -------------------------------
+
+    def record_review_event(
+        self,
+        folder: str,
+        version: str,
+        actor: str,
+        action: str,
+        *,
+        from_status: str = "",
+        to_status: str = "",
+        comment: str = "",
+        meta: Optional[dict] = None,
+    ) -> Tuple[bool, str]:
+        """Append a review-audit row for ``(folder, version)`` (best-effort)."""
+        return self._store.record_review_event(
+            folder,
+            version,
+            actor,
+            action,
+            from_status=from_status,
+            to_status=to_status,
+            comment=comment,
+            meta=meta,
+        )
+
+    def list_review_events(
+        self, folder: str, version: Optional[str] = None
+    ) -> list:
+        """Oldest-first review events for *folder* (optionally one version)."""
+        return self._store.list_review_events(folder, version)
+
+    def list_all_review_events(self) -> list:
+        """All review events across the registry (oldest-first)."""
+        return self._store.list_all_review_events()
 
     # -- document operations -------------------------------------------
 

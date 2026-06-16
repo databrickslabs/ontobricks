@@ -57,6 +57,10 @@ window.BusinessRulesModule = {
             if (!t || !root.contains(t)) return;
             const act = t.getAttribute('data-br-action');
             if (act === 'add-rule') this.addRuleForActiveTab();
+            else if (act === 'auto-generate') this.autoGenerate();
+            else if (act === 'suggest-select-all') this.selectAllSuggestions(true);
+            else if (act === 'suggest-select-none') this.selectAllSuggestions(false);
+            else if (act === 'suggest-accept') this.acceptSuggestions();
             else if (act === 'dt-add-column') this.dtAddColumn();
             else if (act === 'dt-add-row') this.dtAddRow();
             else if (act === 'dt-save') this.dtSave();
@@ -264,7 +268,14 @@ window.BusinessRulesModule = {
     },
 
     async _deleteRule(ruleType, index) {
-        if (!confirm('Delete this rule?')) return;
+        const confirmed = await showConfirmDialog({
+            title: 'Delete Rule',
+            message: 'Are you sure you want to delete this rule?',
+            confirmText: 'Delete',
+            confirmClass: 'btn-danger',
+            icon: 'trash',
+        });
+        if (!confirmed) return;
         try {
             const resp = await fetch(`/ontology/rules/${ruleType}/delete`, {
                 method: 'POST',
@@ -710,6 +721,216 @@ window.BusinessRulesModule = {
 
         const result = await this._saveRule('aggregate_rules', rule, index);
         if (result && result.success) bootstrap.Modal.getInstance(document.getElementById('aggEditorModal'))?.hide();
+    },
+
+    // ═══════════════════════════════════════════════════════════
+    // AUTO-GENERATE (agent) — suggest + review + accept
+    // ═══════════════════════════════════════════════════════════
+
+    _suggestions: { swrl_rules: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] },
+    _genTaskActive: false,
+
+    SUGGEST_SECTIONS: [
+        { key: 'swrl_rules', label: 'SWRL', icon: 'bi-code-square', badge: 'bg-primary' },
+        { key: 'decision_tables', label: 'Decision Tables', icon: 'bi-table', badge: 'bg-success' },
+        { key: 'sparql_rules', label: 'SPARQL', icon: 'bi-braces', badge: 'bg-warning text-dark' },
+        { key: 'aggregate_rules', label: 'Aggregate', icon: 'bi-calculator', badge: 'bg-danger' },
+    ],
+
+    async autoGenerate() {
+        if (this._genTaskActive) return;
+
+        const loadingEl = document.getElementById('brSuggestLoading');
+        const errorEl = document.getElementById('brSuggestError');
+        const emptyEl = document.getElementById('brSuggestEmpty');
+        const listEl = document.getElementById('brSuggestList');
+        const acceptBtn = document.getElementById('brSuggestAcceptBtn');
+        const progressEl = document.getElementById('brSuggestProgress');
+
+        if (loadingEl) loadingEl.style.display = '';
+        if (errorEl) errorEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (listEl) listEl.style.display = 'none';
+        if (acceptBtn) acceptBtn.style.display = 'none';
+        if (progressEl) progressEl.textContent = 'Generating business rules…';
+
+        this._suggestions = { swrl_rules: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] };
+        new bootstrap.Modal(document.getElementById('brSuggestModal')).show();
+
+        this._genTaskActive = true;
+        try {
+            const resp = await fetch('/ontology/business-rules/generate-async', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ options: {}, guidelines: '', documents: [] }),
+            });
+            const data = await resp.json();
+            if (!data.success || !data.task_id) {
+                this._showSuggestError(data.message || 'Could not start generation');
+                return;
+            }
+            const result = await this._pollGenTask(data.task_id, progressEl);
+            if (result === null) return;
+            this._suggestions = {
+                swrl_rules: result.swrl_rules || [],
+                decision_tables: result.decision_tables || [],
+                sparql_rules: result.sparql_rules || [],
+                aggregate_rules: result.aggregate_rules || [],
+            };
+            this._renderSuggestions();
+        } catch (e) {
+            console.error('[BusinessRules] Auto-generate error:', e);
+            this._showSuggestError('Error generating rules: ' + (e.message || e));
+        } finally {
+            this._genTaskActive = false;
+        }
+    },
+
+    async _pollGenTask(taskId, progressEl) {
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+        for (let i = 0; i < 150; i++) {
+            await sleep(2000);
+            let task;
+            try {
+                const resp = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success) { this._showSuggestError('Task not found'); return null; }
+                task = data.task;
+            } catch (e) {
+                continue;
+            }
+            if (progressEl && task.message) progressEl.textContent = task.message;
+            if (task.status === 'completed') return task.result || {};
+            if (task.status === 'failed') {
+                this._showSuggestError(task.error || 'Generation failed');
+                return null;
+            }
+        }
+        this._showSuggestError('Generation timed out');
+        return null;
+    },
+
+    _showSuggestError(msg) {
+        const loadingEl = document.getElementById('brSuggestLoading');
+        const errorEl = document.getElementById('brSuggestError');
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (errorEl) { errorEl.style.display = ''; errorEl.textContent = msg; }
+    },
+
+    _suggestMeta(key, rule) {
+        switch (key) {
+            case 'swrl_rules':
+                return `${this._esc(rule.antecedent || '')} → ${this._esc(rule.consequent || '')}`;
+            case 'decision_tables':
+                return `${this._esc(rule.target_class || '?')} · ${(rule.input_columns || []).length} col · ${(rule.rows || []).length} rows`;
+            case 'sparql_rules': {
+                const snip = (rule.query || '').substring(0, 90).replace(/\n/g, ' ');
+                return this._esc(snip) + ((rule.query || '').length > 90 ? '…' : '');
+            }
+            case 'aggregate_rules': {
+                const func = (rule.aggregate_function || 'count').toUpperCase();
+                return `${this._esc(rule.target_class || '?')} · ${func}(${this._esc(rule.aggregate_property || rule.group_by_property || '*')}) ${this._esc(rule.operator || '')} ${rule.threshold ?? '?'}`;
+            }
+            default:
+                return '';
+        }
+    },
+
+    _renderSuggestions() {
+        const loadingEl = document.getElementById('brSuggestLoading');
+        const emptyEl = document.getElementById('brSuggestEmpty');
+        const listEl = document.getElementById('brSuggestList');
+        const acceptBtn = document.getElementById('brSuggestAcceptBtn');
+        const itemsEl = document.getElementById('brSuggestItems');
+        const countEl = document.getElementById('brSuggestCount');
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        const total = this.SUGGEST_SECTIONS.reduce((n, s) => n + (this._suggestions[s.key] || []).length, 0);
+        if (total === 0) {
+            if (emptyEl) emptyEl.style.display = '';
+            return;
+        }
+        if (listEl) listEl.style.display = '';
+        if (acceptBtn) acceptBtn.style.display = '';
+        if (countEl) countEl.textContent = `${total} rule(s) proposed`;
+
+        let html = '';
+        for (const sec of this.SUGGEST_SECTIONS) {
+            const rules = this._suggestions[sec.key] || [];
+            if (rules.length === 0) continue;
+            html += `<div class="br-suggest-section mb-3">` +
+                `<div class="br-suggest-section-title small fw-semibold text-muted mb-2">` +
+                `<span class="badge ${sec.badge} bg-opacity-75 me-1"><i class="bi ${sec.icon} me-1"></i>${sec.label}</span>` +
+                `${rules.length} rule(s)</div>`;
+            rules.forEach((rule, i) => {
+                html += `<label for="brSug_${sec.key}_${i}" class="d-flex align-items-start gap-3 border rounded px-3 py-2 mb-2 br-suggest-item" style="cursor:pointer">` +
+                    `<input class="form-check-input flex-shrink-0 mt-1" type="checkbox" id="brSug_${sec.key}_${i}" data-br-sug-key="${sec.key}" data-br-sug-idx="${i}" checked>` +
+                    `<div class="flex-grow-1 min-w-0">` +
+                    `<div class="small fw-medium text-body">${this._esc(rule.name || '(unnamed)')}</div>` +
+                    (rule.description ? `<div class="text-muted small">${this._esc(rule.description)}</div>` : '') +
+                    `<div class="text-muted small mt-1"><code class="text-secondary">${this._suggestMeta(sec.key, rule)}</code></div>` +
+                    `</div></label>`;
+            });
+            html += `</div>`;
+        }
+        if (itemsEl) itemsEl.innerHTML = html;
+    },
+
+    selectAllSuggestions(checked) {
+        document.querySelectorAll('#brSuggestItems [data-br-sug-idx]').forEach(el => { el.checked = checked; });
+    },
+
+    async acceptSuggestions() {
+        const payload = { swrl_rules: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] };
+        let selectedCount = 0;
+        document.querySelectorAll('#brSuggestItems [data-br-sug-idx]').forEach(el => {
+            if (!el.checked) return;
+            const key = el.getAttribute('data-br-sug-key');
+            const idx = parseInt(el.getAttribute('data-br-sug-idx'), 10);
+            const rule = (this._suggestions[key] || [])[idx];
+            if (rule) { payload[key].push(rule); selectedCount++; }
+        });
+
+        if (selectedCount === 0) {
+            if (typeof showNotification === 'function') showNotification('No rules selected', 'warning');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/ontology/business-rules/accept-suggestions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload),
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                if (typeof showNotification === 'function') showNotification(data.message || 'Accept failed', 'error');
+                return;
+            }
+            await Promise.all([
+                this._loadRules('decision_tables'),
+                this._loadRules('sparql_rules'),
+                this._loadRules('aggregate_rules'),
+            ]);
+            if (typeof SwrlModule !== 'undefined') await SwrlModule.loadRules();
+            this._refreshAllBadges();
+            bootstrap.Modal.getInstance(document.getElementById('brSuggestModal'))?.hide();
+
+            const added = data.added_total || 0;
+            const rejected = (data.rejected || []).length;
+            const duplicates = data.duplicates_total || (data.duplicates || []).length || 0;
+            let msg = `Added ${added} rule(s)`;
+            if (duplicates) msg += ` · ${duplicates} skipped (duplicate)`;
+            if (rejected) msg += ` · ${rejected} skipped (invalid)`;
+            if (typeof showNotification === 'function') {
+                showNotification(msg, (rejected || duplicates) ? 'warning' : 'success');
+            }
+        } catch (e) {
+            console.error('[BusinessRules] Accept error:', e);
+            if (typeof showNotification === 'function') showNotification('Error accepting rules: ' + (e.message || e), 'error');
+        }
     },
 
 };

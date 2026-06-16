@@ -55,8 +55,10 @@
                                 </small>
                             </div>
                             <div class="col-md-3 mb-3">
-                                <label for="domainVersion" class="form-label">
-                                    <i class="bi bi-hash"></i> Version
+                                <label for="domainVersion" class="form-label d-flex align-items-center gap-2">
+                                    <span><i class="bi bi-hash"></i> Version</span>
+                                    <span class="js-version-status-badge badge border bg-warning-subtle text-dark border-warning"
+                                          style="font-size:0.65rem;">Draft</span>
                                 </label>
                                 <input type="text" class="form-control ob-form-readonly-muted" id="domainVersionDisplay"
                                        value="v{{ domain.version or '1' }}" readonly>
@@ -115,7 +117,15 @@
                                        placeholder="Your name or organization" 
                                        value="{{ domain.author or '' }}">
                             </div>
-                            
+                            <div class="col-md-4 mb-3">
+                                <label for="domainReviewQuorum" class="form-label">
+                                    <i class="bi bi-patch-check"></i> Sign-off quorum
+                                </label>
+                                <input type="number" min="1" step="1"
+                                       class="form-control domain-editable" id="domainReviewQuorum"
+                                       value="{{ domain.review_quorum or 1 }}">
+                                <small class="text-muted">Distinct approvals required before a version can be published.</small>
+                            </div>
                         </div>
                     </div>
 

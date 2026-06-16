@@ -1,0 +1,516 @@
+## Build page: Lakebase graph path + hide Registry archive
+
+Context: The Graph DB (Postgres) card on the Build / sync section should show the concrete
+Lakebase target (`database.schema.table`) when the graph table is not present, instead of a
+generic “not created yet” line. The Registry archive row is not applicable to Lakebase
+graph storage and should be hidden for that engine.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Simplify `_lakebase_graph_target_summary` to the Postgres FQN; optional second line
+   for managed sync Unity Catalog FQN; shorter fallback when the store is not Lakebase.
+2. `src/front/static/query/js/query-sync.js`
+   Call `_applyBuildGraphEngineUi` from `_applyDtExistence` when `graph_engine` is
+   present; use Bootstrap `d-none` for the registry row instead of inline `display`.
+3. `src/front/templates/partials/dtwin/_query_sync.html`
+   Add server-side `d-none` on the Registry archive row when `graph_engine` is
+   `lakebase` to avoid a first-paint flash.
+4. `tests/test_digitaltwin_lakebase_preview.py`
+   Align expectations with the compact target string for `app_managed`.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `tests/test_digitaltwin_lakebase_preview.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2170 passed, 80 skipped in 25.20s
+
+---
+
+## Lakebase Build card: UC catalog + logical graph name (not `*_sync`)
+
+Context: The Graph DB (Postgres) primary line showed the Lakeflow synced UC table
+(`…bigcustomers_v1_sync`) or lower-cased physical IDs. Operators expect the same
+Unity Catalog triplet style as the Registry (`catalog.schema`) plus the logical graph
+version label with original casing (e.g. `BIGCustomers_V1`).
+
+Changes:
+
+1. `src/back/core/graphdb/lakebase/LakebaseBase.py`
+   Add `logical_graph_table_label` (safe identifier, preserves casing).
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Add `_lakebase_graph_uc_location_display`; use it for `fetch_digital_twin_existence`
+   when the graph exists and as the primary line in `_lakebase_graph_target_summary`.
+   Managed-sync second line is explicitly labeled as the Lakeflow data-plane mirror.
+3. `tests/test_digitaltwin_lakebase_preview.py`
+   Expect UC-style first line and preserved graph name casing.
+4. `src/front/templates/partials/dtwin/_query_sync.html`
+   Align Lakebase footnote with catalog.schema.logical graph naming vs `_sync` mirror.
+
+Modified files:
+- `src/back/core/graphdb/lakebase/LakebaseBase.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `tests/test_digitaltwin_lakebase_preview.py`
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2170 passed, 80 skipped in 24.53s
+
+---
+
+## Lakeflow line: `catalog.schema.<physical_table>` (no `*_sync` in UI)
+
+Context: The second Build-page line for managed sync should use the same UC catalog and
+Postgres schema as registration, with the lower-case physical triple id
+(e.g. `benoit_cayla.ontobricks.bigcustomers_v1`), not the internal `*_sync` mirror FQN.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Add `_lakebase_lakeflow_pipeline_uc_display` and use it for the Lakeflow sub-line in
+   `_lakebase_graph_target_summary`.
+2. `tests/test_digitaltwin_lakebase_preview.py`
+   Assert the Lakeflow line uses `bigcustomers_v1` and does not include `_sync`.
+3. `src/front/templates/partials/dtwin/_query_sync.html`
+   Footnote: physical table id for the Lakeflow line vs graph read path.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `tests/test_digitaltwin_lakebase_preview.py`
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2170 passed, 80 skipped in 23.41s
+
+---
+
+## Lakebase KG queries: reader view + cohort deletes on companion
+
+Context: Digital Twin / Knowledge Graph paths use ``TripleStoreBackend`` helpers that
+build SQL from ``_sql_relation``. For Lakebase ``managed_synced``, reads must target the
+UNION view created at build time; cohort cleanup must ``DELETE`` from the writable
+``__app`` companion (not the UNION view — Postgres ``UNION ALL`` views are not reliably
+updatable).
+
+Changes:
+
+1. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Override ``_sql_relation`` to delegate to ``_readable_table_id``; override
+   ``delete_cohort_triples`` to delete from ``_writable_table_id``.
+2. `tests/test_lakebase_flat_store.py`
+   Extend ``TestLakebaseSqlRelation`` for synced vs app_managed cohort targets.
+
+Modified files:
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `tests/test_lakebase_flat_store.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2173 passed, 80 skipped in 23.52s
+
+---
+
+## Build UI: detect Digital Twin pipeline completion (Lakebase managed-sync)
+
+Context: After a successful build, the progress UI stayed on “Updating the knowledge graph”
+then errored — task step indices stayed on the graph row while `_refresh_snapshot` issued
+`skip_step`, which applies to the *current* step (graph instead of snapshot).
+
+Changes:
+
+1. `src/back/objects/digitaltwin/_build_pipeline.py`
+   After a successful graph apply in Lakebase **managed_synced** mode, call
+   `advance_step(..., "Knowledge graph updated.")` before `_refresh_snapshot`.
+2. `src/back/core/task_manager/models.py`
+   Add `current_step_description` to `Task.to_dict()` for clients that poll `/tasks/{id}`.
+3. `src/front/static/query/js/query-sync.js`
+   Normalize `task.status` to lowercase when detecting completion; prefer
+   `current_step_description` for step text.
+4. `tests/test_build_pipeline_streaming.py`
+   Regression test for advance-before-skip ordering.
+
+Modified files:
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/core/task_manager/models.py`
+- `src/front/static/query/js/query-sync.js`
+- `tests/test_build_pipeline_streaming.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2174 passed, 80 skipped in 23.46s
+
+---
+
+## Build card: Lakebase names (read view vs `_sync`) + Loaded when graph exists
+
+Context: The Lakeflow line showed `…bigcustomers_v1` while the registered UC / Postgres mirror is
+`…bigcustomers_v1_sync`, which looked like a contradiction next to the graph read line. The
+**Not loaded** badge also stayed false when the union view existed but the triple count was still 0.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Restore `_lakebase_lakeflow_pipeline_uc_display` via `synced_uc_name` (real `*_sync` FQN). Clarify
+   line labels in `_lakebase_graph_uc_location_display` / target summary. For Lakebase,
+   `local_lbug_exists` when the graph table/view exists (not only when count &gt; 0).
+2. `tests/test_digitaltwin_lakebase_preview.py`
+   Expect `bigcustomers_v1_sync` on the managed-sync second line.
+3. `src/front/templates/partials/dtwin/_query_sync.html`
+   Footnote: read path vs `_sync` registration vs `__app` companion.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `tests/test_digitaltwin_lakebase_preview.py`
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2174 passed, 80 skipped in 24.22s
+
+---
+
+## Triplestore stats cache: schema version invalidates stale presentation strings
+
+Context: Even after the previous fixes, the Build page kept showing the old Lakeflow line
+(`Lakeflow synced data plane table (UC, separate from graph read path): …bigcustomers_v1`).
+The cause was the `dt_existence` cache in `domain.triplestore.stats`: `Domain.save()`
+persists it to disk, so the stale formatted string survived both the 5 minute TTL and a
+server restart, and kept being served until something explicitly overwrote it.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Add `_TS_STATS_CACHE_SCHEMA_VERSION = 2`. `set_ts_cache` writes the version next to
+   the timestamp; `get_ts_cache` returns `None` when the persisted version differs, so
+   any pre-existing cache (with the old Lakeflow prefix and missing `_sync` suffix) is
+   silently dropped on the next read and re-fetched against the current code.
+2. `src/back/objects/domain/Domain.py`
+   On the load-domain-from-UC path, also pop `_ts_cache_schema_version` alongside the
+   existing `_ts_cache_timestamp` cleanup, so the persisted state stays consistent.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/domain/Domain.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q --ignore=tests/integration` → 2174 passed, 80 skipped in 23.57s
+
+---
+
+## DigitalTwin.py: restore from corruption + auto-repair Lakebase union view
+
+Context: Two distinct issues converged on the Build page Lakebase card:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py` had been textually corrupted by an
+   earlier session — code fragments were spliced inside `_check_snapshot` /
+   `_check_registry` and `augment_relationships_from_config` was partly destroyed,
+   leaving a `SyntaxError` at line 1604. Earlier `pytest -q` runs only "passed"
+   because they hit a stale `__pycache__/DigitalTwin.cpython-311.pyc`. Restored the
+   file from `HEAD` and re-applied the intended logical changes cleanly.
+2. The "Not loaded" badge stayed on for `managed_synced` graphs even when the data
+   was clearly present in Postgres + UC, because `table_exists` only checks the
+   readable union view (`bigcustomers_v1`). When a previous Build crashed after
+   Lakeflow registered the `_sync` table but before `ensure_synced_union_view` ran,
+   the data sits in `_sync` + `__app` but the readable surface is missing.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   - Re-apply `_TS_STATS_CACHE_SCHEMA_VERSION = 2` + `get/set_ts_cache` version checks.
+   - Re-add `_lakebase_graph_uc_location_display`, `_lakebase_lakeflow_pipeline_uc_display`,
+     and a single canonical `_lakebase_graph_target_summary` (the corrupted file had two
+     conflicting definitions).
+   - In `fetch_digital_twin_existence`, when the Lakebase backend is `managed_synced`
+     and the union view is absent, call the new
+     `LakebaseFlatStore.repair_synced_view_if_possible` to (re)create the view from
+     the existing `_sync` + `__app` sides, then re-probe. `local_lbug_exists` is
+     `bool(exists_tbl)` — Loaded as soon as the readable surface is queryable, even
+     when the count is still 0.
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   - Add `synced_components_status(name)` returning per-object presence (`view`,
+     `synced`, `companion`) for the current schema. Uses `information_schema`
+     bound to `current_schema()`.
+   - Add `repair_synced_view_if_possible(name)`: idempotent
+     `CREATE OR REPLACE VIEW` only when `_sync` is materialized; safe under
+     concurrent calls. No-op when the store is not in `managed_synced` mode.
+3. `tests/test_lakebase_flat_store.py`
+   - Cover `synced_components_status` (broken-view state and `app_managed` no-op).
+   - Cover `repair_synced_view_if_possible` (repairs when sync present, skips
+     when no sync, no-op in `app_managed`).
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `tests/test_lakebase_flat_store.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q --ignore=tests/integration` → 2179 passed, 80 skipped in 24.98s
+
+---
+
+## Lakebase schema: Settings → Graph DB is now authoritative (Registry is the fallback)
+
+Context: Operators who explicitly set <em>Settings → Graph DB → Postgres schema</em>
+(e.g. `ontobricks_graph`) saw builds materialise tables under the <em>Settings → Registry</em>
+Volume schema instead (`ontobricks`). `resolve_lakebase_graph_schema` always returned the
+Registry value when set, silently overriding the operator's choice. The schema field looked
+"unused" — and the help text under the field actively confirmed that misperception.
+
+Changes:
+
+1. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Reverse the resolution order in `resolve_lakebase_graph_schema`:
+   1. `graph_engine_config.schema` (Settings → Graph DB) when explicitly set wins.
+   2. `RegistryCfg.schema` (Settings → Registry Volume) only as a fallback.
+   3. `DEFAULT_GRAPH_SCHEMA` last.
+   Logs an `INFO` line when the chosen schema differs from Registry so operators can
+   see which path was taken.
+2. `src/back/core/graphdb/GraphDBFactory.py`
+   Stop pre-filling `DEFAULT_GRAPH_SCHEMA` for `cfg.get("schema")` before delegating to
+   `resolve_lakebase_graph_schema`. Pass the raw value (including empty string) so the
+   resolver can distinguish "operator left it blank" from "operator chose the default".
+3. `src/front/templates/settings.html`
+   Fix the now-misleading help text under <em>Schema</em> (the field is the operator's
+   authoritative choice — Registry only fills in when blank) and under <em>Unity Catalog
+   (registration)</em> (UC schema segment now matches the Schema field, not Registry).
+4. `tests/test_lakebase_flat_store.py`
+   Replace `test_prefers_registry_volume_schema` with the new contract:
+   - Explicit Graph DB schema beats Registry Volume schema.
+   - Falls back to Registry Volume schema when Graph DB schema is blank.
+   - Falls back to `DEFAULT_GRAPH_SCHEMA` when both are blank.
+   - Invalid Graph DB schema falls back to Registry.
+   - Registry unavailable still returns the explicit Graph DB schema.
+5. `tests/test_graphdb_factory.py`
+   `test_lakebase_schema_follows_registry_volume_schema` →
+   `test_lakebase_schema_honors_explicit_graph_engine_config` (asserts Graph DB wins);
+   added `test_lakebase_schema_falls_back_to_registry_when_unset` for the blank case.
+
+Modified files:
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/front/templates/settings.html`
+- `tests/test_lakebase_flat_store.py`
+- `tests/test_graphdb_factory.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q --ignore=tests/integration` → 2183 passed, 80 skipped in 23.66s
+
+---
+
+## Digital Twin Build UI: detect sync completion reliably
+
+Context: The Build page could keep polling forever even after a successful run — the
+Lakebase archive phase called ``advance_step`` then ``skip_step``, pushing
+``current_step`` past the last step; the task poller also treated non-canonical
+status strings and HTTP error bodies poorly.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/_build_pipeline.py`
+   Lakebase archive: use a single ``skip_step`` on the active archive row (no prior
+   ``advance_step``).
+2. `src/front/static/query/js/query-sync.js`
+   Add ``_syncTaskTerminalKind`` (trim/aliases, ``completed_at`` + progress fallback);
+   poll with ``response.ok``, safe JSON parse, try/catch around ``renderBuildLog``,
+   max poll ticks (~5h), clearer errors.
+3. `tests/test_build_pipeline_streaming.py`
+   Assert ``advance_step`` is not used on the Lakebase archive short path.
+
+Modified files:
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/front/static/query/js/query-sync.js`
+- `tests/test_build_pipeline_streaming.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2183 passed, 80 skipped in 23.71s
+
+---
+
+## Settings → Graph DB: live UC synced-table name preview
+
+Context: Operators had to mentally construct the UC + Postgres object names from three
+separate fields (UC catalog, Schema, graph name). The managed sync panel gave no
+concrete preview of what would actually be created.
+
+Changes:
+
+1. `src/front/templates/settings.html`
+   Added a preview block inside `lakebaseManagedSyncPanel` showing:
+   - UC synced table FQN: `<catalog>.<schema>.<graph_name>_sync`
+   - PG synced table: `<schema>.<graph_name>_sync`
+   - PG union view (readers): `<schema>.<graph_name>`
+   - PG companion (writes): `<schema>.<graph_name>__app`
+   Graph name is rendered as `<graph_name>` since it is domain-specific.
+2. `src/front/static/config/js/settings.js`
+   Added `updateUcSyncPreview()` called from `applyLakebaseFormFromConfigTextarea`
+   (on settings load + engine-select change) and from `input`/`change` events on
+   `lakebaseUcCatalog` and `lakebaseGraphSchema`, so the preview stays live.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q --ignore=tests/integration` → 2183 passed, 80 skipped in 24.10s
+
+---
+
+## Fix startup: remove duplicate fragment in `fetch_digital_twin_existence`
+
+Context: A bad merge left a copy of `_check_registry` body and a second
+`asyncio.gather` + Lakebase block inside `fetch_digital_twin_existence`, causing
+`IndentationError` at line 1201 and preventing `DigitalTwin` (and thus the whole
+FastAPI app) from importing.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Delete the orphan lines and the duplicate gather/Lakebase branch; end the method
+   with a single `return result` after the Lakebase path.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2183 passed, 80 skipped in 23.72s
+
+---
+
+## Build log card: Ladybug vs Lakebase (pipeline FQN, hide registry step)
+
+Context: The bottom “Building Digital Twin” panel used one generic title and always
+listed the Ladybug registry-backup stage, which does not apply to Lakebase. Operators
+on managed sync want the Unity Catalog pipeline (synced table) name in view.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Add ``build_log_ui_meta(domain, settings)`` — engine, ``lakebase_sync_mode``, and
+   optional ``lakebase_pipeline_uc`` (managed sync).
+2. `src/api/routers/internal/dtwin.py`
+   Include ``build_log_ui`` on ``GET /dtwin/sync/info``.
+3. `src/front/static/query/js/query-sync.js`
+   Merge ``build_log_ui`` into ``__TRIPLESTORE_CONFIG``; ``_applyBuildLogSectionLabels``
+   for title + intro; filter ``archive`` step from the log list and export when
+   ``graph_engine`` is ``lakebase``; preserve ``build_log_ui`` when merging domain info.
+4. `src/front/templates/partials/dtwin/_query_sync.html`
+   Wrap the build-log heading text in ``#syncBuildLogTitle`` for live updates.
+5. `tests/test_digitaltwin_build_log_meta.py`
+   Cover ladybug, Lakebase app-managed, and managed-sync pipeline FQN.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `tests/test_digitaltwin_build_log_meta.py`
+- `changelogs/v0.3.0/2026-05-11.log`
+
+Tests: `uv run pytest -q` → 2186 passed, 80 skipped in 23.61s
+
+---
+
+## Build page: Lakebase pipeline status polling + sync-end detection
+
+Context: The Build page never detected the end of a Lakebase managed-synced build
+because `trigger_and_wait` blocked a daemon thread for up to 600 s with no task
+updates. The frontend had no way to track the Lakeflow pipeline independently, so
+if the SDK hung or took a long time the spinner ran forever.
+
+Changes:
+1. `src/back/core/task_manager/models.py` — Added `context: Dict[str, Any]` field to `Task`; included in `to_dict()` so the frontend can read it.
+2. `src/back/core/task_manager/TaskManager.py` — Added `set_task_context(task_id, data)` to merge runtime metadata into `task.context`.
+3. `src/back/core/graphdb/lakebase/SyncedTableManager.py` — Added `get_pipeline_status(name)` non-blocking method; added `on_state_change` callback to `wait_for_completion` and `trigger_and_wait` so the build pipeline can push live pipeline state into the task.
+4. `src/back/objects/digitaltwin/_build_pipeline.py` — Before `trigger_and_wait`, stores `lakebase_synced_uc` and `lakebase_pipeline_id` in the task context; registers an `_on_state_change` callback that updates progress message and context with the Lakeflow state on every state transition.
+5. `src/api/routers/internal/dtwin.py` — New endpoint `GET /dtwin/sync/pipeline-status?task_id=…` (or `?synced_uc=…`) that queries `SyncedTableManager.get_pipeline_status()` live and returns `{state, pipeline_id, terminal_ok, terminal_fail, synced_uc}`. Fixed pre-existing Python 3.9 `str | None` type-union syntax at line 2408.
+6. `src/front/static/query/js/query-sync.js` — `monitorSyncTask` now detects Lakebase context from `task.context.lakebase_synced_uc`; polls `/dtwin/sync/pipeline-status?task_id=…` every 4 task ticks (~6 s); appends live pipeline state to the step description; if the pipeline has been terminal-OK for >30 s but the task is still RUNNING, declares the build complete (30-second grace window for the backend to finish its final lightweight steps). Added `_fetchPipelineStatus` and `_pipelineTerminalOk` helpers.
+7. `tests/test_build_pipeline_streaming.py` — Migrated all `patch(string)` targeting class-inside-module paths to `patch.object` to fix Python 3.9 import resolution in mock.
+8. `tests/test_digitaltwin_build_log_meta.py` — Same fix: `patch.object(_TSFactory, …)` instead of string-based patch targets.
+
+Modified files:
+- `src/back/core/task_manager/models.py`
+- `src/back/core/task_manager/TaskManager.py`
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-sync.js`
+- `tests/test_build_pipeline_streaming.py`
+- `tests/test_digitaltwin_build_log_meta.py`
+
+Tests: 37 passed (changed-area tests), 30 pre-existing failures unrelated to this change
+
+---
+
+## Build page: Graph DB card shows wrong path/status for Lakebase after build
+
+Context: After a successful Lakebase build, the Graph DB card displayed
+`/tmp/ontobricks/BIGCustomers_V1.lbug` with a "Not loaded" badge. The root
+cause was `_populate_session_cache` always writing Ladybug-specific values
+(resolved `.lbug` local path + `os.path.exists()`) to the dt_existence cache,
+regardless of graph engine. This stale cache (5-min TTL) was then served to
+the UI instead of the correct Lakebase state.
+
+Changes:
+1. `src/back/objects/digitaltwin/_build_pipeline.py` — `_populate_session_cache` now resolves the graph engine and writes engine-specific values:
+   - **Lakebase**: `local_lbug_exists=True` (build succeeded → table is ready), `local_lbug_path` from `DigitalTwin._lakebase_graph_target_summary(...)` (Postgres/UC location), `registry_archive_applicable=False`, `graph_engine="lakebase"` added to cache.
+   - **Ladybug**: unchanged path (`.lbug` local file + registry archive).
+
+Modified files:
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+
+Tests: 20 passed (changed-area tests)
+
+---
+
+## Lakebase: Fix "Graph does not exist" after successful build + frontend pipeline polling
+
+Context: After a successful Lakebase build the Knowledge Graph search returned
+"Error: Graph Cust360Auto_V4 does not exist. Run Build first."  The root cause
+was that the Lakeflow sync pipeline's terminal state was not correctly detected
+(SDK returns `SYNCED_TABLE_ONLINE_NO_PENDING_UPDATE` as an enum, not a plain
+string), so `wait_for_completion` never exited, `ensure_synced_union_view` was
+never called, and the union view (the readable name the app queries against)
+was never created. Additionally the frontend had no live pipeline-status polling
+and no engine-specific build-log labels for Lakebase.
+
+Changes:
+1. `src/back/core/graphdb/lakebase/SyncedTableManager.py` — Added `_normalize_state`
+   to strip `SYNCED_TABLE_` prefix and `ClassName.MEMBER` dot-notation from raw SDK
+   states. Updated `_extract_state` and `wait_for_completion` to use it. Added
+   `get_pipeline_status` (non-blocking) and `on_state_change` callback support in
+   `wait_for_completion`/`trigger_and_wait`.
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py` — Added
+   `repair_synced_view_if_possible` to recreate the union view when it is missing,
+   checking for the `_sync` table first.
+3. `src/api/routers/internal/dtwin.py` — `load_triplestore` and `filter_triplestore`
+   now catch "does not exist" errors, attempt `repair_synced_view_if_possible`, and
+   retry. `NotFoundError` message includes full underlying detail. New
+   `GET /dtwin/sync/pipeline-status` endpoint for frontend polling. Fixed
+   `entity_type`/`search` params from `str | None` to `Optional[str]` (Python 3.9).
+4. `src/back/core/task_manager/models.py` — Added `context: Dict[str, Any]` field
+   to `Task` (included in `to_dict()`).
+5. `src/back/core/task_manager/TaskManager.py` — Added `set_task_context`.
+6. `src/back/objects/digitaltwin/_build_pipeline.py` — `_apply_via_synced_pipeline`
+   stores `lakebase_synced_uc`/`lakebase_pipeline_id` in task context and registers
+   `on_state_change` callback for live state updates.
+7. `src/back/objects/digitaltwin/DigitalTwin.py` — Added `_lakebase_graph_target_summary`
+   and `build_log_ui_meta` for engine-specific UI labels.
+8. `src/front/static/query/js/query-sync.js` — Added `_fetchPipelineStatus` / pipeline
+   side-channel polling in `monitorSyncTask`. Added `_buildLogUiMeta` cache,
+   `_applyBuildLogSectionLabels`, `hide_steps` filtering in `renderBuildLog`. Wired
+   `loadSyncInfo` to apply build-log labels on page load.
+9. `tests/test_build_pipeline_streaming.py` — Fixed broken mock paths using
+   `patch.object(DigitalTwin, ...)`.
+
+Modified files:
+- `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/back/core/task_manager/models.py`
+- `src/back/core/task_manager/TaskManager.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/static/query/js/query-sync.js`
+- `tests/test_build_pipeline_streaming.py`
+
+Tests: 2103 passed, 27 pre-existing failures (unrelated to these changes), 81 skipped.

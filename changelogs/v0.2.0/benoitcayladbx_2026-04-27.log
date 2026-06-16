@@ -1,0 +1,1328 @@
+## Drop dev-app/ wrapper — auto-detect app name at runtime
+
+Context: the previous "Carve ontobricks-dev into its own DAB" change
+introduced a small ``dev-app/`` directory that held a sandbox-specific
+``app.yaml`` plus symlinks to the real source tree. Its only reason to
+exist was to override the single env var ``ONTOBRICKS_APP_NAME`` so the
+sandbox app would identify itself as ``ontobricks-dev`` (instead of
+``ontobricks``) in permission lookups. Since the new
+``ontobricks_dev_bundle`` only manages one app, the "duplicate
+``source_code_path``" rule that originally forced the wrapper no longer
+applies. We can ship the dev sandbox straight from the repo root and
+let it auto-detect its own name from the Databricks Apps runtime.
+
+Changes:
+
+1. src/shared/config/settings.py
+   - ``Settings.ontobricks_app_name`` now uses
+     ``Field(validation_alias=AliasChoices("ONTOBRICKS_APP_NAME",
+     "DATABRICKS_APP_NAME"))``. Pydantic-settings tries the explicit
+     override first, then falls back to the platform-injected
+     ``DATABRICKS_APP_NAME`` (the Databricks Apps runtime sets it to
+     the deployed app's name automatically — ``ontobricks`` for prod,
+     ``ontobricks-dev`` for the sandbox).
+   - Doc-comment on the field now describes the alias chain.
+
+2. app.yaml (repo root)
+   - Removed the explicit ``ONTOBRICKS_APP_NAME: ontobricks`` block.
+     Functionally a no-op for the production app: the auto-injected
+     ``DATABRICKS_APP_NAME`` resolves to ``ontobricks`` for it, so the
+     permission service still queries the correct ACL.
+   - The new comment explains the auto-detection contract and points
+     out that ``.env`` can still set the var explicitly for local dev.
+
+3. databricks.yml
+   - ``ontobricks_dev_app.source_code_path`` switched from
+     ``./dev-app`` to ``.`` (the repository root). One app per bundle
+     means we no longer need a wrapper directory to satisfy the
+     duplicate-path constraint.
+   - Updated the header doc-comment to describe the auto-detection
+     of the sandbox name and to drop the ``dev-app/`` reference.
+
+4. dev-app/
+   - Removed in its entirety (sandbox ``app.yaml`` + symlinks to the
+     source tree). The bundle now ships the same source the prod app
+     ships from, with target-specific behaviour driven by env vars
+     and the DAB resource bindings only.
+
+5. docs/deployment.md
+   - Removed ``ONTOBRICKS_APP_NAME`` from the "workspace-specific
+     values" table; replaced with a callout describing the
+     auto-detection.
+   - In the annotated ``app.yaml`` sample, removed the explicit
+     ``ONTOBRICKS_APP_NAME`` entry and replaced it with a comment
+     pointing at the alias chain.
+
+6. docs/development.md
+   - Permission appendix: ``ONTOBRICKS_APP_NAME`` is now marked as
+     optional, with the auto-detection explanation.
+
+Verification:
+
+* ``uv run pytest -q`` — full suite green (1808 passed in 60s). The
+  config / auth tests in particular exercise ``Settings`` loading and
+  the Databricks-Apps-mode detection.
+* ``ls dev-app/`` returns "No such file or directory".
+* ``databricks bundle validate -t dev`` and ``-t dev-lakebase`` still
+  resolve cleanly from the repo root (run separately).
+
+Operational notes:
+
+* The production ``ontobricks`` app is **not redeployed** by this
+  change. Its currently-running container still has
+  ``ONTOBRICKS_APP_NAME=ontobricks`` set from its previous deploy.
+  Whenever it next gets redeployed (from a future bundle bound to it,
+  not this one) it will pick up the new ``app.yaml`` and rely on the
+  auto-injected ``DATABRICKS_APP_NAME`` instead — same value, same
+  behaviour.
+* For local development without ``.env``, set
+  ``ONTOBRICKS_APP_NAME`` explicitly (no Databricks Apps runtime to
+  auto-inject the fallback).
+
+
+================================================================
+[Settings] Lakebase: database picker for the Registry Location
+================================================================
+
+Context:
+The Registry Location modal could only edit the Postgres *schema*.
+The actual database the Lakebase backend talked to was always the
+one auto-injected via ``PGDATABASE`` from the Apps ``database``
+resource binding (e.g. ``ontobricks_registry``), so the only way
+to point the registry at a *different* database was to redeploy
+the bundle. With multiple databases now living on the same
+Lakebase instance, admins want to switch between them at runtime.
+
+Decision:
+The Lakebase JWT scope is per-instance — the cached token can
+authenticate against every database on the same instance the SP
+is allowed on. We therefore expose a per-registry override
+(``lakebase_database``) that lives next to ``lakebase_schema`` in
+the global config; when set, the store overrides ``dbname`` in
+the psycopg conninfo. When empty, it falls back to ``PGDATABASE``
+exactly like before.
+
+The override is keyed into the connection pool so swapping it
+spins up a new pool against the new database without recycling
+existing connections (a single Postgres connection only ever talks
+to a single database, so we cannot reuse them anyway).
+
+Changes:
+
+1. src/back/objects/registry/RegistryService.py
+   - ``RegistryCfg`` gains ``lakebase_database: str = ""``.
+   - ``from_volume_path`` / ``from_domain`` / ``from_dict`` /
+     ``as_dict`` plumb the new field. Defaults preserve the old
+     behaviour (empty = "use PGDATABASE").
+
+2. src/shared/config/settings.py
+   - ``Settings.lakebase_database`` is the env-level fallback for
+     the override (rare; mostly there for test parity).
+
+3. src/back/objects/registry/store/lakebase/store.py
+   - ``LakebaseRegistryStore`` accepts ``database=`` and stores it
+     alongside ``schema``.
+   - ``_LakebasePool`` accepts ``database=`` and overrides
+     ``dbname`` in ``self._auth.kwargs(...)`` when opening a
+     connection.
+   - ``_get_pool`` keys on ``(host, port, bound_db, effective_db,
+     user, instance, schema)`` so each (database, schema) pair
+     gets its own pool.
+   - ``cache_key`` and ``describe()`` now expose ``effective_database``
+     and ``database_override`` so the registry-cache TTL bucket is
+     invalidated automatically on switch.
+
+4. src/back/objects/registry/store/factory.py
+   - ``RegistryFactory.lakebase`` / ``for_backend`` / ``from_cfg``
+     accept ``database=`` / ``lakebase_database=`` and forward it
+     to the store. ``build_store`` legacy alias updated too.
+
+5. src/back/objects/domain/SettingsService.py
+   - New module-level ``_SAFE_DBNAME_RE``: validates the override
+     against ``[A-Za-z_][A-Za-z0-9_-]*`` to keep dynamic SQL safe.
+   - ``apply_registry_save`` accepts ``lakebase_database``. An
+     empty string in the payload clears the override.
+   - ``_lakebase_runtime_info`` returns ``database`` (bound),
+     ``database_override`` (admin choice) and ``effective_database``
+     (whichever is in use).
+   - ``lakebase_stats_result`` and ``migrate_to_lakebase_result``
+     pass ``cfg.lakebase_database`` through to
+     ``RegistryFactory.lakebase``.
+   - New ``list_lakebase_databases_result`` helper:
+     connects to the bound database, runs
+     ``SELECT datname, has_database_privilege(...)`` against
+     ``pg_database`` and returns ``[{name, connectable, is_bound,
+     is_selected}, ...]``. Filters out ``postgres`` / ``rdsadmin``
+     / template DBs.
+
+6. src/api/routers/internal/settings.py
+   - New admin-only ``GET /settings/registry/lakebase-databases``
+     endpoint that calls ``list_lakebase_databases_result``.
+
+7. src/front/templates/partials/registry/_registry_configuration.html
+   - Read-only "Database" field renamed to "Database (effective)"
+     with a hint line that flips between *override* and
+     *from app resource binding*.
+   - Modal: new ``Lakebase Database`` ``<select>`` shown only when
+     the backend is Lakebase. First option is "default — use bound
+     database"; the rest are populated dynamically.
+
+8. src/front/static/registry/js/registry.js
+   - ``updateLakebasePanel`` renders the effective DB and the
+     override hint.
+   - ``updateRegistryLabel`` adds an ``override`` badge when the
+     selected DB differs from the bound one.
+   - New ``loadModalLakebaseDatabases``: fetches the new endpoint,
+     renders selectable options (disables ones the SP cannot
+     CONNECT to, marks the bound one), preselects the current
+     override, and degrades gracefully on API errors.
+   - Apply button POSTs ``lakebase_database`` alongside the
+     existing fields.
+
+9. tests/test_registry.py
+   - Added ``"lakebase_database": ""`` to the ``_make_settings``
+     defaults and the ``as_dict`` golden so the new field is
+     exercised by the existing roundtrip + factory tests.
+
+Verification:
+
+* ``uv run pytest -q`` — 1808 passed in 61s.
+* Linter clean across the touched modules.
+* The change is fully backwards compatible — existing deployments
+  see ``lakebase_database=""`` and behave identically to before.
+
+================================================================
+[Registry] Auto-refresh the Browse list on sidebar nav
+================================================================
+
+Bug:
+On the Registry page, switching to Bridges (or any other sidebar
+section) and coming back to **Browse** (the Domains panel) left
+the table showing whatever was loaded on first page-render. New
+versions, freshly-activated versions, deletes, or a backend /
+Lakebase-database switch in Settings were never reflected until
+the user clicked the small refresh button in the panel header.
+
+Root cause:
+``sidebar-nav.js`` dispatches a ``sidebarSectionChanged`` event on
+every nav-link click. ``registry.js`` only listened for it on the
+``bridges`` section (lazy-load). The ``domains`` section had no
+listener, so navigating back never re-fetched.
+
+Fix:
+``src/front/static/registry/js/registry.js`` — extended the
+``sidebarSectionChanged`` handler with a ``domains`` branch that
+calls ``loadRegistryDomains()`` whenever the user navigates back
+to the Browse panel. Guarded by ``registryConfigured`` so we
+don't hammer the API while the registry is still being set up
+(the initial ``loadRegistryConfig`` already primes the list once
+the registry is ready).
+
+Verification:
+* Linter clean.
+* Manual: open Registry, click Bridges, click Domains — list
+  re-fetches without pressing the refresh button. The refresh
+  button still works as before.
+
+================================================================
+[bug] Registry/Browse silently ignored Lakebase database override
+================================================================
+
+Bug:
+After picking *Lakebase* (and optionally a non-default database)
+in **Settings → Registry Location**, the Registry/Browse panel
+still listed domains. The list looked correct on a fresh deploy
+where ``cfg.lakebase_database`` is empty (so the bound
+``PGDATABASE`` is used anyway), but as soon as the admin used
+the new database picker to point the registry at a *different*
+Postgres database on the same Lakebase instance, Browse kept
+reading from the old, bound database. Migration / Initialize
+already honoured the override (they go through the
+``SettingsService`` helpers which were updated when the picker
+landed) — only the read path used by Browse was broken.
+
+Root cause:
+Every read path used by the Registry/Browse UI ultimately goes
+through ``RegistryService.from_context(domain, settings)`` →
+``RegistryService.__init__`` → ``RegistryService._build_store``.
+That helper hand-built the Lakebase store via
+``RegistryFactory.lakebase(registry_cfg=cfg, schema=cfg.lakebase_schema)``
+and forgot to forward ``database=cfg.lakebase_database``. The
+factory then defaulted to the bound ``PGDATABASE`` so the store
+connected to the wrong database, and the JSONB rows it returned
+came from the wrong place. The Lakebase pool cache key includes
+the effective database, so once the override was correctly
+plumbed everywhere else, this was the *only* hole left.
+
+Fix:
+* ``src/back/objects/registry/RegistryService.py`` — pass
+  ``database=cfg.lakebase_database`` when calling
+  ``RegistryFactory.lakebase`` from ``_build_store``. The Volume
+  branch is unchanged. Docstring updated to spell out why
+  forgetting the override is a silent footgun.
+* ``tests/test_registry_store.py`` — two new factory tests:
+  ``test_lakebase_database_override_propagates_to_store`` checks
+  that ``RegistryFactory.lakebase(database=...)`` surfaces the
+  override on ``describe()`` and bakes it into ``cache_key``;
+  ``test_lakebase_factory_for_backend_plumbs_database`` covers
+  the higher-level ``for_backend`` and ``from_cfg`` entry points
+  that ``_build_store`` would route through if the cfg ever
+  carried the override pre-built.
+
+Verification:
+* ``uv run pytest`` — 1810 / 1810 pass (incl. 2 new tests).
+* Linter clean on the touched files.
+* Manual: with Lakebase selected and a database override set,
+  Registry/Browse now reads from the chosen database (verified
+  against the SP audit log on the bound instance — queries hit
+  the override DB, not ``PGDATABASE``).
+
+================================================================
+[refactor] Decouple registry callers from the Volume backend
+================================================================
+
+Goal:
+Make every registry read/write path honour the active backend
+(``cfg.backend == "volume"`` vs ``"lakebase"``). The Lakebase
+plumbing was already in place, but two paths still reached into
+the Unity Catalog Volume directly and would silently produce
+wrong results on Lakebase-only registries.
+
+Findings (audit of every ``self._uc.*`` call in
+``RegistryService.py`` and every ``VolumeFileService(...)``
+construction site outside ``store/volume/``):
+
+1. ``RegistryService.list_all_bridges`` — enumerated domains
+   via ``self._uc.list_directory(self.domains_path(),
+   dirs_only=True)``. On a Lakebase-only registry the on-Volume
+   ``domains/`` folder may not exist, so the cross-domain
+   bridge list silently returned empty. The per-domain ontology
+   read inside the loop already went through the store via
+   ``self.load_latest_domain_data`` → ``self._store.read_version``
+   (correct), only the *enumeration* was broken.
+2. ``BuildScheduler._resolve_creds`` (used at app startup before
+   the global config is loaded) — built a bare
+   ``RegistryCfg(catalog, schema, volume)`` and dropped
+   ``backend`` / ``lakebase_schema`` / ``lakebase_database``.
+   Result: any schedule store call that fired before the first
+   user opened the Schedule tab targeted Volume even on a
+   Lakebase deployment with the Lakebase database resource
+   bound. ``_resolve_creds`` is also the path the lazy
+   ``_restore_jobs`` uses on cold start.
+
+Other ``_uc.*`` call sites in ``RegistryService.py`` were
+intentionally left as Volume-direct because they manipulate the
+**binary tree only** — ``documents/`` and ``*.lbug.tar.gz``
+always live on the Unity Catalog Volume regardless of which
+:class:`RegistryStore` backs the registry. They are now grouped
+under a single comment block that spells this contract out so
+the next reader does not have to re-derive it. Affected
+helpers (kept Volume-direct on purpose):
+* ``_resolve_domains_folder`` / ``volume_root`` /
+  ``domains_path`` / ``domain_path`` / ``version_path`` /
+  ``version_file_path`` / ``marker_path`` /
+  ``config_file_path`` / ``history_file_path``
+* ``recursive_delete`` (binary tree wipe after
+  ``store.delete_domain`` / ``store.delete_version``)
+* ``copy_version_documents`` (per-version ``documents/`` copy)
+* ``migrate_domain_layout`` (one-time flat → versioned layout
+  migration on the Volume)
+
+External call sites also audited:
+* ``DigitalTwin._backfill_registry_lbug`` and
+  ``DigitalTwin._check_registry`` — read the Volume to check
+  whether a registry ``.lbug.tar.gz`` archive exists. **Binary
+  side, OK.**
+* ``Domain.count_documents_in_volume`` — counts files in a
+  version's ``documents/`` directory. **Binary side, OK.**
+* ``Mapping.fetch_documents_for_agent`` — reads documents from
+  a version's ``documents/`` directory. **Binary side, OK.**
+* ``GraphDBFactory._build_auto_restore`` — restores ``.lbug``
+  graphs from the Volume on first DT/Build access. **Binary
+  side, OK.**
+* ``home.read_volume_file`` /
+  ``home.write_volume_file`` — generic UC Volume R/W endpoints
+  that take an explicit path from the frontend. **Not
+  registry-specific, OK.**
+* ``UCDomainIO.list_domains`` /
+  ``UCDomainIO.load_domain`` — public ``/api/v1/domain/...``
+  REST endpoints that take an explicit ``domain_path`` and
+  read JSON from the Volume. **Public REST surface explicitly
+  Volume-keyed; not used by the Browse / Load Domain flow.
+  Kept as-is.**
+
+Fixes:
+* ``src/back/objects/registry/RegistryService.py``
+  - ``list_all_bridges``: enumerate via
+    ``self._store.list_domain_folders()`` instead of
+    ``self._uc.list_directory(self.domains_path(), ...)``.
+  - Added a multi-line comment block on the ``# -- path
+    builders`` section that documents the Volume-only intent
+    of every helper that still touches ``self._uc`` directly,
+    so the contract (binary artifacts always live on the
+    Volume) is impossible to miss.
+* ``src/back/objects/registry/scheduler.py``
+  - ``_resolve_creds`` now reads ``settings.registry_backend``,
+    ``settings.lakebase_schema`` and ``settings.lakebase_database``
+    and forwards them to ``RegistryCfg``. Schedule reads/writes
+    that fire before the global config is loaded (cold-start
+    job restore, first-time CRON tick) now target the right
+    backend on Lakebase deployments.
+
+Tests added:
+* ``tests/test_registry.py``
+  - ``TestListAllBridges.test_uses_store_list_domain_folders_not_volume``
+    rigs ``_uc.list_directory`` to raise so a regression to the
+    Volume-direct enumeration would explode loudly. Stubs
+    ``store.list_domain_folders`` and ``load_latest_domain_data``
+    to verify the bridge result is built end-to-end.
+  - ``TestListAllBridges.test_skips_hidden_folder_names`` locks
+    in the ``.hidden`` folder filter behaviour.
+  - ``TestSchedulerResolveCredsBackend.test_volume_defaults`` and
+    ``...test_lakebase_with_database_override`` cover the
+    scheduler's startup credential resolution.
+
+Verification:
+* ``uv run pytest`` — **1814 / 1814 passed** (4 new tests).
+* Linter clean on ``RegistryService.py``, ``scheduler.py``,
+  and ``tests/test_registry.py``.
+* Manual: with Lakebase selected and at least one domain
+  carrying bridges, Registry/Browse → "Bridges" now lists
+  every domain's bridges. Previously the panel was empty
+  unless the registry also happened to keep a ``domains/``
+  folder on the Volume.
+
+================================================================
+2026-04-27 (late) — Settings → Registry Location: unbreak the
+                    backend chooser on Databricks Apps
+================================================================
+
+Summary:
+On any Databricks Apps deployment a Volume resource is bound to
+the app, so ``SettingsService.is_registry_locked()`` returns
+``True``. The lock was originally meant to protect the bound
+``catalog/schema/volume`` triplet from being silently desynced
+by an in-app edit — but it was *also* disabling the **backend
+radios** in Settings → Registry Location and rejecting any POST
+to ``/settings/registry``. Net result: admins on a deployed app
+could never flip Volume ↔ Lakebase from the UI, even when the
+``database`` resource was correctly bound and Lakebase was
+fully available (``psycopg_installed: true, env_ready: true,
+bound: true``). The whole purpose of the runtime backend toggle
+was being defeated by an over-eager safety net.
+
+Two surgical changes restore the intended UX:
+
+1. **JS** — ``updateBackendChooser`` now disables the Lakebase
+   radio purely on availability, and the Volume radio is always
+   enabled. The lock no longer leaks into the chooser.
+
+2. **API** — ``POST /settings/registry`` no longer hard-fails
+   when locked. It only refuses *non-empty* writes to
+   ``catalog/schema/volume`` (the bound triplet) and lets
+   ``backend``, ``lakebase_schema``, and ``lakebase_database``
+   through unchanged. Empty values for the locked keys are
+   silently stripped (some clients echo the full config back).
+
+The ``app.yaml`` extra fix earlier the same day (uv run with
+``--extra lakebase``) is what makes this practically useful:
+Postgres-side deps are now always present in the running
+container, so flipping to Lakebase Just Works the moment the
+database resource binding goes live — no redeploy required.
+
+Files changed:
+* ``src/front/static/registry/js/registry.js``
+  - ``updateBackendChooser``: drop ``registryLocked`` from the
+    radio-disabled equation. Comment block records *why* the
+    lock semantic is intentionally narrow.
+* ``src/api/routers/internal/settings.py``
+  - ``save_registry``: read the body first, then on lock
+    intersect against the locked-keys set. Raise only when a
+    non-empty write to a locked key is attempted; otherwise
+    forward a sanitised payload to ``apply_registry_save``.
+    Updated docstring to spell out the contract.
+
+Tests added:
+* ``tests/test_registry.py::TestSaveRegistryRouteLockedSemantics``
+  - ``test_locked_blocks_catalog_schema_volume_changes``: a
+    write to ``{"catalog": "evil"}`` on a locked deployment
+    raises ``ValidationError`` and never reaches
+    ``apply_registry_save``.
+  - ``test_locked_allows_backend_switch``: ``{"backend":
+    "lakebase"}`` on a locked deployment is forwarded
+    unchanged.
+  - ``test_locked_allows_lakebase_database_override``:
+    ``lakebase_database`` + ``lakebase_schema`` are accepted on
+    a locked deployment.
+  - ``test_locked_strips_locked_keys_silently_when_empty``: a
+    payload echoing ``{"catalog": "", "schema": "", "backend":
+    "lakebase"}`` is silently sanitised to just ``{"backend":
+    "lakebase"}`` — no exception.
+  - ``test_unlocked_passes_payload_through``: on an unlocked
+    deployment the full payload is forwarded as-is.
+
+Verification:
+* ``uv run --extra lakebase pytest tests/test_registry.py
+  tests/test_registry_store.py`` — **92 / 92 passed**.
+* Manual (deployed dev app, ``ontobricks-dev``):
+  - ``GET /settings/registry`` returns ``available_backends.lakebase
+    = {available: true, psycopg_installed: true, env_ready:
+    true}`` and ``lakebase.bound = true`` with the
+    ``ontobricks-app`` instance details populated.
+  - With ``registry_locked: true`` (Volume is bound by DAB), the
+    Lakebase radio is now selectable in **Settings → Registry
+    Location**, and switching backend persists via
+    ``POST /settings/registry``.
+
+================================================================
+2026-04-27 (later) — Backend switch silently reverted to Volume
+                     on Databricks Apps deployments
+================================================================
+
+Summary:
+After re-enabling the backend chooser earlier today, switching
+to Lakebase from Settings → Registry Location appeared to
+succeed (``POST /settings/registry`` returned 200) but the next
+``GET /settings/registry`` came back with ``backend: "volume"``,
+silently flipping the radio back. The persisted value was
+correct in ``domain.settings.registry.backend``; what was
+broken was the *read path*.
+
+``RegistryCfg.from_domain`` had a fast-path: when
+``settings.registry_volume_path`` is set (i.e. on every
+Databricks Apps deployment, because the Volume resource is
+bound) it short-circuited to ``from_volume_path`` and read the
+backend choice **only** from ``settings.registry_backend``
+(env var). The carefully-saved ``domain.settings.registry``
+override was never consulted on that branch. Same trap for
+``lakebase_schema`` / ``lakebase_database``: any UI override
+would be discarded on the next read.
+
+Fix: layer ``domain.settings.registry`` *over* the env values
+**before** picking the branch, so the bound-Volume path still
+sources catalog/schema/volume from the resource binding (which
+must always win) but the **backend** and **Lakebase-side
+knobs** carry the admin's UI choice through both paths.
+
+Files changed:
+* ``src/back/objects/registry/RegistryService.py``
+  - ``RegistryCfg.from_domain``: rewrite the resolution order.
+    Read ``domain.settings.registry`` first; ``backend``,
+    ``lakebase_schema`` and ``lakebase_database`` resolve to
+    the session value with env as a fallback. Pass them into
+    both the bound-volume path (``from_volume_path``) and the
+    legacy / local-dev path. Updated the docstring with the
+    explicit precedence order.
+
+Tests added:
+* ``tests/test_registry.py::TestRegistryCfgConstruction``
+  - ``test_from_domain_volume_path_keeps_session_backend``: a
+    bound-Volume deployment with ``domain.settings.registry =
+    {"backend": "lakebase"}`` returns ``backend == "lakebase"``
+    even when the env says Volume — proves the radio choice
+    survives the round-trip.
+  - ``test_from_domain_volume_path_keeps_session_lakebase_overrides``:
+    ``lakebase_schema`` / ``lakebase_database`` UI overrides
+    survive on the bound-Volume path.
+  - ``test_from_domain_no_volume_path_session_backend_wins``:
+    same precedence on the local-dev path, locking down the
+    behaviour for both code paths.
+
+Verification:
+* ``uv run --extra lakebase pytest tests/test_registry.py
+  tests/test_registry_store.py`` — **95 / 95 passed** (3 new).
+* Linter clean on ``RegistryService.py`` and the test file.
+* Manual (deployed ``ontobricks-dev``): Settings → Registry
+  Location → Lakebase radio + Save → ``GET /settings/registry``
+  reports ``backend == "lakebase"`` and the Lakebase panel
+  populates with the bound instance/database/schema, instead
+  of snapping back to Volume.
+
+================================================================
+2026-04-27 (v3) — *Migrate to Lakebase* button vanished after
+                  the very flip that needed it
+================================================================
+
+Summary:
+After flipping to the Lakebase backend on a fresh deployment
+the inventory grid showed "0 rows" for every table — which is
+correct, the schema is genuinely empty — but the **Migrate to
+Lakebase** button was hidden and the admin had no way to
+populate it. The button visibility condition was
+``backend === 'volume'``, which made the button vanish the
+moment the radio flipped to Lakebase. Net result: switching
+backend was a one-way trap with empty tables on the other
+side.
+
+Fix:
+1. ``_lakebase_runtime_info`` now includes an ``initialized``
+   boolean (``store.is_initialized()`` probe). The probe is
+   best-effort, never raises, and is gated on the optional
+   ``psycopg`` extra. Added a sister method
+   ``_lakebase_schema_initialized`` to keep the probe out of
+   the main runtime-info path.
+2. JS shows **Migrate to Lakebase** when:
+   - Lakebase is available (``psycopg`` + bound resource), AND
+   - the Volume registry is configured, AND
+   - either the admin is still on Volume, OR Lakebase is
+     selected but ``lakebase.initialized`` is ``false``.
+   The "still on Volume" branch keeps the pre-switch flow
+   (admins can pre-warm Lakebase before flipping); the new
+   "selected but uninitialised" branch is the rescue path.
+
+Files changed:
+* ``src/back/objects/domain/SettingsService.py``
+  - ``_lakebase_runtime_info``: include
+    ``initialized: bool``; the existing payload is otherwise
+    unchanged.
+  - ``_lakebase_schema_initialized`` (new helper): build a
+    Lakebase store via ``RegistryFactory`` and call
+    ``is_initialized()``. Catches every exception (including
+    ``ImportError`` on Volume-only stacks) and returns
+    ``False`` — the field is purely informational.
+* ``src/front/static/registry/js/registry.js``
+  - ``updateBackendChooser``: replace
+    ``backend === 'volume'`` with the more nuanced rule
+    above; comment block records the rationale.
+
+Verification:
+* ``uv run --extra lakebase pytest tests/test_registry.py
+  tests/test_registry_store.py`` — **95 / 95 passed**.
+* Linter clean.
+* Manual (deployed ``ontobricks-dev``):
+  - On Volume → button visible. ✓
+  - On Lakebase + empty schema → button visible (the rescue
+    path). ✓
+  - On Lakebase + initialised schema → button hidden so the
+    admin doesn't accidentally re-migrate over live data. ✓
+
+================================================================
+2026-04-27 (v4) — DAB Lakebase resource binding: Autoscaling
+                  uses the wrong schema (branch missing,
+                  database name landed in the wrong field)
+================================================================
+
+Summary:
+The ``dev-lakebase`` target was wiring the Lakebase resource
+with the **Provisioned-tier** YAML schema:
+
+```yaml
+- name: database
+  database:
+    database_name: ontobricks_registry
+    instance_name: ontobricks-app
+    permission: CAN_CONNECT_AND_CREATE
+```
+
+But Lakebase instances created after 2026-03-12 are
+**Autoscaling projects**, which require an entirely different
+schema: ``postgres: { branch, database }`` where both fields
+are *full project-relative resource paths* (e.g.
+``projects/ontobricks-app/branches/production`` and
+``projects/ontobricks-app/branches/production/databases/db-xxx-yyy``).
+
+When the bundle reached the Apps platform with the wrong
+schema the bind was technically accepted but visibly mangled in
+the UI (database name landed in the *branch* field) and the
+runtime PG env-var injection was unstable. The dev sandbox
+``ontobricks-app`` is an Autoscaling project — the project's
+default branch is ``production`` (NOT ``main``), and the
+``ontobricks_registry`` database has resource ID
+``db-8u4l-0na72ub5sp``.
+
+Fix:
+1. Replaced the ``dev-lakebase`` binding with the Autoscaling
+   ``postgres`` schema, populated from new variables
+   (``lakebase_branch``, ``lakebase_database_resource``) so the
+   admin can override resource paths without editing the YAML.
+2. Added a sibling ``dev-lakebase-provisioned`` target that
+   keeps the legacy Provisioned schema for instances that still
+   pre-date the Autoscaling rollout.
+3. Variable docs spell out the lookup recipe via
+   ``databricks api get
+   /api/2.0/postgres/projects/<project>/branches/<branch>/databases``
+   so the next admin can pick a different database without
+   re-deriving the resource path from scratch.
+
+Files changed:
+* ``databricks.yml``
+  - New variables ``lakebase_branch`` and
+    ``lakebase_database_resource`` with descriptive defaults
+    matching the dev sandbox.
+  - ``dev-lakebase``: rewritten to use the Autoscaling
+    ``postgres`` resource (default key) with full resource
+    paths.
+  - ``dev-lakebase-provisioned``: new sibling target that
+    keeps the legacy Provisioned binding alive for
+    backwards-compat.
+  - Comment block at the top of the variable section
+    documents the schema split, the post-2026-03-12
+    Autoscaling default, and the silent-misroute failure
+    mode.
+
+Verification:
+* ``databricks bundle validate -t dev-lakebase`` — clean.
+* ``databricks bundle deploy -t dev-lakebase`` — succeeded.
+* ``databricks bundle run ontobricks_dev_app -t dev-lakebase``
+  — app restarted in 212s, status RUNNING/ACTIVE.
+* ``databricks apps get ontobricks-dev``: the bound resource
+  now reports::
+
+      "postgres": {
+        "branch": "projects/ontobricks-app/branches/production",
+        "database": "projects/ontobricks-app/branches/production/databases/db-8u4l-0na72ub5sp",
+        "permission": "CAN_CONNECT_AND_CREATE"
+      }
+
+* ``GET /settings/registry`` from the deployed dev app:
+  ``lakebase.bound = true``, ``effective_database =
+  ontobricks_registry``, ``schema = ontobricks_registry``,
+  ``initialized = false`` (next step: click *Migrate to
+  Lakebase* to populate the empty schema).
+* Production ``ontobricks`` app — untouched (this DAB only
+  manages ``ontobricks-dev``).
+
+
+## Lakebase registry identity = the schema (decouple from Volume path)
+
+Context: deployed apps with the Lakebase backend reported
+``initialized: false`` and "0 rows in every table" even though the
+Postgres schema had been migrated end-to-end. Root cause: the
+``LakebaseRegistryStore`` keyed the ``registries.name`` row by the
+*Volume* triplet (``catalog.schema.volume``). When two apps shared a
+Lakebase but were bound to different Volumes (typical of an
+``ontobricks-dev`` sandbox running next to the prod ``ontobricks``
+app), the dev app could not find the registry row created by prod —
+and a brand-new row would never be inserted because the first
+``is_initialized()`` probe is read-only. Switching the UI backend to
+*Lakebase (Postgres)* should map directly to the bound Lakebase
+configuration (instance + database + schema) — the Volume binding
+is incidental, only used for binary artifacts. This change makes
+that the contract.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/store.py
+   ``_registry_name()`` now returns ``self._schema``: the Postgres
+   schema *is* the registry namespace. Two apps pointing at the same
+   ``(instance, database, schema)`` triple share the registry; two
+   apps on the same Lakebase but different schemas are isolated. The
+   Volume triplet is intentionally absent from the identity.
+   ``_fetch_registry_id()`` keeps backward-compat with pre-existing
+   schemas via a "legacy adoption" path: when no row matches the new
+   schema-keyed name but exactly one (or, with a warning, several)
+   legacy row(s) live in this schema, the oldest is renamed in
+   place. No data migration script needed — the first read in the
+   deployed app self-heals the row.
+   ``table_row_counts()`` and ``is_initialized()`` no longer swallow
+   connection / permission errors silently; ``table_row_counts``
+   propagates so the admin UI can surface a clear error instead of
+   misleading all-zero rows.
+   ``_LakebasePool`` / ``_get_pool()`` accept an optional
+   ``database`` argument so admins can swap the Postgres database
+   from the UI without redeploying (JWT scope is per-instance, so
+   the cached token still authenticates).
+   New ``_effective_database`` property + ``database_override`` /
+   ``effective_database`` keys in the runtime payload.
+
+2. tests/test_registry_store.py
+   New ``TestLakebaseRegistryIdentity`` covering the four cases:
+   schema-as-name, hit-by-name, lone-legacy adoption, empty-schema
+   no-op, multi-legacy oldest-wins. The multi-legacy test now
+   patches ``logger.warning`` directly (avoids caplog brittleness
+   when other tests reconfigure the root logger).
+   New ``TestLakebaseTableRowCountsErrors`` pinning the new
+   propagating-vs-zero contract.
+
+3. tests/test_registry.py
+   ``TestSaveRegistryRouteLockedSemantics`` now executes the
+   coroutine via a worker-thread ``_run`` helper instead of the
+   ``@pytest.mark.asyncio`` runner. Pytest-asyncio + anyio session
+   loops occasionally cross-pollinate (``Runner.run() cannot be
+   called from a running event loop``); a private
+   ``new_event_loop()`` on a daemon thread keeps the case hermetic
+   regardless of test ordering.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/store.py
+- tests/test_registry.py
+- tests/test_registry_store.py
+
+Tests: uv run --extra lakebase pytest -q → 1830 passed in 58.4s
+
+
+## Lakebase JWT mint failed: PGAPPNAME is the app name, not the instance
+
+Context: deployed ``ontobricks-dev`` raised
+``Database instance 'ontobricks-dev' not found`` when trying to mint
+a Lakebase JWT. The actual instance is ``ontobricks-app``. Root
+cause: ``LakebaseAuth.instance_name`` consulted ``PGAPPNAME`` as a
+fallback identifier, but ``PGAPPNAME`` is libpq's
+``application_name`` (a free-form connection trace label), and the
+Databricks Apps runtime populates it with the *app's* name. So
+``generate_database_credential(instance_names=["ontobricks-dev"])``
+was hitting a non-existent instance.
+
+Changes:
+
+1. src/back/core/databricks/LakebaseAuth.py
+   Drop ``PGAPPNAME`` from the instance-name resolution chain.
+   Order is now: ``DATABASE_INSTANCE_NAME`` env var → SDK lookup
+   matching ``PGHOST`` against ``read_write_dns`` /
+   ``read_only_dns`` of the workspace's database instances. Module
+   docstring updated to call out why ``PGAPPNAME`` is intentionally
+   ignored.
+
+2. tests/test_lakebase_auth.py (new)
+   Five-case test class pinning the resolver: explicit env wins;
+   ``PGAPPNAME`` is never used (regression for the deployed-app
+   failure); SDK lookup matches host to ``read_write_dns``; result
+   is cached; SDK failure surfaces as ``ValidationError``.
+
+Modified files:
+- src/back/core/databricks/LakebaseAuth.py
+- tests/test_lakebase_auth.py
+
+Tests: uv run --extra lakebase pytest -q → 1835 passed in 58.8s
+
+================================================================
+Lakebase connection details: surface tier (Provisioned vs
+Autoscaling) and active branch
+================================================================
+
+The admin Settings → Registry → Lakebase Status panel now also
+shows the **tier** of the bound Lakebase instance (``Autoscaling``
+or ``Provisioned``) and, for Autoscaling, the **branch** that
+hosts the bound ``PGDATABASE`` plus the project's CU min/max.
+
+Provisioned instances simply 404 on
+``GET /api/2.0/postgres/projects/<name>``, which is the
+discriminator. For Autoscaling we walk the project's branches +
+databases and match on ``status.postgres_database`` to identify
+the active branch (falling back to ``default_branch`` when no
+match is found).
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   - ``_lakebase_runtime_info`` now passes ``bound_database`` to
+     ``_lakebase_instance_metadata``.
+   - ``_lakebase_instance_metadata`` enriches the payload with
+     ``tier``, ``branch``, ``branch_resource``,
+     ``autoscaling_min_cu``, ``autoscaling_max_cu`` (defaults
+     ``"unknown"``/``""``/``None`` when detection fails).
+   - New ``_lakebase_tier_info`` static helper performs the
+     project lookup and tier classification.
+   - New ``_lakebase_active_branch`` static helper walks branches
+     to attribute ``PGDATABASE`` to a specific branch.
+
+2. src/front/templates/partials/registry/_registry_configuration.html
+   Added three new fields under the Instance block: ``Tier``
+   (always shown, badge), ``Branch`` and ``Autoscale (CU)`` (both
+   shown only when ``tier == autoscaling``).
+
+3. src/front/static/registry/js/registry.js
+   ``updateLakebaseInstanceBlock`` now renders the tier badge and
+   conditionally reveals the branch + CU range columns.
+
+4. tests/test_settings_lakebase_tier.py (new)
+   Seven cases covering: autoscaling project extraction (default
+   branch + CU range), branch attribution when a database matches,
+   fallback to default branch when nothing matches, Provisioned
+   classification when the project endpoint 404s, empty-instance
+   short circuit, empty-database short circuit, and graceful
+   fallback when the branch listing API fails.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/registry/js/registry.js
+- tests/test_settings_lakebase_tier.py
+
+Tests: uv run --extra lakebase pytest -q → 1842 passed in 59.4s
+
+================================================================
+Fix: Schedules duplicated in Lakebase global_config JSONB blob
+================================================================
+
+Context:
+- The Volume backend stores schedules *inside* the
+  ``.global_config.json`` blob (legitimate, single-file storage).
+- The Lakebase backend has a dedicated ``schedules`` table, so
+  the JSONB ``global_config.config`` column must stay free of any
+  ``schedules`` (or ``schedule_history``) key.
+- The Volume → Lakebase migration helper was forwarding the
+  whole Volume blob — including ``schedules`` — to
+  ``dst.save_global_config`` *and* then calling ``save_schedules``,
+  duplicating the data into both the JSONB column and the
+  ``schedules`` table. Subsequent ``save_global_config`` calls
+  preserved the duplicated key (only ``schedule_history`` was
+  stripped), so the corruption was sticky.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/store.py
+   - ``load_global_config`` now strips both ``schedules`` and
+     ``schedule_history`` from the returned blob (uses the
+     pre-existing but unused ``_SCHEDULES_KEY`` constant).
+   - ``save_global_config`` filters ``schedules`` /
+     ``schedule_history`` out of *updates* before merging and
+     drops them from the loaded data, so the persisted JSONB
+     can never reacquire those keys.
+   - ``initialize`` now calls a new ``_scrub_global_config_legacy_keys``
+     helper that runs an idempotent ``UPDATE … SET config =
+     (config - 'schedules') - 'schedule_history' WHERE config ?
+     'schedules' OR config ? 'schedule_history'``. Existing
+     deployments self-heal at next app start; the WHERE clause
+     keeps the operation a no-op afterwards.
+
+2. src/back/objects/registry/store/migration.py
+   - ``migrate_volume_to_lakebase`` strips ``schedules`` /
+     ``schedule_history`` from the Volume blob before calling
+     ``dst.save_global_config``. Defensive (the Lakebase store
+     also strips them now) but makes the intent explicit and
+     avoids growing the JSONB row needlessly during migration.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/migration.py
+
+Tests: uv run pytest tests/ -x -q → 1842 passed in 58.5s
+
+================================================================
+Migrate to Lakebase: hide when redundant, warn on overwrite
+================================================================
+
+Three regimes for the *Migrate to Lakebase* button on the admin
+Registry Location page:
+
+1. **Lakebase active backend + tables populated** → hide the
+   button. Re-running the migration there silently overwrites
+   live rows and offering it without context is a footgun.
+
+2. **Volume active backend + Lakebase tables populated** → keep
+   the button visible but downgrade to *Re-sync from Volume*:
+   ``btn-outline-danger`` style + a hard confirmation popup
+   spelling out the overwrite ("Continue only if you intend to
+   reset Lakebase from the Volume snapshot"). This is the
+   legitimate reset path for admins who deliberately want to
+   throw away post-migration changes.
+
+3. **Otherwise** (Volume + empty Lakebase, or Lakebase but
+   uninitialised) → standard *Migrate to Lakebase* CTA with the
+   informational popup.
+
+Detection is driven by a new ``populated`` boolean in the
+Lakebase runtime payload. ``_lakebase_runtime_info`` now calls a
+single consolidated probe ``_lakebase_schema_status`` that
+returns ``{initialized, populated}`` from one store instance.
+``populated`` is true iff any of the canonical data tables
+(``domains``, ``permission_sets``, ``scheduled_builds``,
+``scheduled_history``) carries one or more rows. Any failure —
+psycopg missing, connection error, ``table_row_counts`` raising
+on a permissions issue — degrades gracefully to ``False`` so
+the admin UI keeps rendering.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   - New ``_lakebase_schema_status`` helper returning
+     ``{initialized, populated}``.
+   - ``_lakebase_schema_initialized`` is now a thin wrapper
+     delegating to the status probe (kept for backwards
+     compatibility with callers that only need the boolean).
+   - ``_lakebase_runtime_info`` surfaces ``populated`` next to
+     ``initialized`` in the payload.
+
+2. src/front/static/registry/js/registry.js
+   - ``updateBackendChooser`` toggles the migrate button between
+     hidden / *Migrate* / *Re-sync from Volume* using
+     ``lakebase.populated``. Stores the regime in
+     ``btn.dataset.mode`` so the click handler can branch.
+   - Click handler picks one of two confirmation dialogs: an
+     informational migrate prompt or a red, explicit overwrite
+     warning ("Re-sync from Volume — overwrite Lakebase?").
+   - Finally-block restore now respects the entered mode so a
+     failed re-sync no longer reverts the label to *Migrate to
+     Lakebase*.
+
+3. tests/test_settings_lakebase_status.py (new)
+   Seven cases pinning the probe behaviour: psycopg-missing
+   short-circuit, uninitialised schema skips the row probe,
+   empty tables report ``populated=False``, any non-empty
+   canonical table reports ``populated=True``, factory failure
+   is swallowed, ``table_row_counts`` failure keeps
+   ``initialized=True`` while reporting ``populated=False``,
+   and ``_lakebase_schema_initialized`` delegates correctly.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/front/static/registry/js/registry.js
+- tests/test_settings_lakebase_status.py
+
+Tests: uv run --extra lakebase pytest -q → 1849 passed in 59.6s
+
+================================================================
+Build page: surface DT existence reasons + paths
+================================================================
+
+The Build page reported "Triple-Store Digital Twin Not found"
+even when the user-visible UC view existed, and the registry
+archive badge silently fell back to "Not configured" / blank.
+Both checks were swallowing their underlying state (no warehouse,
+no host/token, missing ``uc_version_path`` on the domain, 404 on
+the parent volume directory, ``TABLE_OR_VIEW_NOT_FOUND`` against
+a stale ``domain.delta.catalog.schema``) and the UI had no way to
+explain the verdict. Operators ended up trusting a red badge that
+was actually pointing at the wrong fully-qualified name.
+
+Changes:
+
+1. src/back/objects/digitaltwin/DigitalTwin.py
+   - ``fetch_digital_twin_existence`` now returns three new
+     fields: ``view_check_error``, ``snapshot_check_error``,
+     ``registry_check_error`` populated whenever a check cannot
+     yield a definitive ``True``/``False``.
+   - ``_check_view`` / ``_check_snapshot`` / ``_check_registry``
+     refactored to return ``(Optional[bool], Optional[str])`` and
+     log the resolved name + outcome at INFO instead of swallowing
+     at DEBUG. Distinguishes "no warehouse", "view name not fully
+     qualified", "directory 404" from real not-found verdicts.
+
+2. src/back/objects/domain/HomeService.py
+   - ``dtwin_detail`` propagates ``view_check_error``,
+     ``snapshot_check_error``, ``registry_check_error`` and the
+     resolved ``local_lbug_path`` / ``registry_lbug_path`` so the
+     build page renders them.
+
+3. src/front/static/domain/js/domain-validation.js
+   - View / Registry badges now carry a ``title`` tooltip
+     showing either the queried path or the failure reason.
+   - New ``psDtViewReason`` and ``psDtRegistryReason`` slots
+     surface the error inline; ``psDtRegistryPath`` shows the
+     archive path so a stale ``delta`` config or wrong volume
+     becomes obvious.
+
+4. src/front/static/query/js/query-sync.js
+   - DT page tooltips mirror the Build page (queried path on
+     success, error reason on failure).
+
+5. src/front/templates/partials/domain/_domain_validation.html
+   - Adds the ``psDtViewReason``, ``psDtRegistryPath``,
+     ``psDtRegistryReason`` containers under the existing badges.
+
+Modified files:
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/domain/HomeService.py
+- src/front/static/domain/js/domain-validation.js
+- src/front/static/query/js/query-sync.js
+- src/front/templates/partials/domain/_domain_validation.html
+
+Tests: uv run pytest -q → 1849 passed in 59.6s
+
+================================================================
+Lakebase: drop Provisioned tier — Autoscaling-only
+================================================================
+
+OntoBricks now targets **Lakebase Autoscaling** exclusively. The
+legacy Provisioned tier is no longer supported anywhere in the
+codebase: deployment YAML, runtime auth, admin UI, and docs all
+assume an Autoscaling project resource. This removes a maintenance
+burden (dual YAML schemas, dual project-vs-database lookups, dual
+test paths) for a tier that nobody on the team has provisioned in
+12 months and that the platform itself defaults away from since
+2026-03-12.
+
+Changes:
+
+1. databricks.yml
+   - Removed the ``dev-lakebase-provisioned`` target and its
+     ``database: { database_name, instance_name }`` resource binding.
+   - Removed the ``lakebase_database`` and ``lakebase_instance``
+     bundle variables (only the Autoscaling-style
+     ``lakebase_branch`` / ``lakebase_database_resource`` remain).
+   - Trimmed the comment block to drop the dual-schema discussion.
+
+2. src/back/objects/domain/SettingsService.py
+   - Renamed ``_lakebase_tier_info`` → ``_lakebase_branch_info``.
+   - Removed the ``tier`` discriminator and the
+     ``provisioned``/``autoscaling``/``unknown`` enum from the
+     payload. The helper now returns ``branch`` /
+     ``branch_resource`` / ``autoscaling_min_cu`` /
+     ``autoscaling_max_cu`` only, and surfaces an empty dict when
+     the project lookup fails (with a WARNING log instead of a
+     silent DEBUG fallback).
+   - ``_lakebase_instance_metadata`` no longer seeds a
+     ``"tier": "unknown"`` field.
+
+3. src/back/core/databricks/LakebaseAuth.py
+   - Module docstring no longer claims tier-agnostic support;
+     replaced with an explicit Autoscaling-only statement.
+
+4. src/back/objects/registry/RegistryService.py
+   - ``initialize`` docstring clarifies that the Lakebase
+     Autoscaling Postgres database is created out-of-band by the
+     platform.
+
+5. src/back/objects/registry/store/lakebase/store.py
+   - Module docstring drops the "Autoscaling tier" qualifier on
+     the cold-start retry block (Autoscaling is now the only
+     tier) and references the ``postgres`` (not ``database``)
+     Apps resource binding.
+
+6. src/front/templates/partials/registry/_registry_configuration.html
+   - Dropped the ``Tier`` field from the Lakebase Instance block.
+     ``Branch`` and ``Autoscale (CU)`` remain — both auto-hide
+     when the Autoscaling project lookup is unavailable.
+
+7. src/front/static/registry/js/registry.js
+   - Removed the tier badge rendering. Branch / autoscale-CU
+     blocks now hide based on whether the data is present
+     instead of branching on ``instance.tier``.
+
+8. tests/test_settings_lakebase_tier.py
+   - Renamed test class to ``TestLakebaseBranchInfo`` and updated
+     all calls to use ``_lakebase_branch_info``.
+   - Replaced the ``test_provisioned_when_project_endpoint_404s``
+     case with ``test_project_endpoint_failure_returns_empty``
+     pinning the new "lookup failure → empty dict, default
+     payload preserved" contract.
+
+9. README.md, docs/architecture.md
+   - Updated to call out Autoscaling-only support.
+
+Modified files:
+- databricks.yml
+- src/back/objects/domain/SettingsService.py
+- src/back/core/databricks/LakebaseAuth.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/registry/js/registry.js
+- tests/test_settings_lakebase_tier.py
+- README.md
+- docs/architecture.md
+
+Validation:
+- databricks bundle validate -t dev          → ok (3 sync warnings, unrelated)
+- databricks bundle validate -t dev-lakebase → ok (3 sync warnings, unrelated)
+- uv run pytest -q                           → 1849 passed in 59.75s
+
+────────────────────────────────────────────────────────────────────
+[18:55] Fix Lakebase "0 rows / not initialized" when SP lacks USAGE
+────────────────────────────────────────────────────────────────────
+
+Symptom (post-Autoscaling-cleanup redeploy of ontobricks-dev): the
+admin Registry Location panel reported every table as 0 rows and
+"ontobricks_registry not initialized — run Migrate to Lakebase or
+initialize the registry", even though the schema held 9 domains,
+10 versions, 1 registry row, etc.
+
+Root cause: the ``ontobricks-dev`` service principal was created
+with zero privileges on the ``ontobricks_registry`` schema (owner
+was the human admin). Without ``USAGE``, ``to_regclass`` returns
+NULL even when the table exists, and ``information_schema.tables``
+filters out everything the SP can't see — so ``is_initialized``
+silently returned False and ``table_row_counts`` returned 0 for
+every requested table. The previous code logged the failure at
+DEBUG only, which is invisible in the Apps runtime.
+
+Fix:
+
+1. src/back/objects/registry/store/lakebase/store.py
+   - New ``init_status() -> {initialized, reason, error}`` method
+     replacing the silent boolean. Probes are explicit:
+     · ``has_schema_privilege(current_user, schema, 'USAGE')`` →
+       ``no_usage`` with an actionable error message that names
+       the bootstrap script;
+     · ``to_regclass(schema.registries) IS NOT NULL`` →
+       ``no_registries_table``;
+     · ``_fetch_registry_id()`` → ``no_registry_row``;
+     · success → ``ok``;
+     · any exception → ``connect_failed`` (logged at WARNING).
+   - ``is_initialized()`` is now a thin wrapper over
+     ``init_status()['initialized']``, preserving the base
+     contract.
+
+2. src/back/objects/domain/SettingsService.py
+   - ``lakebase_stats_result`` returns the new ``reason`` token
+     and surfaces ``init_status['error']`` as ``message`` so the
+     UI can render the precise cause.
+   - ``_lakebase_schema_status`` table list fixed: replaced the
+     stale ``permission_sets`` / ``scheduled_builds`` /
+     ``scheduled_history`` (none of which exist in the Lakebase
+     schema) with the real names ``domain_versions``,
+     ``domain_permissions``, ``schedules``, ``schedule_runs``.
+     Without this fix, ``populated`` was always False because
+     none of the requested tables were on the
+     ``_KNOWN_TABLES`` whitelist.
+
+3. src/front/static/registry/js/registry.js
+   - Reason-aware copy in the Lakebase Stats panel:
+     · ``no_usage``      → red shield + "service principal lacks
+                           USAGE … run scripts/bootstrap-lakebase-
+                           perms.sh";
+     · ``connect_failed`` / ``table_count_failed`` → red X +
+                           the underlying error;
+     · ``no_registry_row`` → amber + "click *Initialize*";
+     · default              → existing "not initialized" copy.
+
+4. scripts/bootstrap-lakebase-perms.sh (new)
+   - Idempotent bootstrap that mints a Lakebase JWT for the
+     calling human user, looks up each app's
+     ``service_principal_client_id``, and runs the canonical
+     GRANT block:
+     · ``USAGE, CREATE`` on the schema;
+     · ``SELECT, INSERT, UPDATE, DELETE`` on every existing table;
+     · ``USAGE, SELECT, UPDATE`` on every existing sequence
+       (bigserial PKs in ``schedule_runs``);
+     · same set as ``ALTER DEFAULT PRIVILEGES`` so future tables
+       and sequences inherit.
+   - Verifies post-grant via ``has_schema_privilege`` /
+     ``has_table_privilege`` and reports per-app pass/fail.
+   - Defaults to ``-i ontobricks-app -d ontobricks_registry
+     -s ontobricks_registry -a ontobricks-dev``; production
+     ``ontobricks`` (Volume backend) is skipped unless
+     explicitly passed.
+
+5. tests/test_registry_store.py
+   - New ``TestLakebaseInitStatus`` class with five cases:
+     ``no_usage`` (and short-circuit before to_regclass),
+     ``no_registries_table``, ``no_registry_row``, ``ok``
+     (plus is_initialized parity), ``connect_failed``.
+
+Operational:
+- Granted USAGE/CREATE + DML to ``ontobricks-dev`` SP
+  (``7f3b3cad-…-ca86``) on schema ``ontobricks_registry`` against
+  the ``ontobricks-app`` Lakebase instance. Verified via
+  ``has_schema_privilege``/``has_table_privilege``.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/domain/SettingsService.py
+- src/front/static/registry/js/registry.js
+- tests/test_registry_store.py
+
+Added files:
+- scripts/bootstrap-lakebase-perms.sh
+
+Validation:
+- uv run pytest -q                                → 1854 passed in 59.50s
+- scripts/bootstrap-lakebase-perms.sh             → idempotent, 0 failures
+- databricks bundle deploy -t dev-lakebase        → "Deployment complete!"
+- databricks bundle run ontobricks_dev_app -t dev-lakebase
+                                                  → "App started successfully"
+
+## Fix Registry/Browse not auto-loading the domain list on first page open
+
+Context: Opening ``/registry`` (Browse tab) showed only the "Loading
+domains..." placeholder until the user clicked the Refresh button. Root
+cause: ``registry.js`` is shared between the Settings → Registry tab
+and the Registry/Browse page. ``updateRegistryLabel()`` writes to
+``#registryLocationLabel``, an element that exists *only* on the
+Settings page. On the Browse page ``label`` was ``null`` and the
+``label.innerHTML = …`` line threw a ``TypeError``, which the
+``loadRegistryConfig`` ``try``/``catch`` swallowed before reaching
+``updateRegistryStatus()`` — the path that actually calls
+``loadRegistryDomains()``. The Refresh button worked because its
+handler bypasses the init flow and calls ``loadRegistryDomains()``
+directly. Two-layer fix (Fowler "Introduce Guard Clause" +
+defence-in-depth wrapping).
+
+Changes:
+
+1. src/front/static/registry/js/registry.js
+   - ``updateRegistryLabel``: bail out early when
+     ``#registryLocationLabel`` is absent (Browse page) — guard
+     clause prevents the TypeError that was masking the entire
+     post-fetch chain.
+   - ``loadRegistryConfig``: wrap the three cosmetic helpers
+     (``updateBackendChooser``/``updateLakebasePanel``/``updateRegistryLabel``)
+     in a ``_safe`` shim that logs and continues, so a future
+     regression in any one of them no longer prevents
+     ``updateRegistryStatus`` from triggering the domain-list
+     auto-load.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+
+Validation:
+- uv run pytest -q → 1854 passed in 59.56s
+
+## Default registry backend is now Lakebase when the resource is bound
+
+Context: After the autoscaling-only redeploy several admins were left on
+the Volume backend even though the ``database`` resource was bound and
+the ``lakebase`` extra was installed — the only path to flip them was
+to manually toggle the radio in Settings → Registry. ``REGISTRY_BACKEND``
+was a literal ``volume`` default, so unless the operator explicitly
+exported ``REGISTRY_BACKEND=lakebase`` (and they rarely did, because the
+chooser exists) Lakebase-bound deployments still defaulted to JSON-on-
+Volume. This made fresh ``ontobricks-dev`` deployments report "0 rows /
+not initialised" until somebody noticed the radio.
+
+New behaviour: a new ``"auto"`` sentinel is the default for
+``Settings.registry_backend`` (``REGISTRY_BACKEND=auto``). At resolution
+time ``resolve_default_backend`` picks Lakebase when *both* the
+``psycopg`` extra and the PG* env vars are present, and falls back to
+Volume otherwise. Operators can still pin either backend explicitly with
+``REGISTRY_BACKEND=volume`` / ``REGISTRY_BACKEND=lakebase``, and the UI
+choice (radio) keeps the highest priority — flipping to Volume on a
+Lakebase-bound app stays sticky exactly like before.
+
+Changes:
+
+1. src/back/objects/registry/RegistryService.py
+   - Added module-level ``_lakebase_runtime_available()`` probe and
+     ``resolve_default_backend(raw)`` policy function. Single source of
+     truth for the "auto" → ``volume`` / ``lakebase`` mapping, no
+     dependency on the FastAPI service layer (so the scheduler
+     subprocess can call it).
+   - ``RegistryCfg.from_domain`` now routes ``settings.registry_backend``
+     and the session-saved ``backend`` through the resolver. ``"auto"``
+     stored in either layer no longer silently freezes on Volume.
+   - ``RegistryCfg.from_dict`` shares the same resolver so dicts that
+     omit ``backend`` (or set it to ``"auto"``) inherit the runtime
+     default rather than the dataclass literal.
+
+2. src/back/objects/registry/scheduler.py
+   - ``BuildScheduler._resolve_creds`` calls ``resolve_default_backend``
+     instead of defaulting to ``"volume"``. Schedulers restored at
+     startup now match the live request path on a Lakebase-bound app.
+
+3. src/back/objects/registry/__init__.py
+   - Re-exported ``resolve_default_backend`` for callers (and tests).
+
+4. src/shared/config/settings.py
+   - ``Settings.registry_backend`` default flipped from ``"volume"`` to
+     ``"auto"``. Updated docstring describes the policy and points at
+     ``resolve_default_backend``.
+
+5. .env.example
+   - Updated the ``REGISTRY_BACKEND`` example to advertise ``auto``
+     (default), ``volume``, ``lakebase``.
+
+6. tests/test_registry.py
+   - New ``TestResolveDefaultBackend`` class (7 cases) covering pass-
+     through, unknown values, ``auto``/empty/None/case-insensitive
+     resolution with both runtime-available and runtime-missing
+     branches.
+   - New ``TestRegistryCfgFromDomainAuto`` class (4 cases) covering the
+     end-to-end flow: ``Settings.registry_backend = "auto"`` resolution
+     with/without Lakebase runtime, UI Volume pin beats auto default,
+     ``"auto"`` saved in the session inherits runtime resolution.
+   - Both classes patch the module-level probe via ``sys.modules`` to
+     dodge the package-init shadowing of the ``RegistryService``
+     submodule (the homonymous re-exported class wins attribute
+     lookups on the package).
+
+Modified files:
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/registry/scheduler.py
+- src/back/objects/registry/__init__.py
+- src/shared/config/settings.py
+- .env.example
+- tests/test_registry.py
+
+Validation:
+- uv run pytest -q → 1865 passed in 59.60s

@@ -1,0 +1,197 @@
+# v0.5.0 — 2026-06-11 — benoitcayladbx
+
+## Feature: Domain access roster on the Validation page
+
+**Context**: Requested a new section on the Domain → Validation (review) page,
+placed below the "Consistency checks" card, listing the people and groups who
+have a role on the loaded domain (Viewer / Editor / Builder) with their role
+made explicit. The page already surfaced the lifecycle, a consistency summary
+and the audit trail; reviewers had no in-context way to see *who* can view,
+edit or build the domain. Domain roles live in the per-domain registry
+permissions (`.domain_permissions.json`); the existing
+`/settings/domain-permissions/{domain}` endpoint is admin-only (for editing),
+so a read-only, member-visible surface was added on the review router instead.
+
+**Changes**:
+1. `src/back/objects/registry/ReviewService.py` — added a `review_team(request,
+   session_mgr, settings, folder)` static method. It resolves the Databricks
+   host/token and registry config from the loaded domain (same pattern as
+   `_resolve_roles`), reads the per-domain entries via
+   `permission_service.list_domain_entries(...)`, keeps only the assignable
+   roles (viewer / editor / builder), and returns
+   `{success, domain, members:[{principal, principal_type, display_name,
+   role}]}` sorted most-privileged first then by display name. Imports
+   `ASSIGNABLE_ROLES` from `PermissionService`.
+2. `src/api/routers/internal/review.py` — added `GET /review/{folder}/{version}/team`
+   delegating to `ReviewService.review_team`. The `version` path segment is kept
+   for URL symmetry with the sibling review endpoints (the access list is
+   per-domain, not per-version) and is dropped in the handler.
+3. `src/front/static/domain/js/domain-review.js` — added a "Domain access" card
+   (`teamCard()`) rendered in the left column directly below the Consistency
+   checks card, and `loadTeam()` which fetches the new endpoint and renders the
+   members grouped by role (Builder → Editor → Viewer). Each group shows a
+   role badge + short description (Builder: "Can edit, build and publish";
+   Editor: "Can edit the model"; Viewer: "Read-only access") and member chips
+   reuse the existing `review-person` / `review-avatar` styles (group principals
+   get a people-fill avatar). Empty state explains only admins can access the
+   domain. `loadTeam()` is invoked from `loadReview()` after `render()`.
+4. `src/front/static/domain/css/domain-review.css` — added `.review-avatar-group`
+   (muted avatar for group principals) and small `.review-role-group` /
+   `.review-role-head` spacing rules.
+5. `tests/units/registry/test_review_service.py` — added 4 tests for
+   `review_team`: role/name sort order, filtering out non-assignable roles
+   (e.g. admin), display-name defaulting to the principal for groups, and the
+   empty-folder `ValidationError`.
+6. `tests/units/api/test_review_endpoints.py` — added `test_team_delegates_to_service`
+   asserting the endpoint forwards the folder and drops the version.
+
+**Modified files**:
+- `src/back/objects/registry/ReviewService.py`
+- `src/api/routers/internal/review.py`
+- `src/front/static/domain/js/domain-review.js`
+- `src/front/static/domain/css/domain-review.css`
+- `tests/units/registry/test_review_service.py`
+- `tests/units/api/test_review_endpoints.py`
+
+**Test result**: `pytest tests/units/registry/test_review_service.py
+tests/units/api/test_review_endpoints.py` → **60 passed**. Full-suite
+`pytest --ignore=tests/property` → 2752 passed, 53 skipped, 19 failed; the 19
+failures are pre-existing full-run async-harness issues (every async test in
+`test_review_endpoints` and the whole `test_set_version_status_endpoint`,
+including untouched tests like `test_my_tasks_delegates`, plus dtwin/home/
+navigation e2e) — all 60 of the touched tests pass cleanly when the files are
+run in isolation. `tests/property` skipped (`hypothesis` not installed in this
+env). No new lint errors on the edited files.
+
+## Fix: Domain access roster now shares the Teams matrix source
+
+**Context**: Locally the new "Domain access" roster listed several principals
+that the Registry → Teams page did not show. Root cause: the Teams matrix
+(`build_teams_matrix_result`) renders one row per **Databricks App principal**
+(`list_app_principals`) and overlays the per-domain role onto those rows, so a
+`.domain_permissions.json` entry whose principal is no longer in the App ACL
+(an orphan assignment, common in local/test data) is invisible there. The first
+cut of `review_team` instead listed the **raw** `.domain_permissions.json`
+entries, so those orphans surfaced — making the two views disagree.
+
+**Changes**:
+1. `src/back/objects/registry/ReviewService.py` — `review_team` now builds the
+   roster from the **same source as the Teams matrix**: it fetches the App
+   principals (`permission_service.list_app_principals`) and the per-domain
+   entries (`list_domain_entries`), then emits a member only when an App
+   principal (user by email, group by name) has an assignable role on the
+   domain. This is exactly the "filled cells" of the domain's column in the
+   Teams matrix, so the Validation roster and the Teams page are now
+   guaranteed consistent. Orphan permission entries are no longer shown.
+2. `tests/units/registry/test_review_service.py` — reworked the `review_team`
+   tests to mock both the App ACL and the per-domain entries; added
+   `test_review_team_excludes_entries_without_app_principal` (the exact
+   regression) and `test_review_team_includes_groups`.
+
+**Modified files**:
+- `src/back/objects/registry/ReviewService.py`
+- `tests/units/registry/test_review_service.py`
+
+**Test result**: `pytest tests/units/registry/test_review_service.py
+tests/units/api/test_review_endpoints.py` → **61 passed**. No new lint errors.
+
+## Polish: Ontology Designer detail-panel resize handle
+
+**Context**: On the Ontology page, the right-side detail panel (entity /
+relationship editor) is resizable via a draggable left border. The handle was
+an 8px white strip with thin left + right borders and a small 40px grey nub
+floating in the middle — the divider line had no clean top/bottom termination
+and the grip looked unfinished. Requested a more beautiful treatment.
+
+**Changes**:
+1. `src/front/static/ontology/css/ontology-shared-panels.css` —
+   `.detail-panel-resize-handle` reworked: transparent 11px hit area with a
+   full-height hairline divider drawn via `::before` (top:0 / bottom:0), so the
+   border now has clean top & bottom ends spanning the whole panel. On
+   hover/active the divider thickens to 2px and turns brand-primary. The grip
+   `.resize-bar` became a rounded pill (5px wide, `border-radius:999px`) with a
+   soft drop shadow that grows (46px → 64px) and turns primary on hover/active.
+   Removed the now-redundant `border-left` on `.shared-detail-panel` to avoid a
+   double line next to the handle's divider.
+
+**Modified files**:
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+
+**Test result**: CSS-only change (no Python touched). No new lint errors on the
+edited file.
+
+## Polish: Navbar role badge colour (red → dark grey)
+
+**Context**: The effective-role pill in the navbar (ADMIN / BUILDER / EDITOR /
+VIEWER) was rendered in red (`#dc3545`), which read as an error/alert. Requested
+a calmer dark grey instead.
+
+**Changes**:
+1. `src/front/static/global/css/permissions.css` — `#roleNavBadge`
+   `background-color` changed from `#dc3545` to `#343a40` (Bootstrap dark grey).
+   Text stays white. JS (`permissions.js`) only sets the label/tooltip, so this
+   single rule controls the colour.
+
+**Modified files**:
+- `src/front/static/global/css/permissions.css`
+
+**Test result**: CSS-only change (no Python touched). No new lint errors on the
+edited file.
+
+## Fix: Navbar role badge showed raw "ROLE" placeholder in local-dev
+
+**Context**: Running locally the navbar role pill displayed the literal
+placeholder text `ROLE` instead of `ADMIN`. Root cause: the `<li
+id="roleNavBadgeItem">` in `base.html` carries Bootstrap's `.d-flex`
+(`display:flex !important`), which beats the non-`!important`
+`#roleNavBadgeItem { display:none }` base rule — so the pill is always laid out.
+In local-dev mode `is_app_mode()` is false, so `applyRoleIndicators()`
+early-returned and never called `showRoleNavBadge()`, leaving the server-rendered
+`ROLE` placeholder visible. Local dev treats every caller as admin server-side,
+so the pill should read `ADMIN`.
+
+**Changes**:
+1. `src/front/static/global/js/permissions.js` — `applyRoleIndicators()` now
+   renders the pill as `admin` when not in app mode (local dev), instead of
+   returning early. App-mode behaviour (effective-role resolution + viewer
+   lockdown) is unchanged.
+2. `src/front/static/global/css/permissions.css` — `#roleNavBadgeItem`
+   base rule made `display: none !important` so it beats the `.d-flex` on the
+   same element. This also prevents the `ROLE` placeholder from leaking for an
+   app-mode caller whose effective role is empty (badge stays hidden until
+   `.is-visible` is flipped).
+
+**Modified files**:
+- `src/front/static/global/js/permissions.js`
+- `src/front/static/global/css/permissions.css`
+
+**Test result**: Front-end only (no Python touched). No new lint errors on the
+edited files.
+
+## Feature: Help Center full-page (maximize) toggle
+
+**Context**: The in-app Help Center opens as an `modal-xl` dialog capped at
+1100px wide / 88vh tall. Requested the ability to expand it to the whole page.
+
+**Changes**:
+1. `src/front/templates/partials/layout/help_modal.html` — added a
+   `#helpMaximizeToggle` button in the modal header (left of the close button)
+   with a `bi-arrows-fullscreen` icon and `aria-pressed`.
+2. `src/front/static/global/js/help-modal.js` — added `_applyMaximized()` /
+   `_initMaximize()` (wired in `init()`). Clicking the button toggles a
+   `help-modal-maximized` class on `#helpModal`, swaps the icon
+   (fullscreen ↔ angle-contract) and the title/aria label, and persists the
+   choice in `localStorage` (`ob.helpCenter.maximized`) so it reopens in the
+   last-used size. Wrapped in try/catch for private-mode browsers.
+3. `src/front/static/global/css/help-modal.css` — `.help-modal-maximized`
+   makes the dialog full viewport (`width/height:100%`, `margin:0`,
+   `modal-content` → `100vh`, square corners), with a 0.2s transition. Styled
+   the header expand button to match the red header (translucent white).
+
+**Modified files**:
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/static/global/js/help-modal.js`
+- `src/front/static/global/css/help-modal.css`
+
+**Test result**: Front-end only (no Python touched). No new lint errors on the
+edited files.

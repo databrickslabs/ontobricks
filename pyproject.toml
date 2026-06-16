@@ -1,25 +1,36 @@
 [project]
 name = "ontobricks"
-version = "0.4.0"
+version = "0.5.0"
 description = "Ontology Management Tool for Databricks"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.109.0",
+    # fastapi>=0.129.0 added Starlette 1.0.0+ support (needed for the
+    # starlette>=1.0.1 BadHost fix below).
+    "fastapi>=0.129.0",
     "uvicorn[standard]>=0.27.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "python-multipart>=0.0.27",
-    "starlette>=0.35.0",
+    # starlette>=1.0.1: BadHost (CVE-2026-48710 / GHSA-86qp-5c8j-p5mr) — missing
+    # Host-header validation poisons request.url.path, bypassing path-based auth.
+    # Requires fastapi>=0.129 (Starlette 1.0 support added upstream Feb 2026).
+    "starlette>=1.0.1",
     "itsdangerous>=2.1.0",
     "jinja2>=3.1.0",
     "aiofiles>=23.0.0",
     "databricks-sql-connector>=3.0.0",
     "databricks-sdk>=0.20.0",
-    "pyarrow>=14.0.0",
+    # pyarrow>=23.0.1: Arrow C++ IPC use-after-free (CVE-2026-25087 /
+    # GHSA-rgxp-2hwp-jwgg). The Python binding doesn't expose the affected
+    # PreBufferMetadata API, but pin to silence the advisory.
+    "pyarrow>=23.0.1",
     "rdflib>=7.6.0",
     "python-dotenv>=1.2.2",
     "requests>=2.33.0",
-    "strawberry-graphql[fastapi]>=0.315.4",
+    # strawberry-graphql>=0.315.7: MaxAliasesLimiter fragment-spread bypass
+    # (CVE-2026-47707 / GHSA-fr49-mhgj-crfc) and circular-fragment DOS in
+    # QueryDepthLimiter — both DOS via resource exhaustion.
+    "strawberry-graphql[fastapi]>=0.315.7",
     "mlflow>=3.11.1",
     "apscheduler>=3.10,<4",
     "owlrl>=7.0.0",
@@ -49,15 +60,31 @@ pitfalls = [
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
     "httpx>=0.25.0",
     "black>=26.3.1",
     "flake8>=6.0.0",
-    "pytest-cov>=4.1.0",
     "responses>=0.24.0",
     "playwright>=1.40.0",
     "sphinx>=7.0.0",
     "myst-parser>=3.0.0",
     "pip-audit>=2.7.0",
+    # Test foundations (T-M0 onwards under CNS)
+    "hypothesis>=6.100.0",        # property-based tests (T-M6)
+    "syrupy>=4.6.0",              # snapshot tests for templates + MCP schemas
+    "testcontainers[postgres]>=4.0.0",  # ephemeral Postgres for Lakebase tests (db marker)
+    "fastmcp>=2.3.1",             # in-process MCP server tests (T-M3, mcp marker)
+    "pyyaml>=6.0",                # consumed by scripts/check_coverage.py
+    # M3.P1 quality enforcement
+    "ruff>=0.7.4",                # supersedes flake8 once the baseline is clean
+    "mypy>=1.13.0",               # type checker; runs against `mypy_baseline.txt`
+    # Lakebase backend is the production registry path since v0.4.0; the
+    # tests that exercise the registry-config gate need psycopg present so
+    # the import-time short-circuit in SettingsService doesn't fire.
+    # Mirrors `[project.optional-dependencies].lakebase` — kept in sync.
+    "psycopg[binary]>=3.2.0",
+    "psycopg-pool>=3.2.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -80,11 +107,138 @@ constraint-dependencies = [
     # idna 3.13 closes bypass of CVE-2024-3651 mitigation (GHSA-65pc-fj4g-8rjx):
     #   specially crafted inputs to idna.encode() could still reach quadratic-time path.
     "idna>=3.13",
+    # aiohttp 3.14.0 fixes two issues (pulled in transitively by mlflow):
+    #   GHSA-jg22-mg44-37j8 (CVE-2026-34993)  CookieJar.load() pickle deserialization RCE
+    #   GHSA-hg6j-4rv6-33pg (CVE-2026-47265)  per-request cookies leaked on cross-origin redirect
+    "aiohttp>=3.14.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+addopts = "-v --tb=short --strict-markers --strict-config"
+markers = [
+    "unit: Unit tests (pure in-process, no I/O — default)",
+    "integration: Multi-module, in-proc backends",
+    "contract: Schema/contract verification (subset of integration)",
+    "e2e: Playwright browser flows (CI nightly only)",
+    "eval: LLM agent quality evals (CNS T-M4)",
+    "mcp: Exercises the MCP server (in-process or subprocess)",
+    "db: Requires ephemeral Postgres (testcontainers)",
+    "spark: Requires PySpark/Databricks Connect",
+    "external: Hits a real Databricks workspace (nightly only — fevm-ontobricks-int)",
+    "live_integration: Probes a deployed OntoBricks instance (requires ONTOBRICKS_LIVE_BASE)",
+    "property: Hypothesis property-based tests",
+    "slow: >2s wall clock",
+    "asyncio: anyio/asyncio coroutine",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:rdflib.plugins.sparql.parser",
+    "ignore::DeprecationWarning:rdflib.plugins.parsers.notation3",
+    "ignore::DeprecationWarning:pyparsing.util",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+omit = [
+    "src/**/_starter_kit/*",
+    "src/**/__init__.py",
+    "src/**/migrations/*",
+    "src/**/generated/*",
+    "tests/*",
+]
+parallel = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 1
+exclude_also = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+    "if __name__ == .__main__.:",
+    "\\.\\.\\.",
+]
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# M3.P1 — ruff config. Replaces flake8 long-term; both run in CI during the
+# transition until the codebase is ruff-clean.
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+extend-exclude = [
+    "src/**/_starter_kit/*",
+    "docs/sphinx/_build/*",
+    ".venv/*",
+    "htmlcov/*",
+]
+
+[tool.ruff.lint]
+# Start with a conservative ruleset; we'll widen as the codebase tolerates it.
+# E + W: pycodestyle. F: pyflakes. I: isort. UP: pyupgrade. B: bugbear (real bugs).
+# Per the M3.P1 risk-mitigation: fail only on NEW violations via the pre-commit hook
+# (`ruff --fix --exit-non-zero-on-fix`). CI uses `--no-fix` to gate.
+select = ["E", "W", "F", "I", "UP", "B"]
+ignore = [
+    "E203",  # whitespace before ':' — clashes with black.
+    "E501",  # line too long — flake8 already enforces; let formatter own this.
+    "B008",  # function-call-in-default-argument — common in FastAPI Depends(...).
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests get more leeway: bare excepts, unused imports in conftest, etc.
+"tests/**/*.py" = ["B011", "F401", "F811"]
+# __init__.py re-exports are intentional unused imports.
+"src/**/__init__.py" = ["F401", "F403"]
+# starter-kit is template-only; never enforce.
+"src/**/_starter_kit/*" = ["ALL"]
+
+# M3.P1 — mypy config. Begin in lenient mode against the baseline; tighten over time.
+# The baseline file (`mypy_baseline.txt`) records currently-acceptable violations
+# so PRs are only gated on NEW issues. Generate with:
+#   uv run mypy src --no-error-summary > mypy_baseline.txt
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+ignore_missing_imports = true   # third-party untyped (rdflib, mlflow, etc.)
+follow_imports = "silent"
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+# Strict-er switches we want eventually but are not ready yet:
+disallow_untyped_defs = false
+disallow_any_explicit = false
+strict_optional = false
+# Exclude tests + generated code from the gate (tests can be strict later).
+# mypy treats these as Python regexes, not globs — use literal substrings.
+exclude = "(tests/|/_starter_kit/|docs/|build/|dist/|\\.venv/)"
+
+[[tool.mypy.overrides]]
+module = [
+    "rdflib.*",
+    "owlrl.*",
+    "pyshacl.*",
+    "real_ladybug.*",
+    "strawberry.*",
+    "databricks.*",
+    "mlflow.*",
+    "psycopg.*",
+    "psycopg_pool.*",
+    "apscheduler.*",
+    "fastmcp.*",
+]
+ignore_missing_imports = true
 
 [build-system]
 requires = ["hatchling"]

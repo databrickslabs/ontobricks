@@ -1,62 +1,56 @@
 # mcp-ontobricks — Custom MCP Server for OntoBricks
 # Exposes Digital Twin knowledge graph tools to the Databricks Playground.
 # Calls back to the main OntoBricks app REST API.
+#
+# ╔════════════════════════════════════════════════════════════════╗
+# ║  GENERATED FILE — DO NOT EDIT app.yaml DIRECTLY               ║
+# ║                                                                ║
+# ║  This template is rendered into ./app.yaml at deploy time by   ║
+# ║  scripts/deploy.sh (which calls scripts/_render-app-yaml.py).  ║
+# ║  Edit scripts/deploy.config.sh to change the values below,     ║
+# ║  then run `make deploy`.                                        ║
+# ║                                                                 ║
+# ║  app.yaml is .gitignored — only this template is tracked.      ║
+# ╚════════════════════════════════════════════════════════════════╝
 command:
   - "uv"
   - "run"
   - "mcp-ontobricks"
 
 env:
-  # ── Main app URL ──────────────────────────────────────────────
-  # Must point at the SAME OntoBricks app whose UC volume binding
-  # matches this MCP server's REGISTRY_VOLUME_PATH. The MCP forwards
-  # ``registry_catalog/schema/volume`` query params on every
-  # ``/api/v1/...`` call, so a URL pointing at a different app whose
-  # session-default registry differs will silently re-target the wrong
-  # volume and return ``[]`` from ``list_domains``.
-  - name: ONTOBRICKS_URL
-    value: "https://ontobricks-030-2508734981122804.aws.databricksapps.com"
+  # ── Main app URL ──────────────────────────────────────────────────
+  # URL of the OntoBricks FastAPI app that this MCP server proxies.
+  # Set DEFAULT_APP_ONTOBRICKS_URL in scripts/deploy.config.sh.
+  # Defaults to localhost:8000 when empty (local dev only).
+  - name: ONTOBRICKS_URL  # optional
+    value: "https://ontobricks-050-2508734981122804.aws.databricksapps.com"
 
-  # ── SQL Warehouse ─────────────────────────────────────────────
-  # Injected from the sql-warehouse resource binding.
-  # Passed to the main app as a query parameter so the MCP server
-  # can operate independently of the main app's warehouse config.
+  # ── SQL Warehouse ─────────────────────────────────────────────────
+  # Injected from the sql-warehouse resource binding. Passed to the
+  # main app as a query parameter so the MCP server can operate
+  # independently of the main app's warehouse config.
   - name: DATABRICKS_SQL_WAREHOUSE_ID
     valueFrom: sql-warehouse
+  - name: DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT
+    value: "d2096aa075ad44a3"
 
-  # ── Registry ──────────────────────────────────────────────────
-  # Injected from the volume resource binding.
-  # The path looks like /Volumes/<catalog>/<schema>/<volume>.
-  # When set, overrides the three static REGISTRY_* variables below.
-  - name: REGISTRY_VOLUME_PATH
-    valueFrom: volume
-
-  # Static fallbacks — used for local dev when no volume resource
-  # is bound. Leave empty or remove to auto-discover from the main app.
-  #- name: REGISTRY_CATALOG
-  #  value: ""
-  #- name: REGISTRY_SCHEMA
-  #  value: ""
-  #- name: REGISTRY_VOLUME
-  #  value: "OntoBricksRegistry"
-
-  # ── Lakebase (optional) ───────────────────────────────────────
+  # ── Lakebase ──────────────────────────────────────────────────────
   # When deployed to a *-lakebase target the DAB binds a ``database``
-  # resource to the MCP server too — Databricks Apps then auto-injects
-  # PGHOST/PGPORT/PGDATABASE/PGUSER/PGAPPNAME/PGSSLMODE. Without that
-  # binding the env vars stay unset and the MCP server keeps reading
-  # the registry from the Unity Catalog Volume (default behaviour).
+  # resource to the MCP server. Databricks Apps then auto-injects
+  # PGHOST/PGPORT/PGDATABASE/PGUSER/PGAPPNAME/PGSSLMODE — no explicit
+  # valueFrom mapping needed. The schema must still be set explicitly.
   - name: LAKEBASE_SCHEMA
-    value: "ontobricks_registry"
+    value: "ontobricks_demo"
+  - name: LAKEBASE_PROJECT
+    value: "ontobricks-demo2"
+  - name: LAKEBASE_DATABASE
+    value: "ontobricks_demo"
+  - name: LAKEBASE_BRANCH
+    value: "production"
 
-# Resources that this app uses
-# Configure these resources in the Databricks Apps UI after deployment
+# Resources that this app uses.
 resources:
   - name: sql-warehouse
     description: "SQL Warehouse for executing queries and metadata operations"
     sql_warehouse:
       permission: CAN_USE
-  - name: volume
-    description: "Unity Catalog Volume for the OntoBricks project registry"
-    volume:
-      permission: CAN_READ_WRITE

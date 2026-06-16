@@ -71,6 +71,7 @@ def get_domain_info(domain_data: Dict[str, Any]) -> Dict[str, Any]:
         "description": info.get("description", ""),
         "uri": info.get("uri", ""),
         "version": version,
+        "status": (info.get("status") or "DRAFT"),
         "author": info.get("author", ""),
         "statistics": {
             "classes": len(ontology.get("classes", [])),

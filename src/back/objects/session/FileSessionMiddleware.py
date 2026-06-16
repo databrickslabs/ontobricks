@@ -104,7 +104,9 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process request with session handling."""
-        path = request.url.path
+        # Raw routed path, not request.url.path: the latter is reconstructed
+        # from the Host header and could be poisoned (BadHost / CVE-2026-48710).
+        path = request.scope["path"]
 
         if any(path.startswith(p) for p in _SESSION_BYPASS_PREFIXES):
             request.state.session = {}

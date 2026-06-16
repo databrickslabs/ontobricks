@@ -1,0 +1,463 @@
+## Build sub-menu: fix unreadable "Mapping" stale-indicator badge
+
+Context: In the Build sub-menu (Digital Twin Information →
+"Out of sync with last build:" row), the "Mapping" badge that appears
+when assignments were modified since the last build rendered as red
+text on a solid red background — completely unreadable. Triggered by
+the typical "I just updated mapping; the digital twin is now stale"
+flow.
+
+Root cause: The badge was declared with the Bootstrap utility classes
+``bg-primary bg-opacity-10 text-primary border border-primary`` in
+``_query_sync.html``. The project-wide Databricks theme in
+``src/front/static/global/css/main.css`` redefines ``.bg-primary``,
+``.text-primary`` and ``.border-primary`` to use ``--db-primary``
+(``#FF3621``) with ``!important``. The ``!important`` defeats
+Bootstrap's ``bg-opacity-*`` modifiers, so what was meant to be a
+faint blue tint with darker blue text became solid Databricks red on
+solid Databricks red. The neighbouring "Ontology" badge was unaffected
+because it uses ``bg-warning`` / ``text-warning`` (not overridden by
+the theme).
+
+Fix: Switched the Mapping stale-indicator badge from ``primary`` to
+``info`` (cyan/teal). ``bg-info``, ``text-info`` and ``border-info``
+are not overridden by the custom theme, so ``bg-opacity-10`` works
+again and the badge renders as a readable cyan-on-pale-cyan pill,
+visually distinct from the yellow Ontology badge in the same row.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sync.html
+   - ``#syncBadgeAssignmentChanged`` ("Mapping" stale indicator):
+     replaced ``bg-primary bg-opacity-10 text-primary border
+     border-primary`` with ``bg-info bg-opacity-10 text-info border
+     border-info`` so the badge stays readable when the user has just
+     modified mapping assignments and the Digital Twin is not yet
+     rebuilt.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sync.html
+
+Tests: .venv/bin/python -m pytest — 1787 passed in 63.37s.
+
+
+## Build sub-menu: stop reporting "Loaded" Graph DB DT when nothing was built
+
+Context: In the same Build sub-menu (Digital Twin Information section,
+"Graph DB Digital Twin" card), the existence badge displayed "Loaded"
+even on freshly-opened domains where no Digital Twin had ever been
+built. The user expectation — sensibly — is that "Loaded" should
+correspond to an actual built graph sitting on disk.
+
+Root cause: The readiness probe in
+``DigitalTwin.fetch_digital_twin_existence`` computed
+``local_lbug_exists`` with a plain ``os.path.exists(local_path)``
+check against ``/tmp/ontobricks/<safe_name>.lbug`` (see
+``resolve_ladybug_local_path`` →
+``GraphSyncService.local_path_for_db``). However Ladybug — via
+``LadybugBase._get_connection()`` — auto-creates that on-disk
+directory the first time **anything** opens a connection to that
+path:
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.exists(path):
+        self._try_auto_restore(path)
+    self._db = lb.Database(path)   # ← creates the directory
+
+Any incidental query (sidebar, readiness probe, schema introspection,
+the auto-restore attempt itself) therefore materialises an empty
+Kuzu/Ladybug database directory, and ``os.path.exists`` then returns
+``True`` forever after — yielding a false-positive "Loaded" badge on
+a domain that was never built.
+
+Fix: The readiness probe now gates ``local_lbug_exists`` on
+``domain.last_build`` as well, so the badge only flips to "Loaded"
+when:
+1. The domain has been built at least once (``last_built`` is set),
+   AND
+2. The local ``.lbug`` directory is actually on disk.
+
+This matches the "Last Built: Never built" copy already shown right
+above the card and is consistent with the existing reload-from-
+registry flow (registry uploads only happen after a successful build,
+so any reloaded local file already corresponds to a non-empty
+``last_built``). After a real build, the post-build cache writer at
+line 2762 keeps writing the file-on-disk reality unchanged — that
+site is correct by construction (it runs only after a successful
+build, so both signals are necessarily true).
+
+Changes:
+
+1. src/back/objects/digitaltwin/digitaltwin.py
+   - ``fetch_digital_twin_existence``: ``local_lbug_exists`` is now
+     ``bool(last_built) and os.path.exists(local_path)`` instead of
+     a bare ``os.path.exists(local_path)``, eliminating the false
+     "Loaded" badge for never-built domains where Ladybug had
+     auto-created an empty on-disk database directory as a side
+     effect of an earlier query.
+
+Modified files:
+- src/back/objects/digitaltwin/digitaltwin.py
+
+Tests: .venv/bin/python -m pytest — 1787 passed in 62.63s.
+
+
+## Sidebar: fix "Teams" icon misaligned vs the other entries
+
+Context: In the retractable left sidebar of the Registry page, the
+"Teams" entry's icon (``bi-people``) sat slightly off compared to its
+neighbours (Browse, Bridges, Schedule, API, Registry Location). The
+icon-to-label gap was missing and the glyph appeared visually shifted
+within the row. Only Teams was affected because it is the only
+sidebar item flagged ``"admin_only": true`` in
+``src/front/config/menu_config.json``.
+
+Root cause: The admin-gate in ``src/front/static/global/css/permissions.css``
+hides admin-only entries by default and reveals them for admins via
+``display: revert``:
+
+    [data-requires-app="admin"]                              { display: none   !important; }
+    body[data-app-role="admin"] [data-requires-app="admin"]  { display: revert !important; }
+
+``display: revert`` reverts to the *user-agent default* — bypassing
+every author rule. For an ``<a class="nav-link" data-requires-app="admin">``,
+that means the Teams entry loses its
+``.sidebar-nav .nav-link { display: flex; align-items: center; gap: 0.5rem }``
+and falls back to plain ``inline``. Without flex, the ``<i class="bi
+bi-people">`` icon container loses ``align-items: center``, the
+``gap: 0.5rem`` between icon and label evaporates, and the icon's
+fixed-width 20px slot no longer applies the same way — so the glyph
+visually misaligns relative to the other (still-flex) sidebar items.
+
+The same trap affects Bootstrap's ``.dropdown-item`` (used in the
+navbar admin menu): it normally sets ``display: block``, also wiped
+by ``display: revert``.
+
+Fix: Added two targeted "post-revert" rules in ``permissions.css``
+right after the admin-reveal block, restoring the proper display per
+surface for admin-gated elements:
+
+- ``body[data-app-role="admin"] .sidebar-nav .nav-link[data-requires-app="admin"]``
+  → ``display: flex !important`` (re-enables the flex layout that
+  centers the icon and applies the icon-to-label gap, matching every
+  other sidebar entry).
+- ``body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"]``
+  → ``display: block !important`` (matches Bootstrap's natural
+  dropdown-item layout so admin-only menu items behave like the
+  non-gated ones).
+
+Considered but rejected: ``.quick-link-sm`` on the home page also
+carries ``data-requires-app="admin"``, but its natural display is
+``inline`` (matches the user-agent default for ``<a>``), so
+``display: revert`` already produces the correct result — no override
+needed.
+
+Changes:
+
+1. src/front/static/global/css/permissions.css
+   - Added a documented "post-revert" block restoring
+     ``display: flex`` for admin-only sidebar nav-links and
+     ``display: block`` for admin-only ``.dropdown-item`` entries, so
+     admin-gated UI keeps the same layout as the non-gated siblings.
+
+Modified files:
+- src/front/static/global/css/permissions.css
+
+Tests: .venv/bin/python -m pytest — 1787 passed in 63.91s.
+
+
+
+## Add Data Access engine map doc to in-app Help Center
+
+Context: Users asked which engine actually runs behind each UI/MCP/Chat
+feature (REST, GraphQL, SPARQL, Spark SQL, Cypher). Captured the full
+inventory in a new doc and wired it into every documentation surface
+(in-app Help Center allow-list, Resources quick-links, Sphinx toctree,
+docs README index).
+
+Changes:
+
+1. docs/data-access.md
+   New end-to-end engine map: 5 wrappers, storage backends, decision
+   tree, per-feature tables for UI / MCP / Graph Chat / agents,
+   reasoning engine internals, three sequence diagrams, TL;DR matrix,
+   and source-code anchors.
+2. docs/README.md
+   Linked the new doc in the topic-index table between API and MCP.
+3. src/api/routers/internal/help.py
+   Registered slug "data-access" under the Reference & Ops category in
+   the Help Center allow-list, so /api/help/docs and /api/help/docs/{slug}
+   serve it. Audit logger will surface the file at boot.
+4. src/front/templates/partials/layout/help_modal.html
+   Added a quick-link in the Resources panel
+   (data-help-doc="data-access") so users can jump to it from Welcome.
+5. docs/sphinx/guides/data-access.md
+   Thin MyST wrapper that {include}s ../../data-access.md, matching the
+   pattern of the other guide wrappers.
+6. docs/sphinx/index.rst
+   Added guides/data-access between guides/api and guides/mcp in the
+   Topic guides toctree so the Sphinx build links it.
+
+Modified files:
+- docs/data-access.md
+- docs/README.md
+- src/api/routers/internal/help.py
+- src/front/templates/partials/layout/help_modal.html
+- docs/sphinx/guides/data-access.md
+- docs/sphinx/index.rst
+
+Tests: .venv/bin/python -m pytest -q — 1787 passed in 63.78s.
+
+## Generalize Data Access doc to GraphDB (LadybugDB as default engine)
+
+Context: docs/data-access.md mentioned "LadybugDB" inline for every
+engine reference, hiding the fact that the GraphDB layer is pluggable
+(`GraphDBBackend` + `GraphDBFactory`). Reworked to refer to the family
+("GraphDB") in the prose and only call out LadybugDB once, as the
+default/embedded engine, plus in the source-code anchors.
+
+Changes:
+
+1. docs/data-access.md
+   - §1 wrapper table: Cypher row now points to GraphDBBackend.py with
+     a note that LadybugDB is the default file-based engine.
+   - §2 storage backends: renamed `graph` row to `GraphDBBackend`;
+     added an explanatory blockquote describing GraphDBBackend as the
+     abstract base, with LadybugDB as the current default and KuzuDB /
+     Neo4j as plausible future engines.
+   - §3 decision tree: "(LadybugDB + reasoning)" → "(GraphDB engine
+     + reasoning)".
+   - §4 UI feature map, §5 MCP map, §6 Graph Chat map: every
+     "LadybugDB <X>" → "GraphDB <X>" (stats, MATCH counts, COPY/bulk
+     load, Cypher backend label).
+   - §8 reasoning table: SWRL Cypher row → "GraphDB engine (graph
+     backend only)"; OWLRLReasoner materialization → "GraphDB bulk
+     insert".
+   - §9.3 sequence diagram: `LadybugGraphStore.cypher(...)` →
+     `GraphDBBackend.cypher(...)` annotated "(e.g. LadybugDB engine)";
+     storage box renamed "Embedded GraphDB file (default: .lbug)".
+   - §10 TL;DR footnote: "Cypher (GraphDB backend — default engine:
+     LadybugDB)".
+   - §11 source anchors: split into a "GraphDB backend" link
+     (GraphDBBackend.py + GraphDBFactory.py) and a "GraphDB engine
+     (default: LadybugDB)" link to the ladybugdb folder.
+
+Modified files:
+- docs/data-access.md
+
+Tests: no code paths touched (markdown-only edit).
+
+## Permissions refactor (4 steps): declarative guards + body data-attrs + CSS gating
+
+Context: The permission stack had three pain points — (1) every
+write-route in ``dtwin.py`` repeated the same
+``role_level(actual) < role_level(ROLE_BUILDER); raise
+AuthorizationError`` boilerplate, (2) ``filter_visible_domains`` was
+copy-pasted between ``settings.py`` and ``domain.py``, (3)
+``permissions.js`` and ``version-check.js`` did per-button JS sweeps
+to disable write surfaces for viewers / older versions, fighting with
+each new feature that added markup. PermissionService also conflated
+app-scoped principals (``list_app_principals``) with workspace-scoped
+SCIM users/groups in a single ``_users_cache`` / ``_groups_cache``
+pair, silently corrupting lookups when both endpoints were called.
+
+Reorganised the stack into four steps. Each commit is independently
+green; together they replace the imperative gating model with a
+declarative one (Replace Conditional with Polymorphism + Move Method,
+Fowler).
+
+Changes:
+
+Step 1 — quick wins:
+1. src/back/objects/registry/PermissionService.py
+   Split ``_users_cache``/``_groups_cache`` into ``_app_*`` (used by
+   ``list_app_principals``) and ``_workspace_*`` (used by
+   ``list_users`` / ``list_groups``). Each pair now has its own
+   timestamp; ``clear_principals_cache`` resets all four plus the
+   admin and SCIM-membership caches.
+2. src/api/routers/internal/_permissions.py (NEW)
+   Extracted ``filter_visible_domains`` from the duplicated
+   ``_filter_domains_by_user_access`` helpers in ``settings.py`` and
+   ``domain.py`` (Extract Function + remove copy-paste).
+3. src/api/routers/internal/domain.py
+   Removed the local ``_filter_domains_by_user_access`` and routed
+   ``list_domains`` through ``filter_visible_domains``.
+4. src/api/routers/internal/settings.py
+   Same — dropped the duplicated helper, now imports from
+   ``_permissions``.
+
+Step 2 — declarative route guards:
+5. src/back/objects/registry/guards.py (NEW)
+   ``require(min_role, *, scope='app'|'domain')`` factory returning a
+   FastAPI ``Depends`` that reads ``request.state.user_role`` /
+   ``user_domain_role`` and raises ``AuthorizationError`` below the
+   minimum. Domain scope falls back to the app role to mirror the
+   middleware's resolution order.
+6. src/back/objects/registry/__init__.py
+   Re-exported ``require`` so handlers do
+   ``from back.objects.registry import require``.
+7. src/api/routers/internal/dtwin.py
+   Replaced three inline ``role_level(...) < ROLE_BUILDER`` blocks
+   in ``start_triplestore_sync``, ``reload_graph_from_registry``,
+   ``drop_snapshot`` with
+   ``dependencies=[Depends(require(ROLE_BUILDER, scope='domain'))]``.
+8. src/api/routers/internal/settings.py
+   Same pattern for the admin-only settings / permission management
+   endpoints.
+
+Step 3 — server-injected permissions on <body>:
+9. src/front/fastapi/dependencies.py
+   Registered ``get_user_role`` / ``get_user_domain_role`` /
+   ``is_app_mode`` Jinja globals so templates can render the caller's
+   resolved roles without a JS round-trip.
+10. src/front/templates/base.html
+    ``<body>`` now carries ``data-app-role`` / ``data-domain-role`` /
+    ``data-app-mode``. Replaced the ``admin-only-nav`` +
+    ``style="display:none"`` pattern (toggled by JS) with
+    ``data-requires-app="admin"`` (gated by CSS, see Step 4).
+11. src/front/static/global/js/permissions.js (NEW)
+    Reads the body data-attrs once at parse time, exposes a frozen
+    ``window.OB.permissions`` namespace (``hasAppRole`` /
+    ``hasDomainRole`` mirroring the backend ``role_level``), stamps
+    ``body.role-viewer`` for non-admin viewers, installs the shared
+    capture-phase contextmenu blocker for D3/Canvas surfaces, and
+    renders the navbar role pill. Loaded **first** so every other
+    script can read ``window.OB.permissions`` synchronously.
+12. src/front/templates/partials/layout/_sidebar_nav.html
+13. src/front/templates/home.html
+    Same ``admin-only-nav`` → ``data-requires-app="admin"``
+    migration.
+
+Step 4 — declarative CSS gating:
+14. src/front/static/global/css/permissions.css (NEW)
+    Single source of truth for role / version gating. App-role gates
+    use ``[data-requires-app="admin"]``; domain-role gates use
+    ``[data-requires="builder"|"editor"]``;
+    ``body:is(.read-only-version, .role-viewer)`` neutralises every
+    write surface (~40 selectors covering Domain → Metadata,
+    Documents, Ontology imports, Mapping designer, Business Views,
+    Data Quality, Save Domain, generic form fields). Loaded **last**
+    so its ``!important`` gates beat per-component rules.
+15. src/front/static/global/js/version-check.js
+    Shrunk from ~535 lines to ~50: the version-status round-trip
+    just adds ``read-only-version`` to <body> and reuses the same
+    CSS gates as viewer mode (and ``permissions.js``'s contextmenu
+    blocker). The 13 helpers that disabled controls one by one are
+    gone.
+16. src/front/static/global/js/navbar.js,
+    src/front/static/registry/js/registry.js,
+    src/front/static/global/js/breadcrumb.js,
+    src/front/static/global/js/ontology-core.js,
+    src/front/static/global/js/ontology-design.js,
+    src/front/static/ontology/js/ontology-{axioms,entities,
+    relationships,shared-panels,swrl}.js
+    Cleaned up references to the removed ``admin-only-nav`` /
+    ``disableEditingForInactiveVersion`` paths and routed remaining
+    role checks through ``window.OB.permissions``.
+17. src/front/static/global/css/{components,main,mapping,sidebar-layout}.css,
+    src/front/static/global/ontoviz/css/{ontoviz,ontoviz-ui}.css
+    Adjusted selectors so OntoViz toolbars and mapping/sidebar
+    write controls compose cleanly with the new
+    ``:is(.read-only-version, .role-viewer)`` gates.
+
+Tests:
+18. tests/test_route_guards.py (NEW)
+    27 cases — factory validation, comparison logic against
+    hand-rolled requests, end-to-end via FastAPI ``TestClient`` for
+    both ``app`` and ``domain`` scopes, AuthorizationError → 403
+    surface check.
+19. tests/test_permissions.py
+    Extended cache-split coverage: ``clear_principals_cache``
+    drops every relevant cache; ``list_app_principals`` and
+    ``list_users`` no longer share state.
+
+Docs:
+20. docs/data-access.md (NEW)
+    Engine map describing which wrapper (REST / GraphQL / SPARQL /
+    Spark SQL / Cypher) every UI / MCP / Chat feature uses.
+    Surfaced via ``docs/sphinx/index.rst`` and the in-app Help
+    Center (``src/api/routers/internal/help.py:_DOC_CATEGORIES``,
+    ``src/front/templates/partials/layout/help_modal.html``).
+21. docs/README.md, docs/sphinx/index.rst,
+    docs/sphinx/guides/data-access.md
+    Wired the new data-access guide into both the file index and
+    the Sphinx toctree.
+
+Modified files:
+- src/back/objects/registry/PermissionService.py
+- src/back/objects/registry/guards.py
+- src/back/objects/registry/__init__.py
+- src/api/routers/internal/_permissions.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/settings.py
+- src/api/routers/internal/help.py
+- src/front/fastapi/dependencies.py
+- src/front/templates/base.html
+- src/front/templates/home.html
+- src/front/templates/partials/layout/_sidebar_nav.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/ontology/_ontology_design.html
+- src/front/templates/partials/ontology/_ontology_groups.html
+- src/front/static/global/css/permissions.css
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- src/front/static/global/css/mapping.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/global/ontoviz/css/ontoviz.css
+- src/front/static/global/ontoviz/css/ontoviz-ui.css
+- src/front/static/global/js/permissions.js
+- src/front/static/global/js/version-check.js
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/breadcrumb.js
+- src/front/static/global/js/ontology-core.js
+- src/front/static/global/js/ontology-design.js
+- src/front/static/ontology/js/ontology-axioms.js
+- src/front/static/ontology/js/ontology-entities.js
+- src/front/static/ontology/js/ontology-relationships.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-swrl.js
+- src/front/static/registry/js/registry.js
+- tests/test_route_guards.py
+- tests/test_permissions.py
+- docs/data-access.md
+- docs/README.md
+- docs/sphinx/index.rst
+- docs/sphinx/guides/data-access.md
+
+Tests: uv run pytest -q → 1787 passed in 69.25s.
+
+## Code review fix-up: move navbar role-badge inline CSS into permissions.css
+
+Context: Code review of the declarative-permissions refactor flagged
+that ``base.html`` introduced inline ``style="..."`` on the new
+``#roleNavBadgeItem`` / ``#roleNavBadge`` markup, violating
+``src/.coding_rules.md`` §4 ("templates must not contain CSS styles
+directly"). The initial-state ``style="display:none !important"`` also
+forced ``permissions.js`` to fight back with
+``style.setProperty('display', 'flex', 'important')``. Moved both into
+``permissions.css`` and switched the toggle to a class flip.
+
+Changes:
+
+1. src/front/static/global/css/permissions.css
+   New "Navbar role badge" block: ``#roleNavBadgeItem`` ships hidden,
+   ``.is-visible`` flips it to ``display: flex !important``,
+   ``#roleNavBadge`` carries the colour / sizing / spacing the inline
+   styles used to set.
+2. src/front/templates/base.html
+   Removed the two ``style="..."`` attributes from
+   ``#roleNavBadgeItem`` and ``#roleNavBadge`` — the markup is now
+   purely structural.
+3. src/front/static/global/js/permissions.js
+   ``showRoleNavBadge`` now adds ``is-visible`` instead of imperatively
+   writing ``style.display = 'flex'``, matching the declarative
+   gating model used everywhere else in this PR.
+
+Modified files:
+- src/front/static/global/css/permissions.css
+- src/front/templates/base.html
+- src/front/static/global/js/permissions.js
+
+Tests: uv run pytest -q → 1787 passed in 67.4s.

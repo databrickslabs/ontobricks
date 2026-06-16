@@ -1,0 +1,286 @@
+## Lakebase registry backend: end-to-end wiring
+
+Context: OntoBricks now supports persisting the domain registry on
+Databricks Lakebase (Postgres) in addition to the existing Unity
+Catalog Volume backend. The choice is admin-selectable in
+**Settings → Registry / Registry Location**, defaults to ``volume``,
+and binary artefacts (``documents/``, ``*.lbug.tar.gz``) keep living
+on the Volume regardless of which backend is active. Authentication
+is fully app-managed: the Databricks Apps runtime injects
+``PGHOST``/``PGPORT``/``PGDATABASE``/``PGUSER`` and ``LakebaseAuth``
+mints OAuth tokens automatically — no user secret. Both Provisioned
+and Autoscaling Lakebase tiers are supported, with cold-start retry
+on ``SQLSTATE 57P03``.
+
+This entry covers the final ribbon of the migration: API route, DAB
+overlay targets, app.yaml env wiring, contract test suite, and docs.
+The earlier per-service refactor (RegistryService / PermissionService
+/ BuildScheduler / GlobalConfigService now delegate JSON-shaped
+operations to a ``RegistryStore`` ABC), the cache-key tagging, the
+admin UI chooser, and the migration helper itself were landed in
+preceding sessions on this branch.
+
+Changes:
+
+1. src/api/routers/internal/settings.py
+   New ``POST /settings/registry/migrate-to-lakebase`` route (admin
+   only) that drives the one-shot Volume → Lakebase copy.
+2. src/back/objects/domain/SettingsService.py
+   New ``migrate_to_lakebase_result`` orchestrator: builds the source
+   ``VolumeRegistryStore`` and destination ``LakebaseRegistryStore``,
+   delegates to ``migrate_volume_to_lakebase``, and returns a
+   single-line summary plus the structured ``MigrationReport`` for
+   the admin UI.
+3. databricks.yml
+   Added ``registry_backend``/``lakebase_database``/
+   ``lakebase_instance``/``lakebase_schema`` bundle variables and
+   two opt-in target overlays — ``dev-lakebase`` and ``prod-lakebase``
+   — that attach a ``database`` Apps resource to both
+   ``ontobricks_app`` and ``mcp_ontobricks_app``. Default ``dev``/
+   ``prod`` targets stay Volume-only so existing deployments are
+   unchanged.
+4. app.yaml
+   Documented that the database resource binding makes the
+   Apps runtime auto-inject ``PGHOST``/``PGPORT``/``PGDATABASE``/
+   ``PGUSER`` (no ``valueFrom`` mapping needed) and added
+   ``LAKEBASE_SCHEMA`` env var (default ``ontobricks_registry``).
+5. src/mcp-server/app.yaml
+   Same Lakebase comment + ``LAKEBASE_SCHEMA`` for the MCP server.
+6. tests/test_registry_store.py
+   New contract test suite: ``build_store`` factory (Volume default,
+   unknown-backend fallback, lazy-import safety for Lakebase),
+   :class:`RegistryStore` behavioural contract (idempotent
+   initialize, missing-row no-raise, write/read round-trip,
+   permissions/global-config/history shapes), Volume cache key
+   backend-tag assertion, and migration round-trip + idempotency
+   driven by an in-memory fake store.
+7. tests/test_registry.py
+   Brought existing tests in line with the store-routed paths:
+   ``RegistryCfg.as_dict`` now exposes ``backend``/``lakebase_schema``
+   defaults, ``_make_settings`` seeds them, ``_make_svc`` pre-resolves
+   the store-side domain folder, and the delete/write/initialize
+   tests assert against the new (path, dict, ``overwrite=True``)
+   call shape.
+8. tests/test_permissions.py
+   Reworked domain-permission tests to mock
+   ``PermissionService._store_for`` instead of the now-deleted
+   ``_new_uc``/``_domain_permissions_path`` internals.
+9. README.md
+   Added Lakebase prerequisite + ``uv sync --extra lakebase`` note,
+   plus the ``-t dev-lakebase`` / ``-t prod-lakebase`` deploy
+   instructions.
+10. .env.example
+    Documented ``REGISTRY_BACKEND``, ``LAKEBASE_SCHEMA``, and the
+    auto-injected ``PG*`` variables (with a no-hardcoded-password
+    note since the password is a runtime OAuth token).
+11. docs/architecture.md
+    Replaced the "Unity Catalog Versioning" section with a broader
+    "Registry Storage Backends" section that lists both backends,
+    the Postgres table layout, the auth model, and the binaries-stay-
+    on-Volume invariant.
+
+Modified files:
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+- databricks.yml
+- app.yaml
+- src/mcp-server/app.yaml
+- tests/test_registry_store.py
+- tests/test_registry.py
+- tests/test_permissions.py
+- README.md
+- .env.example
+- docs/architecture.md
+
+Tests: uv run pytest -q → 1802 passed in 62.5s
+
+================================================================
+Lakebase migration: surface the actual error in admin UI
+================================================================
+
+Reported issue
+--------------
+The admin clicked "Migrate to Lakebase" and got back the toast
+"Error: Migration completed with errors — domains=0, versions=0,
+ permission_sets=0, schedules=0, history=0, global_config=no;
+ errors=1." with no indication of *which* error. The structured
+``report.errors`` array was returned in the JSON payload but never
+displayed.
+
+Fixes
+-----
+1. src/back/objects/registry/store/migration.py
+   ``summarize()`` now appends the first error message to the
+   summary string (and ``(+N more)`` when there are several), so
+   the toast notification immediately tells the admin what failed
+   (most commonly the destination ``initialize`` step: connection
+   refused, missing DB, permission denied on CREATE SCHEMA, missing
+   ``pgcrypto``, etc.).
+2. src/front/static/registry/js/registry.js
+   The migrate handler now logs the full ``data.report`` object
+   to the browser console (collapsed group) and prints every entry
+   from ``report.errors`` as ``console.warn``, so operators can
+   inspect every error, not just the first.
+3. tests/test_registry_store.py
+   Strengthened ``test_summarize_flags_errors`` and added
+   ``test_summarize_flags_multiple_errors`` covering the new
+   first-error suffix and the ``+N more`` accumulator.
+
+Modified files:
+- src/back/objects/registry/store/migration.py
+- src/front/static/registry/js/registry.js
+- tests/test_registry_store.py
+
+Tests: uv run pytest -q → 1803 passed in 62.7s
+
+================================================================
+Registry Location: surface Lakebase instance + table inventory
+================================================================
+
+Goal
+----
+Admins clicking the Registry Location section now see, in addition
+to the raw PG* connection params, the Databricks metadata for the
+bound Lakebase instance (name, state, capacity, pg_version, node
+count, uid) and a per-table row-count grid for the registry
+schema. This makes the panel actually informative on production
+deployments instead of just echoing what's already in app.yaml.
+
+Backend
+-------
+1. src/back/objects/domain/SettingsService.py
+   - ``_lakebase_runtime_info`` now also returns an ``instance``
+     dict (or ``None``) populated by the new helper
+     ``_lakebase_instance_metadata`` which calls
+     ``WorkspaceClient().database.list_database_instances()`` and
+     matches PGHOST against ``read_write_dns`` /
+     ``read_only_dns``. Best-effort: any failure logs at debug
+     level and returns ``None`` so the UI still renders.
+   - New ``lakebase_stats_result(session_mgr, settings)`` method:
+     builds a transient ``LakebaseRegistryStore`` from the
+     resolved registry triplet and asks it for per-table row
+     counts. Surfaces ``success=False`` + ``message`` when the
+     resource is not bound, psycopg is not installed, or the
+     query fails.
+2. src/back/objects/registry/store/base.py
+   - Added a default ``RegistryStore.table_row_counts(tables)``
+     implementation returning ``0`` for every requested table —
+     keeps the admin UI backend-agnostic.
+3. src/back/objects/registry/store/lakebase_store.py
+   - Overrode ``table_row_counts``: queries
+     ``information_schema.tables`` first (so a partially-
+     initialised schema does not raise), then issues
+     ``SELECT count(*)`` for each whitelisted table
+     (``_KNOWN_TABLES``). Failures are logged at debug level and
+     reported as zeros.
+4. src/api/routers/internal/settings.py
+   - New endpoint ``GET /settings/registry/lakebase-stats``
+     (admin only) wrapping ``lakebase_stats_result``.
+
+Frontend
+--------
+5. src/front/templates/partials/registry/_registry_configuration.html
+   - Lakebase panel now has three sections:
+     * **Instance** (name / state badge / capacity / pg_version /
+       nodes / uid) — hidden when SDK lookup fails.
+     * **Connection** (existing host/port/database/user/schema).
+     * **Registry Tables** — sortable-style grid with a Refresh
+       button and a status line indicating schema initialisation
+       state.
+6. src/front/static/registry/js/registry.js
+   - ``updateLakebasePanel`` now renders the new instance block,
+     auto-loads stats on first display (via
+     ``loadLakebaseStats``), and resets the loaded flag after a
+     successful migration so the post-migration row counts
+     refresh automatically.
+   - State badge colours map AVAILABLE/RUNNING → green,
+     STARTING/PROVISIONING → blue, FAILED/ERROR → red,
+     STOPPED → orange.
+
+Tests
+-----
+7. tests/test_registry_store.py
+   - Added ``test_table_row_counts_defaults_to_zero`` and
+     ``test_table_row_counts_handles_empty_input`` covering the
+     new contract method.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase_store.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/registry/js/registry.js
+- tests/test_registry_store.py
+
+Tests: uv run pytest -q → 1805 passed in 63.6s
+
+================================================================
+Lakebase auth: use generate_database_credential (fixes JWT error)
+================================================================
+
+Reported issue
+--------------
+With ``REGISTRY_BACKEND=lakebase`` and PG* set locally, every
+connection was rejected by Lakebase with
+``Provided authentication token is not a valid JWT encoding``.
+
+Root cause
+----------
+``LakebaseAuth.password()`` was returning the raw workspace bearer
+token from ``WorkspaceClient().config.authenticate()``. Lakebase
+requires a **Lakebase-scoped JWT** minted via
+``WorkspaceClient.database.generate_database_credential(
+instance_names=[<name>])`` — the plain workspace token is not a
+JWT and is rejected.
+
+Fixes
+-----
+1. src/back/core/databricks/LakebaseAuth.py
+   - ``password()`` now calls ``generate_database_credential``
+     scoped to the bound instance and returns ``cred.token``.
+   - New ``instance_name`` property resolves the Lakebase
+     instance name from (in order):
+       a. ``DATABASE_INSTANCE_NAME`` env var,
+       b. ``PGAPPNAME`` env var,
+       c. SDK lookup matching ``PGHOST`` against
+          ``read_write_dns`` / ``read_only_dns`` (cached for the
+          process lifetime).
+   - Workspace-client construction extracted into a private
+     ``_ensure_workspace`` helper so both the lookup and the
+     credential mint share the lazy import.
+2. src/shared/config/settings.py
+   - Added ``extra="ignore"`` to the Pydantic Settings config so
+     the ``.env`` file can carry the ``PG*`` /
+     ``DATABASE_INSTANCE_NAME`` entries that ``LakebaseAuth``
+     reads directly via ``os.environ`` without raising
+     ``extra_forbidden`` validation errors.
+3. src/back/objects/domain/SettingsService.py
+   - Added ``_enum_short`` and ``_pg_version_short`` helpers and
+     used them in ``_lakebase_instance_metadata`` so the admin UI
+     shows ``AVAILABLE`` / ``CU_1`` / ``16`` instead of the SDK
+     enum reprs ``DatabaseInstanceState.AVAILABLE`` /
+     ``DatabaseInstanceCapacity.CU_1`` / ``PG_VERSION_16``.
+4. .env.example
+   - Documented the local-dev PG* values and the optional
+     ``DATABASE_INSTANCE_NAME`` pin.
+5. databricks.yml
+   - Default ``lakebase_instance`` updated to ``ontobricks-app``
+     (matching the canonical instance name used by the new local
+     dev setup; deploys still default to the same instance).
+
+Operational note
+----------------
+Lakebase instance ``ontobricks-app`` (CU_1, PG 16) was provisioned
+in the FE VM workspace; database ``ontobricks_registry`` was
+created inside it via ``CREATE DATABASE ontobricks_registry``
+using a JWT minted via the same SDK call.
+
+Modified files:
+- src/back/core/databricks/LakebaseAuth.py
+- src/shared/config/settings.py
+- src/back/objects/domain/SettingsService.py
+- .env.example
+- databricks.yml
+
+Tests: uv run pytest -q → 1805 passed in 61.5s

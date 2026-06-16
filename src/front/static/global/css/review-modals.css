@@ -1,0 +1,84 @@
+/* Shared review modals: comment prompt + comments chat */
+
+.review-chat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    max-height: 60vh;
+}
+
+.review-chat-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+}
+
+.review-chat-avatar {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--db-primary, #ff3621);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.review-chat-bubble {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: var(--db-bg-secondary, #f5f6f8);
+    border: 1px solid var(--db-border, #e0e0e0);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem;
+}
+
+.review-chat-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.review-chat-action {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.review-chat-transition {
+    font-size: 0.7rem;
+    font-family: var(--bs-font-monospace, monospace);
+    background: #fff;
+    border: 1px solid var(--db-border, #e0e0e0);
+    border-radius: 4px;
+    padding: 0 0.35rem;
+    color: var(--db-text-muted, #666);
+}
+
+.review-chat-time {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--db-text-muted, #666);
+}
+
+.review-chat-text {
+    font-size: 0.9rem;
+    color: var(--db-text, #1e1e1e);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.review-chat-empty {
+    font-style: italic;
+    color: var(--db-text-muted, #888);
+}
+
+.review-chat-actor {
+    margin-top: 0.3rem;
+    font-size: 0.72rem;
+    color: var(--db-text-muted, #666);
+}

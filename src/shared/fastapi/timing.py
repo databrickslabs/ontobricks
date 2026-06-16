@@ -23,7 +23,9 @@ class RequestTimingMiddleware(BaseHTTPMiddleware):
     """Log request duration for every non-static endpoint."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        path = request.url.path
+        # Raw routed path, not request.url.path: the latter is reconstructed
+        # from the Host header and could be poisoned (BadHost / CVE-2026-48710).
+        path = request.scope["path"]
         if any(path.startswith(p) for p in _SKIP_PREFIXES):
             return await call_next(request)
 

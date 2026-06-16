@@ -1,0 +1,71 @@
+# 2026-06-05 — Read-only domain: pitfalls selectable, cohorts locked, mapping bulk-exclude gated
+
+## Refine read-only (PUBLISHED / IN-REVIEW / viewer) UI gates for Pitfalls, Cohorts and Mapping
+
+**Context:** When a domain version is read-only (non-DRAFT lifecycle status —
+e.g. PUBLISHED — older inactive version, or a viewer role), the declarative
+gates in `permissions.css` (`body:is(.read-only-version, .role-viewer)`) lock
+write surfaces. Three gaps surfaced:
+
+1. **Pitfalls** — the pattern checkboxes (`.pitfall-chk`) were caught by the
+   generic "disable all form inputs" rule, so a reader on a PUBLISHED version
+   could not select patterns to run. Running a pitfalls analysis is a
+   read-only operation (the backend `/ontology/pitfalls/analyze` endpoint is in
+   `_STATUS_GATE_OPEN_SUFFIXES`, so it is allowed on locked versions), so the
+   checkboxes must stay selectable.
+2. **Cohorts** — neither the design page (Ontology → Cohorts) write buttons nor
+   the Digital-Twin run-page write actions were gated, so a read-only domain
+   still allowed creating/editing rules and materialising outputs. The DT page
+   is deliberately exempt from the generic form rule, so cohort write controls
+   needed explicit gates that also fire there.
+3. **Mapping designer** — the bulk `Auto-Exclude` / `Include excluded` buttons
+   (added in the mapping-designer bulk-actions work) were missing from the
+   read-only gate list, unlike the other designer buttons (reset / auto-map /
+   save).
+
+**Changes:**
+
+1. `src/front/static/global/css/permissions.css` — added `:not(.pitfall-chk)`
+   to the generic read-only form-input disable selector so pitfalls pattern
+   checkboxes stay interactive on locked versions.
+2. `src/front/static/global/css/permissions.css` — added `#mappingAutoExclude`
+   and `#mappingIncludeExcluded` to the mapping-designer read-only gate list.
+3. `src/front/static/global/css/permissions.css` — added a new Cohorts gate
+   block neutralising the create/edit/materialise controls
+   (`#cohortNewBtn`, `#cohortSaveBtn`, `#cohortAddPathBtn`,
+   `#cohortAddConstraintBtn`, `#cohortOutputsBtn`, `#cohortMaterializeBtn`) plus
+   the dynamically-rendered link/hop/where/compat add+remove buttons
+   (`.cohort-link-del`, `.cohort-hop-add`, `.cohort-hop-del`,
+   `.cohort-hop-where-add`, `.cohort-hop-where-del`, `.cohort-hop-where-sample`,
+   `.cohort-row-del`, `.cohort-sample`). The saved-rules picker and the
+   read-only Preview / Trace / Explain actions stay interactive.
+4. `src/front/templates/partials/ontology/_ontology_cohorts.html` — added
+   `id="cohortNewBtn"`, `id="cohortAddPathBtn"`, `id="cohortAddConstraintBtn"`
+   so the design-page write buttons can be targeted by the gate.
+5. `src/front/templates/partials/dtwin/_query_cohorts.html` — added
+   `id="cohortOutputsBtn"` so the run-page Configure-outputs button can be
+   gated (Materialise already had `id="cohortMaterializeBtn"`).
+
+**Scope note:** "Cohorts read-only" is implemented as: cannot create or edit a
+rule (design page) and cannot persist outputs or materialise (run page).
+Read-only inspection — loading a saved rule, Preview, Path trace, Explain —
+remains available. Server-side, mutating cohort endpoints are not yet
+status-gated; this change is the UI half. Real enforcement for cohort writes on
+locked versions is a follow-up if required.
+
+**Files modified:**
+- `src/front/static/global/css/permissions.css`
+- `src/front/templates/partials/ontology/_ontology_cohorts.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+
+**Tests:**
+
+```
+uv run pytest -q --ignore=tests/e2e --ignore=tests/property --ignore=tests/live_integration --no-cov
+# 2467 passed, 22 warnings in 20.72s
+```
+
+E2E (`tests/e2e/security/test_permissions_flows.py`) and property/live suites
+were not run here — they require a Playwright browser + a reachable Databricks
+workspace. These changes are CSS + Jinja-template only (no Python behaviour
+change), and the full in-process unit + integration suite is green.
