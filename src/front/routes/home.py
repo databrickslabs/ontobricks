@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 
 from front.fastapi.dependencies import templates
+from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.constants import APP_VERSION
 
@@ -31,7 +32,12 @@ async def settings_page(
     """Settings page."""
     user_role = getattr(request.state, "user_role", "admin")
     return templates.TemplateResponse(
-        request, "settings.html", {"user_role": user_role}
+        request,
+        "settings.html",
+        {
+            "user_role": user_role,
+            "neo4j_password_from_secret": is_neo4j_password_from_secret(),
+        },
     )
 
 

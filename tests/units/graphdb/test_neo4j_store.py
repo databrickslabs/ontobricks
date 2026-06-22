@@ -294,3 +294,66 @@ class TestReasoningTranslator:
         assert t.build_antecedent_count_sql("dom_V1", {}) is None
         assert t.build_materialization_sql("dom_V1", {}) is None
         assert t.build_inference_sql("dom_V1", {}) is None
+
+
+# ---------------------------------------------------------------------------
+#  Password sourcing — Databricks Apps secret vs local-dev fallback
+# ---------------------------------------------------------------------------
+
+class TestPasswordSourcing:
+    """The Bolt password must come from the NEO4J_PASSWORD env var in prod
+    (populated by a Databricks Apps secret resource bound in app.yaml) and
+    fall back to engine_config['password'] only in local dev.
+    """
+
+    def test_helper_reports_secret_when_env_var_set(self, monkeypatch):
+        from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
+
+        monkeypatch.setenv("NEO4J_PASSWORD", "from-secret")
+        assert is_neo4j_password_from_secret() is True
+
+    def test_helper_reports_no_secret_when_env_var_blank(self, monkeypatch):
+        from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
+
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+        assert is_neo4j_password_from_secret() is False
+
+    def test_resolve_auth_prefers_env_var(self, monkeypatch):
+        monkeypatch.setenv("NEO4J_PASSWORD", "from-secret")
+        s = _store(password="from-config")
+        user, pwd = s._resolve_auth()
+        assert user == "neo4j"
+        assert pwd == "from-secret"
+
+    def test_resolve_auth_falls_back_to_config_in_local_dev(self, monkeypatch):
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        s = _store(password="from-config")
+        user, pwd = s._resolve_auth()
+        assert pwd == "from-config"
+
+    def test_resolve_auth_raises_in_prod_without_env_var(self, monkeypatch):
+        from back.core.errors import InfrastructureError
+
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+        monkeypatch.setenv("DATABRICKS_APP_PORT", "8080")
+        s = _store(password="from-config")  # config password ignored in prod
+        with pytest.raises(InfrastructureError, match="NEO4J_PASSWORD"):
+            s._resolve_auth()
+
+    def test_resolve_auth_raises_when_no_credentials_anywhere(self, monkeypatch):
+        from back.core.errors import ValidationError
+
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        s = _store(password="")
+        with pytest.raises(ValidationError, match="NEO4J_PASSWORD"):
+            s._resolve_auth()
+
+    def test_resolve_auth_raises_when_username_missing(self, monkeypatch):
+        from back.core.errors import ValidationError
+
+        monkeypatch.setenv("NEO4J_PASSWORD", "from-secret")
+        s = _store(username="")
+        with pytest.raises(ValidationError, match="username"):
+            s._resolve_auth()

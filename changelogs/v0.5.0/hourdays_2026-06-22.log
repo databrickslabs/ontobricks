@@ -1,0 +1,25 @@
+## Move Neo4j Bolt password to a Databricks Apps secret resource
+
+**Context:** Benoit's PR #47 review on 2026-06-18 flagged that the Neo4j password was being persisted in clear inside `global_config.graph_engine_config` — a blocker for any customer deployment. Switching to a Databricks Apps **secret resource** declared in `app.yaml` and injected as the `NEO4J_PASSWORD` env var at runtime; the persisted JSON `password` is stripped at save-time, so no clear-text credential ever lands in the database. Local development keeps the existing `engine_config.password` fallback (guarded by `DATABRICKS_APP_PORT` to detect the deployed environment).
+
+**Changes:**
+1. `src/back/core/graphdb/neo4j/Neo4jStore.py` — `_resolve_auth()` now reads `NEO4J_PASSWORD` env var first (logged as source); in the deployed app (`DATABRICKS_APP_PORT` set) the env var becomes mandatory and a missing variable raises `InfrastructureError` with a clear remediation pointer. Local-dev path unchanged (`engine_config.password`). New module-level helper `is_neo4j_password_from_secret()` exposes the credential source to other layers. Switched `ValueError` → `ValidationError` on the user-input validation branches (aligned with `back.core.errors` hierarchy from `src/.coding_rules.md §4`). Constant `NEO4J_PASSWORD_ENV` added.
+2. `app.yaml.template` — declared the `neo4j-password` resource (`secret: permission: READ`) and the `NEO4J_PASSWORD` env var with `valueFrom: neo4j-password`. The resource is **Unbound** by default; the admin binds it via the Apps UI to a workspace secret (scope/key) before activating the Neo4j engine.
+3. `src/back/objects/domain/SettingsService.py` — `set_graph_engine_config_result()` strips `password` from the incoming `engine_config` dict whenever `NEO4J_PASSWORD` is set in the environment. Defence-in-depth: even if the UI sends a password, the persisted JSON never contains it.
+4. `src/front/routes/home.py` — settings page context now exposes `neo4j_password_from_secret` so the Jinja template can render the credential-source badge.
+5. `src/front/templates/settings.html` — Neo4j settings form: password label gains a dynamic badge (`From Apps secret` green / `Local-dev fallback` yellow) and the input is `disabled` with a `••••••••` placeholder when the secret is bound. Help text below points to the new docs page.
+6. `src/front/static/config/js/settings.js` — `mergeNeo4jPanelIntoConfigTextarea()` never serialises the password field when the input is disabled (Apps secret in place), preventing stale clear-text values from being re-sent on save.
+7. `docs/v0.6-neo4j-demo/secret-configuration.md` (new) — step-by-step admin guide: `databricks secrets put-secret` → bind the `neo4j-password` resource → verify in Settings UI → troubleshooting table.
+8. `tests/units/graphdb/test_neo4j_store.py` — new `TestPasswordSourcing` class with 7 unit tests covering helper behaviour and every branch of `_resolve_auth` (env-var-wins, local-dev fallback, prod refusal, missing creds, missing username).
+
+**Modified files:**
+- `src/back/core/graphdb/neo4j/Neo4jStore.py`
+- `app.yaml.template`
+- `src/back/objects/domain/SettingsService.py`
+- `src/front/routes/home.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `docs/v0.6-neo4j-demo/secret-configuration.md` (new)
+- `tests/units/graphdb/test_neo4j_store.py`
+
+**Test result:** `python3 -m py_compile` on every changed `.py` — OK. `node --check` on `settings.js` — OK. Jinja2 lex of `settings.html` — OK. Inline logic test of the 8 `_resolve_auth` + helper paths via stubs — all assertions pass. Full `pytest tests/units/graphdb/test_neo4j_store.py::TestPasswordSourcing` deferred (uv environment offline locally; will run in CI).

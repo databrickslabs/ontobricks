@@ -17,6 +17,7 @@ from back.core.errors import (
 from shared.config.constants import HTTP_USER_AGENT
 from shared.config.settings import Settings
 from back.core.databricks import is_databricks_app
+from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.core.helpers import (
     get_databricks_client,
     get_databricks_host_and_token,
@@ -1222,6 +1223,15 @@ class SettingsService:
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
+        if is_neo4j_password_from_secret() and isinstance(config, dict) and config.get("password"):
+            # Never persist a clear-text password when the Apps secret is
+            # in place — the env var wins at runtime and this would only
+            # leak a redundant credential into global_config.
+            logger.info(
+                "Stripping engine_config['password'] before persist — "
+                "NEO4J_PASSWORD env var is the source of truth"
+            )
+            config = {k: v for k, v in config.items() if k != "password"}
         ok, msg = global_config_service.set_graph_engine_config(
             host, token, registry_cfg, config
         )

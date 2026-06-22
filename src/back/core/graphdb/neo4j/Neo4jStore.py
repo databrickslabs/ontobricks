@@ -21,8 +21,10 @@ ontology validation in the build pipeline (Benoit's C2 safeguard:
 "l'entrée se fait par l'ontologie").
 """
 
+import os
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.graphdb.GraphDBBackend import GraphDBBackend
 from back.core.logging import get_logger
 from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
@@ -43,6 +45,21 @@ DEFAULT_DATABASE = "neo4j"
 DEFAULT_AUTH_METHOD = "basic"
 SUPPORTED_AUTH_METHODS = ("basic", "databricks_secret")
 
+# Env var fed by a Databricks Apps secret resource bound in app.yaml as
+# ``valueFrom: neo4j-password``. When set, the persisted engine_config
+# password is ignored (and stripped at save-time) — see
+# docs/v0.6-neo4j-demo/secret-configuration.md.
+NEO4J_PASSWORD_ENV = "NEO4J_PASSWORD"
+
+
+def is_neo4j_password_from_secret() -> bool:
+    """True when ``NEO4J_PASSWORD`` is set in the environment.
+
+    Module-level helper so the Settings save endpoint and the UI page
+    context can ask the question without instantiating a full store.
+    """
+    return bool(os.environ.get(NEO4J_PASSWORD_ENV, "").strip())
+
 
 class Neo4jStore(GraphDBBackend):
     """Neo4j (Bolt / Cypher) graph database backend — flat triple model.
@@ -62,9 +79,18 @@ class Neo4jStore(GraphDBBackend):
             Logical Neo4j database name on the target instance.
         ``auth_method`` (default ``"basic"``)
             ``"basic"`` → username + password. ``"databricks_secret"`` →
-            credentials resolved from a Databricks secret scope (PR 2).
-        ``username``, ``password``
+            credentials resolved from a Databricks secret scope (PR 3, deferred).
+        ``username``
             Required when ``auth_method == "basic"``.
+        ``password``
+            Local-dev fallback when ``auth_method == "basic"``. **In the
+            deployed app** (when ``DATABRICKS_APP_PORT`` is set) the password
+            MUST come from the ``NEO4J_PASSWORD`` env var, populated via a
+            Databricks Apps secret resource bound in ``app.yaml``. The
+            persisted JSON ``password`` is ignored in prod and stripped at
+            save-time so no clear-text credential ever lands in
+            ``global_config``. See
+            ``docs/v0.6-neo4j-demo/secret-configuration.md``.
         ``secret_scope``, ``secret_key``
             Required when ``auth_method == "databricks_secret"``.
         ``encrypted`` (default ``True``)
@@ -149,32 +175,56 @@ class Neo4jStore(GraphDBBackend):
         self._driver = None
         logger.debug("Neo4j driver closed")
 
+    @staticmethod
+    def _is_deployed_app() -> bool:
+        """True when running inside Databricks Apps (port var is set)."""
+        return bool(os.environ.get("DATABRICKS_APP_PORT"))
+
     def _resolve_auth(self) -> Tuple[str, str]:
         cfg = self.engine_config
         if self._auth_method == "basic":
             user = str(cfg.get("username") or "").strip()
-            pwd = str(cfg.get("password") or "")
-            if not user or not pwd:
-                raise ValueError(
-                    "Neo4jStore: auth_method=basic requires "
-                    "engine_config['username'] and ['password']"
+            if not user:
+                raise ValidationError(
+                    "Neo4jStore: auth_method=basic requires engine_config['username']"
                 )
-            return (user, pwd)
+            pwd_env = os.environ.get(NEO4J_PASSWORD_ENV, "").strip()
+            pwd_cfg = str(cfg.get("password") or "")
+            if pwd_env:
+                logger.info("Neo4j credentials sourced from %s env var", NEO4J_PASSWORD_ENV)
+                return (user, pwd_env)
+            if self._is_deployed_app():
+                raise InfrastructureError(
+                    "Neo4jStore: %s env var is required in the deployed app — "
+                    "declare a Databricks Apps secret resource named 'neo4j-password' "
+                    "and bind it via app.yaml `valueFrom`. See "
+                    "docs/v0.6-neo4j-demo/secret-configuration.md."
+                    % NEO4J_PASSWORD_ENV
+                )
+            if not pwd_cfg:
+                raise ValidationError(
+                    "Neo4jStore: auth_method=basic requires either the %s env var "
+                    "(production) or engine_config['password'] (local dev)."
+                    % NEO4J_PASSWORD_ENV
+                )
+            logger.info("Neo4j credentials sourced from engine_config (local-dev fallback)")
+            return (user, pwd_cfg)
         if self._auth_method == "databricks_secret":
             scope = str(cfg.get("secret_scope") or "").strip()
             key = str(cfg.get("secret_key") or "").strip()
             if not scope or not key:
-                raise ValueError(
+                raise ValidationError(
                     "Neo4jStore: auth_method=databricks_secret requires "
                     "engine_config['secret_scope'] and ['secret_key']"
                 )
-            # TODO(PR2): resolve via Databricks secrets API.
-            # For PR 1 the secret_scope/key are validated but resolution
-            # is deferred — basic auth is the only path tested live.
+            # TODO(PR3): resolve via Databricks secrets API. The supported
+            # production path today is the env-var-via-Apps-secret-resource
+            # mechanism handled by the ``basic`` branch above.
             raise NotImplementedError(
-                "auth_method=databricks_secret is reserved for PR 2"
+                "auth_method=databricks_secret is reserved for a follow-up PR; "
+                "use auth_method=basic with the NEO4J_PASSWORD secret resource instead."
             )
-        raise ValueError("Unsupported auth_method: %s" % self._auth_method)
+        raise ValidationError("Unsupported auth_method: %s" % self._auth_method)
 
     def _run(self, cypher: str, **params: Any) -> List[Dict[str, Any]]:
         """Execute a Cypher statement against the configured database.

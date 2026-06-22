@@ -106,6 +106,17 @@ env:
   # MLflow — ensure traces are persisted to the workspace tracking server.
   - name: MLFLOW_TRACKING_URI
     value: "${APP_MLFLOW_TRACKING_URI}"
+  # ── Neo4j (optional) ──────────────────────────────────────────
+  # Password sourced from a Databricks Apps secret resource (see
+  # `resources:` below). The `neo4j-password` resource is unbound by
+  # default; the admin binds it to a workspace secret (scope/key) in
+  # the Apps UI before selecting the Neo4j engine. When the resource
+  # is unbound, NEO4J_PASSWORD stays unset and the deployed app refuses
+  # to instantiate Neo4jStore with a clear instruction in the logs.
+  # Local dev keeps the legacy fallback to engine_config['password'].
+  # See docs/v0.6-neo4j-demo/secret-configuration.md.
+  - name: NEO4J_PASSWORD
+    valueFrom: neo4j-password
 
 # User authorization scopes — declares which Databricks APIs the app is
 # allowed to access on behalf of the logged-in user via the
@@ -132,3 +143,7 @@ resources:
     description: "Unity Catalog Volume for the OntoBricks domain registry"
     volume:
       permission: CAN_READ_WRITE
+  - name: neo4j-password
+    description: "Databricks Apps secret holding the Neo4j Bolt password. Unbound by default; bind it to a workspace secret (scope/key) in the Apps UI before activating the Neo4j engine. See docs/v0.6-neo4j-demo/secret-configuration.md."
+    secret:
+      permission: READ

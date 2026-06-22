@@ -2033,7 +2033,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (authMethod === 'basic') {
             const user = (document.getElementById('neo4jUsername')?.value || '').trim();
-            const pwd  = (document.getElementById('neo4jPassword')?.value || '');
+            const pwdEl = document.getElementById('neo4jPassword');
+            // When the password input is disabled (Apps secret is in place),
+            // never serialise the field — the server-side env var is the
+            // source of truth and the backend strips persisted passwords.
+            const pwd  = (pwdEl && !pwdEl.disabled) ? (pwdEl.value || '') : '';
             if (user) o.username = user; else delete o.username;
             if (pwd)  o.password = pwd;  else delete o.password;
             delete o.secret_scope;
