@@ -357,3 +357,73 @@ class TestPasswordSourcing:
         s = _store(username="")
         with pytest.raises(ValidationError, match="username"):
             s._resolve_auth()
+
+
+# ---------------------------------------------------------------------------
+#  Cypher logging — every _run call emits an info-level summary
+# ---------------------------------------------------------------------------
+
+class TestCypherLogging:
+    """Benoit's review (2026-06-18) asked that the Cypher emitted by every
+    ``_run`` call be visible in the Databricks app logs at INFO level so
+    operators can correlate UI actions with backend queries.
+    """
+
+    def test_normalise_collapses_whitespace(self):
+        from back.core.graphdb.neo4j.Neo4jStore import _normalise_cypher_for_log
+
+        flat = _normalise_cypher_for_log(
+            "MATCH (t:`X`)\n  WHERE t.predicate = $rdf_type\n   RETURN t"
+        )
+        assert flat == "MATCH (t:`X`) WHERE t.predicate = $rdf_type RETURN t"
+
+    def test_normalise_truncates_long_cypher(self):
+        from back.core.graphdb.neo4j.Neo4jStore import _normalise_cypher_for_log
+
+        long = "MATCH (t:`X`) RETURN t " + ("x" * 4000)
+        out = _normalise_cypher_for_log(long)
+        assert out.endswith("… (truncated)")
+        assert len(out) < len(long)
+
+    def test_run_emits_info_log_with_cypher_and_metrics(self, caplog):
+        """The real `_run` (no MagicMock) emits a single INFO line per call."""
+        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+
+        # Build a store without the MagicMock helper so `_run` runs for real,
+        # then stub `get_connection` to return a fake driver capturing the call.
+        s = Neo4jStore(db_name="testset", engine_config=_basic_config())
+
+        class _FakeResult:
+            def __iter__(self):
+                return iter([{"subject": "ex:a"}, {"subject": "ex:b"}])
+
+        class _FakeSession:
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+            def run(self, cypher, **params):
+                return _FakeResult()
+
+        class _FakeDriver:
+            def session(self, **kw):
+                return _FakeSession()
+
+        s._driver = _FakeDriver()
+
+        import logging
+        with caplog.at_level(logging.INFO, logger="back.core.graphdb.neo4j.Neo4jStore"):
+            rows = s._run("MATCH (t:`X`) WHERE t.subject = $s RETURN t", s="ex:a")
+
+        assert len(rows) == 2
+        info_records = [r for r in caplog.records if r.levelname == "INFO"]
+        cypher_logs = [r for r in info_records if r.getMessage().startswith("Cypher (")]
+        assert len(cypher_logs) == 1, (
+            "Expected exactly one INFO log line starting with 'Cypher (', "
+            f"got {len(cypher_logs)}"
+        )
+        msg = cypher_logs[0].getMessage()
+        assert "2 rows" in msg
+        assert "MATCH (t:`X`) WHERE t.subject = $s RETURN t" in msg
+        # Critical: the bound parameter value must not appear in the INFO log
+        assert "ex:a" not in msg, "Bound params leaked into INFO log"

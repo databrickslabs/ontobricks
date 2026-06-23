@@ -22,6 +22,8 @@ ontology validation in the build pipeline (Benoit's C2 safeguard:
 """
 
 import os
+import re
+import time
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from back.core.errors import InfrastructureError, ValidationError
@@ -59,6 +61,24 @@ def is_neo4j_password_from_secret() -> bool:
     context can ask the question without instantiating a full store.
     """
     return bool(os.environ.get(NEO4J_PASSWORD_ENV, "").strip())
+
+
+# Cap on the Cypher snippet logged at INFO. Beyond this size we truncate
+# (full statement is still available at DEBUG via ``Cypher params``).
+_CYPHER_LOG_MAX = 1500
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _normalise_cypher_for_log(cypher: str) -> str:
+    """Collapse runs of whitespace into single spaces and truncate.
+
+    Cypher in this module is assembled from multi-line f-strings; flattening
+    them keeps each log entry on a single grep-friendly line.
+    """
+    flat = _WHITESPACE_RE.sub(" ", cypher).strip()
+    if len(flat) > _CYPHER_LOG_MAX:
+        return flat[:_CYPHER_LOG_MAX] + "… (truncated)"
+    return flat
 
 
 class Neo4jStore(GraphDBBackend):
@@ -230,11 +250,28 @@ class Neo4jStore(GraphDBBackend):
         """Execute a Cypher statement against the configured database.
 
         Returns rows as dicts. Wraps the session in a single transaction.
+        Emits one INFO log line per call with ``rows`` count, duration, and
+        a whitespace-flattened Cypher snippet so reviewers can correlate
+        UI actions with the backend query (per Benoit's review request,
+        PR #47 2026-06-18). Bound ``params`` are logged at DEBUG only —
+        they never contain credentials (auth is set on the driver, not
+        per-session), but they may carry URIs/literals from the build
+        pipeline that don't belong in default INFO logs.
         """
         driver = self.get_connection()
+        logger.debug("Cypher params: %s", params)
+        t0 = time.monotonic()
         with driver.session(database=self._database) as session:
             result = session.run(cypher, **params)
-            return [dict(record) for record in result]
+            rows = [dict(record) for record in result]
+        duration_ms = (time.monotonic() - t0) * 1000.0
+        logger.info(
+            "Cypher (%d rows, %.1f ms): %s",
+            len(rows),
+            duration_ms,
+            _normalise_cypher_for_log(cypher),
+        )
+        return rows
 
     # ======================================================================
     #  GraphDBBackend — schema helpers

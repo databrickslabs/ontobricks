@@ -23,3 +23,17 @@
 - `tests/units/graphdb/test_neo4j_store.py`
 
 **Test result:** `python3 -m py_compile` on every changed `.py` — OK. `node --check` on `settings.js` — OK. Jinja2 lex of `settings.html` — OK. Inline logic test of the 8 `_resolve_auth` + helper paths via stubs — all assertions pass. Full `pytest tests/units/graphdb/test_neo4j_store.py::TestPasswordSourcing` deferred (uv environment offline locally; will run in CI).
+
+## Log the executed Cypher at INFO (PR #47 review – Benoit 2026-06-18)
+
+**Context:** Benoit's PR #47 review asked that every Cypher statement run by the Neo4j backend be visible in the Databricks app logs at INFO level — without leaking secrets — so operators can correlate UI actions (filters, builds, GraphQL resolvers) with the backend query. Bolt-bound parameters are kept at DEBUG only (they don't carry credentials — auth lives on the driver, not the session — but they may carry URIs/literals from the build pipeline that don't belong in default INFO logs). Single-line, whitespace-flattened, truncation-marked snippets so logs stay grep-friendly.
+
+**Changes:**
+1. `src/back/core/graphdb/neo4j/Neo4jStore.py` — `_run()` now emits one INFO log line per call: `"Cypher (<n> rows, <ms> ms): <flattened cypher>"`. Bound `params` go to DEBUG. Added module-level helper `_normalise_cypher_for_log()` that collapses runs of whitespace to single spaces and truncates beyond `_CYPHER_LOG_MAX` (1500 chars) with a `"… (truncated)"` marker — caps log line size without dropping context. New imports: `re`, `time`.
+2. `tests/units/graphdb/test_neo4j_store.py` — new `TestCypherLogging` class with 3 unit tests: whitespace flattening, long-cypher truncation, and end-to-end verification that `_run` emits the expected INFO line with row count, duration, flattened cypher, and **no leakage of bound parameter values** into INFO logs.
+
+**Modified files:**
+- `src/back/core/graphdb/neo4j/Neo4jStore.py`
+- `tests/units/graphdb/test_neo4j_store.py`
+
+**Test result:** `python3 -m py_compile` — OK. Inline run of `_run` against a fake driver confirmed: 1 INFO line emitted, row count + duration + flattened multi-line cypher present, bound `$s = 'ex:value'` param **absent** from the INFO log. Truncation + whitespace-flattening helpers verified. Full pytest suite deferred to CI (uv offline locally).
