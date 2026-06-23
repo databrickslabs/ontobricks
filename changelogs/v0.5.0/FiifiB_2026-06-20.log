@@ -1,0 +1,42 @@
+# v0.5.0 — PGE Run-Visualizer: reasoning-wrap fix + live verification
+
+## Context
+
+Continuation of the PGE run-visualizer (see FiifiB_2026-06-19.log). Verified the
+visualizer end-to-end with a real, live PGE auto-map run on the deployed app
+(ontobricks-pgeviz). The live run surfaced one rendering issue not present in the
+synthetic-data tests: the semantic critic's `reasoning` (carried in
+`EvalReport.metrics.reasoning`) is long free text that rendered inline and
+overflowed the viewport.
+
+## Changes
+
+1. `src/front/static/mapping/js/mapping-pge-visualizer.js` — `renderItem()`:
+   split per-item eval metrics into short scalar metrics (rendered inline as
+   before) and long free-text fields >60 chars such as `reasoning` (now rendered
+   as a wrapped `.ob-pge-reasoning` block instead of a nowrap inline span).
+2. `src/front/static/mapping/css/mapping-pge-visualizer.css` — added
+   `.ob-pge-reasoning` (white-space: normal, overflow-wrap: anywhere) so long
+   critic reasoning wraps cleanly.
+
+## Modified files
+
+- src/front/static/mapping/js/mapping-pge-visualizer.js
+- src/front/static/mapping/css/mapping-pge-visualizer.css
+
+## Tests / verification
+
+- `node --check` passes on the visualizer JS.
+- LIVE end-to-end verification on deployed app `ontobricks-pgeviz`
+  (https://ontobricks-pgeviz-7474646666236453.aws.databricksapps.com):
+  loaded trust_a.maternity_episode metadata → applied a maternity ontology
+  (MaternityEpisode, Baby) → ran a real PGE auto-assign → both entities PASS in
+  1 attempt. The deployed PgeVisualizer rendered the real run: stage chips,
+  RED verdict, KPI strip (entity/rel/id-integrity 100%, 0 sql failures,
+  0% coverage-loss), gate tiers (Tier-1 absolute FAILED on orphan_class_count=2,
+  Tier-2/3 pass), per-item Generator→Evaluator→Critic chains with full wrapped
+  critic reasoning, per-item metrics, and the planner source-model (candidate
+  confidences 98%/90%, canonical-id analysis with real row counts 1228/776).
+  Zero console errors. Screenshot captured.
+- Deployment used the dev-lakebase target against a dedicated Lakebase project
+  (ontobricks-pgeviz-db) for full isolation from shared production.

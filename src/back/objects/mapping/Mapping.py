@@ -415,6 +415,14 @@ class Mapping:
                     "agent_iterations": total_iterations,
                     "agent_usage": total_usage,
                     "pge_scorecard": scorecard,
+                    # PGE run-visualizer payload — the planner's source model,
+                    # per-item evaluator verdicts, and the attempt-by-attempt run
+                    # log. Persisted to the session already; also surfaced here so
+                    # the UI can render the planner→generator→evaluator→critic loop
+                    # from the polled task result without a second round-trip.
+                    "source_model": last_source_model,
+                    "mapping_evaluations": merged_mapping_evaluations or None,
+                    "mapping_run_log": merged_mapping_run_log or None,
                 },
                 message=message,
             )
@@ -533,6 +541,12 @@ class Mapping:
                     "item_type": item_type,
                     "mapping": mapping,
                     "iterations": agent_result.iterations,
+                    # PGE run-visualizer payload (see batch path) — surface the
+                    # single-item planner model, evaluator verdicts and run log
+                    # so the UI renders the same loop view for one-off re-maps.
+                    "source_model": single_source_model,
+                    "mapping_evaluations": single_evals,
+                    "mapping_run_log": single_run_log,
                 },
                 message=f"Assigned {item_type}: {item_name}",
             )

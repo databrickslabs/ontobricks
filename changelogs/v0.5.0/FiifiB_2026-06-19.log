@@ -1,0 +1,67 @@
+# v0.5.0 — PGE Run-Visualizer (make the mapping PGE loop demoable in the UI)
+
+## Context
+
+The mapping PGE pipeline (Planner → Generator → Evaluator → Critic) already
+computes rich artifacts — the planner's `source_model`, per-item
+`mapping_evaluations` (EvalReports), an attempt-by-attempt `mapping_run_log`,
+and an intrinsic-eval `pge_scorecard` — but the UI surfaced almost none of it.
+Auto-Map showed a progress bar, a flat per-item results table, and appended
+the scorecard verdict to a toast string. The orchestration (planner picks,
+generator attempts, evaluator/critic verdicts, retry hints, re-plan
+escalations) was invisible, which made the agentic loop "hard to demo on the
+OntoBricks UI."
+
+This change exposes the PGE loop in the Batch Auto-Map report without touching
+any agent logic: a new client-side run-visualizer renders the loop from the
+artifacts the engine already produces, and the two artifacts that were
+persisted-to-session-only are now also surfaced on the polled task result.
+
+## Changes
+
+1. `src/back/objects/mapping/Mapping.py` — `run_auto_assign_task` (batch) and
+   `run_single_auto_assign_task` (single): added `source_model`,
+   `mapping_evaluations`, and `mapping_run_log` to the `complete_task` result
+   dict. These were already accumulated and persisted to the session via
+   `save_mappings_to_session`; they are now also returned on the polled task so
+   the UI can render the loop from `GET /tasks/{id}` with no extra round-trip.
+   `pge_scorecard` was already present (computed by `score_mapping_run`).
+2. `src/front/static/mapping/js/mapping-pge-visualizer.js` — NEW. `PgeVisualizer`
+   module: renders the verdict pill + KPI strip (entity/relationship
+   completeness, id-integrity, sql-exec failures, coverage-loss), the three
+   gate tiers (absolute / ratio / regression), a per-item loop trace
+   (Generator › Evaluator › Critic chain with attempt numbers, retry hints, and
+   re-plan markers) enriched with per-item eval metrics, and a collapsible
+   planner source-model panel (table→class candidates with confidence bars,
+   canonical ids, join keys with overlap, planner skips). Fully defensive — any
+   field may be missing; renders nothing if there is no PGE payload.
+3. `src/front/static/mapping/css/mapping-pge-visualizer.css` — NEW. Component
+   styles (ob-pge-* classes) for the card, KPI strip, gate chips, loop-trace
+   timeline, and source-model tables. Bootstrap 5.3 for everything else.
+4. `src/front/static/mapping/js/mapping-autoassign.js` — stash `this.taskResult`
+   in both completion paths (live monitor + resumed task) and call
+   `PgeVisualizer.render(...)` from `showReport()`; clear it in `reset()`.
+5. `src/front/templates/partials/mapping/_mapping_autoassign.html` — added the
+   `#autoAssignPgeVisualizer` mount container inside the report section.
+6. `src/front/templates/mapping.html` — included the new CSS + JS assets.
+
+## Modified / new files
+
+- src/back/objects/mapping/Mapping.py (modified)
+- src/front/static/mapping/js/mapping-pge-visualizer.js (new)
+- src/front/static/mapping/css/mapping-pge-visualizer.css (new)
+- src/front/static/mapping/js/mapping-autoassign.js (modified)
+- src/front/templates/partials/mapping/_mapping_autoassign.html (modified)
+- src/front/templates/mapping.html (modified)
+
+## Tests
+
+- `pytest tests/agents/agent_mapping_pge/` — 82 passed, 1 warning (no regression
+  from the task-result additions; the engine/contracts are untouched).
+- `node --check` passes on both modified/new JS modules.
+- `python -m py_compile` passes on Mapping.py.
+- Visual verification: rendered the visualizer against a realistic synthetic
+  task result via headless Chrome (file:// harness). Confirmed: verdict pill,
+  KPI strip, three gate tiers, per-item loop chains (incl. a 2-attempt
+  null-id-hint retry and a re-plan escalation), per-item eval metrics, and the
+  planner source-model panel all render correctly. Screenshots captured.

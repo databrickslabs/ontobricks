@@ -1,0 +1,147 @@
+/* PGE Run-Visualizer — surfaces the Planner→Generator→Evaluator→Critic loop.
+ * JS: /static/mapping/js/mapping-pge-visualizer.js
+ * Component-level classes only (ob-pge-*), Bootstrap 5.3 for everything else. */
+
+.ob-pge-card {
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.ob-pge-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(90deg, #f3f0ff 0%, #eef5ff 100%);
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.ob-pge-stages {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #343a40;
+    flex-wrap: wrap;
+}
+.ob-pge-stage-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid #d7d2f0;
+    font-size: 0.8rem;
+}
+.ob-pge-stage-arrow { color: #adb5bd; }
+
+/* Verdict pill */
+.ob-pge-verdict {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+}
+.ob-pge-verdict-green { background: #d1e7dd; color: #0f5132; }
+.ob-pge-verdict-red   { background: #f8d7da; color: #842029; }
+.ob-pge-verdict-na    { background: #e2e3e5; color: #41464b; }
+
+/* KPI strip */
+.ob-pge-kpis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+    background: #fcfcfd;
+}
+.ob-pge-kpi {
+    flex: 1 1 120px;
+    min-width: 110px;
+    background: #fff;
+    border: 1px solid #eef0f2;
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.7rem;
+}
+.ob-pge-kpi-val { font-size: 1.15rem; font-weight: 700; line-height: 1.1; }
+.ob-pge-kpi-lbl { font-size: 0.72rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.03em; }
+
+.ob-pge-gates { display: flex; gap: 0.4rem; flex-wrap: wrap; padding: 0.6rem 1rem 0.85rem; }
+.ob-pge-gate {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    font-size: 0.78rem; padding: 0.25rem 0.6rem; border-radius: 0.35rem;
+    border: 1px solid transparent;
+}
+.ob-pge-gate-pass { background: #e8f6ee; color: #0f5132; border-color: #b6ddc6; }
+.ob-pge-gate-fail { background: #fdecea; color: #842029; border-color: #f1b0b7; }
+
+/* Per-item loop trace */
+.ob-pge-item {
+    border-top: 1px solid #f0f1f3;
+    padding: 0.6rem 1rem;
+}
+.ob-pge-item:first-child { border-top: none; }
+.ob-pge-item-head {
+    display: flex; align-items: center; gap: 0.5rem;
+    cursor: pointer;
+}
+.ob-pge-item-name { font-weight: 600; flex: 1 1 auto; }
+.ob-pge-item-name code { font-weight: 600; color: #4530a8; background: none; padding: 0; }
+
+/* Attempt chain */
+.ob-pge-attempts { margin: 0.5rem 0 0.2rem; padding-left: 0.25rem; }
+.ob-pge-attempt {
+    display: flex; align-items: flex-start; gap: 0.5rem;
+    padding: 0.35rem 0;
+    border-left: 2px solid #e9ecef;
+    padding-left: 0.75rem;
+    margin-left: 0.4rem;
+}
+.ob-pge-attempt-num {
+    flex: 0 0 auto; font-size: 0.72rem; color: #6c757d;
+    background: #f1f3f5; border-radius: 999px; padding: 0.05rem 0.45rem; margin-top: 0.1rem;
+}
+.ob-pge-chain { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+.ob-pge-step {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    font-size: 0.76rem; padding: 0.1rem 0.45rem; border-radius: 0.3rem;
+    border: 1px solid #e3e6ea; background: #fff;
+}
+.ob-pge-step-pass { border-color: #b6ddc6; background: #f0faf4; color: #0f5132; }
+.ob-pge-step-fail { border-color: #f1b0b7; background: #fdf2f3; color: #842029; }
+.ob-pge-step-skip { color: #868e96; }
+.ob-pge-step-bubble { border-color: #ffe0a6; background: #fff8ec; color: #8a5a00; }
+.ob-pge-arrow { color: #ced4da; font-size: 0.7rem; }
+.ob-pge-hint {
+    font-size: 0.76rem; color: #6c4a00; background: #fff8ec;
+    border: 1px solid #ffe9c2; border-radius: 0.3rem; padding: 0.3rem 0.5rem;
+    margin: 0.25rem 0 0.1rem; display: block;
+}
+.ob-pge-metrics-inline {
+    font-size: 0.74rem; color: #495057; margin-top: 0.2rem; display: flex; flex-wrap: wrap; gap: 0.5rem;
+}
+.ob-pge-metrics-inline span { white-space: nowrap; }
+
+/* Long free-text eval fields (e.g. critic reasoning) — wrap, don't overflow. */
+.ob-pge-reasoning {
+    font-size: 0.78rem;
+    color: #495057;
+    margin-top: 0.3rem;
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.ob-pge-reasoning .text-muted { font-weight: 600; }
+
+/* Source model panel */
+.ob-pge-sm-table { font-size: 0.8rem; }
+.ob-pge-sm-table th { white-space: nowrap; }
+.ob-pge-conf-bar {
+    display: inline-block; height: 6px; border-radius: 3px; background: #6f42c1;
+    vertical-align: middle; margin-right: 0.35rem;
+}

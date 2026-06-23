@@ -106,6 +106,7 @@ window.AutoAssignModule = {
                 console.log('[AutoAssign] Task completed, applying results');
                 sessionStorage.removeItem(AUTO_ASSIGN_TASK_KEY);
                 this.results = task.result.results || [];
+                this.taskResult = task.result;
                 await this.saveMappingsFromTask(task.result);
                 this.showReport();
                 await this.refreshMappingConfig();
@@ -351,6 +352,7 @@ window.AutoAssignModule = {
                     
                     if (task.result) {
                         this.results = task.result.results || [];
+                        this.taskResult = task.result;
                         await this.saveMappingsFromTask(task.result);
                     }
                     
@@ -666,6 +668,17 @@ window.AutoAssignModule = {
             `;
         }).join('');
         
+        // Render the PGE run-visualizer (planner→generator→evaluator→critic
+        // loop + scorecard) from the captured task result. Defensive: never
+        // let a visualizer error break the report.
+        if (window.PgeVisualizer) {
+            try {
+                PgeVisualizer.render(this.taskResult || {}, 'autoAssignPgeVisualizer');
+            } catch (e) {
+                console.error('[AutoAssign] PGE visualizer render failed:', e);
+            }
+        }
+
         // Show notification
         if (successCount > 0) {
             showNotification(`Auto-mapped ${successCount} item(s) successfully`, 'success', 3000);
@@ -677,6 +690,9 @@ window.AutoAssignModule = {
      */
     reset: function() {
         this.results = [];
+        this.taskResult = null;
+        const pgeEl = document.getElementById('autoAssignPgeVisualizer');
+        if (pgeEl) { pgeEl.style.display = 'none'; pgeEl.innerHTML = ''; }
         document.getElementById('autoAssignProgressSection').style.display = 'none';
         document.getElementById('autoAssignReportSection').style.display = 'none';
         document.getElementById('startAutoAssignBtn').style.display = 'inline-block';
