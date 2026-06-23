@@ -873,7 +873,7 @@ class SHACLService:
         return suggestions
 
     # ------------------------------------------------------------------
-    # SHACL-to-SQL translation (for Digital Twin execution)
+    # SHACL-to-SQL translation (for Knowledge Graph execution)
     # ------------------------------------------------------------------
 
     @staticmethod

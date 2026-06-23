@@ -114,7 +114,7 @@ body[data-domain-role="editor"] [data-requires="editor"] {
    sync action, which is otherwise builder-gated rather than version-gated.
    ========================================================================== */
 
-/* --- Digital Twin Build/sync: blocked unless the version is DRAFT. */
+/* --- Knowledge Graph Build/sync: blocked unless the version is DRAFT. */
 body.read-only-status #syncStartBtn,
 body.read-only-status [data-sync-action="start-triple-store-sync"] {
     pointer-events: none !important;
@@ -200,7 +200,7 @@ body:is(.read-only-version, .role-viewer) #menuSaveDomain {
 
 /* --- Cohorts: a read-only domain blocks creating, editing and
        materialising cohort rules. Unlike most write surfaces these gates
-       must also fire on the Digital Twin run page (which is otherwise
+       must also fire on the Knowledge Graph run page (which is otherwise
        exempt from the generic form-field rule below), because the
        Materialise / Configure-outputs actions persist into the domain.
        The saved-rules picker and the read-only Preview / Trace / Explain
@@ -261,7 +261,7 @@ body:is(.read-only-version, .role-viewer) .view-mode-hidden {
    Any future "navigation" select / input should be added here rather
    than to a per-page override.
 
-   The Digital Twin page (``body[data-page="digitaltwin"]``) is excluded
+   The Knowledge Graph page (``body[data-page="digitaltwin"]``) is excluded
    wholesale: it is a read / analysis surface (SPARQL/insights, graph
    exploration + filter/search, data quality, reasoning, cohort
    discovery) that never edits the domain *design*. Its filter controls

@@ -52,7 +52,7 @@ Package                                     Responsibility
 ``shared.fastapi``                          FastAPI app factory, health, shared wiring
 ``front.fastapi``                           UI-specific FastAPI dependencies
 ``back.fastapi``                            GraphQL routes and domain HTTP helpers
-``api``                                     External REST v1 + Digital Twin (mounted at ``/api``)
+``api``                                     External REST v1 + Knowledge Graph (mounted at ``/api``)
 ``back.core.databricks``                    Typed facades for Databricks SDK & SQL
 ``back.core.triplestore``                   Abstract base + Delta view backend
 ``back.core.graphdb``                       Pluggable Graph DB engines (Lakebase Postgres, …)

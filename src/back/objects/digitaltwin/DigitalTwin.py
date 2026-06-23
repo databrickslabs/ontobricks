@@ -825,7 +825,7 @@ class DigitalTwin:
             logger.debug("sync_last_build_from_schedule: %s", exc)
 
     # ------------------------------------------------------------------
-    # Live Digital Twin status (instance methods)
+    # Live Knowledge Graph status (instance methods)
     # ------------------------------------------------------------------
 
     async def fetch_graph_triplestore_status(self, settings) -> Dict[str, Any]:
@@ -2465,7 +2465,7 @@ class DigitalTwin:
         *,
         build_kind: str = "session",
     ) -> None:
-        """Execute Digital Twin build/sync in a worker thread (TaskManager progress).
+        """Execute Knowledge Graph build/sync in a worker thread (TaskManager progress).
 
         ``build_kind``:
           * ``"session"`` — UI/internal build (diagnostics, progress callbacks,
@@ -3094,7 +3094,7 @@ class DigitalTwin:
         ts_status: Dict[str, Any],
         dt_exist: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Derive a three-state Digital Twin indicator from live graph and artefact checks.
+        """Derive a three-state Knowledge Graph indicator from live graph and artefact checks.
 
         Returns a dict with:
             indicator: ``'green'`` | ``'orange'`` | ``'red'``
@@ -3106,13 +3106,13 @@ class DigitalTwin:
             if not domain.last_build:
                 return {
                     "indicator": "red",
-                    "title": "Digital Twin never built",
+                    "title": "Knowledge Graph never built",
                     "count": 0,
                     "pending": False,
                 }
             return {
                 "indicator": "orange",
-                "title": "Digital Twin status not yet checked",
+                "title": "Knowledge Graph status not yet checked",
                 "count": 0,
                 "pending": True,
             }
@@ -3127,7 +3127,7 @@ class DigitalTwin:
         if graph_loaded and view_exists is not False:
             return {
                 "indicator": "green",
-                "title": f"Digital Twin active — {count:,} triples",
+                "title": f"Knowledge Graph active — {count:,} triples",
                 "count": count,
                 "pending": False,
             }
@@ -3139,7 +3139,7 @@ class DigitalTwin:
         ):
             return {
                 "indicator": "red",
-                "title": "Digital Twin never built",
+                "title": "Knowledge Graph never built",
                 "count": 0,
                 "pending": False,
             }
@@ -3150,9 +3150,9 @@ class DigitalTwin:
         if not graph_loaded:
             parts.append("graph not loaded")
         title = (
-            "Digital Twin incomplete — " + ", ".join(parts)
+            "Knowledge Graph incomplete — " + ", ".join(parts)
             if parts
-            else "Digital Twin partially available"
+            else "Knowledge Graph partially available"
         )
         return {"indicator": "orange", "title": title, "count": count, "pending": False}
 

@@ -195,6 +195,27 @@
                     ]
                 },
                 {
+                    "id": "domain-collaboration",
+                    "title": "Collaboration",
+                    "icon": "bi-chat-left-text",
+                    "items": [
+                        {
+                            "id": "mytasks",
+                            "label": "My Tasks",
+                            "icon": "bi-inbox",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "discussions",
+                            "label": "Discussions",
+                            "icon": "bi-chat-left-text",
+                            "default": false,
+                            "requires": "domain_saved"
+                        }
+                    ]
+                },
+                {
                     "id": "domain-management",
                     "title": "Management",
                     "icon": "bi-gear",
@@ -558,10 +579,11 @@
 
         {
             "id": "digitaltwin",
-            "label": "Digital Twin",
+            "label": "Knowledge Graph",
             "icon": "bi-box",
             "route": "/dtwin/",
             "requires_domain_saved": true,
+            "navbar_hidden": true,
             "status_indicator": null,
             "navbar_actions": [],
             "groups": [
@@ -586,7 +608,7 @@
                     "items": [
                         {
                             "id": "sigmagraph",
-                            "label": "Knowledge Graph",
+                            "label": "Graph Viewer",
                             "icon": "bi-layers-half",
                             "default": true,
                             "requires": null

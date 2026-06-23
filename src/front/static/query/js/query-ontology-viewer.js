@@ -1,6 +1,6 @@
 /**
  * OntoBricks - query-ontology-viewer.js
- * Read-only D3.js ontology model viewer modal for the Digital Twin page.
+ * Read-only D3.js ontology model viewer modal for the Knowledge Graph page.
  *
  * Provides OntologyViewer.open() which fetches the ontology classes,
  * properties, and saved map layout, then renders a frozen (non-editable)

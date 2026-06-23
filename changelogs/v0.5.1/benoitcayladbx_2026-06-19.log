@@ -1,0 +1,44 @@
+## Fix: Interactive Build Does Not Persist last_build to Registry
+
+### Context
+Bug report: on the Validation page, "Submit for Review" was blocked with
+"This version has never been built. Run a Digital Twin build first." even
+after a successful interactive Digital Twin build.
+
+Root cause: `_BuildPipeline._complete_task()` (the shared completion path
+for both interactive UI and external REST builds) never called
+`store.write_version()` to flush `domain.last_build` to the
+`domain_versions.last_build` DB column.  Only the scheduled-build path
+(`scheduler._persist_domain_metadata`) wrote that column.  The
+`ReviewService.submit()` gate reads the column; the Consistency-checks
+panel reads live triple-store state — hence the two indicators
+disagreed.
+
+### Changes
+
+1. `src/back/objects/digitaltwin/_build_pipeline.py`
+   - Added `_BuildPipeline._persist_last_build_to_registry()`: best-effort
+     method that resolves folder/version (same logic as `_record_build_run`),
+     stamps `domain.last_build` when empty (API build path), and calls
+     `RegistryService.from_context().store.write_version()`.
+   - `_complete_task()` now calls `_persist_last_build_to_registry()` after
+     `_record_build_run()`, covering both `build_kind="session"` (interactive
+     UI) and `build_kind="api"` (external REST).
+
+2. `tests/back/core/digitaltwin/test_build_pipeline_units.py`
+   - Added import for `patch` and `RegistryService`.
+   - Added `TestPersistLastBuildToRegistry` (6 tests):
+     - happy path: `write_version` is called with correct folder + version
+     - domain_data carries `last_build` value
+     - API build path: empty `last_build` is stamped before persist
+     - early-return when folder/version cannot be resolved
+     - graceful handling of `write_version` failure (False return)
+     - graceful handling of `RegistryService.from_context` exception
+
+### Modified files
+- src/back/objects/digitaltwin/_build_pipeline.py
+- tests/back/core/digitaltwin/test_build_pipeline_units.py
+
+### Test results
+2484 passed, 15 skipped, 1 pre-existing failure (pyshacl not installed, unrelated)
+All 22 tests in test_build_pipeline_units.py pass.

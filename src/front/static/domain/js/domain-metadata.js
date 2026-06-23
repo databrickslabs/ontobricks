@@ -83,6 +83,7 @@ async function loadMetadataStatus() {
             
             // Show preview and Update Mappings button
             displayMetadataPreview(data.metadata);
+            checkMetadataDescriptions(data.metadata);
             const updateMappingsBtn = document.getElementById('updateMappingsBtn');
             if (updateMappingsBtn) updateMappingsBtn.classList.remove('d-none');
         } else {
@@ -91,6 +92,8 @@ async function loadMetadataStatus() {
             statusDiv.className = 'alert alert-secondary mb-4';
             statusText.innerHTML = '<i class="bi bi-info-circle"></i> No data sources loaded';
             previewDiv.classList.add('d-none');
+            const warningEl = document.getElementById('metadataDescriptionWarning');
+            if (warningEl) warningEl.style.display = 'none';
             const updateMappingsBtn = document.getElementById('updateMappingsBtn');
             if (updateMappingsBtn) updateMappingsBtn.classList.add('d-none');
         }
@@ -775,6 +778,7 @@ function saveTableDetails() {
     
     // Refresh the display
     displayMetadataPreview(metadataCache);
+    checkMetadataDescriptions(metadataCache);
     
     showNotification('Table details updated. Click "Save Changes" to persist.', 'info', 2000);
 }
@@ -1061,3 +1065,62 @@ async function updateMetadataFromUC() {
     }
     document.addEventListener('DOMContentLoaded', bind);
 })();
+
+function checkMetadataDescriptions(metadata) {
+    const warningEl = document.getElementById('metadataDescriptionWarning');
+    if (!warningEl) return;
+
+    const tables = metadata?.tables || [];
+    if (tables.length === 0) {
+        warningEl.style.display = 'none';
+        return;
+    }
+
+    const tablesNoDesc = [];
+    let columnsNoDescCount = 0;
+
+    for (const t of tables) {
+        const tName = t.full_name || t.name || '?';
+        if (!t.comment || !t.comment.trim()) {
+            tablesNoDesc.push(tName);
+        }
+        for (const col of (t.columns || [])) {
+            if (!col.comment || !col.comment.trim()) {
+                columnsNoDescCount++;
+            }
+        }
+    }
+
+    const totalMissing = tablesNoDesc.length + columnsNoDescCount;
+    if (totalMissing === 0) {
+        warningEl.style.display = 'none';
+        return;
+    }
+
+    const collapseId = 'metaDescQualityDetails';
+    const tableRows = tablesNoDesc.map(t =>
+        `<li><i class="bi bi-table text-muted me-1"></i><code>${t}</code> — no table description</li>`
+    ).join('');
+
+    warningEl.innerHTML = `
+        <div class="alert alert-warning mb-0 py-2">
+            <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+                <div class="flex-grow-1">
+                    <strong>${tablesNoDesc.length} table(s) and ${columnsNoDescCount} column(s) are missing descriptions.</strong>
+                    <span class="ms-1 text-muted small">Adding descriptions improves AI mapping accuracy.</span>
+                    ${tablesNoDesc.length > 0 ? `
+                    <button class="btn btn-link btn-sm py-0 px-1 ms-1 text-warning-emphasis text-decoration-none"
+                            type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                        <i class="bi bi-chevron-down" style="font-size:0.75rem;"></i> Show tables
+                    </button>
+                    <div class="collapse mt-2" id="${collapseId}">
+                        <ul class="list-unstyled mb-0 small" style="max-height:160px;overflow-y:auto;">
+                            ${tableRows}
+                        </ul>
+                    </div>` : ''}
+                </div>
+            </div>
+        </div>`;
+    warningEl.style.display = 'block';
+}

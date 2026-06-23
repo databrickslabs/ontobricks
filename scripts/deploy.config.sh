@@ -40,7 +40,7 @@
 # THE ONLY LINE YOU NEED TO CHANGE to create a new deployment.
 # App names are workspace-global — pick one not already in `databricks apps list`.
 # The workspace sync folder is automatically isolated per app name.
-DEFAULT_APP_NAME="ontobricks-050"
+DEFAULT_APP_NAME="ontobricks-060"
 
 # ── 0b. Workspace constants ──────────────────────────────────────────
 # Set once for your workspace. Shared across all instances deployed here.

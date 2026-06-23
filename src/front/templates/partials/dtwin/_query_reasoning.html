@@ -1,7 +1,7 @@
 <!-- Inference Section - OWL + SWRL + Graph + Business Rules inference -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
-        <div>
+        <div class="me-auto">
             <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Inference</h4>
             <p class="text-muted mb-0 small">OWL 2 RL inference, SWRL rules, graph reasoning, and business rules<br>
                 <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50 query-reasoning-fs-tiny">v{{ current_version }}</span> <span class="js-version-status-badge badge border bg-warning-subtle text-dark border-warning" style="font-size:0.6rem;">Draft</span>
@@ -10,8 +10,12 @@
                 </button>
             </p>
         </div>
-        <button class="btn btn-sm btn-outline-primary" onclick="ReasoningModule.runReasoning()" id="runReasoningBtn">
+        <button class="btn btn-sm btn-outline-primary me-2" onclick="ReasoningModule.runReasoning()" id="runReasoningBtn">
             <i class="bi bi-play-fill me-1"></i> Run Inference
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
+            <i class="bi bi-chat-dots"></i>
         </button>
     </div>
     <div class="card">

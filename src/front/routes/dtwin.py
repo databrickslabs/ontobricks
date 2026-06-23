@@ -1,4 +1,4 @@
-"""Frontend HTML route -- Digital Twin / Query page."""
+"""Frontend HTML route -- Knowledge Graph / Query page."""
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-info-circle"></i> About OntoBricks</h1>
-    <p>Digital Twin Builder for Databricks &mdash; from Unity Catalog to a queryable knowledge graph in four clicks</p>
+    <p>Knowledge Graph Builder for Databricks &mdash; from Unity Catalog to a queryable graph viewer in four clicks</p>
 </div>
 
 <div class="row">
@@ -16,7 +16,7 @@
             </div>
             <div class="card-body">
                 <p>
-                    OntoBricks transforms Databricks tables into a materialized knowledge graph. Design ontologies
+                    OntoBricks transforms Databricks tables into a materialized graph viewer. Design ontologies
                     (OWL/RDFS/SHACL), map them to Unity Catalog tables via R2RML, materialize triples into a
                     Delta-backed triple store with a Lakebase Postgres graph engine, reason over the graph, and query it through an
                     auto-generated GraphQL API &mdash; all from a single web application running as a
@@ -24,7 +24,7 @@
                 </p>
                 <p class="mb-0">
                     LLM-powered automation drives the full pipeline: import metadata, generate the ontology,
-                    auto-map entities and relationships, then synchronize the Digital Twin.
+                    auto-map entities and relationships, then synchronize the Knowledge Graph.
                 </p>
             </div>
         </div>
@@ -52,9 +52,9 @@
                         </ul>
                     </div>
                     <div class="col-md-6">
-                        <h6><i class="bi bi-share"></i> Digital Twin</h6>
+                        <h6><i class="bi bi-share"></i> Knowledge Graph</h6>
                         <ul class="small">
-                            <li>Full knowledge graph build via Lakeflow</li>
+                            <li>Full graph viewer build via Lakeflow</li>
                             <li>SPARQL endpoint &amp; GraphQL API</li>
                             <li>Interactive graph visualization</li>
                             <li>Community detection &amp; clustering</li>
@@ -156,7 +156,7 @@
             </div>
             <div class="card-body">
                 <p class="small mb-0">
-                    The companion <code>mcp-ontobricks</code> server exposes the knowledge graph to LLM
+                    The companion <code>mcp-ontobricks</code> server exposes the graph viewer to LLM
                     agents via the Model Context Protocol &mdash; usable from Cursor, Claude Desktop, or
                     the Databricks Playground.
                 </p>

@@ -4,7 +4,7 @@
  *
  * Re-uses the .assistant-* DOM class family for bubbles / thinking /
  * input styling (see /static/ontology/css/ontology-assistant.css), but
- * runs embedded inside the Digital Twin sidebar section -- no floating
+ * runs embedded inside the Knowledge Graph sidebar section -- no floating
  * popup, no FAB.
  *
  * Talks to POST /dtwin/assistant/chat which drives the
@@ -88,7 +88,7 @@
         a.classList.add('graph-chat-entity-link');
         a.setAttribute(
             'title',
-            'Open in the Knowledge Graph viewer'
+            'Open in the Graph Viewer viewer'
         );
         a.setAttribute('target', '_self');
         a.setAttribute('rel', 'noopener');

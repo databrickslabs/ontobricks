@@ -5,12 +5,12 @@
 <h1 align="center">OntoBricks</h1>
 
 <p align="center">
-  <strong>Digital Twin Builder for Databricks</strong>
+  <strong>Knowledge Graph Builder for Databricks</strong>
 </p>
 
 <p align="center">
-  OntoBricks is a web-based application that turns <strong>Databricks tables into a knowledge graph</strong>.<br>
-  Design ontologies using OWL or import industry standards (FIBO, CDISC, IOF&nbsp;…), map them to tables (with R2RML behind the scenes), materialize triples into a Delta-backed triple store mirrored on Lakebase Postgres, query them through a typed GraphQL API, and explore your knowledge graph visually.
+  OntoBricks is a web-based application that turns <strong>Databricks tables into a graph viewer</strong>.<br>
+  Design ontologies using OWL or import industry standards (FIBO, CDISC, IOF&nbsp;…), map them to tables (with R2RML behind the scenes), materialize triples into a Delta-backed triple store mirrored on Lakebase Postgres, query them through a typed GraphQL API, and explore your graph viewer visually.
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 
 ## How It Works
 
-OntoBricks builds a **materialized knowledge graph** (triple store) from your Databricks tables using semantic web standards, graph databases, and formal reasoning:
+OntoBricks builds a **materialized graph viewer** (triple store) from your Databricks tables using semantic web standards, graph databases, and formal reasoning:
 
 ```
                           OntoBricks                      MCP Server
@@ -60,9 +60,9 @@ OntoBricks builds a **materialized knowledge graph** (triple store) from your Da
 1. **Design** an ontology (OWL) — visually or via LLM-powered generation
 2. **Map** ontology entities to Databricks tables using R2RML mappings
 3. **Materialize** triples — Delta view in Unity Catalog (governance) + Lakebase Postgres flat table (queryable Graph DB engine)
-4. **Reason** over the knowledge graph — OWL 2 RL deductive closure, SWRL rules, transitive/symmetric expansion, constraint validation, and SHACL data quality shapes
-5. **Query** the knowledge graph via GraphQL with a typed schema auto-generated from the ontology
-6. **Explore** the knowledge graph with interactive visualization, GraphiQL playground, and quality checks
+4. **Reason** over the graph viewer — OWL 2 RL deductive closure, SWRL rules, transitive/symmetric expansion, constraint validation, and SHACL data quality shapes
+5. **Query** the graph viewer via GraphQL with a typed schema auto-generated from the ontology
+6. **Explore** the graph viewer with interactive visualization, GraphiQL playground, and quality checks
 
 ## Screenshots
 
@@ -80,11 +80,11 @@ Map ontology entities to Databricks tables — click any entity on the graph, wr
   <img src="docs/screenshots/Ontology%20Mapping.png" alt="Ontology Mapping" width="800">
 </p>
 
-### Knowledge Graph
-Explore your knowledge graph — search, filter, and navigate entities and relationships with full attribute details, up to N levels deep.
+### Graph Viewer
+Explore your graph viewer — search, filter, and navigate entities and relationships with full attribute details, up to N levels deep.
 
 <p align="center">
-  <img src="docs/screenshots/Graph%20result.png" alt="Knowledge Graph" width="800">
+  <img src="docs/screenshots/Graph%20result.png" alt="Graph Viewer" width="800">
 </p>
 
 ## Features
@@ -109,12 +109,12 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 - **📝 R2RML Generation**: Automatic W3C-compliant R2RML mapping generation
 - **🔀 Unified Panel UI**: Consistent editing experience across Designer and Manual views
 
-### Digital Twin (Sync & Explore)
+### Knowledge Graph (Sync & Explore)
 - **🔄 Triple Store Sync**: Synchronize mapped data to the Delta view + Graph DB engine (Lakebase) with readiness validation
 - **💾 Two Layers**: **Delta view** (Databricks SQL Warehouse, governance + lineage) plus a pluggable **Graph DB engine** (currently Lakebase Postgres — `app_managed` `COPY FROM STDIN` or `managed_synced` Lakeflow mode)
-- **📈 Knowledge Graph**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, and entity detail panels
-- **🔬 Data Cluster Detection**: Detect communities in the knowledge graph using Louvain, Label Propagation, or Greedy Modularity algorithms — client-side (Graphology) for the visible subgraph, server-side (NetworkX) for the full graph; color-by-cluster visualization, adjustable resolution, cluster collapse/expand into super-nodes with member details on click
-- **🗺️ Ontology Designer Viewer**: Read-only D3.js ontology model accessible from Knowledge Graph and GraphQL sections — frozen force-directed graph with pan/zoom in a fullscreen modal
+- **📈 Graph Viewer**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, and entity detail panels
+- **🔬 Data Cluster Detection**: Detect communities in the graph viewer using Louvain, Label Propagation, or Greedy Modularity algorithms — client-side (Graphology) for the visible subgraph, server-side (NetworkX) for the full graph; color-by-cluster visualization, adjustable resolution, cluster collapse/expand into super-nodes with member details on click
+- **🗺️ Ontology Designer Viewer**: Read-only D3.js ontology model accessible from Graph Viewer and GraphQL sections — frozen force-directed graph with pan/zoom in a fullscreen modal
 - **📊 Dashboard Integration**: Embed Databricks dashboards with parameter mapping to entities
 - **✅ Async Quality Checks**: Validate data against ontology constraints with background processing and progress tracking
 - **📏 SHACL Data Quality**: Run SHACL-based validation against the triple store — shapes defined in the ontology are compiled to SQL for execution, with violation reporting and PySHACL in-memory validation support
@@ -126,7 +126,7 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 - **📏 SWRL Rule Engine**: User-defined Horn-clause rules (Antecedent → Consequent) with a **graphical D3-based editor** (fullscreen modal with IF/THEN atom builders, context menu, and live SWRL preview) — compiled to SQL (Spark / Postgres) for violation detection and triple materialization
 - **🔗 Graph Reasoning**: Automatic transitive closure and symmetric expansion based on OWL property characteristics (`TransitiveProperty`, `SymmetricProperty`)
 - **✔️ Constraint Validation**: Cardinality checks, functional/inverse-functional property enforcement, value constraints, orphan detection, and label requirements — executed in SQL on the Delta view and the Lakebase graph engine
-- **📊 Materialization**: Inferred triples from any reasoning phase can be written back to the triple store, enriching the knowledge graph with derived facts
+- **📊 Materialization**: Inferred triples from any reasoning phase can be written back to the triple store, enriching the graph viewer with derived facts
 
 ### GraphQL API
 - **🔮 Auto-Generated Schema**: The GraphQL schema is derived from the ontology — each class becomes a type, each data property a field, each object property a typed relationship
@@ -137,8 +137,8 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 - **📦 Per-Domain Schemas**: Each domain gets its own GraphQL schema, cached and invalidated on ontology change
 
 ### MCP Server (AI Integration)
-- **🤖 Model Context Protocol**: Expose the knowledge graph to LLM agents via [MCP](https://modelcontextprotocol.io/)
-- **📂 `list_projects` / `select_project`**: Two-step workflow — browse available knowledge graphs, then select one to query
+- **🤖 Model Context Protocol**: Expose the graph viewer to LLM agents via [MCP](https://modelcontextprotocol.io/)
+- **📂 `list_projects` / `select_project`**: Two-step workflow — browse available graph viewers, then select one to query
 - **📋 `list_entity_types`**: Discover all entity types, counts, and predicates in human-readable text
 - **🔍 `describe_entity`**: Search by name or type and get a full-text description with attributes, relationships, and hop-by-hop traversal
 - **📊 `get_status`**: Retrieve triple store status, readiness, and last-modified timestamp
@@ -154,17 +154,17 @@ Explore your knowledge graph — search, filter, and navigate entities and relat
 - **🧭 Domain Cockpit (Validation)**: Tiles for registry readiness; **Active Version** reflects the version **exposed via API/MCP** (set in Registry → Browse), not only the newest file on disk — with a *(not loaded)* hint when the editor session differs
 - **⏳ New domain flow**: Full-page loading overlay until Domain Information completes its first round-trip after **New Domain**
 - **🧱 Save guard**: Duplicate sanitized domain names are rejected before save to the registry (inline + Save-to-UC check)
-- **🧩 Digital Twin field preview**: On Domain Information, triple-store / snapshot / local graph paths refresh when the domain name is committed (blur) or the version changes
+- **🧩 Knowledge Graph field preview**: On Domain Information, triple-store / snapshot / local graph paths refresh when the domain name is committed (blur) or the version changes
 
 ### Registry
 - **📂 Multi-Domain Registry**: Central registry backed by a UC Volume that indexes all domains, their versions, and status
 - **🔄 Scheduled Refresh**: Background scheduler keeps the registry cache up-to-date on a configurable interval
-- **🔗 Entity URI Resolution**: `/resolve` endpoint resolves entity URIs to the correct domain and redirects into the knowledge graph
+- **🔗 Entity URI Resolution**: `/resolve` endpoint resolves entity URIs to the correct domain and redirects into the graph viewer
 - **✅ Active (API/MCP) version**: In **Registry → Browse**, expand a domain and use **Set as Active** on a version row — this is the only UI for changing which version tools and MCP see; **Domain → Versions** shows the result as a read-only badge
 
 ### Navigation & UI
 - **📋 Centralized Menu Configuration**: Top navbar and sidebar menus are driven from a single JSON config (`menu_config.json`)
-- **🔔 Unified Status Indicators**: Ontology, Mapping, and Digital Twin navbar indicators refresh simultaneously via a centralized function
+- **🔔 Unified Status Indicators**: Ontology, Mapping, and Knowledge Graph navbar indicators refresh simultaneously via a centralized function
 - **🏷️ Smart Defaults**: Ontology name defaults to the domain name; version displayed in the top navbar
 - **🔁 Navbar domain label**: Domain name and version in the navbar invalidate cached consolidated state after domain lifecycle actions so labels stay in sync with the session
 
@@ -226,16 +226,16 @@ MLFLOW_TRACKING_URI=databricks
 
 ## Automated Pipeline: From Tables to Triple Store in 4 Clicks
 
-OntoBricks can automatically build a complete knowledge graph from your Databricks tables using LLM-powered automation:
+OntoBricks can automatically build a complete graph viewer from your Databricks tables using LLM-powered automation:
 
 | Step | Action | What Happens |
 |------|--------|--------------|
 | **1** | **Import Metadata** (Domain > Metadata) | Fetches table and column metadata from Unity Catalog |
 | **2** | **Generate Ontology** (Ontology > Wizard) | LLM designs entities, relationships, and attributes from your metadata |
 | **3** | **Auto-Map** (Mapping > Auto-Map) | LLM generates SQL mappings for every entity and relationship |
-| **4** | **Synchronize** (Digital Twin > Status) | Executes mappings and populates the triple store table |
+| **4** | **Synchronize** (Knowledge Graph > Status) | Executes mappings and populates the triple store table |
 
-After a one-time configuration (Databricks connection, LLM endpoint, triple store table), the entire process from raw tables to a queryable knowledge graph is fully automated.
+After a one-time configuration (Databricks connection, LLM endpoint, triple store table), the entire process from raw tables to a queryable graph viewer is fully automated.
 
 See the **[Automated triple-store pipeline](docs/user-guide.md#automated-triple-store-pipeline-merged)** section in the user guide for detailed steps, tips, and the REST API equivalent.
 
@@ -298,16 +298,16 @@ Domains **never** store:
 - Authentication tokens or passwords
 - Query results
 
-### 3. 🔍 Digital Twin
+### 3. 🔍 Knowledge Graph
 
-Synchronize, validate, and explore your knowledge graph:
+Synchronize, validate, and explore your graph viewer:
 
-- **Build** your Digital Twin — creates a Triple-Store VIEW in Unity Catalog and mirrors the triples into the active Graph DB engine (Lakebase Postgres)
+- **Build** your Knowledge Graph — creates a Triple-Store VIEW in Unity Catalog and mirrors the triples into the active Graph DB engine (Lakebase Postgres)
 - **Readiness Status** validates ontology, entity mappings, relationship mappings, and attribute completeness before sync
 - **Quality Checks** run asynchronously with progress tracking; validate cardinality, value constraints, property characteristics, and global rules
-- **Interactive Knowledge Graph**: Explore entities and relationships as a sigma.js WebGL graph — search, filter, click entities to see all attributes and values
-- **View Ontology**: Open a frozen, read-only D3.js ontology model from the Knowledge Graph or GraphQL section to see the full ontology structure while exploring data
-- **GraphQL Playground**: Embedded GraphiQL IDE to query the knowledge graph with the auto-generated typed schema — auto-complete, docs explorer, and live results
+- **Interactive Graph Viewer**: Explore entities and relationships as a sigma.js WebGL graph — search, filter, click entities to see all attributes and values
+- **View Ontology**: Open a frozen, read-only D3.js ontology model from the Graph Viewer or GraphQL section to see the full ontology structure while exploring data
+- **GraphQL Playground**: Embedded GraphiQL IDE to query the graph viewer with the auto-generated typed schema — auto-complete, docs explorer, and live results
 - **API Documentation**: Built-in REST API reference with schema introspection for programmatic access
 
 ## Architecture
@@ -332,7 +332,7 @@ src/
 │
 ├── back/                        # Core domain, objects, GraphQL (Strawberry)
 │   ├── core/                    # Databricks, W3C, triplestore, reasoning, graph_analysis, registry helpers, …
-│   ├── objects/                 # Session, project, registry, digital twin models
+│   ├── objects/                 # Session, project, registry, graph viewer models
 │   └── fastapi/                 # GraphQL wiring with core services
 │
 ├── front/                       # HTML UI: routes, templates, static assets
@@ -489,7 +489,7 @@ The key insight behind OntoBricks is that you **don't need a separate graph data
 5. **SWRL rules** for domain-specific logic
 6. **Graph algorithms** (transitive closure, BFS, shortest path) via SQL recursive CTEs on both layers
 
-...OntoBricks delivers a **complete knowledge graph platform** that runs entirely on Databricks infrastructure.
+...OntoBricks delivers a **complete graph viewer platform** that runs entirely on Databricks infrastructure.
 
 ## Semantic Web Standards
 
@@ -497,7 +497,7 @@ OntoBricks leverages these W3C and semantic web standards:
 
 | Standard | Purpose in OntoBricks |
 |----------|----------------------|
-| **RDF** | Data model — all knowledge graph data is expressed as Subject-Predicate-Object triples |
+| **RDF** | Data model — all graph viewer data is expressed as Subject-Predicate-Object triples |
 | **OWL 2** | Ontology language — classes, properties, restrictions, axioms; serialized as Turtle |
 | **OWL 2 RL** | Reasoning profile — forward-chaining deductive closure via the `owlrl` library |
 | **RDFS** | Schema vocabulary — `subClassOf`, `domain`, `range`, `label` for class hierarchies |

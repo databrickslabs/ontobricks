@@ -1,10 +1,10 @@
 <!-- CSS: /static/query/css/query-sigmagraph.css -->
 <!-- JS: /static/query/js/query-sigmagraph.js -->
-<!-- Knowledge Graph Section -->
+<!-- Graph Viewer Section -->
 
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h4 class="mb-1"><i class="bi bi-layers-half me-2"></i>Knowledge Graph</h4>
+        <h4 class="mb-1"><i class="bi bi-layers-half me-2"></i>Graph Viewer</h4>
         <p class="text-muted mb-0 small">Interactive graph visualization<br>
             <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50 ob-version-badge">v{{ current_version }}</span> <span class="js-version-status-badge badge border bg-warning-subtle text-dark border-warning" style="font-size:0.6rem;">Draft</span><br>
             <i class="bi bi-diagram-3"></i> Graph DB: <code id="sgGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
@@ -58,6 +58,10 @@
                 <i class="bi bi-arrows-fullscreen"></i>
             </button>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
+            <i class="bi bi-chat-dots"></i>
+        </button>
     </div>
 </div>
 <div class="visualization-layout" id="sgLayout">
@@ -297,7 +301,7 @@
                     <div class="tab-pane fade sg-tab-pane" id="sgTabFilterPane" role="tabpanel">
                         <div class="sg-tab-inner p-3">
                             <span class="small fw-semibold"><i class="bi bi-funnel"></i> Filter Graph</span>
-                            <p class="text-muted small mt-1 mb-2">Search and filter entities from the knowledge graph.</p>
+                            <p class="text-muted small mt-1 mb-2">Search and filter entities from the graph viewer.</p>
                             <label class="form-label small mb-1" for="sgFilterMatchType">Match</label>
                             <select class="form-select form-select-sm mb-2" id="sgFilterMatchType">
                                 <option value="contains">Contains</option>

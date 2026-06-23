@@ -19,7 +19,7 @@ For the developer guide on *adding a new engine*, see `docs/graphdb-integration.
 6. [Postgres schema layout](#6-postgres-schema-layout)
 7. [Scripts reference](#7-scripts-reference)
 8. [Permissions bootstrap](#8-permissions-bootstrap)
-9. [Digital Twin build — step by step](#9-digital-twin-build--step-by-step)
+9. [Knowledge Graph build — step by step](#9-digital-twin-build--step-by-step)
 10. [Troubleshooting](#10-troubleshooting)
 
 ---
@@ -104,7 +104,7 @@ Lakebase has **two project-creation APIs** with different capabilities:
 
 The **Databricks UI "New project" button** calls the new API and produces a project
 that is **incompatible** with `POST /api/2.0/database/synced_tables` (used by the
-Digital Twin `managed_synced` build mode). Always use `scripts/setup-lakebase.sh`
+Knowledge Graph `managed_synced` build mode). Always use `scripts/setup-lakebase.sh`
 to provision the project.
 
 ---
@@ -146,7 +146,7 @@ two scripts by hand. In **Settings → Lakebase → Connection** tab there is a
 compute capacity, branch, Postgres database, graph schema, and the MCP app
 name, then click **Create graph DB**. The action runs as an async job (a
 progress bar + per-step log update live, polling `GET /tasks/{id}` like a
-Digital Twin build) and performs the same flow as
+Knowledge Graph build) and performs the same flow as
 `scripts/setup-lakebase.sh` + `scripts/bootstrap-lakebase-perms.sh`:
 
 1. Create the Lakebase instance (via the synced-tables-compatible
@@ -335,7 +335,7 @@ OntoBricks uses up to three Postgres schemas in the same Lakebase project:
 | Schema | Default name | Created by | Purpose |
 |--------|-------------|-----------|---------|
 | Registry | `ontobricks_registry` | `Settings → Registry → Initialize` | Project metadata, domain configs, schedule runs |
-| Graph DB | `ontobricks_graph` | First Digital Twin Build | Per-domain triple tables (and views in `managed_synced`) |
+| Graph DB | `ontobricks_graph` | First Knowledge Graph Build | Per-domain triple tables (and views in `managed_synced`) |
 | Sync | *(UC registry schema segment)* | First Lakeflow snapshot | Auto-created by Lakeflow; mirrors the UC `<schema>` segment |
 
 ### 6.2 — Objects per graph version
@@ -456,7 +456,7 @@ Step 2:  Open app → Settings → Registry → Initialize
          → Creates 'ontobricks_registry' schema in Postgres
 Step 3:  make bootstrap-lakebase  (or make deploy again — idempotent)
          → Applies USAGE + DML on 'ontobricks_registry' schema
-Step 4:  Build a Digital Twin (Settings → Digital Twin → Build)
+Step 4:  Build a Knowledge Graph (Settings → Knowledge Graph → Build)
          → Creates 'ontobricks_graph' schema (first build)
 Step 5:  make bootstrap-lakebase  (or make deploy again)
          → Applies USAGE + DML on 'ontobricks_graph' schema
@@ -488,7 +488,7 @@ databricks permissions get database-instances/<instance-id> -o json
 
 ---
 
-## 9. Digital Twin build — step by step
+## 9. Knowledge Graph build — step by step
 
 This section describes what the Lakebase engine does during a **Build** for the
 `managed_synced` mode. For `app_managed`, steps 3–6 are replaced by direct
@@ -635,6 +635,25 @@ and the project+branch pair. This means `lakebase_project` or
 
 ---
 
+### Build uses `app_managed` even though `managed_synced` is configured in Settings
+
+**Symptom:** The build log shows `sync_mode=app_managed` and iterates triples
+through the app process. The Settings → Graph DB page correctly displays the
+saved config with `"sync_mode": "managed_synced"`.
+
+**Cause (fixed in v0.6.0):** On cold start, if the Lakebase store was briefly
+unavailable (typical the first few seconds after the app container started), the
+`GlobalConfigService` in-memory cache was populated with the empty template
+(`_empty()`). Subsequent reads within the 5-minute cache TTL returned the empty
+config, so the build resolved `sync_mode` as missing and silently fell back to
+`app_managed`. The Settings page was not affected because it always forces a
+fresh read.
+
+**Fix:** Upgrade to v0.6.0 — `_resolve_lakebase_mode` now bypasses the cache
+via `force=True`.  No configuration change needed; simply redeploy.
+
+---
+
 ### Settings → Graph DB: catalog list is empty
 
 The UC catalog dropdown uses the configured SQL Warehouse. If the warehouse is not
@@ -674,6 +693,6 @@ instead of `window.confirm()`. If you see this on an older deployment,
 [ ] 8. Open Settings → Graph DB
         - Engine: lakebase
         - Config: { "sync_mode": "app_managed" }  (or "managed_synced")
-[ ] 9. Build your first Digital Twin
+[ ] 9. Build your first Knowledge Graph
 [ ] 10. make bootstrap-lakebase again (grants on ontobricks_graph schema)
 ```

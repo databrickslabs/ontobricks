@@ -1,6 +1,6 @@
 # Getting Started with OntoBricks
 
-By the end of this guide you will have OntoBricks running locally and connected to your Databricks workspace, ready to design your first ontology and explore a knowledge graph.
+By the end of this guide you will have OntoBricks running locally and connected to your Databricks workspace, ready to design your first ontology and explore a graph viewer.
 
 ## Prerequisites
 
@@ -306,12 +306,12 @@ Alternatively, use the traditional form interface:
 
 4. Click **Validate** (in navbar) to verify all mappings are complete
 
-### 6. Explore Your Data (Digital Twin)
+### 6. Explore Your Data (Knowledge Graph)
 
-1. Go to the **Digital Twin** page
+1. Go to the **Knowledge Graph** page
 2. Click **Synchronize** to generate triples from your mappings and write them to the configured Unity Catalog table
 3. Once synced, browse the **Triples** tab to see the generated data in a sortable grid
-4. Explore the **Knowledge Graph** tab for an interactive graph:
+4. Explore the **Graph Viewer** tab for an interactive graph:
    - Click on entities to see details in the right panel
    - Use **Find** to search for specific entities
    - Use **Filters** to narrow down by entity type, field, or depth
@@ -319,7 +319,7 @@ Alternatively, use the traditional form interface:
 5. Run **Quality** checks to validate your data against ontology constraints
 6. Run **Data Quality** (SHACL) checks from the **Data Quality** sidebar section — validates cardinality, datatypes, patterns, and custom SPARQL rules against the triple store
 7. Run **Reasoning** from the **Reasoning** sidebar section — executes OWL 2 RL inference and SWRL business rules to discover inferred triples
-8. Access the **GraphQL** playground to query your knowledge graph with auto-generated typed queries
+8. Access the **GraphQL** playground to query your graph viewer with auto-generated typed queries
 
 ## Common Commands
 
@@ -355,7 +355,7 @@ The OntoBricks interface has a navigation bar with status indicators:
 | **SQL Warehouse** | Dropdown to select/switch SQL warehouses |
 | **Ontology** | Shows ✓ (green) when ontology is loaded, ✗ (red) otherwise |
 | **Mapping** | Shows ✓ (green) when R2RML mapping exists, ✗ (red) otherwise |
-| **Digital Twin** | Access the sync, knowledge graph, and quality checks interface |
+| **Knowledge Graph** | Access the sync, graph viewer, and quality checks interface |
 | **Settings** | Manage Databricks connection and settings |
 
 ## Ontology Sidebar Navigation
@@ -412,7 +412,7 @@ rm -rf .venv
 scripts/setup.sh
 ```
 
-### Sync or Knowledge Graph Fails
+### Sync or Graph Viewer Fails
 
 - Ensure both Ontology and Mapping have green checkmarks in the navbar
 - Check that the R2RML mapping is generated (visible in Domain → Export)

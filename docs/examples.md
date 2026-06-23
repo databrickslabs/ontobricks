@@ -1,6 +1,6 @@
 # Examples
 
-These walkthroughs take you from raw tables to an explorable knowledge graph. Each one can be completed in 15–30 minutes.
+These walkthroughs take you from raw tables to an explorable graph viewer. Each one can be completed in 15–30 minutes.
 
 | Example | Difficulty | What you'll learn |
 |---------|-----------|-------------------|
@@ -13,7 +13,7 @@ These walkthroughs take you from raw tables to an explorable knowledge graph. Ea
 
 ### What you'll build
 
-A knowledge graph of family relationships (parent–child links) starting from a single CSV table. By the end you will have an OWL ontology, an R2RML mapping, and a navigable graph in the Digital Twin view.
+A graph viewer of family relationships (parent–child links) starting from a single CSV table. By the end you will have an OWL ontology, an R2RML mapping, and a navigable graph in the Knowledge Graph view.
 
 ### Dataset
 
@@ -274,7 +274,7 @@ ex:person/p7 a family:Person ;
 
 ### SPARQL Queries (External API)
 
-The following SPARQL queries can be executed programmatically via the external REST API (`/api/v1/query`). In the OntoBricks UI, triple store data is explored visually through the Digital Twin section without writing queries manually:
+The following SPARQL queries can be executed programmatically via the external REST API (`/api/v1/query`). In the OntoBricks UI, triple store data is explored visually through the Knowledge Graph section without writing queries manually:
 
 #### Query 1: Find all people
 
@@ -390,7 +390,7 @@ This example demonstrated:
 - Creating class mappings for ontology classes
 - Defining relationship mappings for object properties
 - Generating W3C-compliant R2RML
-- Exploring the resulting knowledge graph through the Digital Twin Knowledge Graph
+- Exploring the resulting graph viewer through the Knowledge Graph Graph Viewer
 
 The same approach can be applied to any relational database schema and target ontology.
 
@@ -401,7 +401,7 @@ The same approach can be applied to any relational database schema and target on
 
 ### What you'll build
 
-A full customer-journey knowledge graph for an energy provider — 10 interconnected tables covering customers, contracts, meters, readings, invoices, payments, calls, claims, and interactions. This example exercises the visual Designer, entity and relationship mapping, and the Knowledge Graph explorer.
+A full customer-journey graph viewer for an energy provider — 10 interconnected tables covering customers, contracts, meters, readings, invoices, payments, calls, claims, and interactions. This example exercises the visual Designer, entity and relationship mapping, and the Graph Viewer explorer.
 
 ### Dataset
 
@@ -587,9 +587,9 @@ FROM your_catalog.your_schema.meter
 
 ---
 
-### Step 3: Explore the Data (Digital Twin)
+### Step 3: Explore the Data (Knowledge Graph)
 
-In the OntoBricks UI, navigate to the **Digital Twin** page and click **Synchronize** to generate triples, then explore the knowledge graph visually. The SPARQL queries below illustrate the underlying data model and can be used via the external REST API (`/api/v1/query`).
+In the OntoBricks UI, navigate to the **Knowledge Graph** page and click **Synchronize** to generate triples, then explore the graph viewer visually. The SPARQL queries below illustrate the underlying data model and can be used via the external REST API (`/api/v1/query`).
 
 #### Example Queries (External API)
 
@@ -645,9 +645,9 @@ GROUP BY ?customer ?name ?segment
 
 ---
 
-### Knowledge Graph
+### Graph Viewer
 
-After synchronization, switch to the **Knowledge Graph** tab to see an interactive graph:
+After synchronization, switch to the **Graph Viewer** tab to see an interactive graph:
 
 - **Nodes**: Represent entities (Customer, Contract, Meter, etc.) with emoji icons
 - **Edges**: Represent relationships (hasContract, hasMeter, etc.)

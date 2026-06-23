@@ -1,5 +1,5 @@
 /**
- * Digital Twin API documentation page logic.
+ * Knowledge Graph API documentation page logic.
  *
  * - Detects the base URL from the current window location
  * - Wires the "Try it" buttons to fetch live data from GET endpoints

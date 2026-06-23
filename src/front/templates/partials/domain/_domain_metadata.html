@@ -13,6 +13,10 @@
         <button type="button" class="btn btn-sm btn-outline-primary" id="loadMetadataBtn" data-meta-action="show-load-modal">
             <i class="bi bi-download me-1"></i> Add Data Source
         </button>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the domain discussion" onclick="openDomainDiscussion()">
+            <i class="bi bi-chat-dots"></i>
+        </button>
     </div>
 </div>
 <div class="card">
@@ -27,6 +31,9 @@
         <div id="metadataStatus" class="alert alert-secondary mb-4">
             <span id="metadataStatusText">No data sources loaded</span>
         </div>
+
+        <!-- Description quality warning (rendered dynamically by checkMetadataQuality) -->
+        <div id="metadataDescriptionWarning" style="display:none;" class="mb-4"></div>
         
         <div class="mb-3">
             <span class="text-muted small" id="metadataInitStatus"></span>

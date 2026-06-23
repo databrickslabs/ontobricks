@@ -152,7 +152,11 @@ class ReviewService:
             # Newest activity first; versions never reviewed (no activity)
             # sort to the bottom.
             tasks.sort(key=lambda t: t["last_activity"] or "", reverse=True)
-            return {"success": True, "tasks": tasks}
+            return {
+                "success": True,
+                "tasks": tasks,
+                "assigned_tasks": ReviewService._assigned_tasks(svc, email),
+            }
         except OntoBricksError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -213,7 +217,7 @@ class ReviewService:
                         ""
                         if last_build
                         else "This version has never been built. "
-                        "Run a Digital Twin build first."
+                        "Run a Knowledge Graph build first."
                     ),
                     "can_approve": (
                         status == STATUS_IN_REVIEW and is_member and not already
@@ -350,7 +354,7 @@ class ReviewService:
         if not last_build:
             raise ValidationError(
                 "Cannot submit for review: this version has never been "
-                "built. Run a Digital Twin build first."
+                "built. Run a Knowledge Graph build first."
             )
 
         ReviewService._set_status(
@@ -647,6 +651,26 @@ class ReviewService:
         transition, including publishing regardless of the sign-off quorum.
         """
         return user_role == ROLE_ADMIN or user_domain_role == ROLE_ADMIN
+
+    @staticmethod
+    def _assigned_tasks(svc, email: str) -> List[Dict[str, Any]]:
+        """Open / in-progress collaborative tasks assigned to *email*.
+
+        Best-effort: the worklist must still render review actions even if
+        the tasks backend is mid-migration or unavailable.
+        """
+        if not email:
+            return []
+        try:
+            rows = svc.list_tasks_for_assignee(email)
+            return [
+                r
+                for r in rows
+                if (r.get("status") or "").lower() in ("open", "in_progress")
+            ]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("_assigned_tasks(%s) failed: %s", email, exc)
+            return []
 
     @staticmethod
     def _group_events(

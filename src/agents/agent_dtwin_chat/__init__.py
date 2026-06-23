@@ -1,5 +1,5 @@
 """
-Graph Chat Agent -- conversational agent for querying a Digital Twin
+Graph Chat Agent -- conversational agent for querying a Knowledge Graph
 knowledge graph via natural language.
 
 Exports:

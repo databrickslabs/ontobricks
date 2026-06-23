@@ -1,0 +1,400 @@
+# Per-Attribute Include/Exclude in Mapping Designer
+
+## Context
+Users needed the ability to intentionally exclude specific ontology attributes from the mapping,
+rather than having all unmapped attributes flagged as gaps. This adds a checkbox per attribute in
+the Designer bottom pane (Status tab, Attributes table) — checked = included (default),
+unchecked = excluded from mapping, validation and gap reporting.
+
+## Changes
+
+1. **`src/front/static/mapping/js/mapping-design.js`**
+   - Added `excludedAttributes: []` field to `EntityPanelState` and `RelPanelState`
+   - `initEntityPanel()` / `initRelationshipPanel()`: initialise `excludedAttributes` from
+     `existingMapping.excluded_attributes` on panel open
+   - `epOntologyRows` / `rpOntologyRows`: replaced static index+icon rows with checkbox rows
+     (`ep-attr-include-cb` / `rp-attr-include-cb`); excluded attributes render with
+     strikethrough and a dash icon
+   - Updated table headers: `#` column replaced with a `bi-check2-square` icon column
+   - `initEntityPanel()` / `initRelationshipPanel()`: added `change` event listeners on
+     per-attribute checkboxes; unchecking also removes the attribute from `attributeMappings`
+     and updates the row DOM in place (no full re-render)
+   - `saveEntityPanelMapping()` / `saveRelPanelMapping()`: filters excluded attributes out of
+     `attribute_mappings` before saving, and writes `excluded_attributes` array into the
+     mapping object when non-empty
+
+2. **`src/back/objects/mapping/Mapping.py`**
+   - `build_entity_mapping()`: propagates `excluded_attributes` list when present in input data
+   - `build_relationship_mapping()`: same
+   - `compute_mapping_gaps()`: attributes listed in `excluded_attributes` are no longer reported
+     as unmapped gaps
+
+## Modified Files
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/back/objects/mapping/Mapping.py`
+
+## Test Results
+- 132 mapping-specific tests: all passed
+- Full unit suite (excluding e2e / property tests requiring optional deps): 2573 passed, 5 pre-existing failures (Lakebase/psycopg not installed), 57 skipped
+
+---
+
+# Bug Fix: Attribute Exclusion State Not Persisted
+
+## Context
+When a user toggled an attribute's include/exclude checkbox in the Designer Status tab, the change
+was stored only in the transient `EntityPanelState` / `RelPanelState`. If the panel was closed
+(or the user switched to another entity) without clicking "Save", the checkbox state was lost and
+reverted to the last persisted value on next open.
+
+## Changes
+
+1. **`src/front/static/mapping/js/mapping-design.js`**
+   - Added `_syncEntityAttrExclusions(classUri)` helper: writes
+     `EntityPanelState.excludedAttributes` directly into the matching entry of
+     `MappingState.config.entities` (creating a lightweight stub if no full mapping exists yet)
+     and calls `autoSaveMappings()`.
+   - Added `_syncRelAttrExclusions(propertyUri)` helper: same for relationships, using
+     `MappingState.config.relationships`.
+   - `initEntityPanel()` checkbox handler: calls `_syncEntityAttrExclusions(classUri)` after
+     every toggle so the state is immediately reflected in the global config and persisted to the
+     backend session.
+   - `initRelationshipPanel()` checkbox handler: calls `_syncRelAttrExclusions(ontologyProperty.uri)`
+     on every toggle.
+   - `initRelationshipPanel()`: stores `ontologyProperty.uri` into `RelPanelState.propertyUri` so
+     the auto-exclude button can reference it outside the closure.
+   - `autoExcludeUnmappedEntityAttrs()`: calls `_syncEntityAttrExclusions(classUri)` after
+     bulk-excluding unmapped attributes.
+   - `autoExcludeUnmappedRelAttrs()`: calls `_syncRelAttrExclusions(RelPanelState.propertyUri)`
+     after bulk-excluding unmapped attributes.
+
+## Modified Files
+- `src/front/static/mapping/js/mapping-design.js`
+
+## Test Results
+- Full unit suite (excluding e2e / property tests requiring optional deps): 2141 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped
+
+---
+
+# Bug Fix: Column Assignments in Mapping Tab Not Persisted + Mapping Tab Disable State
+
+## Context
+Two issues in the Designer bottom pane Mapping tab:
+1. Column assignments (ID / Label / Attribute → column) made via the dropdown in the Mapping
+   tab were lost if the user closed the panel without clicking Save, because they only lived in
+   `EntityPanelState` / `RelPanelState` and were never written back to `MappingState.config`.
+2. The Mapping tab button was only disabled when there was no `existingMapping` object at all —
+   it remained enabled for mappings that had an empty `sql_query` (e.g. stub entries).
+
+## Changes
+
+1. **`src/front/static/mapping/js/mapping-design.js`**
+   - Added `_syncEntityColAssignments()` helper: reads `idColumn`, `labelColumn`,
+     `attributeMappings` (filtered for excluded attrs) from `EntityPanelState` and writes
+     them into the existing `MappingState.config.entities` entry, then calls
+     `autoSaveMappings()`. No-op when no existing entry is found.
+   - Added `_syncRelColAssignments()` helper: same for relationships, using
+     `RelPanelState.propertyUri`.
+   - `showEntityColumnMenu()` dropdown click handler: calls `_syncEntityColAssignments()`
+     after every column role assignment (ID / Label / Attribute / Clear).
+   - `showRelColumnMenu()` dropdown click handler: calls `_syncRelColAssignments()` after
+     every column role assignment.
+   - `runEntityPanelQuery()`: calls `_syncEntityColAssignments()` after
+     `autoMapEntityColumns()` + `renderEntityPanelGrid()` so auto-mapped columns are
+     immediately persisted.
+   - `runRelPanelQuery()`: same with `_syncRelColAssignments()`.
+   - Entity Mapping tab button: changed disabled condition from `!existingMapping` to
+     `!existingMapping?.sql_query` so the tab is disabled whenever there is no SQL query,
+     regardless of whether a partial mapping object exists.
+   - Relationship Mapping tab button: same fix.
+
+## Modified Files
+- `src/front/static/mapping/js/mapping-design.js`
+
+## Test Results
+- No new tests added (UI-only change).
+- Full unit suite (excluding e2e / property tests requiring optional deps): 2141 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped
+
+---
+
+# Fix: Save Button Always Available for Mapped Entities (Replaces Auto-Save)
+
+## Context
+Auto-save on checkbox/column-assignment changes was not working: changes were lost on page
+refresh. The root cause was that `savePanelBtn` is disabled by default and only re-enabled by
+`renderEntityPanelGrid()` (called only when the Mapping tab is opened and query run). A user
+staying on the Status tab to toggle attribute exclusions could never save. Separately, if the
+auto-load query returned different columns than saved, idColumn was reset to null and the Save
+button was permanently disabled.
+
+The approach is changed to: remove all auto-save calls, make the Save button always available
+for entities/relationships that already have a saved mapping.
+
+## Changes
+
+1. **`src/front/static/mapping/js/mapping-design.js`**
+   - Removed all `_syncEntityAttrExclusions`, `_syncRelAttrExclusions`,
+     `_syncEntityColAssignments`, `_syncRelColAssignments` calls from event handlers
+     (checkbox change, column dropdown click, autoMap, auto-exclude buttons).
+   - `updateEntityPanelSaveBtn()`: now looks up the existing config entry by `panelEntityClass`
+     and uses `existingInConfig?.id_column` as a fallback when `EntityPanelState.idColumn`
+     is null (e.g. after auto-load with mismatched columns). Shows a warning status message
+     instead of disabling Save.
+   - `updateRelPanelSaveBtn()`: same fallback using `RelPanelState.propertyUri` and
+     `existingInConfig?.source_id_column` / `target_id_column`.
+   - `saveEntityPanelMapping()`: uses `effectiveSql` and `effectiveIdCol` (with fallback to
+     existing config values) so the save works when the user only changed attribute exclusions
+     on the Status tab without touching the Mapping tab. Also preserves existing `excluded`
+     flag from config.
+   - `saveRelPanelMapping()`: same fallbacks for `effectiveSql`, `effectiveSrc`, `effectiveTgt`.
+   - Auto-exclude button notifications updated to say "click Save to persist".
+
+## Modified Files
+- `src/front/static/mapping/js/mapping-design.js`
+
+## Test Results
+- Full unit suite (excluding e2e / property tests requiring optional deps): 2141 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped
+
+---
+
+# Fix: Allow Saving Attribute Exclusions Without a Full Mapping
+
+## Context
+When an entity has no SQL mapping yet, the Save button showed "SQL + ID column required"
+and blocked saving. The user needs to be able to set attribute exclusion preferences
+(include/exclude checkboxes in Status tab) before the SQL is configured.
+
+The backend already skips stubs with empty `sql_query` in R2RML generation, gap computation,
+and validation (`if m.get("sql_query")`), so lightweight stub entries are safe.
+
+## Changes
+
+1. **`src/front/static/mapping/js/mapping-design.js`**
+   - `saveEntityPanelMapping()`: when `effectiveSql` or `effectiveIdCol` is empty, saves
+     only `excluded_attributes` without showing a warning. Updates the existing config entry
+     if one exists; otherwise creates a lightweight stub
+     `{ ontology_class, ontology_class_label, sql_query: '', excluded_attributes: [...] }`.
+     Shows "Attribute selections saved" notification, closes panel, refreshes canvas.
+   - `saveRelPanelMapping()`: same pattern for relationship panels.
+   - `updateEntityPanelSaveBtn()` / `updateRelPanelSaveBtn()`: Save button is now always
+     enabled (never disabled by these functions, except for inactive-version mode).
+     Status line shows informational text when no ID column is configured.
+   - Removed `saveBtn.disabled = true` on panel open (was overriding the always-enabled logic).
+   - Removed `disabled` attribute from `savePanelBtn` in HTML template.
+
+2. **`src/front/templates/partials/mapping/_mapping_design.html`**
+   - Removed `disabled` from `savePanelBtn` button element.
+
+## Modified Files
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+
+## Test Results
+- Full unit suite (excluding e2e / property tests requiring optional deps): 2141 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped
+
+---
+
+# Bug Fix: Auto-Map Overwrites User Attribute Exclusions
+
+## Context
+When the auto-mapping agent ran for an entity that already had user-excluded attributes
+(saved in `excluded_attributes`), it would:
+1. Re-include excluded attributes in the generated `attribute_mappings` (since it reads from
+   the ontology's declared attributes without checking exclusions).
+2. Drop the `excluded_attributes` field entirely when replacing the existing mapping entry
+   in `ctx.entity_mappings`.
+
+The result: excluded attributes were silently re-mapped and their exclusion state was lost.
+
+## Changes
+
+1. **`src/agents/tools/mapping.py`**
+   - `tool_submit_entity_mapping()`: now reads the existing mapping's `excluded_attributes`
+     before building the new mapping. Applies a second filter on `filtered_mappings` to
+     remove any agent-assigned mappings for user-excluded attributes. Copies
+     `excluded_attributes` into the new mapping dict so the field survives the update.
+   - `tool_submit_relationship_mapping()`: same — preserves `excluded_attributes` from the
+     existing relationship mapping when updating.
+
+2. **`src/agents/tools/ontology.py`**
+   - `tool_get_ontology()`: before returning an entity's `attributes` list to the agent,
+     strips out any attributes that appear in the existing mapping's `excluded_attributes`.
+     This prevents the agent from even seeing excluded attributes, providing defence-in-depth.
+
+## Modified Files
+- `src/agents/tools/mapping.py`
+- `src/agents/tools/ontology.py`
+
+## Test Results
+- Full unit suite (excluding e2e / property tests requiring optional deps): 2141 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped
+
+---
+
+# Bug Fix: Unmap Clears Attribute Exclusions + Auto-Map Result Drops excluded_attributes
+
+## Context
+Two related issues caused attribute exclusion state to be lost silently:
+
+1. **Unmap action** — right-clicking an entity on the canvas and choosing "Unmap" called
+   `MappingState.config.entities.splice(existingIndex, 1)`, which deleted the entire entry
+   including any `excluded_attributes`. After an Unmap + re-map cycle the exclusion state
+   appeared reset.
+
+2. **Auto-map result** — `_saveEntityAgentResult()` / `_saveRelAgentResult()` constructed a
+   new mapping object from the agent result without carrying forward `excluded_attributes`.
+   Even though `tool_submit_entity_mapping` now preserves `excluded_attributes` in the backend
+   `ctx.entity_mappings`, the frontend silently dropped it when writing back to
+   `MappingState.config`.
+
+   Additionally `_buildAgentEntityItem()` sent the full attribute list to the single-entity
+   auto-map endpoint — user-excluded attributes were visible to the agent.
+
+## Changes
+
+1. **`src/front/static/mapping/js/mapping-design.js`**
+   - `contextMenuUnassignEntity()`: instead of always splicing the entry, checks if
+     `excluded_attributes` is non-empty. If so, replaces the entry with a lightweight stub
+     `{ ontology_class, ontology_class_label, sql_query: '', excluded_attributes: [...] }`,
+     preserving exclusion state across an Unmap + re-map cycle.
+   - `contextMenuUnassignRelationship()`: same pattern for relationships.
+   - `_saveEntityAgentResult()`: reads `excluded_attributes` from the agent result (`m`),
+     falls back to `existingEntry.excluded_attributes` in `MappingState.config`, and writes
+     the field into the new mapping object when non-empty.
+   - `_saveRelAgentResult()`: same fallback for relationships.
+   - `_buildAgentEntityItem()`: filters out user-excluded attributes before building the item
+     payload sent to the single-entity auto-map endpoint, so the agent never sees them.
+
+## Modified Files
+- `src/front/static/mapping/js/mapping-design.js`
+
+## Test Results
+- Full unit suite (excluding e2e / property tests requiring optional deps): 2141 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped
+
+---
+
+# Bug Fix: Attribute KPI and Canvas Node Color Ignore Excluded Attributes
+
+## Context
+Two UI components used all `dataProperties` (including user-excluded ones) when computing
+attribute coverage, causing the gauge and node colour to show less than 100% even when every
+*included* attribute was mapped.
+
+- **Auto-Map page KPI** (`updateStatus`): `totalAttributes` was the raw count of all attributes.
+  With 1 excluded attribute out of 14, the gauge showed 13/14 ≈ 93 % instead of 13/13 = 100 %.
+- **Designer canvas node colour**: the `partial` (orange) status was set when any `dataProperty`
+  had no column assigned, even excluded ones.
+  
+Secondary issues in the same files:
+- `entitiesWithMissingAttrs` (drives the "Re-assign" button visibility) used excluded attrs.
+- `startPartial()` would queue entities for re-mapping because excluded attrs appeared missing.
+- `start()` and `startPartial()` sent the full attribute list to the backend, so the agent saw
+  excluded attributes again.
+
+## Changes
+
+1. **`src/front/static/mapping/js/mapping-autoassign.js`**
+   - `updateStatus()` / attribute loop: skip attributes present in `em.excluded_attributes`
+     before incrementing `totalAttributes` and `mappedAttributes`. The gauge denominator now
+     equals only included attributes.
+   - `entitiesWithMissingAttrs` filter: also skips excluded attributes when deciding whether
+     an entity has "missing" attributes (affects "Re-assign" button visibility).
+   - `startPartial()` entity filter: same fix — excluded attrs no longer trigger a re-map.
+   - `start()` entity builder: filters `excluded_attributes` out of the `attributes` array
+     before sending to `/mapping/auto-assign/start`.
+   - `startPartial()` entity builder: same filter.
+
+2. **`src/front/static/mapping/js/mapping-design.js`**
+   - Canvas node status logic: builds `includedProps` by filtering `dataProperties` against
+     `em.excluded_attributes`, then checks only `includedProps` for column completeness.
+     A fully-mapped entity with some excluded attributes now shows green instead of orange.
+
+## Modified Files
+- `src/front/static/mapping/js/mapping-autoassign.js`
+- `src/front/static/mapping/js/mapping-design.js`
+
+## Test Results
+- Full unit suite (excluding e2e / property tests requiring optional deps): 2141 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped
+
+---
+
+# Feature: Column Names with Spaces / Special Characters in SQL and R2RML
+
+## Context
+Column names in source tables (Databricks Delta / UC) may contain spaces, hyphens,
+dots or other characters that are invalid in plain SQL identifiers or R2RML column
+references. Without quoting, the generated SQL would be syntactically invalid and
+the R2RML `rr:column` / `rr:template` references would not resolve correctly.
+
+## Changes
+
+1. **`src/agents/agent_auto_assignment/engine.py`** — system prompt
+   - Added a new "COLUMN NAME QUOTING (CRITICAL)" section instructing the agent to:
+     - Wrap unsafe column names with backticks: `` `customer name` ``.
+     - Alias backtick-quoted columns to safe snake_case names:
+       `` `customer name` AS customer_name ``.
+     - Pass only the final output column name (the alias) as `id_column`,
+       `label_column`, and `attribute_mappings` keys to `submit_entity_mapping`.
+     - Never pass a column name with spaces as a mapping key.
+   - Added "Apply the same backtick-quoting rules" note to the relationship SQL rules.
+
+2. **`src/back/core/w3c/r2rml/R2RMLGenerator.py`**
+   - Added `_quote_column(col)` helper: wraps a column name in double-quotes (per
+     R2RML spec §7.4) when it is not a plain SQL identifier (`[A-Za-z_][A-Za-z0-9_]*`).
+     Already-quoted names and empty strings are returned unchanged.
+   - Applied `_quote_column` to every `rr:column` Literal (label and attribute
+     object maps) and every column reference inside `rr:template` curly-braces
+     (entity subject, relationship source/target subject).
+
+3. **`tests/units/mapping/test_r2rml_generator.py`**
+   - Added `TestQuoteColumn` class with 8 tests covering: plain identifiers, already-
+     quoted names, spaces, hyphens, dots, empty strings, end-to-end entity template
+     quoting, and end-to-end attribute-mapping column quoting.
+
+## Modified Files
+- `src/agents/agent_auto_assignment/engine.py`
+- `src/back/core/w3c/r2rml/R2RMLGenerator.py`
+- `tests/units/mapping/test_r2rml_generator.py`
+
+## Test Results
+- R2RML generator tests: 20 passed (8 new)
+- Full mapping suite: 139 passed, 1 skipped
+- Full unit suite (excluding e2e / property tests): 2141 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped
+
+---
+
+# Tests: Attribute Include/Exclude Coverage
+
+## Context
+No unit tests existed for the per-attribute exclusion feature that spans
+the model layer, gap reporting, R2RML export, and all three agent tools.
+
+## Changes
+
+1. **`tests/units/mapping/test_attribute_exclusion.py`** (new file — 33 tests)
+
+   | Class | Tests | What is verified |
+   |---|---|---|
+   | `TestBuildEntityMappingExcludedAttributes` | 5 | `excluded_attributes` propagated, empty list omitted, absent key omitted, copy isolation, coexists with `excluded` flag |
+   | `TestBuildRelationshipMappingExcludedAttributes` | 4 | Same for relationship mappings |
+   | `TestComputeMappingGapsExcludedAttributes` | 6 | Excluded attrs not in gap list; all excluded → no gaps; mapped+excluded → no gap; unmapped entity not checked |
+   | `TestR2RMLExcludedAttributes` | 3 | Included attr present in R2RML; absent attr_mapping → no predicate/column; end-to-end with excluded_attributes field |
+   | `TestToolSubmitEntityMappingExcludedAttributes` | 6 | No existing excl → field absent; existing excl preserved on re-map; agent mapping for excluded attr stripped; multiple exclusions; no attrs submitted; updates existing entry |
+   | `TestToolSubmitRelationshipMappingExcludedAttributes` | 3 | No excl → absent; excl preserved; updates existing entry |
+   | `TestToolGetOntologyExcludedAttributes` | 6 | All attrs visible; one excl hidden; multiple excl hidden; all excl → empty list; entity count unchanged; exclusion scoped to correct entity |
+
+## Modified Files
+- `tests/units/mapping/test_attribute_exclusion.py` (created)
+
+## Test Results
+- New suite: 33 passed
+- Full mapping suite: 172 passed, 1 skipped
+- Full unit suite (excluding e2e / property tests): 2174 passed,
+  1 pre-existing failure (Lakebase/psycopg not installed), 15 skipped

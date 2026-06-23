@@ -31,10 +31,26 @@ def tool_get_ontology(ctx: ToolContext, **_kwargs) -> str:
     entities = ontology.get("entities", [])
     relationships = ontology.get("relationships", [])
 
-    # Trim attributes per entity if too many
+    # Build a lookup of user-excluded attributes per entity URI from existing mappings.
+    excl_by_uri: dict = {}
+    for m in (ctx.entity_mappings or []):
+        excl = m.get("excluded_attributes") or []
+        if excl:
+            excl_by_uri[m.get("ontology_class", "")] = set(excl)
+
+    # Trim attributes per entity if too many, and strip user-excluded attributes.
     trimmed_entities: List[dict] = []
     for e in entities:
         attrs = e.get("attributes", [])
+        excluded = excl_by_uri.get(e.get("uri", ""), set())
+        if excluded:
+            before = len(attrs)
+            attrs = [a for a in attrs if a not in excluded]
+            logger.debug(
+                "tool_get_ontology: entity '%s' — stripped %d excluded attribute(s)",
+                e.get("name", "?"),
+                before - len(attrs),
+            )
         if len(attrs) > _MAX_ATTRIBUTES_PER_ENTITY:
             trimmed = attrs[:_MAX_ATTRIBUTES_PER_ENTITY]
             trimmed_entities.append(
@@ -51,7 +67,7 @@ def tool_get_ontology(ctx: ToolContext, **_kwargs) -> str:
                 len(trimmed),
             )
         else:
-            trimmed_entities.append(e)
+            trimmed_entities.append({**e, "attributes": attrs})
 
     logger.info(
         "tool_get_ontology: returning %d entities, %d relationships",

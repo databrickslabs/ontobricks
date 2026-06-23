@@ -262,12 +262,15 @@ class R2RMLGenerator:
         # Template for subject URI - ALWAYS use taxonomy base URI.
         # Shared with relationship mapping so subject/object URIs match.
         class_name = self._entity_uri_name(class_uri, class_label, table)
+        # Column references inside rr:template must also be quoted when the
+        # column name is not a plain SQL identifier.
+        id_col_ref = self._quote_column(id_column)
 
         g.add(
             (
                 subject_map,
                 self.rr.template,
-                Literal(f"{self.base_uri}{class_name}/{{{id_column}}}"),
+                Literal(f"{self.base_uri}{class_name}/{{{id_col_ref}}}"),
             )
         )
 
@@ -292,7 +295,7 @@ class R2RMLGenerator:
 
             obj_map = BNode()
             g.add((pom, self.rr.objectMap, obj_map))
-            g.add((obj_map, self.rr.column, Literal(label_column)))
+            g.add((obj_map, self.rr.column, Literal(self._quote_column(label_column))))
 
         # Ontology property-URI lookup for this class
         ont_props = (data_prop_uri_lookup or {}).get(class_uri, {})
@@ -322,7 +325,7 @@ class R2RMLGenerator:
 
                 obj_map = BNode()
                 g.add((pom, self.rr.objectMap, obj_map))
-                g.add((obj_map, self.rr.column, Literal(column_name)))
+                g.add((obj_map, self.rr.column, Literal(self._quote_column(column_name))))
                 g.add((obj_map, self.rr.datatype, XSD.string))  # Default to string
 
     def _add_relationship_mapping(
@@ -484,7 +487,7 @@ class R2RMLGenerator:
             (
                 subject_map,
                 self.rr.template,
-                Literal(f"{self.base_uri}{source_class_name}/{{{source_column}}}"),
+                Literal(f"{self.base_uri}{source_class_name}/{{{self._quote_column(source_column)}}}"),
             )
         )
 
@@ -527,7 +530,7 @@ class R2RMLGenerator:
             (
                 obj_map,
                 self.rr.template,
-                Literal(f"{self.base_uri}{target_class_name}/{{{target_column}}}"),
+                Literal(f"{self.base_uri}{target_class_name}/{{{self._quote_column(target_column)}}}"),
             )
         )
 
@@ -644,6 +647,23 @@ class R2RMLGenerator:
             table,
         )
         return "UnknownEntity"
+
+    def _quote_column(self, col: str) -> str:
+        """Return the column name always double-quoted per R2RML spec §7.4.
+
+        Double-quoting every column name is unconditionally safe and avoids
+        edge cases with reserved words, digit-leading names, or any future
+        column naming convention.
+
+        Already-quoted names (surrounded by double-quotes) are returned as-is.
+        Empty strings are returned unchanged.
+        """
+        if not col:
+            return col
+        if col.startswith('"') and col.endswith('"'):
+            return col
+        inner = col.replace('"', '""')  # escape any embedded double-quotes
+        return f'"{inner}"'
 
     def _sanitize_name(self, name: str) -> str:
         """Sanitize a name for use in URIs."""

@@ -61,7 +61,7 @@ class ScheduleHistoryEntry(TypedDict, total=False):
 class BuildRunEntry(TypedDict, total=False):
     """One row in a domain's build-run trace (``build_runs`` table).
 
-    Captures the full statistics of a single Digital Twin build,
+    Captures the full statistics of a single Knowledge Graph build,
     regardless of which path triggered it (``session`` / ``api`` /
     ``scheduled``). The grain is the tuple ``(folder, version)``; many
     entries per tuple are expected and the most recent successful one
@@ -110,6 +110,47 @@ class ReviewEvent(TypedDict, total=False):
     comment: str
     meta: Dict[str, Any]
     created_at: str          # ISO timestamp
+
+
+class DomainComment(TypedDict, total=False):
+    """One threaded comment on a DRAFT domain's discussion.
+
+    Discussions are domain-wide: every comment belongs to the single
+    per-(domain, version) thread. A non-empty ``parent_id`` makes the row a
+    reply in a thread. Rows are append-only and ordered by ``created_at``;
+    ``resolved`` flips a thread closed without deleting the history.
+    """
+
+    id: str                  # row id (UUID string; "" for stores without one)
+    folder: str              # domain folder (populated by reads)
+    version: str
+    parent_id: str           # thread parent comment id ("" for a root comment)
+    author: str              # acting user email
+    body: str
+    resolved: bool
+    created_at: str          # ISO timestamp
+
+
+class DomainTask(TypedDict, total=False):
+    """A personalised work item assigned to a teammate on a DRAFT domain.
+
+    Usually born from a comment (``comment_id``) turned into actionable
+    work, surfaced in the assignee's "My Tasks" worklist. ``status``
+    walks ``open -> in_progress -> done`` (or ``cancelled``).
+    """
+
+    id: str                  # row id (UUID string; "" for stores without one)
+    folder: str              # domain folder (populated by reads)
+    version: str
+    assignee: str            # email the work is assigned to
+    created_by: str          # email that created the task
+    title: str
+    description: str
+    status: str              # open|in_progress|done|cancelled
+    due_date: str            # ISO date ("" when unset)
+    comment_id: str          # originating comment id ("" when standalone)
+    created_at: str          # ISO timestamp
+    updated_at: str          # ISO timestamp
 
 
 class RegistryStore(ABC):
@@ -247,7 +288,7 @@ class RegistryStore(ABC):
     # ------------------------------------------------------------------
     # Build-run trace (analytics)
     #
-    # One immutable row per Digital Twin build — across every path
+    # One immutable row per Knowledge Graph build — across every path
     # (UI session / external API / scheduler). Linked to the domain
     # row; grain is the tuple ``(folder, version)``. Unlike
     # ``schedule_runs`` this is *not* capped — the whole point is a
@@ -260,6 +301,25 @@ class RegistryStore(ABC):
         """Append a build-run trace row for *folder*. Best-effort; must
         NOT raise (log + swallow on failure).
         """
+
+    def stamp_last_build(
+        self, folder: str, version: str, ts: str
+    ) -> Tuple[bool, str]:
+        """Lightweight update: write *ts* into ``domain_versions.last_build``
+        for ``(folder, version)`` without touching any other column.
+
+        Default implementation falls back to a full ``read_version`` +
+        ``write_version`` round-trip so that stores which do not override
+        this method still work correctly (at higher cost).
+
+        Returns ``(ok, message)``.
+        """
+        ok, data, msg = self.read_version(folder, version)
+        if not ok:
+            return False, f"stamp_last_build read failed: {msg}"
+        info = data.setdefault("info", {})
+        info["last_build"] = ts
+        return self.write_version(folder, version, data)
 
     @abstractmethod
     def load_build_runs(
@@ -346,6 +406,91 @@ class RegistryStore(ABC):
         """All review events across the registry, each enriched with its
         ``folder``. Oldest-first. Backs the cross-domain "My Tasks"
         worklist. Empty list on any error.
+        """
+
+    # ------------------------------------------------------------------
+    # Collaborative comments + tasks
+    #
+    # Contextual threaded comments anchored to a DRAFT domain (ontology
+    # class/property, mapping, graph node/edge, or the whole domain) and
+    # the personalised tasks they can spawn. Both are keyed by
+    # ``(folder, version)``. Writes return the created row (or ``None``
+    # on failure) so a comment can be turned into a task in one round
+    # trip; reads return oldest-first. All methods are best-effort and
+    # must NOT raise (log + swallow) — a UI surface should degrade
+    # gracefully when the backend is mid-migration.
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def insert_comment(
+        self,
+        folder: str,
+        version: str,
+        *,
+        author: str,
+        body: str,
+        parent_id: Optional[str] = None,
+    ) -> Optional[DomainComment]:
+        """Append a comment for ``(folder, version)``; return the created
+        row (with its id + timestamp) or ``None`` on failure.
+        """
+
+    @abstractmethod
+    def list_comments(
+        self,
+        folder: str,
+        version: Optional[str] = None,
+        *,
+        include_resolved: bool = True,
+    ) -> List[DomainComment]:
+        """Oldest-first comments for *folder*, optionally scoped to a
+        version. Empty list on any error.
+        """
+
+    @abstractmethod
+    def resolve_comment(
+        self, folder: str, comment_id: str, *, resolved: bool = True
+    ) -> Tuple[bool, str]:
+        """Flip a comment's ``resolved`` flag. ``(False, msg)`` when the
+        comment does not exist or on error.
+        """
+
+    @abstractmethod
+    def insert_task(
+        self,
+        folder: str,
+        version: str,
+        *,
+        assignee: str,
+        created_by: str,
+        title: str,
+        description: str = "",
+        due_date: Optional[str] = None,
+        comment_id: Optional[str] = None,
+    ) -> Optional[DomainTask]:
+        """Create a task for ``(folder, version)``; return the created row
+        or ``None`` on failure.
+        """
+
+    @abstractmethod
+    def list_tasks(
+        self, folder: str, version: Optional[str] = None
+    ) -> List[DomainTask]:
+        """Newest-first tasks for *folder* (optionally one *version*)."""
+
+    @abstractmethod
+    def list_tasks_for_assignee(self, assignee: str) -> List[DomainTask]:
+        """All tasks across the registry assigned to *assignee* (case-
+        insensitive), each enriched with its ``folder``. Newest-first.
+        Backs the assignee's "My Tasks" worklist.
+        """
+
+    @abstractmethod
+    def update_task_status(
+        self, folder: str, task_id: str, status: str
+    ) -> Tuple[bool, str]:
+        """Set a task's ``status``. ``(False, msg)`` when the task does
+        not exist or on error.
         """
 
     # ------------------------------------------------------------------

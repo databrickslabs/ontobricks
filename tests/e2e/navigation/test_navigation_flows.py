@@ -27,7 +27,7 @@ class TestNavigation:
             ("/ontology", "Ontology"),
             ("/mapping", "Mapping"),
             ("/domain", "Domain"),
-            ("/dtwin/", "Digital Twin"),
+            ("/dtwin/", "Knowledge Graph"),
             ("/about", "About"),
         ],
     )

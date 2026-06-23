@@ -9,7 +9,7 @@
  *   query-entity-details.js – Entity/relationship detail panel, mapping lookup
  *   query-dashboard.js      – Dashboard modal (URL builder, iframe)
  *   query-sync.js           – Triple store sync, readiness checks
- *   query-sigmagraph.js     – Sigma.js knowledge graph
+ *   query-sigmagraph.js     – Sigma.js graph viewer
  *   query-quality.js        – Quality checks
  *   query-api.js            – API documentation helpers
  *   query-graphql.js        – Embedded GraphiQL playground
@@ -59,6 +59,38 @@ let taxonomyIcons = {};
 
 // Track all relationship types for filtering
 let allRelationshipTypes = new Set();
+
+// =====================================================
+// DISCUSSION
+// =====================================================
+
+// Cache the ontology-derived tag vocabulary for the Knowledge Graph discussion.
+let _twinTaggable = null;
+
+/**
+ * Open the Knowledge Graph discussion. Anchors to the whole twin
+ * (domain/'digital-twin'); each comment can optionally be tagged with one or
+ * more ontology classes/relationships via the compose-box tag picker. The tag
+ * vocabulary is lazily fetched from the loaded ontology and cached.
+ */
+async function openTwinDiscussion() {
+    if (!window.OntoComments) return;
+    if (_twinTaggable === null) {
+        _twinTaggable = [];
+        try {
+            const resp = await fetch('/ontology/load', { credentials: 'same-origin' });
+            const data = await resp.json();
+            const cfg = (data && data.success && data.config) ? data.config : {};
+            _twinTaggable = window.OntoComments.taggableFromOntology(cfg);
+        } catch (e) {
+            console.log('Twin discussion: could not load ontology tags:', e.message);
+        }
+    }
+    window.OntoComments.openForSelection(
+        'domain', 'digital-twin', 'Knowledge Graph', _twinTaggable
+    );
+}
+window.openTwinDiscussion = openTwinDiscussion;
 
 // =====================================================
 // INITIALIZATION

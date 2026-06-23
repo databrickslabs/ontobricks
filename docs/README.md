@@ -1,6 +1,6 @@
 # OntoBricks Documentation
 
-OntoBricks is a **Knowledge Graph Builder** for the Databricks platform. It lets you design ontologies visually, map them to Unity Catalog tables, materialize a triple store, and explore the result as an interactive knowledge graph — all from a single Databricks App.
+OntoBricks is a **Graph Viewer Builder** for the Databricks platform. It lets you design ontologies visually, map them to Unity Catalog tables, materialize a triple store, and explore the result as an interactive graph viewer — all from a single Databricks App.
 
 **New here?** Start with the [Get Started](get-started.md) guide, then browse the [Examples](examples.md) for end-to-end walkthroughs.
 

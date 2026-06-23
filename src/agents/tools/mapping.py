@@ -19,6 +19,13 @@ logger = get_logger(__name__)
 # =====================================================
 
 
+def _strip_backticks(value: str) -> str:
+    """Remove surrounding backticks from a column name if present."""
+    if value and value.startswith("`") and value.endswith("`") and len(value) > 1:
+        return value[1:-1]
+    return value
+
+
 def tool_submit_entity_mapping(
     ctx: ToolContext,
     *,
@@ -42,6 +49,11 @@ def tool_submit_entity_mapping(
     invariant: every ontology attribute is either in ``attribute_mappings`` or
     in ``unmapped_attributes``.
     """
+    # Normalise column names: strip any surrounding backticks the LLM may have added.
+    id_column = _strip_backticks(id_column)
+    label_column = _strip_backticks(label_column)
+    if attribute_mappings:
+        attribute_mappings = {k: _strip_backticks(v) for k, v in attribute_mappings.items()}
     logger.info("tool_submit_entity_mapping: '%s' (uri=%s)", class_name, class_uri)
     if not class_uri or not sql_query:
         logger.warning("tool_submit_entity_mapping: missing required fields")
@@ -69,24 +81,16 @@ def tool_submit_entity_mapping(
         else:
             normalised_unmapped.append(str(item))
 
-    mapping = {
-        "ontology_class": class_uri,
-        "class_name": class_name,
-        "sql_query": clean_sql,
-        "id_column": id_column,
-        "label_column": label_column,
-        "attribute_mappings": attribute_mappings or {},
-        "unmapped_attributes": normalised_unmapped,
-    }
+    # Restrict attribute_mappings to attributes declared in the ontology for this entity.
+    # This prevents the LLM from inventing mappings for columns that are not ontology
+    # data properties (e.g. mapping all table columns when the entity has none).
+    declared_attrs: set = set()
+    for entity in (ctx.ontology or {}).get("entities", []):
+        if entity.get("uri") == class_uri or entity.get("name") == class_name:
+            declared_attrs = set(entity.get("attributes", []))
+            break
 
-    logger.debug(
-        "tool_submit_entity_mapping: '%s' — ID=%s, Label=%s, attrs=%d",
-        class_name,
-        id_column,
-        label_column,
-        len(mapping["attribute_mappings"]),
-    )
-
+    # Retrieve the existing mapping so we can preserve user-set excluded_attributes.
     existing_idx = next(
         (
             i
@@ -95,6 +99,55 @@ def tool_submit_entity_mapping(
         ),
         -1,
     )
+    existing_excl: list = (
+        ctx.entity_mappings[existing_idx].get("excluded_attributes", [])
+        if existing_idx >= 0
+        else []
+    )
+
+    raw_attr_mappings = attribute_mappings or {}
+    if declared_attrs:
+        filtered_mappings = {k: v for k, v in raw_attr_mappings.items() if k in declared_attrs}
+    else:
+        # Entity has no ontology attributes — discard anything the LLM may have invented.
+        filtered_mappings = {}
+
+    # Honour user-excluded attributes: remove them even if the agent tried to map them.
+    if existing_excl:
+        filtered_mappings = {k: v for k, v in filtered_mappings.items() if k not in existing_excl}
+
+    if len(filtered_mappings) < len(raw_attr_mappings):
+        discarded = set(raw_attr_mappings) - set(filtered_mappings)
+        logger.warning(
+            "tool_submit_entity_mapping: '%s' — discarded %d attribute mapping(s) "
+            "(non-ontology or user-excluded): %s",
+            class_name,
+            len(discarded),
+            discarded,
+        )
+
+    mapping = {
+        "ontology_class": class_uri,
+        "class_name": class_name,
+        "sql_query": clean_sql,
+        "id_column": id_column,
+        "label_column": label_column,
+        "attribute_mappings": filtered_mappings,
+        "unmapped_attributes": normalised_unmapped,
+    }
+    # Preserve user-set excluded_attributes across auto-map runs.
+    if existing_excl:
+        mapping["excluded_attributes"] = existing_excl
+
+    logger.debug(
+        "tool_submit_entity_mapping: '%s' — ID=%s, Label=%s, attrs=%d, excl=%d",
+        class_name,
+        id_column,
+        label_column,
+        len(mapping["attribute_mappings"]),
+        len(existing_excl),
+    )
+
     if existing_idx >= 0:
         ctx.entity_mappings[existing_idx] = mapping
         logger.debug(
@@ -142,6 +195,10 @@ def tool_submit_relationship_mapping(
     **_kwargs,
 ) -> str:
     """Record a completed relationship mapping."""
+    # Normalise column names: strip any surrounding backticks the LLM may have added.
+    source_id_column = _strip_backticks(source_id_column)
+    target_id_column = _strip_backticks(target_id_column)
+
     logger.info(
         "tool_submit_relationship_mapping: '%s' (uri=%s)", property_name, property_uri
     )
@@ -171,6 +228,21 @@ def tool_submit_relationship_mapping(
     else:
         src_class, tgt_class = domain, range_class
 
+    # Preserve user-set excluded_attributes from the existing relationship mapping.
+    existing_idx = next(
+        (
+            i
+            for i, m in enumerate(ctx.relationships)
+            if m.get("property") == property_uri
+        ),
+        -1,
+    )
+    existing_excl: list = (
+        ctx.relationships[existing_idx].get("excluded_attributes", [])
+        if existing_idx >= 0
+        else []
+    )
+
     mapping = {
         "property": property_uri,
         "property_name": property_name,
@@ -186,23 +258,18 @@ def tool_submit_relationship_mapping(
         "source_class_label": _extract_label(src_class),
         "target_class_label": _extract_label(tgt_class),
     }
+    if existing_excl:
+        mapping["excluded_attributes"] = existing_excl
 
     logger.debug(
-        "tool_submit_relationship_mapping: '%s' — src_col=%s, tgt_col=%s, direction=%s",
+        "tool_submit_relationship_mapping: '%s' — src_col=%s, tgt_col=%s, direction=%s, excl=%d",
         property_name,
         source_id_column,
         target_id_column,
         direction,
+        len(existing_excl),
     )
 
-    existing_idx = next(
-        (
-            i
-            for i, m in enumerate(ctx.relationships)
-            if m.get("property") == property_uri
-        ),
-        -1,
-    )
     if existing_idx >= 0:
         ctx.relationships[existing_idx] = mapping
         logger.debug(

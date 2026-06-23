@@ -143,7 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
     ON schedule_runs(registry_id, domain_name, run_ts DESC);
 
 -- ----------------------------------------------------------------
--- Build-run trace (one immutable row per Digital Twin build, all
+-- Build-run trace (one immutable row per Knowledge Graph build, all
 -- paths: UI session / external API / scheduler). Linked to the
 -- domain row; grain is the tuple (domain_id, version). Many rows per
 -- tuple are expected — the "active" build for a (domain, version) is
@@ -209,3 +209,53 @@ CREATE TABLE IF NOT EXISTS domain_review_events (
 
 CREATE INDEX IF NOT EXISTS idx_review_events_domain_version
     ON domain_review_events(domain_id, version, created_at);
+
+-- ----------------------------------------------------------------
+-- Collaborative comments — domain-wide threaded discussion. Every
+-- comment belongs to the single per-(domain, version) thread. A
+-- non-empty ``parent_id`` makes the row a reply within a thread.
+-- Append-only; ``resolved`` closes a thread without losing history.
+-- Grain: (domain_id, version).
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS domain_comments (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id   uuid NOT NULL
+                REFERENCES domains(id) ON DELETE CASCADE,
+    version     text NOT NULL,
+    parent_id   uuid REFERENCES domain_comments(id) ON DELETE CASCADE,
+    author      text NOT NULL,
+    body        text NOT NULL DEFAULT '',
+    resolved    boolean NOT NULL DEFAULT false,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_domain_comments_lookup
+    ON domain_comments(domain_id, version, created_at);
+
+-- ----------------------------------------------------------------
+-- Collaborative tasks — a personalised work item assigned to a
+-- teammate, usually born from a comment (``comment_id``). Surfaced in
+-- the assignee's "My Tasks" worklist. ``status`` walks
+-- open -> in_progress -> done (or cancelled). Grain: (domain_id, version).
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS domain_tasks (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id   uuid NOT NULL
+                REFERENCES domains(id) ON DELETE CASCADE,
+    version     text NOT NULL,
+    assignee    text NOT NULL,
+    created_by  text NOT NULL,
+    title       text NOT NULL,
+    description text NOT NULL DEFAULT '',
+    status      text NOT NULL DEFAULT 'open'
+                CHECK (status IN ('open', 'in_progress', 'done', 'cancelled')),
+    due_date    date,
+    comment_id  uuid REFERENCES domain_comments(id) ON DELETE SET NULL,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_domain_tasks_assignee
+    ON domain_tasks(lower(assignee), status);
+CREATE INDEX IF NOT EXISTS idx_domain_tasks_domain
+    ON domain_tasks(domain_id, version);

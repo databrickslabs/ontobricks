@@ -1419,7 +1419,7 @@ class SettingsService:
         else:
             out["message"] = (
                 f"Connected to graph database {graph_db!r}, but schema {schema!r} "
-                "does not exist yet — run a Digital Twin build or create the schema. "
+                "does not exist yet — run a Knowledge Graph build or create the schema. "
                 f"Registry database: {registry_db!r}."
             )
         return out

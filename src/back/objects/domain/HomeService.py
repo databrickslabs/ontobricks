@@ -250,7 +250,7 @@ class HomeService:
     ) -> Dict[str, Any]:
         """Get detailed validation status.
 
-        Digital Twin graph status and artefact existence are served from the
+        Knowledge Graph graph status and artefact existence are served from the
         session cache when available (populated after each successful build).
         On a cache miss the values are fetched live and then cached.
 
@@ -423,7 +423,7 @@ class HomeService:
             "unmapped_entities": unmapped_entities,
             "unmapped_relationships": unmapped_relationships,
             "unmapped_attributes": unmapped_attributes,
-            # Digital Twin status (summary + detail)
+            # Knowledge Graph status (summary + detail)
             "dtwin": dtwin_detail,
             # Warehouse status
             "warehouse": {"warehouse_id": warehouse_id},
@@ -454,7 +454,7 @@ class HomeService:
         ts_status: Dict[str, Any],
         dt_exist: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Derive a three-state Digital Twin indicator.
+        """Derive a three-state Knowledge Graph indicator.
 
         Delegates to :meth:`DigitalTwin.compute_dtwin_indicator`.
         """
@@ -472,7 +472,7 @@ class HomeService:
 
         The navbar only displays domain identity, SQL Warehouse status,
         and the (optionally customised) brand logo, so this intentionally
-        skips the expensive Digital Twin and validation I/O that used to
+        skips the expensive Knowledge Graph and validation I/O that used to
         run here. Those checks are available on the validation page
         (``/validate/detailed``) and the DT Sync page
         (``/dtwin/sync/info``).

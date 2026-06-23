@@ -23,9 +23,12 @@
     --db-border: #E0E0E0;
     --db-border-light: #dee2e6;
 
-    /* Navbar / top banner - classic light grey chrome */
+    /* Navbar / top banner — three-level dark→lighter→white hierarchy:
+       L1 navbar (#ECECEC)  →  L2 subnav (#F4F4F4, lighter)  →  breadcrumb (#ffffff) */
     --db-navbar-bg: #ECECEC;
     --db-navbar-border: #D8D8D8;
+    --db-subnav-bg: #F4F4F4;
+    --db-subnav-border: #E4E4E4;
 
     /* Bootstrap `light` surface kept white so `.bg-light` utilities are white.
        NOTE: do NOT override --bs-secondary-bg / --bs-tertiary-bg here — Bootstrap
@@ -312,22 +315,236 @@ body {
     margin-top: 1rem;
 }
 
-/* Process chevron separators between Project > Ontology > Mapping > Digital Twin */
-.navbar .nav-chevron {
+/* ==========================================================================
+   Navbar path separators (Proposal 1 — "· Registry › Domain" style)
+   ========================================================================== */
+.navbar .ob-nav-dot-sep,
+.navbar .ob-nav-path-sep {
     display: flex;
-    align-items: stretch;
-    height: 1.5rem;
-    padding: 0;
-    margin: 0 0.1rem;
+    align-items: center;
+    padding: 0 0.15rem;
     pointer-events: none;
     user-select: none;
-    color: var(--db-primary);
+    color: var(--db-border);
+    font-size: 1rem;
+    line-height: 1;
 }
 
-.navbar .nav-chevron svg {
-    width: 12px;
-    height: 100%;
-    display: block;
+.navbar .ob-nav-dot-sep { font-size: 1.1rem; }
+.navbar .ob-nav-path-sep { font-size: 0.9rem; opacity: 0.7; }
+
+/* Disabled state for L1 Domain link (no domain loaded) */
+.navbar .nav-link.ob-nav-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+    cursor: default;
+}
+
+/* ==========================================================================
+   Level-2 contextual sub-navigation (.ob-subnav)
+   Sits directly below the main navbar and provides Ontology / Mapping /
+   Knowledge Graph tabs plus the Domain dropdown.
+   ========================================================================== */
+.ob-subnav {
+    background-color: var(--db-subnav-bg);
+    border-bottom: 1px solid var(--db-subnav-border);
+    padding: 0;
+    position: relative;
+    z-index: 1040;
+}
+
+.ob-subnav .container-fluid {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+.ob-subnav-nav {
+    display: flex;
+    align-items: stretch;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 0;
+}
+
+.ob-subnav-item {
+    display: flex;
+    align-items: stretch;
+}
+
+.ob-subnav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.8125rem;
+    color: var(--db-text-secondary);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.ob-subnav-link .bi {
+    font-size: 0.85rem;
+}
+
+.ob-subnav-link:hover {
+    color: var(--db-text);
+    border-bottom-color: var(--db-border);
+    text-decoration: none;
+}
+
+.ob-subnav-link.active {
+    color: var(--db-text);
+    font-weight: 500;
+    border-bottom-color: var(--db-primary);
+}
+
+.ob-subnav-link.nav-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+/* Dropdown toggle arrow */
+.ob-subnav-link.dropdown-toggle::after {
+    margin-left: 0.2rem;
+}
+
+/* Subnav uses the same dropdown style as the main navbar */
+.ob-subnav .dropdown-menu {
+    z-index: 1051;
+    background-color: var(--db-subnav-bg);
+    border: 1px solid var(--db-subnav-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.4rem 0;
+    min-width: 14rem;
+    margin-top: 0.15rem;
+}
+
+.ob-subnav .dropdown-menu .dropdown-item {
+    color: var(--db-text);
+    font-size: 0.8125rem;
+    padding: 0.4rem 1rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    border-radius: 0.25rem;
+    margin: 0 0.3rem;
+}
+
+.ob-subnav .dropdown-menu .dropdown-item .bi {
+    opacity: 0.7;
+    margin-right: 0.15rem;
+}
+
+.ob-subnav .dropdown-menu .dropdown-item:hover,
+.ob-subnav .dropdown-menu .dropdown-item:focus {
+    background-color: var(--db-primary);
+    color: #fff;
+}
+
+.ob-subnav .dropdown-menu .dropdown-item:hover .bi,
+.ob-subnav .dropdown-menu .dropdown-item:focus .bi {
+    opacity: 1;
+}
+
+.ob-subnav .dropdown-menu .dropdown-item.disabled,
+.ob-subnav .dropdown-menu .dropdown-item.dropdown-requires-domain.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.ob-subnav .dropdown-menu .dropdown-header {
+    color: var(--db-text-muted);
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.45rem 1rem 0.2rem;
+}
+
+.ob-subnav .dropdown-menu .dropdown-divider {
+    border-color: var(--db-subnav-border);
+    margin: 0.35rem 0.8rem;
+}
+
+/* Vertical separator between tabs and Domain dropdown */
+.ob-subnav-divider {
+    width: 1px;
+    background-color: var(--db-border);
+    margin: 0.3rem 0.4rem;
+    align-self: stretch;
+}
+
+/* Save Domain button — right-aligned in the L2 subnav */
+.ob-subnav-save-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.8rem;
+    color: var(--db-text);
+    background-color: var(--db-navbar-bg);        /* one shade darker = button stands out on L2 */
+    border: 1px solid var(--db-navbar-border);
+    border-radius: 0.3rem;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.ob-subnav-save-btn:hover {
+    background-color: var(--db-primary);
+    color: #fff;
+    text-decoration: none;
+}
+
+.ob-subnav-save-btn.disabled,
+.ob-subnav-save-btn.btn-requires-domain.disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* Inline breadcrumb inside the subnav row */
+.ob-subnav-flex-spacer {
+    flex: 1;
+}
+
+.ob-subnav-breadcrumb-wrap {
+    display: flex;
+    align-items: center;
+    padding: 0 0.75rem;
+    border-left: 1px solid var(--db-subnav-border);
+}
+.ob-subnav-breadcrumb-wrap .breadcrumb {
+    font-size: 0.65rem;
+    font-style: italic;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    gap: 0;
+}
+.ob-subnav-breadcrumb-wrap .breadcrumb-item,
+.ob-subnav-breadcrumb-wrap .breadcrumb-item a {
+    color: var(--db-text-muted, #6c757d);
+    text-decoration: none;
+}
+.ob-subnav-breadcrumb-wrap .breadcrumb-item a:hover {
+    color: var(--db-primary, #1b3a6b);
+}
+.ob-subnav-breadcrumb-wrap .breadcrumb-item.active {
+    color: var(--db-text, #1b3a6b);
+    font-weight: 500;
+}
+.ob-subnav-breadcrumb-wrap .breadcrumb-item + .breadcrumb-item::before {
+    font-size: 0.65rem;
+    color: var(--db-subnav-border);
+}
+
+/* Save button item alignment */
+.ob-subnav-nav .ob-subnav-item:has(.ob-subnav-save-btn) {
+    display: flex;
+    align-items: center;
+    padding-right: 0.25rem;
 }
 
 /* ==========================================================================

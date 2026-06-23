@@ -105,7 +105,7 @@ class SparqlQueryRunner:
                     template_str = str(template)
                     mapping["uri_template"] = template_str
                     subject_template = template_str
-                    col_match = re.search(r"\{(\w+)\}", template_str)
+                    col_match = re.search(r'\{"?([^"{}]+)"?\}', template_str)
                     if col_match:
                         mapping["id_column"] = col_match.group(1)
                         subject_column = col_match.group(1)
@@ -130,7 +130,7 @@ class SparqlQueryRunner:
 
                     for template in g.objects(om, RR.template):
                         object_template = str(template)
-                        col_match = re.search(r"\{(\w+)\}", object_template)
+                        col_match = re.search(r'\{"?([^"{}]+)"?\}', object_template)
                         if col_match:
                             object_column = col_match.group(1)
 

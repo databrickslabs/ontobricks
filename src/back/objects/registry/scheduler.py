@@ -1204,7 +1204,7 @@ def _run_scheduled_build(
     registry_cfg: Optional[Dict[str, str]] = None,
     version: str = "latest",
 ) -> None:
-    """Execute a Digital Twin build for *domain_name* without a user session.
+    """Execute a Knowledge Graph build for *domain_name* without a user session.
 
     Loads the domain from the registry, generates SQL from R2RML, creates
     the VIEW, and populates the graph store (full rebuild every run).

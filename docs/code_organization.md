@@ -91,7 +91,7 @@ back/objects/
 ├── domain/           <- Session-scoped UC/metadata/layout operations
 ├── ontology/         <- Ontology domain class
 ├── mapping/          <- Mapping domain class
-└── digitaltwin/      <- Digital Twin domain class
+└── digitaltwin/      <- Knowledge Graph domain class
 ```
 
 ### 2.5 Backend core infrastructure (`src/back/core/`)
@@ -172,15 +172,15 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 | `/settings/*` (API) | `api/routers/internal/settings.py` | (mostly JSON) | Load/save Databricks config, test connection, permissions helpers |
 | `/ontology/*` | `front/routes/ontology.py` | `ontology.html`, fragments | Ontology editor, SHACL, industry catalogs, **agent**-backed flows (chat, OWL generation, icons) |
 | `/mapping/*` | `front/routes/mapping.py` | mapping templates | R2RML / table–ontology mapping UI |
-| `/dtwin/*` | `front/routes/dtwin.py` | dtwin templates | SPARQL, graph exploration, triple-store–backed "digital twin" UI |
+| `/dtwin/*` | `front/routes/dtwin.py` | dtwin templates | SPARQL, graph exploration, triple-store–backed "graph viewer" UI |
 | `/domain/*` | `front/routes/domain.py` | domain templates | Domain JSON in UC volumes, versioning, metadata, documents |
 | `/registry/*` | `front/routes/registry.py` | `registry.html`, fragments | Multi-domain registry browser, schedules, API endpoint reference |
-| `/resolve` | `front/routes/resolve.py` | — (redirect) | Entity URI resolution — finds the owning domain and redirects to the knowledge graph |
+| `/resolve` | `front/routes/resolve.py` | — (redirect) | Entity URI resolution — finds the owning domain and redirects to the graph viewer |
 | `/tasks/*` | `api/routers/internal/tasks.py` | — | Task list/detail JSON for long-running work |
 
 **Note:** The **settings HTML page** is served at **`GET /settings`** from **home** routes; **internal settings** routes use the same **`/settings`** prefix for **JSON APIs** (`/settings/current`, `/settings/save`, etc.).
 
-**XHR / JSON:** Besides **`tasks`**, the ontology, mapping, digital twin, and domain UIs call session-aware JSON handlers in **`api/routers/internal/ontology.py`**, **`mapping.py`**, **`dtwin.py`**, and **`domain.py`** (and **`home.py`** for shared navbar/session helpers). Paths align with the same feature areas as the HTML routers above.
+**XHR / JSON:** Besides **`tasks`**, the ontology, mapping, graph viewer, and domain UIs call session-aware JSON handlers in **`api/routers/internal/ontology.py`**, **`mapping.py`**, **`dtwin.py`**, and **`domain.py`** (and **`home.py`** for shared navbar/session helpers). Paths align with the same feature areas as the HTML routers above.
 
 ### 3.4 Menu and client-side navigation
 
@@ -209,7 +209,7 @@ Apply the same procedure for inline CSS → `src/front/static/<area>/css/`.
 
 ---
 
-## 4. API (REST v1, Digital Twin, GraphQL)
+## 4. API (REST v1, Knowledge Graph, GraphQL)
 
 ### 4.1 Registration
 
@@ -217,7 +217,7 @@ In `src/shared/fastapi/main.py`, `_register_routers` mounts:
 
 - **Health** — `shared/fastapi/health.py` (app health; may overlap conceptually with v1 `/health`).
 - **External REST v1** — `src/api/routers/v1.py` at **`/api/v1`** (stateless; credentials in body or headers), exposed via the mounted external API app (see `api.external_app` and `EXTERNAL_API_MOUNT_PREFIX`).
-- **Digital Twin API** — `src/api/routers/digitaltwin.py` at **`/api/v1/digitaltwin`** (registry, domain artifacts, build, triples, quality, reasoning).
+- **Knowledge Graph API** — `src/api/routers/digitaltwin.py` at **`/api/v1/digitaltwin`** (registry, domain artifacts, build, triples, quality, reasoning).
 - **GraphQL** — `src/back/fastapi/graphql_routes.py` at **`/graphql`** and on the external app (see `api.external_app`; per-domain GraphQL execution).
 
 The **OpenAPI** document is at `/openapi.json`; interactive docs at `/docs` and `/redoc`.
@@ -242,7 +242,7 @@ Defined in `api/routers/domains.py`. Representative paths:
 | GET | `/api/v1/domain/versions`, `/domain/design-status` | Versions and design readiness |
 | GET | `/api/v1/domain/ontology`, `/api/v1/domain/r2rml`, `/api/v1/domain/sparksql` | Serialized design artifacts |
 
-### 4.4 `/api/v1/digitaltwin` (Digital Twin)
+### 4.4 `/api/v1/digitaltwin` (Knowledge Graph)
 
 Defined in `api/routers/digitaltwin.py`. Representative paths:
 
@@ -521,7 +521,7 @@ All logging goes through `back/core/logging/LogManager`.
 | Internal JSON API (session-aware) | `src/api/routers/internal/*.py` |
 | REST v1 | `src/api/routers/v1.py`, `src/api/service.py` |
 | Domain list & artifacts | `src/api/routers/domains.py` |
-| Digital Twin REST | `src/api/routers/digitaltwin.py` |
+| Knowledge Graph REST | `src/api/routers/digitaltwin.py` |
 | Graph analysis / clustering | `src/back/core/graph_analysis/` (`CommunityDetector`, models) |
 | GraphQL | `src/back/fastapi/graphql_routes.py` |
 | Agents | `src/agents/**` |

@@ -92,7 +92,7 @@ html_title = "OntoBricks Documentation"
 html_short_title = "OntoBricks"
 
 html_theme_options = {
-    "description": "Knowledge Graph Builder for Databricks",
+    "description": "Graph Viewer Builder for Databricks",
     "github_user": "",
     "github_repo": "OntoBricks",
     "fixed_sidebar": True,

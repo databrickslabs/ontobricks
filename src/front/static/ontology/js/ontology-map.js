@@ -190,10 +190,24 @@ async function initOntologyMap() {
         return nodeNameLower.get(name.toLowerCase());
     }
     
+    // Primitive XSD/OWL data types — properties whose range is one of these are
+    // data-type attributes, not object relationships. Skip them silently; they
+    // have no target node on the graph.
+    const PRIMITIVE_TYPES = new Set([
+        'string', 'integer', 'int', 'long', 'float', 'double', 'decimal',
+        'boolean', 'date', 'datetime', 'time', 'duration',
+        'anyuri', 'literal', 'plainliteral', 'langstring',
+        'xsd:string', 'xsd:integer', 'xsd:int', 'xsd:long', 'xsd:float',
+        'xsd:double', 'xsd:decimal', 'xsd:boolean', 'xsd:date',
+        'xsd:datetime', 'xsd:time', 'xsd:duration', 'xsd:anyuri',
+        'rdfs:literal',
+    ]);
+
     // Add relationship links (only if both domain and range exist as classes)
     let mapSkipped = 0;
     properties.forEach(prop => {
         if (prop.domain && prop.range) {
+            if (PRIMITIVE_TYPES.has((prop.range || '').toLowerCase())) return;
             const source = resolveNodeId(prop.domain);
             const target = resolveNodeId(prop.range);
             if (source && target) {
@@ -789,6 +803,11 @@ async function initOntologyMap() {
     // Auto-map icons button (use onclick to avoid stacking listeners on map refresh)
     const autoIconsBtn = document.getElementById('mapAutoAssignIcons');
     if (autoIconsBtn) autoIconsBtn.onclick = () => autoAssignEntityIcons();
+
+    // Discussion button — opens the whole-ontology thread with a picker to
+    // optionally re-tag the comment to a specific entity/relationship.
+    const discussBtn = document.getElementById('mapDiscuss');
+    if (discussBtn) discussBtn.onclick = () => openOntologyDiscussion();
 
     // Reset layout button - clears saved positions and re-runs simulation
     document.getElementById('mapResetLayout')?.addEventListener('click', async () => {
@@ -1500,6 +1519,20 @@ const ICONS_TASK_KEY = 'ontobricks_icons_task';
 
 // Module-level guard so the monitor loop is started at most once per task.
 let _iconsCurrentTaskId = null;
+
+/**
+ * Open the ontology designer discussion. Anchors to the whole ontology
+ * diagram (domain/'ontology'); each comment can optionally be tagged with
+ * one or more classes/relationships via the compose-box tag picker.
+ */
+function openOntologyDiscussion() {
+    if (!window.OntoComments) return;
+    const cfg = (typeof OntologyState !== 'undefined' && OntologyState.config) || {};
+    OntoComments.openForSelection(
+        'domain', 'ontology', 'Whole ontology diagram',
+        OntoComments.taggableFromOntology(cfg)
+    );
+}
 
 /**
  * Restore button state (used after completion, failure, or resume).

@@ -1,6 +1,6 @@
 # OntoBricks MCP Server
 
-OntoBricks exposes its Digital Twin knowledge-graph capabilities via the
+OntoBricks exposes its Knowledge Graph knowledge-graph capabilities via the
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), allowing
 LLM-based tools to browse domains, discover entity types, look up specific
 entities with full-text descriptions, and check triple-store health — all
@@ -15,8 +15,8 @@ Python package deployed separately from the main OntoBricks web application.
 
 The MCP server follows a **two-step workflow**:
 
-1. **Choose a domain** — call `list_domains` to see available knowledge graphs with descriptions, then `select_domain` to activate one. Only domains with the **API / MCP** flag enabled in OntoBricks are listed.
-2. **Query the knowledge graph** — use `list_entity_types`, `describe_entity`, or `get_status` on the selected domain.
+1. **Choose a domain** — call `list_domains` to see available graph viewers with descriptions, then `select_domain` to activate one. Only domains with the **API / MCP** flag enabled in OntoBricks are listed.
+2. **Query the graph viewer** — use `list_entity_types`, `describe_entity`, or `get_status` on the selected domain.
 
 **Which version?** For each domain folder, the registry stores exactly one **Active** (MCP/API-enabled) version at a time. Operators set that version in the main OntoBricks app under **Registry → Browse** (expand the domain, then **Set as Active** on a row). **Domain → Versions** shows the outcome as a read-only badge but does not change it.
 
@@ -36,15 +36,15 @@ topic covered by one of the listed domains, the LLM selects it automatically.
 
 | Tool | Description |
 |------|-------------|
-| `list_domains` | Lists all domains (knowledge graphs) in the registry with their names and descriptions |
+| `list_domains` | Lists all domains (graph viewers) in the registry with their names and descriptions |
 | `select_domain` | Activates a domain by name — all subsequent queries operate on this domain's triple store |
 | `list_domain_versions` | Lists registry versions for a named domain (latest first) |
 | `get_design_status` | Design pipeline readiness (ontology, metadata, assignment, build_ready) for a domain |
-| `list_entity_types` | Returns a human-readable overview of the selected domain's knowledge graph: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
+| `list_entity_types` | Returns a human-readable overview of the selected domain's graph viewer: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
 | `describe_entity` | Searches for an entity by name/type and returns a **full-text description** — identity, attributes, relationships, and related entities discovered hop-by-hop (BFS traversal) |
 | `get_status` | Compact diagnostic: domain name, view table, graph name, data availability, triple count |
 | `get_graphql_schema` | Returns the auto-generated GraphQL schema (SDL) for the selected domain — shows types, fields, and relationships |
-| `query_graphql` | Executes a GraphQL query against the selected domain's knowledge graph with structured, nested results |
+| `query_graphql` | Executes a GraphQL query against the selected domain's graph viewer with structured, nested results |
 
 ### Tool Details
 
@@ -62,7 +62,7 @@ Returns formatted text:
 Available Domains (3)
 ========================================
   • customer360
-    Customer 360 knowledge graph with interactions, contracts, and claims
+    Customer 360 graph viewer with interactions, contracts, and claims
   • supply_chain
     Supply chain ontology covering suppliers, products, and logistics
   • hr_analytics
@@ -95,7 +95,7 @@ No arguments. Requires a domain to be selected first.
 Returns formatted text:
 
 ```
-Knowledge Graph — customer360
+Graph Viewer — customer360
 ========================================
 Total triples:       12,030
 Distinct entities:   1,301
@@ -225,7 +225,7 @@ Use query_graphql to execute queries against this schema.
 
 Requires a domain to be selected first.
 
-Executes a GraphQL query against the knowledge graph and returns structured, formatted results. Ideal for:
+Executes a GraphQL query against the graph viewer and returns structured, formatted results. Ideal for:
 - Fetching specific fields without over-fetching
 - Nested relationship traversal in a single request
 - Filtering with `search`, pagination with `limit`/`offset`
@@ -354,7 +354,7 @@ databricks apps deploy mcp-ontobricks \
 2. Navigate to **Playground**
 3. **mcp-ontobricks** appears in the MCP Servers list (apps starting with `mcp-` are shown automatically)
 4. Select it — you now have access to `list_entity_types`, `describe_entity`, and `get_status`
-5. Ask questions like *"What entity types are in the knowledge graph?"* or *"Tell me about Jacob Martinez"*
+5. Ask questions like *"What entity types are in the graph viewer?"* or *"Tell me about Jacob Martinez"*
 
 ---
 

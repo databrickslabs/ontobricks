@@ -104,5 +104,5 @@ def check_status_transition(
     if (current, new) == (STATUS_DRAFT, STATUS_IN_REVIEW) and not last_build:
         raise ValidationError(
             "Cannot submit for review: this version has never been built. "
-            "Run a Digital Twin build first."
+            "Run a Knowledge Graph build first."
         )

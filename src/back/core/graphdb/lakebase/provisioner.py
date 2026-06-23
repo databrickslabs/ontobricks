@@ -13,7 +13,7 @@ the only way to stand up the graph store:
 
 The whole flow runs in a worker thread and reports progress through the
 shared :class:`~back.core.task_manager.TaskManager`, so the UI can poll
-``GET /tasks/{id}`` exactly like the Digital Twin build.
+``GET /tasks/{id}`` exactly like the Knowledge Graph build.
 
 Permission model (unchanged from the scripts -- only automated):
 

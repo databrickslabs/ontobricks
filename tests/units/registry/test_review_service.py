@@ -738,3 +738,54 @@ def test_my_tasks_raises_when_domain_listing_fails():
     svc.list_domain_details_cached.return_value = (False, [], "boom")
     with pytest.raises(InfrastructureError):
         _call_my_tasks(svc)
+
+
+# ----------------------------------------------------------------------
+# My Tasks — assigned collaborative tasks merged into the worklist
+# ----------------------------------------------------------------------
+
+
+def test_my_tasks_includes_assigned_open_and_in_progress():
+    svc = _my_tasks_svc([])  # no review actions, only assigned tasks
+    svc.list_tasks_for_assignee.return_value = [
+        {"id": "1", "folder": "acme", "version": "2", "title": "fix",
+         "status": "open", "assignee": "alice@acme.com"},
+        {"id": "2", "folder": "acme", "version": "2", "title": "wip",
+         "status": "in_progress", "assignee": "alice@acme.com"},
+    ]
+    result = _call_my_tasks(svc)
+    assert result["success"] is True
+    assert result["tasks"] == []
+    assert [t["id"] for t in result["assigned_tasks"]] == ["1", "2"]
+    svc.list_tasks_for_assignee.assert_called_once_with("alice@acme.com")
+
+
+def test_my_tasks_assigned_filters_done_and_cancelled():
+    svc = _my_tasks_svc([])
+    svc.list_tasks_for_assignee.return_value = [
+        {"id": "1", "status": "open"},
+        {"id": "2", "status": "done"},
+        {"id": "3", "status": "cancelled"},
+        {"id": "4", "status": "in_progress"},
+    ]
+    result = _call_my_tasks(svc)
+    assert [t["id"] for t in result["assigned_tasks"]] == ["1", "4"]
+
+
+def test_my_tasks_assigned_resilient_when_backend_errors():
+    svc = _my_tasks_svc([])
+    svc.list_tasks_for_assignee.side_effect = RuntimeError("tasks table missing")
+    result = _call_my_tasks(svc)
+    # Worklist still succeeds; the assigned section degrades to empty.
+    assert result["success"] is True
+    assert result["assigned_tasks"] == []
+
+
+def test_my_tasks_assigned_empty_without_email():
+    svc = _my_tasks_svc([])
+    svc.list_tasks_for_assignee.return_value = [{"id": "1", "status": "open"}]
+    # app_role "" short-circuits roles to admin, but an empty email must
+    # skip the assignee lookup entirely.
+    result = _call_my_tasks(svc, email="")
+    assert result["assigned_tasks"] == []
+    svc.list_tasks_for_assignee.assert_not_called()

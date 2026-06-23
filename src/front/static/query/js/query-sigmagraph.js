@@ -1,6 +1,6 @@
 /**
  * OntoBricks - query-sigmagraph.js
- * Sigma.js + Graphology graph view for the Digital Twin section.
+ * Sigma.js + Graphology graph view for the Knowledge Graph section.
  * Reuses the same data (lastQueryResults / d3NodesData / d3LinksData) built by query.js.
  */
 
@@ -1446,6 +1446,12 @@ var SigmaGraph = (function () {
             html += _sec('bi bi-arrow-left-circle', 'Incoming (' + incomingRels.length + ')', inBody, false);
         }
 
+        var _dNid = esc(nodeId).replace(/'/g, "\\'");
+        var _dNlbl = esc(displayLabel).replace(/'/g, "\\'");
+        html += '<div class="entity-detail-section">' +
+            '<button class="btn btn-sm btn-outline-primary w-100" onclick="SigmaGraph.discussNode(\'' + _dNid + '\', \'' + _dNlbl + '\')">' +
+            '<i class="bi bi-chat-dots me-1"></i>Discuss this entity</button></div>';
+
         el.innerHTML = html;
     }
 
@@ -1518,6 +1524,14 @@ var SigmaGraph = (function () {
             ' <i class="bi bi-arrow-right text-muted"></i> ' +
             '<span class="badge bg-info">' + targetIcon + ' ' + esc(targetLabel) + '</span>' +
             '</div></div></div>';
+
+        var _dSrc = esc(source).replace(/'/g, "\\'");
+        var _dPred = esc(predicateUri).replace(/'/g, "\\'");
+        var _dTgt = esc(target).replace(/'/g, "\\'");
+        var _dPlbl = esc(predicateLabel).replace(/'/g, "\\'");
+        html += '<div class="entity-detail-section">' +
+            '<button class="btn btn-sm btn-outline-primary w-100" onclick="SigmaGraph.discussEdge(\'' + _dSrc + '\', \'' + _dPred + '\', \'' + _dTgt + '\', \'' + _dPlbl + '\')">' +
+            '<i class="bi bi-chat-dots me-1"></i>Discuss this relationship</button></div>';
 
         el.innerHTML = html;
     }
@@ -2289,7 +2303,7 @@ var SigmaGraph = (function () {
                 placeholder.innerHTML =
                     '<div class="text-muted">' +
                     '<i class="bi bi-diagram-3 " style="font-size:2.5rem;"></i>' +
-                    '<p class="mt-2 mb-1 fw-semibold">Knowledge Graph</p>' +
+                    '<p class="mt-2 mb-1 fw-semibold">Graph Viewer</p>' +
                     '<p class="small">Use the filter panel to search and explore entities.</p>' +
                     '</div>';
                 container.appendChild(placeholder);
@@ -2348,6 +2362,24 @@ var SigmaGraph = (function () {
             if (_renderer) {
                 _renderer.refresh();
                 _focusCameraOnNodes(new Set([entityId]));
+            }
+        },
+
+        // Open the contextual discussion thread anchored to a graph node
+        // (subject URI) or edge (source|predicate|target). Auto-resolves
+        // the loaded domain + version via OntoComments.
+        discussNode: function (nodeId, label) {
+            if (window.OntoComments) {
+                window.OntoComments.openForSelection('graph_node', nodeId, label || nodeId);
+            }
+        },
+
+        discussEdge: function (source, predicate, target, label) {
+            if (window.OntoComments) {
+                window.OntoComments.openForSelection(
+                    'graph_edge', source + '|' + predicate + '|' + target,
+                    label || predicate
+                );
             }
         },
 

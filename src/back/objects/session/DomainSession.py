@@ -869,7 +869,7 @@ class DomainSession:
 
     @property
     def last_build(self) -> str:
-        """ISO timestamp of the last successful Digital Twin build."""
+        """ISO timestamp of the last successful Knowledge Graph build."""
         return self._data["domain"].get("last_build", "")
 
     @last_build.setter

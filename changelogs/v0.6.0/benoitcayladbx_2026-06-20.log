@@ -1,0 +1,114 @@
+# Documentation Update — Attribute Include/Exclude, Column Quoting, Auto-Map Improvements
+
+## Context
+
+Documentation refresh following the complete implementation of per-attribute include/exclude
+in the Mapping Designer, Auto-Map KPI excluded counts, metadata quality warning, column-name
+quoting in SQL and R2RML, Auto-Exclude canvas logic refinement, and all related bug fixes.
+No code changes were made in this session — documentation only.
+
+## Changes
+
+1. `docs/features.md`
+   - Updated **Data Mapping** section to document per-attribute include/exclude, Auto-Exclude
+     unmapped attributes button, includes-aware Partial Mapping Detection, Auto-Map KPI excluded
+     counts, Metadata Quality Warning, column-name quoting (backtick SQL + R2RML double-quote),
+     and R2RML excluded-attribute suppression.
+
+2. `docs/user-guide.md`
+   - Added **Excluding and Including Attributes** subsection under Step 2 (Map Data Sources)
+     covering the Status tab checkbox workflow, Auto-Exclude unmapped, canvas colour semantics,
+     and KPI impact.
+   - Updated **Auto-Map** subsection to mention excluded-counts badge and Metadata Quality Warning.
+   - Updated **Validate Your Mappings** to clarify that only included attributes are checked.
+   - Extended **Mapping Strategy** tips with three new items: exclude irrelevant attributes early,
+     quote special column names, and use the metadata quality warning.
+
+3. `docs/sphinx/changelog.rst`
+   - Added v0.6.0 section covering all features, bug fixes, and new tests from this development
+     cycle.
+
+## Modified Files
+
+- `docs/features.md`
+- `docs/user-guide.md`
+- `docs/sphinx/changelog.rst`
+
+## Test Results
+
+108 / 108 passed (`tests/units/mapping/`) — no regressions.
+
+---
+
+# Always-Quote Column Names in R2RML and Agent SQL
+
+## Context
+
+User noted that the conditional quoting in `_quote_column` (only quote when not a plain
+identifier) could still miss edge cases: SQL reserved words, digit-leading names, or any
+future naming convention. Simpler and safer to always quote.
+
+## Changes
+
+1. `src/back/core/w3c/r2rml/R2RMLGenerator.py`
+   - `_quote_column`: removed the conditional check — now unconditionally wraps every
+     column name in double-quotes per R2RML spec §7.4.
+
+2. `src/back/core/w3c/r2rml/R2RMLParser.py`
+   - Added `_unquote_column()` helper that strips double-quotes when reading column names
+     back from R2RML.
+   - Applied `_unquote_column` to `id_column` (from `rr:template`), `object_column`
+     (from `rr:column`), and `target_id_column` (from relationship templates).
+
+3. `src/agents/agent_auto_assignment/engine.py`
+   - Updated `COLUMN NAME QUOTING` section of the system prompt: agent is now instructed
+     to ALWAYS backtick-quote every column name in SQL, even plain identifiers.
+
+4. `tests/units/mapping/test_r2rml_generator.py`
+   - `test_plain_identifier_unchanged` renamed to `test_plain_identifier_always_quoted`;
+     expectation updated to `"customer_id"`.
+   - Relationship URI template assertion updated to check presence of the class path
+     and column name rather than the exact unquoted template string.
+
+## Modified Files
+
+- `src/back/core/w3c/r2rml/R2RMLGenerator.py`
+- `src/back/core/w3c/r2rml/R2RMLParser.py`
+- `src/agents/agent_auto_assignment/engine.py`
+- `tests/units/mapping/test_r2rml_generator.py`
+
+## Test Results
+
+108 / 108 passed (`tests/units/mapping/`) — no regressions.
+
+---
+
+# Fix: strip backticks from submitted column names, clarify alias quoting in prompt
+
+## Context
+
+After the "always backtick every column" change, the LLM sometimes passed backtick-
+quoted values for id_column/label_column/source_id_column/target_id_column/attribute_mappings
+(e.g. `ID` instead of ID), causing 5 mappings to not be generated or stored incorrectly.
+
+## Changes
+
+1. `src/agents/tools/mapping.py`
+   - Added `_strip_backticks()` helper.
+   - Applied it to `id_column`, `label_column`, and all `attribute_mappings` values in
+     `tool_submit_entity_mapping`.
+   - Applied it to `source_id_column` and `target_id_column` in
+     `tool_submit_relationship_mapping`.
+
+2. `src/agents/agent_auto_assignment/engine.py`
+   - Rewrote the COLUMN NAME QUOTING section of the system prompt to explicitly state
+     that alias names (after AS) must NEVER be backtick-quoted, with concrete examples.
+
+## Modified Files
+
+- `src/agents/tools/mapping.py`
+- `src/agents/agent_auto_assignment/engine.py`
+
+## Test Results
+
+109 / 109 passed (`tests/units/mapping/`) — no regressions.

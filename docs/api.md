@@ -521,13 +521,13 @@ type Query {
 2. **Per-domain schemas**: Different domains may have completely different schemas, reflecting their ontology.
 3. **Caching**: Schemas are cached per domain and invalidated on ontology changes.
 4. **Relationship depth**: Nested relationships are resolved to a configurable depth (default 2, max 5). The depth can be set via the `depth` field in the request body or the depth selector in the GraphiQL playground.
-5. **Triple store required**: The domain must have a materialized triple store (synced via Digital Twin) for GraphQL queries to return data.
+5. **Triple store required**: The domain must have a materialized triple store (synced via Knowledge Graph) for GraphQL queries to return data.
 
 ---
 
-## Digital Twin API
+## Knowledge Graph API
 
-The Digital Twin API provides stateless, programmatic access to the knowledge graph — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional `project_name` query parameter to load a domain from the registry instead of the browser session.
+The Knowledge Graph API provides stateless, programmatic access to the graph viewer — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional `project_name` query parameter to load a domain from the registry instead of the browser session.
 
 ### Base URL
 
@@ -796,7 +796,7 @@ This document describes the REST API endpoints available in OntoBricks.
 | Module | Base Path | Purpose |
 |--------|-----------|---------|
 | Domain API | `/api/v1/domains`, `/api/v1/domain` | Registry list, versions, design status, OWL/R2RML/SQL artifacts |
-| Digital Twin API | `/api/v1/digitaltwin` | Stateless access to triple store, builds, triple search, quality, reasoning |
+| Knowledge Graph API | `/api/v1/digitaltwin` | Stateless access to triple store, builds, triple search, quality, reasoning |
 | Core/Navbar | `/` | Session status, file browsing |
 | Settings | `/settings` | Databricks connection, settings |
 | Scheduled Builds | `/settings/schedules` | Automated triple store build scheduling |
@@ -807,7 +807,7 @@ This document describes the REST API endpoints available in OntoBricks.
 | SHACL Data Quality | `/ontology/dataquality` | SHACL shape CRUD, Turtle import/export |
 | Mapping | `/mapping` | Entity/relationship mapping, R2RML |
 | SQL Wizard | `/mapping/wizard` | LLM-assisted SQL generation for mappings |
-| Digital Twin | `/dtwin` | Sync, knowledge graph, quality checks, internal query execution |
+| Knowledge Graph | `/dtwin` | Sync, graph viewer, quality checks, internal query execution |
 | Data Quality Execution | `/dtwin/dataquality` | Run SHACL checks against triple store |
 | Reasoning | `/dtwin/reasoning` | OWL 2 RL + SWRL inference, inferred triples |
 | GraphQL | `/graphql` (UI); `/api/v1/graphql` (external API mount) | Auto-generated typed GraphQL schema from ontology |
@@ -1814,19 +1814,19 @@ POST /mapping/save-to-uc
 
 ---
 
-### Digital Twin Endpoints
+### Knowledge Graph Endpoints
 
-#### Get Digital Twin Page
+#### Get Knowledge Graph Page
 
 ```http
 GET /dtwin
 ```
 
-Returns the Digital Twin HTML page (sync, quality, triples, knowledge graph).
+Returns the Knowledge Graph HTML page (sync, quality, triples, graph viewer).
 
 #### Execute Query (Internal)
 
-Used internally by the sync and knowledge graph features to generate and execute SQL from the ontology mappings.
+Used internally by the sync and graph viewer features to generate and execute SQL from the ontology mappings.
 
 ```http
 POST /dtwin/execute
@@ -2134,9 +2134,9 @@ type Query {
 
 ### External REST API (`/api/v1`)
 
-**Domain** routes (`/api/v1/domains`, `/api/v1/domain/...`) and **Digital Twin** routes (`/api/v1/digitaltwin/...`). Most accept an optional `project_name` (and often `project_version`) to load a domain from the registry instead of the browser session.
+**Domain** routes (`/api/v1/domains`, `/api/v1/domain/...`) and **Knowledge Graph** routes (`/api/v1/digitaltwin/...`). Most accept an optional `project_name` (and often `project_version`) to load a domain from the registry instead of the browser session.
 
-**Digital Twin base URL:** `http://localhost:8000/api/v1/digitaltwin`
+**Knowledge Graph base URL:** `http://localhost:8000/api/v1/digitaltwin`
 
 #### Registry
 
@@ -2467,7 +2467,7 @@ HTML routes are thin; they call **domain objects** under `back/objects/*` and **
 | `front/routes/home.py` (settings page served from home), `api/routers/internal/settings.py` | `back/services/settings.py`, `shared/config/settings.py`, `shared/config/constants.py` | Settings & environment UI |
 | `front/routes/ontology.py`, `api/routers/internal/ontology.py` | `back/objects/ontology/ontology.py`, `back/core/w3c/*` | Ontology design & import |
 | `front/routes/mapping.py`, `api/routers/internal/mapping.py` | `back/objects/mapping/mapping.py`, `back/core/w3c/r2rml/*` | Table mapping & R2RML |
-| `front/routes/dtwin.py`, `api/routers/internal/dtwin.py` | `back/objects/digitaltwin/digitaltwin.py`, `back/core/w3c/sparql/SparqlTranslator.py` | Digital Twin, SPARQL, query UI |
+| `front/routes/dtwin.py`, `api/routers/internal/dtwin.py` | `back/objects/digitaltwin/digitaltwin.py`, `back/core/w3c/sparql/SparqlTranslator.py` | Knowledge Graph, SPARQL, query UI |
 | `front/routes/domain.py`, `api/routers/internal/domain.py` | `back/objects/domain/Domain.py`, `back/objects/session/DomainSession.py` | Domain save/load & registry UX |
 | `api/routers/internal/tasks.py` | (handlers in routes; registry scheduler via `back/objects/registry`) | Task status / triggers |
 | `api/routers/v1.py`, `api/routers/domains.py`, `api/routers/digitaltwin.py` | `api/service.py` | External stateless REST |

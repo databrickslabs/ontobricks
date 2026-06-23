@@ -14,7 +14,7 @@ Deployment uses **Databricks Asset Bundles (DAB)** — a declarative, repeatable
 │   (Databricks App)   │◄─────│   (Databricks App)   │
 │                      │ REST │                      │
 │   Web UI + REST API  │ API  │   MCP Server for     │
-│   Knowledge Graph    │      │   Databricks         │
+│   Graph Viewer    │      │   Databricks         │
 │                      │      │   Playground          │
 └──────────┬───────────┘      └──────────────────────┘
            │
@@ -47,7 +47,7 @@ Deployment uses **Databricks Asset Bundles (DAB)** — a declarative, repeatable
 
 ## Architecture
 
-This section provides detailed diagrams covering the OntoBricks component topology, Lakebase Postgres schema layout, data-flow through the Digital Twin build pipeline, network ports, and all permission layers required for a production deployment.
+This section provides detailed diagrams covering the OntoBricks component topology, Lakebase Postgres schema layout, data-flow through the Knowledge Graph build pipeline, network ports, and all permission layers required for a production deployment.
 
 ### A. Component Architecture
 
@@ -104,7 +104,7 @@ OntoBricks uses Lakebase Postgres (Autoscaling) as **both** its registry store (
 ║          Database (datname): ontobricks_registry  (or databricks_postgres in legacy)    ║
 ╠═══════════════════════════════════════╦════════════════════════════════════════════════╣
 ║  Schema: ontobricks_registry          ║  Schema: ontobricks_graph                      ║
-║  Created by: Settings → Initialize    ║  Created by: first Digital Twin Build          ║
+║  Created by: Settings → Initialize    ║  Created by: first Knowledge Graph Build          ║
 ║  Granted by: make bootstrap-lakebase  ║  Granted by: make bootstrap-lakebase           ║
 ╠═══════════════════════════════════════╣════════════════════════════════════════════════╣
 ║  registries                           ║  Per-domain, per-version triple tables:        ║
@@ -131,7 +131,7 @@ OntoBricks uses Lakebase Postgres (Autoscaling) as **both** its registry store (
 ╚══════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
-### C. Digital Twin Build — Data Flow
+### C. Knowledge Graph Build — Data Flow
 
 ```
   UC Source Tables         SQL Warehouse               Lakebase Postgres
@@ -219,7 +219,7 @@ All four layers must be satisfied before the application is fully functional. Th
 ║  CATALOG  <registry_catalog>         USE CATALOG                      all operations     ║
 ║  SCHEMA   <registry_catalog>.<sch>   USE SCHEMA                       all operations     ║
 ║                                      CREATE TABLE                     triplestore        ║
-║                                      CREATE VIEW                      Digital Twin Sync  ║
+║                                      CREATE VIEW                      Knowledge Graph Sync  ║
 ║  VOLUME   <cat>.<sch>.<vol>           READ VOLUME + WRITE VOLUME       artefact storage   ║
 ║  CATALOG  <source_catalog>            USE CATALOG                      Data Source picker ║
 ║  SCHEMA   <src_cat>.<src_sch>         USE SCHEMA                       R2RML builds       ║
@@ -235,7 +235,7 @@ All four layers must be satisfied before the application is fully functional. Th
 ║  Lakebase project (control-plane)     CAN_USE            before first deploy             ║
 ║  Schema: ontobricks_registry          USAGE + CREATE +   after Settings → Initialize     ║
 ║                                       DML on tables      (schema created by the app)     ║
-║  Schema: ontobricks_graph             USAGE + CREATE +   after first Digital Twin Build  ║
+║  Schema: ontobricks_graph             USAGE + CREATE +   after first Knowledge Graph Build  ║
 ║                                       DML on tables                                      ║
 ║  Schema: ontobricks  (sync, optional) USAGE + CREATE +   after first Lakeflow snapshot   ║
 ║                                       DML on tables                                      ║
@@ -260,7 +260,7 @@ All four layers must be satisfied before the application is fully functional. Th
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
-> **Deployment order matters.** Layer 1 bootstrap must run before the first user logs in. Layer 2 grants must be in place before any build or sync. Layer 3 grants for `ontobricks_registry` must be applied after the registry schema is initialized (step 14 in the Full Deployment Checklist). Layer 3 grants for `ontobricks_graph` must be applied after the first Digital Twin build creates that schema.
+> **Deployment order matters.** Layer 1 bootstrap must run before the first user logs in. Layer 2 grants must be in place before any build or sync. Layer 3 grants for `ontobricks_registry` must be applied after the registry schema is initialized (step 14 in the Full Deployment Checklist). Layer 3 grants for `ontobricks_graph` must be applied after the first Knowledge Graph build creates that schema.
 
 ---
 
@@ -277,7 +277,7 @@ All four layers must be satisfied before the application is fully functional. Th
   (`POST /api/2.0/database/instances`), not the Databricks UI "New project"
   button. The UI uses `POST /api/2.0/postgres/projects`, which produces an
   autoscaling-only project that is **incompatible** with the Synced Tables
-  API (`POST /api/2.0/database/synced_tables`) used by the Digital Twin
+  API (`POST /api/2.0/database/synced_tables`) used by the Knowledge Graph
   build. Use `scripts/setup-lakebase.sh` to create the project correctly
   (see §2 prerequisites below).
 - `psql` (libpq client) on `PATH` for `scripts/bootstrap-lakebase-perms.sh`
@@ -380,7 +380,7 @@ Deployment uses **Databricks Asset Bundles** to deploy both the main app and the
 > **Critical:** The Databricks UI "New project" button calls
 > `POST /api/2.0/postgres/projects` which creates an autoscaling-only project.
 > That API is **incompatible** with the Synced Tables API
-> (`POST /api/2.0/database/synced_tables`) used by the Digital Twin build.
+> (`POST /api/2.0/database/synced_tables`) used by the Knowledge Graph build.
 > You must use `scripts/setup-lakebase.sh` instead.
 
 ```bash
@@ -564,7 +564,7 @@ or a manual `bootstrap-lakebase-perms.sh` run.
 | Schema | When to bootstrap | Who runs it |
 |--------|-------------------|-------------|
 | Registry (`ontobricks_registry`) | After **Settings → Registry → Initialize** has created the schema | `deploy.sh` automatically (`LAKEBASE_REGISTRY_SCHEMA` in `deploy.config.sh`) |
-| Graph DB (`ontobricks_graph`) | After the **first Digital Twin Build** has created the schema | In-app "Create graph DB" flow, or manual run with the graph project/branch/database |
+| Graph DB (`ontobricks_graph`) | After the **first Knowledge Graph Build** has created the schema | In-app "Create graph DB" flow, or manual run with the graph project/branch/database |
 
 The script grants:
 
@@ -789,7 +789,7 @@ The main app's service principal performs the following operations at runtime. E
 |---|-----------|--------|-----------------------|
 | 1 | `SHOW CATALOGS`, `SHOW SCHEMAS`, `SHOW TABLES`, `DESCRIBE`, `SHOW VOLUMES`, `information_schema.tables` lookups (Data Source picker) | Source catalogs + registry catalog | `USE CATALOG` + `USE SCHEMA` + `SELECT` on browsed tables |
 | 2 | `SELECT` on source tables referenced by R2RML `sql_query` entries (VIEW creation + build) | Each source table/view | `SELECT` |
-| 3 | `CREATE OR REPLACE VIEW <registry_catalog>.<registry_schema>.triplestore_<domain>_V<n>` (Digital Twin Sync) | Registry schema | Schema `CREATE VIEW`. If an object with the same name already exists from a previous build, additionally `MANAGE` on it or SP ownership. |
+| 3 | `CREATE OR REPLACE VIEW <registry_catalog>.<registry_schema>.triplestore_<domain>_V<n>` (Knowledge Graph Sync) | Registry schema | Schema `CREATE VIEW`. If an object with the same name already exists from a previous build, additionally `MANAGE` on it or SP ownership. |
 | 4 | `SELECT subject, predicate, object FROM <triplestore VIEW>` (SPARQL + Lakebase Graph DB population) | The triplestore VIEW | `SELECT` (inherited by the SP as owner once it created the VIEW in step 3). |
 | 5 | `CREATE TABLE IF NOT EXISTS <table>(subject STRING, predicate STRING, object STRING) USING DELTA`, `DELETE FROM`, `INSERT INTO` on the optional `DATABRICKS_TRIPLESTORE_TABLE` fallback (reasoning materialisation, MCP session-less calls) | Fallback triple-store table | Schema `CREATE TABLE`. If the table pre-exists, `MODIFY` to `DELETE`/`INSERT` + `SELECT`. |
 | 6 | File I/O under `/Volumes/<registry_catalog>/<registry_schema>/<registry_volume>/` (projects, domains, history log, registry artefacts) | Registry volume | `READ VOLUME` + `WRITE VOLUME`. |
@@ -1225,9 +1225,9 @@ Use your real main app name everywhere **`ontobricks-XXX`** appears (from `datab
 
 | Tool | Description |
 |---|---|
-| `list_projects` | List all projects (knowledge graphs) in the registry with names and descriptions |
+| `list_projects` | List all projects (graph viewers) in the registry with names and descriptions |
 | `select_project` | Activate a project by name — subsequent queries operate on its triple store |
-| `list_entity_types` | Human-readable overview of the selected project's knowledge graph (entity types, counts, predicates) |
+| `list_entity_types` | Human-readable overview of the selected project's graph viewer (entity types, counts, predicates) |
 | `describe_entity` | Search by name/type and get a full-text description with attributes, relationships, and BFS traversal |
 | `get_status` | Compact diagnostic: project, backend, table, data availability, triple count |
 
@@ -1488,7 +1488,7 @@ The agents need OAuth credentials to call the Foundation Model API. In a Databri
 - Check the SP has correct permissions on catalogs/schemas — see [§3 Unity Catalog Permissions for the Service Principal](#3-unity-catalog-permissions-for-the-service-principal)
 - Review app logs in the Databricks Apps UI
 
-### Digital Twin Sync: `PERMISSION_DENIED` / `Failed to create VIEW`
+### Knowledge Graph Sync: `PERMISSION_DENIED` / `Failed to create VIEW`
 
 If **Sync** fails with a message like
 
@@ -1505,7 +1505,7 @@ DROP TABLE IF EXISTS `<cat>`.`<schema>`.`triplestore_<domain>_v<n>`;
 
 If the failure is a plain `PERMISSION_DENIED` without a pre-existing object, the app SP is missing a UC grant — see [§3.2](#32--registry-catalogschema-grants-minimum-viable-set) for the registry schema and [§3.3](#33--source-data-grants-customer-tablesviews) for source tables.
 
-### Digital Twin Sync: `TABLE_OR_VIEW_NOT_FOUND`
+### Knowledge Graph Sync: `TABLE_OR_VIEW_NOT_FOUND`
 
 The app SP lacks `USE CATALOG` / `USE SCHEMA` / `SELECT` on one of the source tables referenced in an R2RML mapping. Identify which source from the error message and grant per [§3.3](#33--source-data-grants-customer-tablesviews).
 

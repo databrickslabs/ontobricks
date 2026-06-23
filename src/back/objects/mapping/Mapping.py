@@ -591,6 +591,8 @@ class Mapping:
         }
         if data.get("excluded"):
             mapping["excluded"] = True
+        if data.get("excluded_attributes"):
+            mapping["excluded_attributes"] = list(data["excluded_attributes"])
         return mapping
 
     @staticmethod
@@ -612,6 +614,8 @@ class Mapping:
         }
         if data.get("excluded"):
             mapping["excluded"] = True
+        if data.get("excluded_attributes"):
+            mapping["excluded_attributes"] = list(data["excluded_attributes"])
         return mapping
 
     def add_or_update_entity_mapping(
@@ -985,6 +989,57 @@ class Mapping:
         return results
 
     @staticmethod
+    def _merge_entity_mappings(
+        existing: List[Dict[str, Any]], incoming: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Upsert *incoming* entity mappings into *existing* (keyed by class URI).
+
+        Preserves an existing ``excluded`` flag when the incoming mapping does
+        not set one, so a re-map never silently re-includes an entity the user
+        excluded.
+        """
+        merged = list(existing)
+        for new_m in incoming:
+            uri = new_m.get("ontology_class") or new_m.get("class_uri", "")
+            idx = next(
+                (
+                    i
+                    for i, m in enumerate(merged)
+                    if (m.get("ontology_class") or m.get("class_uri")) == uri
+                ),
+                None,
+            )
+            if idx is not None:
+                if merged[idx].get("excluded") and "excluded" not in new_m:
+                    new_m["excluded"] = True
+                merged[idx] = new_m
+            else:
+                merged.append(new_m)
+        return merged
+
+    @staticmethod
+    def _merge_relationship_mappings(
+        existing: List[Dict[str, Any]], incoming: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Upsert *incoming* relationship mappings into *existing* (keyed by
+        ``property``), preserving an existing ``excluded`` flag.
+        """
+        merged = list(existing)
+        for new_m in incoming:
+            uri = new_m.get("property", "")
+            idx = next(
+                (i for i, m in enumerate(merged) if m.get("property") == uri),
+                None,
+            )
+            if idx is not None:
+                if merged[idx].get("excluded") and "excluded" not in new_m:
+                    new_m["excluded"] = True
+                merged[idx] = new_m
+            else:
+                merged.append(new_m)
+        return merged
+
+    @staticmethod
     def save_mappings_to_session(
         session_id: Optional[str],
         session_ref: Any,
@@ -1019,48 +1074,17 @@ class Mapping:
 
             if entity_mappings is not None:
                 if existing_entity_mappings is not None:
-                    merged = list(existing_entity_mappings)
-                    for new_m in entity_mappings:
-                        uri = new_m.get("ontology_class") or new_m.get("class_uri", "")
-                        idx = next(
-                            (
-                                i
-                                for i, m in enumerate(merged)
-                                if (m.get("ontology_class") or m.get("class_uri"))
-                                == uri
-                            ),
-                            None,
-                        )
-                        if idx is not None:
-                            if merged[idx].get("excluded") and "excluded" not in new_m:
-                                new_m["excluded"] = True
-                            merged[idx] = new_m
-                        else:
-                            merged.append(new_m)
-                    assignment["entities"] = merged
+                    assignment["entities"] = Mapping._merge_entity_mappings(
+                        existing_entity_mappings, entity_mappings
+                    )
                 else:
                     assignment["entities"] = entity_mappings
 
             if relationship_mappings is not None:
                 if existing_relationship_mappings is not None:
-                    merged = list(existing_relationship_mappings)
-                    for new_m in relationship_mappings:
-                        uri = new_m.get("property", "")
-                        idx = next(
-                            (
-                                i
-                                for i, m in enumerate(merged)
-                                if m.get("property") == uri
-                            ),
-                            None,
-                        )
-                        if idx is not None:
-                            if merged[idx].get("excluded") and "excluded" not in new_m:
-                                new_m["excluded"] = True
-                            merged[idx] = new_m
-                        else:
-                            merged.append(new_m)
-                    assignment["relationships"] = merged
+                    assignment["relationships"] = Mapping._merge_relationship_mappings(
+                        existing_relationship_mappings, relationship_mappings
+                    )
                 else:
                     assignment["relationships"] = relationship_mappings
 
@@ -1248,10 +1272,11 @@ class Mapping:
                 continue
             em = mapping_by_class.get(cls_uri, {})
             attr_map = em.get("attribute_mappings", {})
+            excluded_attrs = set(em.get("excluded_attributes", []))
             cls_label = cls.get("label") or cls.get("name", "Unknown")
             for dp in data_props:
                 attr_name = dp.get("name") or dp.get("localName") or ""
-                if attr_name and attr_name not in attr_map:
+                if attr_name and attr_name not in attr_map and attr_name not in excluded_attrs:
                     unmapped_attributes.append(
                         {"class": cls_label, "attribute": attr_name}
                     )

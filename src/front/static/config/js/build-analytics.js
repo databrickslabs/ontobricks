@@ -1,7 +1,7 @@
 /*
  * Registry → Build Analytics.
  *
- * Renders the per-domain Digital Twin build-run trace stored in the
+ * Renders the per-domain Knowledge Graph build-run trace stored in the
  * registry ``build_runs`` table: summary cards plus a full runs table
  * (newest-first). The most recent successful run for the selected
  * (domain, version) is flagged as the "active" build.

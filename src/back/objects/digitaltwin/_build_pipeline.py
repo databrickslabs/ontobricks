@@ -1,4 +1,4 @@
-"""Internal helper that drives a single Digital Twin build.
+"""Internal helper that drives a single Knowledge Graph build.
 
 Extracted from :class:`back.objects.digitaltwin.DigitalTwin.run_build_task`
 (formerly an 839-line method) to make each phase — prepare → view →
@@ -155,7 +155,7 @@ def step_times_from_task(task) -> Dict[str, float]:
 
 
 class _BuildPipeline:
-    """One run of the Digital Twin build/sync pipeline.
+    """One run of the Knowledge Graph build/sync pipeline.
 
     Constructed once per build with the same arguments as the legacy
     :meth:`DigitalTwin.run_build_task`. Call :meth:`run` to execute the
@@ -252,11 +252,17 @@ class _BuildPipeline:
 
         logger.debug("[DT-BUILD %s] resolving graph engine mode…", self.task_id)
         try:
+            # force=True bypasses the GlobalConfigService in-memory cache.
+            # At cold start, a transiently unavailable Lakebase can cause the
+            # cache to hold _empty() (no sync_mode), while the Settings UI
+            # always shows the correct value because it also uses force=True.
+            # Without this flag the build silently falls back to app_managed
+            # even when managed_synced is configured.
             engine = TripleStoreFactory._resolve_graph_engine(
-                self.domain, self.settings
+                self.domain, self.settings, force=True
             )
             cfg = TripleStoreFactory._resolve_graph_engine_config(
-                self.domain, self.settings
+                self.domain, self.settings, force=True
             ) or {}
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -565,7 +571,7 @@ class _BuildPipeline:
         apply_msg = (
             "Applying changes to graph..."
             if self.is_api
-            else "Applying changes to the knowledge graph..."
+            else "Applying changes to the graph viewer..."
         )
         self.tm.advance_step(self.task_id, apply_msg)
 
@@ -1021,7 +1027,7 @@ class _BuildPipeline:
             )
             return False
 
-        _adv()  # → "Creating knowledge graph union view"
+        _adv()  # → "Creating graph viewer union view"
 
         # Step 6 — create/refresh the union view.
         t_step = time.time()
@@ -1065,7 +1071,7 @@ class _BuildPipeline:
             )
             return False
 
-        _adv()  # → "Finalizing knowledge graph"
+        _adv()  # → "Finalizing graph viewer"
 
         # Step 7 — truncate companion for a clean reasoning slate.
         t_step = time.time()
@@ -1249,10 +1255,90 @@ class _BuildPipeline:
             }
             svc = RegistryService.from_context(self.domain, self.settings)
             svc.record_build_run(folder, entry)
+            if status == "success" and version:
+                build_ts = getattr(self.domain, "last_build", "") or entry.get(
+                    "finished_at", ""
+                )
+                if build_ts:
+                    ok, msg = svc._store.stamp_last_build(folder, str(version), build_ts)
+                    if ok:
+                        logger.info(
+                            "[DT-BUILD %s] stamped last_build=%s in registry",
+                            self.task_id,
+                            build_ts,
+                        )
+                    else:
+                        logger.warning(
+                            "[DT-BUILD %s] stamp_last_build failed (non-fatal): %s",
+                            self.task_id,
+                            msg,
+                        )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "[DT-BUILD %s] could not record build-run trace "
                 "(non-fatal): %s",
+                self.task_id,
+                exc,
+            )
+
+    def _persist_last_build_to_registry(self) -> None:
+        """Write last_build to the registry domain_versions row.
+
+        The session/UI build path stamps domain.last_build before the build
+        thread starts; the API path does not.  In both cases the timestamp
+        must reach the DB column so ReviewService.submit() can unblock the
+        Submit-for-Review gate.  Best-effort: a failure is logged but never
+        propagates.
+        """
+        try:
+            from back.objects.registry.RegistryService import RegistryService
+            from back.objects.session import sanitize_domain_folder
+
+            folder = getattr(self.domain, "uc_domain_folder", "") or (
+                sanitize_domain_folder(self.domain_name)
+            )
+            version = (
+                getattr(self.domain_snap, "current_version", None)
+                or getattr(self.domain, "current_version", None)
+                or ""
+            )
+            if not folder or not version:
+                logger.warning(
+                    "[DT-BUILD %s] _persist_last_build_to_registry: "
+                    "cannot resolve folder=%r version=%r — skipping",
+                    self.task_id,
+                    folder,
+                    version,
+                )
+                return
+
+            # API build path never stamps last_build before starting; do it now.
+            if not getattr(self.domain, "last_build", None):
+                self.domain.last_build = datetime.now(timezone.utc).isoformat()
+
+            svc = RegistryService.from_context(self.domain, self.settings)
+            domain_data = self.domain.export_for_save()
+            w_ok, w_msg = svc._store.write_version(folder, version, domain_data)
+            if w_ok:
+                logger.info(
+                    "[DT-BUILD %s] persisted last_build=%s to registry "
+                    "(folder=%s version=%s)",
+                    self.task_id,
+                    self.domain.last_build,
+                    folder,
+                    version,
+                )
+            else:
+                logger.error(
+                    "[DT-BUILD %s] write_version failed when persisting "
+                    "last_build: %s",
+                    self.task_id,
+                    w_msg,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[DT-BUILD %s] could not persist last_build to registry "
+                "(non-fatal — Submit for Review gate may remain blocked): %s",
                 self.task_id,
                 exc,
             )
@@ -1284,6 +1370,7 @@ class _BuildPipeline:
         msg = f"Full rebuild: {self.triple_count} triples in {duration:.1f}s"
         self.tm.complete_task(self.task_id, result=result_data, message=msg)
         self._record_build_run("success", message=msg)
+        self._persist_last_build_to_registry()
 
     def _fail_unexpected(self, exc: Exception) -> None:
         duration = time.time() - self.start_time

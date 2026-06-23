@@ -50,7 +50,7 @@ triple-store backend (`TripleStoreFactory.create(...)`):
 The selection is made in `back/core/triplestore/TripleStoreFactory.py` and
 `back/core/graphdb/GraphDBFactory.py`. Both layers are always present: the
 Delta view is the governance-controlled snapshot, and the Graph DB engine is
-the queryable mirror used by the Digital Twin, reasoning and BFS / cohort
+the queryable mirror used by the Knowledge Graph, reasoning and BFS / cohort
 helpers. The user-facing wrappers (REST / GraphQL / SPARQL) don't change
 when the Graph DB engine is swapped.
 
@@ -125,18 +125,18 @@ and the engine that ultimately runs (column **Engine**).
 | **R2RML** view | `mapping-r2rml.js` | `/mapping/r2rml/raw` | REST | rdflib serializer |
 | **Spark SQL** preview | `mapping-sparksql.js` | `POST /dtwin/translate` | REST → SPARQL **translation only** | `SparqlTranslator` (no execution; shows the generated SQL) |
 
-### 4.4 Digital Twin (the core read surface)
+### 4.4 Knowledge Graph (the core read surface)
 
-This is where users actually query the knowledge graph. **Knowledge Graph**,
-**GraphQL**, and **Graph Chat** all sit under the *Digital Twin* menu; they
+This is where users actually query the graph viewer. **Graph Viewer**,
+**GraphQL**, and **Graph Chat** all sit under the *Knowledge Graph* menu; they
 hit different wrappers but eventually share the same Delta / GraphDB
 storage.
 
 | UI Feature | JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
 | **Insight / Overview** | `query-sync.js` (stats panel), `query.js` | `GET /dtwin/sync/stats`, `GET /dtwin/sync/status` | REST | Spark SQL aggregates on the Delta view, or Postgres SQL aggregates on the Lakebase Graph DB |
-| **Knowledge Graph** (Sigma.js viz) | `query-sigmagraph.js`, `query-d3graph.js` | `GET /dtwin/groups`, `POST /dtwin/sync/filter`, `GET /dtwin/sync/stats?refresh=true`, `POST /dtwin/clusters/detect`, `GET /dtwin/reasoning/inferred` | REST | Each `/sync/filter` call is a **SPARQL** under the hood, translated to **Spark SQL** (Delta) or **Postgres SQL** (Lakebase Graph DB) |
-| **Knowledge Graph → SPARQL panel** | `query-execute.js` | `POST /dtwin/execute` | **SPARQL** | `SparqlQueryRunner` → **Spark SQL** on the SQL Warehouse (Delta view) |
+| **Graph Viewer** (Sigma.js viz) | `query-sigmagraph.js`, `query-d3graph.js` | `GET /dtwin/groups`, `POST /dtwin/sync/filter`, `GET /dtwin/sync/stats?refresh=true`, `POST /dtwin/clusters/detect`, `GET /dtwin/reasoning/inferred` | REST | Each `/sync/filter` call is a **SPARQL** under the hood, translated to **Spark SQL** (Delta) or **Postgres SQL** (Lakebase Graph DB) |
+| **Graph Viewer → SPARQL panel** | `query-execute.js` | `POST /dtwin/execute` | **SPARQL** | `SparqlQueryRunner` → **Spark SQL** on the SQL Warehouse (Delta view) |
 | **GraphQL** | `query-graphql.js` | `GET /graphql/{domain}/schema`, `POST /graphql/{domain}`, `GET /graphql/settings/depth` | **GraphQL** | Schema generated from OWL; resolvers call `DomainQueryService` → SPARQL → **Spark SQL** |
 | **Graph Chat** | `query-chat.js`, agent `agent_dtwin_chat` | `POST /dtwin/assistant/chat`, `GET/DELETE /dtwin/assistant/history` | REST → LLM tool-calling | LLM calls REST + GraphQL + SPARQL tools (see §6) |
 | **Build** (materialize triple store) | `query-sync.js` | `POST /dtwin/sync/start`, `POST /dtwin/sync/load` | REST | `_BuildPipeline` runs the R2RML SQL on the Warehouse (Delta `CREATE OR REPLACE VIEW`) and streams the rows into the active Graph DB engine via `bulk_insert_iter` (`COPY FROM STDIN` on Lakebase) |
@@ -312,7 +312,7 @@ Cursor (stdio)  ──FastMCP──▶  src/mcp-server/server/app.py
 
 Wrappers in play: REST (transport) → **GraphQL** (query) → SPARQL → **Spark SQL**.
 
-### 9.3 User opens **Knowledge Graph** tab and applies a filter
+### 9.3 User opens **Graph Viewer** tab and applies a filter
 
 ```text
 Browser  ──POST /dtwin/sync/filter──▶  api/routers/internal/dtwin.py
@@ -344,7 +344,7 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 | Surface | REST | GraphQL | SPARQL | Spark SQL (Delta) | Postgres SQL (Lakebase) |
 |---|:---:|:---:|:---:|:---:|:---:|
 | UI — Registry / Domain / Ontology / Mapping | ✓ | | | sample-only | |
-| UI — Knowledge Graph (Sigma) | ✓ | | (via filter) | ✓ | ✓ |
+| UI — Graph Viewer (Sigma) | ✓ | | (via filter) | ✓ | ✓ |
 | UI — SPARQL panel | | | ✓ | ✓ | |
 | UI — GraphQL tab | | ✓ | (under) | ✓ | |
 | UI — Graph Chat | ✓ | ✓ | ✓ | ✓ | ✓ |

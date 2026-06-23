@@ -1,6 +1,6 @@
 /**
  * OntoBricks — query-sync.css
- * Triple store / Digital Twin build (sync) section — extracted from _query_sync.html
+ * Triple store / Knowledge Graph build (sync) section — extracted from _query_sync.html
  */
 
 #sync-section .sync-content-section {
@@ -44,7 +44,7 @@
 /* Readiness tiles now use shared .ob-kpi-tile from components.css */
 
 /* =====================================================================
- * Building Digital Twin — live build log card
+ * Building Knowledge Graph — live build log card
  * ===================================================================== */
 
 #syncBuildLogCard .sync-build-log {
@@ -122,7 +122,7 @@
     padding-left: 8px;
 }
 
-/* ── Digital Twin architecture diagram ────────── */
+/* ── Knowledge Graph architecture diagram ────────── */
 .dt-arch-diagram {
     display: flex;
     align-items: stretch;

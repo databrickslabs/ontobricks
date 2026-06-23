@@ -100,7 +100,7 @@ function updateHealthBanner(data) {
     if (ready && dtwin.indicator === 'green' && hasWarehouse) {
         banner.className = 'validation-health-banner health-ready mb-4';
         banner.innerHTML = '<i class="bi bi-check-circle-fill health-icon"></i>' +
-            '<div><strong>Domain fully operational</strong> — Ontology, Mapping, Warehouse and Digital Twin are all healthy.</div>';
+            '<div><strong>Domain fully operational</strong> — Ontology, Mapping, Warehouse and Knowledge Graph are all healthy.</div>';
         return;
     }
 
@@ -108,8 +108,8 @@ function updateHealthBanner(data) {
     if (!hasWarehouse) issues.push('SQL Warehouse not configured');
     if (!data.ontology_valid) issues.push('Ontology invalid');
     if (!data.mapping_valid) issues.push('Mapping incomplete');
-    if (dtwin.indicator === 'red') issues.push('Digital Twin not built');
-    else if (dtwin.indicator === 'orange') issues.push('Digital Twin partially ready');
+    if (dtwin.indicator === 'red') issues.push('Knowledge Graph not built');
+    else if (dtwin.indicator === 'orange') issues.push('Knowledge Graph partially ready');
 
     if (!data.ontology_valid || !data.mapping_valid || !hasWarehouse) {
         banner.className = 'validation-health-banner health-error mb-4';
@@ -397,7 +397,7 @@ function updateMappingCard(data) {
         : '';
 }
 
-/* ── Digital Twin detail card ─────────────────── */
+/* ── Knowledge Graph detail card ─────────────────── */
 
 /** Reusable existence badge (same pattern as query-sync.js _badge) */
 function _dtBadge(flag, okText, failText, unknownText) {

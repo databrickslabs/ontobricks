@@ -1,0 +1,177 @@
+## Two-level navbar — feature/two-level-navbar
+
+### Context
+Restructure the top navigation bar into two horizontal levels to improve
+discoverability and reduce cognitive load. Level 1 (top) surfaces the global
+Registry and the active domain name. Level 2 (below) exposes the three
+design/query areas (Ontology, Mapping, Knowledge Graph) as persistent tabs,
+plus a Domain dropdown for all domain management sub-pages.
+
+### Changes
+1. `src/front/config/menu_config.json` — added `navbar_hidden: true` to the
+   `digitaltwin` menu entry so Knowledge Graph no longer renders as an L1 dropdown.
+2. `src/front/templates/base.html`
+   - Removed all `<li class="nav-item nav-chevron">` separator elements from
+     the L1 navbar loop.
+   - Changed the Domain menu item in L1 from a dropdown to a plain `<a>` link
+     (`id="domainL1Link"`), showing `currentDomainName` and linking to `/domain/`.
+   - Added a new `<nav id="obSubnav" class="ob-subnav">` below the main `<nav>`,
+     driven by Jinja lookups into `menu_config.menus`. Contains:
+     Ontology link, Mapping link, Knowledge Graph link (all with
+     `data-subnav-route` for JS active-state), a visual divider, and a Domain
+     dropdown (all domain groups except `domain-design`, plus the Save Domain
+     action and `id="domainSectionName"` / `id="menuSaveDomain"`).
+3. `src/front/static/global/css/main.css`
+   - Removed `.navbar .nav-chevron` and `.navbar .nav-chevron svg` rule blocks.
+   - Added full `.ob-subnav` component styles: background, border, flex nav,
+     `.ob-subnav-link` with hover/active/disabled states, dropdown overrides,
+     and `.ob-subnav-divider`.
+4. `src/front/static/global/js/breadcrumb.js`
+   - `_updateChromeHeight()` now reads actual `nav.navbar`, `#obSubnav`, and
+     `#obBreadcrumb` heights from the DOM instead of hard-coding 60 px.
+   - `init()` calls `_updateChromeHeight()` unconditionally (before the
+     early-return on ≤1 crumbs) so sidebar layout is always correct.
+5. `src/front/static/global/js/navbar.js`
+   - Added `initSubnavActiveState()`: marks the `.ob-subnav-link` whose
+     `data-subnav-route` matches the current `window.location.pathname` as
+     `.active` on page load.
+   - `initNavbar()` now calls `initSubnavActiveState()`.
+6. `tests/units/api/test_ui_rendering.py`
+   - Replaced `test_navbar_has_domain_dropdown` (checked `id="domainDropdown"`)
+     with `test_navbar_has_domain_l1_link` (checks `id="domainL1Link"`).
+   - Replaced `test_navbar_has_digital_twin_dropdown` (checked
+     `id="digitaltwinDropdown"`) with `test_subnav_has_domain_dropdown` and
+     `test_subnav_has_knowledge_graph_link`.
+
+### Modified files
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/breadcrumb.js
+- src/front/static/global/js/navbar.js
+- tests/units/api/test_ui_rendering.py
+
+### Test result
+2419 passed, 15 skipped — all green.
+
+---
+
+## L2 subnav — Ontology / Mapping / KG now have submenus
+
+### Context
+Follow-up to the two-level navbar change. The three area tabs in the L2
+subnav (Ontology, Mapping, Knowledge Graph) were plain links; they now
+render as dropdown menus exposing their section groups directly from the
+subnav, consistent with the Domain dropdown already in place.
+
+### Changes
+1. `src/front/templates/base.html` — each of the three L2 subnav items
+   (`ontology_m`, `mapping_m`, `kg_m`) is now a `dropdown` `<li>` with
+   a `data-bs-toggle="dropdown"` toggle (ids: `subnavOntologyDropdown`,
+   `subnavMappingDropdown`, `subnavKgDropdown`). The dropdown menu renders
+   all non-`sidebar_only` groups and their items, linking to
+   `[route]?section=[id]`. `hidden_in_view_mode` and `dropdown-requires-domain`
+   gating is preserved per item. `data-subnav-route` is kept on the toggle
+   `<a>` for the URL-based active-state logic.
+2. `tests/units/api/test_ui_rendering.py` — `test_subnav_has_knowledge_graph_link`
+   replaced by `test_subnav_has_knowledge_graph_dropdown` (checks both the
+   `data-subnav-route` attribute and `id="subnavKgDropdown"`); added
+   `test_subnav_has_ontology_and_mapping_dropdowns`.
+
+### Modified files
+- src/front/templates/base.html
+- tests/units/api/test_ui_rendering.py
+
+### Test result
+2420 passed, 15 skipped — all green.
+
+---
+
+## Navbar — Apply Proposal 1 design (path separators + tinted L2 + Save button)
+
+### Context
+Applied the "Path + underline tabs" design to match the selected canvas proposal.
+Three visual refinements: path-style text separators in L1, slightly tinted L2
+bar for visual distinction, and Save Domain button right-aligned on L2.
+
+### Changes
+1. `src/front/templates/base.html`
+   - Added `<li class="ob-nav-dot-sep">·</li>` as the first item in the L1
+     navbar list (between brand and Registry).
+   - Added `<li class="ob-nav-path-sep">›</li>` before the Domain `<li>` in
+     the loop, giving the path-style "Registry › Domain" appearance.
+   - Removed the Save Domain `navbar_actions` loop from the L2 Domain dropdown
+     (the action was duplicated — it now lives exclusively in the new Save button).
+   - Added a right-aligned `<li class="ob-subnav-item ms-auto">` at the end of
+     `.ob-subnav-nav` containing an `<a class="ob-subnav-save-btn">` for Save Domain.
+2. `src/front/static/global/css/main.css`
+   - Added `.ob-nav-dot-sep` and `.ob-nav-path-sep` rules for the text separators.
+   - Changed `.ob-subnav` background from `var(--db-navbar-bg)` to
+     `var(--db-navbar-border)` (#D8D8D8) for a tinted appearance.
+   - Added `.ob-subnav-save-btn` styles (button look, hover state, disabled gate)
+     and `.ob-subnav-nav .ob-subnav-item.ms-auto` to push it right.
+
+### Modified files
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+
+### Test result
+2420 passed, 15 skipped — all green.
+
+---
+
+## Fix: Save Domain button not triggering action
+
+### Context
+After moving the "Save Domain" action from the L1 dropdown into the L2 subnav (`#obSubnav`), the click delegation was still scoped to `#navbarNav` and never reached the button.
+
+### Changes
+1. `src/front/static/global/js/base-ui-handlers.js` — Changed `initNavbarActionDelegation` to attach the delegated click listener to `document.body` instead of `#navbarNav`, so `data-navbar-action` links work in both L1 and L2 subnav.
+
+### Modified files
+- src/front/static/global/js/base-ui-handlers.js
+
+### Test result
+2420 passed, 15 skipped — all green.
+
+---
+
+## Two-level navbar, breadcrumb-in-subnav, and new-domain popup — full session changelog
+
+### Context
+Complete rework of the application chrome during this session:
+two-level navbar (L1 + L2 subnav), breadcrumb moved inline into the subnav,
+Save Domain button relocated to subnav, New Domain flow replaced by a popup,
+domain navigation gating decoupled from UC-save requirement, partial-delete
+bug fixed for domains with no UC directory, cursor rules updated.
+
+### Changes
+1. `src/front/templates/base.html` — Added `#obSubnav` (L2 subnav, hidden by default); Domain shown as plain link in L1; L2 contains Domain/Ontology/Mapping/KG dropdowns + flex spacer + breadcrumb `<li>` + Save Domain button; removed chevrons.
+2. `src/front/static/global/css/main.css` — Added `.ob-subnav*` styles, `.ob-nav-dot-sep`, `.ob-nav-path-sep`, `.ob-nav-disabled`, `.ob-subnav-breadcrumb-wrap`, `.ob-subnav-flex-spacer`, L1/L2 colour tokens; removed chevron rules.
+3. `src/front/static/global/js/navbar.js` — Added `initSubnavActiveState`, removed `alignSubnavWithDomain`; `updateDomainMenuVisibility` now shows/hides `#obSubnav` and disables `#domainL1Link`; `updateMenusForDomainStatus` now driven by `hasDomain` (not `hasRegistry`); `domainNew` replaced with popup + UC-save flow; `showDomainSaveDialog` / `doDomainSave` accept `{ afterSave }` option.
+4. `src/front/static/global/js/breadcrumb.js` — Breadcrumb now toggles `#obBreadcrumbWrap`; `_updateChromeHeight` simplified (no separate breadcrumb measurement); `window.OBBreadcrumb` exposed.
+5. `src/front/static/global/js/utils.js` — Added `showNewDomainDialog()` (name + description + LLM endpoint picker with refresh); exposed as `window.showNewDomainDialog`.
+6. `src/front/static/global/js/base-ui-handlers.js` — Click delegation for `data-navbar-action` moved to `document.body` (was `#navbarNav`) so Save Domain button in subnav works.
+7. `src/front/static/domain/js/domain-actions.js` — `updateVersionStatus` targets `#menuSaveDomain` (was `#btnSaveDomain`).
+8. `src/front/templates/partials/domain/_domain_information.html` — Removed in-page Save Domain button from section header.
+9. `src/front/config/menu_config.json` — `"navbar_hidden": true` on `digitaltwin`.
+10. `src/front/templates/home.html` — Added "New Domain" button in "All Domains" section header.
+11. `src/back/objects/registry/RegistryService.py` — `recursive_delete` treats 404 (directory not found) as a no-op instead of an error, fixing "partially deleted" on domains with no UC directory.
+12. `.cursor/11-frontend-design.mdc` — Updated navbar/breadcrumb/subnav architecture docs, new-domain dialog, gating rules, component catalog.
+
+### Modified files
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/breadcrumb.js
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/base-ui-handlers.js
+- src/front/static/domain/js/domain-actions.js
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/config/menu_config.json
+- src/front/templates/home.html
+- src/back/objects/registry/RegistryService.py
+- .cursor/11-frontend-design.mdc
+
+### Test result
+2420 passed, 15 skipped — all green.

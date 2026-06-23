@@ -379,7 +379,7 @@
 
 .mapping-map-context-divider {
     height: 1px;
-    background: #ffffff;
+    background: #e9ecef;
 }
 
 .mapping-map-context-item {
@@ -394,7 +394,7 @@
 }
 
 .mapping-map-context-item:hover {
-    background: #ffffff;
+    background: #f1f5f9;
 }
 
 .mapping-map-context-item i {
@@ -416,5 +416,5 @@
 }
 
 .mapping-map-context-item.mapping-map-context-warning:hover {
-    background: #ffffff;
+    background: #f1f5f9;
 }

@@ -1,5 +1,5 @@
 # mcp-ontobricks — Custom MCP Server for OntoBricks
-# Exposes Digital Twin knowledge graph tools to the Databricks Playground.
+# Exposes Knowledge Graph graph viewer tools to the Databricks Playground.
 # Calls back to the main OntoBricks app REST API.
 #
 # ╔════════════════════════════════════════════════════════════════╗

@@ -10,7 +10,7 @@ See also: [Databricks Asset Bundles docs](https://docs.databricks.com/dev-tools/
 
 | App | Bundle Key | Name | Description |
 |-----|------------|------|-------------|
-| **OntoBricks** | `ontobricks_app` | `ontobricks` | Main FastAPI application — ontology editor, mapping, Digital Twin builder |
+| **OntoBricks** | `ontobricks_app` | `ontobricks` | Main FastAPI application — ontology editor, mapping, Knowledge Graph builder |
 | **MCP Server** | `mcp_ontobricks_app` | `mcp-ontobricks` | Model Context Protocol companion — exposes knowledge-graph tools to the Databricks Playground |
 
 ## Quick Start

@@ -631,7 +631,7 @@ const ReasoningModule = {
                         } else if (area) {
                             const hint = document.createElement('div');
                             hint.className = 'small text-muted mt-1';
-                            hint.innerHTML = '<i class="bi bi-info-circle me-1"></i>Open the <strong>Knowledge Graph</strong> tab and reload to see the new triples.';
+                            hint.innerHTML = '<i class="bi bi-info-circle me-1"></i>Open the <strong>Graph Viewer</strong> tab and reload to see the new triples.';
                             area.appendChild(hint);
                         }
                     }

@@ -22,12 +22,14 @@
                 credentials: 'same-origin',
             });
             const data = await resp.json();
-            const tasks = (resp.ok && data.success && data.tasks) ? data.tasks : [];
-            if (!tasks.length) {
+            const ok = resp.ok && data.success;
+            const tasks = (ok && data.tasks) ? data.tasks : [];
+            const assigned = (ok && data.assigned_tasks) ? data.assigned_tasks : [];
+            if (!tasks.length && !assigned.length) {
                 section.style.display = 'none';
                 return;
             }
-            render(container, tasks);
+            render(container, tasks, assigned);
             section.style.display = '';
         } catch (err) {
             // Home page must stay usable even if the review API is down.
@@ -36,7 +38,8 @@
         }
     }
 
-    function render(container, tasks) {
+    function render(container, tasks, assigned) {
+        assigned = assigned || [];
         const rows = tasks.map((t) => {
             const actions = validateButton(t);
             return '<tr>' +
@@ -49,13 +52,16 @@
                 '</td></tr>';
         }).join('');
 
-        container.innerHTML =
-            '<div class="table-responsive">' +
-            '<table class="table table-sm align-middle my-tasks-table mb-0">' +
-            '<thead><tr>' +
-            '<th>Domain</th><th>Version</th><th>Status</th>' +
-            '<th>Approvals</th><th class="text-end">Review</th>' +
-            '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+        const reviewBlock = tasks.length
+            ? '<div class="table-responsive">' +
+              '<table class="table table-sm align-middle my-tasks-table mb-0">' +
+              '<thead><tr>' +
+              '<th>Domain</th><th>Version</th><th>Status</th>' +
+              '<th>Approvals</th><th class="text-end">Review</th>' +
+              '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+            : '';
+
+        container.innerHTML = reviewBlock + assignedBlock(assigned);
 
         container.querySelectorAll('button[data-validate]').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -67,6 +73,58 @@
                 ReviewModals.showComments(btn.dataset.domain, btn.dataset.version);
             });
         });
+        container.querySelectorAll('button[data-task-done]').forEach((btn) => {
+            btn.addEventListener('click', () => completeTask(btn));
+        });
+    }
+
+    function assignedBlock(assigned) {
+        if (!assigned.length) return '';
+        const rows = assigned.map((t) =>
+            '<tr>' +
+            '<td class="fw-medium">' + escapeHtml(t.title) + '</td>' +
+            '<td>' + escapeHtml(t.folder) + ' v' + escapeHtml(t.version) + '</td>' +
+            '<td>' + escapeHtml((t.status || 'open').replace('_', ' ')) + '</td>' +
+            '<td class="text-end">' +
+            '<button type="button" class="btn btn-sm btn-success" data-task-done="1" ' +
+            'data-folder="' + escapeAttr(t.folder) + '" ' +
+            'data-version="' + escapeAttr(t.version) + '" ' +
+            'data-task-id="' + escapeAttr(t.id) + '">' +
+            '<i class="bi bi-check2 me-1"></i>Done</button></td></tr>'
+        ).join('');
+        return '<div class="mt-3 mb-2 fw-medium small text-uppercase text-muted">' +
+            '<i class="bi bi-person-check me-1"></i>Assigned to me</div>' +
+            '<div class="table-responsive">' +
+            '<table class="table table-sm align-middle my-tasks-table mb-0">' +
+            '<thead><tr><th>Task</th><th>Domain</th><th>Status</th>' +
+            '<th class="text-end">Action</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table></div>';
+    }
+
+    async function completeTask(btn) {
+        const { folder, version, taskId } = btn.dataset;
+        try {
+            const resp = await fetch(
+                '/comments/' + encodeURIComponent(folder) + '/' +
+                encodeURIComponent(version) + '/tasks/' +
+                encodeURIComponent(taskId) + '/status',
+                {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'done' }),
+                }
+            );
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                showNotification(data.message || 'Failed to update task', 'error');
+                return;
+            }
+            showNotification('Task completed.', 'success');
+            loadTasks();
+        } catch (err) {
+            showNotification('Error: ' + err.message, 'error');
+        }
     }
 
     function commentsButton(task) {

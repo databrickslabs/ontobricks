@@ -150,7 +150,7 @@ class SQLWarehouse:
     ) -> Iterator[Dict[str, Any]]:
         """Stream *query* results as dict rows in fixed-size ``fetchmany`` batches.
 
-        Used by the Digital Twin build pipeline to keep large result sets
+        Used by the Knowledge Graph build pipeline to keep large result sets
         (full graph rebuild, EXCEPT diffs) from being materialized in the
         FastAPI process: the cursor stays open on the warehouse side and the
         app yields one batch at a time.

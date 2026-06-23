@@ -1,4 +1,4 @@
-"""Application domain objects: session state, ontology, mapping, digital twin, Unity Catalog registry, HTTP session."""
+"""Application domain objects: session state, ontology, mapping, knowledge graph, Unity Catalog registry, HTTP session."""
 
 from back.objects.ontology import Ontology
 from back.objects.mapping import Mapping

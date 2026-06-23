@@ -291,7 +291,7 @@ ONTOBRICKS_PROFILE=dst scripts/registry_transfer.sh import-commit \
   --conflict rename \
   --yes
 
-# 6. On the target env, rebuild the Digital Twin for each imported domain
+# 6. On the target env, rebuild the Knowledge Graph for each imported domain
 #    so the Delta view + Lakebase Graph DB tables (which are NOT transferred)
 #    get regenerated.
 ```

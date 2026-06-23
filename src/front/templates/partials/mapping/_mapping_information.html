@@ -32,12 +32,16 @@
 <div id="mappingLoadedContent" class="d-none">
 
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
-    <div>
+    <div class="me-auto">
         <h4 class="mb-1"><i class="bi bi-diagram-2 me-2"></i>Mapping Summary</h4>
         <p class="text-muted mb-0 small">Overview of mappings between ontology and data sources</p>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn" id="resetMappingsBtn">
+    <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn me-2" id="resetMappingsBtn">
         <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+            title="Open the mappings discussion" onclick="openMappingDiscussion()">
+        <i class="bi bi-chat-dots"></i>
     </button>
 </div>
 

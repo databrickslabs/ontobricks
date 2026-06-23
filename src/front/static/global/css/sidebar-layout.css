@@ -248,7 +248,7 @@ body.full-width-layout {
 }
 
 /* ==========================================================================
-   Knowledge Graph Sections - No scroll, full height
+   Graph Viewer Sections - No scroll, full height
    ========================================================================== */
 .sidebar-content:has(#sigmagraph-section.active),
 .sidebar-content:has(#graphql-section.active),

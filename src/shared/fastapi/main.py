@@ -65,7 +65,7 @@ tags_metadata = [
 API_DESCRIPTION = """
 # OntoBricks API
 
-**Knowledge Graph Builder for Databricks**
+**Graph Viewer Builder for Databricks**
 
 OntoBricks enables you to build knowledge graphs from Databricks tables using ontologies 
 and R2RML mappings. Design an ontology, map it to your data, and materialize triples 
@@ -76,7 +76,7 @@ into a Delta triple store for visual exploration and quality validation.
 - 🏗️ **Ontology Design** - Visual ontology editor with OWL export
 - 🔗 **Data Mapping** - Map ontology concepts to Databricks tables
 - 🔍 **SPARQL Queries** - Query data using W3C standard SPARQL
-- 📊 **Digital Twin Knowledge Graph** - Interactive sigma.js WebGL graph exploration with SPARQL-based quality checks
+- 📊 **Knowledge Graph Graph Viewer** - Interactive sigma.js WebGL graph exploration with SPARQL-based quality checks
 - 📦 **Domain Management** - Save/load domains to Unity Catalog volumes
 - 🔮 **GraphQL API** - Auto-generated typed schema from ontology with nested entity traversal
 

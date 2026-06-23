@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}Digital Twin - OntoBricks{% endblock %}
+{% block title %}Knowledge Graph - OntoBricks{% endblock %}
 
-{# The Digital Twin is a read / analysis surface (query, explore, run
+{# The Knowledge Graph is a read / analysis surface (query, explore, run
    reasoning, discover cohorts). Lifecycle / viewer read-only gating must NOT
    disable its filter / search / query controls — see permissions.css. #}
 {% block page_id %}digitaltwin{% endblock %}
@@ -53,7 +53,7 @@
                 {% include "partials/dtwin/_query_cohorts.html" %}
             </div>
 
-            <!-- Knowledge Graph Section -->
+            <!-- Graph Viewer Section -->
             <div id="sigmagraph-section" class="sidebar-section active">
                 {% include "partials/dtwin/_query_sigmagraph.html" %}
             </div>

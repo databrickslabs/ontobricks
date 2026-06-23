@@ -1905,7 +1905,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
 }
 
 /**
- * Create a Knowledge Graph group from the current business view's entities.
+ * Create a Graph Viewer group from the current business view's entities.
  */
 function createGroupFromView() {
     if (window.isActiveVersion === false) return;

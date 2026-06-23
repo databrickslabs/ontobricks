@@ -32,7 +32,30 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 function initNavbar() {
     loadNavbarState();
+    initSubnavActiveState();
 }
+
+/**
+ * Mark the correct Level-2 subnav link as active based on the current URL
+ * path prefix. Runs once on page load — no polling needed.
+ */
+function initSubnavActiveState() {
+    const path = window.location.pathname;
+    const links = document.querySelectorAll('.ob-subnav-link[data-subnav-route]');
+    links.forEach(link => {
+        const route = link.getAttribute('data-subnav-route');
+        if (route && path.startsWith(route)) {
+            link.classList.add('active');
+        }
+    });
+}
+
+/**
+ * Align the first L2 subnav item (Ontology) with the Domain link in L1.
+ * Measures the left edge of #domainL1Link and shifts the subnav list by
+ * that same offset so the two items are visually column-aligned.
+ * Re-runs on window resize in case the brand/registry widths change.
+ */
 
 /**
  * Load the consolidated navbar state in a single round-trip and
@@ -70,7 +93,7 @@ window.applyBrandLogo = applyBrandLogo;
 
 
 /**
- * Refresh all three workflow indicators (Ontology, Mapping, Digital Twin)
+ * Refresh all three workflow indicators (Ontology, Mapping, Knowledge Graph)
  * in the top navbar. Call this single function after any change that could
  * affect one or more of these statuses.
  *
@@ -181,8 +204,9 @@ function applyDomainInfo(data) {
 
     updateDomainMenuVisibility(hasDomain);
 
-    const hasRegistry = data.registry && data.registry.catalog && data.domain_folder;
-    updateMenusForDomainStatus(hasRegistry);
+    // Sub-pages unlock as soon as a domain is open in session.
+    // UC-save is no longer required for basic navigation.
+    updateMenusForDomainStatus(hasDomain);
 }
 
 /**
@@ -300,8 +324,28 @@ function enableMenusAfterSave() {
  * Note: All menu items are now always visible
  */
 function updateDomainMenuVisibility(hasDomain) {
-    // All domain menu items are now always visible
-    // This function is kept for compatibility but does nothing
+    // Show/hide L2 subnav
+    const subnav = document.getElementById('obSubnav');
+    if (subnav) {
+        subnav.classList.toggle('d-none', !hasDomain);
+        if (typeof window.OBBreadcrumb !== 'undefined' && typeof window.OBBreadcrumb._updateChromeHeight === 'function') {
+            window.OBBreadcrumb._updateChromeHeight();
+        }
+    }
+
+    // Disable/enable the L1 Domain link
+    const domainL1 = document.getElementById('domainL1Link');
+    if (domainL1) {
+        if (hasDomain) {
+            domainL1.classList.remove('ob-nav-disabled');
+            domainL1.removeAttribute('aria-disabled');
+            domainL1.removeAttribute('tabindex');
+        } else {
+            domainL1.classList.add('ob-nav-disabled');
+            domainL1.setAttribute('aria-disabled', 'true');
+            domainL1.setAttribute('tabindex', '-1');
+        }
+    }
 }
 
 
@@ -317,40 +361,42 @@ window.refreshDigitalTwinStatus = refreshNavbarIndicators;
 // ==========================================
 
 /**
- * Start a new domain (clears current data)
+ * Start a new domain — collects name/description/LLM via popup, clears
+ * existing data, persists session info, then immediately opens the UC
+ * save dialog so the domain is registered before navigating away.
  */
 async function domainNew() {
-    const confirmed = await showConfirmDialog({
-        title: 'New Domain',
-        message: 'Start a new domain? This will clear all current ontology, design, and mapping data.',
-        confirmText: 'Start New',
-        confirmClass: 'btn-warning',
-        icon: 'file-earmark-plus'
-    });
-    if (!confirmed) return;
-    
+    const input = await showNewDomainDialog();
+    if (!input) return;
+
     try {
-        const response = await fetch('/domain/clear', {
+        // 1. Clear existing domain data
+        const clearResp = await fetch('/domain/clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin'
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification('New domain started', 'success');
-            invalidateDomainCaches();
-            // Hand off the spinner to the next page: domain.js / domain-information.js
-            // pick this flag up on DOMContentLoaded, show the overlay until the
-            // initial Promise.all (info + version-status + LLM endpoints) resolves.
-            try { sessionStorage.setItem('ob_creating_new_domain', '1'); } catch (e) {}
-            setTimeout(() => {
-                window.location.href = '/domain/#information';
-            }, 1000);
-        } else {
-            showNotification('Error: ' + data.message, 'error');
+        const clearData = await clearResp.json();
+        if (!clearData.success) {
+            showNotification('Error: ' + clearData.message, 'error');
+            return;
         }
+
+        // 2. Persist name, description, and LLM endpoint to session
+        const payload = { name: input.name };
+        if (input.description) payload.description = input.description;
+        if (input.llm_endpoint) payload.llm_endpoint = input.llm_endpoint;
+        await fetch('/domain/info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            credentials: 'same-origin'
+        });
+
+        invalidateDomainCaches();
+
+        // 3. Open UC save dialog; navigate to domain page after a successful save
+        showDomainSaveDialog({ afterSave: '/domain/#information' });
     } catch (error) {
         console.error('Error creating new domain:', error);
         showNotification('Failed to create new domain: ' + error.message, 'error');
@@ -458,8 +504,10 @@ async function saveDomainInfoBeforeSave() {
 
 /**
  * Show confirmation dialog before saving to the registry.
+ * @param {Object} [opts]
+ * @param {string} [opts.afterSave] - URL to navigate to after a successful save.
  */
-async function showDomainSaveDialog() {
+async function showDomainSaveDialog(opts = {}) {
     const modalHtml = `
         <div class="modal fade" id="domainSaveModal" tabindex="-1">
             <div class="modal-dialog">
@@ -520,11 +568,11 @@ async function showDomainSaveDialog() {
 
     document.getElementById('btnConfirmSave').addEventListener('click', async () => {
         modal.hide();
-        await doDomainSave();
+        await doDomainSave({ afterSave: opts.afterSave });
     });
 }
 
-async function doDomainSave() {
+async function doDomainSave(opts = {}) {
     try {
         // Belt-and-suspenders duplicate-name guard: domain.js already
         // checks ``/domain/check-name`` (debounced 500 ms on every
@@ -559,6 +607,9 @@ async function doDomainSave() {
             enableMenusAfterSave();
             await refreshNavbarIndicators();
             loadDomainName();
+            if (opts.afterSave) {
+                setTimeout(() => { window.location.href = opts.afterSave; }, 800);
+            }
         } else {
             showNotification('Error: ' + data.message, 'error');
         }

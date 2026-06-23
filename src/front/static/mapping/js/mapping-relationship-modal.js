@@ -395,6 +395,8 @@ function openRelationshipMappingModal(propertyUri, propertyName) {
         setTimeout(() => switchToRelTab('rel-wizard-tab'), 100);
     }
     
+    injectMappingDiscussButton('addRelationshipMappingModal', propertyUri, propertyName);
+
     const modal = new bootstrap.Modal(document.getElementById('addRelationshipMappingModal'));
     modal.show();
 }

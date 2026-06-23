@@ -73,7 +73,7 @@ async def validate_detailed(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Get detailed validation status including Digital Twin and warehouse."""
+    """Get detailed validation status including Knowledge Graph and warehouse."""
     domain = get_domain(session_mgr)
     warehouse_id = resolve_warehouse_id(domain, settings)
     return await home_service.get_detailed_validation(

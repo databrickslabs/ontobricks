@@ -1,4 +1,4 @@
-"""Tests for the Digital Twin API module (api.routers.digitaltwin).
+"""Tests for the Knowledge Graph API module (api.routers.digitaltwin).
 
 Covers helper functions, Pydantic models, and endpoint behavior
 with mocked dependencies.

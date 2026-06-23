@@ -1,5 +1,5 @@
 """
-Digital Twin External REST API
+Knowledge Graph External REST API
 
 Provides programmatic access to the triple store: status, insights,
 build trigger, and triple retrieval.
@@ -328,7 +328,7 @@ async def dt_status(
     except Exception as e:
         logger.exception("dt_status failed: %s", e)
         raise InfrastructureError(
-            "Digital Twin status check failed", detail=str(e)
+            "Knowledge Graph status check failed", detail=str(e)
         ) from e
 
 
@@ -432,7 +432,7 @@ async def dt_stats(
 @router.post(
     "/build",
     response_model=BuildStartedResponse,
-    summary="Start a Digital Twin build",
+    summary="Start a Knowledge Graph build",
     description="Generate all triples from the current ontology + mapping configuration "
     "and write them to the configured triple store backend. "
     "Returns a `task_id` that can be polled via `GET /build/{task_id}`.",
@@ -502,7 +502,7 @@ async def dt_build(
 
     tm = get_task_manager()
     task = tm.create_task(
-        name="Digital Twin Build (API)",
+        name="Knowledge Graph Build (API)",
         task_type="triplestore_sync",
         steps=[
             {"name": "prepare", "description": "Preparing"},
@@ -1119,7 +1119,7 @@ async def dt_inference_progress(task_id: str):
 # parameters used by the rest of this router.
 #
 # Why under ``/digitaltwin``:
-#   The cohort engine writes to the *digital twin's* knowledge graph (and
+#   The cohort engine writes to the *knowledge graph's* graph store (and
 #   optionally a UC Delta table). Grouping the routes here keeps a single
 #   resource path for everything that operates on the materialised twin —
 #   ``status``, ``stats``, ``triples``, ``inference``, and now ``cohorts``.
