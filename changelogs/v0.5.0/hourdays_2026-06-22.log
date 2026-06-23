@@ -37,3 +37,19 @@
 - `tests/units/graphdb/test_neo4j_store.py`
 
 **Test result:** `python3 -m py_compile` — OK. Inline run of `_run` against a fake driver confirmed: 1 INFO line emitted, row count + duration + flattened multi-line cypher present, bound `$s = 'ex:value'` param **absent** from the INFO log. Truncation + whitespace-flattening helpers verified. Full pytest suite deferred to CI (uv offline locally).
+
+## Fix Settings page engine-selector flash (PR #47 review – Benoit 2026-06-18)
+
+**Context:** Benoit's review caught a UX flicker on the Settings page: the *Triple store > Global > Graph DB Engine* selector painted `Lakebase` (the first `<option>`) for a fraction of a second on every page load before the lazy JS fetch on `/settings/graph-engine` came back and replaced the value with `Neo4j`. Fix is to resolve the persisted engine **server-side** during the page render and emit the correct `selected` attribute on the right `<option>` so the first paint already matches the persisted state. Also align the Lakebase sub-panel visibility (`applyGraphDbEnginePanels()`) before the lazy fetch so its display state doesn't flicker either.
+
+**Changes:**
+1. `src/front/routes/home.py` — settings page route now depends on `Settings` and calls `SettingsService.get_graph_engine_result(session_mgr, settings)` to resolve the persisted engine before rendering. Failure is non-fatal: a warning is logged and the template falls back to `"lakebase"` (matches the previous behaviour, so no regression in degraded mode).
+2. `src/front/templates/settings.html` — `<option value="lakebase">` / `<option value="neo4j">` gain a `{% if graph_engine == "<name>" %}selected{% endif %}` clause; the `<select>` also carries a `data-server-rendered-engine="{{ graph_engine|default('lakebase') }}"` attribute for future JS reconciliation if needed.
+3. `src/front/static/config/js/settings.js` — the `DOMContentLoaded` init block now calls `applyGraphDbEnginePanels()` once at start so the Lakebase sub-panel's visibility matches the server-rendered engine selector before any async fetch runs.
+
+**Modified files:**
+- `src/front/routes/home.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+**Test result:** `python3 -m py_compile` on `home.py` — OK. `node --check` on `settings.js` — OK. Jinja2 `env.lex` on `settings.html` — 347 tokens parsed cleanly, both `{% if graph_engine == "..." %}selected{% endif %}` markers present, `data-server-rendered-engine` attribute present. Functional verification (no flash) deferred to the deployed-app smoke test (#73).

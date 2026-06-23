@@ -23,6 +23,13 @@ document.addEventListener('DOMContentLoaded', function () {
     loadRegistryCacheTtl();
     loadNavbarLogo();
 
+    // Align Lakebase sub-panel visibility with the server-rendered engine
+    // selector before any async fetch runs — fixes the "Lakebase flashes
+    // before Neo4j" flicker flagged by Benoit in the PR #47 review (the
+    // select itself is already correct from Jinja's `selected` attribute,
+    // but applyGraphDbEnginePanels otherwise waits for the lazy-load).
+    applyGraphDbEnginePanels();
+
     // =====================================================================
     //  DATABRICKS TAB
     // =====================================================================
