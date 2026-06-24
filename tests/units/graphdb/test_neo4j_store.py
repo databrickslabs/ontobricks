@@ -51,11 +51,20 @@ def _basic_config(**overrides: Any) -> Dict[str, Any]:
 
 
 def _store(**overrides: Any):
-    """Construct a Neo4jStore with mocked driver + capture _run calls."""
+    """Construct a Neo4jStore with the underlying connection's `run` mocked.
+
+    Post-split (PR #47 Benoit review) the actual Cypher execution lives on
+    :class:`Neo4jConnection`, not on the Store. Mocking ``s._connection.run``
+    intercepts every Cypher call regardless of whether the read/write op
+    helpers or the Store façade is the entry point.
+    """
     from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
 
     s = Neo4jStore(db_name="testset", engine_config=_basic_config(**overrides))
-    s._run = MagicMock(return_value=[])  # type: ignore[assignment]
+    s._connection.run = MagicMock(return_value=[])  # type: ignore[assignment]
+    # Legacy alias: tests that still reference ``s._run`` go through the
+    # façade's delegator, which now points at the mocked connection.
+    s._run = s._connection.run
     return s
 
 
@@ -412,7 +421,12 @@ class TestCypherLogging:
         s._driver = _FakeDriver()
 
         import logging
-        with caplog.at_level(logging.INFO, logger="back.core.graphdb.neo4j.Neo4jStore"):
+        # The Cypher INFO log is emitted from Neo4jConnection.run (post-split,
+        # PR #47 Benoit review). The Store façade now delegates via _run.
+        # NOTE: `get_logger` (back.core.logging.LogManager) rewrites the
+        # ``back.`` prefix → ``ontobricks.`` so the real logger name is
+        # ``ontobricks.core.graphdb.neo4j.Neo4jConnection``.
+        with caplog.at_level(logging.INFO, logger="ontobricks.core.graphdb.neo4j.Neo4jConnection"):
             rows = s._run("MATCH (t:`X`) WHERE t.subject = $s RETURN t", s="ex:a")
 
         assert len(rows) == 2

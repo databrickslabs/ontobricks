@@ -53,3 +53,40 @@
 - `src/front/static/config/js/settings.js`
 
 **Test result:** `python3 -m py_compile` on `home.py` — OK. `node --check` on `settings.js` — OK. Jinja2 `env.lex` on `settings.html` — 347 tokens parsed cleanly, both `{% if graph_engine == "..." %}selected{% endif %}` markers present, `data-server-rendered-engine` attribute present. Functional verification (no flash) deferred to the deployed-app smoke test (#73).
+
+## Split Neo4jStore.py into 4 cohesive modules (PR #47 review – Benoit 2026-06-18)
+
+**Context:** Benoit's review flagged that `Neo4jStore.py` had grown to 1028 LoC mixing four orthogonal concerns: driver/auth lifecycle, schema, bulk writes, and read queries. Per the project's Fowler-vocabulary convention (`src/.coding_rules.md §9`) this is **Large Class → Extract Class**. The split produces three new services held by a thin Store façade; the public ``Neo4jStore`` API is unchanged so the factory and all callers continue to work.
+
+**Fowler refactorings applied:**
+1. **Extract Class** — driver lifecycle, auth resolution, and the single ``run()`` execution path become :class:`Neo4jConnection` (`Neo4jConnection.py`). Owns ``_resolve_auth``, ``_is_deployed_app``, ``get_driver``, ``close``, ``run``, and the Cypher-logging helpers (``_normalise_cypher_for_log``, ``_CYPHER_LOG_MAX``, ``_WHITESPACE_RE``). The ``NEO4J_PASSWORD_ENV`` constant and the ``is_neo4j_password_from_secret`` module helper live here too.
+2. **Extract Class** — schema + bulk writes become :class:`Neo4jWriteOps` (`Neo4jWriteOps.py`). Owns ``create_table``, ``drop_table``, ``insert_triples``, ``delete_triples``, ``optimize_table``, ``delete_cohort_triples``. Module-level helper ``sanitise_label`` (used by every op to derive the Cypher node label from a table name).
+3. **Extract Class** — read queries become :class:`Neo4jReadOps` (`Neo4jReadOps.py`). Owns the 16+ named-query methods: statistics (``get_aggregate_stats``, ``get_type_distribution``, ``get_predicate_distribution``), entity lookup (``find_subjects_by_type``, ``resolve_subject_by_id``, ``get_entity_metadata``, ``get_triples_for_subjects``, ``get_predicates_for_type``), pagination (``paginated_triples``, ``paginated_count``), the KG-filter primitives Benoit asked about (``bfs_traversal``, ``find_seed_subjects``, ``find_subjects_by_patterns``, ``expand_entity_neighbors``), and the reasoning helpers (``transitive_closure``, ``symmetric_expand``, ``shortest_path``).
+4. **Façade pattern** — ``Neo4jStore`` becomes a thin composition holding the three services and exposing the unchanged ``GraphDBBackend`` interface. Every method is a one-line delegator. Back-compat: keeps ``_run`` (passthrough to ``Neo4jConnection.run``), ``_resolve_auth`` (delegate), ``_is_deployed_app`` (staticmethod delegate), and a ``_driver`` property whose setter writes through to ``self._connection._driver`` (preserves tests that swap in a fake driver).
+
+**Public API preservation:**
+- All ``Neo4jStore(...)`` constructor signatures unchanged.
+- All ``TripleStoreBackend`` / ``GraphDBBackend`` methods unchanged.
+- ``__init__.py`` re-exports both the legacy symbols (``Neo4jStore``, ``is_neo4j_password_from_secret``) AND the new types (``Neo4jConnection``, ``Neo4jWriteOps``, ``Neo4jReadOps``) so external callers can pick either entry point.
+- ``Neo4jStore`` itself re-exports ``_normalise_cypher_for_log`` and the auth constants for the legacy import path.
+
+**Test updates:**
+- `tests/units/graphdb/test_neo4j_store.py` — helper ``_store(...)`` now mocks ``s._connection.run`` (the new execution layer) and aliases ``s._run`` to the same mock so existing assertions on ``s._run.call_args`` keep working unchanged. No assertion in any existing test class needed a logic change.
+- `TestCypherLogging::test_run_emits_info_log_with_cypher_and_metrics` — updated the ``caplog.at_level(logger=...)`` name from ``back.core.graphdb.neo4j.Neo4jStore`` to ``ontobricks.core.graphdb.neo4j.Neo4jConnection`` (correct post-split + accounts for ``get_logger``'s ``back.`` → ``ontobricks.`` prefix rewrite).
+
+**Modified files:**
+- `src/back/core/graphdb/neo4j/Neo4jStore.py` (was 1028 LoC → 435 LoC, all delegators)
+- `src/back/core/graphdb/neo4j/__init__.py` (re-exports the four new types + legacy symbols)
+- `src/back/core/graphdb/neo4j/Neo4jConnection.py` (new — 227 LoC)
+- `src/back/core/graphdb/neo4j/Neo4jWriteOps.py` (new — 156 LoC)
+- `src/back/core/graphdb/neo4j/Neo4jReadOps.py` (new — 614 LoC)
+- `tests/units/graphdb/test_neo4j_store.py` (mock target updated to `s._connection.run`; logger name corrected)
+
+**File-size verification (per `src/.coding_rules.md §12` expectation that each file stays < 800 LoC):**
+- `Neo4jStore.py`        435 LoC ✓
+- `Neo4jConnection.py`   227 LoC ✓
+- `Neo4jWriteOps.py`     156 LoC ✓
+- `Neo4jReadOps.py`      614 LoC ✓
+- All four files single-class, name-matches-PascalCase.
+
+**Test result:** `python3 -m py_compile` on every new/changed `.py` — OK. Inline equivalence harness (mocking `s._connection.run` + replaying each existing test class' call pattern) — all 18 assertions pass: construction errors, capability flags, sanitisation, every CRUD method (create/drop/insert/empty/count/exists/status/execute_query refusal), every named query reachable through the façade (`get_aggregate_stats`, `find_subjects_by_type`), all three `TestPasswordSourcing` env-var paths via the back-compat `_resolve_auth` delegate, `TestCypherLogging` end-to-end (fake driver → INFO log captured from the correct logger, no param leak, no truncation, whitespace flattening). Full `pytest` deferred to CI (uv environment offline locally).
