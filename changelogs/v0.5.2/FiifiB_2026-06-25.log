@@ -56,3 +56,60 @@ package is introduced here; the full scorecard/CLI lands separately.
 `uv run pytest tests/units/pge_eval/test_ontology_metrics.py
 tests/units/pge_eval/test_owl_evaluator_stage.py
 tests/units/ontology/test_owl_generator.py -q` → **39 passed**.
+# 2026-06-25 — feat(mapping): PGE loop for entity/relationship mapping
+
+## Context
+
+Entity/relationship mapping previously ran through `agent_auto_assignment` —
+a single-agent "implementer marks its own homework" loop with no planning or
+independent evaluation. This change introduces `agent_mapping_pge`, a
+Planner→Generator→Evaluator (PGE) mapping engine, **additively**: the original
+`agent_auto_assignment` engine is retained and still reachable via
+`AgentClient.run_auto_assignment`, so a downstream orchestrator can choose which
+engine to run.
+
+The PGE engine plans a source-model, generates entity and relationship SQL per
+ontology item, and gates each with a deterministic evaluator + a semantic
+critic. Coverage is engine-enforced (computed from the ontology, not left to LLM
+discretion), with abstract-superclass UNION derivation and a synthetic-endpoint
+fallback so a single failed hub never cascades to drop all relationships.
+
+## Changes
+
+1. NEW package `src/agents/agent_mapping_pge/` — Planner (`planner.py`),
+   generators (`generators/{entity,relationship}.py`), evaluator
+   (`evaluator/{deterministic,critic,report}.py`), engine orchestrator
+   (`engine.py`, bounded ThreadPool walk + monotonic progress), `contracts.py`
+   (SourceModel/EvalReport), and `coverage.py` (deterministic ontology-derived
+   coverage; `skip[]` is advisory and never removes an item).
+2. NEW `src/agents/tools/planner.py` + `src/agents/tools/evaluation.py` —
+   planner/evaluation terminal tools (submit_source_model, submit_evaluation,
+   normalized_value_overlap) used by the PGE agents.
+3. `src/agents/tools/context.py` — ADD `source_model` + `semantic_eval_report`
+   fields (forward-ref typed to avoid a circular import). `warehouse_id` and all
+   existing fields are preserved.
+4. `src/agents/tools/mapping.py` — additive PGE tool-schema plumbing
+   (`unmapped_attributes`, `MAPPING_TOOL_DEFINITIONS_BY_NAME`).
+5. `src/back/core/agents/AgentClient.py` — ADD `run_mapping_pge()` gateway
+   (→ `agent_mapping_pge`). `run_auto_assignment()` is unchanged and still
+   points at `agent_auto_assignment` (the simple engine is retained).
+6. `src/back/objects/mapping/Mapping.py` — run the PGE engine in the auto-assign
+   flow and accumulate the PGE extras (`source_model`, `mapping_evaluations`,
+   `mapping_run_log`) across chunks and single-item runs;
+   `save_mappings_to_session` gains three OPTIONAL params (default `None`, so the
+   legacy path is unaffected). The upstream `_canonicalize_imported_uris` helper
+   is preserved.
+7. Tests: `tests/agents/agent_mapping_pge/` — contracts, coverage, planner,
+   entity/relationship generators, deterministic evaluator, critic, engine.
+
+## Modified / added files
+
+27 files changed, 12047 insertions(+), 8 deletions(-). New `agent_mapping_pge`
+package (12 modules) + 2 new tools + 9 test modules; 4 additive modifications
+(`context.py`, `mapping.py`, `AgentClient.py`, `Mapping.py`).
+
+## Tests
+
+- `uv run pytest tests/agents/agent_mapping_pge -q` → **90 passed**.
+- `uv run pytest tests/units/agents tests/units/mapping -q` → **208 passed**.
+- Imports resolve on the upstream base (origin/master, v0.5.2).
