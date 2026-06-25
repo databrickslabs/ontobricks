@@ -1,0 +1,31 @@
+## Wire Settings → Neo4j "Test connection" button + bind neo4j-password secret resource via DAB
+
+**Context:** Smoke test of the post-review v0.7.0 build on `fevm-mjolnir` revealed two gaps that bundled cleanly into one improvement: (1) the "Test connection" button on Settings → Triple store → Neo4j was a placeholder ("Test-connection is not wired up yet") — left over from the v0.6.0 ship; (2) the `neo4j-password` Apps secret resource was declared in `app.yaml.template` but not bound to a workspace secret by the DAB, requiring manual UI binding after every deploy. This change wires the button to a real Bolt handshake **and** binds the secret resource through `databricks.yml`, so a `make deploy` lands a working Neo4j stack in one shot.
+
+**Verified live on `fevm-mjolnir`** (2026-06-25, app `ontobricks-070`):
+```
+Connected to neo4j+s://b4810af7.databases.neo4j.io (database neo4j) in 860.2 ms
+credentials from env var (NEO4J_PASSWORD — Databricks Apps secret)
+```
+
+**Changes:**
+1. `databricks.yml` — declared the `neo4j-password` secret resource on the `dev-lakebase` target overlay (`scope=ontobricks, key=neo4j-password, permission=READ`). At deploy time DAB binds the Apps resource directly to the workspace secret, so no manual UI step is needed. The standalone declaration in `app.yaml.template` (no scope/key) stays in place for customers who prefer the "admin binds via UI" flow.
+2. `src/api/routers/internal/settings.py` — new route `POST /settings/graph-engine/neo4j-test` calling `SettingsService.graph_engine_neo4j_test_result(...)`. Thin route (4 lines), delegates to the service layer.
+3. `src/back/objects/domain/SettingsService.py` — new staticmethod `graph_engine_neo4j_test_result(...)` (~115 LoC). Reads the persisted `engine_config`, constructs a `Neo4jConnection` (which resolves auth from the `NEO4J_PASSWORD` env var first, then falls back to `engine_config.password` in local dev), calls the official driver's `verify_connectivity()` (a lightweight Bolt handshake — no Cypher is executed, no data is touched), and returns one of:
+   - `{success: true, ok: true, uri, database, latency_ms, credentials_source}` — the credentials_source string surfaces *which* layer provided the password ("env var (NEO4J_PASSWORD — Databricks Apps secret)" vs "engine_config (local-dev fallback)").
+   - `{success: true, ok: false, error, category}` — clean error states with `category` in `{config, driver-missing, auth, connectivity}` so the UI can colour-code without parsing the message.
+4. `src/front/static/config/js/settings.js` — replaced the placeholder click handler on `#btnTestNeo4jConnection`. The new handler shows a spinner, persists the current form state (so the test uses what's in the form, not just what was last saved), POSTs the test endpoint, then renders a Bootstrap alert: green with latency + credentials source on success, red with a `category` badge on failure.
+
+**Files:**
+- `databricks.yml`
+- `src/api/routers/internal/settings.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/front/static/config/js/settings.js`
+- `docs/v0.6-neo4j-demo/screenshots/20-settings-neo4j-secret-badge.png` (new — captures the green "From Apps secret" badge + disabled password input)
+- `docs/v0.6-neo4j-demo/screenshots/22-settings-global-engine-selector.png` (new — captures the server-side-rendered engine selector with no flash)
+- `docs/v0.6-neo4j-demo/screenshots/23-settings-neo4j-test-connection-result.png` (new — captures the green "Connected … 860.2 ms · credentials from env var" alert)
+
+**Test result:** `python3 -m py_compile` on every changed `.py` — OK. `node --check` on `settings.js` — OK. **Live verification on `fevm-mjolnir` / `ontobricks-070` (post deploy `bf39lra2x`):**
+- Initial test → `category: "connectivity"` clean error (Aura instance was offline at that moment — DNS unresolvable from the Databricks Apps container). UI rendered the red badge correctly.
+- After Aura came back online → `{ok: true, latency_ms: 860.2, credentials_source: "env var (NEO4J_PASSWORD — Databricks Apps secret)"}`. UI rendered the green alert correctly.
+- Apps logs (`databricks apps logs ontobricks-070`) show the expected sequence: `Neo4jConnection._resolve_auth → "Neo4j credentials sourced from NEO4J_PASSWORD env var"`, `Neo4jConnection.get_driver → "Neo4j driver opened for ..."`, `Neo4jConnection.close → "Neo4j driver closed"` — all four `db-hkyi…` / Lakebase / secret resource paths exercised cleanly.

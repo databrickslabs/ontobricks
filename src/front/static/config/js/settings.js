@@ -2089,14 +2089,59 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initial render — apply auth-method visibility on page load.
     applyNeo4jAuthMethodVisibility();
 
-    // Test-connection button: deferred to a follow-up commit; surface a
-    // friendly message for now so users don't think the button is broken.
-    document.getElementById('btnTestNeo4jConnection')?.addEventListener('click', () => {
+    // Test-connection button — POSTs to /settings/graph-engine/neo4j-test which
+    // runs a Bolt protocol handshake (driver.verify_connectivity()) using the
+    // persisted engine_config + NEO4J_PASSWORD env var. No Cypher is executed.
+    document.getElementById('btnTestNeo4jConnection')?.addEventListener('click', async function () {
+        const btn = this;
         const result = document.getElementById('neo4jTestResult');
         if (!result) return;
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing…';
         result.className = 'alert alert-info mt-3 small';
         result.classList.remove('d-none');
-        result.textContent = 'Test-connection is not wired up yet. Save the config and run a build to verify the connection.';
+        result.textContent = 'Sending Bolt handshake…';
+        try {
+            // Save the current panel state first so the test uses the values
+            // currently in the form, not just what was persisted.
+            mergeNeo4jPanelIntoConfigTextarea();
+            const ta = document.getElementById('graphEngineConfig');
+            let parsed = {};
+            try { parsed = JSON.parse(ta?.value || '{}'); } catch (_) { parsed = {}; }
+            await fetch('/settings/graph-engine-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ graph_engine_config: parsed }),
+            });
+            const resp = await fetch('/settings/graph-engine/neo4j-test', {
+                method: 'POST',
+                credentials: 'same-origin',
+            });
+            const j = await resp.json();
+            if (j.ok) {
+                result.className = 'alert alert-success mt-3 small';
+                result.innerHTML =
+                    '<i class="bi bi-check-circle me-1"></i>' +
+                    '<strong>Connected</strong> to <code>' + j.uri + '</code> ' +
+                    '(database <code>' + j.database + '</code>) in ' + j.latency_ms + ' ms · ' +
+                    'credentials from <em>' + j.credentials_source + '</em>.';
+            } else {
+                result.className = 'alert alert-danger mt-3 small';
+                const cat = j.category ? ' <span class="badge bg-danger-subtle text-danger-emphasis border ms-1">' + j.category + '</span>' : '';
+                result.innerHTML =
+                    '<i class="bi bi-x-circle me-1"></i>' +
+                    '<strong>Test failed</strong>' + cat + ': ' +
+                    (j.error || j.message || 'Unknown error');
+            }
+        } catch (e) {
+            result.className = 'alert alert-danger mt-3 small';
+            result.textContent = 'Test failed: ' + (e.message || e);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
     });
 
     document.querySelectorAll('.btn-save-settings').forEach(saveBtn => saveBtn.addEventListener('click', async function () {
