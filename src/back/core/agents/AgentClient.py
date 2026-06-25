@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 if TYPE_CHECKING:
     from agents.agent_owl_generator.engine import AgentResult
     from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
+    from agents.agent_mapping_pge.engine import AgentResult as MappingPGEAgentResult
     from agents.agent_auto_icon_assign.engine import (
         AgentResult as IconAssignAgentResult,
     )
@@ -116,6 +117,67 @@ class AgentClient:
             Exception: Propagates any failure raised by ``run_agent``.
         """
         from agents.agent_auto_assignment import run_agent
+
+        return run_agent(
+            host=host,
+            token=token,
+            endpoint_name=endpoint_name,
+            client=client,
+            metadata=metadata,
+            ontology=ontology,
+            entity_mappings=entity_mappings,
+            relationship_mappings=relationship_mappings,
+            documents=documents,
+            on_step=on_step,
+            max_iterations=max_iterations,
+        )
+
+    def run_mapping_pge(
+        self,
+        *,
+        host: str,
+        token: str,
+        endpoint_name: str,
+        client: Any,
+        metadata: Any,
+        ontology: Any,
+        entity_mappings: Any,
+        relationship_mappings: Any,
+        documents: Any = None,
+        on_step: Optional[Callable] = None,
+        max_iterations: int = 10,
+    ) -> "MappingPGEAgentResult":
+        """Propose entity and relationship SQL mappings using the mapping PGE agent.
+
+        This is the Planner–Generator–Evaluator (PGE) mapping engine
+        (``agents.agent_mapping_pge``). It shares the same call signature as
+        :meth:`run_auto_assignment` but drives a deterministic, coverage-checked
+        loop with a semantic critic and a structured run log.
+
+        Args:
+            host: Databricks workspace host (with or without ``https://``).
+            token: Bearer token for the workspace APIs.
+            endpoint_name: Model serving endpoint name for the agent.
+            client: SQL client (typically :class:`~back.core.databricks.DatabricksClient`)
+                used to validate or sample queries against the configured warehouse.
+            metadata: Schema context (for example UC table metadata) for the agent.
+            ontology: Ontology dict describing classes and properties to map.
+            entity_mappings: Existing or partial entity mapping list for the agent
+                to refine or extend.
+            relationship_mappings: Existing or partial relationship mapping list.
+            documents: Optional list of document dicts (``name``, ``content``) for
+                grounding.
+            on_step: Optional progress callback invoked by the agent loop.
+            max_iterations: Upper bound on agent refinement iterations.
+
+        Returns:
+            Structured result from ``agents.agent_mapping_pge`` describing
+            proposed mappings, per-item status, and PGE diagnostics.
+
+        Raises:
+            Exception: Propagates any failure raised by ``run_agent``.
+        """
+        from agents.agent_mapping_pge import run_agent
 
         return run_agent(
             host=host,
