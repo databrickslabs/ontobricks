@@ -1,0 +1,17 @@
+Databricks app logs · ontobricks-070 · 2026-06-25T19:19:49Z UTC
+Triggered by clicking Settings → Triple store → Neo4j → Test connection
+
+INFO   ontobricks.core.graphdb.neo4j.Neo4jConnection | Neo4jConnection._resolve_auth:169
+       Neo4j credentials sourced from NEO4J_PASSWORD env var
+
+INFO   ontobricks.core.graphdb.neo4j.Neo4jConnection | Neo4jConnection.get_driver:141
+       Neo4j driver opened for neo4j+s://b4810af7.databases.neo4j.io (database=neo4j)
+
+DEBUG  ontobricks.core.graphdb.neo4j.Neo4jConnection | Neo4jConnection.run:215
+       Cypher params: {}
+
+INFO   ontobricks.core.graphdb.neo4j.Neo4jConnection | Neo4jConnection.run:221
+       Cypher (1 rows, 706.4 ms): RETURN 1 AS probe
+
+DEBUG  ontobricks.core.graphdb.neo4j.Neo4jConnection | Neo4jConnection.close:151
+       Neo4j driver closed

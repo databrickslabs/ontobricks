@@ -342,14 +342,14 @@
   <section class="slide cover active" data-title="Cover">
     <div class="cover-grid">
       <div>
-        <div class="cover-logo ob-logo"><span class="dot"></span> OntoBricks <span class="ver" style="color:rgba(255,255,255,.6);">v0.5.0 → v0.6</span></div>
+        <div class="cover-logo ob-logo"><span class="dot"></span> OntoBricks <span class="ver" style="color:rgba(255,255,255,.6);">v0.6.0 → v0.7.0</span></div>
         <div class="cover-eyebrow">Pull request · #47 · feature/neo4j-graphdb-skeleton</div>
         <h1>Neo4j as a selectable<br>graph DB engine <span class="accent">via Bolt</span></h1>
-        <div class="cover-subtitle">End-to-end demo on fevm-mjolnir with a real PFAS research-paper ontology — 303 triples written into Neo4j over the Bolt protocol, 99 inferred via OWL 2 RL, paper itself never leaves the workspace.</div>
+        <div class="cover-subtitle">End-to-end demo on fevm-mjolnir with a real PFAS research-paper ontology — 303 triples written into Neo4j over Bolt, 99 inferred via OWL 2 RL. Post-review iteration ships secret-resource auth, Cypher INFO logging, a modular split, and the wired Test-connection flow.</div>
         <div class="cover-meta">
           <span>Hugues Journeau · @hourdays</span>
           <span class="sep"></span>
-          <span>2026-06-12</span>
+          <span>2026-06-12 (v0.6 demo) · 2026-06-25 (v0.7 review pass)</span>
           <span class="sep"></span>
           <span>databrickslabs/ontobricks</span>
         </div>
@@ -370,7 +370,7 @@
         <div class="eyebrow">TL;DR</div>
         <h1>v0.6 Neo4j slot — landed, end-to-end</h1>
       </div>
-      <div class="slide-page">2 / 21</div>
+      <div class="slide-page">2 / 27</div>
     </div>
     <div class="slide-body">
       <p class="lead">
@@ -385,6 +385,7 @@
       <ul class="bullets">
         <li class="ok"><strong>C1 / C2 preserved</strong> — Writes only via the OntoBricks build pipeline. <code>Neo4jStore.execute_query</code> raises <code>NotImplementedError</code> by design — no raw Cypher entry point.</li>
         <li class="ok"><strong>Cleanup done</strong> — WaterTreatment_V1 label dropped from the demo Neo4j after capture. Total nodes: <strong>0</strong>. Paper stays in fevm-mjolnir.</li>
+        <li class="ok"><strong>v0.7 post-review iteration (2026-06-25)</strong> — 6 commits address every point of Benoit's 2026-06-18 review: secret-resource auth, Cypher INFO logging, modular split (4 files), Settings UI flash fix, version bump to 0.7.0, and a wired Test-connection flow.</li>
       </ul>
     </div>
     <div class="slide-footer">
@@ -401,7 +402,7 @@
         <div class="eyebrow">Roadmap</div>
         <h1>Why now</h1>
       </div>
-      <div class="slide-page">3 / 21</div>
+      <div class="slide-page">3 / 27</div>
     </div>
     <div class="slide-body">
       <p class="lead">
@@ -440,7 +441,7 @@
         <div class="eyebrow">Architecture</div>
         <h1>Factory dispatch, two backends</h1>
       </div>
-      <div class="slide-page">4 / 21</div>
+      <div class="slide-page">4 / 27</div>
     </div>
     <div class="slide-body">
       <p class="lead">
@@ -482,7 +483,7 @@
         <div class="eyebrow">Backend</div>
         <h1>What's in the PR — backend</h1>
       </div>
-      <div class="slide-page">5 / 21</div>
+      <div class="slide-page">5 / 27</div>
     </div>
     <div class="slide-body">
       <table class="simple">
@@ -511,7 +512,7 @@
         <div class="eyebrow">Frontend</div>
         <h1>What's in the PR — frontend</h1>
       </div>
-      <div class="slide-page">6 / 21</div>
+      <div class="slide-page">6 / 27</div>
     </div>
     <div class="slide-body">
       <table class="simple">
@@ -543,7 +544,7 @@
         <div class="eyebrow">End-to-end demo on fevm-mjolnir</div>
         <h1>The path — paper to triples</h1>
       </div>
-      <div class="slide-page">7 / 21</div>
+      <div class="slide-page">7 / 27</div>
     </div>
     <div class="slide-body">
       <p class="lead">
@@ -572,10 +573,10 @@
         <div class="eyebrow">Step 1 · Settings</div>
         <h1>Switch engine to Neo4j</h1>
       </div>
-      <div class="slide-page">8 / 21</div>
+      <div class="slide-page">8 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../01-settings-global-neo4j-saved.png" alt="Settings — Triple Store — Global — Neo4j (Bolt) selected" /></div>
+      <div class="screenshot-frame"><img src="screenshots/01-settings-global-neo4j-saved.png" alt="Settings — Triple Store — Global — Neo4j (Bolt) selected" /></div>
       <div class="screenshot-caption">
         <span>Triple Store → Global → <strong>Neo4j (Bolt)</strong> · saved confirmation toast.</span>
         <span class="file">01-settings-global-neo4j-saved.png</span>
@@ -595,10 +596,10 @@
         <div class="eyebrow">Step 1 · Settings</div>
         <h1>Neo4j connection form</h1>
       </div>
-      <div class="slide-page">9 / 21</div>
+      <div class="slide-page">9 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../02-settings-neo4j-form-filled.png" alt="Neo4j config form filled with Bolt URI, database, basic auth, encrypted" /></div>
+      <div class="screenshot-frame"><img src="screenshots/02-settings-neo4j-form-filled.png" alt="Neo4j config form filled with Bolt URI, database, basic auth, encrypted" /></div>
       <div class="screenshot-caption">
         <span>Bolt URI · basic auth · encrypted on. Form is engine-generic — works against any Bolt endpoint (Aura, AuraDS, self-hosted, on-prem). Test-connection is a stub for now — "Save & run a build to verify".</span>
         <span class="file">02-settings-neo4j-form-filled.png</span>
@@ -618,10 +619,10 @@
         <div class="eyebrow">Step 2 · Documents + Generate</div>
         <h1>PDF in, ontology out</h1>
       </div>
-      <div class="slide-page">10 / 21</div>
+      <div class="slide-page">10 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../03-ontology-generate-pdf-selected.png" alt="Generate Ontology — Documents tab with PFAS PDF selected" /></div>
+      <div class="screenshot-frame"><img src="screenshots/03-ontology-generate-pdf-selected.png" alt="Generate Ontology — Documents tab with PFAS PDF selected" /></div>
       <div class="screenshot-caption">
         <span>Generate Ontology → Documents tab · PFAS Risk Assessment PDF selected as AI context.</span>
         <span class="file">03-ontology-generate-pdf-selected.png</span>
@@ -641,10 +642,10 @@
         <div class="eyebrow">Step 2 · Documents + Generate</div>
         <h1>32 classes, 13 relations</h1>
       </div>
-      <div class="slide-page">11 / 21</div>
+      <div class="slide-page">11 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../04-ontology-designer-with-icons.png" alt="Ontology Designer — generated PFAS ontology with auto-mapped icons" /></div>
+      <div class="screenshot-frame"><img src="screenshots/04-ontology-designer-with-icons.png" alt="Ontology Designer — generated PFAS ontology with auto-mapped icons" /></div>
       <div class="screenshot-caption">
         <span>PFAS Compound + PFOA/PFOS/PFNA/PFHxS/GenX subclasses · Treatment Facility · Treatment Process + GAC/IX/RO · Water Source + Groundwater/Surface · Risk Assessment · Measurement · Regulation · Operator · Monitoring Program · etc.</span>
         <span class="file">04-ontology-designer-with-icons.png</span>
@@ -664,10 +665,10 @@
         <div class="eyebrow">Step 3 · Data Source</div>
         <h1>Synthetic UC fact table</h1>
       </div>
-      <div class="slide-page">12 / 21</div>
+      <div class="slide-page">12 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../06-data-source-loaded.png" alt="Data Sources — pfas_measurements_demo loaded with 20 columns" /></div>
+      <div class="screenshot-frame"><img src="screenshots/06-data-source-loaded.png" alt="Data Sources — pfas_measurements_demo loaded with 20 columns" /></div>
       <div class="screenshot-caption">
         <span><code>mjolnir_catalog.ontobricks.pfas_measurements_demo</code> · 12 rows · 20 columns · synthetic but paper-aligned schema (facility / water source / process / contaminant / measurement / regulation).</span>
         <span class="file">06-data-source-loaded.png</span>
@@ -687,10 +688,10 @@
         <div class="eyebrow">Step 4 · Auto-Map</div>
         <h1>25 entities + 13 relations mapped</h1>
       </div>
-      <div class="slide-page">13 / 21</div>
+      <div class="slide-page">13 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../07-automap-completed-22of32.png" alt="Auto-Map results — 22 of 32 entities mapped (later 25/25 after manual touch-up)" /></div>
+      <div class="screenshot-frame"><img src="screenshots/07-automap-completed-22of32.png" alt="Auto-Map results — 22 of 32 entities mapped (later 25/25 after manual touch-up)" /></div>
       <div class="screenshot-caption">
         <span>AI batch Auto-Map · 22 entities + 13 relations on first pass · 3 more added via single-entity Auto-Map (Sample, Treatmentfacility, Riskassessment) · 7 abstract classes excluded as designed.</span>
         <span class="file">07-automap-completed-22of32.png</span>
@@ -710,10 +711,10 @@
         <div class="eyebrow">Step 5 · Build</div>
         <h1>303 triples in Neo4j · 5.3 s</h1>
       </div>
-      <div class="slide-page">14 / 21</div>
+      <div class="slide-page">14 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../10-build-success-303-triples-neo4j.png" alt="Build page after success — Triple Store → Bolt (UNWIND · MERGE) → Graph DB (Neo4j) · 303 triples" /></div>
+      <div class="screenshot-frame"><img src="screenshots/10-build-success-303-triples-neo4j.png" alt="Build page after success — Triple Store → Bolt (UNWIND · MERGE) → Graph DB (Neo4j) · 303 triples" /></div>
       <div class="screenshot-caption">
         <span>3-card architecture: <code>Triple Store → Bolt (Cypher UNWIND · MERGE) → Graph DB (Neo4j) · WaterTreatment_V1</code>. The Bolt card is the Neo4j-specific bridge (mirrors the Lakeflow Sync card on Lakebase). Build wrote 303 triples.</span>
         <span class="file">10-build-success-303-triples-neo4j.png</span>
@@ -733,10 +734,10 @@
         <div class="eyebrow">Step 6 · Verify</div>
         <h1>Neo4j Browser — the triples</h1>
       </div>
-      <div class="slide-page">15 / 21</div>
+      <div class="slide-page">15 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../12-neo4j-browser-303-nodes-graph.png" alt="Neo4j Browser — graph visualization of 25 entity instances, all under :WaterTreatment_V1 label" /></div>
+      <div class="screenshot-frame"><img src="screenshots/12-neo4j-browser-303-nodes-graph.png" alt="Neo4j Browser — graph visualization of 25 entity instances, all under :WaterTreatment_V1 label" /></div>
       <div class="screenshot-caption">
         <span>Direct Cypher query against the live Neo4j · <strong>Nodes (303)</strong>, all under single label <code>:WaterTreatment_V1</code> · 25 rdf:type nodes rendered (one per ontology class instantiated).</span>
         <span class="file">12-neo4j-browser-303-nodes-graph.png</span>
@@ -756,10 +757,10 @@
         <div class="eyebrow">Step 6 · Verify</div>
         <h1>Inference — 99 triples in 0.1 s</h1>
       </div>
-      <div class="slide-page">16 / 21</div>
+      <div class="slide-page">16 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../15-inference-99-inferred.png" alt="Inference report — T-Box OWL 2 RL 99 inferred, SWRL skipped (no rules), others skipped" /></div>
+      <div class="screenshot-frame"><img src="screenshots/15-inference-99-inferred.png" alt="Inference report — T-Box OWL 2 RL 99 inferred, SWRL skipped (no rules), others skipped" /></div>
       <div class="screenshot-caption">
         <span>T-Box (OWL 2 RL) ✓ 99 inferred · SWRL skipped (scaffold no-op as designed) · others skipped gracefully (no rules in this domain).</span>
         <span class="file">15-inference-99-inferred.png</span>
@@ -779,10 +780,10 @@
         <div class="eyebrow">Step 7 · Health</div>
         <h1>Cockpit — fully operational on Neo4j</h1>
       </div>
-      <div class="slide-page">17 / 21</div>
+      <div class="slide-page">17 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../16-cockpit-neo4j-active.png" alt="Domain Cockpit — Triple Store → Bolt → Graph DB (Neo4j) 3-card arch, Digital Twin Active, 303 triples" /></div>
+      <div class="screenshot-frame"><img src="screenshots/16-cockpit-neo4j-active.png" alt="Domain Cockpit — Triple Store → Bolt → Graph DB (Neo4j) 3-card arch, Digital Twin Active, 303 triples" /></div>
       <div class="screenshot-caption">
         <span>Cockpit now visibly shows the active engine via the 3-card arch: <code>Triple Store → Bolt (UNWIND · MERGE) → Graph DB (Neo4j) · 303 triples</code>. Before this PR the Cockpit was entirely engine-agnostic.</span>
         <span class="file">16-cockpit-neo4j-active.png</span>
@@ -802,10 +803,10 @@
         <div class="eyebrow">Step 8 · Query</div>
         <h1>GraphQL Playground over the Neo4j graph</h1>
       </div>
-      <div class="slide-page">18 / 21</div>
+      <div class="slide-page">18 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../17-graphql-playground-watertreatment.png" alt="GraphQL Playground — real query returns PFOA/PFOS/etc from the Neo4j-backed graph" /></div>
+      <div class="screenshot-frame"><img src="screenshots/17-graphql-playground-watertreatment.png" alt="GraphQL Playground — real query returns PFOA/PFOS/etc from the Neo4j-backed graph" /></div>
       <div class="screenshot-caption">
         <span>Query <code>{ pfascompounds { id label } facilities { id label } treatmentprocesses { id label } }</code> resolved transparently: <strong>5 PFAS compounds</strong> (GenX, PFHxS, PFNA, PFOA, PFOS), <strong>3 facilities</strong> (Eastside / Westport / Northvale MMSF), <strong>6 treatment processes</strong>. The GraphQL service rewrites this into Cypher under the hood and queries Neo4j.</span>
         <span class="file">17-graphql-playground-watertreatment.png</span>
@@ -825,7 +826,7 @@
         <div class="eyebrow">Behind the scenes</div>
         <h1>GraphQL → Cypher · how the resolver talks to Neo4j</h1>
       </div>
-      <div class="slide-page">19 / 21</div>
+      <div class="slide-page">19 / 27</div>
     </div>
     <div class="slide-body">
       <div style="display:grid; grid-template-columns: 1.05fr 1fr; gap:22px; flex:1; min-height:0;">
@@ -895,10 +896,10 @@ RETURN t.subject AS subject, t.object AS label</pre>
         <div class="eyebrow">Step 10 · Validate</div>
         <h1>SHACL Data Quality — Graph mode on Neo4j</h1>
       </div>
-      <div class="slide-page">20 / 21</div>
+      <div class="slide-page">20 / 27</div>
     </div>
     <div class="screenshot-wrap">
-      <div class="screenshot-frame"><img src="../18-data-quality-graph-on-neo4j.png" alt="SHACL Data Quality Report — Consistency 92.3% pass over 13 rules, 1 rule with 12 violations" /></div>
+      <div class="screenshot-frame"><img src="screenshots/18-data-quality-graph-on-neo4j.png" alt="SHACL Data Quality Report — Consistency 92.3% pass over 13 rules, 1 rule with 12 violations" /></div>
       <div class="screenshot-caption">
         <span>13 SHACL <strong>Consistency</strong> rules auto-generated from the ontology (sh:class on each object property), run in <strong>Graph mode against Neo4j</strong>: <strong>92.3% pass</strong> — 12/13 rules at 100%, one rule (<code>Sample.analyzedby → Laboratoryanalysis</code>) shows <strong>12 violations</strong> because the demo data wires Samples to <code>analytical_method</code> directly instead of via a separate Laboratoryanalysis instance. Exactly the kind of signal SHACL validation is built for.</span>
         <span class="file">18-data-quality-graph-on-neo4j.png</span>
@@ -910,6 +911,242 @@ RETURN t.subject AS subject, t.object AS label</pre>
     </div>
   </section>
 
+  <!-- ============================================================
+       v0.7 post-review iteration — 6 slides, captured 2026-06-25
+       ============================================================ -->
+
+  <!-- ========= 21 · v0.7 overview (post-review iteration) ========= -->
+  <section class="slide" data-title="v0.7 — post-review iteration">
+    <div class="corner-mark"></div>
+    <div class="slide-header">
+      <div class="slide-title">
+        <div class="eyebrow">v0.7 · post-review iteration</div>
+        <h1>6 commits answer Benoit's 2026-06-18 review</h1>
+      </div>
+      <div class="slide-page">21 / 27</div>
+    </div>
+    <div class="slide-body">
+      <p class="lead">Every item of @benoitcayladbx's PR review punch-list landed as its own commit on top of the v0.6 demo. The deck slides that follow show each change live in prod.</p>
+      <div class="grid-2">
+        <div>
+          <ul class="bullets">
+            <li class="ok"><strong>Secret resource auth</strong> — Neo4j password sourced from <code>NEO4J_PASSWORD</code> env var (Databricks Apps secret bound via <code>databricks.yml</code>). Save endpoint strips clear-text from <code>global_config</code>. <code>da9cae9</code></li>
+            <li class="ok"><strong>Cypher logging at INFO</strong> — Every <code>_run</code> emits one line: <code>Cypher (n rows, ms): &lt;flattened&gt;</code>. Params at DEBUG only, no credential leak. <code>e8b523c</code></li>
+            <li class="ok"><strong>Bump <code>v0.7.0</code></strong> — pyproject + README + deploy default app name. <code>577b70f</code></li>
+          </ul>
+        </div>
+        <div>
+          <ul class="bullets">
+            <li class="ok"><strong>Settings flash fix</strong> — Engine selector server-side rendered from Jinja, no Lakebase → Neo4j transition on first paint. <code>e63bfce</code></li>
+            <li class="ok"><strong>Modular split</strong> — <code>Neo4jStore.py</code> (1028 LoC) → façade + Connection + WriteOps + ReadOps. Fowler <em>Large Class → Extract Class</em>. <code>7a9a625</code></li>
+            <li class="ok"><strong>Test connection wired (bonus)</strong> — UI button now runs a real Bolt handshake + <code>RETURN 1</code> probe; placeholder removed. <code>820f607</code> + follow-up</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="background: linear-gradient(135deg, var(--ob-cobalt), var(--neo4j-deep)); color: #fff; border: none; margin-top: 8px;">
+        <h3 style="color:#fff; font-size: 16px;">All 6 commits verified live on <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">ontobricks-070</code> · FEVM-Mjolnir · 2026-06-25</h3>
+        <p style="color: rgba(255,255,255,.9); font-size:13px;">
+          The next 5 slides are fresh screenshots + log excerpts from the deployed v0.7.0 app. Original v0.6 PFAS demo flow (slides 8–20) is unchanged — Cypher generation, OWL inference, SHACL, and GraphQL all reach Neo4j through the new <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">Neo4jConnection.run</code> path.
+        </p>
+      </div>
+    </div>
+    <div class="slide-footer">
+      <div class="ob-logo"><span class="dot"></span> OntoBricks v0.7 · PR #47</div>
+      <span>2026-06-25</span>
+    </div>
+  </section>
+
+  <!-- ========= 22 · Secret resource flow ========= -->
+  <section class="slide screenshot-slide" data-title="Secret resource">
+    <div class="corner-mark"></div>
+    <div class="slide-header">
+      <div class="slide-title">
+        <div class="eyebrow">v0.7 · #68 secret-resource auth</div>
+        <h1>Neo4j password → Databricks Apps secret</h1>
+      </div>
+      <div class="slide-page">22 / 27</div>
+    </div>
+    <div class="screenshot-wrap">
+      <div class="screenshot-frame"><img src="screenshots/20-settings-neo4j-secret-badge.png" alt="Settings → Neo4j — green 'From Apps secret' badge, password input disabled with •••••••• placeholder" /></div>
+      <div class="screenshot-caption">
+        <span>Settings → Neo4j · <strong>green <code>From Apps secret</code> badge</strong> next to the Password label · input disabled with <code>••••••••  (sourced from Apps secret)</code> placeholder. The page Jinja calls <code>is_neo4j_password_from_secret()</code> at render time so the badge flips colour without a JS round-trip. Save endpoint <code>SettingsService.set_graph_engine_config_result</code> strips the <code>password</code> key from <code>global_config</code> when the env var is bound — no clear-text credential ever lands in the DB.</span>
+        <span class="file">20-settings-neo4j-secret-badge.png</span>
+      </div>
+    </div>
+    <div class="slide-footer">
+      <div class="ob-logo"><span class="dot"></span> OntoBricks v0.7 · PR #47</div>
+      <span>2026-06-25</span>
+    </div>
+  </section>
+
+  <!-- ========= 23 · Test connection wired ========= -->
+  <section class="slide screenshot-slide" data-title="Test connection wired">
+    <div class="corner-mark"></div>
+    <div class="slide-header">
+      <div class="slide-title">
+        <div class="eyebrow">v0.7 · #74 Test connection wire</div>
+        <h1>One-click Bolt handshake + Cypher probe</h1>
+      </div>
+      <div class="slide-page">23 / 27</div>
+    </div>
+    <div class="screenshot-wrap">
+      <div class="screenshot-frame"><img src="screenshots/23-settings-neo4j-test-connection-result.png" alt="Settings → Neo4j — green 'Connected' alert with latency and credentials source" /></div>
+      <div class="screenshot-caption">
+        <span>Settings → Neo4j → <strong>Test connection</strong>. The placeholder ("Test-connection is not wired up yet") is gone. POST to <code>/settings/graph-engine/neo4j-test</code> runs <code>driver.verify_connectivity()</code> + a <code>RETURN 1 AS probe</code> through <code>Neo4jConnection.run</code> — exercises the full <em>secret resolve → driver → session → Cypher</em> path. Green alert: <code>Connected to neo4j+s://b4810af7.databases.neo4j.io (database neo4j) in 860.2 ms · credentials from env var (NEO4J_PASSWORD — Databricks Apps secret)</code>. Failure mode returns a typed <code>category</code> ({config, driver-missing, auth, connectivity}) so the UI colour-codes the error without parsing the message.</span>
+        <span class="file">23-settings-neo4j-test-connection-result.png</span>
+      </div>
+    </div>
+    <div class="slide-footer">
+      <div class="ob-logo"><span class="dot"></span> OntoBricks v0.7 · PR #47</div>
+      <span>2026-06-25</span>
+    </div>
+  </section>
+
+  <!-- ========= 24 · Cypher logging at INFO ========= -->
+  <section class="slide" data-title="Cypher INFO logging">
+    <div class="corner-mark"></div>
+    <div class="slide-header">
+      <div class="slide-title">
+        <div class="eyebrow">v0.7 · #69 Cypher logging</div>
+        <h1>Every Cypher visible in Databricks app logs</h1>
+      </div>
+      <div class="slide-page">24 / 27</div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div>
+          <h3 style="color:var(--ob-navy); font-size:16px; margin-bottom:10px;">Real log capture · 2026-06-25T19:19 UTC</h3>
+          <pre style="background:#0F2A47; color:#9FE2BE; padding:14px; border-radius:8px; font-size:11px; line-height:1.5; overflow:auto;">INFO   ontobricks.core.graphdb.neo4j.Neo4jConnection
+       _resolve_auth:169 |
+       Neo4j credentials sourced from
+       NEO4J_PASSWORD env var
+
+INFO   ontobricks.core.graphdb.neo4j.Neo4jConnection
+       get_driver:141 |
+       Neo4j driver opened for
+       neo4j+s://b4810af7.databases.neo4j.io
+       (database=neo4j)
+
+DEBUG  ontobricks.core.graphdb.neo4j.Neo4jConnection
+       run:215 | Cypher params: {}
+
+INFO   ontobricks.core.graphdb.neo4j.Neo4jConnection
+       run:221 |
+       Cypher (1 rows, 706.4 ms): RETURN 1 AS probe
+
+DEBUG  ontobricks.core.graphdb.neo4j.Neo4jConnection
+       close:151 | Neo4j driver closed</pre>
+          <p style="font-size:11px; color:var(--text-mute); margin-top:6px;">Triggered by clicking <em>Settings → Neo4j → Test connection</em> on <code>ontobricks-070</code> · captured via <code>databricks apps logs ontobricks-070</code>.</p>
+        </div>
+        <div>
+          <h3 style="color:var(--ob-navy); font-size:16px; margin-bottom:10px;">Why this matters</h3>
+          <ul class="bullets">
+            <li class="ok"><strong>Every query is greppable.</strong> One INFO line per Cypher with row count, duration, and the whitespace-flattened statement. Multi-line f-strings collapsed; truncated at 1500 chars with a <code>… (truncated)</code> marker.</li>
+            <li class="ok"><strong>No credential leak.</strong> Auth lives on the driver (not on <code>session.run</code>) so bound params never carry the password. Params are DEBUG-only — kept out of the default INFO stream.</li>
+            <li class="ok"><strong>Logger module name doubles as proof of the split.</strong> <code>ontobricks.core.graphdb.neo4j.Neo4jConnection</code> in the log header confirms the extracted class is the one running, not <code>Neo4jStore</code>.</li>
+            <li><strong>Trace the UI action → backend query mapping.</strong> Clicking <em>Test connection</em> → <code>RETURN 1 AS probe</code>. Clicking <em>KG filter</em> → <code>find_seed_subjects</code> Cypher emitted next. Operators correlate without instrumentation.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer">
+      <div class="ob-logo"><span class="dot"></span> OntoBricks v0.7 · PR #47</div>
+      <span>2026-06-25</span>
+    </div>
+  </section>
+
+  <!-- ========= 25 · Settings flash fix ========= -->
+  <section class="slide" data-title="Settings flash fix">
+    <div class="corner-mark"></div>
+    <div class="slide-header">
+      <div class="slide-title">
+        <div class="eyebrow">v0.7 · #71 server-side render</div>
+        <h1>Engine selector no longer flickers on load</h1>
+      </div>
+      <div class="slide-page">25 / 27</div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div>
+          <h3 style="color:#B45309; font-size:16px; margin-bottom:10px;">Before v0.7</h3>
+          <ul class="bullets">
+            <li class="warn">Page loads → <code>&lt;option value="lakebase"&gt;</code> rendered as default (HTML first paint).</li>
+            <li class="warn">JS lazy-loads on first visit to <code>ts-global</code> → fetches <code>/settings/graph-engine</code>.</li>
+            <li class="warn">~150 ms later → <code>sel.value = 'neo4j'</code> snap. Visible flicker. (Benoit, 2026-06-18: <em>"je vois pas Neo4j"</em>)</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="color:var(--ok); font-size:16px; margin-bottom:10px;">After v0.7 — commit <code>e63bfce</code></h3>
+          <ul class="bullets">
+            <li class="ok">Settings route resolves the engine via <code>SettingsService.get_graph_engine_result(...)</code> <strong>before</strong> render.</li>
+            <li class="ok">Jinja emits <code>&lt;option value="neo4j" {% if graph_engine == "neo4j" %}selected{% endif %}&gt;</code> — correct on first paint.</li>
+            <li class="ok"><code>applyGraphDbEnginePanels()</code> runs at <code>DOMContentLoaded</code> so sub-panels align before async fetch. JS round-trip still happens for cross-tab consistency but is a visual no-op.</li>
+            <li class="ok">Failure-degraded mode unchanged: if the global-config service is unreachable, the page still loads with the Lakebase default.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer">
+      <div class="ob-logo"><span class="dot"></span> OntoBricks v0.7 · PR #47</div>
+      <span>2026-06-25</span>
+    </div>
+  </section>
+
+  <!-- ========= 26 · Modular split ========= -->
+  <section class="slide" data-title="Modular split">
+    <div class="corner-mark"></div>
+    <div class="slide-header">
+      <div class="slide-title">
+        <div class="eyebrow">v0.7 · #72 Extract Class</div>
+        <h1><code>Neo4jStore.py</code> · 1028 LoC → 4 files</h1>
+      </div>
+      <div class="slide-page">26 / 27</div>
+    </div>
+    <div class="slide-body">
+      <p class="lead">Fowler <em>Large Class → Extract Class</em>. Façade pattern keeps the public <code>Neo4jStore</code> API and the <code>GraphDBBackend</code> contract untouched — callers, the factory, and the existing tests work as-is.</p>
+      <div class="grid-2">
+        <div>
+          <pre style="background:#0F2A47; color:#9FE2BE; padding:14px; border-radius:8px; font-size:12px; line-height:1.5; overflow:auto;">┌──────────────────────────────────────┐
+│  Neo4jStore (façade, 435 LoC)        │
+│  • GraphDBBackend interface          │
+│  • Capability flags                  │
+│  • execute_query → NotImplementedErr │
+│  • Thin delegators                   │
+└────────────────┬─────────────────────┘
+                 │ composes
+   ┌─────────────┼──────────────┐
+   ▼             ▼              ▼
+Neo4jConn-     Neo4jWrite-   Neo4jRead-
+ection         Ops           Ops
+(227 LoC)      (156 LoC)     (614 LoC)
+• auth         • create_table • get_aggregate_stats
+• driver       • drop_table   • find_subjects_by_type
+• run + INFO   • insert       • find_seed_subjects
+  log          • delete       • bfs_traversal
+• Cypher       • optimize     • expand_entity_neighbors
+  flatten      • cohort       • get_entity_metadata
+               • sanitise_    • paginated_*
+                 label        • transitive_closure
+                              • symmetric_expand
+                              • shortest_path</pre>
+        </div>
+        <div>
+          <h3 style="color:var(--ob-navy); font-size:16px; margin-bottom:10px;">Why this matters</h3>
+          <ul class="bullets">
+            <li class="ok"><strong>Single concern per file.</strong> Auth + driver lifecycle in one place (security-critical, easy to audit). CRUD writes isolated from read queries.</li>
+            <li class="ok"><strong>Public API preserved.</strong> <code>Neo4jStore(...)</code> constructor + every <code>TripleStoreBackend</code> / <code>GraphDBBackend</code> method unchanged. Factory dispatch and the 30+ existing unit tests pass without rewrites — only the mock target moved from <code>s._run</code> to <code>s._connection.run</code> (with a back-compat alias).</li>
+            <li class="ok"><strong>Back-compat hooks.</strong> <code>_run</code>, <code>_resolve_auth</code>, <code>_is_deployed_app</code>, and <code>_driver</code> all delegate to the connection so the legacy mocking pattern keeps working in tests.</li>
+            <li><strong>Per <code>src/.coding_rules.md §12</code>:</strong> each file ≤ 700 LoC, one public class per file matching its PascalCase filename. Lakebase precedent (<code>LakebaseFlatStore</code>, <code>PoolProvisioner</code>) confirmed as the shape Benoit asks for.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer">
+      <div class="ob-logo"><span class="dot"></span> OntoBricks v0.7 · PR #47</div>
+      <span>2026-06-25</span>
+    </div>
+  </section>
+
   <!-- ========= 21 · Bugs + limitations + ask ========= -->
   <section class="slide" data-title="Bugs · Limitations · Ask">
     <div class="corner-mark"></div>
@@ -918,7 +1155,7 @@ RETURN t.subject AS subject, t.object AS label</pre>
         <div class="eyebrow">Closing</div>
         <h1>Bugs found · limitations · ask</h1>
       </div>
-      <div class="slide-page">21 / 21</div>
+      <div class="slide-page">27 / 27</div>
     </div>
     <div class="slide-body">
       <div class="grid-2">
@@ -928,6 +1165,8 @@ RETURN t.subject AS subject, t.object AS label</pre>
             <li class="warn"><strong>Tautology in <code>triplestore_page_context</code></strong> — <code>_raw if _raw == "lakebase" else "lakebase"</code> silently coerced every non-Lakebase engine to lakebase. Now passes through.</li>
             <li class="warn"><strong>Multi-label CREATE CONSTRAINT rejected by Neo4j 5+</strong> — <code>:Triple:&lt;store&gt;</code> compound. Switched to single backtick-quoted label.</li>
             <li class="warn"><strong>Driver missing in deployed App</strong> — <code>app.yaml.template</code> uv-run lacked <code>--extra neo4j</code>. Added.</li>
+            <li class="warn"><strong>(v0.7) Clear-text password in <code>global_config</code></strong> — Save endpoint now strips the field when <code>NEO4J_PASSWORD</code> env var is bound.</li>
+            <li class="warn"><strong>(v0.7) Settings page Lakebase → Neo4j flicker</strong> — Engine selector now server-side rendered via Jinja <code>{% if graph_engine == "..." %}selected{% endif %}</code>.</li>
           </ul>
         </div>
         <div>
@@ -942,13 +1181,13 @@ RETURN t.subject AS subject, t.object AS label</pre>
       <div class="card" style="background: linear-gradient(135deg, var(--ob-cobalt), var(--neo4j-deep)); color: #fff; border: none; margin-top: 8px;">
         <h3 style="color:#fff; font-size: 17px;">Ask: review & merge into <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">develop</code></h3>
         <p style="color: rgba(255,255,255,.9); font-size:14px;">
-          12 commits on <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">feature/neo4j-graphdb-skeleton</code>. The five most recent (<code style="background:rgba(255,255,255,.15); color:#fff; border:none;">cc679b9</code> → <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">0ba4ca6</code>) are the engine-aware label fixes. Reviewer to optionally re-run <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">tests/integration/neo4j_e2e_smoke.py</code> against any Neo4j endpoint.
+          v0.6 demo + 6 post-review commits (<code style="background:rgba(255,255,255,.15); color:#fff; border:none;">da9cae9</code> → <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">820f607</code>) on <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">feature/neo4j-graphdb-skeleton</code>. All five items of the 2026-06-18 review punch-list addressed + one bonus (Test connection wired). Verified live on <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">ontobricks-070</code> on FEVM-Mjolnir: <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">Connected … 860 ms · credentials from env var (NEO4J_PASSWORD — Databricks Apps secret)</code>. Reviewer may optionally re-run <code style="background:rgba(255,255,255,.15); color:#fff; border:none;">tests/integration/neo4j_e2e_smoke.py</code> against any Neo4j endpoint.
         </p>
       </div>
     </div>
     <div class="slide-footer">
-      <div class="ob-logo"><span class="dot"></span> OntoBricks v0.6 · PR #47</div>
-      <span>2026-06-12 · Hugues Journeau · @hourdays</span>
+      <div class="ob-logo"><span class="dot"></span> OntoBricks v0.7 · PR #47</div>
+      <span>2026-06-25 · Hugues Journeau · @hourdays</span>
     </div>
   </section>
 

@@ -2122,11 +2122,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const j = await resp.json();
             if (j.ok) {
                 result.className = 'alert alert-success mt-3 small';
+                const probe = j.cypher_probe
+                    ? ' · <code>RETURN 1 AS probe</code> echoed ' +
+                      j.cypher_probe.rows + ' row(s) — Cypher path live.'
+                    : '';
                 result.innerHTML =
                     '<i class="bi bi-check-circle me-1"></i>' +
                     '<strong>Connected</strong> to <code>' + j.uri + '</code> ' +
                     '(database <code>' + j.database + '</code>) in ' + j.latency_ms + ' ms · ' +
-                    'credentials from <em>' + j.credentials_source + '</em>.';
+                    'credentials from <em>' + j.credentials_source + '</em>.' + probe;
             } else {
                 result.className = 'alert alert-danger mt-3 small';
                 const cat = j.category ? ' <span class="badge bg-danger-subtle text-danger-emphasis border ms-1">' + j.category + '</span>' : '';

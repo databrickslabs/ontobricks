@@ -1478,9 +1478,14 @@ class SettingsService:
             }
 
         t0 = _time.monotonic()
+        cypher_rows = None
         try:
             driver = conn.get_driver()
             driver.verify_connectivity()
+            # Round-trip a trivial Cypher through the same ``_run`` path the
+            # real query stack uses — exercises session creation, Cypher
+            # execution, and the INFO log line (Benoit's PR #47 review #2).
+            cypher_rows = conn.run("RETURN 1 AS probe")
         except InfrastructureError as exc:
             return {
                 "success": True,
@@ -1515,6 +1520,11 @@ class SettingsService:
             "uri": uri,
             "database": conn.database,
             "latency_ms": latency_ms,
+            "cypher_probe": (
+                {"rows": len(cypher_rows or []), "echo": (cypher_rows[0] if cypher_rows else None)}
+                if cypher_rows is not None
+                else None
+            ),
             "credentials_source": (
                 "env var (%s — Databricks Apps secret)" % NEO4J_PASSWORD_ENV
                 if is_neo4j_password_from_secret()
