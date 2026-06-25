@@ -158,3 +158,24 @@ on it. (Stacked on PR1 + PR2.)
   routing-accuracy 20/20 and Python↔SQL constant parity).
 - Full stacked-branch regression `tests/agents tests/units/{agents,mapping,pge_eval,ontology}`
   → **759 passed, 11 skipped**.
+
+# 2026-06-25 — refactor(agents): simplify supervisor engine for reviewability
+
+## Context
+
+Post-review simplification pass on the new supervisor code (behavior-preserving).
+
+## Changes
+
+1. `src/agents/agent_supervisor/engine.py` — Remove Middle Man: deleted the
+   `_run_mapping(**kw)` indirection that packed→unpacked→repacked identical
+   kwargs; `run()` now selects `run_mapping_pge` vs `run_auto_assignment` inline
+   (−15 lines), keeping the dispatch decision beside its call.
+2. `src/agents/agent_supervisor/responses_agent.py` — moved the `assess()` call
+   into the `assess` branch that consumes it (the `run` path recomputes it in
+   `SupervisorEngine.run`), inlined a one-use local, tightened `_text_event`
+   `custom_outputs` to `Optional[dict]`.
+
+## Tests
+
+`uv run pytest tests/agents/agent_supervisor -q` → **35 passed** (unchanged).

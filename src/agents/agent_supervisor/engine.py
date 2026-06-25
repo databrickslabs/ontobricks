@@ -123,9 +123,12 @@ class SupervisorEngine:
 
         try:
             if task == "mapping":
-                result = SupervisorEngine._run_mapping(
-                    agent,
-                    engine,
+                run_engine = (
+                    agent.run_mapping_pge
+                    if engine == "pge"
+                    else agent.run_auto_assignment
+                )
+                result = run_engine(
                     host=host,
                     token=token,
                     endpoint_name=endpoint_name,
@@ -167,21 +170,3 @@ class SupervisorEngine:
             result=result,
             success=bool(getattr(result, "success", True)),
         )
-
-    @staticmethod
-    def _run_mapping(agent, engine, **kw):
-        common = dict(
-            host=kw["host"],
-            token=kw["token"],
-            endpoint_name=kw["endpoint_name"],
-            client=kw["client"],
-            metadata=kw["metadata"],
-            ontology=kw["ontology"],
-            entity_mappings=kw["entity_mappings"],
-            relationship_mappings=kw["relationship_mappings"],
-            documents=kw["documents"],
-            on_step=kw["on_step"],
-        )
-        if engine == "pge":
-            return agent.run_mapping_pge(**common)
-        return agent.run_auto_assignment(**common)

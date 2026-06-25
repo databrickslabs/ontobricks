@@ -25,7 +25,7 @@ serving-friendly adapter.
 """
 
 import copy
-from typing import Generator
+from typing import Generator, Optional
 from uuid import uuid4
 
 import mlflow
@@ -75,10 +75,8 @@ class MappingEngineResponsesAgent(ResponsesAgent):
         ontology = copy.deepcopy(ci.get("ontology", {}))
         mode = ci.get("mode") or ("run" if ci.get("client") is not None else "assess")
 
-        report = assess(metadata, ontology)
-        engine = ci.get("engine_override") or self._engine
-
         if mode == "assess":
+            report = assess(metadata, ontology)
             text = (
                 f"Complexity {report.score:.2f} ({report.tier}). "
                 f"Recommended engine: {report.recommended_engine}. {report.rationale}"
@@ -99,7 +97,7 @@ class MappingEngineResponsesAgent(ResponsesAgent):
             endpoint_name=ci["endpoint_name"],
             metadata=metadata,
             ontology=ontology,
-            engine_override=engine,
+            engine_override=ci.get("engine_override") or self._engine,
             client=ci.get("client"),
             entity_mappings=ci.get("entity_mappings"),
             relationship_mappings=ci.get("relationship_mappings"),
@@ -110,7 +108,9 @@ class MappingEngineResponsesAgent(ResponsesAgent):
             custom_outputs=result.to_dict(),
         )
 
-    def _text_event(self, text: str, custom_outputs: dict = None) -> ResponsesAgentStreamEvent:
+    def _text_event(
+        self, text: str, custom_outputs: Optional[dict] = None
+    ) -> ResponsesAgentStreamEvent:
         return ResponsesAgentStreamEvent(
             type="response.output_item.done",
             item=self.create_text_output_item(text=text, id=f"msg_{uuid4().hex[:8]}"),
