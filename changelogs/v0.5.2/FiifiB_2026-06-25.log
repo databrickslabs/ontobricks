@@ -1,0 +1,58 @@
+# 2026-06-25 — feat(ontology): PGE Evaluator stage for owl-generator
+
+## Context
+
+The owl-generator agent had a single-shot generation + a pitfall-tool fix loop,
+but no deterministic Evaluator stage — so structural defects (orphan classes,
+dangling domain/range, naming violations, duplicate classes) could survive into
+the delivered ontology. This change turns owl-generation into a real
+Planner→Generator→Evaluator (PGE) loop: after the pitfall loop settles, a
+deterministic Stage-1 evaluator scores the ontology against the source metadata
+and feeds concrete retry-hints back to the generator, bounded by a hard cap.
+
+The Evaluator reuses a small, usecase-agnostic ontology-metrics module
+(`agents.pge_eval.ontology_metrics`) — gold-free, computed purely from the
+generated ontology + source schema. Only the ontology slice of the metrics
+package is introduced here; the full scorecard/CLI lands separately.
+
+## Changes
+
+1. `src/agents/agent_owl_generator/engine.py`
+   - Add `MAX_OWL_EVAL_ROUNDS` (bounded Evaluator retry cap) and
+     `_evaluate_ontology_stage()` — parses the Turtle, runs the deterministic
+     Tier-1 ontology checks, and returns a retry-hint string on hard defects
+     (orphan / dangling domain-range / naming / duplicate). Fails open: any
+     parse/dep error returns `None` so a check failure never blocks delivery.
+   - Wire the Evaluator into the agent loop after the pitfall loop; only retry
+     when an iteration remains, so a usable ontology is never discarded by
+     exhausting `MAX_ITERATIONS`.
+   - Raise `max_tokens` to `MAX_OUTPUT_TOKENS = 16000` so exhaustive attribute
+     coverage isn't silently truncated past the old 4096 ceiling.
+   - Strengthen the system prompt: `# ATTRIBUTE COVERAGE` section + a
+     `get_table_detail`-per-table workflow step driving exhaustive (not curated)
+     datatype-property coverage.
+2. `src/agents/pge_eval/__init__.py` — new package (minimal root; importers
+   depend on the concrete submodule to avoid coupling to later modules).
+3. `src/agents/pge_eval/normalize.py` — shared name/metadata/ontology
+   normalization primitives (stdlib-only).
+4. `src/agents/pge_eval/ontology_metrics.py` — `evaluate_ontology()`:
+   deterministic Stage-1 checks + footprint coverage, no stored reference.
+5. Tests: `tests/units/pge_eval/{__init__,_fixtures}.py`,
+   `test_ontology_metrics.py`, `test_owl_evaluator_stage.py`.
+
+## Modified / added files
+
+- M src/agents/agent_owl_generator/engine.py
+- A src/agents/pge_eval/__init__.py
+- A src/agents/pge_eval/normalize.py
+- A src/agents/pge_eval/ontology_metrics.py
+- A tests/units/pge_eval/__init__.py
+- A tests/units/pge_eval/_fixtures.py
+- A tests/units/pge_eval/test_ontology_metrics.py
+- A tests/units/pge_eval/test_owl_evaluator_stage.py
+
+## Tests
+
+`uv run pytest tests/units/pge_eval/test_ontology_metrics.py
+tests/units/pge_eval/test_owl_evaluator_stage.py
+tests/units/ontology/test_owl_generator.py -q` → **39 passed**.
