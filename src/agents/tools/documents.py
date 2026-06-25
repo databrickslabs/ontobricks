@@ -182,7 +182,15 @@ def tool_read_document(ctx: ToolContext, *, filename: str = "", **_kwargs) -> st
                 "error": (
                     "Binary document could not be parsed. A SQL warehouse with "
                     "ai_parse_document access is required to read PDF, Office, or "
-                    "image files."
+                    "image files. See docs/pr47-neo4j-demo/"
+                    "ai-parse-document-prereq.md for setup. Falling back to "
+                    "filename-only inference for ontology generation."
+                ),
+                "remediation": (
+                    "1) Grant USE CATALOG + ALL ON SCHEMA on system.ai to the "
+                    "app service principal, OR pick a SQL warehouse with "
+                    "ai_parse_document enabled in the workspace. "
+                    "2) Re-deploy or re-bind the sql-warehouse Apps resource."
                 ),
             }
         )

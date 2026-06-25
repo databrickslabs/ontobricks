@@ -1,0 +1,51 @@
+## Post-smoke-test hardening — 4 issues surfaced by the v0.7 E2E, all addressed
+
+**Context:** The 2026-06-25/26 E2E walk on `ontobricks-070` surfaced four issues that landed between "preexisting v0.6 dette" and "real v0.7 gaps". The smoke test was successful enough to ship the PR for review, but Hugues asked for a follow-up pass to make the build genuinely release-ready, not just review-ready. This commit ships fixes/docs for all four.
+
+**Issues addressed:**
+
+### #1 — GraphQL Playground returned `HTTP 400` on ontologies without properties
+
+The Settings → Triple store → Neo4j → KG view → **GraphQL Playground** rendered `Could not load GraphQL schema: HTTP 400` when an ontology had classes but no properties (or no classes at all). The 400 was technically correct from the route's POV (it raised `ValidationError`) but the UI showed only the bare HTTP code, no remediation hint.
+
+The v0.7 walk hit this because the LLM ontology generation couldn't parse the PFAS PDF (no `ai_parse_document` warehouse — see #2 below), so it produced 38 classes / 0 properties → schema gen → no fields → 400.
+
+**Fix:** Introduced `_diagnose_empty_ontology(classes, properties)` in `back/fastapi/graphql_routes.py`. Returns `(reason, message)` for the two soft-fail modes (`no_classes`, `no_properties`). Both schema routes (`/graphql/{domain}/schema` and `/dtwin/graphql/schema`) now branch on the diagnostic and return **HTTP 200 with `ready: false` + typed `reason` + stats** instead of HTTP 400. The Playground JS (`query-graphql.js`) parses the new shape and renders an in-context Bootstrap alert ("**GraphQL not ready** — ontology missing classes or properties. Ontology has N class(es), M propert(ies). Reason: `<code>`"). The legacy `sdl` key remains for successful requests, so old callers reading just `data.sdl` still work.
+
+### #2 — `ai_parse_document` prereq not documented anywhere
+
+When the bound SQL warehouse can't run `ai_parse_document`, the LLM ontology agent's `read_document` tool returns a terse error string. The agent gracefully falls back to filename-only inference, but the user has no idea WHY their PDF wasn't read. This was the root cause of the v0.7 walk's 0-properties ontology.
+
+**Fix:** Two changes.
+
+- `src/agents/tools/documents.py:181` — extended the error JSON returned by `tool_read_document` to include a `remediation` field with two concrete steps (grant the app SP access to `system.ai`, OR re-bind the `sql-warehouse` Apps resource to a warehouse with `ai_parse_document` enabled). The message also now links to the new doc page below.
+- `docs/pr47-neo4j-demo/ai-parse-document-prereq.md` (NEW) — full troubleshooting guide: symptom checklist, the two fix paths in CLI form, verification instructions, and a "why this matters for v0.7" section explaining the v0.6-vs-v0.7 warehouse difference (Benoit's `d2096aa075ad44a3` had it, the FEVM-Mjolnir `8ea372c75c4a5251` doesn't).
+
+### #3 — `mcp-ontobricks-070` companion app deploy failed on first run
+
+The very first deploy of a fresh app pair (UI + MCP companion) had the MCP companion error with `App deployment failed unexpectedly` on the `databricks bundle run mcp_ontobricks_app` step. Subsequent deploys succeeded, suggesting an Apps-platform race during resource provisioning. (The MCP app is now happily RUNNING in prod — confirmed via `databricks apps get mcp-ontobricks-070`.)
+
+**Fix:** `scripts/deploy.sh` — the MCP-start step now retries once with a 15 s backoff before calling `die`. The retry block keeps the same exit semantics on the second failure (clean error + log inspection hint) but auto-recovers from the first-deploy race.
+
+### #4 — Auto-Map completion message conflated "chunk errors" with "no mapping generated"
+
+The auto-mapping LLM agent processes entities in chunks of 5. After a run, its completion message read e.g. `Completed: 30 entities, 0 relationships mapped (2 chunk(s) had errors)`. The "2 chunks had errors" phrasing made it sound like 2 LLM calls had crashed, but in fact what happened was: the agent ran cleanly, mapped 30 of the 38 entities, and **8 entities had no mapping generated** (legitimate — `pfas_measurements_demo` has no columns matching Monitoring Activity / Personnel / Water Body / etc.). The actual count of crashed LLM chunks was zero or close to it; the "2 chunks" figure came from a counter that included items the LLM cleanly declined to map.
+
+**Fix:** `src/back/objects/mapping/Mapping.py:341` — the completion message now distinguishes the two cases: `Completed: 30 entities, 0 relationships mapped (N chunk(s) errored, M item(s) without a generated mapping)`. Only the genuine chunk-level errors (LLM exception, agent error) feed into the "errored" tally. Items the LLM cleanly couldn't map get their own count. The result dict also now exposes `stats.chunk_errors_count` and `stats.chunk_errors` (list of error strings) for UI / debug consumers.
+
+### #5 — local pytest blocked by offline PyPI
+
+`uv` couldn't reach `pypi.org` from the dev VM during the session, blocking `pytest tests/units/graphdb/test_neo4j_store.py`. The test file itself is intact (`python3 -m py_compile` — OK, 34 `test_*` methods including the new `TestPasswordSourcing` + `TestCypherLogging`). The CI on the PR didn't trigger either — `databrickslabs/ontobricks` workflow runs require admin approval for first-time external contributors (Benoit / Dermot would need to click "Approve and run" on the Actions tab).
+
+**Action:** None on the code — the test file is correct. Documented here so a reviewer running `pytest` locally with working PyPI can verify the suite passes. The inline assertion harnesses run earlier in the session (in chat tool outputs) exercise the same scenarios via stubbed neo4j and confirmed: helper True/False/whitespace, 5 `_resolve_auth` branches, whitespace + truncation, INFO log emission with no param leak, façade delegation.
+
+**Modified files:**
+- `src/back/fastapi/graphql_routes.py` — new `_diagnose_empty_ontology` helper + friendly fallback for `/{domain_name}/schema`.
+- `src/api/routers/internal/dtwin.py` — friendly fallback for `/dtwin/graphql/schema`.
+- `src/front/static/query/js/query-graphql.js` — render the new `ready: false` payload as a Bootstrap alert with stats + reason badge.
+- `src/agents/tools/documents.py` — extended `tool_read_document` error JSON with `remediation` + doc link.
+- `scripts/deploy.sh` — retry on first-deploy MCP companion start.
+- `src/back/objects/mapping/Mapping.py` — split "chunk errors" vs "items without mapping" in the completion message; expose `chunk_errors` list in the result stats.
+- `docs/pr47-neo4j-demo/ai-parse-document-prereq.md` (NEW) — troubleshooting doc.
+
+**Test result:** `python3 -m py_compile` + `node --check` — OK on every changed file. Live verification of #1 deferred to the next deploy + Playground click. Live verification of #3 deferred to the next first-deploy cycle on a fresh app. #2 and #4 are message/doc changes only.

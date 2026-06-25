@@ -394,9 +394,25 @@ if ! $NO_RUN; then
     ok "app start requested"
 
     begin_step "Start $MCP_APP_NAME"
-    databricks bundle run "$MCP_APP_RESOURCE_KEY" -t "$TARGET" "${_dab_var_overrides[@]}" \
-        || die "failed to start app '${MCP_APP_NAME}'. Inspect the logs: databricks apps logs ${MCP_APP_NAME}"
-    ok "MCP app start requested"
+    # The MCP companion start step is observed to fail transiently with
+    # "App deployment failed unexpectedly" on the very first deploy of a
+    # fresh app — likely a race between the Apps platform reconciling
+    # the freshly-created `mcp_ontobricks_app` resource and the bundle
+    # run call. A second attempt 15 seconds later always succeeds.
+    _mcp_attempt=1
+    _mcp_max_attempts=2
+    while true; do
+        if databricks bundle run "$MCP_APP_RESOURCE_KEY" -t "$TARGET" "${_dab_var_overrides[@]}"; then
+            ok "MCP app start requested"
+            break
+        fi
+        if [ "$_mcp_attempt" -ge "$_mcp_max_attempts" ]; then
+            die "failed to start app '${MCP_APP_NAME}' after ${_mcp_max_attempts} attempts. Inspect: databricks apps logs ${MCP_APP_NAME}"
+        fi
+        info "MCP start failed (attempt $_mcp_attempt) — retrying in 15s (Apps platform race on first-deploy)..."
+        sleep 15
+        _mcp_attempt=$((_mcp_attempt + 1))
+    done
 else
     begin_step "Start apps (skipped)"
     info "skipped per --no-run"
