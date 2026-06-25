@@ -259,7 +259,7 @@ targets:
             # Customer admins can switch to manual UI binding by removing
             # this overlay (the resource declaration still lives in
             # ``app.yaml.template``, unbound by default).
-            # See docs/v0.6-neo4j-demo/secret-configuration.md.
+            # See docs/pr47-neo4j-demo/secret-configuration.md.
             - name: neo4j-password
               description: "Databricks Apps secret holding the Neo4j Bolt password"
               secret:

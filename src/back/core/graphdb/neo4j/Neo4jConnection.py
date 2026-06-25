@@ -45,7 +45,7 @@ SUPPORTED_AUTH_METHODS = ("basic", "databricks_secret")
 # Env var fed by a Databricks Apps secret resource bound in app.yaml as
 # ``valueFrom: neo4j-password``. When set, the persisted engine_config
 # password is ignored (and stripped at save-time) — see
-# docs/v0.6-neo4j-demo/secret-configuration.md.
+# docs/pr47-neo4j-demo/secret-configuration.md.
 NEO4J_PASSWORD_ENV = "NEO4J_PASSWORD"
 
 
@@ -173,7 +173,7 @@ class Neo4jConnection:
                     "Neo4jConnection: %s env var is required in the deployed app — "
                     "declare a Databricks Apps secret resource named 'neo4j-password' "
                     "and bind it via app.yaml `valueFrom`. See "
-                    "docs/v0.6-neo4j-demo/secret-configuration.md."
+                    "docs/pr47-neo4j-demo/secret-configuration.md."
                     % NEO4J_PASSWORD_ENV
                 )
             if not pwd_cfg:

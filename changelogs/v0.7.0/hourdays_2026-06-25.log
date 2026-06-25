@@ -21,9 +21,9 @@ credentials from env var (NEO4J_PASSWORD — Databricks Apps secret)
 - `src/api/routers/internal/settings.py`
 - `src/back/objects/domain/SettingsService.py`
 - `src/front/static/config/js/settings.js`
-- `docs/v0.6-neo4j-demo/screenshots/20-settings-neo4j-secret-badge.png` (new — captures the green "From Apps secret" badge + disabled password input)
-- `docs/v0.6-neo4j-demo/screenshots/22-settings-global-engine-selector.png` (new — captures the server-side-rendered engine selector with no flash)
-- `docs/v0.6-neo4j-demo/screenshots/23-settings-neo4j-test-connection-result.png` (new — captures the green "Connected … 860.2 ms · credentials from env var" alert)
+- `docs/pr47-neo4j-demo/screenshots/20-settings-neo4j-secret-badge.png` (new — captures the green "From Apps secret" badge + disabled password input)
+- `docs/pr47-neo4j-demo/screenshots/22-settings-global-engine-selector.png` (new — captures the server-side-rendered engine selector with no flash)
+- `docs/pr47-neo4j-demo/screenshots/23-settings-neo4j-test-connection-result.png` (new — captures the green "Connected … 860.2 ms · credentials from env var" alert)
 
 **Test result:** `python3 -m py_compile` on every changed `.py` — OK. `node --check` on `settings.js` — OK. **Live verification on `fevm-mjolnir` / `ontobricks-070` (post deploy `bf39lra2x`):**
 - Initial test → `category: "connectivity"` clean error (Aura instance was offline at that moment — DNS unresolvable from the Databricks Apps container). UI rendered the red badge correctly.
@@ -37,17 +37,17 @@ credentials from env var (NEO4J_PASSWORD — Databricks Apps secret)
 **Changes:**
 1. `src/back/objects/domain/SettingsService.py` — after `driver.verify_connectivity()`, run `conn.run("RETURN 1 AS probe")` (still inside the existing try/except so failure surfaces with `category: "connectivity"`). New `cypher_probe` field in the success payload: `{"rows": <int>, "echo": <first-row-dict>}`.
 2. `src/front/static/config/js/settings.js` — success alert now appends "<code>RETURN 1 AS probe</code> echoed N row(s) — Cypher path live." when the probe is present.
-3. `docs/v0.6-neo4j-demo/deck.html` — major refresh: cover banner bumped to "v0.6.0 → v0.7.0" with refreshed date metadata; TL;DR bullet added for the post-review iteration; **6 new slides** (21–26) inserted between Data Quality (slide 20) and Closing (now slide 27) covering: (a) v0.7 overview tiles for all 6 commits, (b) Secret resource flow with the `From Apps secret` badge screenshot, (c) Test-connection wire with the green `Connected … 860 ms · Cypher path live` alert screenshot, (d) Cypher INFO log format with the real prod log capture, (e) Settings flash fix before/after, (f) Modular split composition diagram. All previous `slide-page` markers renumbered 1/21–21/21 → 1/27–27/27. Closing slide updated with v0.7 bugs row, v0.7 footer, and revised "Ask: 6 commits + verified live on ontobricks-070" card.
-4. `docs/v0.6-neo4j-demo/OntoBricks-PR47-Neo4j.pdf` — regenerated via headless Chrome from the updated deck.html (5.85 MB, 27 pages).
-5. `docs/v0.6-neo4j-demo/screenshots/23-settings-neo4j-test-connection-result.png` — re-captured to include the new `RETURN 1 AS probe echoed 1 row(s) — Cypher path live` tail in the green alert.
-6. `docs/v0.6-neo4j-demo/screenshots/24-app-logs-cypher-info-real.txt` (new) — text capture of the actual prod log sequence from a single Test-connection click on `ontobricks-070`: the 5 lines `_resolve_auth`, `get_driver`, DEBUG `Cypher params`, INFO `Cypher (1 rows, 706.4 ms): RETURN 1 AS probe`, DEBUG `close`. Used verbatim in deck slide 24.
+3. `docs/pr47-neo4j-demo/deck.html` — major refresh: cover banner bumped to "v0.6.0 → v0.7.0" with refreshed date metadata; TL;DR bullet added for the post-review iteration; **6 new slides** (21–26) inserted between Data Quality (slide 20) and Closing (now slide 27) covering: (a) v0.7 overview tiles for all 6 commits, (b) Secret resource flow with the `From Apps secret` badge screenshot, (c) Test-connection wire with the green `Connected … 860 ms · Cypher path live` alert screenshot, (d) Cypher INFO log format with the real prod log capture, (e) Settings flash fix before/after, (f) Modular split composition diagram. All previous `slide-page` markers renumbered 1/21–21/21 → 1/27–27/27. Closing slide updated with v0.7 bugs row, v0.7 footer, and revised "Ask: 6 commits + verified live on ontobricks-070" card.
+4. `docs/pr47-neo4j-demo/OntoBricks-PR47-Neo4j.pdf` — regenerated via headless Chrome from the updated deck.html (5.85 MB, 27 pages).
+5. `docs/pr47-neo4j-demo/screenshots/23-settings-neo4j-test-connection-result.png` — re-captured to include the new `RETURN 1 AS probe echoed 1 row(s) — Cypher path live` tail in the green alert.
+6. `docs/pr47-neo4j-demo/screenshots/24-app-logs-cypher-info-real.txt` (new) — text capture of the actual prod log sequence from a single Test-connection click on `ontobricks-070`: the 5 lines `_resolve_auth`, `get_driver`, DEBUG `Cypher params`, INFO `Cypher (1 rows, 706.4 ms): RETURN 1 AS probe`, DEBUG `close`. Used verbatim in deck slide 24.
 
 **Modified files:**
 - `src/back/objects/domain/SettingsService.py`
 - `src/front/static/config/js/settings.js`
-- `docs/v0.6-neo4j-demo/deck.html`
-- `docs/v0.6-neo4j-demo/OntoBricks-PR47-Neo4j.pdf`
-- `docs/v0.6-neo4j-demo/screenshots/23-settings-neo4j-test-connection-result.png`
-- `docs/v0.6-neo4j-demo/screenshots/24-app-logs-cypher-info-real.txt` (new)
+- `docs/pr47-neo4j-demo/deck.html`
+- `docs/pr47-neo4j-demo/OntoBricks-PR47-Neo4j.pdf`
+- `docs/pr47-neo4j-demo/screenshots/23-settings-neo4j-test-connection-result.png`
+- `docs/pr47-neo4j-demo/screenshots/24-app-logs-cypher-info-real.txt` (new)
 
 **Test result:** `python3 -m py_compile` + `node --check` — OK. Live on `ontobricks-070` (post deploy `b7net6nay`): UI alert reads `Connected to neo4j+s://b4810af7.databases.neo4j.io (database neo4j) in 1574.4 ms · credentials from env var (NEO4J_PASSWORD — Databricks Apps secret). · RETURN 1 AS probe echoed 1 row(s) — Cypher path live.` Prod log captures the matching INFO line: `Cypher (1 rows, 706.4 ms): RETURN 1 AS probe`.

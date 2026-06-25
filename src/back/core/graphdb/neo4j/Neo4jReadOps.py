@@ -274,7 +274,7 @@ class Neo4jReadOps:
     #  Knowledge-Graph filter primitives (UI: KG filter modal, GraphQL,
     #  API explorer "triples/find"). The Cypher logic for these three
     #  methods is what Benoit asked to locate in the PR review — see
-    #  docs/v0.6-neo4j-demo/secret-configuration.md and the OntoBricks
+    #  docs/pr47-neo4j-demo/secret-configuration.md and the OntoBricks
     #  contributors thread on 2026-06-18.
     # ======================================================================
 

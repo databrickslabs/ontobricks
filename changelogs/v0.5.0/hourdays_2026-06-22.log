@@ -9,7 +9,7 @@
 4. `src/front/routes/home.py` — settings page context now exposes `neo4j_password_from_secret` so the Jinja template can render the credential-source badge.
 5. `src/front/templates/settings.html` — Neo4j settings form: password label gains a dynamic badge (`From Apps secret` green / `Local-dev fallback` yellow) and the input is `disabled` with a `••••••••` placeholder when the secret is bound. Help text below points to the new docs page.
 6. `src/front/static/config/js/settings.js` — `mergeNeo4jPanelIntoConfigTextarea()` never serialises the password field when the input is disabled (Apps secret in place), preventing stale clear-text values from being re-sent on save.
-7. `docs/v0.6-neo4j-demo/secret-configuration.md` (new) — step-by-step admin guide: `databricks secrets put-secret` → bind the `neo4j-password` resource → verify in Settings UI → troubleshooting table.
+7. `docs/pr47-neo4j-demo/secret-configuration.md` (new) — step-by-step admin guide: `databricks secrets put-secret` → bind the `neo4j-password` resource → verify in Settings UI → troubleshooting table.
 8. `tests/units/graphdb/test_neo4j_store.py` — new `TestPasswordSourcing` class with 7 unit tests covering helper behaviour and every branch of `_resolve_auth` (env-var-wins, local-dev fallback, prod refusal, missing creds, missing username).
 
 **Modified files:**
@@ -19,7 +19,7 @@
 - `src/front/routes/home.py`
 - `src/front/templates/settings.html`
 - `src/front/static/config/js/settings.js`
-- `docs/v0.6-neo4j-demo/secret-configuration.md` (new)
+- `docs/pr47-neo4j-demo/secret-configuration.md` (new)
 - `tests/units/graphdb/test_neo4j_store.py`
 
 **Test result:** `python3 -m py_compile` on every changed `.py` — OK. `node --check` on `settings.js` — OK. Jinja2 lex of `settings.html` — OK. Inline logic test of the 8 `_resolve_auth` + helper paths via stubs — all assertions pass. Full `pytest tests/units/graphdb/test_neo4j_store.py::TestPasswordSourcing` deferred (uv environment offline locally; will run in CI).

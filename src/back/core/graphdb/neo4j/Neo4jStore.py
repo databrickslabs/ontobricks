@@ -98,7 +98,7 @@ class Neo4jStore(GraphDBBackend):
             persisted JSON ``password`` is ignored in prod and stripped at
             save-time so no clear-text credential ever lands in
             ``global_config``. See
-            ``docs/v0.6-neo4j-demo/secret-configuration.md``.
+            ``docs/pr47-neo4j-demo/secret-configuration.md``.
         ``secret_scope``, ``secret_key``
             Required when ``auth_method == "databricks_secret"``.
         ``encrypted`` (default ``True``)
