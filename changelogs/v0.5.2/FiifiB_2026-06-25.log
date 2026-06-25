@@ -113,3 +113,48 @@ package (12 modules) + 2 new tools + 9 test modules; 4 additive modifications
 - `uv run pytest tests/agents/agent_mapping_pge -q` → **90 passed**.
 - `uv run pytest tests/units/agents tests/units/mapping -q` → **208 passed**.
 - Imports resolve on the upstream base (origin/master, v0.5.2).
+
+# 2026-06-25 — feat(agents): Agent Bricks Supervisor for engine selection
+
+## Context
+
+PR1 (ontology PGE) and PR2 (mapping PGE) introduce the heavyweight PGE engines
+alongside the retained simple engine. This change adds the orchestration layer:
+a Databricks **Agent Bricks Multi-Agent Supervisor (MAS)** that, per domain,
+**deterministically** assesses complexity and routes the mapping task to the PGE
+engine (`agent_mapping_pge`) or the simple engine (`agent_auto_assignment`).
+
+Routing is the requested hybrid: a deterministic Unity Catalog function provides
+the hard recommendation, and the supervisor's natural-language instructions act
+on it. (Stacked on PR1 + PR2.)
+
+## Changes
+
+1. NEW `src/agents/agent_supervisor/`:
+   - `complexity.py` — `ComplexityAssessor`: weighted, deterministic score over
+     #tables, #columns, #classes, #relationships, cross-source key-sharing, and
+     schema-naming heterogeneity → tier + recommended engine. Reuses
+     `pge_eval.normalize` for input parsing.
+   - `engine.py` — `SupervisorEngine`: assess → select → dispatch via
+     `AgentClient` (mapping has the genuine PGE-vs-simple choice; ontology uses
+     the single owl-generator).
+   - `responses_agent.py` — `MappingEngineResponsesAgent`: MLflow ResponsesAgent
+     serving one engine per endpoint (`assess`/`run` modes; long runs handled by
+     the caller as a task).
+   - `mas.py` — `SupervisorProvisioner.build_config` (pure) + `provision`; the
+     MAS wires the complexity UC function + the two engine endpoints with NL
+     routing instructions.
+   - `uc_function.sql` — `assess_domain_complexity` UC function, a self-contained
+     mirror of `complexity.py` (constants guarded by `test_uc_function_parity`).
+   - `log_model.py` — logs both engine endpoints.
+2. `scripts/provision_supervisor.py` — end-to-end provisioning orchestration.
+3. `.planning/agents/agent_supervisor/SPEC.md` + eval dataset
+   `tests/eval/datasets/agent_supervisor/baseline.jsonl` (20 examples).
+4. Tests: `tests/agents/agent_supervisor/{test_complexity,test_engine}.py`.
+
+## Tests
+
+- `uv run pytest tests/agents/agent_supervisor -q` → **35 passed** (incl. baseline
+  routing-accuracy 20/20 and Python↔SQL constant parity).
+- Full stacked-branch regression `tests/agents tests/units/{agents,mapping,pge_eval,ontology}`
+  → **759 passed, 11 skipped**.
