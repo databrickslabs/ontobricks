@@ -303,6 +303,41 @@
     font-size: 22px; color: var(--ob-cobalt); font-weight: 700;
   }
 
+  /* Backend-pair rows — mirrors the UI's 3-card arch (Triple Store → Sync → Graph DB).
+     One row per backend, with a version tag on the left. */
+  .backend-row {
+    display: grid;
+    grid-template-columns: 70px 1fr 24px 1fr 24px 1fr;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .backend-row .ver-tag {
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+    color: #fff;
+    border-radius: 10px;
+    padding: 10px 8px;
+    letter-spacing: 0.3px;
+  }
+  .backend-row .ver-tag.ver-lk { background: linear-gradient(135deg, #FF8C42, #FF6B2C); }
+  .backend-row .ver-tag.ver-n4 { background: linear-gradient(135deg, #2D6CDF, #018BFF); }
+  .backend-row .card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    text-align: left;
+  }
+  .backend-row.row-lk .card { background: linear-gradient(135deg, #FFF8F1, #FFEFE0); border-color: #FFD7B0; }
+  .backend-row.row-n4 .card { background: linear-gradient(135deg, #F2F8FF, #E1ECFF); border-color: #BCD7FF; }
+  .backend-row .card .card-name { font-weight: 700; color: var(--ob-navy); font-size: 13px; }
+  .backend-row .card .card-sub { font-size: 11px; color: var(--text-soft); margin-top: 3px; line-height: 1.35; }
+  .backend-row .arrow {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: var(--ob-cobalt); font-weight: 700;
+  }
+
   /* Nav */
   .nav {
     position: fixed; bottom: 14px; right: 18px;
@@ -445,26 +480,54 @@
     </div>
     <div class="slide-body">
       <p class="lead">
-        Engine selection is resolved once via <code>TripleStoreFactory._resolve_graph_engine</code> against <code>GlobalConfigService</code>. The factory dispatches to either <code>LakebaseStore</code> (existing) or the new <code>Neo4jStore</code>. Same <code>GraphDBBackend</code> interface, different SQL/Cypher dialect.
+        Engine selection is resolved once via <code>TripleStoreFactory._resolve_graph_engine</code> against <code>GlobalConfigService</code>. The factory dispatches to either <code>LakebaseStore</code> (existing) or <code>Neo4jStore</code> (this PR). <strong>Both backends share the same 3-card arch shown in the Build / Cockpit UI</strong> — Triple Store → Sync mechanism → Graph DB — they differ only in what fills each card.
       </p>
-      <div class="arch">
+      <div class="arch" style="grid-template-columns: 1fr 24px 1fr; max-width: 720px; margin: 6px auto 0;">
         <div class="layer input"><div class="layer-name">OntoBricks Build</div><div class="layer-sub">R2RML → triples</div></div>
         <div class="arch-arrow">→</div>
-        <div class="layer factory"><div class="layer-name">GraphDBFactory</div><div class="layer-sub">_resolve_graph_engine()<br>lakebase · neo4j</div></div>
-        <div class="arch-arrow">→</div>
+        <div class="layer factory"><div class="layer-name">GraphDBFactory</div><div class="layer-sub">_resolve_graph_engine()<br>dispatch ↓</div></div>
       </div>
-      <div class="arch" style="grid-template-columns: 1fr 1fr; gap:20px; margin-top: -8px;">
-        <div class="layer backend-lk">
-          <div class="layer-name">LakebaseStore (existing)</div>
-          <div class="layer-sub">Postgres + pgvector · synced UC · SQL dialect</div>
+
+      <!-- Row 1 — Lakebase path (v0.5+) -->
+      <div class="backend-row row-lk">
+        <div class="ver-tag ver-lk">v0.5+</div>
+        <div class="card">
+          <div class="card-name">Triple Store</div>
+          <div class="card-sub">Delta VIEW in UC<br><code>triplestore_&lt;domain&gt;_V&lt;n&gt;</code></div>
         </div>
-        <div class="layer backend-n4">
-          <div class="layer-name">Neo4jStore (NEW — this PR)</div>
-          <div class="layer-sub">Bolt protocol · Cypher dialect · Aura / AuraDS / self-hosted</div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-name">Lakeflow Sync</div>
+          <div class="card-sub">snapshot pipeline keeps Postgres in lock-step with the R2RML view</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-name">Graph DB · Lakebase</div>
+          <div class="card-sub">Postgres + pgvector · SQL dialect · UNION view <code>g_&lt;dom&gt;_v&lt;n&gt;</code></div>
         </div>
       </div>
-      <ul class="bullets" style="margin-top: 8px;">
-        <li>Single switch in Settings, no per-domain override on this PR.</li>
+
+      <!-- Row 2 — Neo4j path (v0.7, this PR) -->
+      <div class="backend-row row-n4">
+        <div class="ver-tag ver-n4">v0.7</div>
+        <div class="card">
+          <div class="card-name">Triple Store</div>
+          <div class="card-sub">Delta VIEW in UC<br><code>triplestore_&lt;domain&gt;_V&lt;n&gt;</code></div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-name">Bolt · UNWIND · MERGE</div>
+          <div class="card-sub">Cypher write at build time · per-batch tx · INFO-logged</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="card">
+          <div class="card-name">Graph DB · Neo4j</div>
+          <div class="card-sub">Bolt protocol · Cypher dialect · Aura / AuraDS / self-hosted · <code>:&lt;domain&gt;_V&lt;n&gt;</code> label</div>
+        </div>
+      </div>
+
+      <ul class="bullets" style="margin-top: 10px;">
+        <li><strong>Same <code>GraphDBBackend</code> interface</strong> on both rows. The Triple Store card is identical (Delta view, R2RML-built). Only the middle card (sync mechanism) and the Graph DB card change.</li>
         <li>Capability flags on <code>Neo4jStore</code>: <code>supports_cypher=True</code>, <code>query_dialect="cypher"</code>, <code>supports_graph_model=False</code> (flat triple in v1).</li>
         <li>Reasoning translator is symmetric: <code>SWRLSQLTranslator</code> ↔ <code>SWRLFlatCypherTranslator</code> (scaffolded — full Cypher in a follow-up PR).</li>
       </ul>
