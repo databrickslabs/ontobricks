@@ -65,6 +65,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/_lakebase-diag.sh"
+
 INSTANCE="${INSTANCE:-ontobricks-app}"
 BRANCH="${BRANCH:-${LAKEBASE_BRANCH:-production}}"
 DATABASE="${DATABASE:-ontobricks_registry}"
@@ -112,7 +115,7 @@ done
 
 if ! databricks current-user me >/dev/null 2>&1; then
     echo "ERROR: Databricks CLI not authenticated." >&2
-    echo "       Run: databricks auth login --host https://<workspace>" >&2
+    echo "       Run: databricks auth login --host https://<workspace>${DATABRICKS_CONFIG_PROFILE:+ --profile $DATABRICKS_CONFIG_PROFILE}" >&2
     exit 1
 fi
 
@@ -168,8 +171,9 @@ PY
 )"
 if [[ -z "$ENDPOINT_INFO" ]]; then
     echo "ERROR: Could not resolve a primary endpoint for Lakebase Autoscaling project '${INSTANCE}' on branch '${BRANCH}'." >&2
-    echo "       Check 'databricks api get /api/2.0/postgres/projects/${INSTANCE}/branches/${BRANCH}/endpoints'" >&2
-    echo "       and confirm project/branch values match the app postgres resource binding." >&2
+    _lakebase_print_diag_hints \
+        "no postgres endpoint for project/branch" \
+        "${INSTANCE}" "${BRANCH}" "${DATABASE}"
     exit 1
 fi
 PGHOST="$(printf '%s\n' "$ENDPOINT_INFO" | sed -n 1p)"
@@ -192,7 +196,10 @@ PGPASSWORD="$(databricks api post /api/2.0/postgres/credentials \
     --json "{\"endpoint\":\"${ENDPOINT_PATH}\"}" \
     | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')"
 if [[ -z "$PGPASSWORD" ]]; then
-    echo "ERROR: Failed to mint a Lakebase JWT for instance '${INSTANCE}'." >&2
+    echo "ERROR: Failed to mint a Lakebase JWT for project '${INSTANCE}' on branch '${BRANCH}'." >&2
+    _lakebase_print_diag_hints \
+        "postgres credentials API failed (endpoint: ${ENDPOINT_PATH})" \
+        "${INSTANCE}" "${BRANCH}" "${DATABASE}"
     exit 1
 fi
 export PGPASSWORD
@@ -244,7 +251,14 @@ done
 # Ensure the target schema actually exists. If not, the operator
 # probably ran the script before initialising the registry.
 if ! psql "$PGCONN" -tAc "SELECT 1 FROM information_schema.schemata WHERE schema_name='${SCHEMA}'" \
-        | grep -q 1; then
+        2>/dev/null | grep -q 1; then
+    if ! psql "$PGCONN" -tAc "SELECT 1" >/dev/null 2>&1; then
+        echo "ERROR: Cannot connect to Lakebase Postgres (host=${PGHOST}, dbname=${DATABASE})." >&2
+        _lakebase_print_diag_hints \
+            "psql connection failed — wrong datname or endpoint" \
+            "${INSTANCE}" "${BRANCH}" "${DATABASE}"
+        exit 1
+    fi
     echo "ERROR: Schema '${SCHEMA}' does not exist in database '${DATABASE}'." >&2
     echo "       Initialise the registry from the OntoBricks Settings UI first." >&2
     echo "       CAN_USE grants above were applied — re-run after initialisation" >&2

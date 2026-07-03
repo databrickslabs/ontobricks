@@ -74,6 +74,9 @@ ok()   { echo "  ${_C_GRN}✓${_C_RST} $*"; }
 warn() { echo "  ${_C_YEL}⚠${_C_RST}  $*" >&2; }
 die()  { echo "" >&2; echo "${_C_RED}✗ ERROR:${_C_RST} $*" >&2; exit 1; }
 
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/_lakebase-diag.sh"
+
 # Fired by the ERR trap on any uncaught failure (set -e). Reports which
 # step failed, the exact command + line, and a targeted hint.
 _on_error() {
@@ -88,9 +91,16 @@ _on_error() {
             echo "  hint    : inspect the error above; re-run \`databricks bundle validate -t ${TARGET:-?}\`" >&2
             echo "            and double-check the --var values in ${CONFIG_FILE:-scripts/deploy.config.sh}." >&2 ;;
         *auth*|*Authentication*)
-            echo "  hint    : run \`databricks auth login --host https://<workspace>\` then retry." >&2 ;;
+            echo "  hint    : run \`databricks auth login --host https://<workspace>${DATABRICKS_CONFIG_PROFILE:+ --profile $DATABRICKS_CONFIG_PROFILE}\` then retry." >&2 ;;
         *Render*)
             echo "  hint    : check scripts/_render-app-yaml.py and the APP_* values in ${CONFIG_FILE:-scripts/deploy.config.sh}." >&2 ;;
+        *Lakebase*)
+            if $IS_LAKEBASE; then
+                _lakebase_print_diag_hints "step failed: ${CURRENT_STEP}" \
+                    "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+                    "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" \
+                    "${CONFIG_FILE:-scripts/deploy.config.sh}"
+            fi ;;
     esac
     exit "$rc"
 }
@@ -157,6 +167,7 @@ EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATAB
 
 echo "${_C_BLU}=== OntoBricks Deployment (DAB) ===${_C_RST}"
 echo "Config  : $CONFIG_FILE"
+[[ -n "${DATABRICKS_CONFIG_PROFILE:-}" ]] && echo "Profile : $DATABRICKS_CONFIG_PROFILE"
 echo "Target  : $TARGET"
 echo "App     : $APP_NAME ($APP_RESOURCE_KEY)"
 echo "MCP app : $MCP_APP_NAME ($MCP_APP_RESOURCE_KEY)"
@@ -237,23 +248,26 @@ if $IS_LAKEBASE; then
         _branch_path="projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}"
         _resolve_out="$(databricks postgres list-databases "$_branch_path" -o json 2>/dev/null || true)"
         if [[ -n "$_resolve_out" ]]; then
-            LAKEBASE_DATABASE_RESOURCE_SEGMENT="$(printf '%s' "$_resolve_out" \
-                | python3 -c "
-import sys, json
-raw = sys.stdin.read()
-try:
-    data = json.loads(raw)
-    dbs = data if isinstance(data, list) else data.get('databases', [])
-    for db in dbs:
-        if db.get('status', {}).get('postgres_database') == '${LAKEBASE_DATABASE}':
-            print(db.get('name','').split('/')[-1])
-            break
-except Exception:
-    pass
-" 2>/dev/null || true)"
+            _resolve_hit="$(printf '%s' "$_resolve_out" \
+                | python3 scripts/_lakebase-resolve-db.py "${LAKEBASE_DATABASE}" 2>/dev/null || true)"
+            if [[ -n "$_resolve_hit" ]]; then
+                LAKEBASE_DATABASE_RESOURCE_SEGMENT="${_resolve_hit%%$'\t'*}"
+                _resolved_datname="${_resolve_hit#*$'\t'}"
+                if [[ -n "$_resolved_datname" && "$_resolved_datname" != "$LAKEBASE_DATABASE" ]]; then
+                    warn "LAKEBASE_DATABASE='${LAKEBASE_DATABASE}' matched a database whose Postgres datname is '${_resolved_datname}'."
+                    warn "Underscores in datnames often appear as hyphens in the resource id — update DEFAULT_LAKEBASE_DATABASE in ${CONFIG_FILE} to '${_resolved_datname}'."
+                    LAKEBASE_DATABASE="$_resolved_datname"
+                    export APP_LAKEBASE_DATABASE="$_resolved_datname"
+                    info "Auto-corrected LAKEBASE_DATABASE → '${_resolved_datname}' for this deploy."
+                fi
+            fi
         fi
         if [[ -z "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" ]]; then
-            die "Could not resolve db-… resource segment for database '${LAKEBASE_DATABASE}'. Set LAKEBASE_DATABASE_RESOURCE_SEGMENT explicitly or check LAKEBASE_PROJECT/LAKEBASE_BRANCH."
+            _lakebase_print_diag_hints \
+                "no db-… segment matches datname '${LAKEBASE_DATABASE}'" \
+                "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+                "${LAKEBASE_DATABASE}" "" "${CONFIG_FILE}"
+            die "Could not resolve db-… resource segment for database '${LAKEBASE_DATABASE}'. Set LAKEBASE_DATABASE_RESOURCE_SEGMENT explicitly or fix LAKEBASE_PROJECT/LAKEBASE_BRANCH/DATABASE in ${CONFIG_FILE}."
         fi
         export LAKEBASE_DATABASE_RESOURCE_SEGMENT
         info "Resolved db-… segment: ${LAKEBASE_DATABASE_RESOURCE_SEGMENT} (from database '${LAKEBASE_DATABASE}')"
@@ -272,6 +286,7 @@ except Exception:
             break
         fi
     done
+    EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
 fi
 ok "deploy.config values present"
 
@@ -284,7 +299,7 @@ esac
 # ── 2. Verify Databricks authentication ─────────────────────────────
 begin_step "Verify Databricks authentication"
 if ! databricks current-user me &>/dev/null; then
-    die "Not authenticated to Databricks. Run: databricks auth login --host https://<workspace> (or export DATABRICKS_HOST/DATABRICKS_TOKEN)."
+    die "Not authenticated to Databricks. Run: databricks auth login --host https://<workspace>${DATABRICKS_CONFIG_PROFILE:+ --profile $DATABRICKS_CONFIG_PROFILE} (or export DATABRICKS_HOST/DATABRICKS_TOKEN)."
 fi
 DATABRICKS_USERNAME="$(databricks current-user me -o json \
     | python3 -c 'import sys,json; print(json.load(sys.stdin).get("userName","<unknown>"))' 2>/dev/null || echo "<unknown>")"
@@ -395,11 +410,19 @@ except Exception:
             fi
         else
             CHECK_FAILED=$((CHECK_FAILED + 1))
-            warn "Lakebase database '${LAKEBASE_DATABASE_RESOURCE_SEGMENT}' not found under ${EXPECTED_PG_BRANCH_PATH}. List ids with: databricks postgres list-databases \"${EXPECTED_PG_BRANCH_PATH}\" -o json"
+            warn "Lakebase database '${LAKEBASE_DATABASE_RESOURCE_SEGMENT}' not found under ${EXPECTED_PG_BRANCH_PATH}."
+            _lakebase_print_diag_hints \
+                "db-… segment not listed under project/branch" \
+                "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+                "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT}" "${CONFIG_FILE}"
         fi
     else
         CHECK_FAILED=$((CHECK_FAILED + 1))
-        warn "could not list Lakebase databases for ${EXPECTED_PG_BRANCH_PATH} — verify LAKEBASE_PROJECT/LAKEBASE_BRANCH and that the project was created via scripts/setup-lakebase.sh."
+        warn "could not list Lakebase databases for ${EXPECTED_PG_BRANCH_PATH} (API error or project/branch not found)."
+        _lakebase_print_diag_hints \
+            "postgres list-databases call failed" \
+            "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+            "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" "${CONFIG_FILE}"
     fi
 fi
 
@@ -411,6 +434,12 @@ fi
 if $DRY_RUN; then
     echo ""
     if [[ $CHECK_FAILED -gt 0 ]]; then
+        if $IS_LAKEBASE; then
+            _lakebase_print_diag_hints \
+                "dry-run resource check failed" \
+                "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+                "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" "${CONFIG_FILE}"
+        fi
         die "DRY RUN found ${CHECK_FAILED} resource problem(s) above. Fix them in ${CONFIG_FILE} before deploying."
     fi
     echo "${_C_GRN}=== Dry run OK ===${_C_RST}  preflight + auth + render + validate + resource checks all passed."
@@ -664,6 +693,10 @@ if $IS_LAKEBASE; then
             -a "$MCP_APP_NAME"; then
         echo ""
         echo "  ⚠ Lakebase permission bootstrap did not complete cleanly."
+        _lakebase_print_diag_hints \
+            "bootstrap-lakebase-perms.sh failed (connection, endpoint, or schema grants)" \
+            "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+            "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" "${CONFIG_FILE}"
         echo "    If the registry schema does not exist yet, initialise it"
         echo "    from Settings > Registry > Initialize and re-run:"
         echo "      scripts/bootstrap-lakebase-perms.sh \\"

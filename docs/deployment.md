@@ -431,6 +431,7 @@ Edit the workspace-specific defaults in `scripts/deploy.config.sh`:
 
 | Variable | Maps to | Description |
 |----------|---------|-------------|
+| `DEFAULT_DATABRICKS_PROFILE` | `DATABRICKS_CONFIG_PROFILE` (CLI env) | Databricks CLI profile from `databricks auth profiles`. Empty = CLI default. |
 | `DEFAULT_APP_NAME` | `databricks.yml > var.app_name` and `DATABRICKS_APP_NAME` at runtime | Deployed name of the FastAPI app (e.g. `ontobricks-030`). |
 | `DEFAULT_MCP_APP_NAME` | `databricks.yml > var.mcp_app_name` | Deployed name of the MCP companion (must start with `mcp-`). |
 | `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | `dev-lakebase` (default) or `dev` (volume-only fallback). |

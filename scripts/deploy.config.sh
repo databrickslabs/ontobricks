@@ -10,9 +10,11 @@
 # │  TO DEPLOY A NEW INSTANCE:                                      │
 # │    1. Set DEFAULT_APP_NAME.                                     │
 # │    2. Set DEFAULT_LAKEBASE_DATABASE (existing Postgres datname).│
-# │    3. Optionally set DEFAULT_LAKEBASE_SCHEMA if you want a      │
+# │    3. Optionally set DEFAULT_DATABRICKS_PROFILE if you use a    │
+# │       non-default Databricks CLI profile.                       │
+# │    4. Optionally set DEFAULT_LAKEBASE_SCHEMA if you want a      │
 # │       specific schema name (defaults to app-name slug).         │
-# │    4. Optionally set DEFAULT_REGISTRY_SCHEMA if the UC schema   │
+# │    5. Optionally set DEFAULT_REGISTRY_SCHEMA if the UC schema   │
 # │       differs from the app-name slug.                           │
 # │                                                                  │
 # │  The Lakebase db-… resource segment is resolved automatically   │
@@ -35,6 +37,11 @@ DEFAULT_APP_NAME="ontobricks-060"
 # ── 0b. Workspace constants ──────────────────────────────────────────
 # Set once for your workspace. Shared across all instances deployed here.
 
+# Databricks CLI profile (`databricks auth profiles`). Leave empty to use
+# the CLI default profile. Exported as DATABRICKS_CONFIG_PROFILE for all
+# `databricks` invocations when this file is sourced (make deploy, bootstrap, …).
+DEFAULT_DATABRICKS_PROFILE="fe-vm-bcayla-demos"
+
 # SQL Warehouse
 DEFAULT_WAREHOUSE_ID="d2096aa075ad44a3"
 
@@ -47,7 +54,10 @@ DEFAULT_REGISTRY_VOLUME="registry"
 # Lakebase Autoscaling project + branch
 DEFAULT_LAKEBASE_PROJECT="ontobricks-demo2"
 DEFAULT_LAKEBASE_BRANCH="production"
-# Postgres database (datname) on the shared Lakebase instance.
+# Postgres database (datname) on the shared Lakebase instance — the value of
+# status.postgres_database from list-databases (underscores OK). Do NOT copy the
+# hyphenated database_id from the resource path name; those differ when the
+# datname contains underscores (API uses hyphens only in database_id / RFC-1123).
 # Each app gets its own SCHEMA inside this database.
 DEFAULT_LAKEBASE_DATABASE="ontobricks_demo"
 # Postgres schema inside the Lakebase database, Each instance should have its own schema for isolation.
@@ -67,6 +77,12 @@ DEFAULT_APP_MLFLOW_TRACKING_URI="databricks"
 
 # ── DAB target ───────────────────────────────────────────────────────
 DEFAULT_DAB_TARGET="dev-lakebase"
+
+# ── 0e. Databricks CLI profile ───────────────────────────────────────
+# Override for one-off runs: DATABRICKS_CONFIG_PROFILE=my-profile make deploy
+if [[ -n "${DATABRICKS_CONFIG_PROFILE:-$DEFAULT_DATABRICKS_PROFILE}" ]]; then
+    export DATABRICKS_CONFIG_PROFILE="${DATABRICKS_CONFIG_PROFILE:-$DEFAULT_DATABRICKS_PROFILE}"
+fi
 
 # ── 1. Apps ─────────────────────────────────────────────────────────
 export APP_NAME="${APP_NAME:-$DEFAULT_APP_NAME}"

@@ -83,7 +83,7 @@ scripts/start.sh
 brew install databricks            # or curl -fsSL https://databricks.com/install.sh | sh
 databricks auth login --host https://<workspace>
 
-# Edit scripts/deploy.config.sh (warehouse, registry catalog/schema,
+# Edit scripts/deploy.config.sh (CLI profile, warehouse, registry catalog/schema,
 # Lakebase project/branch/database — see the file header) and then:
 make deploy
 # Or directly: scripts/deploy.sh
