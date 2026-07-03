@@ -381,15 +381,10 @@ document.addEventListener('DOMContentLoaded', function () {
     //  GRAPH DB TAB – Graph Engine selector
     // =====================================================================
 
-    /** Show Lakebase picker section from graph engine select. */
+    /** Ensure Lakebase configuration panel is visible (no backend-based nav hiding). */
     function applyGraphDbEnginePanels() {
-        const sel = document.getElementById('graphEngineSelect');
-        const lakePanel = document.getElementById('lakebaseGraphPanel');
-        if (!sel) return;
-        const eng = sel.value;
-        if (lakePanel) {
-            lakePanel.style.display = eng === 'lakebase' ? 'block' : 'none';
-        }
+        const lkPanel = document.getElementById('lakebaseGraphPanel');
+        if (lkPanel) lkPanel.style.display = 'block';
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -884,56 +879,36 @@ document.addEventListener('DOMContentLoaded', function () {
         if (loading && lkPanel) lkPanel.style.display = 'none';
     }
 
-    /** Reload engine + JSON from server so the tab matches persisted settings after every visit. */
     async function refreshGraphDbTabFromServer() {
+        const tsSel = document.getElementById('tripleStoreBackendSelect');
         const sel = document.getElementById('graphEngineSelect');
         const ta  = document.getElementById('graphEngineConfig');
-        if (!sel || !ta) return;
+        if (!tsSel) return;
         try {
-            const [engResp, cfgResp] = await Promise.all([
+            const [tsResp, engResp, cfgResp] = await Promise.all([
+                fetch('/settings/triple-store-backend', { credentials: 'same-origin' }),
                 fetch('/settings/graph-engine',        { credentials: 'same-origin' }),
-                fetch('/settings/graph-engine-config', { credentials: 'same-origin' }),
+                ta ? fetch('/settings/graph-engine-config', { credentials: 'same-origin' }) : Promise.resolve(null),
             ]);
+            const tsData = tsResp.ok ? await tsResp.json() : {};
             const engData = engResp.ok ? await engResp.json() : {};
-            const cfgData = cfgResp.ok ? await cfgResp.json() : {};
-            if (cfgData.success) {
+            const cfgData = cfgResp && cfgResp.ok ? await cfgResp.json() : {};
+            if (ta && cfgData.success) {
                 ta.value = JSON.stringify(cfgData.graph_engine_config || {}, null, 2);
             }
-            const rawEng = engData.graph_engine;
-            if (engData.success && rawEng && typeof rawEng === 'string') {
-                const allowed = Array.isArray(engData.allowed_engines) ? engData.allowed_engines : [];
-                if (allowed.length === 0 && rawEng === 'lakebase') {
-                    sel.value = rawEng;
-                } else if (allowed.indexOf(rawEng) >= 0) {
-                    sel.value = rawEng;
+            const rawTs = tsData.triple_store_backend;
+            if (tsData.success && rawTs) {
+                const allowedTs = Array.isArray(tsData.allowed_backends) ? tsData.allowed_backends : [];
+                if (allowedTs.length === 0 || allowedTs.indexOf(rawTs) >= 0) {
+                    tsSel.value = rawTs;
                 } else {
-                    sel.value = 'lakebase';
+                    tsSel.value = 'lakebase';
                 }
             }
-            applyLakebaseFormFromConfigTextarea();
-            if (sel.value === 'lakebase') {
-                // auto-load the cascading chain if a project is already configured
-                await loadLakebaseProjects();
-                // guarantee the 4 fields always show the saved registry config,
-                // even when the cascade couldn't list/match a stale project
-                prefillLakebaseConnectionFromConfig();
-                await loadLakebaseGraphHealth();
-                // restore UC catalog/schema dropdowns when managed_synced was persisted
-                const syncModeEl = document.getElementById('lakebaseSyncMode');
-                if (syncModeEl && syncModeEl.value === 'managed_synced') {
-                    await loadUcCatalogsForGraphEngine();
-                }
+            if (sel) {
+                const rawEng = engData.graph_engine;
+                if (engData.success && rawEng) sel.value = rawEng;
             }
-        } catch (e) {
-            console.log('Graph DB tab refresh failed', e);
-        } finally {
-            applyGraphDbEnginePanels();
-        }
-    }
-
-    document.getElementById('graphEngineSelect')?.addEventListener('change', async function () {
-        applyGraphDbEnginePanels();
-        if (this.value === 'lakebase') {
             applyLakebaseFormFromConfigTextarea();
             await loadLakebaseProjects();
             prefillLakebaseConnectionFromConfig();
@@ -942,6 +917,104 @@ document.addEventListener('DOMContentLoaded', function () {
             if (syncModeEl && syncModeEl.value === 'managed_synced') {
                 await loadUcCatalogsForGraphEngine();
             }
+            await loadDeltaTripleStoreHealth();
+        } catch (e) {
+            console.log('Graph DB tab refresh failed', e);
+        } finally {
+            applyGraphDbEnginePanels();
+        }
+    }
+
+    async function loadDeltaTripleStoreHealth() {
+        const out = document.getElementById('deltaHealthResult');
+        const btn = document.getElementById('btnDeltaTripleStoreHealth');
+        const regLoc = document.getElementById('deltaRegistryLocation');
+        const activeDom = document.getElementById('deltaActiveDomain');
+        if (!out) return;
+        if (btn) btn.disabled = true;
+        out.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Checking…</span>';
+        try {
+            const resp = await fetch('/settings/triple-store/databricks-health', { credentials: 'same-origin' });
+            const data = await resp.json();
+
+            if (regLoc) {
+                regLoc.textContent = data.storage_location
+                    || (data.registry_catalog && data.registry_schema
+                        ? data.registry_catalog + '.' + data.registry_schema
+                        : '(not configured — set Registry catalog & schema)');
+            }
+            if (activeDom) {
+                activeDom.textContent = data.active_domain
+                    ? data.active_domain
+                    : '(no domain open — open a domain to resolve per-domain table names)';
+            }
+
+            if (!data.registry_configured) {
+                out.innerHTML =
+                    '<div class="alert alert-warning mb-0 py-2">' +
+                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
+                    'Registry catalog/schema is not configured. Go to <strong>Settings → Registry</strong> first.' +
+                    '</div>';
+                return;
+            }
+            if (!data.warehouse_configured) {
+                out.innerHTML =
+                    '<div class="alert alert-warning mb-0 py-2">' +
+                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
+                    'SQL Warehouse is not configured. Set it under <strong>Settings → Databricks</strong>.' +
+                    '</div>';
+                return;
+            }
+
+            const dt = data.data_table || {};
+            const viewErr = (data.view && data.view.error) ? data.view.error : '';
+            const dataErr = dt.error ? dt.error : '';
+            let html = '<dl class="row mb-0">';
+            if (data.view_fqn) {
+                html += '<dt class="col-sm-3">R2RML VIEW</dt><dd class="col-sm-9 font-monospace">' +
+                    escapeHtmlSettings(data.view_fqn) + '</dd>';
+            }
+            if (data.data_table_fqn) {
+                html += '<dt class="col-sm-3">Data TABLE</dt><dd class="col-sm-9 font-monospace">' +
+                    escapeHtmlSettings(data.data_table_fqn) + '</dd>';
+            }
+            if (data.inferred_table_fqn) {
+                html += '<dt class="col-sm-3">Inferred TABLE</dt><dd class="col-sm-9 font-monospace">' +
+                    escapeHtmlSettings(data.inferred_table_fqn) + '</dd>';
+            }
+            if (data.data_table_fqn) {
+                const exists = dt.exists ? 'yes' : 'no';
+                const count = dt.count != null ? dt.count : '—';
+                html += '<dt class="col-sm-3">Data table</dt><dd class="col-sm-9">exists: ' +
+                    escapeHtmlSettings(exists) + ' · triples: <strong>' + escapeHtmlSettings(String(count)) +
+                    '</strong></dd>';
+            }
+            html += '</dl>';
+            if (!data.active_domain) {
+                html += '<p class="text-muted mt-2 mb-0">Open a domain to see resolved FQNs and row counts.</p>';
+            } else if (viewErr || dataErr) {
+                html += '<p class="text-warning mt-2 mb-0">' +
+                    escapeHtmlSettings(viewErr || dataErr) + '</p>';
+            } else if (!data.data_table_fqn) {
+                html += '<p class="text-muted mt-2 mb-0">Could not derive table names for the active domain.</p>';
+            }
+            out.innerHTML = html;
+        } catch (e) {
+            out.innerHTML = '<span class="text-danger">' + escapeHtmlSettings(e.message || 'Error') + '</span>';
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    document.getElementById('btnDeltaTripleStoreHealth')?.addEventListener('click', loadDeltaTripleStoreHealth);
+
+    document.getElementById('tripleStoreBackendSelect')?.addEventListener('change', async function () {
+        // Backend choice is persisted via Save on Back End; do not hide Lakebase/Delta nav items.
+        if (this.value === 'lakebase') {
+            applyLakebaseFormFromConfigTextarea();
+            await loadLakebaseProjects();
+            prefillLakebaseConnectionFromConfig();
+            await loadLakebaseGraphHealth();
         }
     });
 
@@ -1947,14 +2020,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /** Persist graph engine and JSON config (used by global Save). */
     async function saveGraphDbSettings(errors) {
+        const tsSel = document.getElementById('tripleStoreBackendSelect');
         const sel = document.getElementById('graphEngineSelect');
         const ta = document.getElementById('graphEngineConfig');
         const errDiv = document.getElementById('graphEngineConfigError');
-        if (!sel || !ta) return;
+        if (!tsSel) return;
 
         if (errDiv) errDiv.style.display = 'none';
 
         try {
+            const tsResp = await fetch('/settings/triple-store-backend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ triple_store_backend: tsSel.value }),
+            });
+            const tsResult = await tsResp.json();
+            if (!tsResult.success) {
+                errors.push('Triple store backend: ' + (tsResult.message || 'Unknown error'));
+                return;
+            }
+
+            if (tsSel.value !== 'lakebase' || !sel || !ta) {
+                applyGraphDbEnginePanels();
+                return;
+            }
+
             const resp = await fetch('/settings/graph-engine', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2016,7 +2107,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('sidebarSectionChanged', async (e) => {
         const s = e.detail?.section;
-        if ((s === 'ts-global' || s === 'lakebase') && !graphDbLoaded) {
+        if (s === 'delta') {
+            await loadDeltaTripleStoreHealth();
+        }
+        if (s === 'lakebase' && graphDbLoaded) {
+            await loadLakebaseGraphHealth();
+        }
+        if ((s === 'ts-global' || s === 'lakebase' || s === 'delta') && !graphDbLoaded) {
             graphDbLoaded = true;
             setGraphDbTabLoading(true);
             try {

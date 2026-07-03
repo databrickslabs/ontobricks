@@ -832,6 +832,7 @@ class DigitalTwin:
         """Live graph backend row count and paths."""
         from back.core.helpers import (
             effective_graph_name,
+            effective_graph_query_table,
             effective_view_table,
             run_blocking,
         )
@@ -839,7 +840,7 @@ class DigitalTwin:
 
         domain = self._domain
         try:
-            graph_name = effective_graph_name(domain)
+            graph_name = effective_graph_query_table(domain, settings)
             view_table = effective_view_table(domain)
             graph_store = get_triplestore(domain, settings, backend="graph")
             graph_ok = False
@@ -908,6 +909,7 @@ class DigitalTwin:
 
         from back.core.helpers import (
             effective_graph_name,
+            effective_graph_query_table,
             effective_view_table,
             run_blocking,
         )
@@ -916,7 +918,7 @@ class DigitalTwin:
         domain = self._domain
         graph_engine = DigitalTwin.resolve_graph_engine(domain, settings)
         view_table = effective_view_table(domain)
-        graph_name = effective_graph_name(domain)
+        graph_name = effective_graph_query_table(domain, settings)
         last_built = domain.last_build or None
         last_update = domain.last_update or None
 

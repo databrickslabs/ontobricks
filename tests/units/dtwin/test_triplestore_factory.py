@@ -85,6 +85,7 @@ class TestGetTriplestore:
                 "_read_global_config",
                 side_effect=[
                     "lakebase",
+                    None,
                     {},
                 ],
             ),

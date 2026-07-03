@@ -859,6 +859,44 @@ async def set_graph_engine(
     )
 
 
+@router.get("/triple-store-backend")
+async def get_triple_store_backend(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the configured instance triple-store backend."""
+    return config_service.get_triple_store_backend_result(session_mgr, settings)
+
+
+@router.post("/triple-store-backend")
+async def set_triple_store_backend(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Set triple-store backend (``lakebase`` or ``databricks``), admin only."""
+    data = await request.json()
+    backend = data.get("triple_store_backend", "lakebase")
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.set_triple_store_backend_result(
+        backend, email, user_token, session_mgr, settings
+    )
+
+
+@router.get("/triple-store/databricks-health")
+async def get_triple_store_databricks_health(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Probe SQL Warehouse + UC Delta triple-store artefacts."""
+    with map_route_errors("Databricks triple store health", logger):
+        return config_service.triple_store_databricks_health_result(
+            session_mgr, settings
+        )
+
+
 @router.get("/graph-engine-config")
 async def get_graph_engine_config(
     session_mgr: SessionManager = Depends(get_session_manager),

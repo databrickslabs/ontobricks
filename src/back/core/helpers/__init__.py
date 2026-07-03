@@ -14,7 +14,9 @@ from back.core.helpers.URIHelpers import URIHelpers  # noqa: F401
 sql_escape = SQLHelpers.sql_escape
 validate_table_name = SQLHelpers.validate_table_name
 effective_view_table = SQLHelpers.effective_view_table
+effective_databricks_table = SQLHelpers.effective_databricks_table
 effective_graph_name = SQLHelpers.effective_graph_name
+effective_graph_query_table = SQLHelpers.effective_graph_query_table
 
 is_uri = URIHelpers.is_uri
 extract_local_name = URIHelpers.extract_local_name
@@ -55,6 +57,7 @@ __all__ = [
     "sql_escape",
     "validate_table_name",
     "effective_view_table",
+    "effective_databricks_table",
     "effective_graph_name",
     "is_uri",
     "extract_local_name",

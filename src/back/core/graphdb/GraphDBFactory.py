@@ -47,6 +47,9 @@ class GraphDBFactory:
         if engine == "lakebase":
             return self._create_lakebase(domain, settings, engine_config=engine_config)
 
+        if engine == "delta":
+            return self._create_delta(domain, settings)
+
         logger.warning("Unknown graph DB engine: %s", engine)
         return None
 
@@ -159,6 +162,28 @@ class GraphDBFactory:
             )
         except Exception as e:
             logger.exception("Failed to create Lakebase graph store: %s", e)
+            return None
+
+    def _create_delta(
+        self,
+        domain: Any,
+        settings: Optional[Any] = None,
+    ) -> Optional[Any]:
+        """Instantiate :class:`DeltaFlatStore` on SQL Warehouse."""
+        try:
+            from back.core.graphdb.delta.DeltaBase import create_databricks_client
+            from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+        except ImportError as exc:
+            logger.warning("Delta graph engine unavailable: %s", exc)
+            return None
+
+        client = create_databricks_client(domain, settings)
+        if client is None:
+            return None
+        try:
+            return DeltaFlatStore(client, domain=domain, settings=settings)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to create DeltaFlatStore: %s", exc)
             return None
 
     @staticmethod

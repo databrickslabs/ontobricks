@@ -32,6 +32,7 @@ from back.core.helpers import (
     sql_escape,
     effective_view_table,
     effective_graph_name,
+    effective_graph_query_table,
     run_blocking,
 )
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
@@ -306,15 +307,17 @@ async def dt_status(
             reason="Graph backend not configured",
         )
 
+    query_table = effective_graph_query_table(domain, settings, store=graph_store)
+
     try:
-        if not graph_store.table_exists(graph_name):
+        if not graph_store.table_exists(query_table):
             return StatusResponse(
                 success=True,
                 view_table=view_table,
                 graph_name=graph_name,
                 reason="Graph does not exist yet",
             )
-        status = graph_store.get_status(graph_name)
+        status = graph_store.get_status(query_table)
         count = status.get("count", 0)
         last_mod = status.get("last_modified")
         return StatusResponse(
@@ -385,19 +388,21 @@ async def dt_stats(
     if not store:
         raise ValidationError("Graph backend not configured")
 
+    query_table = effective_graph_query_table(domain, settings, store=store)
+
     try:
-        stats = store.get_aggregate_stats(graph_name)
+        stats = store.get_aggregate_stats(query_table)
         total = stats["total"]
         subj = stats["distinct_subjects"]
         pred = stats["distinct_predicates"]
         type_cnt = stats["type_assertion_count"]
         lbl = stats["label_count"]
 
-        entity_rows = store.get_type_distribution(graph_name)
-        pred_rows = store.get_predicate_distribution(graph_name)
+        entity_rows = store.get_type_distribution(query_table)
+        pred_rows = store.get_predicate_distribution(query_table)
 
         rel_cnt = max(total - type_cnt - lbl, 0)
-        inferred_cnt = store.get_inferred_triple_count(graph_name)
+        inferred_cnt = store.get_inferred_triple_count(query_table)
 
         return StatsResponse(
             success=True,
@@ -607,13 +612,13 @@ async def dt_triples_find(
         registry_volume,
         domain_version,
     )
-    table = effective_graph_name(domain)
-    if not table:
-        raise ValidationError("Graph name not configured")
-
     store = get_triplestore(domain, settings, backend="graph")
     if not store:
         raise ValidationError("Graph backend not configured")
+
+    table = effective_graph_query_table(domain, settings, store=store)
+    if not table:
+        raise ValidationError("Graph name not configured")
 
     rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
@@ -757,17 +762,17 @@ async def dt_triples(
         domain_version,
     )
     be = backend or "graph"
-    table = (
-        effective_view_table(domain, settings).strip()
-        if be == "view"
-        else effective_graph_name(domain)
-    )
-    if not table:
-        raise ValidationError("Triple store not configured")
-
     store = get_triplestore(domain, settings, backend=be)
     if not store:
         raise ValidationError("Backend not configured")
+
+    table = (
+        effective_view_table(domain, settings).strip()
+        if be == "view"
+        else effective_graph_query_table(domain, settings, store=store)
+    )
+    if not table:
+        raise ValidationError("Triple store not configured")
 
     try:
         conditions = []
@@ -887,7 +892,12 @@ async def dt_dataquality_start(
 
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
-    triplestore_table = graph_name if body.backend == "graph" else view_table
+    store = get_triplestore(domain, settings, backend="graph")
+    triplestore_table = (
+        effective_graph_query_table(domain, settings, store=store)
+        if body.backend == "graph" and store
+        else view_table
+    )
     if not triplestore_table:
         raise ValidationError("Triple store not configured")
 
@@ -1276,7 +1286,8 @@ def _resolve_cohort_context(
     store = get_triplestore(domain, settings, backend="graph")
     if not store:
         raise InfrastructureError("Graph backend is not configured")
-    return domain, store, graph_name, CohortService(domain)
+    query_table = effective_graph_query_table(domain, settings, store=store)
+    return domain, store, query_table, CohortService(domain)
 
 
 # ---------------------------------------------------------------------------

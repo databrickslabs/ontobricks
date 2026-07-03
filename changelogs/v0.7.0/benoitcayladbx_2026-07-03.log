@@ -99,3 +99,242 @@ Modified files:
 - tests/units/scripts/test_lakebase_resolve_db.py
 
 Tests: uv run pytest -q -m "not scenario" → 2990 passed, 275 skipped, 5 deselected in 20.32s
+
+## Unify KG Build menu for Lakebase and Delta backends
+
+Context: Delta triple-store mode added a second sidebar item ("Build Triple Store")
+alongside the classic Lakebase Build page. Operators should see a single **Build**
+entry; the page content swaps based on `triple_store_backend` (Lakebase sync UI vs
+Delta materialize UI).
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Removed the extra `databricks-build` nav item; kept one **Build** (`sync`) entry.
+2. src/front/templates/dtwin.html
+   Nested Lakebase and Delta build partials inside `#sync-section`; load databricks JS before sync JS.
+3. src/front/static/query/js/query-databricks-build.js
+   Toggle `#sync-lakebase-panel` / `#sync-databricks-panel` instead of separate sidebar sections.
+4. src/front/static/query/js/query-sync.js
+   Skip Lakebase sync init when backend is `databricks`; delegate to Delta loader on Build navigation.
+5. src/front/templates/partials/dtwin/_query_databricks_build.html
+   Renamed page title to **Build** (same menu label as Lakebase).
+6. src/front/templates/settings.html
+   Updated help text to reference **Knowledge Graph → Build**.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/dtwin.html
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/templates/settings.html
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/query/js/query-sync.js
+
+Tests: uv run pytest -q -m "not scenario" → 2999 passed, 275 skipped, 5 deselected in 22.91s
+
+## Rename triple-store backend UI: Databricks → Delta
+
+Context: In Settings → Triple store, the non-Lakebase backend is Delta (Unity Catalog
+TABLE). User-facing labels now say **Delta** instead of **Databricks**; the persisted
+value remains `databricks`. Also fixed duplicate `databricks-section` id (connection vs
+triple-store panels).
+
+Changes:
+
+1. src/front/templates/settings.html
+   Backend select option and triple-store panel titled **Delta**; section id `delta-triplestore-section`.
+2. src/front/config/menu_config.json
+   Triple store nav item id/label `delta` / **Delta**.
+3. src/front/static/config/js/settings.js
+   Panel toggles and health check wired to `delta-triplestore-section` and `data-section="delta"`.
+4. src/front/templates/partials/dtwin/_query_databricks_build.html
+   Build page icon aligned with Delta (`bi-layers`).
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/config/menu_config.json
+- src/front/static/config/js/settings.js
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+
+Tests: uv run pytest -q -m "not scenario" → 2999 passed, 275 skipped, 5 deselected in 20.06s
+
+## Enrich Settings → Delta page with storage guidance
+
+Context: The Delta triple-store settings page looked empty (no forms like Lakebase, and
+the status block only filled after a manual health click). Added static documentation
+explaining Registry catalog/schema usage and auto-refresh status on page visit.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Added how-it-works, storage location, naming pattern, and status cards for Delta backend.
+2. src/front/static/config/js/settings.js
+   Auto-load status when opening Delta section; show registry location, prerequisites, FQNs.
+3. src/back/core/graphdb/delta/health.py
+   Health payload now includes registry catalog/schema and inferred table FQN.
+4. src/back/objects/domain/SettingsService.py
+   Pass registry_cfg into settings_health_summary.
+5. tests/units/graphdb/delta/test_delta_package.py
+   Regression test for registry location in health summary.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/back/core/graphdb/delta/health.py
+- src/back/objects/domain/SettingsService.py
+- tests/units/graphdb/delta/test_delta_package.py
+
+Tests: uv run pytest -q -m "not scenario" → 3000 passed, 275 skipped, 5 deselected in 20.15s
+
+## Keep Lakebase and Delta settings nav always visible
+
+Context: Selecting Lakebase as triple-store backend hid the Delta sidebar item (and set
+inline `display:none` on the Delta section), so Delta could not be opened until the
+backend was switched back. Nav items are now static; only **Back End** controls the
+active runtime backend.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Removed backend-based `d-none` on Lakebase/Delta nav and section `display` toggling.
+2. src/front/templates/settings.html
+   Removed inline `display:none` on Delta section; clarified Back End help text.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- src/front/templates/settings.html
+
+Tests: uv run pytest -q -m "not scenario" → 3000 passed, 275 skipped, 5 deselected in 20.20s
+
+## Fix empty Settings → Delta page (section id mismatch)
+
+Context: Sidebar navigation resolves `data-section="delta"` to element id `delta-section`
+(see sidebar-nav.js). The Delta panel used `delta-triplestore-section`, so clicking Delta
+never activated the section — blank content area.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Renamed panel id from `delta-triplestore-section` to `delta-section`.
+
+Modified files:
+- src/front/templates/settings.html
+
+Tests: uv run pytest -q -m "not scenario" → 3000 passed, 275 skipped, 5 deselected in 19.90s
+
+## Fix silent Delta build failures in KG Build UI
+
+Context: Delta build task polling called non-existent `GET /tasks/{id}/status`
+(instead of `GET /tasks/{id}`), so completion/failure was never detected and no
+error was shown to the user.
+
+Changes:
+
+1. src/front/static/query/js/query-databricks-build.js
+   Poll `GET /tasks/{id}`; show inline alert + toast on failed/cancelled/warning outcomes.
+2. src/front/templates/partials/dtwin/_query_databricks_build.html
+   Added `#dbxBuildResultAlert` for build result messages.
+
+Modified files:
+- src/front/static/query/js/query-databricks-build.js
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+
+Tests: uv run pytest -q -m "not scenario" → 3000 passed, 275 skipped, 5 deselected in 20.60s
+
+## Fix Delta CTAS: drop explicit schema from RTAS
+
+Context: Databricks rejects ``CREATE OR REPLACE TABLE … (cols) … AS SELECT`` — schema
+must be inferred from the SELECT. Delta triple-store materialize failed with
+"Schema may not be specified in a Replace Table As Select (RTAS) statement".
+
+Changes:
+
+1. src/back/core/graphdb/delta/materialize.py
+   Removed ``(subject STRING, …)`` from ``build_ctas_sql``; RTAS uses VIEW column types.
+2. tests/units/graphdb/delta/test_delta_package.py
+   Assert generated SQL omits explicit column list.
+
+Modified files:
+- src/back/core/graphdb/delta/materialize.py
+- tests/units/graphdb/delta/test_delta_package.py
+
+Tests: uv run pytest -q -m "not scenario" → 3000 passed, 275 skipped, 5 deselected in 20.15s
+
+## Wire Graph Explorer to Delta UC table FQN
+
+Context: With ``triple_store_backend=databricks``, Explorer/filter/neighbors queried the
+Lakebase-style name (``Cust360_V5``) instead of the UC ``…_data`` table, causing
+"Error querying graph".
+
+Changes:
+
+1. src/back/core/helpers/SQLHelpers.py — ``effective_graph_query_table`` resolver.
+2. src/api/routers/internal/dtwin.py — graph read routes use ``_graph_query_table``.
+3. src/back/fastapi/graphql_routes.py, src/api/routers/digitaltwin.py — same for GraphQL/REST.
+4. src/back/objects/digitaltwin/DigitalTwin.py — status probes use Delta FQN.
+5. tests/units/graphdb/delta/test_triple_store_backend_config.py — resolver tests.
+6. tests/units/dtwin/test_digitaltwin_api.py — cohort context mock update.
+
+Tests: uv run pytest -q -m "not scenario" → 3002 passed, 275 skipped, 5 deselected in 20.32s
+
+## Fix Inference materialise-to-graph for Delta triple store
+
+Context: Inference → "Materialise to graph" failed on ``triple_store_backend=databricks``
+because ``ReasoningService`` inserted into the logical graph name (``Domain_V5``) while
+the Delta backend only materialized ``…_data`` at build time — the ``…_inferred``
+companion TABLE and union read VIEW were never created.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Route ``insert_triples`` to ``…_inferred``; ensure companion TABLE + ``…_graph`` VIEW.
+2. src/back/core/graphdb/delta/materialize.py
+   ``ensure_inferred_table`` and ``ensure_graph_view`` DDL helpers.
+3. src/back/core/graphdb/delta/_table_naming.py
+   ``graph_view_fqn`` (``…_graph`` = ``_data`` ∪ ``_inferred``).
+4. src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+   Create inferred TABLE and graph VIEW on build (truncate inferred on full rebuild).
+5. src/back/core/helpers/SQLHelpers.py
+   ``effective_graph_query_table`` returns ``…_graph`` when ``include_inferred``.
+6. src/back/core/graphdb/GraphDBFactory.py
+   Pass domain/settings into ``DeltaFlatStore``.
+7. src/front/templates/settings.html
+   Document ``…_graph`` union VIEW in Delta object list.
+8. tests/units/graphdb/delta/test_delta_flat_store.py
+   Inferred routing and synced-table resolution tests.
+9. tests/units/graphdb/delta/test_delta_package.py, test_triple_store_backend_config.py
+   DDL and resolver coverage.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/front/templates/settings.html
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/delta/test_triple_store_backend_config.py
+
+Tests: uv run pytest -q -m "not scenario" → 3008 passed, 275 skipped, 5 deselected in 21.29s
+
+## Fix SWRL inference on Delta (logical graph name → UC FQN)
+
+Context: SWRL (and other reasoning SQL) used ``Cust360Auto_V5`` via
+``ReasoningService._get_graph_name()``. Lakebase maps that to ``g_cust360auto_v5``
+through ``_sql_relation``; ``DeltaFlatStore`` passed the logical name through unchanged,
+so inference SQL queried a non-existent relation and returned zero findings.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   ``_sql_relation`` / ``physical_table_id`` resolve to ``…_graph`` (or ``…_data`` fallback).
+2. tests/units/graphdb/delta/test_delta_flat_store.py
+   SQL reference resolution tests.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+
+Tests: uv run pytest -q -m "not scenario" → 3011 passed, 275 skipped, 5 deselected in 21.17s

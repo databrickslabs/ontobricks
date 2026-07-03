@@ -94,6 +94,7 @@ class SettingsService:
         *,
         engine: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
+        triple_store_backend: Optional[str] = None,
     ) -> None:
         """Copy graph DB settings into ``domain.settings['registry']`` (best-effort).
 
@@ -102,7 +103,7 @@ class SettingsService:
         or Lakebase ``global_config`` JSONB). Mirroring keeps the domain JSON
         export aligned with the catalog/schema/volume block for operators.
         """
-        if engine is None and config is None:
+        if engine is None and config is None and triple_store_backend is None:
             return
         try:
             domain = get_domain(session_mgr)
@@ -111,6 +112,8 @@ class SettingsService:
                 reg["graph_engine"] = engine
             if config is not None:
                 reg["graph_engine_config"] = dict(config)
+            if triple_store_backend is not None:
+                reg["triple_store_backend"] = triple_store_backend
             domain.save()
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -1471,6 +1474,60 @@ class SettingsService:
             session_mgr, engine=persisted
         )
         return {"success": True, "graph_engine": persisted}
+
+    @staticmethod
+    def get_triple_store_backend_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        global_config_service.load(host, token, registry_cfg, force=True)
+        backend = global_config_service.get_triple_store_backend(
+            host, token, registry_cfg
+        )
+        allowed = list(global_config_service.ALLOWED_TRIPLE_STORE_BACKENDS)
+        return {
+            "success": True,
+            "triple_store_backend": backend,
+            "allowed_backends": allowed,
+        }
+
+    @staticmethod
+    def set_triple_store_backend_result(
+        backend: str,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ok, msg = global_config_service.set_triple_store_backend(
+            host, token, registry_cfg, backend
+        )
+        if not ok:
+            raise ValidationError(msg)
+        persisted = global_config_service.get_triple_store_backend(
+            host, token, registry_cfg
+        )
+        SettingsService._mirror_graph_engine_to_domain_registry(
+            session_mgr, triple_store_backend=persisted
+        )
+        return {"success": True, "triple_store_backend": persisted}
+
+    @staticmethod
+    def triple_store_databricks_health_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        from back.core.graphdb.delta.health import settings_health_summary
+
+        domain, _, _, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
+        return settings_health_summary(domain, settings, registry_cfg=registry_cfg)
 
     @staticmethod
     def get_graph_engine_config_result(

@@ -26,7 +26,9 @@ from back.core.triplestore import get_triplestore
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 from back.objects.domain import HomeService, Domain
 from back.core.helpers import (
+    effective_databricks_table,
     effective_graph_name,
+    effective_graph_query_table,
     effective_view_table,
     get_databricks_client,
     get_databricks_credentials,
@@ -39,6 +41,22 @@ from back.core.helpers import (
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/dtwin", tags=["Query"])
+
+
+def _graph_query_table(
+    domain,
+    settings,
+    store=None,
+    *,
+    include_inferred: bool = True,
+) -> str:
+    """Resolve the physical graph table for read queries (Lakebase or Delta)."""
+    return effective_graph_query_table(
+        domain,
+        settings,
+        include_inferred=include_inferred,
+        store=store,
+    )
 
 # Canonical rdf:type predicate. Neighbour expansion must preserve type
 # triples so the knowledge graph can group/colour expanded nodes by their
@@ -348,11 +366,10 @@ async def load_triplestore(
         include_inferred = body.get("include_inferred", True)
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
-
         store = _require_graph_store(domain, settings)
-
-        query_table = graph_name if include_inferred else store.synced_table_name(graph_name)
+        query_table = _graph_query_table(
+            domain, settings, store, include_inferred=include_inferred
+        )
 
         try:
             results = store.query_triples(query_table)
@@ -363,7 +380,7 @@ async def load_triplestore(
             error_msg = str(e)
             if "does not exist" in error_msg.lower():
                 raise NotFoundError(
-                    f"Graph {graph_name} does not exist. Run Build first.",
+                    f"Graph {query_table} does not exist. Run Build first.",
                     detail=error_msg,
                 )
             raise InfrastructureError(
@@ -407,11 +424,10 @@ async def detect_clusters(
         max_triples = int(data.get("max_triples", settings.analytics_max_triples))
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
         if not graph_name:
             raise ValidationError("Graph name is not configured")
-
-        store = _require_graph_store(domain, settings)
 
         dt = DigitalTwin(domain)
         result = await run_blocking(
@@ -491,11 +507,10 @@ async def compute_graph_metrics(
         max_nodes_betweenness = int(data.get("max_nodes_betweenness", 2_000))
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
         if not graph_name:
             raise ValidationError("Graph name is not configured")
-
-        store = _require_graph_store(domain, settings)
 
         # Fail fast on graphs too large for in-memory analysis — the triple
         # count is already known, so reject here instead of spawning a
@@ -752,10 +767,10 @@ def cohort_engine_context(
     backend cannot be instantiated.
     """
     domain = get_domain(session_mgr)
-    graph_name = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    graph_name = _graph_query_table(domain, settings, store)
     if not graph_name:
         raise ValidationError("Graph name is not configured")
-    store = _require_graph_store(domain, settings)
     return CohortEngineContext(
         domain=domain,
         settings=settings,
@@ -1038,13 +1053,10 @@ async def filter_triplestore(
         include_inferred = data.get("include_inferred", True)
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
-        if not graph_name:
-            raise ValidationError("Graph name is not configured")
-
         store = _require_graph_store(domain, settings)
-
-        query_table = graph_name if include_inferred else store.synced_table_name(graph_name)
+        query_table = _graph_query_table(
+            domain, settings, store, include_inferred=include_inferred
+        )
 
         if phase == "preview":
             entity_type = (data.get("entity_type") or "").strip()
@@ -1220,6 +1232,138 @@ async def sync_info(
 
 
 # ===========================================
+# Databricks Triple Store Build (Delta only)
+# ===========================================
+
+
+@router.get("/databricks-build/info")
+async def databricks_build_info(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Readiness + Delta table status for the Databricks triple-store build page."""
+    from back.core.graphdb.delta import _table_naming
+    from back.core.graphdb.delta.health import probe_from_client
+    from back.core.graphdb.delta.DeltaBase import create_databricks_client
+    from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+
+    domain = get_domain(session_mgr)
+    backend = TripleStoreFactory._resolve_triple_store_backend(domain, settings)
+    readiness = HomeService.validate_status(domain)
+    view_table = effective_view_table(domain)
+    data_table = effective_databricks_table(domain, settings)
+    client = create_databricks_client(domain, settings)
+    data_status = probe_from_client(client, data_table) if data_table else {}
+    return {
+        "success": True,
+        "triple_store_backend": backend,
+        "readiness": readiness,
+        "view_table": view_table,
+        "data_table": data_table,
+        "inferred_table": _table_naming.inferred_table_fqn(domain, settings),
+        "triplestore_status": data_status,
+    }
+
+
+@router.post(
+    "/databricks-build/start",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def start_databricks_triplestore_build(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Materialize UC Delta triple store (VIEW → TABLE); no Lakebase sync."""
+    import threading
+    from back.core.task_manager import get_task_manager
+    from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+    from back.objects.digitaltwin._databricks_triplestore_build import (
+        run_databricks_triplestore_build,
+    )
+
+    await request.json()
+
+    domain = get_domain(session_mgr)
+    if TripleStoreFactory._resolve_triple_store_backend(domain, settings) != "databricks":
+        raise ValidationError(
+            "Databricks triple-store build is only available when "
+            "triple_store_backend is 'databricks' (Settings → Triple store)."
+        )
+
+    view_table = effective_view_table(domain)
+    data_table = effective_databricks_table(domain, settings)
+    if len(view_table.split(".")) != 3:
+        raise ValidationError(
+            "View location must be fully qualified: catalog.schema.view_name"
+        )
+    if len(data_table.split(".")) != 3:
+        raise ValidationError("Delta data table FQN could not be resolved")
+
+    domain.ensure_generated_content()
+    r2rml_content = domain.get_r2rml()
+    if not r2rml_content:
+        raise ValidationError(
+            "No R2RML mapping available. Configure ontology and assignments first."
+        )
+
+    host, token, warehouse_id = get_databricks_credentials(domain, settings)
+    if not host and not is_databricks_app():
+        raise ValidationError("Databricks not configured")
+    if not token and not is_databricks_app():
+        raise ValidationError("Databricks not configured")
+    if not warehouse_id:
+        raise ValidationError("No SQL warehouse configured")
+
+    domain.triplestore.pop("stats", None)
+    domain.triplestore.pop("_ts_cache_timestamp", None)
+    if domain.last_update:
+        domain.triplestore["build_last_update"] = domain.last_update
+
+    from datetime import datetime, timezone as tz
+
+    domain.last_build = datetime.now(tz.utc).isoformat()
+    domain.save()
+
+    domain_snap = DomainSnapshot(domain)
+    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
+
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Databricks Triple Store Build",
+        task_type="databricks_triplestore_build",
+        steps=[
+            {"name": "prepare", "description": "Preparing mappings and generating queries"},
+            {"name": "view", "description": "Creating the R2RML SQL view"},
+            {"name": "materialize", "description": "Materializing Delta table in Unity Catalog"},
+            {"name": "finalize", "description": "Optimizing Delta table"},
+        ],
+    )
+
+    def run_build():
+        run_databricks_triplestore_build(
+            tm,
+            task.id,
+            domain,
+            settings,
+            domain_snap,
+            host,
+            token,
+            warehouse_id,
+            view_table,
+            data_table,
+            r2rml_content,
+            domain.assignment,
+            domain.ontology,
+            base_uri,
+            build_kind="session",
+        )
+
+    threading.Thread(target=run_build, daemon=True).start()
+    return {"success": True, "task_id": task.id}
+
+
+# ===========================================
 # Knowledge Graph Existence Checks
 # ===========================================
 
@@ -1255,7 +1399,8 @@ async def triplestore_stats(
     """Return content statistics about the triple store."""
     try:
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
 
         if not graph_name:
             raise ValidationError("Graph name is not configured")
@@ -1335,7 +1480,7 @@ async def execute_dataquality_check(
         backend = data.get("backend", "view").strip()
         domain = get_domain(session_mgr)
         if backend == "graph":
-            triplestore_table = effective_graph_name(domain).strip()
+            triplestore_table = _graph_query_table(domain, settings).strip()
         else:
             triplestore_table = data.get("triplestore_table", "").strip()
 
@@ -1351,7 +1496,7 @@ async def execute_dataquality_check(
             raise InfrastructureError(f"Could not initialize {backend} backend")
 
         if backend == "graph":
-            graph_name = triplestore_table or effective_graph_name(domain)
+            graph_name = triplestore_table or _graph_query_table(domain, settings)
             triples = await run_blocking(store.query_triples, graph_name)
             if not triples:
                 raise ValidationError(f"Graph '{graph_name}' is empty. Build first.")
@@ -1403,7 +1548,7 @@ async def start_dataquality_checks(
 
     domain = get_domain(session_mgr)
     if requested_backend == "graph":
-        triplestore_table = effective_graph_name(domain).strip()
+        triplestore_table = _graph_query_table(domain, settings).strip()
     else:
         triplestore_table = data.get("triplestore_table", "").strip()
 
@@ -2233,7 +2378,7 @@ async def dtwin_graphql_execute(
 
     context = {
         "triplestore": store,
-        "table_name": effective_graph_name(domain),
+        "table_name": _graph_query_table(domain, settings, store),
         "base_uri": base_uri,
     }
     if depth is not None:
@@ -2288,11 +2433,10 @@ async def dtwin_triples_find(
     offset = max(0, int(offset or 0))
 
     domain = get_domain(session_mgr)
-    table = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    table = _graph_query_table(domain, settings, store)
     if not table:
         raise ValidationError("Graph name not configured")
-
-    store = _require_graph_store(domain, settings)
 
     rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
     rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
@@ -2408,11 +2552,10 @@ async def dtwin_neighbors(
     limit = max(1, min(int(limit or 2000), 20000))
 
     domain = get_domain(session_mgr)
-    table = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    table = _graph_query_table(domain, settings, store)
     if not table:
         raise ValidationError("Graph name not configured")
-
-    store = _require_graph_store(domain, settings)
 
     query_table = table if include_inferred else store.synced_table_name(table)
 

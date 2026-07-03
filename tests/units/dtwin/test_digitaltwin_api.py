@@ -413,9 +413,10 @@ class TestResolveCohortContext:
             )
 
     @patch("api.routers.digitaltwin.get_triplestore")
+    @patch("api.routers.digitaltwin.effective_graph_query_table", return_value="dom_V1")
     @patch("api.routers.digitaltwin.effective_graph_name", return_value="dom_V1")
     @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
-    def test_returns_service_when_configured(self, mock_resolve, _eff, mock_store):
+    def test_returns_service_when_configured(self, mock_resolve, _eff, _query, mock_store):
         from api.routers.digitaltwin import _resolve_cohort_context
         from back.objects.digitaltwin import CohortService
 

@@ -30,7 +30,7 @@ from back.core.errors import (
 from back.objects.registry import RegistryService
 from back.core.triplestore import get_triplestore
 from shared.config.constants import DEFAULT_BASE_URI
-from back.core.helpers import effective_graph_name
+from back.core.helpers import effective_graph_name, effective_graph_query_table
 
 logger = get_logger(__name__)
 
@@ -197,7 +197,7 @@ def _get_schema_and_context(domain, settings):
             "Graph backend not configured or unreachable."
         )
 
-    table = effective_graph_name(domain)
+    table = effective_graph_query_table(domain, settings, store=store)
 
     logger.info(
         "GraphQL context: table=%s, store=%s, classes=%d",

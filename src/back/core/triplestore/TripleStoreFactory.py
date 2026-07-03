@@ -15,6 +15,8 @@ from back.core.helpers import (
 )
 from back.core.logging import get_logger
 
+from back.objects.session.GlobalConfigService import GlobalConfigService
+
 logger = get_logger(__name__)
 
 
@@ -48,6 +50,12 @@ class TripleStoreFactory:
 
         if backend == "graph":
             from back.core.graphdb import get_graphdb
+
+            ts_backend = self._resolve_triple_store_backend(domain, settings)
+            if ts_backend == "databricks":
+                return get_graphdb(
+                    domain, settings, engine="delta", engine_config={}
+                )
 
             engine = self._resolve_graph_engine(domain, settings) or "lakebase"
             engine_config = self._resolve_graph_engine_config(domain, settings)
@@ -140,6 +148,31 @@ class TripleStoreFactory:
             return gcs_val
         mirrored_eng, _ = TripleStoreFactory._registry_graph_engine_mirror(domain)
         return mirrored_eng
+
+    @staticmethod
+    def _resolve_triple_store_backend(
+        domain: Any, settings: Optional[Any] = None, *, force: bool = False
+    ) -> str:
+        """Read ``triple_store_backend`` from global config (default ``lakebase``)."""
+        gcs_val = TripleStoreFactory._read_global_config(
+            domain,
+            settings,
+            lambda gcs, h, t, r: gcs.get_triple_store_backend(h, t, r),
+            force=force,
+        )
+        if gcs_val:
+            return gcs_val
+        try:
+            blob = getattr(domain, "settings", None)
+            if isinstance(blob, dict):
+                reg = blob.get("registry")
+                if isinstance(reg, dict):
+                    raw = (reg.get("triple_store_backend") or "").strip().lower()
+                    if raw in GlobalConfigService.ALLOWED_TRIPLE_STORE_BACKENDS:
+                        return raw
+        except Exception:  # noqa: BLE001
+            pass
+        return "lakebase"
 
     @staticmethod
     def _resolve_graph_engine_config(
