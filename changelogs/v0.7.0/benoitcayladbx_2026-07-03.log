@@ -1,0 +1,27 @@
+## Fix Switch modal on published domains (issue #97)
+
+Context: On an IN-REVIEW or PUBLISHED domain, the L2 **Switch** popup kept the version
+dropdown disabled and offered "Save my changes before switching" even though read-only
+versions cannot be saved. The read-only CSS gate did not exempt `#switchVersionSelect`, and
+the modal never adapted to lifecycle status.
+
+Changes:
+
+1. src/front/static/global/css/permissions.css
+   Exempt `#switchVersionSelect` from the read-only select disable rule (navigation, not
+   design editing).
+2. src/front/static/global/js/navbar.js
+   Added `isSwitchSaveAllowed()`, `configureSwitchSaveOption()`, and confirm-handler guard
+   so save-before-switch is disabled on non-DRAFT versions.
+3. tests/units/front/test_switch_domain_modal.py
+   Regression tests for the CSS exemption and navbar.js save gating.
+4. docs/user-guide.md
+   Document read-only Switch behaviour (version picker available, save option disabled).
+
+Modified files:
+- src/front/static/global/css/permissions.css
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_switch_domain_modal.py
+- docs/user-guide.md
+
+Tests: uv run pytest -q -m "not scenario" → 2987 passed, 275 skipped, 5 deselected in 29.67s

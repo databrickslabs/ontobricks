@@ -792,8 +792,10 @@ domain in edit mode.
 **Switching version** — the **Switch** button (between **Save** and **Close**) opens a popup
 listing every version of the currently open domain, with the current one flagged. Pick the
 current version to **reload** it from the Registry (discarding in-session edits) or another
-version to **switch** to it. A *"Save my changes before switching"* box is ticked by default —
-leave it on to persist your work first, or untick it to discard unsaved changes.
+version to **switch** to it. On a **DRAFT** version, a *"Save my changes before switching"*
+box is ticked by default — leave it on to persist your work first, or untick it to discard
+unsaved changes. On an **IN-REVIEW** or **PUBLISHED** version the version picker stays
+available but the save option is disabled (those versions are read-only).
 
 **Stuck lock?** A lock left behind (e.g. a browser that crashed without closing) clears
 itself: once its lease lapses (no renew for the TTL, 10 minutes by default) the next person

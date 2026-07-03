@@ -789,6 +789,17 @@ async function domainSwitch() {
 }
 
 /**
+ * True when the loaded domain version allows persisting design edits (DRAFT).
+ * Mirrors ``window.OB.canEditOntology`` / ``version-check.js`` signals without
+ * requiring the permissions module.
+ */
+function isSwitchSaveAllowed() {
+    if (window.isActiveVersion === false) return false;
+    if (window.versionStatus && window.versionStatus !== 'DRAFT') return false;
+    return true;
+}
+
+/**
  * Render the Switch-version popup for the currently open domain.
  */
 function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
@@ -819,7 +830,7 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
                             <label class="form-check-label" for="switchSaveFirst">
                                 Save my changes before switching
                             </label>
-                            <div class="form-text text-warning-emphasis">
+                            <div class="form-text text-warning-emphasis" id="switchSaveFirstHint">
                                 <i class="bi bi-exclamation-triangle me-1"></i>Unchecking discards any unsaved changes.
                             </div>
                         </div>
@@ -841,6 +852,7 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
     modal.show();
     modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove());
 
+    configureSwitchSaveOption();
     populateSwitchVersions(currentVersion);
 
     document.getElementById('btnConfirmSwitch').addEventListener('click', async () => {
@@ -850,7 +862,9 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
             showNotification('Please select a version', 'warning');
             return;
         }
-        const saveFirst = document.getElementById('switchSaveFirst').checked;
+        const saveCheckbox = document.getElementById('switchSaveFirst');
+        const saveFirst = saveCheckbox && saveCheckbox.checked && !saveCheckbox.disabled
+            && isSwitchSaveAllowed();
         modal.hide();
 
         if (saveFirst) {
@@ -861,6 +875,32 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
 
         await doDomainLoad(domainSlug, version);
     });
+}
+
+/**
+ * Enable or disable the "save before switching" option based on lifecycle
+ * status. Non-DRAFT versions are read-only — switching is navigation only.
+ */
+function configureSwitchSaveOption() {
+    const saveCheckbox = document.getElementById('switchSaveFirst');
+    const saveHint = document.getElementById('switchSaveFirstHint');
+    if (!saveCheckbox) return;
+
+    const editable = isSwitchSaveAllowed();
+    if (editable) {
+        saveCheckbox.checked = true;
+        saveCheckbox.disabled = false;
+        return;
+    }
+
+    saveCheckbox.checked = false;
+    saveCheckbox.disabled = true;
+    if (saveHint) {
+        saveHint.classList.remove('text-warning-emphasis');
+        saveHint.classList.add('text-muted');
+        saveHint.innerHTML =
+            '<i class="bi bi-lock me-1"></i>This version is read-only; switching will not save changes.';
+    }
 }
 
 /**

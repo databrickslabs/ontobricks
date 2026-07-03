@@ -229,6 +229,9 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
    used purely for navigation, not for mutating content:
 
      - ``#domainVersionSelect``                    switch to a newer/older version
+     - ``#switchVersionSelect``                    navbar Switch-version modal
+       (L2 subnav → Switch). Readers on an IN-REVIEW / PUBLISHED version must
+       still be able to pick another version to load.
      - ``#loadDomainSelect`` / ``#loadVersionSelect`` Load-Domain modal
        (navbar → Load Domain). Viewers must still be able to navigate
        between domains and pick a version to load — without this, the
@@ -276,7 +279,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
    to check and run the analysis. */
 body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not([data-collab]),
 body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) textarea:not([data-rm-comment]):not([data-collab]),
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not(#runsVersionFilter):not([data-collab]) {
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not(#runsVersionFilter):not([data-collab]) {
     pointer-events: none !important;
     background-color: #e9ecef !important;
     opacity: 0.7 !important;
