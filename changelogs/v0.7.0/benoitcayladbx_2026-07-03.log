@@ -99,3 +99,35 @@ Modified files:
 - tests/units/scripts/test_lakebase_resolve_db.py
 
 Tests: uv run pytest -q -m "not scenario" → 2990 passed, 275 skipped, 5 deselected in 20.32s
+
+## Backport mapping SQL column deduplication fix (PR #98)
+
+Context: The Auto-Map agent's prompt instructs repeating a source column under its
+original name alongside an "AS ID"/"AS Label" alias for attribute mapping. When that
+original name is itself "id"/"label" (case-insensitive) — e.g. a table with an actual
+column named `label` — Databricks/Spark resolves both as the same output column, causing
+`AMBIGUOUS_REFERENCE` when the digital-twin build creates the triple-store VIEW.
+`SQLWizardService._deduplicate_select_columns` already handled this in the manual
+SQL-wizard flow but not in the Auto-Map submission tools. Cherry-picked from PR #98
+(epoilvet) onto develop.
+
+Changes:
+
+1. src/agents/tools/mapping.py
+   Call `SQLWizardService._deduplicate_select_columns` after LIMIT stripping in
+   `tool_submit_entity_mapping` and `tool_submit_relationship_mapping`.
+2. src/back/core/sqlwizard/SQLWizardService.py
+   Make `_deduplicate_select_columns` a `@staticmethod` so agents can reuse it
+   without constructing a full `SQLWizardService`.
+3. tests/units/agents/test_mapping_tools.py
+   Regression tests for label-column self-collision and non-colliding passthrough.
+4. CONTRIBUTORS.md
+   Add Eric Poilvet ([@epoilvet](https://github.com/epoilvet)) to the contributor list.
+
+Modified files:
+- src/agents/tools/mapping.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- tests/units/agents/test_mapping_tools.py
+- CONTRIBUTORS.md
+
+Tests: uv run pytest -q -m "not scenario" → 2982 passed, 286 skipped, 5 deselected in 38.20s
