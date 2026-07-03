@@ -9,6 +9,7 @@ import re
 from typing import Callable, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.sqlwizard.SQLWizardService import SQLWizardService
 from agents.tools.context import ToolContext
 
 logger = get_logger(__name__)
@@ -53,6 +54,9 @@ def tool_submit_entity_mapping(
         re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql_query, flags=re.IGNORECASE)
         .strip()
         .rstrip(";")
+    )
+    clean_sql = SQLWizardService._deduplicate_select_columns(
+        clean_sql, mapping_type="entity"
     )
 
     # Restrict attribute_mappings to attributes declared in the ontology for this entity.
@@ -180,6 +184,9 @@ def tool_submit_relationship_mapping(
         re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql_query, flags=re.IGNORECASE)
         .strip()
         .rstrip(";")
+    )
+    clean_sql = SQLWizardService._deduplicate_select_columns(
+        clean_sql, mapping_type="relationship"
     )
 
     def _extract_label(value: str) -> str:
