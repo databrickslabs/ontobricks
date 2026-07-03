@@ -338,3 +338,28 @@ Modified files:
 - tests/units/graphdb/delta/test_delta_flat_store.py
 
 Tests: uv run pytest -q -m "not scenario" → 3011 passed, 275 skipped, 5 deselected in 21.17s
+
+## OPTIMIZE inferred companion after inference materialize
+
+Context: Post-inference writes append small files to ``…_inferred`` without
+re-clustering. After materialise-to-graph, liquid clustering on the companion
+table was not refreshed (unlike ``…_data`` at full build).
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   ``optimize_inferred_companion`` runs ``OPTIMIZE`` on the inferred FQN.
+2. src/back/core/reasoning/ReasoningService.py
+   ``materialize_inferred`` calls the hook when the store provides it.
+3. tests/units/graphdb/delta/test_delta_flat_store.py
+   Companion OPTIMIZE target test.
+4. tests/units/ontology/test_reasoning_service.py
+   Materialize invokes companion optimize hook.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/reasoning/ReasoningService.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/ontology/test_reasoning_service.py
+
+Tests: uv run pytest -q -m "not scenario" → 3014 passed, 275 skipped, 5 deselected in 25.76s

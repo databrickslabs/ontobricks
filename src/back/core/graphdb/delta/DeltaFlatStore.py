@@ -125,6 +125,16 @@ class DeltaFlatStore(GraphDBBackend):
             target, triples, batch_size=batch_size, on_progress=on_progress
         )
 
+    def optimize_inferred_companion(self, table_name: str) -> None:
+        """Compact and re-cluster the inferred companion after app writes."""
+        try:
+            inferred = self._writable_table_fqn(table_name)
+            materialize.optimize_table(self._client, inferred)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "OPTIMIZE inferred companion failed for %s: %s", table_name, exc
+            )
+
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
         return self._store.query_triples(table_name)
 

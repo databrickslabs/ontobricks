@@ -514,6 +514,10 @@ class ReasoningService:
             return 0
 
         count = self._store.insert_triples(table_name, triples)
+        if count > 0:
+            optimize_fn = getattr(self._store, "optimize_inferred_companion", None)
+            if callable(optimize_fn):
+                optimize_fn(table_name)
         logger.info("Materialised %d inferred triples into %s", count, table_name)
         return count
 

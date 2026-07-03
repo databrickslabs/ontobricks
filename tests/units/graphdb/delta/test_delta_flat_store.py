@@ -72,3 +72,13 @@ class TestDeltaFlatStoreInferredRouting:
         store = DeltaFlatStore(MagicMock(), domain=_domain())
         fqn = "cat.sch.triplestore_mydomain_V1_data"
         assert store.sql_table_reference(fqn) == fqn
+
+    def test_optimize_inferred_companion_targets_inferred_fqn(self):
+        client = MagicMock()
+        domain = _domain()
+        store = DeltaFlatStore(client, domain=domain)
+        with patch("back.core.graphdb.delta.materialize.optimize_table") as mock_opt:
+            store.optimize_inferred_companion("MyDomain_V1")
+        mock_opt.assert_called_once_with(
+            client, "cat.sch.triplestore_mydomain_V1_inferred"
+        )
