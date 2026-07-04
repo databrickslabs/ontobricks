@@ -54,7 +54,7 @@ help:
 	@echo "    make bootstrap-perms     - Grant the app SP CAN_MANAGE on itself (first-run fix)"
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
 	@echo "    make bundle-validate     - Validate the bundle config (Lakebase target)"
-	@echo "    make bundle-summary      - Show bundle summary (Lakebase target)"
+    @echo "    make deploy-check      - Read-only deploy prerequisite check (see scripts/DEPLOY_CHECKLIST.md)"
 	@echo ""
 	@echo "  Maintenance:"
 	@echo "    make clean        - Remove generated files"
@@ -174,8 +174,8 @@ bootstrap-lakebase:
 	  scripts/bootstrap-lakebase-perms.sh \
 	    -i "$$LAKEBASE_PROJECT" \
 	    -b "$$LAKEBASE_BRANCH" \
-	    -d "$$LAKEBASE_REGISTRY_DATABASE" \
-	    -s "$$LAKEBASE_REGISTRY_SCHEMA" \
+	    -d "$$LAKEBASE_DATABASE" \
+	    -s "$$LAKEBASE_SCHEMA" \
 	    -a "$$APP_NAME" -a "$$MCP_APP_NAME"
 
 bundle-validate:
@@ -190,25 +190,13 @@ bundle-validate:
 	    --var=lakebase_project="$$LAKEBASE_PROJECT" \
 	    --var=lakebase_branch="$$LAKEBASE_BRANCH" \
 	    --var=lakebase_database_resource_segment="$$LAKEBASE_DATABASE_RESOURCE_SEGMENT" \
-	    --var=lakebase_registry_schema="$$LAKEBASE_REGISTRY_SCHEMA"
+	    --var=lakebase_registry_schema="$$LAKEBASE_SCHEMA"
 
 bundle-summary:
 	@echo "Bundle summary (target: dev-lakebase)..."
 	databricks bundle summary -t dev-lakebase
 
-# Check deployment prerequisites
+# Check deployment prerequisites (read-only — see scripts/DEPLOY_CHECKLIST.md)
 deploy-check:
-	@echo "Checking deployment prerequisites..."
-	@command -v databricks >/dev/null 2>&1 || { echo "ERROR: Databricks CLI not installed"; exit 1; }
-	@echo "  Databricks CLI: OK"
-	@test -f databricks.yml || { echo "ERROR: databricks.yml not found"; exit 1; }
-	@echo "  databricks.yml: OK"
-	@test -f app.yaml.template || { echo "ERROR: app.yaml.template not found"; exit 1; }
-	@echo "  app.yaml.template: OK"
-	@test -f $(CONFIG) || { echo "ERROR: $(CONFIG) not found"; exit 1; }
-	@echo "  $(CONFIG): OK"
-	@test -f run.py || { echo "ERROR: run.py not found"; exit 1; }
-	@echo "  run.py: OK"
-	@databricks current-user me >/dev/null 2>&1 || { echo "ERROR: Not authenticated. Run: databricks auth login"; exit 1; }
-	@echo "  CLI auth: OK"
-	@echo "All prerequisites met!"
+	@chmod +x scripts/check-deploy-prerequisites.sh
+	@scripts/check-deploy-prerequisites.sh

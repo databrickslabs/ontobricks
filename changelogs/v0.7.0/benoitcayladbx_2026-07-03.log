@@ -99,3 +99,46 @@ Modified files:
 - tests/units/scripts/test_lakebase_resolve_db.py
 
 Tests: uv run pytest -q -m "not scenario" → 2990 passed, 275 skipped, 5 deselected in 20.32s
+
+## Add deploy preflight checks and deployment checklist
+
+Context: Install and deploy scripts previously failed late (missing psql, unreachable
+Lakebase endpoints, schema migration blockers). Operators needed a single place listing
+all resources, permissions, and tooling required for a successful deploy.
+
+Changes:
+
+1. scripts/check-deploy-prerequisites.sh
+   Standalone read-only preflight (`make deploy-check`) for local tooling, Databricks
+   auth, workspace resources, bootstrap-lakebase-perms.sh readiness, and registry
+   migration state.
+2. scripts/_deploy-preflight.sh
+   Shared bash helpers sourced by deploy/setup scripts.
+3. scripts/_lakebase_preflight.py
+   Python module: endpoint/JWT/psql connectivity, schema ownership, pending/stale
+   migration objects (0.4→0.6 parity with bootstrap Step 2b and upgrade SQL scripts).
+4. scripts/DEPLOY_CHECKLIST.md
+   Human checklist: workstation tools, workspace resources, bootstrap steps, DB upgrades.
+5. scripts/deploy.sh
+   Hard-fail when psql is missing on Lakebase deploys; run Lakebase bootstrap preflight
+   after auth (blocks `--dry-run` on hard failures).
+6. scripts/setup.sh / scripts/setup-lakebase.sh
+   Run preflight before install or Lakebase provisioning.
+7. Makefile
+   `deploy-check` delegates to the new script; fix `bootstrap-lakebase` to use
+   `LAKEBASE_DATABASE` / `LAKEBASE_SCHEMA` from deploy.config.sh.
+8. tests/units/scripts/test_lakebase_preflight.py
+   Regression guard for migration expectation constants.
+
+Modified files:
+- scripts/check-deploy-prerequisites.sh
+- scripts/_deploy-preflight.sh
+- scripts/_lakebase_preflight.py
+- scripts/DEPLOY_CHECKLIST.md
+- scripts/deploy.sh
+- scripts/setup.sh
+- scripts/setup-lakebase.sh
+- Makefile
+- tests/units/scripts/test_lakebase_preflight.py
+
+Tests: uv run pytest -q -m "not scenario" → 2988 passed, 275 skipped, 5 deselected in 20.19s

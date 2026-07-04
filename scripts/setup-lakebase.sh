@@ -39,6 +39,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# Preflight CLI auth + tooling before any API calls.
+chmod +x scripts/check-deploy-prerequisites.sh
+scripts/check-deploy-prerequisites.sh --provision
+
 # ── Defaults ────────────────────────────────────────────────────────────────
 DEFAULT_NAME="ontobricks-demo"
 DEFAULT_CAPACITY="CU_2"

@@ -75,7 +75,7 @@ warn() { echo "  ${_C_YEL}⚠${_C_RST}  $*" >&2; }
 die()  { echo "" >&2; echo "${_C_RED}✗ ERROR:${_C_RST} $*" >&2; exit 1; }
 
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/_lakebase-diag.sh"
+source "${SCRIPT_DIR}/_deploy-preflight.sh"
 
 # Fired by the ERR trap on any uncaught failure (set -e). Reports which
 # step failed, the exact command + line, and a targeted hint.
@@ -202,6 +202,9 @@ if $IS_LAKEBASE && $DO_BOOTSTRAP; then
 fi
 
 if [[ ${#_missing_soft[@]} -gt 0 ]]; then
+    if $IS_LAKEBASE && $DO_BOOTSTRAP; then
+        die "Missing required dependencies for Lakebase bootstrap: ${_missing_soft[*]}. Install them and re-run (see scripts/DEPLOY_CHECKLIST.md)."
+    fi
     warn "the following optional dependencies are NOT installed:"
     for _m in "${_missing_soft[@]}"; do echo "      • ${_m}" >&2; done
     warn "the deploy will run, but the step(s) relying on them will be skipped or fail."
@@ -228,7 +231,10 @@ if $RENDER_APP_YAML; then
 fi
 if $DO_BOOTSTRAP; then
     require_file "scripts/bootstrap-app-permissions.sh"
-    $IS_LAKEBASE && require_file "scripts/bootstrap-lakebase-perms.sh"
+    if $IS_LAKEBASE; then
+        require_file "scripts/bootstrap-lakebase-perms.sh"
+        require_file "scripts/_lakebase_preflight.py"
+    fi
 fi
 ok "required files present"
 
@@ -320,6 +326,31 @@ if [[ -z "${APP_ONTOBRICKS_URL:-}" ]]; then
         info "resolved ONTOBRICKS_URL → ${APP_ONTOBRICKS_URL}"
     else
         info "ONTOBRICKS_URL not yet known (first deploy?) — MCP will use localhost fallback until next deploy"
+    fi
+fi
+
+# ── 2c. Lakebase bootstrap + migration preflight (read-only) ────────
+if $IS_LAKEBASE && $DO_BOOTSTRAP; then
+    begin_step "Lakebase bootstrap preflight"
+    _PREFLIGHT_FAILED=0
+    _PREFLIGHT_WARNINGS=0
+    if ! _preflight_check_lakebase_bootstrap \
+            "$LAKEBASE_PROJECT" \
+            "$LAKEBASE_BRANCH" \
+            "$LAKEBASE_DATABASE" \
+            "$LAKEBASE_SCHEMA" \
+            "$APP_NAME" \
+            "$MCP_APP_NAME"; then
+        if $DRY_RUN; then
+            die "Lakebase bootstrap preflight failed — fix the issues above before deploying (see scripts/DEPLOY_CHECKLIST.md)."
+        fi
+        warn "Lakebase bootstrap preflight reported blocking issues — deploy will continue but step 11 may fail."
+    else
+        if [[ $_PREFLIGHT_WARNINGS -gt 0 ]]; then
+            info "preflight passed with ${_PREFLIGHT_WARNINGS} warning(s) — review messages above."
+        else
+            ok "bootstrap-lakebase-perms.sh and registry migrations ready"
+        fi
     fi
 fi
 

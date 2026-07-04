@@ -3,6 +3,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# Preflight before touching the venv or downloading packages.
+chmod +x scripts/check-deploy-prerequisites.sh
+scripts/check-deploy-prerequisites.sh --local
+
 echo "====================================="
 echo "  OntoBricks Setup"
 echo "====================================="
