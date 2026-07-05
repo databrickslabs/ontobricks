@@ -118,3 +118,30 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-05.log
 
 Tests: uv run pytest -q -m "not scenario" → 3099 passed, 275 skipped, 5 deselected in 21.24s
+
+## Backport PR #85 — Agent Bricks Supervisor onto develop
+
+Context: PR #85 added `agent_supervisor`, a deterministic complexity assessor + Agent Bricks
+MAS config that routes mapping to `agent_mapping_pge` or `agent_auto_assignment`. Cherry-picked
+onto `develop` (not `master`) after #100 landed; net-new code is supervisor-only (13 files).
+
+Changes:
+
+1. src/agents/agent_supervisor/
+   ComplexityAssessor, SupervisorEngine, MAS provisioner, UC function SQL mirror, ResponsesAgent wrappers.
+2. scripts/provision_supervisor.py
+   CLI to log/deploy mapping engine endpoints and provision the MAS.
+3. .planning/agents/agent_supervisor/SPEC.md
+   Agent contract + routing eval dimensions.
+4. tests/agents/agent_supervisor/, tests/eval/datasets/agent_supervisor/baseline.jsonl
+   35 unit tests + 20-example routing baseline.
+
+Modified files:
+- src/agents/agent_supervisor/** (new)
+- scripts/provision_supervisor.py
+- .planning/agents/agent_supervisor/SPEC.md
+- tests/agents/agent_supervisor/**
+- tests/eval/datasets/agent_supervisor/baseline.jsonl
+- changelogs/v0.7.0/benoitcayladbx_2026-07-05.log
+
+Tests: uv run pytest -q -m "not scenario" → 3134 passed, 275 skipped, 5 deselected in 23.47s

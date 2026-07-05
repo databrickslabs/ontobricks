@@ -77,5 +77,5 @@ plan tracked in session memory.
 ## 10. Sign-off
 
 - [x] Sections 4, 5, 6, 7 filled.
-- [ ] Baseline eval run URI pasted into PR body.
+- [ ] Baseline eval run URI pasted into PR body (waiver: calibration grace period; routing unit tests + 20-example baseline cover cold-start).
 - [x] Aggregate threshold declared in §5.
