@@ -11,6 +11,8 @@ Thank you to everyone who has contributed to OntoBricks!
 | Hugues Journeau | [@hourdays](https://github.com/hourdays) | Contributor |
 | Eric Poilvet | [@epoilvet](https://github.com/epoilvet) | Contributor |
 | Fiifi Botchway | [@FiifiB](https://github.com/FiifiB) | Contributor |
+| Ulrik Møller | [@ulsmo](https://github.com/ulsmo) | Contributor |
+| Mitul | [@kmitul](https://github.com/kmitul) | Contributor |
 
 ## How to Contribute
 
