@@ -32,3 +32,43 @@ Modified files:
 - tests/units/core/test_task_manager.py
 
 Tests: uv run pytest -q -m "not scenario" → 3137 passed, 275 skipped, 5 deselected in 25.12s
+
+## Apply task progress overlay to Batch Auto-Map page
+
+Context: The ontology wizard now shows a branded spinner with step checklist and
+activity log during async work. The Batch Auto-Map page still used a minimal inline
+progress bar with only the latest message. This reuses the same overlay pattern so
+users can follow auto-map agent steps live.
+
+Changes:
+
+1. src/front/static/global/js/task-progress-ui.js
+   Extract shared overlay builder, step checklist, activity log, and agent-steps
+   panel used by wizard and auto-map.
+2. src/front/static/ontology/js/ontology-wizard.js
+   Delegate to `TaskProgressUI` instead of inline render helpers.
+3. src/front/static/mapping/js/mapping-autoassign.js
+   Full-page overlay on `#autoassign-section` with step log + activity trace;
+   live gauge updates preserved during polling.
+4. src/front/templates/partials/mapping/_mapping_autoassign.html
+   Remove legacy inline progress card (overlay is JS-driven).
+5. src/front/templates/mapping.html, src/front/templates/ontology.html
+   Load `task-progress-ui.js` before wizard/auto-map modules.
+6. src/front/static/global/css/components.css
+   Generalize overlay styles to `.task-progress-*` (wizard aliases kept).
+7. src/api/routers/internal/mapping.py, src/back/objects/mapping/Mapping.py
+   Align auto-map task steps with init → prepare → agent → finalize and advance
+   through them during the background run.
+
+Modified files:
+- src/front/static/global/js/task-progress-ui.js
+- src/front/static/ontology/js/ontology-wizard.js
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/templates/partials/mapping/_mapping_autoassign.html
+- src/front/templates/mapping.html
+- src/front/templates/ontology.html
+- src/front/static/global/css/components.css
+- src/api/routers/internal/mapping.py
+- src/back/objects/mapping/Mapping.py
+
+Tests: uv run pytest -q -m "not scenario" → 3137 passed, 275 skipped, 5 deselected in 20.17s

@@ -597,9 +597,10 @@
 
 
 /* ==========================================================================
-   Wizard Form Overlay (for async tasks)
+   Task progress overlay (wizard, auto-map, async tasks)
    ========================================================================== */
 
+.task-progress-overlay,
 .wizard-form-overlay {
     position: absolute;
     top: 0;
@@ -616,6 +617,8 @@
     border-radius: 0.375rem;
 }
 
+.task-step-log-panel,
+.task-activity-log-panel,
 .wizard-step-log-panel,
 .wizard-activity-log-panel {
     max-width: 520px;
@@ -623,6 +626,7 @@
     margin-right: auto;
 }
 
+.task-activity-log,
 .wizard-activity-log {
     max-height: 200px;
     overflow-y: auto;
@@ -632,14 +636,17 @@
     border-radius: 0.375rem;
 }
 
+.task-activity-row:last-child,
 .wizard-activity-row:last-child {
     margin-bottom: 0 !important;
 }
 
+.task-agent-steps-mount details,
 #wizardAgentStepsMount details {
     margin-top: 0.75rem;
 }
 
+.task-agent-steps-mount .border,
 #wizardAgentStepsMount .border {
     background: #ffffff !important;
 }

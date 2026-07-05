@@ -652,12 +652,9 @@ async def start_auto_assign(
         task_type="auto_assign",
         steps=[
             {"name": "init", "description": "Initializing auto-map"},
-            {"name": "entities", "description": f"Processing {len(entities)} entities"},
-            {
-                "name": "relationships",
-                "description": f"Processing {len(relationships)} relationships",
-            },
-            {"name": "finalize", "description": "Finalizing mappings"},
+            {"name": "prepare", "description": "Loading schema and documents"},
+            {"name": "agent", "description": "Running AI mapping agent"},
+            {"name": "finalize", "description": "Saving mappings"},
         ],
     )
     logger.info("Auto-assign: task created — id=%s", task.id)

@@ -173,7 +173,12 @@ class Mapping:
         total_items = len(entities) + len(relationships)
 
         try:
-            tm.start_task(task.id, "Starting auto-mapping agent…")
+            tm.start_task(task.id, "Initializing auto-map…")
+            tm.advance_step(task.id, "Loading schema and documents…")
+
+            documents = Mapping.fetch_documents_for_agent(domain, host, token)
+
+            tm.advance_step(task.id, "Running AI mapping agent…")
             task.result = {
                 "live_stats": True,
                 "entities_assigned": 0,
@@ -182,8 +187,6 @@ class Mapping:
                 "relationships_total": len(relationships),
             }
             logger.info("Auto-assign agent thread started — task=%s", task.id)
-
-            documents = Mapping.fetch_documents_for_agent(domain, host, token)
 
             all_items = [("entity", e) for e in entities] + [
                 ("rel", r) for r in relationships
@@ -399,6 +402,8 @@ class Mapping:
                 all_entity_mappings,
                 all_relationship_mappings,
             )
+
+            tm.advance_step(task.id, "Saving mappings…")
 
             Mapping.save_mappings_to_session(
                 session_id,
