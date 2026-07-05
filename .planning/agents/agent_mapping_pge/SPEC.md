@@ -7,9 +7,12 @@
 `agent_mapping_pge` generates entity and relationship SQL mappings for a domain
 via a Planner→Generator→Evaluator (PGE) loop. Given source metadata + an ontology
 it plans a source model, generates SQL per ontology item, and gates each mapping
-with a deterministic evaluator plus an independent semantic critic. It replaces
-the single-agent `agent_auto_assignment` mapping flow with separation of creator
-and critic, and enforces coverage from the ontology rather than LLM discretion.
+with a deterministic evaluator plus an independent semantic critic. It is an
+**additive** alternative to the single-agent `agent_auto_assignment` mapping flow:
+the legacy engine remains the default in `Mapping.auto_assign_with_agent`; this
+engine is reachable via `Mapping.auto_assign_with_pge_agent` and
+`AgentClient.run_mapping_pge`. Coverage is enforced from the ontology rather than
+LLM discretion.
 
 ## 2. Identity
 
@@ -80,5 +83,5 @@ harness-design (planner/generator/evaluator separation).
 ## 10. Sign-off
 
 - [x] Sections 4, 5, 6, 7 filled.
-- [ ] Baseline eval run URI pasted into PR body.
+- [ ] Baseline eval run URI pasted into PR body (waiver: calibration grace period per `.cursor/12-ai-feature-lifecycle.mdc`; unit + agent tests cover cold-start).
 - [x] Aggregate threshold declared in §5.
