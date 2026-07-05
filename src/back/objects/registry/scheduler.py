@@ -1283,7 +1283,7 @@ def _run_scheduled_build(
             raise ValidationError("Registry not configured")
 
         from back.core.databricks.DatabricksClient import DatabricksClient
-        from back.core.databricks.VolumeFileService import VolumeFileService
+        from back.core.databricks.uc import VolumeFileService
         from back.core.helpers import resolve_warehouse_id
 
         tm.update_progress(task.id, 5, "Loading domain from registry...")
@@ -1543,7 +1543,7 @@ def _run_scheduled_cohort_materialize(
             raise ValidationError("Registry not configured")
 
         from back.core.databricks.DatabricksClient import DatabricksClient
-        from back.core.databricks.VolumeFileService import VolumeFileService
+        from back.core.databricks.uc import VolumeFileService
         from back.core.helpers import resolve_warehouse_id
         from back.core.triplestore import get_triplestore
         from back.objects.digitaltwin import CohortService

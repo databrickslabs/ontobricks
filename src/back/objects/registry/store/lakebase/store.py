@@ -915,7 +915,7 @@ class LakebaseRegistryStore(RegistryStore):
         than aborting, so the schema grants (the part the SP can always do)
         still apply.
         """
-        from back.core.databricks.lakebase_grants import (  # noqa: PLC0415
+        from back.core.databricks.lakebase.grants import (  # noqa: PLC0415
             grant_can_use_on_project,
             grant_schema_privileges,
             grant_uc_catalog,

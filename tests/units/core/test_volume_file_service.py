@@ -1,10 +1,10 @@
-"""Tests for back.core.databricks.VolumeFileService."""
+"""Tests for back.core.databricks.uc.VolumeFileService."""
 
 import pytest
 from unittest.mock import MagicMock
 
 from back.core.databricks.DatabricksAuth import DatabricksAuth
-from back.core.databricks.VolumeFileService import VolumeFileService
+from back.core.databricks.uc import VolumeFileService
 
 
 @pytest.fixture

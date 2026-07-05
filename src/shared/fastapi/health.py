@@ -264,7 +264,7 @@ def _check_registry_volume_read(settings: Settings) -> Tuple[str, str]:
         return _WARNING, "Registry volume not configured — skipped"
 
     from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.VolumeFileService import VolumeFileService
+    from back.core.databricks.uc import VolumeFileService
 
     svc = VolumeFileService(auth=DatabricksAuth())
     if not svc.is_configured():
@@ -288,7 +288,7 @@ def _check_registry_volume_write(settings: Settings) -> Tuple[str, str]:
         return _WARNING, "Registry volume not configured — skipped"
 
     from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.VolumeFileService import VolumeFileService
+    from back.core.databricks.uc import VolumeFileService
 
     svc = VolumeFileService(auth=DatabricksAuth())
     if not svc.is_configured():
@@ -358,7 +358,7 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
     targets the same host as the actual build engine — the graph DB may be
     on a completely different Lakebase project than the registry.
     """
-    from back.core.databricks.LakebaseAuth import BranchLakebaseAuth, get_lakebase_auth
+    from back.core.databricks.lakebase import BranchLakebaseAuth, get_lakebase_auth
 
     cfg = _resolve_registry_cfg(settings)
     try:
@@ -423,7 +423,7 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
 
 
 def _check_lakebase(settings: Settings) -> Tuple[str, str]:
-    from back.core.databricks.LakebaseAuth import get_lakebase_auth
+    from back.core.databricks.lakebase import get_lakebase_auth
 
     auth = get_lakebase_auth()
     if not auth.is_available:
@@ -457,7 +457,7 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
 
 def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
     """Verify Lakebase registry privileges expected by OntoBricks runtime."""
-    from back.core.databricks.LakebaseAuth import get_lakebase_auth
+    from back.core.databricks.lakebase import get_lakebase_auth
 
     auth = get_lakebase_auth()
     if not auth.is_available:

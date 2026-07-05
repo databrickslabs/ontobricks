@@ -12,7 +12,13 @@ from typing import Any, Dict, List
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
 from shared.config.constants import MSG_WAREHOUSE_ID_REQUIRED
-from .DatabricksAuth import DatabricksAuth
+
+from ..DatabricksAuth import DatabricksAuth
+from .identifiers import (
+    quote_uc_fqn,
+    quote_uc_identifier,
+    validate_uc_identifier,
+)
 
 logger = get_logger(__name__)
 
@@ -55,11 +61,12 @@ class UnityCatalog:
     def get_schemas(self, catalog: str) -> List[str]:
         """Return schema names within *catalog*."""
         self._require_warehouse()
+        catalog_q = quote_uc_identifier(catalog, role="catalog")
         try:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SHOW SCHEMAS IN {catalog}")
+                    cur.execute(f"SHOW SCHEMAS IN {catalog_q}")
                     return [row[0] for row in cur.fetchall()]
         except Exception as exc:
             logger.exception("Error fetching schemas: %s", exc)
@@ -71,11 +78,12 @@ class UnityCatalog:
         Returns an empty list on error (callers rely on this for graceful
         degradation).
         """
+        fqn = quote_uc_fqn(catalog, schema)
         try:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SHOW TABLES IN {catalog}.{schema}")
+                    cur.execute(f"SHOW TABLES IN {fqn}")
                     return [row[1] for row in cur.fetchall()]
         except Exception as exc:
             logger.exception("Error fetching tables: %s", exc)
@@ -87,13 +95,16 @@ class UnityCatalog:
         Requires only USE SCHEMA — works even when SHOW TABLES returns empty
         due to missing SELECT grants on individual tables.  Returns -1 on error.
         """
+        catalog_q = quote_uc_identifier(catalog, role="catalog")
+        schema_val = validate_uc_identifier(schema, role="schema")
         try:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        f"SELECT count(*) FROM {catalog}.information_schema.tables "
-                        f"WHERE table_schema = '{schema}' AND table_type = 'BASE TABLE'"
+                        f"SELECT count(*) FROM {catalog_q}.information_schema.tables "
+                        "WHERE table_schema = %s AND table_type = 'BASE TABLE'",
+                        (schema_val,),
                     )
                     row = cur.fetchone()
                     return int(row[0]) if row else 0
@@ -113,11 +124,12 @@ class UnityCatalog:
         - ``can_select`` (bool): True when the query succeeds
         - ``error`` (str | None): human-readable reason when can_select is False
         """
+        fqn = quote_uc_fqn(catalog, schema, table)
         try:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SELECT * FROM {catalog}.{schema}.{table} LIMIT 0")
+                    cur.execute(f"SELECT * FROM {fqn} LIMIT 0")
             return {"can_select": True, "error": None}
         except Exception as exc:
             logger.info(
@@ -134,11 +146,12 @@ class UnityCatalog:
         Returns an empty list on error (callers rely on this for graceful
         degradation).
         """
+        fqn = quote_uc_fqn(catalog, schema, table)
         try:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"DESCRIBE {catalog}.{schema}.{table}")
+                    cur.execute(f"DESCRIBE {fqn}")
                     columns = []
                     for row in cur.fetchall():
                         columns.append(
@@ -155,17 +168,21 @@ class UnityCatalog:
 
     def get_table_comment(self, catalog: str, schema: str, table: str) -> str:
         """Return the table-level comment (empty string if none)."""
+        catalog_q = quote_uc_identifier(catalog, role="catalog")
+        catalog_val = validate_uc_identifier(catalog, role="catalog")
+        schema_val = validate_uc_identifier(schema, role="schema")
+        table_val = validate_uc_identifier(table, role="table")
         try:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
                     query = (
-                        f"SELECT comment FROM {catalog}.information_schema.tables "
-                        f"WHERE table_catalog = '{catalog}' "
-                        f"AND table_schema = '{schema}' "
-                        f"AND table_name = '{table}'"
+                        f"SELECT comment FROM {catalog_q}.information_schema.tables "
+                        "WHERE table_catalog = %s "
+                        "AND table_schema = %s "
+                        "AND table_name = %s"
                     )
-                    cur.execute(query)
+                    cur.execute(query, (catalog_val, schema_val, table_val))
                     row = cur.fetchone()
                     return row[0] if row and row[0] else ""
         except Exception as exc:
@@ -175,11 +192,12 @@ class UnityCatalog:
     def get_volumes(self, catalog: str, schema: str) -> List[str]:
         """Return volume names via ``SHOW VOLUMES``."""
         self._require_warehouse()
+        fqn = quote_uc_fqn(catalog, schema)
         try:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SHOW VOLUMES IN {catalog}.{schema}")
+                    cur.execute(f"SHOW VOLUMES IN {fqn}")
                     return [row[1] for row in cur.fetchall()]
         except Exception as exc:
             logger.exception("Error fetching volumes: %s", exc)

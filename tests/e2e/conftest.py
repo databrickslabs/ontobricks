@@ -81,18 +81,22 @@ def _e2e_explicitly_selected(config) -> bool:
     every async test collected after it. It is a *nightly-only* suite, so the
     routine command (``uv run pytest -q -m "not scenario"``) must not run it —
     but a developer who explicitly targets it (``pytest tests/e2e``,
-    ``-m e2e``, or live mode) must still get it.
+    ``pytest tests/e2e/scenarios/``, ``-m e2e``, ``-m scenario``, or live
+    mode) must still get it.
     """
     if _live_base():
         return True
-    markexpr = getattr(config.option, "markexpr", "") or ""
-    if "e2e" in markexpr:
-        return True
+    markexpr = (getattr(config.option, "markexpr", "") or "").strip()
+    # ``-m "not scenario"`` must not count as an explicit e2e/scenario request.
+    if markexpr and not markexpr.startswith("not "):
+        if "e2e" in markexpr or "scenario" in markexpr:
+            return True
     try:
         args = list(config.invocation_params.args)
     except Exception:  # noqa: BLE001 — invocation params are best-effort
         args = []
-    return any("e2e" in str(a).replace("\\", "/") for a in args)
+    normalized = [str(a).replace("\\", "/") for a in args]
+    return any("tests/e2e" in a or a.endswith("/e2e") for a in normalized)
 
 
 def _install_redirect_fix(ctx, base: str, token: str) -> None:
@@ -410,11 +414,12 @@ def pytest_collection_modifyitems(config, items):
 
     Two responsibilities:
 
-    1. **Nightly-only isolation** — tag every non-scenario e2e test with the
-       ``e2e`` marker and, unless the suite is explicitly targeted, skip it.
-       This keeps the session-scoped Playwright event loop out of routine
-       runs so it cannot poison ``pytest-asyncio`` for the unit/mcp suites
-       collected after it (see :func:`_e2e_explicitly_selected`).
+    1. **Nightly-only isolation** — tag browser e2e tests with the ``e2e``
+       marker and, unless the suite is explicitly targeted, skip **every**
+       test under ``tests/e2e/`` (including ``tests/e2e/scenarios/``).
+       ``test_full_lifecycle.py`` uses the session-scoped Playwright loop too;
+       leaving scenarios un-gated poisons ``pytest-asyncio`` for MCP/API tests
+       collected later in a bare ``pytest -q`` run.
     2. **Live-mode gating** — when ``ONTOBRICKS_LIVE_BASE`` is set, skip
        environment-specific flows always and durable-mutating flows unless the
        caller opts in with ``ONTOBRICKS_LIVE_ALLOW_MUTATING=1``.
@@ -425,8 +430,8 @@ def pytest_collection_modifyitems(config, items):
     targeted = _e2e_explicitly_selected(config)
     skip_nightly = pytest.mark.skip(
         reason="e2e browser suite is nightly-only; run it explicitly with "
-        "`uv run pytest tests/e2e` (skipped in routine runs so the "
-        "session-scoped Playwright loop can't break pytest-asyncio)."
+        "`uv run pytest tests/e2e` or `-m scenario` (skipped in routine runs "
+        "so the session-scoped Playwright loop can't break pytest-asyncio)."
     )
     for item in items:
         item_path = pathlib.Path(
@@ -434,8 +439,9 @@ def pytest_collection_modifyitems(config, items):
         ).resolve()
         under_e2e = _E2E_DIR in item_path.parents or item_path == _E2E_DIR
         under_scenarios = _SCENARIOS_DIR in item_path.parents
-        if under_e2e and not under_scenarios:
-            item.add_marker(pytest.mark.e2e)
+        if under_e2e:
+            if not under_scenarios:
+                item.add_marker(pytest.mark.e2e)
             if not targeted:
                 item.add_marker(skip_nightly)
 

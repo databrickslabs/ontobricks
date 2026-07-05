@@ -94,7 +94,7 @@ class TestDatabricksAuthHeaders:
 
 class TestVolumeFileServiceHeaders:
     def test_user_agent_present(self, monkeypatch):
-        from back.core.databricks.VolumeFileService import VolumeFileService
+        from back.core.databricks.uc import VolumeFileService
         from back.core.databricks.DatabricksAuth import DatabricksAuth
 
         auth = MagicMock(spec=DatabricksAuth)

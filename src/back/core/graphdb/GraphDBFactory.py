@@ -111,7 +111,7 @@ class GraphDBFactory:
         branch_path = str(cfg.get("lakebase_branch") or "").strip()
         try:
             if branch_path:
-                from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+                from back.core.databricks.lakebase import BranchLakebaseAuth
 
                 auth = BranchLakebaseAuth(branch_path, database_override)
                 logger.info(

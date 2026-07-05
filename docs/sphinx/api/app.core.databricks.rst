@@ -20,7 +20,15 @@ Authentication
 Lakebase Grants
 ---------------
 
-.. automodule:: back.core.databricks.lakebase_grants
+.. automodule:: back.core.databricks.lakebase.grants
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Lakebase Auth
+-------------
+
+.. automodule:: back.core.databricks.lakebase.LakebaseAuth
    :members:
    :undoc-members:
    :show-inheritance:
@@ -44,7 +52,23 @@ SQL Warehouse
 Unity Catalog
 -------------
 
-.. automodule:: back.core.databricks.UnityCatalog
+.. automodule:: back.core.databricks.uc.UnityCatalog
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+UC Identifiers
+--------------
+
+.. automodule:: back.core.databricks.uc.identifiers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+UC Domain I/O
+-------------
+
+.. automodule:: back.core.databricks.uc.UCDomainIO
    :members:
    :undoc-members:
    :show-inheritance:
@@ -52,7 +76,7 @@ Unity Catalog
 Volume File Service
 -------------------
 
-.. automodule:: back.core.databricks.VolumeFileService
+.. automodule:: back.core.databricks.uc.VolumeFileService
    :members:
    :undoc-members:
    :show-inheritance:
@@ -76,15 +100,7 @@ Dashboard Service
 Metadata Service
 ----------------
 
-.. automodule:: back.core.databricks.MetadataService
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-UC Project I/O
---------------
-
-.. automodule:: back.core.databricks.UCProjectIO
+.. automodule:: back.core.databricks.uc.MetadataService
    :members:
    :undoc-members:
    :show-inheritance:

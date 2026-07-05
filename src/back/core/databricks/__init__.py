@@ -3,18 +3,21 @@
 from functools import lru_cache
 
 from back.core.databricks.DatabricksAuth import DatabricksAuth  # noqa: F401
-from back.core.databricks.LakebaseAuth import (  # noqa: F401
+from back.core.databricks.lakebase import (  # noqa: F401
+    BranchLakebaseAuth,
     LakebaseAuth,
     get_lakebase_auth,
 )
-from back.core.databricks.DatabricksClient import DatabricksClient  # noqa: F401
 from back.core.databricks.SQLWarehouse import SQLWarehouse  # noqa: F401
-from back.core.databricks.UnityCatalog import UnityCatalog  # noqa: F401
-from back.core.databricks.VolumeFileService import VolumeFileService  # noqa: F401
+from back.core.databricks.uc import (  # noqa: F401
+    MetadataService,
+    UCDomainIO,
+    UnityCatalog,
+    VolumeFileService,
+)
+from back.core.databricks.DatabricksClient import DatabricksClient  # noqa: F401
 from back.core.databricks.WorkspaceService import WorkspaceService  # noqa: F401
 from back.core.databricks.DashboardService import DashboardService  # noqa: F401
-from back.core.databricks.MetadataService import MetadataService  # noqa: F401
-from back.core.databricks.UCDomainIO import UCDomainIO  # noqa: F401
 from back.core.databricks.DocumentExtractor import DocumentExtractor  # noqa: F401
 
 # Backward-compatible wrappers for previously module-level functions
@@ -54,6 +57,7 @@ def get_local_user_email() -> str:
 __all__ = [
     "DatabricksAuth",
     "LakebaseAuth",
+    "BranchLakebaseAuth",
     "get_lakebase_auth",
     "DatabricksClient",
     "SQLWarehouse",
