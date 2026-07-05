@@ -59,3 +59,21 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-05.log
 
 Tests: N/A (documentation-only change).
+
+## Clarify wizard monitoring error after server reload
+
+Context: Ontology wizard polling showed a generic "Error monitoring task" when the
+dev server hot-reloaded mid-generation. Tasks live in memory only; a reload drops
+the task ID (`83fad989` → 404) and kills the background generation thread.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-wizard.js
+   Detect 404 / not_found during task polling and show a clear "server restarted"
+   message instead of a generic monitoring failure.
+
+Modified files:
+- src/front/static/ontology/js/ontology-wizard.js
+- changelogs/v0.7.0/benoitcayladbx_2026-07-05.log
+
+Tests: uv run pytest -q -m "not scenario" → 3009 passed, 275 skipped, 5 deselected in 21.72s

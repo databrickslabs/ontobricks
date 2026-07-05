@@ -288,9 +288,21 @@ async function monitorWizardTask(taskId) {
             
             const response = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
             const data = await response.json();
-            
+
+            // In-memory tasks are lost when the dev server hot-reloads.
+            if (response.status === 404 || (!data.success && data.error === 'not_found')) {
+                sessionStorage.removeItem(WIZARD_TASK_KEY);
+                wizardCurrentTaskId = null;
+                disableWizardForm(false);
+                showNotification(
+                    'Generation was interrupted (server restarted). Please try again.',
+                    'warning'
+                );
+                break;
+            }
+
             if (!data.success) {
-                throw new Error('Task not found');
+                throw new Error(data.message || 'Task not found');
             }
             
             const task = data.task;
