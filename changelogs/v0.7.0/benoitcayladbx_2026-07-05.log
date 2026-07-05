@@ -107,3 +107,155 @@ Modified files:
 
 Tests: uv run pytest -q -m "not scenario" → 3151 passed, 275 skipped, 5 deselected in 26.18s
 
+## Move uc_identifiers into databricks package
+
+Context: UC identifier helpers are only used by Databricks metadata SQL; colocate
+with `UnityCatalog` under `back/core/databricks/`.
+
+Changes:
+
+1. src/back/core/databricks/uc_identifiers.py
+   Moved from `src/back/core/uc_identifiers.py`.
+2. src/back/core/databricks/UnityCatalog.py
+   Relative import from `.uc_identifiers`.
+3. src/back/core/helpers/SQLHelpers.py
+   Update delegate import path.
+
+Modified files:
+- src/back/core/databricks/uc_identifiers.py
+- src/back/core/uc_identifiers.py (deleted)
+- src/back/core/databricks/UnityCatalog.py
+- src/back/core/helpers/SQLHelpers.py
+
+Tests: uv run pytest -q tests/units/core/test_unity_catalog.py tests/units/core/test_uri_sql_helpers.py → 58 passed in 0.51s
+
+## Group Unity Catalog modules under databricks/uc/
+
+Context: Colocate UC metadata, identifier validation, and domain volume I/O in a
+dedicated subpackage instead of flat files under `databricks/`.
+
+Changes:
+
+1. src/back/core/databricks/uc/
+   New package: `UnityCatalog.py`, `UCDomainIO.py`, `identifiers.py`, `__init__.py`.
+2. src/back/core/databricks/__init__.py
+   Import UC types from `uc` after `VolumeFileService` (import-order fix).
+3. src/back/core/databricks/DatabricksClient.py, MetadataService.py
+   Import `UnityCatalog` from `.uc`.
+4. src/back/core/helpers/SQLHelpers.py, SettingsService.py, tests
+   Update import paths; fix UC mock patch target in graph-engine test.
+5. docs/sphinx/api/app.core.databricks.rst
+   Document `uc` modules; fix stale `UCProjectIO` reference.
+
+Modified files:
+- src/back/core/databricks/uc/__init__.py
+- src/back/core/databricks/uc/UnityCatalog.py
+- src/back/core/databricks/uc/UCDomainIO.py
+- src/back/core/databricks/uc/identifiers.py
+- src/back/core/databricks/__init__.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/databricks/MetadataService.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/objects/domain/SettingsService.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/settings/test_graph_engine_config.py
+- docs/sphinx/api/app.core.databricks.rst
+- src/back/core/databricks/UnityCatalog.py (deleted)
+- src/back/core/databricks/UCDomainIO.py (deleted)
+- src/back/core/databricks/uc_identifiers.py (deleted)
+
+Tests: uv run pytest -q -m "not scenario" → 3151 passed, 275 skipped, 5 deselected in 20.36s
+
+## Group Lakebase modules under databricks/lakebase/
+
+Context: Mirror the `uc/` layout — colocate Lakebase Postgres auth and grant
+primitives in a dedicated subpackage.
+
+Changes:
+
+1. src/back/core/databricks/lakebase/
+   New package: `LakebaseAuth.py`, `grants.py` (was `lakebase_grants.py`), `__init__.py`.
+2. src/back/core/databricks/__init__.py
+   Re-export `LakebaseAuth`, `BranchLakebaseAuth`, `get_lakebase_auth` from `lakebase`.
+3. src/back/core/graphdb/lakebase/provisioner.py, registry store, health, SettingsService, GraphDBFactory
+   Update import paths.
+4. tests/units/auth/test_lakebase_auth.py, tests/units/core/test_health.py
+   Update module paths and mock targets.
+5. docs/sphinx/api/app.core.databricks.rst
+   Document `lakebase` modules.
+
+Modified files:
+- src/back/core/databricks/lakebase/__init__.py
+- src/back/core/databricks/lakebase/LakebaseAuth.py
+- src/back/core/databricks/lakebase/grants.py
+- src/back/core/databricks/__init__.py
+- src/back/core/graphdb/lakebase/provisioner.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/shared/fastapi/health.py
+- src/back/objects/domain/SettingsService.py
+- src/back/core/graphdb/GraphDBFactory.py
+- tests/units/auth/test_lakebase_auth.py
+- tests/units/core/test_health.py
+- docs/sphinx/api/app.core.databricks.rst
+- src/back/core/databricks/LakebaseAuth.py (deleted)
+- src/back/core/databricks/lakebase_grants.py (deleted)
+
+Tests: uv run pytest -q -m "not scenario" → 3151 passed, 275 skipped, 5 deselected in 20.71s
+
+## Move VolumeFileService and MetadataService into databricks/uc/
+
+Context: Complete the UC subpackage — volume I/O and metadata management belong
+alongside `UnityCatalog` and `UCDomainIO`.
+
+Changes:
+
+1. src/back/core/databricks/uc/VolumeFileService.py, MetadataService.py
+   Moved from `databricks/` root; parent imports use `..DatabricksAuth`, `..constants`.
+2. src/back/core/databricks/uc/__init__.py
+   Export `VolumeFileService` and `MetadataService`.
+3. src/back/core/databricks/__init__.py, DatabricksClient.py, UCDomainIO.py
+   Update import paths.
+4. health.py, scheduler.py, tests, sphinx
+   Point direct imports at `back.core.databricks.uc`.
+
+Modified files:
+- src/back/core/databricks/uc/VolumeFileService.py
+- src/back/core/databricks/uc/MetadataService.py
+- src/back/core/databricks/uc/__init__.py
+- src/back/core/databricks/uc/UCDomainIO.py
+- src/back/core/databricks/__init__.py
+- src/back/core/databricks/DatabricksClient.py
+- src/shared/fastapi/health.py
+- src/back/objects/registry/scheduler.py
+- tests/units/core/test_health.py
+- tests/units/core/test_volume_file_service.py
+- tests/units/core/test_uc_file_service.py
+- tests/units/core/test_metadata_mgt.py
+- tests/units/test_user_agent.py
+- docs/sphinx/api/app.core.databricks.rst
+- src/back/core/databricks/VolumeFileService.py (deleted)
+- src/back/core/databricks/MetadataService.py (deleted)
+
+Tests: uv run pytest -q -m "not scenario" → 3151 passed, 275 skipped, 5 deselected in 21.02s
+
+## Fix full-suite failures from Playwright/asyncio event-loop clash
+
+Context: A bare ``pytest -q`` run failed 51 MCP/API tests with
+``RuntimeError: Cannot run the event loop while another loop is running``.
+``tests/e2e/scenarios/test_full_lifecycle.py`` was not gated by the nightly
+e2e skip (only non-scenario e2e tests were), so it started the session-scoped
+Playwright loop during routine full-suite runs.
+
+Changes:
+
+1. tests/e2e/conftest.py
+   Skip **all** ``tests/e2e/**`` tests (including scenarios) unless e2e/scenario
+   is explicitly targeted; treat ``-m "not scenario"`` as non-explicit.
+2. tests/units/test_e2e_collection_gating.py
+   Unit tests for ``_e2e_explicitly_selected`` marker/path detection.
+
+Modified files:
+- tests/e2e/conftest.py
+- tests/units/test_e2e_collection_gating.py
+
+Tests: uv run pytest -q → 3156 passed, 280 skipped in 26.93s

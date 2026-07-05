@@ -4,10 +4,10 @@ import importlib
 import pytest
 from unittest.mock import MagicMock, Mock, patch
 
-_unity_catalog_mod = importlib.import_module("back.core.databricks.UnityCatalog")
+_unity_catalog_mod = importlib.import_module("back.core.databricks.uc.UnityCatalog")
 
 from back.core.databricks.DatabricksAuth import DatabricksAuth
-from back.core.databricks.UnityCatalog import UnityCatalog
+from back.core.databricks.uc import UnityCatalog
 from back.core.errors import ValidationError
 
 

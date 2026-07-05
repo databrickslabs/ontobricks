@@ -25,13 +25,13 @@ class SQLHelpers:
 
     @staticmethod
     def validate_uc_identifier(name: str, *, role: str = "identifier") -> str:
-        from back.core.uc_identifiers import validate_uc_identifier
+        from back.core.databricks.uc.identifiers import validate_uc_identifier
 
         return validate_uc_identifier(name, role=role)
 
     @staticmethod
     def quote_uc_identifier(name: str, *, role: str = "identifier") -> str:
-        from back.core.uc_identifiers import quote_uc_identifier
+        from back.core.databricks.uc.identifiers import quote_uc_identifier
 
         return quote_uc_identifier(name, role=role)
 
@@ -41,7 +41,7 @@ class SQLHelpers:
         schema: str,
         table: str | None = None,
     ) -> str:
-        from back.core.uc_identifiers import quote_uc_fqn
+        from back.core.databricks.uc.identifiers import quote_uc_fqn
 
         return quote_uc_fqn(catalog, schema, table)
 

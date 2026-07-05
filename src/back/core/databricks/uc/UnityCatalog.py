@@ -11,13 +11,14 @@ from typing import Any, Dict, List
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
-from back.core.uc_identifiers import (
+from shared.config.constants import MSG_WAREHOUSE_ID_REQUIRED
+
+from ..DatabricksAuth import DatabricksAuth
+from .identifiers import (
     quote_uc_fqn,
     quote_uc_identifier,
     validate_uc_identifier,
 )
-from shared.config.constants import MSG_WAREHOUSE_ID_REQUIRED
-from .DatabricksAuth import DatabricksAuth
 
 logger = get_logger(__name__)
 

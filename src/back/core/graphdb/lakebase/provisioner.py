@@ -37,7 +37,7 @@ import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from back.core.databricks.lakebase_grants import (
+from back.core.databricks.lakebase.grants import (
     grant_can_use_on_project,
     grant_schema_privileges,
     grant_uc_catalog,

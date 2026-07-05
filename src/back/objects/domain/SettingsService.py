@@ -1544,7 +1544,7 @@ class SettingsService:
         import os
 
         from back.core.databricks import get_lakebase_auth
-        from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+        from back.core.databricks.lakebase import BranchLakebaseAuth
         from back.core.graphdb.lakebase.LakebaseBase import (
             default_schema,
             validate_graph_schema,
@@ -1712,7 +1712,7 @@ class SettingsService:
                     "Configure a SQL warehouse under Settings → Databricks first."
                 )
             from back.core.databricks.DatabricksAuth import DatabricksAuth
-            from back.core.databricks.UnityCatalog import UnityCatalog
+            from back.core.databricks.uc import UnityCatalog
 
             auth = DatabricksAuth(host=host, token=token, warehouse_id=warehouse_id)
             uc = UnityCatalog(auth)
@@ -2054,7 +2054,7 @@ class SettingsService:
         Returns ``(auth, database)``; raises on irrecoverable failures.
         """
         from back.core.databricks import get_lakebase_auth
-        from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+        from back.core.databricks.lakebase import BranchLakebaseAuth
 
         branch_path = form_branch_path.strip()
         database = form_database.strip()
@@ -2733,7 +2733,7 @@ class SettingsService:
                     "Configure a SQL warehouse under Settings → Databricks first."
                 )
             from back.core.databricks.DatabricksAuth import DatabricksAuth
-            from back.core.databricks.UnityCatalog import UnityCatalog
+            from back.core.databricks.uc import UnityCatalog
 
             auth = DatabricksAuth(host=host, token=token, warehouse_id=warehouse_id)
             uc = UnityCatalog(auth)

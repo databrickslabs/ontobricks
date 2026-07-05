@@ -1,4 +1,4 @@
-"""Unity Catalog SQL identifier validation (import-safe for databricks subpackage)."""
+"""Unity Catalog SQL identifier validation for Databricks metadata queries."""
 
 from __future__ import annotations
 
