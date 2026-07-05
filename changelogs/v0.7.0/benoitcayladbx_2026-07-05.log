@@ -1,0 +1,61 @@
+## Backport PR #83 — PGE Evaluator stage for owl-generator (onto develop)
+
+Context: PR #83 added a Planner→Generator→Evaluator loop to `agent_owl_generator`:
+after the pitfall-tool loop, deterministic Stage-1 checks (orphan classes, dangling
+domain/range, naming violations, duplicate classes) feed bounded retry hints back to
+the model. The branch was rebased onto `develop` (not `master`), reconciling with the
+existing 8192-token budget, truncation guard, and class-cap guard landed in 0.7.0.
+
+Changes:
+
+1. src/agents/agent_owl_generator/engine.py
+   Merged PGE evaluator stage (`_evaluate_ontology_stage`, `MAX_OWL_EVAL_ROUNDS`),
+   ATTRIBUTE COVERAGE prompt, and `owl_eval_max_rounds` option; kept `_GEN_MAX_TOKENS=8192`.
+2. src/agents/pge_eval/__init__.py
+   New package root for intrinsic PGE evaluation primitives.
+3. src/agents/pge_eval/normalize.py
+   Shape normalisation and footprint helpers (stdlib-only).
+4. src/agents/pge_eval/ontology_metrics.py
+   `evaluate_ontology()` — deterministic Stage-1 metrics and retry hints.
+5. tests/units/pge_eval/
+   Unit tests for ontology metrics and evaluator stage wiring.
+6. tests/units/agents/test_agent_owl_generator_truncation.py
+   Structurally valid completion fixture; disable PGE loop in isolated guard tests.
+7. tests/units/agents/test_agent_owl_generator_class_cap.py
+   Disable PGE loop via `owl_eval_max_rounds: 0` when isolating class-cap guard.
+8. .planning/agents/agent_owl_generator/SPEC.md
+   Document PGE evaluator failure mode and `max_owl_eval_rounds`.
+9. tests/eval/datasets/agent_owl_generator/regression.jsonl
+   Add `regression-pge-orphan-class-003` for Stage-1 structural defects.
+
+Modified files:
+- src/agents/agent_owl_generator/engine.py
+- src/agents/pge_eval/__init__.py
+- src/agents/pge_eval/normalize.py
+- src/agents/pge_eval/ontology_metrics.py
+- tests/units/pge_eval/__init__.py
+- tests/units/pge_eval/_fixtures.py
+- tests/units/pge_eval/test_ontology_metrics.py
+- tests/units/pge_eval/test_owl_evaluator_stage.py
+- tests/units/agents/test_agent_owl_generator_truncation.py
+- tests/units/agents/test_agent_owl_generator_class_cap.py
+- .planning/agents/agent_owl_generator/SPEC.md
+- tests/eval/datasets/agent_owl_generator/regression.jsonl
+- changelogs/v0.7.0/benoitcayladbx_2026-07-05.log
+
+Tests: uv run pytest -q -m "not scenario" → 3009 passed, 275 skipped, 5 deselected in 20.35s
+
+## Add Fiifi Botchway to contributors
+
+Context: Credit the author of the original PGE evaluator work (PR #83), backported in PR #99.
+
+Changes:
+
+1. CONTRIBUTORS.md
+   Add Fiifi Botchway ([@FiifiB](https://github.com/FiifiB)) to the Core Team table.
+
+Modified files:
+- CONTRIBUTORS.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-05.log
+
+Tests: N/A (documentation-only change).

@@ -8,8 +8,8 @@ ontology (0 classes), which the generation wizard polled on until timeout.
 ``call_serving_endpoint`` is patched to return scripted responses carrying a
 ``finish_reason`` so we can drive the guard without a live endpoint. The
 generation-quality (pitfall) loop is disabled via
-``options={"generation_max_iterations": 0}`` so a complete Turtle answer is
-accepted directly.
+``options={"generation_max_iterations": 0, "owl_eval_max_rounds": 0}`` so a
+complete Turtle answer is accepted directly without the pitfall or PGE loops.
 """
 
 from __future__ import annotations
@@ -34,8 +34,13 @@ _CRM_GUIDELINE = (
 _COMPLETE_TURTLE = (
     "@prefix : <http://ex.org/crm#> .\n"
     "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+    "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+    "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
     ":Customer a owl:Class .\n"
     ":Contact a owl:Class .\n"
+    ":hasContact a owl:ObjectProperty ; rdfs:domain :Customer ; rdfs:range :Contact .\n"
+    ":firstName a owl:DatatypeProperty ; rdfs:domain :Customer ; rdfs:range xsd:string .\n"
+    ":email a owl:DatatypeProperty ; rdfs:domain :Contact ; rdfs:range xsd:string .\n"
 )
 
 
@@ -64,7 +69,7 @@ def _run(responses):
             registry={"catalog": "main", "schema": "ob", "volume": "documents"},
             metadata={"tables": []},
             guidelines=_CRM_GUIDELINE,
-            options={"generation_max_iterations": 0},
+            options={"generation_max_iterations": 0, "owl_eval_max_rounds": 0},
             base_uri="http://ex.org/crm#",
         )
 

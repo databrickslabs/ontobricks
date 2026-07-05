@@ -10,6 +10,7 @@ Thank you to everyone who has contributed to OntoBricks!
 | Dermot Smyth | [@dermotsmyth-db](https://github.com/dermotsmyth-db) | Contributor |
 | Hugues Journeau | [@hourdays](https://github.com/hourdays) | Contributor |
 | Eric Poilvet | [@epoilvet](https://github.com/epoilvet) | Contributor |
+| Fiifi Botchway | [@FiifiB](https://github.com/FiifiB) | Contributor |
 
 ## How to Contribute
 
