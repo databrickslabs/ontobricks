@@ -1,0 +1,34 @@
+## Add live activity log to ontology wizard spinner
+
+Context: During AI ontology generation the wizard overlay only showed the latest
+status line. Agent `on_step` messages were logged server-side but overwritten on
+each poll, so users could not follow the process. This adds a structured step
+checklist and a scrollable activity trace on the spinner page.
+
+Changes:
+
+1. src/back/core/task_manager/models.py
+   Add `TaskLogEntry` and `log_entries` on `Task`; expose via `to_dict()`.
+2. src/back/core/task_manager/TaskManager.py
+   Append deduplicated log lines in `start_task`, `update_progress`, `advance_step`,
+   `complete_task`, and `fail_task` (skip `__iter__:` refinement payloads).
+3. src/api/routers/internal/ontology.py
+   Advance wizard task steps through init → gather → generate before the agent runs.
+4. src/front/static/ontology/js/ontology-wizard.js
+   Render step checklist + activity log during polling; wire `renderAgentStepsLog`
+   on completion.
+5. src/front/static/global/css/components.css
+   Widen overlay and style scrollable activity log panel.
+6. tests/units/core/test_task_manager.py
+   Cover log accumulation, deduplication, and `__iter__:` filtering.
+
+Modified files:
+- src/back/core/task_manager/models.py
+- src/back/core/task_manager/TaskManager.py
+- src/back/core/task_manager/__init__.py
+- src/api/routers/internal/ontology.py
+- src/front/static/ontology/js/ontology-wizard.js
+- src/front/static/global/css/components.css
+- tests/units/core/test_task_manager.py
+
+Tests: uv run pytest -q -m "not scenario" → 3137 passed, 275 skipped, 5 deselected in 25.12s

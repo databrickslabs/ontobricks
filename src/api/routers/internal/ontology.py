@@ -1737,7 +1737,9 @@ async def generate_ontology_async(
 
     def run_generation():
         try:
-            tm.start_task(task.id, "Starting agent…")
+            tm.start_task(task.id, "Initializing agent…")
+            tm.advance_step(task.id, "Gathering context (metadata & documents)…")
+            tm.advance_step(task.id, "Generating ontology with AI…")
 
             def on_step(msg: str):
                 tm.update_progress(task.id, task.progress, msg)

@@ -115,7 +115,7 @@ function disableWizardForm(disabled) {
             overlay.id = 'wizardFormOverlay';
             overlay.className = 'wizard-form-overlay';
             overlay.innerHTML = `
-                <div class="text-center" style="max-width: 400px;">
+                <div class="text-center wizard-progress-panel" style="max-width: 560px; width: 100%;">
                     <div class="ob-loading-spinner">
                         <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
                             <g class="ob-ring">
@@ -140,11 +140,18 @@ function disableWizardForm(disabled) {
                         </svg>
                         <span class="ob-spinner-label" id="wizardOverlayTitle">Generating ontology...</span>
                     </div>
-                    <p id="wizardOverlayMessage" class="text-muted mt-2 mb-3 small">Your ontology is being generated...</p>
-                    <div class="progress mb-2" style="height: 6px; max-width: 300px; margin: 0 auto;">
+                    <p id="wizardOverlayMessage" class="text-muted mt-2 mb-2 small">Your ontology is being generated...</p>
+                    <div class="progress mb-3" style="height: 6px; max-width: 300px; margin: 0 auto;">
                         <div id="wizardOverlayProgress" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
                     </div>
-                    <small id="wizardOverlayStep" class="text-muted"></small>
+                    <div id="wizardStepLogPanel" class="wizard-step-log-panel text-start mb-3">
+                        <p class="small fw-semibold text-muted mb-1"><i class="bi bi-list-check me-1"></i>Progress</p>
+                        <ul id="wizardStepLog" class="list-group list-group-flush small mb-0"></ul>
+                    </div>
+                    <div id="wizardActivityLogPanel" class="wizard-activity-log-panel text-start">
+                        <p class="small fw-semibold text-muted mb-1"><i class="bi bi-terminal me-1"></i>Activity</p>
+                        <div id="wizardActivityLog" class="wizard-activity-log"></div>
+                    </div>
                 </div>
             `;
             form.style.position = 'relative';
@@ -166,13 +173,11 @@ function disableWizardForm(disabled) {
  */
 function showWizardTaskProgress(task) {
     const progressBar = document.getElementById('wizardOverlayProgress');
-    const stepEl = document.getElementById('wizardOverlayStep');
     const messageEl = document.getElementById('wizardOverlayMessage');
 
     if (progressBar) progressBar.style.width = task.progress + '%';
-    if (stepEl && task.steps && task.current_step < task.steps.length) {
-        stepEl.textContent = task.steps[task.current_step].description;
-    }
+    renderWizardStepLog(task);
+    renderWizardActivityLog(task);
 
     const msg = task.message || '';
 
@@ -189,6 +194,96 @@ function showWizardTaskProgress(task) {
     }
 
     if (messageEl) messageEl.textContent = msg || 'Processing...';
+
+    if (task.status === 'completed' && task.result && task.result.agent_steps) {
+        _mountWizardAgentStepsLog(task.result.agent_steps);
+    }
+}
+
+function _wizardEscHtml(s) {
+    return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+/**
+ * Structured step checklist (init → gather → generate → process → finalize).
+ */
+function renderWizardStepLog(task) {
+    const list = document.getElementById('wizardStepLog');
+    if (!list || !task || !Array.isArray(task.steps)) return;
+
+    const icon = (status) => {
+        if (status === 'completed') return '<i class="bi bi-check-circle-fill text-success me-2"></i>';
+        if (status === 'running') return '<span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>';
+        if (status === 'failed') return '<i class="bi bi-x-circle-fill text-danger me-2"></i>';
+        if (status === 'skipped') return '<i class="bi bi-dash-circle text-muted me-2"></i>';
+        return '<i class="bi bi-circle text-muted me-2"></i>';
+    };
+
+    const rows = task.steps.map((step) => {
+        let detail = '';
+        if (step.status === 'running' && task.message && !task.message.startsWith('__iter__:')) {
+            detail = `<div class="small text-muted ms-4">${_wizardEscHtml(task.message)}</div>`;
+        } else if (step.status === 'failed' && task.error) {
+            detail = `<div class="small text-danger ms-4">${_wizardEscHtml(task.error)}</div>`;
+        }
+        return `<li class="list-group-item bg-transparent px-0 py-1 border-0">` +
+            `<div class="d-flex align-items-center">${icon(step.status)}` +
+            `<span>${_wizardEscHtml(step.description || step.name)}</span></div>${detail}</li>`;
+    });
+    list.innerHTML = rows.join('');
+}
+
+/**
+ * Append-only activity log built from task.log_entries.
+ */
+function renderWizardActivityLog(task) {
+    const container = document.getElementById('wizardActivityLog');
+    if (!container || !task) return;
+
+    const entries = task.log_entries || [];
+    const isActive = task.status === 'running' || task.status === 'pending';
+
+    if (!entries.length) {
+        container.innerHTML = '<div class="small text-muted">Waiting for activity…</div>';
+        return;
+    }
+
+    const rows = entries.map((entry, idx) => {
+        const isLast = idx === entries.length - 1;
+        const running = isActive && isLast;
+        const icon = running
+            ? '<span class="spinner-border spinner-border-sm text-primary flex-shrink-0" role="status" style="width:1rem;height:1rem;margin-top:2px;"></span>'
+            : '<i class="bi bi-check-circle-fill text-success flex-shrink-0 mt-1"></i>';
+        return `<div class="wizard-activity-row d-flex align-items-start gap-2 mb-1 small">` +
+            `${icon}<span class="flex-grow-1">${_wizardEscHtml(entry.message)}</span></div>`;
+    });
+    container.innerHTML = rows.join('');
+    container.scrollTop = container.scrollHeight;
+}
+
+function _mountWizardAgentStepsLog(steps) {
+    const panel = document.getElementById('wizardActivityLogPanel');
+    if (!panel || panel.querySelector('#wizardAgentStepsMount')) return;
+    const mount = document.createElement('div');
+    mount.id = 'wizardAgentStepsMount';
+    mount.innerHTML = renderAgentStepsLog(steps);
+    panel.appendChild(mount);
+    const details = mount.querySelector('details');
+    if (details) details.open = true;
+}
+
+function _clearWizardProgressPanels() {
+    const stepLog = document.getElementById('wizardStepLog');
+    const activityLog = document.getElementById('wizardActivityLog');
+    const agentMount = document.getElementById('wizardAgentStepsMount');
+    const refinement = document.getElementById('wizardRefinementPanel');
+    if (stepLog) stepLog.innerHTML = '';
+    if (activityLog) activityLog.innerHTML = '';
+    if (agentMount) agentMount.remove();
+    if (refinement) refinement.remove();
 }
 
 /**
@@ -717,6 +812,7 @@ async function generateOntologyFromWizard() {
         
         // Disable the form and show progress overlay
         disableWizardForm(true);
+        _clearWizardProgressPanels();
         
         // Trigger refresh of task tracker
         if (typeof refreshTasks === 'function') {
