@@ -72,3 +72,38 @@ Modified files:
 - src/back/objects/mapping/Mapping.py
 
 Tests: uv run pytest -q -m "not scenario" → 3137 passed, 275 skipped, 5 deselected in 20.17s
+
+## Harden Unity Catalog SQL against identifier injection
+
+Context: External PR #53 flagged f-string SQL in `UnityCatalog` (catalog/schema/table
+from API query params). The finding was valid but the patch was stale and incomplete.
+This adds centralized UC identifier validation, backtick-quoted FQNs, parameterized
+literals where supported, coverage for newer probe methods, and restores the
+`DatabricksAuth` CloudFetch recursion guard dropped in the #61 revert.
+
+Changes:
+
+1. src/back/core/uc_identifiers.py
+   New module: validate/quote UC segments (`^[a-zA-Z_][a-zA-Z0-9_-]*$`, reject `--`).
+2. src/back/core/databricks/UnityCatalog.py
+   Guard all warehouse SQL paths; parameterize `get_table_comment` and
+   `probe_schema_has_tables` value clauses.
+3. src/back/core/helpers/SQLHelpers.py
+   Thin delegates to `uc_identifiers` for reuse elsewhere.
+4. src/back/core/databricks/DatabricksAuth.py
+   Restore `_resolving_cloud_fetch` guard from #29.
+5. tests/units/core/test_unity_catalog.py
+   Update SQL expectations; add injection, probe, and select-permission tests.
+6. tests/units/core/test_uri_sql_helpers.py
+   Cover UC identifier helpers via `SQLHelpers` delegates.
+
+Modified files:
+- src/back/core/uc_identifiers.py
+- src/back/core/databricks/UnityCatalog.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/core/databricks/DatabricksAuth.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/core/test_uri_sql_helpers.py
+
+Tests: uv run pytest -q -m "not scenario" → 3151 passed, 275 skipped, 5 deselected in 26.18s
+
