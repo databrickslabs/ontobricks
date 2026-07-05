@@ -44,3 +44,18 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-05.log
 
 Tests: uv run pytest -q -m "not scenario" → 3009 passed, 275 skipped, 5 deselected in 20.35s
+
+## Add Fiifi Botchway to contributors
+
+Context: Credit the author of the original PGE evaluator work (PR #83), backported in PR #99.
+
+Changes:
+
+1. CONTRIBUTORS.md
+   Add Fiifi Botchway ([@FiifiB](https://github.com/FiifiB)) to the Core Team table.
+
+Modified files:
+- CONTRIBUTORS.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-05.log
+
+Tests: N/A (documentation-only change).
