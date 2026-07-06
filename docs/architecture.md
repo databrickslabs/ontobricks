@@ -367,12 +367,13 @@ src/
 │   │   │   ├── DatabricksAuth.py       # Authentication & utility functions
 │   │   │   ├── DatabricksClient.py     # Thin facade
 │   │   │   ├── SQLWarehouse.py         # Query execution, DDL (connection-pooled)
-│   │   │   ├── UnityCatalog.py         # Catalogs, schemas, tables, volumes
-│   │   │   ├── UCDomainIO.py           # Domain I/O on UC Volumes
-│   │   │   ├── VolumeFileService.py    # File I/O on UC Volumes
+│   │   │   ├── unity_catalog/          # Unity Catalog metadata, volumes, domain I/O
+│   │   │   │   ├── UnityCatalog.py     # Catalogs, schemas, tables, volumes
+│   │   │   │   ├── VolumeFileService.py # File I/O on UC Volumes
+│   │   │   │   ├── UCDomainIO.py       # Domain I/O on UC Volumes
+│   │   │   │   └── MetadataService.py  # Table metadata
 │   │   │   ├── WorkspaceService.py     # SCIM users/groups
 │   │   │   ├── DashboardService.py     # Lakeview + legacy dashboards
-│   │   │   └── MetadataService.py      # Table metadata
 │   │   │
 │   │   ├── w3c/                        # W3C semantic web standards
 │   │   │   ├── owl/                    # OntologyGenerator, OntologyParser

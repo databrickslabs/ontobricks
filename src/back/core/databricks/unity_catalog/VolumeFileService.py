@@ -10,8 +10,12 @@ from urllib.parse import quote
 from typing import Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
-from .constants import _REQUEST_TIMEOUT, FS_FILES_PATH, FS_DIRS_PATH
-from .DatabricksAuth import DatabricksAuth
+from back.core.databricks.DatabricksAuth import DatabricksAuth
+from back.core.databricks.unity_catalog.constants import (
+    FS_DIRS_PATH,
+    FS_FILES_PATH,
+    _REQUEST_TIMEOUT,
+)
 from shared.config.constants import HTTP_USER_AGENT
 
 logger = get_logger(__name__)

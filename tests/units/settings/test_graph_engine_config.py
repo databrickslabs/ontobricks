@@ -16,7 +16,7 @@ from back.objects.domain.SettingsService import SettingsService
 
 _svc_module = importlib.import_module("back.objects.domain.SettingsService")
 _db_auth_mod = importlib.import_module("back.core.databricks.DatabricksAuth")
-_uc_mod = importlib.import_module("back.core.databricks.UnityCatalog")
+_uc_mod = importlib.import_module("back.core.databricks.unity_catalog.UnityCatalog")
 
 
 REGISTRY_CFG = {"catalog": "cat", "schema": "sch", "volume": "vol"}

@@ -29,3 +29,38 @@ Modified files:
 - `Makefile`
 
 Tests: `uv run pytest -q -m "not scenario"` → 66 passed (changed modules); live scenario campaign → 4 passed, 1 skipped in 888s (13 validation checks passed).
+
+## Group Unity Catalog code under `databricks/unity_catalog`
+
+Context: UC metadata browsing, volume file I/O, domain JSON I/O, and table
+metadata management lived as loose modules next to unrelated Databricks
+facades. Consolidate them into a dedicated subpackage (same pattern as
+`lakebase/`).
+
+Changes:
+
+1. `src/back/core/databricks/unity_catalog/` (new package)
+   Move `UnityCatalog`, `VolumeFileService`, `UCDomainIO`, `MetadataService`;
+   add package `__init__.py` and UC Files API constants.
+2. `src/back/core/databricks/__init__.py`, `DatabricksClient.py`
+   Re-export UC types from `unity_catalog`.
+3. `src/back/core/databricks/constants.py`
+   Drop `FS_FILES_PATH` / `FS_DIRS_PATH` (now in `unity_catalog/constants.py`).
+4. Tests, Sphinx (`app.core.databricks.rst`), `docs/architecture.md`
+   Update import paths and API docs.
+
+Modified files:
+- `src/back/core/databricks/unity_catalog/` (new)
+- `src/back/core/databricks/__init__.py`
+- `src/back/core/databricks/DatabricksClient.py`
+- `src/back/core/databricks/constants.py`
+- `src/shared/fastapi/health.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/back/objects/registry/scheduler.py`
+- `src/back/objects/registry/store/__init__.py`
+- `tests/units/core/test_*.py`, `tests/units/settings/test_graph_engine_config.py`
+- `tests/fixtures/factories/databricks/volumes_mock.py`
+- `docs/sphinx/api/app.core.databricks.rst`
+- `docs/architecture.md`, `docs/development.md`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3163 passed, 275 skipped, 0 failed in 29.4s.

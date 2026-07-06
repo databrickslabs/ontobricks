@@ -10,8 +10,7 @@ from typing import Optional
 
 from .DatabricksAuth import DatabricksAuth
 from .SQLWarehouse import SQLWarehouse
-from .UnityCatalog import UnityCatalog
-from .VolumeFileService import VolumeFileService
+from back.core.databricks.unity_catalog import UnityCatalog, VolumeFileService
 from .WorkspaceService import WorkspaceService
 from .DashboardService import DashboardService
 

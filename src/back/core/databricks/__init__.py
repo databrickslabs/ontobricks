@@ -9,12 +9,14 @@ from back.core.databricks.lakebase import (  # noqa: F401
 )
 from back.core.databricks.DatabricksClient import DatabricksClient  # noqa: F401
 from back.core.databricks.SQLWarehouse import SQLWarehouse  # noqa: F401
-from back.core.databricks.UnityCatalog import UnityCatalog  # noqa: F401
-from back.core.databricks.VolumeFileService import VolumeFileService  # noqa: F401
+from back.core.databricks.unity_catalog import (  # noqa: F401
+    MetadataService,
+    UCDomainIO,
+    UnityCatalog,
+    VolumeFileService,
+)
 from back.core.databricks.WorkspaceService import WorkspaceService  # noqa: F401
 from back.core.databricks.DashboardService import DashboardService  # noqa: F401
-from back.core.databricks.MetadataService import MetadataService  # noqa: F401
-from back.core.databricks.UCDomainIO import UCDomainIO  # noqa: F401
 from back.core.databricks.DocumentExtractor import DocumentExtractor  # noqa: F401
 
 # Backward-compatible wrappers for previously module-level functions

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from back.core.databricks import VolumeFileService
+from back.core.databricks.unity_catalog.VolumeFileService import VolumeFileService
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.logging import get_logger
 

@@ -264,7 +264,7 @@ def _check_registry_volume_read(settings: Settings) -> Tuple[str, str]:
         return _WARNING, "Registry volume not configured — skipped"
 
     from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.VolumeFileService import VolumeFileService
+    from back.core.databricks.unity_catalog.VolumeFileService import VolumeFileService
 
     svc = VolumeFileService(auth=DatabricksAuth())
     if not svc.is_configured():
@@ -288,7 +288,7 @@ def _check_registry_volume_write(settings: Settings) -> Tuple[str, str]:
         return _WARNING, "Registry volume not configured — skipped"
 
     from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.VolumeFileService import VolumeFileService
+    from back.core.databricks.unity_catalog.VolumeFileService import VolumeFileService
 
     svc = VolumeFileService(auth=DatabricksAuth())
     if not svc.is_configured():

@@ -7,8 +7,8 @@ Handles loading, merging, and managing Unity Catalog metadata
 from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
-from .DatabricksAuth import DatabricksAuth
-from .UnityCatalog import UnityCatalog
+from back.core.databricks.DatabricksAuth import DatabricksAuth
+from back.core.databricks.unity_catalog.UnityCatalog import UnityCatalog
 
 logger = get_logger(__name__)
 

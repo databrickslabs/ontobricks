@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
 from shared.config.constants import MSG_WAREHOUSE_ID_REQUIRED
-from .DatabricksAuth import DatabricksAuth
+from back.core.databricks.DatabricksAuth import DatabricksAuth
 
 logger = get_logger(__name__)
 
