@@ -51,15 +51,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     ? '<i class="bi bi-lock-fill text-muted me-1"></i> Configured via Databricks App resource binding (read-only)'
                     : '<i class="bi bi-gear text-muted me-1"></i> Configured via environment variables (<code>.env</code>) — restart the app to change';
             }
-            const btnInit = document.getElementById('btnInitRegistry');
-            if (btnInit) {
-                if (registryCfg.configured) {
-                    btnInit.style.display = 'none';
-                } else {
-                    btnInit.style.display = '';
-                    btnInit.disabled = false;
-                }
-            }
+            updateRegistryLabel();
         } catch (e) {
             console.error('Error loading registry config:', e);
             if (label) {
@@ -145,111 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // Auto-load row counts the first time the panel is displayed,
-        // then keep them around — admins can re-fetch via the Refresh
-        // button. Skipped when not bound (no point hammering the API).
-        if (lb.bound && !panel.dataset.statsLoaded) {
-            panel.dataset.statsLoaded = '1';
-            loadLakebaseStats();
-        }
     }
-
-    async function loadLakebaseStats() {
-        const tbody = document.getElementById('lakebaseStatsBody');
-        const msg = document.getElementById('lakebaseStatsMessage');
-        const btn = document.getElementById('btnRefreshLakebaseStats');
-        if (!tbody) return;
-
-        if (btn) btn.disabled = true;
-        tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2"><span class="spinner-border spinner-border-sm me-1"></span> Loading row counts…</td></tr>';
-        if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
-
-        try {
-            const resp = await fetch('/settings/registry/lakebase-stats', { credentials: 'same-origin' });
-            const data = await resp.json();
-            if (!data.success) {
-                tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">'
-                    + '<i class="bi bi-exclamation-triangle text-warning me-1"></i> '
-                    + escapeHtml(data.message || 'Could not load Lakebase stats')
-                    + '</td></tr>';
-                return;
-            }
-            const rows = Array.isArray(data.tables) ? data.tables : [];
-            if (!rows.length) {
-                tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">No tables to report.</td></tr>';
-                return;
-            }
-            const total = rows.reduce((s, r) => s + (Number(r.rows) || 0), 0);
-            tbody.innerHTML = rows.map(r => (
-                '<tr>'
-                + '<td class="ps-0 font-monospace">' + escapeHtml(r.name) + '</td>'
-                + '<td class="text-end pe-0 font-monospace">' + (Number(r.rows) || 0).toLocaleString() + '</td>'
-                + '</tr>'
-            )).join('') + (
-                '<tr class="border-top">'
-                + '<td class="ps-0 fw-semibold">Total</td>'
-                + '<td class="text-end pe-0 fw-semibold font-monospace">' + total.toLocaleString() + '</td>'
-                + '</tr>'
-            );
-            if (msg) {
-                if (data.initialized) {
-                    msg.style.display = '';
-                    msg.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i> Schema <code>'
-                        + escapeHtml(data.schema || '') + '</code> initialized.';
-                } else {
-                    msg.style.display = '';
-                    // Reason-aware copy: ``no_usage`` is a permission
-                    // problem (admin must run bootstrap-lakebase-perms),
-                    // not a bare "not initialised" — surfacing it
-                    // explicitly avoids the misleading "0 rows /
-                    // not initialised" trap when data is actually
-                    // present but the SP can't see it.
-                    //
-                    // For ``no_usage`` we prefer the backend ``message``
-                    // verbatim because it now carries the live
-                    // ``(database, role, schema_exists)`` triplet the
-                    // probe ran against — operators need that to spot
-                    // grants that landed on a different database than
-                    // the one bound by the Apps ``postgres`` resource.
-                    const reason = data.reason || '';
-                    const detail = data.message || '';
-                    let inner;
-                    if (reason === 'no_usage') {
-                        if (detail) {
-                            inner = '<i class="bi bi-shield-exclamation text-danger me-1"></i> '
-                                + escapeHtml(detail);
-                        } else {
-                            inner = '<i class="bi bi-shield-exclamation text-danger me-1"></i> Schema <code>'
-                                + escapeHtml(data.schema || '') + '</code> visible but the app service principal '
-                                + 'lacks <code>USAGE</code>. Run <code>scripts/bootstrap-lakebase-perms.sh</code> '
-                                + '(or grant manually) and refresh.';
-                        }
-                    } else if (reason === 'connect_failed' || reason === 'table_count_failed') {
-                        inner = '<i class="bi bi-x-circle text-danger me-1"></i> '
-                            + escapeHtml(detail || 'Could not reach Lakebase.');
-                    } else if (reason === 'no_registry_row') {
-                        inner = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Schema <code>'
-                            + escapeHtml(data.schema || '') + '</code> exists but has no registry row — click <em>Initialize</em>.';
-                    } else {
-                        inner = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Schema <code>'
-                            + escapeHtml(data.schema || '') + '</code> not initialized — click <em>Initialize</em>, or run <code>scripts/migrate-registry-to-lakebase.sh</code> to import an existing Volume registry.';
-                    }
-                    msg.innerHTML = inner;
-                }
-            }
-        } catch (e) {
-            tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">'
-                + '<i class="bi bi-x-circle text-danger me-1"></i> '
-                + escapeHtml(e.message || 'Network error')
-                + '</td></tr>';
-        } finally {
-            if (btn) btn.disabled = false;
-        }
-    }
-
-    document.getElementById('btnRefreshLakebaseStats')?.addEventListener('click', () => {
-        loadLakebaseStats();
-    });
 
     function updateRegistryLabel() {
         const schemaLabel = document.getElementById('registrySchemaLabel');
@@ -266,7 +154,16 @@ document.addEventListener('DOMContentLoaded', function () {
             // Volume line: volume name only
             const volName = registryCfg.volume || 'OntoBricksRegistry';
             if (volumeLabel) volumeLabel.innerHTML = '<span class="font-monospace">' + escapeHtml(volName) + '</span>';
-            if (initBtn) initBtn.style.display = registryCfg.configured ? 'none' : '';
+            if (initBtn) {
+                initBtn.style.display = '';
+                if (registryCfg.configured) {
+                    initBtn.className = 'btn btn-sm btn-outline-secondary';
+                    initBtn.innerHTML = '<i class="bi bi-arrow-up-circle me-1"></i> Apply upgrades';
+                } else {
+                    initBtn.className = 'btn btn-sm btn-outline-success';
+                    initBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Initialize';
+                }
+            }
         } else {
             const empty = '<span class="text-muted">—</span>';
             if (schemaLabel) schemaLabel.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i><span class="text-muted">Not configured</span>';
@@ -1533,8 +1430,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnInitRegistry')?.addEventListener('click', async () => {
         const btn = document.getElementById('btnInitRegistry');
+        const wasConfigured = registryCfg.configured;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Initializing...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
+            + (wasConfigured ? 'Applying upgrades…' : 'Initializing…');
         try {
             const resp = await fetch('/settings/registry/initialize', {
                 method: 'POST',
@@ -1556,8 +1455,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     const warns = (data.permissions.warnings || []).length;
                     if (warns) {
                         showNotification(
-                            'Registry initialized, but ' + warns + ' permission grant warning' +
-                            (warns === 1 ? '' : 's') + ' — see Permission Grants below.',
+                            (wasConfigured ? 'Upgrade applied, but ' : 'Registry initialized, but ')
+                            + warns + ' permission grant warning'
+                            + (warns === 1 ? '' : 's') + ' — see Permission Grants below.',
                             'warning'
                         );
                     }
@@ -1569,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotification('Error: ' + e.message, 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Initialize';
+            updateRegistryLabel();  // restore correct label/style for current state
         }
     });
 });

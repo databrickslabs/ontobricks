@@ -297,26 +297,6 @@ async def grant_registry_permissions(
         )
 
 
-@router.get(
-    "/registry/lakebase-stats",
-    dependencies=[Depends(require(ROLE_ADMIN))],
-)
-async def get_lakebase_stats(
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Return per-table row counts for the Lakebase registry schema.
-
-    Powers the read-only inventory grid in the Registry Location
-    panel. Raises :class:`~back.core.errors.ValidationError` or
-    :class:`~back.core.errors.InfrastructureError` when the Lakebase
-    resource is not bound, the backend is not installed, or the store
-    cannot be queried.
-    """
-    with map_route_errors("registry lakebase stats", logger):
-        return config_service.lakebase_stats_result(session_mgr, settings)
-
-
 @router.get("/registry/domains")
 async def list_registry_domains(
     request: Request,

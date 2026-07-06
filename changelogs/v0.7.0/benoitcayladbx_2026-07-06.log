@@ -288,3 +288,60 @@ Modified files:
 - `tests/units/settings/test_delta_warehouse_config.py`
 
 Tests: `uv run pytest -q tests/units/settings/test_delta_warehouse_config.py` → 12 passed.
+
+## Remove REGISTRY TABLES section from Settings → Registry
+
+Context: The row-count table in the Registry Location panel duplicated
+information already available via Check Access (which shows table existence
+and CRUD privileges). Row counts add no actionable value for admins.
+
+Changes:
+
+1. `src/front/templates/partials/registry/_registry_configuration.html`
+   Remove the Registry Tables sub-section (header, table, refresh button,
+   status message).
+2. `src/front/static/registry/js/registry.js`
+   Remove `loadLakebaseStats()`, the auto-load trigger, and the
+   `btnRefreshLakebaseStats` click handler.
+3. `src/api/routers/internal/settings.py`
+   Remove `GET /settings/registry/lakebase-stats` route.
+4. `src/back/objects/domain/SettingsService.py`
+   Remove `lakebase_stats_result()` method.
+
+Modified files:
+- `src/front/templates/partials/registry/_registry_configuration.html`
+- `src/front/static/registry/js/registry.js`
+- `src/api/routers/internal/settings.py`
+- `src/back/objects/domain/SettingsService.py`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3180 passed, 275 skipped, 0 failed.
+
+## Initialize button handles upgrades on existing registries
+
+Context: The Initialize button was hidden once the registry was configured, so
+there was no in-app way to apply schema upgrades (new tables or columns) after
+an app update. Column migrations ran lazily at runtime, which could surface as
+cryptic ownership errors on first use.
+
+Changes:
+
+1. `src/back/objects/registry/store/lakebase/store.py`
+   `initialize()` now explicitly calls `_ensure_domain_versions_status_column()`
+   and `_ensure_domains_review_quorum_column()` after `_apply_ddl()` so all
+   pending column migrations are applied eagerly. Docstring updated.
+2. `src/front/static/registry/js/registry.js`
+   Button is now always shown when the registry location is configured.
+   When the registry is already initialized the button renders as
+   "Apply upgrades" (outline-secondary); when it is not yet initialized it
+   renders as "Initialize" (outline-success). Spinner and final label are
+   state-aware. Duplicate early-load visibility logic replaced by a single
+   `updateRegistryLabel()` call.
+3. `src/front/templates/partials/registry/_registry_configuration.html`
+   Button tooltip updated to describe both Initialize and Upgrade use cases.
+
+Modified files:
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/front/static/registry/js/registry.js`
+- `src/front/templates/partials/registry/_registry_configuration.html`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3180 passed, 275 skipped, 0 failed.

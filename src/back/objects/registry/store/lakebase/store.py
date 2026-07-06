@@ -638,20 +638,34 @@ class LakebaseRegistryStore(RegistryStore):
         }
 
     def initialize(self, *, client: Any = None) -> Tuple[bool, str]:
+        """Initialize or upgrade the Lakebase registry schema.
+
+        Idempotent: safe to re-run on an already-initialized registry.
+        Creates any tables that are missing (``IF NOT EXISTS``), applies
+        pending column migrations, ensures the registry identity row, and
+        scrubs legacy JSONB keys.  Use this both for first-time setup and
+        as an in-app upgrade step when the app is updated to a new version
+        that added columns to existing tables.
+        """
         del client  # not used: Lakebase instance is provisioned out of band
         try:
             self._apply_ddl()
             self._registry_id = self._ensure_registry_row()
             self._scrub_global_config_legacy_keys()
+            # Apply pending column migrations eagerly so the admin gets
+            # immediate feedback from the Initialize / Upgrade button rather
+            # than waiting for the first runtime call that needs the column.
+            self._ensure_domain_versions_status_column()
+            self._ensure_domains_review_quorum_column()
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute("SELECT 1")  # wake probe
             logger.info(
-                "Lakebase registry initialised (schema=%s, host=%s)",
+                "Lakebase registry initialised/upgraded (schema=%s, host=%s)",
                 self._schema,
                 self._auth.host,
             )
             return True, (
-                f"Lakebase registry initialized at "
+                f"Lakebase registry initialized/upgraded at "
                 f"{self._auth.host}/{self._effective_database} "
                 f"(schema={self._schema})"
             )
