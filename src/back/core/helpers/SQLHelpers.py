@@ -24,6 +24,28 @@ class SQLHelpers:
         return str(value).replace("\\", "\\\\").replace("'", "''")
 
     @staticmethod
+    def validate_uc_identifier(name: str, *, role: str = "identifier") -> str:
+        from back.core.databricks.uc.identifiers import validate_uc_identifier
+
+        return validate_uc_identifier(name, role=role)
+
+    @staticmethod
+    def quote_uc_identifier(name: str, *, role: str = "identifier") -> str:
+        from back.core.databricks.uc.identifiers import quote_uc_identifier
+
+        return quote_uc_identifier(name, role=role)
+
+    @staticmethod
+    def quote_uc_fqn(
+        catalog: str,
+        schema: str,
+        table: str | None = None,
+    ) -> str:
+        from back.core.databricks.uc.identifiers import quote_uc_fqn
+
+        return quote_uc_fqn(catalog, schema, table)
+
+    @staticmethod
     def validate_table_name(table_name: str) -> None:
         """Raise :class:`~back.core.errors.ValidationError` if *table_name* is empty.
 

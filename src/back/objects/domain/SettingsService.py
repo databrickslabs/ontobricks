@@ -1846,7 +1846,7 @@ class SettingsService:
                     "Configure a SQL warehouse under Settings → Databricks first."
                 )
             from back.core.databricks.DatabricksAuth import DatabricksAuth
-            from back.core.databricks.unity_catalog.UnityCatalog import UnityCatalog
+            from back.core.databricks.uc import UnityCatalog
 
             auth = DatabricksAuth(host=host, token=token, warehouse_id=warehouse_id)
             uc = UnityCatalog(auth)
@@ -2867,7 +2867,7 @@ class SettingsService:
                     "Configure a SQL warehouse under Settings → Databricks first."
                 )
             from back.core.databricks.DatabricksAuth import DatabricksAuth
-            from back.core.databricks.unity_catalog.UnityCatalog import UnityCatalog
+            from back.core.databricks.uc import UnityCatalog
 
             auth = DatabricksAuth(host=host, token=token, warehouse_id=warehouse_id)
             uc = UnityCatalog(auth)

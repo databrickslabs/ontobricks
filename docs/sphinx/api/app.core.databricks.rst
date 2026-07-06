@@ -67,12 +67,23 @@ SQL Warehouse
 Unity Catalog
 -------------
 
-.. automodule:: back.core.databricks.unity_catalog
+.. automodule:: back.core.databricks.uc.UnityCatalog
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: back.core.databricks.unity_catalog.UnityCatalog
+UC Identifiers
+--------------
+
+.. automodule:: back.core.databricks.uc.identifiers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+UC Domain I/O
+-------------
+
+.. automodule:: back.core.databricks.uc.UCDomainIO
    :members:
    :undoc-members:
    :show-inheritance:
@@ -80,7 +91,7 @@ Unity Catalog
 Volume File Service
 -------------------
 
-.. automodule:: back.core.databricks.unity_catalog.VolumeFileService
+.. automodule:: back.core.databricks.uc.VolumeFileService
    :members:
    :undoc-members:
    :show-inheritance:
@@ -104,15 +115,8 @@ Dashboard Service
 Metadata Service
 ----------------
 
-.. automodule:: back.core.databricks.unity_catalog.MetadataService
+.. automodule:: back.core.databricks.uc.MetadataService
    :members:
    :undoc-members:
    :show-inheritance:
 
-UC Domain I/O
--------------
-
-.. automodule:: back.core.databricks.unity_catalog.UCDomainIO
-   :members:
-   :undoc-members:
-   :show-inheritance:

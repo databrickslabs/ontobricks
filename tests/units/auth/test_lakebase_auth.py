@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from back.core.databricks.lakebase.LakebaseAuth import LakebaseAuth
+from back.core.databricks.lakebase import LakebaseAuth
 from back.core.errors import ValidationError
 
 # ---------------------------------------------------------------------------

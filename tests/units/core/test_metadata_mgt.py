@@ -1,9 +1,9 @@
-"""Tests for back.core.databricks.unity_catalog.MetadataService — metadata management."""
+"""Tests for back.core.databricks.uc.MetadataService — metadata management."""
 
 import importlib
 from unittest.mock import patch
 
-_metadata_service_mod = importlib.import_module("back.core.databricks.unity_catalog.MetadataService")
+_metadata_service_mod = importlib.import_module("back.core.databricks.uc.MetadataService")
 
 from back.core.databricks import (
     MetadataService,

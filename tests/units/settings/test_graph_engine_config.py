@@ -16,7 +16,7 @@ from back.objects.domain.SettingsService import SettingsService
 
 _svc_module = importlib.import_module("back.objects.domain.SettingsService")
 _db_auth_mod = importlib.import_module("back.core.databricks.DatabricksAuth")
-_uc_mod = importlib.import_module("back.core.databricks.unity_catalog.UnityCatalog")
+_uc_pkg = importlib.import_module("back.core.databricks.uc")
 
 
 REGISTRY_CFG = {"catalog": "cat", "schema": "sch", "volume": "vol"}
@@ -644,7 +644,7 @@ class TestGraphEngineUcCatalogs:
             ),
             patch.object(_svc_module, "global_config_service") as gcs,
             patch.object(_db_auth_mod, "DatabricksAuth", MagicMock()),
-            patch.object(_uc_mod, "UnityCatalog", return_value=mock_uc),
+            patch.object(_uc_pkg, "UnityCatalog", return_value=mock_uc),
         ):
             gcs.load = MagicMock()
             gcs.get_warehouse_id.return_value = "wh-1"

@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import MagicMock
 
-from back.core.databricks.unity_catalog.VolumeFileService import VolumeFileService as UCFileService
+from back.core.databricks.uc import VolumeFileService as UCFileService
 
 
 class TestUCFileServiceInit:

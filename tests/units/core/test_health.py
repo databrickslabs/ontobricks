@@ -17,9 +17,7 @@ import pytest
 from shared.fastapi import health
 
 # These imports work around __init__.py re-exports that shadow module paths.
-_VFS_MOD = importlib.import_module("back.core.databricks.unity_catalog.VolumeFileService")
-# ``health`` imports ``get_lakebase_auth`` from the shared lakebase package,
-# so patch the symbol on that package (not the auth submodule).
+_VFS_PKG = importlib.import_module("back.core.databricks.uc")
 _LBA_MOD = importlib.import_module("back.core.databricks.lakebase")
 
 
@@ -189,7 +187,7 @@ class TestCheckRegistryCfg:
 
 class TestCheckRegistryVolumeReadWrite:
     def _patch_svc(self, svc):
-        return patch.object(_VFS_MOD, "VolumeFileService", return_value=svc)
+        return patch.object(_VFS_PKG, "VolumeFileService", return_value=svc)
 
     def test_read_ok(self):
         svc = MagicMock()
