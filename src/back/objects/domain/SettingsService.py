@@ -1553,6 +1553,10 @@ class SettingsService:
             host, token, registry_cfg
         )
         allowed = list(global_config_service.ALLOWED_TRIPLE_STORE_BACKENDS)
+        reg = registry_cfg if isinstance(registry_cfg, dict) else {}
+        catalog = (reg.get("catalog") or "").strip()
+        schema = (reg.get("schema") or "").strip()
+        storage_location = f"{catalog}.{schema}" if catalog and schema else ""
         return {
             "success": True,
             "triple_store_backend": backend,
@@ -1561,6 +1565,10 @@ class SettingsService:
             "effective_delta_warehouse_id": resolve_delta_warehouse_id(
                 domain, settings
             ),
+            "registry_catalog": catalog,
+            "registry_schema": schema,
+            "storage_location": storage_location,
+            "registry_configured": bool(storage_location),
         }
 
     @staticmethod

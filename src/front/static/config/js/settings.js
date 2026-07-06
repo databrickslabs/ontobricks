@@ -1048,6 +1048,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function applyDeltaRegistryLocation(data) {
+        const regLoc = document.getElementById('deltaRegistryLocation');
+        if (!regLoc || !data) return;
+        regLoc.textContent = data.storage_location
+            || (data.registry_catalog && data.registry_schema
+                ? data.registry_catalog + '.' + data.registry_schema
+                : '(not configured — set Registry catalog & schema)');
+    }
+
     async function refreshGraphDbTabFromServer() {
         const tsSel = document.getElementById('tripleStoreBackendSelect');
         const sel = document.getElementById('graphEngineSelect');
@@ -1079,6 +1088,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (engData.success && rawEng) sel.value = rawEng;
             }
             currentDeltaWarehouseId = tsData.delta_warehouse_id || '';
+            applyDeltaRegistryLocation(tsData);
             await loadDeltaWarehouseSelect(
                 currentDeltaWarehouseId,
                 tsData.effective_delta_warehouse_id
@@ -1114,10 +1124,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await resp.json();
 
             if (regLoc && !regLoc.textContent.replace(/[—\s]/g, '')) {
-                regLoc.textContent = data.storage_location
-                    || (data.registry_catalog && data.registry_schema
-                        ? data.registry_catalog + '.' + data.registry_schema
-                        : '(not configured — set Registry catalog & schema)');
+                applyDeltaRegistryLocation(data);
             }
 
             if (!healthPanel || !out) return;
@@ -1226,10 +1233,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            if (regLoc) {
-                regLoc.textContent = data.storage_location
-                    || '(not configured — set Registry catalog & schema)';
-            }
+            applyDeltaRegistryLocation(data);
 
             if (!data.registry_configured) {
                 result.innerHTML = '<div class="alert alert-warning small py-2 mt-2">'

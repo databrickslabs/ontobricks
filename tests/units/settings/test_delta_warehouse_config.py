@@ -157,6 +157,8 @@ class TestSettingsServiceDeltaWarehouse:
             )
         assert result["delta_warehouse_id"] == "wh-delta"
         assert result["effective_delta_warehouse_id"] == "wh-delta"
+        assert result["storage_location"] == "cat.sch"
+        assert result["registry_configured"] is True
 
     def test_select_delta_warehouse_requires_id(self):
         with pytest.raises(ValidationError, match="No warehouse ID"):

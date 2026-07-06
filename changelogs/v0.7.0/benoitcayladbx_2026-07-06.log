@@ -258,3 +258,33 @@ Modified files:
 - `tests/units/settings/test_delta_objects.py` (new)
 
 Tests: `uv run pytest -q -m "not scenario"` → 3180 passed.
+
+## Delta tab rename: Storage → Objects
+
+Context: Align Delta settings tab naming with Lakebase (Objects tab).
+
+Changes:
+
+1. `src/front/templates/settings.html` — tab label, icon (`bi-table`), and pane ids.
+
+Modified files:
+- `src/front/templates/settings.html`
+
+Tests: UI-only; no test run.
+
+## Delta Objects tab — prefill Registry location on load
+
+Context: Registry ``catalog.schema`` stayed as ``—`` until **Load objects** was clicked.
+
+Changes:
+
+1. `SettingsService.get_triple_store_backend_result` — include ``storage_location`` and
+   registry catalog/schema fields.
+2. `settings.js` — ``applyDeltaRegistryLocation()`` called from graph DB refresh on page load.
+
+Modified files:
+- `src/back/objects/domain/SettingsService.py`
+- `src/front/static/config/js/settings.js`
+- `tests/units/settings/test_delta_warehouse_config.py`
+
+Tests: `uv run pytest -q tests/units/settings/test_delta_warehouse_config.py` → 12 passed.
