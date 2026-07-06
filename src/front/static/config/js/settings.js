@@ -28,9 +28,11 @@ document.addEventListener('DOMContentLoaded', function () {
     loadNavbarLogo();
     // Preload triple-store / Delta warehouse so global Save can persist them
     // even when the operator never opened the Graph DB sidebar sections.
+    setGraphDbTabLoading(true);
     refreshGraphDbTabFromServer()
         .then(() => { graphDbLoaded = true; })
-        .catch((e) => console.log('Graph DB preload failed', e));
+        .catch((e) => console.log('Graph DB preload failed', e))
+        .finally(() => { setGraphDbTabLoading(false); });
 
     // =====================================================================
     //  DATABRICKS TAB
@@ -1033,18 +1035,23 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setGraphDbTabLoading(loading) {
-        const lkBanner = document.getElementById('lakebaseSectionBanner');
-        const lkPanel  = document.getElementById('lakebaseGraphPanel');
-        const dtBanner = document.getElementById('deltaSectionBanner');
-        const dtPanel  = document.getElementById('deltaGraphPanel');
-        [lkBanner, dtBanner].forEach(function (banner) {
+        const lkBanner  = document.getElementById('lakebaseSectionBanner');
+        const lkPanel   = document.getElementById('lakebaseGraphPanel');
+        const dtBanner  = document.getElementById('deltaSectionBanner');
+        const dtPanel   = document.getElementById('deltaGraphPanel');
+        const beBanner  = document.getElementById('backendSectionBanner');
+        const beContent = document.getElementById('graphDbTabContent');
+        [lkBanner, dtBanner, beBanner].forEach(function (banner) {
             if (!banner) return;
             banner.classList.toggle('d-none', !loading);
             banner.classList.toggle('d-flex', loading);
         });
         if (loading) {
-            if (lkPanel) lkPanel.style.display = 'none';
-            if (dtPanel) dtPanel.style.display = 'none';
+            if (lkPanel)   lkPanel.style.display   = 'none';
+            if (dtPanel)   dtPanel.style.display   = 'none';
+            if (beContent) beContent.style.display = 'none';
+        } else {
+            if (beContent) beContent.style.display = '';
         }
     }
 

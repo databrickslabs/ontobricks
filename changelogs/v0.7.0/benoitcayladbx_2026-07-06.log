@@ -345,3 +345,46 @@ Modified files:
 - `src/front/templates/partials/registry/_registry_configuration.html`
 
 Tests: `uv run pytest -q -m "not scenario"` → 3180 passed, 275 skipped, 0 failed.
+
+## Fix: Delta Objects delete freezes the page
+
+Context: The drop-confirmation modal (`lkDropConfirmModal`) was defined inside
+the Lakebase tab pane. When the user clicked Delete on the Delta → Objects tab
+the Lakebase pane was hidden (`display:none`), causing Bootstrap to show the
+backdrop but not the modal body — the page appeared frozen with no way to
+dismiss.
+
+Changes:
+
+1. `src/front/templates/settings.html`
+   Move `#lkDropConfirmModal` out of the Lakebase Objects pane and place it at
+   the top-level page body (after all section containers, before `{% endblock %}`).
+   The modal is now always accessible regardless of which settings section is active.
+
+Modified files:
+- `src/front/templates/settings.html`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3180 passed, 275 skipped, 0 failed.
+
+## Loading spinner on Settings → Back End
+
+Context: The Lakebase and Delta sections already had a spinner banner while
+`refreshGraphDbTabFromServer` ran, but the Back End section showed its form
+controls immediately with empty/stale values until the fetch resolved.
+
+Changes:
+
+1. `src/front/templates/settings.html`
+   Add `#backendSectionBanner` (matches Lakebase / Delta spinner pattern) above
+   `#graphDbTabContent` in the Back End section.
+2. `src/front/static/config/js/settings.js`
+   `setGraphDbTabLoading` now also toggles `#backendSectionBanner` and
+   hides/shows `#graphDbTabContent`.
+   Initial preload call (page load) now wraps with
+   `setGraphDbTabLoading(true)` / `.finally(() => setGraphDbTabLoading(false))`.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+Tests: UI-only change; `uv run pytest -q -m "not scenario"` → 3180 passed.

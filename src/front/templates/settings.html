@@ -95,6 +95,11 @@
                         </button>
                     </div>
 
+                    <div id="backendSectionBanner" class="alert alert-light border d-none align-items-center justify-content-center gap-2 py-3 mb-3" role="status" aria-live="polite">
+                        <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                        <span class="small text-muted">Loading Back End configuration…</span>
+                    </div>
+
                     <div id="graphDbTabContent">
                         <div class="mb-4">
                             <label for="tripleStoreBackendSelect" class="form-label fw-semibold mb-2">
@@ -506,22 +511,6 @@
                                 </button>
                                 <div id="lakebaseObjectsResult"></div>
 
-                                <!-- Drop-object confirmation modal -->
-                                <div class="modal fade" id="lkDropConfirmModal" tabindex="-1" aria-labelledby="lkDropConfirmModalLabel" aria-hidden="true">
-                                    <div class="modal-dialog modal-dialog-centered">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title" id="lkDropConfirmModalLabel"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Confirm drop</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body" id="lkDropConfirmModalBody">Are you sure?</div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                                                <button type="button" class="btn btn-danger btn-sm" id="lkDropConfirmBtn">Drop</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
 
                             <!-- ── TAB 5 · Permissions ── -->
@@ -900,6 +889,23 @@
             </div>
             {% endif %}
 
+        </div>
+    </div>
+</div>
+
+<!-- Shared drop-object confirmation modal (used by both Lakebase and Delta sections) -->
+<div class="modal fade" id="lkDropConfirmModal" tabindex="-1" aria-labelledby="lkDropConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="lkDropConfirmModalLabel"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Confirm drop</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="lkDropConfirmModalBody">Are you sure?</div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger btn-sm" id="lkDropConfirmBtn">Drop</button>
+            </div>
         </div>
     </div>
 </div>
