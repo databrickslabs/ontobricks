@@ -1,5 +1,6 @@
 """Unity Catalog integration — metadata, volumes, identifier safety, domain I/O."""
 
+from .constants import FS_FILES_PATH, FS_DIRS_PATH
 from .identifiers import (
     UC_IDENTIFIER_RE,
     quote_uc_fqn,
@@ -16,6 +17,8 @@ __all__ = [
     "UCDomainIO",
     "VolumeFileService",
     "MetadataService",
+    "FS_FILES_PATH",
+    "FS_DIRS_PATH",
     "UC_IDENTIFIER_RE",
     "quote_uc_fqn",
     "quote_uc_identifier",

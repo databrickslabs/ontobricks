@@ -134,6 +134,12 @@ class GlobalConfigService:
         """Return the globally configured SQL Warehouse ID (or empty string)."""
         return self.get(host, token, registry_cfg, "warehouse_id")
 
+    def get_delta_warehouse_id(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> str:
+        """Return the Delta triple-store SQL Warehouse ID (or empty string)."""
+        return self.get(host, token, registry_cfg, "delta_warehouse_id")
+
     def get_default_base_uri(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> str:
@@ -223,6 +229,18 @@ class GlobalConfigService:
         """Persist a new SQL Warehouse ID in the global config file."""
         return self._save(host, token, registry_cfg, {"warehouse_id": warehouse_id})
 
+    def set_delta_warehouse_id(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        warehouse_id: str,
+    ) -> Tuple[bool, str]:
+        """Persist the SQL Warehouse used for Delta triple-store queries."""
+        return self._save(
+            host, token, registry_cfg, {"delta_warehouse_id": warehouse_id}
+        )
+
     def set_default_base_uri(
         self,
         host: str,
@@ -264,6 +282,7 @@ class GlobalConfigService:
         return self._save(host, token, registry_cfg, {"navbar_logo": data_url or ""})
 
     ALLOWED_GRAPH_ENGINES = ("lakebase",)
+    ALLOWED_TRIPLE_STORE_BACKENDS = ("lakebase", "databricks")
 
     def get_graph_engine(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -293,6 +312,30 @@ class GlobalConfigService:
                 f"Unknown graph engine '{engine}'. Allowed: {', '.join(self.ALLOWED_GRAPH_ENGINES)}",
             )
         return self._save(host, token, registry_cfg, {"graph_engine": engine})
+
+    def get_triple_store_backend(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> str:
+        """Return the instance triple-store backend (``lakebase`` or ``databricks``)."""
+        val = self.get(host, token, registry_cfg, "triple_store_backend", "lakebase")
+        return val if val in self.ALLOWED_TRIPLE_STORE_BACKENDS else "lakebase"
+
+    def set_triple_store_backend(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        backend: str,
+    ) -> Tuple[bool, str]:
+        """Persist triple-store backend selection in global config."""
+        backend = (backend or "").strip().lower()
+        if backend not in self.ALLOWED_TRIPLE_STORE_BACKENDS:
+            return (
+                False,
+                "Unknown triple store backend "
+                f"'{backend}'. Allowed: {', '.join(self.ALLOWED_TRIPLE_STORE_BACKENDS)}",
+            )
+        return self._save(host, token, registry_cfg, {"triple_store_backend": backend})
 
     def get_graph_engine_config(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -381,6 +424,7 @@ class GlobalConfigService:
         return {
             "version": 1,
             "warehouse_id": "",
+            "delta_warehouse_id": "",
             "default_base_uri": "",
             "default_emoji": "",
             "navbar_logo": "",
@@ -388,6 +432,7 @@ class GlobalConfigService:
             "registry_cache_ttl": 300,
             "graph_engine": "lakebase",
             "graph_engine_config": {},
+            "triple_store_backend": "lakebase",
         }
 
 

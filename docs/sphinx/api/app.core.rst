@@ -45,5 +45,4 @@ Subpackages
    app.core.industry
    app.core.reasoning
    app.core.sqlwizard
-   app.core.triplestore
    app.core.w3c

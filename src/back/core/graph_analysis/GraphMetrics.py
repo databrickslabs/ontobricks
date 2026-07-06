@@ -10,7 +10,7 @@ from typing import Dict, List, Set
 import networkx as nx
 
 from back.core.logging import get_logger
-from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graph_analysis.GraphBuilder import GraphBuilder, _DEFAULT_EXCLUDED_PREDICATES
 from back.core.graph_analysis.models import (
     EntityTypeProfile,

@@ -1,14 +1,22 @@
 """Factory for creating graph database backends from domain session configuration.
 
-The default (and currently only) engine is ``"lakebase"`` (flat triple
-tables on Lakebase Postgres). The factory keeps a pluggable
-dispatcher so other engines can be added without rewriting callers —
-copy ``_starter_kit/`` into ``back/core/graphdb/<engine>/`` and register
-a new ``_create_<engine>`` branch below. The *engine_config* JSON is
-engine-specific (admin: Settings → Graph DB).
+A single entry point (:meth:`GraphDBFactory.create` / :func:`get_graphdb`)
+constructs the graph DB backend for a domain:
+
+* ``engine=None`` — auto-resolve the engine from global/registry config
+  (``lakebase`` by default, ``delta`` when ``triple_store_backend`` is
+  ``databricks``).  This is the common path callers use.
+* ``engine="lakebase"`` — flat triple tables on Lakebase Postgres.
+* ``engine="delta"`` — materialized Delta triple tables in Unity Catalog.
+* ``engine="view"`` — a raw, read-only Delta store bound to a SQL warehouse
+  (health probes against a UC view/table).
+
+New engines are pluggable — copy ``_starter_kit/`` into
+``back/core/graphdb/<engine>/`` and register a ``_create_<engine>`` branch.
+The *engine_config* JSON is engine-specific (admin: Settings → Graph DB).
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from back.core.logging import get_logger
 
@@ -32,7 +40,8 @@ class GraphDBFactory:
         Args:
             domain: Domain session with info and databricks config.
             settings: Optional application settings.
-            engine: ``"lakebase"`` (default — currently the only supported engine).
+            engine: One of ``None`` (auto-resolve from config), ``"lakebase"``,
+                    ``"delta"``, or ``"view"`` (raw read-only Delta store).
             engine_config: Engine-specific JSON configuration set by the
                            admin in Settings > Graph DB.
 
@@ -40,15 +49,225 @@ class GraphDBFactory:
             GraphDBBackend instance or *None* if configuration is incomplete.
         """
         if engine is None:
-            engine = "lakebase"
+            return self._create_auto(domain, settings)
+
+        if engine == "view":
+            return self._create_delta_view(domain, settings)
+
         if engine_config is None:
             engine_config = {}
 
         if engine == "lakebase":
             return self._create_lakebase(domain, settings, engine_config=engine_config)
 
+        if engine == "delta":
+            return self._create_delta(domain, settings)
+
         logger.warning("Unknown graph DB engine: %s", engine)
         return None
+
+    def _create_auto(
+        self, domain: Any, settings: Optional[Any] = None
+    ) -> Optional[Any]:
+        """Resolve the engine from global/registry config and dispatch.
+
+        Mirrors the former ``TripleStoreFactory`` ``backend="graph"`` behaviour.
+        """
+        ts_backend = self._resolve_triple_store_backend(domain, settings)
+        if ts_backend == "databricks":
+            return self.create(domain, settings, engine="delta", engine_config={})
+
+        engine = self._resolve_graph_engine(domain, settings) or "lakebase"
+        engine_config = self._resolve_graph_engine_config(domain, settings)
+        return self.create(
+            domain, settings, engine=engine, engine_config=engine_config or {}
+        )
+
+    # ------------------------------------------------------------------
+    # Config resolution (formerly on TripleStoreFactory)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _read_global_config(domain: Any, settings: Optional[Any], accessor, *, force: bool = False):
+        """Call *accessor(global_config_service, host, token, registry_cfg)*.
+
+        Returns ``None`` on any error (registry not configured, etc.).
+
+        When *force* is ``True`` the ``GlobalConfigService`` in-memory cache is
+        bypassed and a fresh read is performed against the backing store.  This
+        is important for build-time resolution: the cache may hold the empty
+        template (``_empty()``) from a cold-start race where Lakebase was
+        briefly unavailable, while the Settings UI correctly shows the saved
+        value because it always uses ``force=True``.  Without bypassing the
+        cache the build would silently fall back to ``app_managed`` even though
+        ``managed_synced`` is configured.
+        """
+        try:
+            from back.objects.session.GlobalConfigService import global_config_service
+            from back.core.helpers import get_databricks_host_and_token
+
+            if settings is not None:
+                host, token = get_databricks_host_and_token(domain, settings)
+            else:
+                db = getattr(domain, "databricks", None) or {}
+                host = db.get("host", "")
+                token = db.get("token", "")
+            from back.objects.registry import RegistryCfg
+
+            registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+            if force:
+                global_config_service.load(host, token, registry_cfg, force=True)
+            return accessor(global_config_service, host, token, registry_cfg)
+        except Exception as exc:
+            logger.debug("Could not read global config: %s", exc)
+            return None
+
+    @staticmethod
+    def _registry_graph_engine_mirror(domain: Any) -> Tuple[Optional[str], Dict[str, Any]]:
+        """Best-effort read of graph DB fields mirrored under ``domain.settings['registry']``.
+
+        ``SettingsService`` copies the persisted engine choice here after a
+        successful admin save.  The mirror is checked as a fallback when
+        :meth:`GlobalConfigService.load` returns the empty template (e.g.
+        registry catalog/schema not yet wired into the dict passed to ``load``).
+        """
+        try:
+            blob = getattr(domain, "settings", None)
+            if not isinstance(blob, dict):
+                return None, {}
+            reg = blob.get("registry")
+            if not isinstance(reg, dict):
+                return None, {}
+            from back.objects.session.GlobalConfigService import GlobalConfigService
+
+            allowed = GlobalConfigService.ALLOWED_GRAPH_ENGINES
+            raw_eng = (reg.get("graph_engine") or "").strip().lower()
+            eng = raw_eng if raw_eng in allowed else None
+            cfg_raw = reg.get("graph_engine_config")
+            cfg: Dict[str, Any] = dict(cfg_raw) if isinstance(cfg_raw, dict) else {}
+            return eng, cfg
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not read registry graph_engine mirror: %s", exc)
+            return None, {}
+
+    @staticmethod
+    def _resolve_graph_engine(domain: Any, settings: Optional[Any], *, force: bool = False) -> Optional[str]:
+        """Read the configured graph engine from ``GlobalConfigService``.
+
+        Falls back to the domain-level registry mirror when global resolution
+        is unavailable (e.g. registry not yet wired up).
+
+        Pass *force=True* to bypass the in-memory cache (required for build-time
+        calls to avoid a cold-start race where the cache holds ``_empty()``).
+        """
+        gcs_val = GraphDBFactory._read_global_config(
+            domain,
+            settings,
+            lambda gcs, h, t, r: gcs.get_graph_engine(h, t, r),
+            force=force,
+        )
+        if gcs_val is not None:
+            return gcs_val
+        mirrored_eng, _ = GraphDBFactory._registry_graph_engine_mirror(domain)
+        return mirrored_eng
+
+    @staticmethod
+    def _resolve_triple_store_backend(
+        domain: Any, settings: Optional[Any] = None, *, force: bool = False
+    ) -> str:
+        """Read ``triple_store_backend`` from global config (default ``lakebase``)."""
+        gcs_val = GraphDBFactory._read_global_config(
+            domain,
+            settings,
+            lambda gcs, h, t, r: gcs.get_triple_store_backend(h, t, r),
+            force=force,
+        )
+        if gcs_val:
+            return gcs_val
+        try:
+            from back.objects.session.GlobalConfigService import GlobalConfigService
+
+            blob = getattr(domain, "settings", None)
+            if isinstance(blob, dict):
+                reg = blob.get("registry")
+                if isinstance(reg, dict):
+                    raw = (reg.get("triple_store_backend") or "").strip().lower()
+                    if raw in GlobalConfigService.ALLOWED_TRIPLE_STORE_BACKENDS:
+                        return raw
+        except Exception:  # noqa: BLE001
+            pass
+        return "lakebase"
+
+    @staticmethod
+    def _resolve_graph_engine_config(
+        domain: Any, settings: Optional[Any], *, force: bool = False
+    ) -> Optional[dict]:
+        """Read the engine-specific JSON config from ``GlobalConfigService``.
+
+        Pass *force=True* to bypass the in-memory cache (required for build-time
+        calls to avoid a cold-start race where the cache holds ``_empty()``).
+        """
+        raw = GraphDBFactory._read_global_config(
+            domain,
+            settings,
+            lambda gcs, h, t, r: gcs.get_graph_engine_config(h, t, r),
+            force=force,
+        )
+        gcs_cfg: Dict[str, Any] = raw if isinstance(raw, dict) else {}
+        _, mirrored_cfg = GraphDBFactory._registry_graph_engine_mirror(domain)
+
+        # Persisted global keys win on overlap; mirror fills gaps when load()
+        # returned the empty template or the config read failed.
+        if mirrored_cfg:
+            return {**mirrored_cfg, **gcs_cfg}
+        return gcs_cfg
+
+    # ------------------------------------------------------------------
+    # Engine constructors
+    # ------------------------------------------------------------------
+
+    def _create_delta_view(
+        self, domain: Any, settings: Optional[Any] = None
+    ) -> Optional[Any]:
+        """Instantiate a raw, read-only :class:`DeltaFlatStore` on a SQL warehouse.
+
+        Bound with ``domain=None`` so it operates directly on the FQNs passed in
+        (health probes against a UC view/table).  Formerly ``backend="view"``.
+        """
+        try:
+            from back.core.databricks import DatabricksClient, is_databricks_app
+            from back.core.helpers import (
+                get_databricks_host_and_token,
+                resolve_delta_warehouse_id,
+            )
+            from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+
+            if settings is not None:
+                host, token = get_databricks_host_and_token(domain, settings)
+                warehouse_id = resolve_delta_warehouse_id(domain, settings)
+            else:
+                db = domain.databricks or {}
+                host = db.get("host", "")
+                token = db.get("token", "")
+                warehouse_id = ""
+            if not host and not is_databricks_app():
+                logger.warning("Delta view store: missing host")
+                return None
+            if not token and not is_databricks_app():
+                logger.warning("Delta view store: missing token")
+                return None
+            if not warehouse_id:
+                logger.warning("Delta view store: missing sql_warehouse_id")
+                return None
+            client = DatabricksClient(
+                host=host,
+                token=token,
+                warehouse_id=warehouse_id,
+            )
+            return DeltaFlatStore(client)
+        except Exception as e:
+            logger.exception("Failed to create Delta view store: %s", e)
+            return None
 
     def _create_lakebase(
         self,
@@ -159,6 +378,28 @@ class GraphDBFactory:
             )
         except Exception as e:
             logger.exception("Failed to create Lakebase graph store: %s", e)
+            return None
+
+    def _create_delta(
+        self,
+        domain: Any,
+        settings: Optional[Any] = None,
+    ) -> Optional[Any]:
+        """Instantiate :class:`DeltaFlatStore` on SQL Warehouse."""
+        try:
+            from back.core.graphdb.delta.DeltaBase import create_databricks_client
+            from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+        except ImportError as exc:
+            logger.warning("Delta graph engine unavailable: %s", exc)
+            return None
+
+        client = create_databricks_client(domain, settings)
+        if client is None:
+            return None
+        try:
+            return DeltaFlatStore(client, domain=domain, settings=settings)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to create DeltaFlatStore: %s", exc)
             return None
 
     @staticmethod

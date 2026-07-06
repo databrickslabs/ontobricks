@@ -5,6 +5,16 @@
 
 const SYNC_TASK_KEY = 'ontobricks_sync_task';
 
+function _syncTripleStoreBackend() {
+    try {
+        const el = document.getElementById('triplestore-config');
+        if (!el) return 'lakebase';
+        return JSON.parse(el.textContent || '{}').triple_store_backend || 'lakebase';
+    } catch (_) {
+        return 'lakebase';
+    }
+}
+
 /** Whether ontology + assignments are both ready */
 let syncIsReady = false;
 
@@ -306,6 +316,7 @@ let _syncSectionLoaded = false;
  * then drops to reveal the fully-populated page in one shot.
  */
 async function initSyncSection() {
+    if (_syncTripleStoreBackend() === 'databricks') return;
     if (_syncSectionLoaded) return;
     _syncSectionLoaded = true;
 
@@ -1500,7 +1511,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (syncSection) {
         const observer = new MutationObserver(() => {
             if (syncSection.classList.contains('active')) {
-                initSyncSection();
+                if (_syncTripleStoreBackend() === 'databricks') {
+                    if (typeof loadDatabricksBuildInfo === 'function') {
+                        loadDatabricksBuildInfo();
+                    }
+                } else {
+                    initSyncSection();
+                }
             } else {
                 _syncSectionLoaded = false;
             }
@@ -1508,7 +1525,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         observer.observe(syncSection, { attributes: true, attributeFilter: ['class'] });
 
         if (syncSection.classList.contains('active')) {
-            initSyncSection();
+            if (_syncTripleStoreBackend() === 'databricks') {
+                if (typeof loadDatabricksBuildInfo === 'function') {
+                    loadDatabricksBuildInfo();
+                }
+            } else {
+                initSyncSection();
+            }
         }
     }
 });

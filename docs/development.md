@@ -372,7 +372,7 @@ tests/
   test_domain_session.py            # DomainSession state management
   test_databricks_client.py         # Databricks client (mocked)
   test_llm_utils.py                 # LLM retry logic
-  test_triplestore_factory.py       # Triplestore factory (Delta side)
+  test_triplestore_factory.py       # Graph DB factory auto-resolve + view path
   test_graphdb_factory.py           # GraphDB engine factory
   test_lakebase_flat_store.py       # Lakebase Postgres flat-store backend
   test_synced_table_manager.py      # Lakeflow synced-table orchestration (managed_synced)
@@ -459,7 +459,7 @@ These use `unittest.mock` to isolate modules that depend on external systems (Da
 | `test_mapping_service.py` | 14 | `back.objects.mapping.Mapping` | `build_entity_mapping`, `build_relationship_mapping`, add/update/delete entities and relationships, `get_mapping_stats`, `save_mapping_config`, `reset_mapping` |
 | `test_domain_service.py` | 8 | `back.objects.domain.Domain` | `get_domain_info`, `get_domain_stats`, `save_domain_info`, `get_domain_template_data` |
 | `test_llm_utils.py` | 5 | `agents.llm_utils` | `call_llm_with_retry` -- success, retry on 429/503 HTTP errors, retry on timeout, retry exhaustion |
-| `test_triplestore_factory.py` | 4 | `back.core.triplestore.TripleStoreFactory` | Unknown backend handling, missing Delta config, successful Delta instantiation (mocked) |
+| `test_triplestore_factory.py` | 6 | `back.core.graphdb.GraphDBFactory` | Unknown engine handling, auto-resolve to lakebase/delta, resolved engine_config passthrough, view store host/success paths (mocked) |
 
 #### P1b -- Lakebase Graph DB Tests
 
@@ -545,7 +545,7 @@ open htmlcov/index.html
 | `back/core/graphdb/lakebase/LakebaseFlatStore.py` | ~80% | Triple CRUD, bulk paths and named queries covered with mocked psycopg |
 | `back/core/graphdb/lakebase/SyncedTableManager.py` | ~85% | `ensure` idempotency, refresh trigger, polling and delete fully tested with mocked Databricks SDK |
 
-Modules with 0% coverage (`back/core/w3c/rdfs`, `back/core/sqlwizard`, `back/core/databricks/MetadataService.py`) are either not yet tested or depend entirely on external services.
+Modules with 0% coverage (`back/core/w3c/rdfs`, `back/core/sqlwizard`, `back/core/databricks/unity_catalog/MetadataService.py`) are either not yet tested or depend entirely on external services.
 
 ---
 

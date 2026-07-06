@@ -10,8 +10,19 @@ Package
    :show-inheritance:
    :exclude-members: GraphDBBackend, GraphDBFactory
 
+Constants
+---------
+
+.. automodule:: back.core.graphdb.constants
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Abstract Base
 -------------
+
+The single triple-store / graph DB abstraction. Every backend (Lakebase
+Postgres, Delta) subclasses :class:`~back.core.graphdb.GraphDBBackend`.
 
 .. automodule:: back.core.graphdb.GraphDBBackend
    :members:
@@ -22,6 +33,14 @@ Factory
 -------
 
 .. automodule:: back.core.graphdb.GraphDBFactory
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Delta (Unity Catalog) backend
+-----------------------------
+
+.. automodule:: back.core.graphdb.delta.DeltaFlatStore
    :members:
    :undoc-members:
    :show-inheritance:
@@ -40,5 +59,5 @@ A copy-paste template for new engines lives at
 :class:`back.core.graphdb.GraphDBBackend` contract, register the engine in
 :class:`back.core.graphdb.GraphDBFactory`, and add it to
 ``ALLOWED_GRAPH_ENGINES`` in
-:mod:`back.objects.session.global_config`. See ``docs/graphdb-integration.md``
+:mod:`back.objects.session.GlobalConfigService`. See ``docs/graphdb-integration.md``
 for the full integration walkthrough.

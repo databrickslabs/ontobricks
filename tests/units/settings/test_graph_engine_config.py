@@ -1,7 +1,7 @@
 """Tests for Graph DB Engine configuration.
 
 Covers: GlobalConfigService get/set graph_engine + graph_engine_config,
-SettingsService orchestration, and TripleStoreFactory engine resolution.
+SettingsService orchestration, and GraphDBFactory engine resolution.
 """
 
 import importlib

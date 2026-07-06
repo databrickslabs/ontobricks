@@ -248,7 +248,7 @@ class _BuildPipeline:
 
     def _resolve_lakebase_mode(self) -> None:
         """Resolve graph engine + engine_config once, before ``_open_store``."""
-        from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         logger.debug("[DT-BUILD %s] resolving graph engine mode…", self.task_id)
         try:
@@ -258,10 +258,10 @@ class _BuildPipeline:
             # always shows the correct value because it also uses force=True.
             # Without this flag the build silently falls back to app_managed
             # even when managed_synced is configured.
-            engine = TripleStoreFactory._resolve_graph_engine(
+            engine = GraphDBFactory._resolve_graph_engine(
                 self.domain, self.settings, force=True
             )
-            cfg = TripleStoreFactory._resolve_graph_engine_config(
+            cfg = GraphDBFactory._resolve_graph_engine_config(
                 self.domain, self.settings, force=True
             ) or {}
         except Exception as exc:  # noqa: BLE001
@@ -577,14 +577,14 @@ class _BuildPipeline:
 
     def _open_store(self) -> bool:
         """Initialise the graph backend. Returns ``False`` on failure."""
-        from back.core.triplestore import get_triplestore as _get_ts
+        from back.core.graphdb import get_graphdb as _get_graphdb
 
         logger.debug(
             "[DT-BUILD %s] opening graph backend store (domain=%s)",
             self.task_id,
             self.domain_name,
         )
-        self.store = _get_ts(self.domain_snap, self.settings, backend="graph")
+        self.store = _get_graphdb(self.domain_snap, self.settings)
         if not self.store:
             logger.error(
                 "[DT-BUILD %s] could not initialize graph backend "
@@ -954,6 +954,13 @@ class _BuildPipeline:
         _adv()  # → "Syncing data from Delta (Lakeflow)"
 
         # Step 5 — trigger Lakeflow snapshot and wait for ONLINE.
+        if self.store.drop_app_owned_sync_artifacts_if_present(self.graph_name):
+            logger.info(
+                "[DT-BUILD %s] removed app-owned _sync artifacts for %s "
+                "before Lakeflow sync",
+                self.task_id,
+                self.graph_name,
+            )
         logger.debug(
             "[DT-BUILD %s] step 5/7: triggering Lakeflow sync for %s "
             "(timeout=%ss)",

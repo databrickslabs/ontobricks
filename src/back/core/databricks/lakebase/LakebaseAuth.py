@@ -47,12 +47,11 @@ import os
 import time
 from typing import Optional
 
+from back.core.databricks.lakebase.constants import TOKEN_TTL_S as _TOKEN_TTL_S
 from back.core.errors import ValidationError
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-_TOKEN_TTL_S = 3300  # refresh ~5 min before the 1h expiry
 
 
 class LakebaseAuth:

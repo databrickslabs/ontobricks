@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import networkx as nx
 
-from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 
 # High-cardinality predicates that create noise in graph structure analysis
 _DEFAULT_EXCLUDED_PREDICATES: Set[str] = {

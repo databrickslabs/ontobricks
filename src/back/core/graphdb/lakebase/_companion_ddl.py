@@ -83,6 +83,14 @@ def ensure_synced(cur: Any, schema: str, synced: str) -> None:
         )
 
 
+_LAKEFLOW_SYNC_OWNER_PREFIX = "databricks_writer"
+
+
+def is_lakeflow_sync_owner(owner: str) -> bool:
+    """Return True when *owner* looks like a Lakeflow synced-table writer role."""
+    return str(owner or "").startswith(_LAKEFLOW_SYNC_OWNER_PREFIX)
+
+
 def drop_synced(cur: Any, synced: str) -> None:
     """Drop the *_sync bulk-data table (app_managed cleanup path).
 

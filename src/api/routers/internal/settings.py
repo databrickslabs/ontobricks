@@ -125,6 +125,26 @@ async def select_warehouse(
     )
 
 
+@router.post("/select-delta-warehouse")
+async def select_delta_warehouse(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Select the SQL warehouse used for Delta triple-store graph queries."""
+    data = await request.json()
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.select_delta_warehouse(
+        data.get("warehouse_id"),
+        email,
+        user_token,
+        session_mgr,
+        settings,
+    )
+
+
 # ===========================================
 # Catalog/Schema/Volume Navigation
 # ===========================================
@@ -275,26 +295,6 @@ async def grant_registry_permissions(
         return await config_service.grant_registry_permissions_result(
             session_mgr, settings
         )
-
-
-@router.get(
-    "/registry/lakebase-stats",
-    dependencies=[Depends(require(ROLE_ADMIN))],
-)
-async def get_lakebase_stats(
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Return per-table row counts for the Lakebase registry schema.
-
-    Powers the read-only inventory grid in the Registry Location
-    panel. Raises :class:`~back.core.errors.ValidationError` or
-    :class:`~back.core.errors.InfrastructureError` when the Lakebase
-    resource is not bound, the backend is not installed, or the store
-    cannot be queried.
-    """
-    with map_route_errors("registry lakebase stats", logger):
-        return config_service.lakebase_stats_result(session_mgr, settings)
 
 
 @router.get("/registry/domains")
@@ -857,6 +857,62 @@ async def set_graph_engine(
     return config_service.set_graph_engine_result(
         engine, email, user_token, session_mgr, settings
     )
+
+
+@router.get("/triple-store-backend")
+async def get_triple_store_backend(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the configured instance triple-store backend."""
+    return config_service.get_triple_store_backend_result(session_mgr, settings)
+
+
+@router.post("/triple-store-backend")
+async def set_triple_store_backend(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Set triple-store backend (``lakebase`` or ``databricks``), admin only."""
+    data = await request.json()
+    backend = data.get("triple_store_backend", "lakebase")
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.set_triple_store_backend_result(
+        backend,
+        email,
+        user_token,
+        session_mgr,
+        settings,
+        delta_warehouse_id=data.get("delta_warehouse_id"),
+        persist_delta_warehouse="delta_warehouse_id" in data,
+    )
+
+
+@router.get("/triple-store/databricks-health")
+async def get_triple_store_databricks_health(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Probe SQL Warehouse + UC Delta triple-store artefacts."""
+    with map_route_errors("Databricks triple store health", logger):
+        return config_service.triple_store_databricks_health_result(
+            session_mgr, settings
+        )
+
+
+@router.get("/triple-store/databricks-objects")
+async def get_triple_store_databricks_objects(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List UC triple-store objects in the Registry schema, grouped by domain."""
+    with map_route_errors("Databricks triple store objects", logger):
+        return config_service.triple_store_databricks_objects_result(
+            session_mgr, settings
+        )
 
 
 @router.get("/graph-engine-config")

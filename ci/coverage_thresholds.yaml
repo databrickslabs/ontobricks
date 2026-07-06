@@ -18,7 +18,7 @@ packages:
     line: 0.95
     branch: 0.85
 
-  # Backend core — translators + reasoners + triplestore (engine room).
+  # Backend core — translators + reasoners + graphdb (engine room).
   src/back/core:
     line: 0.92
     branch: 0.80

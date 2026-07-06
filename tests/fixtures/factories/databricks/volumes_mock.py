@@ -8,7 +8,7 @@ from typing import Any
 
 @dataclass
 class MockVolume:
-    """In-memory file ops matching `back.core.databricks.VolumeFileService`.
+    """In-memory file ops matching `back.core.databricks.unity_catalog.VolumeFileService`.
 
     Stores files under a `/Volumes/<catalog>/<schema>/<volume>/<path>` key.
     Treats paths as opaque strings.

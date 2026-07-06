@@ -54,7 +54,7 @@ class LakebaseFlatStore(LakebaseBase):
     :class:`SyncedTableManager`.
 
     ``search_path`` is set on every pooled connection so generated SQL from
-    :class:`TripleStoreBackend` helpers resolves correctly.
+    :class:`GraphDBBackend` helpers resolves correctly.
     """
 
     def __init__(
@@ -186,6 +186,53 @@ class LakebaseFlatStore(LakebaseBase):
         companion = self.companion_phy(name)
         with self._cursor() as cur:
             _companion_ddl.ensure_companion(cur, self._schema, companion)
+
+    def drop_app_owned_sync_artifacts_if_present(self, name: str) -> bool:
+        """Remove a user-owned ``_sync`` table (and union view) before Lakeflow sync.
+
+        A leftover ``_sync`` table from an ``app_managed`` build (or a partial
+        ``managed_synced`` attempt) is owned by the app user. Lakeflow's
+        ``databricks_writer_*`` principal must own the table; otherwise the
+        snapshot pipeline fails with ``must be owner of table …_sync``.
+
+        Returns ``True`` when view and/or sync artifacts were dropped.
+        """
+        if not self.is_synced:
+            return False
+        validate_table_name(name)
+        synced = _companion_ddl.synced_phy(name)
+        view = _companion_ddl.view_phy(name)
+        bare_synced = synced.split(".")[-1].strip('"')
+        dropped = False
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT pg_get_userbyid(c.relowner) AS owner
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = ANY(current_schemas(false))
+                  AND c.relname = %s
+                  AND c.relkind = 'r'
+                """,
+                (bare_synced,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return False
+            owner = row.get("owner") if isinstance(row, dict) else row[0]
+            if _companion_ddl.is_lakeflow_sync_owner(str(owner)):
+                return False
+            logger.warning(
+                "Dropping app-owned sync artifacts for %s.%s (owner=%s) "
+                "so Lakeflow can recreate the _sync table",
+                self._schema,
+                bare_synced,
+                owner,
+            )
+            _companion_ddl.drop_view(cur, view)
+            _companion_ddl.drop_synced(cur, synced)
+            dropped = True
+        return dropped
 
     def ensure_synced_union_view(
         self,

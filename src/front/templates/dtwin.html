@@ -34,9 +34,14 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
-            <!-- Build Section -->
+            <!-- Build Section (Lakebase or Delta panel toggled by triple_store_backend) -->
             <div id="sync-section" class="sidebar-section">
-                {% include "partials/dtwin/_query_sync.html" %}
+                <div id="sync-lakebase-panel">
+                    {% include "partials/dtwin/_query_sync.html" %}
+                </div>
+                <div id="sync-databricks-panel" class="d-none">
+                    {% include "partials/dtwin/_query_databricks_build.html" %}
+                </div>
             </div>
 
             <!-- Runs Section -->
@@ -92,7 +97,9 @@
 {
     "view_table": "{{ view_table|default('', true) }}",
     "graph_name": "{{ graph_name|default('', true) }}",
+    "data_table": "{{ data_table|default('', true) }}",
     "graph_engine": "{{ graph_engine|default('lakebase', true) }}",
+    "triple_store_backend": "{{ triple_store_backend|default('lakebase', true) }}",
     "cache": {{ triplestore_cache|default({})|tojson }}
 }
 </script>
@@ -122,6 +129,7 @@
 <script defer src="{{ url_for('static', filename='query/js/query.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-loaders.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-execute.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-databricks-build.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='domain/js/domain-runs.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-d3graph.js') }}?v={{ asset_version }}"></script>

@@ -88,6 +88,13 @@ class SQLHelpers:
         return table
 
     @staticmethod
+    def effective_databricks_table(domain, settings=None) -> str:
+        """Fully-qualified materialized Delta TABLE (``…_data``) for Databricks backend."""
+        from back.core.graphdb.delta import _table_naming
+
+        return _table_naming.data_table_fqn(domain, settings)
+
+    @staticmethod
     def effective_graph_name(domain) -> str:
         """Graph table/name derived from the domain name and version."""
         name = (getattr(domain, "info", None) or {}).get("name", DEFAULT_GRAPH_NAME)
@@ -96,3 +103,38 @@ class SQLHelpers:
             or DEFAULT_GRAPH_VERSION
         )
         return f"{name}_V{version}"
+
+    @staticmethod
+    def effective_graph_query_table(
+        domain,
+        settings=None,
+        *,
+        include_inferred: bool = True,
+        store=None,
+    ) -> str:
+        """Physical table/view for graph read queries (Explorer, filter, stats, …).
+
+        * **databricks** — union VIEW ``…_graph`` (``_data`` ∪ ``_inferred``) when
+          *include_inferred* is true; otherwise the materialized ``…_data`` TABLE.
+        * **lakebase** — union view (``Domain_V<n>``) when *include_inferred* is true,
+          otherwise the synced bulk table via *store.synced_table_name*.
+        """
+        from back.core.errors import ValidationError
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
+        if backend == "databricks":
+            if include_inferred:
+                from back.core.graphdb.delta import _table_naming
+
+                table = _table_naming.graph_view_fqn(domain, settings)
+            else:
+                table = SQLHelpers.effective_databricks_table(domain, settings)
+            if not table:
+                raise ValidationError("Delta triple-store table FQN could not be resolved")
+            return table
+
+        graph_name = SQLHelpers.effective_graph_name(domain)
+        if include_inferred or store is None:
+            return graph_name
+        return store.synced_table_name(graph_name)

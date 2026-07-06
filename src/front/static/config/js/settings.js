@@ -6,6 +6,7 @@
 document.addEventListener('DOMContentLoaded', function () {
 
     let currentWarehouseId = null;
+    let currentDeltaWarehouseId = null;
     let warehouseLocked = false;
     let graphDbLoaded = false;
     // Registry rebuilt on every loadLakebaseObjects call; keyed by domain base name.
@@ -13,6 +14,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let _lkDomainRegistry = {};
     // UC/Lakeflow objects keyed by domain base name; populated by loadLakebaseSyncObjects.
     let _lkUCRegistry = {};
+    // Delta UC objects keyed by domain base name (triplestore_<safe>_V<n>).
+    let _dtDomainRegistry = {};
 
     function escapeHtmlSettings(str) { return escapeHtml(str); }
 
@@ -23,6 +26,13 @@ document.addEventListener('DOMContentLoaded', function () {
     loadRegistryCacheTtl();
     loadEditLockTtl();
     loadNavbarLogo();
+    // Preload triple-store / Delta warehouse so global Save can persist them
+    // even when the operator never opened the Graph DB sidebar sections.
+    setGraphDbTabLoading(true);
+    refreshGraphDbTabFromServer()
+        .then(() => { graphDbLoaded = true; })
+        .catch((e) => console.log('Graph DB preload failed', e))
+        .finally(() => { setGraphDbTabLoading(false); });
 
     // =====================================================================
     //  DATABRICKS TAB
@@ -125,6 +135,161 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.getElementById('btnRefreshWarehouses')?.addEventListener('click', () => loadWarehouseSelect(currentWarehouseId));
+
+    function warehouseNameFromSelect(select, warehouseId) {
+        if (!select || !warehouseId) return '';
+        const opt = Array.from(select.options).find((o) => o.value === warehouseId);
+        if (!opt) return '';
+        return opt.textContent
+            .replace(/\s*\(running\)\s*$/i, '')
+            .replace(/\s*\(saved\)\s*$/i, '')
+            .trim();
+    }
+
+    function resolveDeltaWarehouseDisplayName(warehouseId) {
+        if (!warehouseId) return '';
+        return (
+            warehouseNameFromSelect(document.getElementById('deltaWarehouseSelect'), warehouseId)
+            || warehouseNameFromSelect(document.getElementById('settingsWarehouseSelect'), warehouseId)
+            || warehouseId
+        );
+    }
+
+    function setDeltaWarehouseStatus() {
+        const effectiveEl = document.getElementById('deltaEffectiveWarehouse');
+        if (!effectiveEl) return;
+
+        const savedId = (currentDeltaWarehouseId || '').trim();
+        if (savedId) {
+            const name = resolveDeltaWarehouseDisplayName(savedId);
+            effectiveEl.textContent =
+                'Current SQL Warehouse used for Delta queries: ' + name;
+            return;
+        }
+
+        const fallbackId = (currentWarehouseId || '').trim();
+        if (fallbackId) {
+            const name = resolveDeltaWarehouseDisplayName(fallbackId);
+            effectiveEl.textContent =
+                'Current SQL Warehouse used for Delta queries: ' + name
+                + ' (same as global warehouse)';
+            return;
+        }
+
+        effectiveEl.textContent = 'No SQL warehouse configured.';
+    }
+
+    function setDeltaWarehouseLoading(loading) {
+        const loadingEl = document.getElementById('deltaWarehouseLoading');
+        const controls = document.getElementById('deltaWarehouseControls');
+        const select = document.getElementById('deltaWarehouseSelect');
+        const refreshBtn = document.getElementById('btnRefreshDeltaWarehouses');
+        const applyBtn = document.getElementById('btnApplyDeltaWarehouse');
+        if (loadingEl) loadingEl.classList.toggle('d-none', !loading);
+        if (controls) controls.classList.toggle('d-none', loading);
+        if (select) select.setAttribute('aria-busy', loading ? 'true' : 'false');
+        if (refreshBtn) refreshBtn.disabled = loading;
+        if (applyBtn) applyBtn.disabled = loading;
+    }
+
+    async function loadDeltaWarehouseSelect(preselectId, effectiveId) {
+        const select = document.getElementById('deltaWarehouseSelect');
+        if (!select) return;
+        setDeltaWarehouseLoading(true);
+
+        try {
+            const response = await fetch('/settings/warehouses', { credentials: 'same-origin' });
+            const data = await response.json();
+
+            select.innerHTML = '<option value="">— same as global warehouse —</option>';
+
+            if (data.warehouses && data.warehouses.length > 0) {
+                data.warehouses.forEach(wh => {
+                    const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
+                    const opt = document.createElement('option');
+                    opt.value = wh.id;
+                    opt.textContent = wh.name + stateLabel;
+                    select.appendChild(opt);
+                });
+            } else if (data.error) {
+                select.innerHTML = '<option value="">Error: ' + escapeHtmlSettings(data.error) + '</option>';
+            } else {
+                select.innerHTML = '<option value="">No warehouses available</option>';
+            }
+
+            if (preselectId) {
+                const hasOpt = Array.from(select.options).some((o) => o.value === preselectId);
+                if (!hasOpt) {
+                    const wh = (data.warehouses || []).find((w) => w.id === preselectId);
+                    const savedOpt = document.createElement('option');
+                    savedOpt.value = preselectId;
+                    savedOpt.textContent = wh ? wh.name : preselectId + ' (saved)';
+                    select.appendChild(savedOpt);
+                }
+                select.value = preselectId;
+            } else {
+                select.value = '';
+            }
+            setDeltaWarehouseStatus();
+        } catch (error) {
+            console.error('Error loading Delta warehouses:', error);
+            select.innerHTML = '<option value="">Error loading warehouses</option>';
+        } finally {
+            setDeltaWarehouseLoading(false);
+        }
+    }
+
+    document.getElementById('btnRefreshDeltaWarehouses')?.addEventListener(
+        'click',
+        () => loadDeltaWarehouseSelect(currentDeltaWarehouseId)
+    );
+
+    async function saveDeltaWarehouseSelection(errors) {
+        const select = document.getElementById('deltaWarehouseSelect');
+        if (!select) return false;
+        const warehouseId = select.value || '';
+        try {
+            const resp = await fetch('/settings/select-delta-warehouse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ warehouse_id: warehouseId }),
+            });
+            const result = await resp.json();
+            if (!resp.ok || !result.success) {
+                const msg = result.message || result.detail || 'Failed to save Delta warehouse';
+                if (errors) errors.push('Delta warehouse: ' + msg);
+                return false;
+            }
+            currentDeltaWarehouseId = result.delta_warehouse_id || '';
+            setDeltaWarehouseStatus();
+            return true;
+        } catch (e) {
+            if (errors) errors.push('Delta warehouse: ' + e.message);
+            return false;
+        }
+    }
+
+    document.getElementById('btnApplyDeltaWarehouse')?.addEventListener('click', async function () {
+        const btn = this;
+        const select = document.getElementById('deltaWarehouseSelect');
+        if (!select) return;
+        btn.disabled = true;
+        const errors = [];
+        const ok = await saveDeltaWarehouseSelection(errors);
+        btn.disabled = false;
+        if (ok) {
+            showNotification(
+                currentDeltaWarehouseId
+                    ? 'Delta SQL Warehouse saved to registry'
+                    : 'Delta warehouse cleared — using global warehouse',
+                'success',
+                2500
+            );
+        } else if (errors.length) {
+            showNotification(errors[0], 'error');
+        }
+    });
 
     document.getElementById('btnTestConnection')?.addEventListener('click', async function () {
         const whId = document.getElementById('settingsWarehouseSelect').value || currentWarehouseId;
@@ -381,15 +546,12 @@ document.addEventListener('DOMContentLoaded', function () {
     //  GRAPH DB TAB – Graph Engine selector
     // =====================================================================
 
-    /** Show Lakebase picker section from graph engine select. */
+    /** Ensure Lakebase / Delta configuration panels are visible after load. */
     function applyGraphDbEnginePanels() {
-        const sel = document.getElementById('graphEngineSelect');
-        const lakePanel = document.getElementById('lakebaseGraphPanel');
-        if (!sel) return;
-        const eng = sel.value;
-        if (lakePanel) {
-            lakePanel.style.display = eng === 'lakebase' ? 'block' : 'none';
-        }
+        const lkPanel = document.getElementById('lakebaseGraphPanel');
+        const dtPanel = document.getElementById('deltaGraphPanel');
+        if (lkPanel) lkPanel.style.display = 'block';
+        if (dtPanel) dtPanel.style.display = 'block';
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -873,67 +1035,71 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setGraphDbTabLoading(loading) {
-        // Only the Lakebase section shows a spinner (ts-global/Global has no spinner).
-        const lkBanner = document.getElementById('lakebaseSectionBanner');
-        const lkPanel  = document.getElementById('lakebaseGraphPanel');
-        if (lkBanner) {
-            lkBanner.classList.toggle('d-none', !loading);
-            lkBanner.classList.toggle('d-flex', loading);
+        const lkBanner  = document.getElementById('lakebaseSectionBanner');
+        const lkPanel   = document.getElementById('lakebaseGraphPanel');
+        const dtBanner  = document.getElementById('deltaSectionBanner');
+        const dtPanel   = document.getElementById('deltaGraphPanel');
+        const beBanner  = document.getElementById('backendSectionBanner');
+        const beContent = document.getElementById('graphDbTabContent');
+        [lkBanner, dtBanner, beBanner].forEach(function (banner) {
+            if (!banner) return;
+            banner.classList.toggle('d-none', !loading);
+            banner.classList.toggle('d-flex', loading);
+        });
+        if (loading) {
+            if (lkPanel)   lkPanel.style.display   = 'none';
+            if (dtPanel)   dtPanel.style.display   = 'none';
+            if (beContent) beContent.style.display = 'none';
+        } else {
+            if (beContent) beContent.style.display = '';
         }
-        // Hide lakebase panel during load; applyGraphDbEnginePanels() restores it after
-        if (loading && lkPanel) lkPanel.style.display = 'none';
     }
 
-    /** Reload engine + JSON from server so the tab matches persisted settings after every visit. */
+    function applyDeltaRegistryLocation(data) {
+        const regLoc = document.getElementById('deltaRegistryLocation');
+        if (!regLoc || !data) return;
+        regLoc.textContent = data.storage_location
+            || (data.registry_catalog && data.registry_schema
+                ? data.registry_catalog + '.' + data.registry_schema
+                : '(not configured — set Registry catalog & schema)');
+    }
+
     async function refreshGraphDbTabFromServer() {
+        const tsSel = document.getElementById('tripleStoreBackendSelect');
         const sel = document.getElementById('graphEngineSelect');
         const ta  = document.getElementById('graphEngineConfig');
-        if (!sel || !ta) return;
+        if (!tsSel) return;
         try {
-            const [engResp, cfgResp] = await Promise.all([
+            const [tsResp, engResp, cfgResp] = await Promise.all([
+                fetch('/settings/triple-store-backend', { credentials: 'same-origin' }),
                 fetch('/settings/graph-engine',        { credentials: 'same-origin' }),
-                fetch('/settings/graph-engine-config', { credentials: 'same-origin' }),
+                ta ? fetch('/settings/graph-engine-config', { credentials: 'same-origin' }) : Promise.resolve(null),
             ]);
+            const tsData = tsResp.ok ? await tsResp.json() : {};
             const engData = engResp.ok ? await engResp.json() : {};
-            const cfgData = cfgResp.ok ? await cfgResp.json() : {};
-            if (cfgData.success) {
+            const cfgData = cfgResp && cfgResp.ok ? await cfgResp.json() : {};
+            if (ta && cfgData.success) {
                 ta.value = JSON.stringify(cfgData.graph_engine_config || {}, null, 2);
             }
-            const rawEng = engData.graph_engine;
-            if (engData.success && rawEng && typeof rawEng === 'string') {
-                const allowed = Array.isArray(engData.allowed_engines) ? engData.allowed_engines : [];
-                if (allowed.length === 0 && rawEng === 'lakebase') {
-                    sel.value = rawEng;
-                } else if (allowed.indexOf(rawEng) >= 0) {
-                    sel.value = rawEng;
+            const rawTs = tsData.triple_store_backend;
+            if (tsData.success && rawTs) {
+                const allowedTs = Array.isArray(tsData.allowed_backends) ? tsData.allowed_backends : [];
+                if (allowedTs.length === 0 || allowedTs.indexOf(rawTs) >= 0) {
+                    tsSel.value = rawTs;
                 } else {
-                    sel.value = 'lakebase';
+                    tsSel.value = 'lakebase';
                 }
             }
-            applyLakebaseFormFromConfigTextarea();
-            if (sel.value === 'lakebase') {
-                // auto-load the cascading chain if a project is already configured
-                await loadLakebaseProjects();
-                // guarantee the 4 fields always show the saved registry config,
-                // even when the cascade couldn't list/match a stale project
-                prefillLakebaseConnectionFromConfig();
-                await loadLakebaseGraphHealth();
-                // restore UC catalog/schema dropdowns when managed_synced was persisted
-                const syncModeEl = document.getElementById('lakebaseSyncMode');
-                if (syncModeEl && syncModeEl.value === 'managed_synced') {
-                    await loadUcCatalogsForGraphEngine();
-                }
+            if (sel) {
+                const rawEng = engData.graph_engine;
+                if (engData.success && rawEng) sel.value = rawEng;
             }
-        } catch (e) {
-            console.log('Graph DB tab refresh failed', e);
-        } finally {
-            applyGraphDbEnginePanels();
-        }
-    }
-
-    document.getElementById('graphEngineSelect')?.addEventListener('change', async function () {
-        applyGraphDbEnginePanels();
-        if (this.value === 'lakebase') {
+            currentDeltaWarehouseId = tsData.delta_warehouse_id || '';
+            applyDeltaRegistryLocation(tsData);
+            await loadDeltaWarehouseSelect(
+                currentDeltaWarehouseId,
+                tsData.effective_delta_warehouse_id
+            );
             applyLakebaseFormFromConfigTextarea();
             await loadLakebaseProjects();
             prefillLakebaseConnectionFromConfig();
@@ -942,6 +1108,380 @@ document.addEventListener('DOMContentLoaded', function () {
             if (syncModeEl && syncModeEl.value === 'managed_synced') {
                 await loadUcCatalogsForGraphEngine();
             }
+        } catch (e) {
+            console.log('Graph DB tab refresh failed', e);
+        } finally {
+            applyGraphDbEnginePanels();
+        }
+    }
+
+    async function loadDeltaTripleStoreHealth(options) {
+        const opts = options || {};
+        const healthPanel = opts.healthPanel !== false;
+        const out = document.getElementById('deltaHealthResult');
+        const btn = document.getElementById('btnDeltaTripleStoreHealth');
+        const regLoc = document.getElementById('deltaRegistryLocation');
+        if (!out && !regLoc) return;
+        if (btn && healthPanel) btn.disabled = true;
+        if (healthPanel && out) {
+            out.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Checking…</span>';
+        }
+        try {
+            const resp = await fetch('/settings/triple-store/databricks-health', { credentials: 'same-origin' });
+            const data = await resp.json();
+
+            if (regLoc && !regLoc.textContent.replace(/[—\s]/g, '')) {
+                applyDeltaRegistryLocation(data);
+            }
+
+            if (!healthPanel || !out) return;
+
+            if (!data.registry_configured) {
+                out.innerHTML =
+                    '<div class="alert alert-warning mb-0 py-2">' +
+                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
+                    'Registry catalog/schema is not configured. Go to <strong>Settings → Registry</strong> first.' +
+                    '</div>';
+                return;
+            }
+            if (!data.warehouse_configured) {
+                out.innerHTML =
+                    '<div class="alert alert-warning mb-0 py-2">' +
+                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
+                    'SQL Warehouse is not configured. Select one on the <strong>SQL Warehouse</strong> tab ' +
+                    'or set the global warehouse under <strong>Settings → Databricks</strong>.' +
+                    '</div>';
+                return;
+            }
+
+            const dt = data.data_table || {};
+            const viewErr = (data.view && data.view.error) ? data.view.error : '';
+            const dataErr = dt.error ? dt.error : '';
+            let html = '<dl class="row mb-0">';
+            if (data.warehouse_id) {
+                html += '<dt class="col-sm-3">Warehouse</dt><dd class="col-sm-9 font-monospace">' +
+                    escapeHtmlSettings(data.warehouse_id) + '</dd>';
+            }
+            if (data.view_fqn) {
+                html += '<dt class="col-sm-3">R2RML VIEW</dt><dd class="col-sm-9 font-monospace">' +
+                    escapeHtmlSettings(data.view_fqn) + '</dd>';
+            }
+            if (data.data_table_fqn) {
+                html += '<dt class="col-sm-3">Data TABLE</dt><dd class="col-sm-9 font-monospace">' +
+                    escapeHtmlSettings(data.data_table_fqn) + '</dd>';
+            }
+            if (data.inferred_table_fqn) {
+                html += '<dt class="col-sm-3">Inferred TABLE</dt><dd class="col-sm-9 font-monospace">' +
+                    escapeHtmlSettings(data.inferred_table_fqn) + '</dd>';
+            }
+            if (data.data_table_fqn) {
+                const exists = dt.exists ? 'yes' : 'no';
+                const count = dt.count != null ? dt.count : '—';
+                html += '<dt class="col-sm-3">Data table</dt><dd class="col-sm-9">exists: ' +
+                    escapeHtmlSettings(exists) + ' · triples: <strong>' + escapeHtmlSettings(String(count)) +
+                    '</strong></dd>';
+            }
+            html += '</dl>';
+            if (!data.active_domain) {
+                html += '<p class="text-muted mt-2 mb-0">Open a domain to see resolved FQNs and row counts.</p>';
+            } else if (viewErr || dataErr) {
+                html += '<p class="text-warning mt-2 mb-0">' +
+                    escapeHtmlSettings(viewErr || dataErr) + '</p>';
+            } else if (!data.data_table_fqn) {
+                html += '<p class="text-muted mt-2 mb-0">Could not derive table names for the active domain.</p>';
+            }
+            out.innerHTML = html;
+        } catch (e) {
+            if (healthPanel && out) {
+                out.innerHTML = '<span class="text-danger">' + escapeHtmlSettings(e.message || 'Error') + '</span>';
+            }
+        } finally {
+            if (btn && healthPanel) btn.disabled = false;
+        }
+    }
+
+    document.getElementById('btnDeltaTripleStoreHealth')?.addEventListener('click', function () {
+        loadDeltaTripleStoreHealth();
+    });
+
+    // Lazy-load Delta health when the Health tab is first opened
+    (function () {
+        const tabBtn = document.getElementById('dttab-health');
+        let loaded = false;
+        if (tabBtn) {
+            tabBtn.addEventListener('shown.bs.tab', function () {
+                if (!loaded) {
+                    loaded = true;
+                    loadDeltaTripleStoreHealth();
+                }
+            });
+        }
+    }());
+
+    // ── Delta objects (UC tables / views in Registry schema) ───────────────
+    async function loadDeltaObjects() {
+        const btn = document.getElementById('btnLoadDeltaObjects');
+        const result = document.getElementById('deltaObjectsResult');
+        const regLoc = document.getElementById('deltaRegistryLocation');
+        if (!result) return;
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Loading…';
+        }
+        result.innerHTML = '';
+
+        try {
+            const resp = await fetch('/settings/triple-store/databricks-objects', { credentials: 'same-origin' });
+            const data = resp.ok ? await resp.json() : {};
+            if (!data.success) {
+                result.innerHTML = '<div class="alert alert-warning small py-2 mt-2">'
+                    + escapeHtmlSettings(data.message || data.detail || 'Failed to load objects') + '</div>';
+                return;
+            }
+
+            applyDeltaRegistryLocation(data);
+
+            if (!data.registry_configured) {
+                result.innerHTML = '<div class="alert alert-warning small py-2 mt-2">'
+                    + escapeHtmlSettings(data.message || 'Registry catalog/schema is not configured.') + '</div>';
+                return;
+            }
+
+            const domains = data.domains || [];
+            _dtDomainRegistry = {};
+            if (domains.length === 0) {
+                result.innerHTML = '<p class="small text-muted mt-2">No triple-store objects found in this schema.</p>';
+                return;
+            }
+
+            function mkDropBtn(fullName, kind) {
+                return '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 dt-drop-obj-btn"'
+                    + ' data-dt-full-name="' + escapeHtmlSettings(fullName) + '"'
+                    + ' data-dt-kind="' + escapeHtmlSettings(kind) + '"'
+                    + ' title="Drop ' + escapeHtmlSettings(kind) + '">'
+                    + '<i class="bi bi-trash3"></i></button>';
+            }
+
+            function kindBadge(kind) {
+                const map = {
+                    view: 'bg-info-subtle text-info-emphasis',
+                    table: 'bg-primary-subtle text-primary-emphasis',
+                };
+                return '<span class="badge border ' + (map[kind] || 'bg-secondary-subtle text-secondary-emphasis') + '">'
+                    + kind.charAt(0).toUpperCase() + kind.slice(1) + '</span>';
+            }
+
+            function mkObjectRow(kind, name, fullName) {
+                return '<tr>'
+                    + '<td>' + kindBadge(kind) + '</td>'
+                    + '<td class="font-monospace small">' + escapeHtmlSettings(name) + '</td>'
+                    + '<td class="text-end">' + mkDropBtn(fullName, kind) + '</td>'
+                    + '</tr>';
+            }
+
+            let html = '<div class="lk-domain-cards">';
+            domains.forEach(function (grp, idx) {
+                const key = grp.base;
+                _dtDomainRegistry[key] = { base: key, sortedItems: grp.items || [] };
+                const collapseId = 'dtDomainCollapse_' + idx;
+
+                html += '<div class="lk-domain-card">';
+                html += '<div class="lk-domain-header">';
+                html += '<button class="lk-domain-toggle" type="button"'
+                    + ' data-bs-toggle="collapse" data-bs-target="#' + collapseId + '"'
+                    + ' aria-expanded="false" aria-controls="' + collapseId + '">';
+                html += '<i class="bi bi-chevron-right lk-chevron"></i>';
+                html += '<i class="bi bi-folder2 text-muted" style="font-size:.85rem"></i>';
+                html += '<span class="lk-domain-name">' + escapeHtmlSettings(key) + '</span>';
+                html += '<span class="badge bg-secondary-subtle text-secondary-emphasis border lk-domain-count">'
+                    + (grp.items || []).length + '</span>';
+                html += '</button>';
+                html += '<button type="button"'
+                    + ' class="btn btn-sm btn-outline-danger lk-domain-delete-btn dt-drop-domain-btn"'
+                    + ' data-dt-domain="' + escapeHtmlSettings(key) + '"'
+                    + ' title="Delete all objects for this domain">'
+                    + '<i class="bi bi-trash3 me-1"></i>Delete</button>';
+                html += '</div>';
+                html += '<div id="' + collapseId + '" class="collapse lk-domain-body">';
+                html += '<table class="table table-sm mb-0"><thead class="table-light"><tr>'
+                    + '<th style="width:90px">Type</th><th>Name</th>'
+                    + '<th class="text-end" style="width:90px">Action</th>'
+                    + '</tr></thead><tbody>';
+                (grp.items || []).forEach(function (o) {
+                    html += mkObjectRow(o.kind, o.name, o.full_name);
+                });
+                html += '</tbody></table>';
+                html += '</div></div>';
+            });
+            html += '</div>';
+
+            result.innerHTML = html;
+
+            result.querySelectorAll('.dt-drop-domain-btn').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    dropDeltaDomainObjects(this.dataset.dtDomain);
+                });
+            });
+            result.querySelectorAll('.dt-drop-obj-btn').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    dropDeltaObject(this.dataset.dtFullName, this.dataset.dtKind);
+                });
+            });
+            result.querySelectorAll('.lk-domain-card').forEach(function (card) {
+                const collapseEl = card.querySelector('.collapse');
+                if (!collapseEl) return;
+                collapseEl.addEventListener('show.bs.collapse', function () { card.classList.add('lk-open'); });
+                collapseEl.addEventListener('hide.bs.collapse', function () { card.classList.remove('lk-open'); });
+            });
+        } catch (e) {
+            result.innerHTML = '<div class="alert alert-danger small py-2 mt-2">'
+                + escapeHtmlSettings(e.message || 'Network error') + '</div>';
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Load objects';
+            }
+        }
+    }
+
+    async function _execDropDelta(fullName) {
+        const result = document.getElementById('deltaObjectsResult');
+        _showDropSpinner(result, 'Dropping ' + fullName + '…');
+        try {
+            const resp = await fetch('/settings/graph-engine/drop-uc-object', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ full_name: fullName, is_sync: false }),
+            });
+            let data = {};
+            try { data = await resp.json(); } catch (_) {}
+            if (data.success) {
+                showNotification('Dropped ' + fullName, 'success');
+                await loadDeltaObjects();
+            } else {
+                const msg = data.detail || data.message || ('HTTP ' + resp.status);
+                if (result) {
+                    result.insertAdjacentHTML('afterbegin',
+                        '<div class="alert alert-danger small py-2 mb-2">'
+                        + escapeHtmlSettings(msg) + '</div>');
+                }
+                showNotification('Drop failed: ' + msg, 'danger');
+            }
+        } catch (e) {
+            showNotification('Drop error: ' + (e.message || 'Network error'), 'danger');
+        }
+    }
+
+    function dropDeltaObject(fullName, kind) {
+        const modalEl = document.getElementById('lkDropConfirmModal');
+        const bodyEl = document.getElementById('lkDropConfirmModalBody');
+        const confirmBtn = document.getElementById('lkDropConfirmBtn');
+        if (!modalEl || !bodyEl || !confirmBtn) {
+            if (window.confirm('Drop ' + kind + ' ' + fullName + '?')) {
+                _execDropDelta(fullName);
+            }
+            return;
+        }
+        bodyEl.innerHTML = 'Drop <strong>' + escapeHtmlSettings(kind) + '</strong> <code>'
+            + escapeHtmlSettings(fullName) + '</code>?';
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        newBtn.addEventListener('click', function () {
+            modal.hide();
+            _execDropDelta(fullName);
+        });
+        modal.show();
+    }
+
+    async function _execDropAllDelta(items) {
+        const result = document.getElementById('deltaObjectsResult');
+        const errors = [];
+        const total = items.length;
+        _showDropSpinner(result, 'Deleting ' + total + ' object' + (total !== 1 ? 's' : '') + '…');
+
+        for (let i = 0; i < items.length; i++) {
+            const o = items[i];
+            const label = o.kind + ' ' + o.name;
+            _showDropSpinner(result, 'Dropping ' + label + ' (' + (i + 1) + '/' + total + ')…');
+            try {
+                const resp = await fetch('/settings/graph-engine/drop-uc-object', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ full_name: o.full_name, is_sync: false }),
+                });
+                let data = {};
+                try { data = await resp.json(); } catch (_) {}
+                if (!data.success) {
+                    const detail = data.detail || data.message || (resp.ok ? 'server returned failure' : 'HTTP ' + resp.status);
+                    errors.push(label + ': ' + detail);
+                }
+            } catch (e) {
+                errors.push(label + ': ' + (e.message || 'network error'));
+            }
+        }
+
+        if (errors.length) {
+            showNotification('Drops failed:\n' + errors.join('\n'), 'danger');
+            if (result) {
+                result.innerHTML = '<div class="alert alert-danger small py-2 mb-2"><strong>Drop errors:</strong><ul class="mb-0 mt-1 ps-3">'
+                    + errors.map(function (err) { return '<li>' + escapeHtmlSettings(err) + '</li>'; }).join('')
+                    + '</ul></div>';
+            }
+            return;
+        }
+        showNotification('All objects dropped', 'success');
+        await loadDeltaObjects();
+    }
+
+    function dropDeltaDomainObjects(domainKey) {
+        const entry = _dtDomainRegistry[domainKey];
+        if (!entry) {
+            showNotification('Domain not found: ' + domainKey, 'danger');
+            return;
+        }
+        const items = entry.sortedItems || [];
+        const count = items.length;
+        const listHtml = items.map(function (o) {
+            return '<li class="font-monospace small">' + escapeHtmlSettings(o.kind) + ': '
+                + escapeHtmlSettings(o.name) + '</li>';
+        }).join('');
+        const bodyContent = 'Drop all <strong>' + count + ' object' + (count !== 1 ? 's' : '')
+            + '</strong> for <code>' + escapeHtmlSettings(domainKey) + '</code>?'
+            + '<ul class="mt-2 mb-0 ps-3">' + listHtml + '</ul>';
+
+        const modalEl = document.getElementById('lkDropConfirmModal');
+        const bodyEl = document.getElementById('lkDropConfirmModalBody');
+        const confirmBtn = document.getElementById('lkDropConfirmBtn');
+        if (!modalEl || !bodyEl || !confirmBtn) {
+            if (window.confirm('Drop all ' + count + ' objects for ' + domainKey + '?')) {
+                _execDropAllDelta(items);
+            }
+            return;
+        }
+        bodyEl.innerHTML = bodyContent;
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        newBtn.addEventListener('click', function () {
+            modal.hide();
+            _execDropAllDelta(items);
+        });
+        modal.show();
+    }
+
+    document.getElementById('btnLoadDeltaObjects')?.addEventListener('click', loadDeltaObjects);
+
+    document.getElementById('tripleStoreBackendSelect')?.addEventListener('change', async function () {
+        // Backend choice is persisted via Save on Back End; do not hide Lakebase/Delta nav items.
+        if (this.value === 'lakebase') {
+            applyLakebaseFormFromConfigTextarea();
+            await loadLakebaseProjects();
+            prefillLakebaseConnectionFromConfig();
+            await loadLakebaseGraphHealth();
         }
     });
 
@@ -1947,14 +2487,45 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /** Persist graph engine and JSON config (used by global Save). */
     async function saveGraphDbSettings(errors) {
+        const tsSel = document.getElementById('tripleStoreBackendSelect');
         const sel = document.getElementById('graphEngineSelect');
         const ta = document.getElementById('graphEngineConfig');
         const errDiv = document.getElementById('graphEngineConfigError');
-        if (!sel || !ta) return;
+        if (!tsSel) return;
 
         if (errDiv) errDiv.style.display = 'none';
 
         try {
+            const deltaSelect = document.getElementById('deltaWarehouseSelect');
+            const tsBody = { triple_store_backend: tsSel.value };
+            if (deltaSelect) {
+                tsBody.delta_warehouse_id = deltaSelect.value || '';
+            }
+            const tsResp = await fetch('/settings/triple-store-backend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(tsBody),
+            });
+            const tsResult = await tsResp.json();
+            if (!tsResult.success) {
+                errors.push('Triple store backend: ' + (tsResult.message || 'Unknown error'));
+                return;
+            }
+            if (tsResult.delta_warehouse_id != null) {
+                currentDeltaWarehouseId = tsResult.delta_warehouse_id || '';
+            }
+            if (deltaSelect) {
+                await loadDeltaWarehouseSelect(currentDeltaWarehouseId);
+            } else {
+                setDeltaWarehouseStatus();
+            }
+
+            if (tsSel.value !== 'lakebase' || !sel || !ta) {
+                applyGraphDbEnginePanels();
+                return;
+            }
+
             const resp = await fetch('/settings/graph-engine', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2016,7 +2587,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('sidebarSectionChanged', async (e) => {
         const s = e.detail?.section;
-        if ((s === 'ts-global' || s === 'lakebase') && !graphDbLoaded) {
+        if (s === 'lakebase' && graphDbLoaded) {
+            await loadLakebaseGraphHealth();
+        }
+        if ((s === 'ts-global' || s === 'lakebase' || s === 'delta') && !graphDbLoaded) {
             graphDbLoaded = true;
             setGraphDbTabLoading(true);
             try {
@@ -2106,6 +2680,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // 4. Graph DB engine + JSON config (same tab; top Save only)
+        if (!graphDbLoaded) {
+            try {
+                await refreshGraphDbTabFromServer();
+                graphDbLoaded = true;
+            } catch (e) {
+                console.log('Graph DB refresh before save failed', e);
+            }
+        }
         await saveGraphDbSettings(errors);
 
         btn.disabled = false;

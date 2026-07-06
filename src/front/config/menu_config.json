@@ -532,6 +532,13 @@
                             "icon": "bi-diagram-3",
                             "default": false,
                             "requires": null
+                        },
+                        {
+                            "id": "delta",
+                            "label": "Delta",
+                            "icon": "bi-layers",
+                            "default": false,
+                            "requires": null
                         }
                     ]
                 },

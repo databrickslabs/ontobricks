@@ -832,16 +832,17 @@ class DigitalTwin:
         """Live graph backend row count and paths."""
         from back.core.helpers import (
             effective_graph_name,
+            effective_graph_query_table,
             effective_view_table,
             run_blocking,
         )
-        from back.core.triplestore import get_triplestore
+        from back.core.graphdb import get_graphdb
 
         domain = self._domain
         try:
-            graph_name = effective_graph_name(domain)
+            graph_name = effective_graph_query_table(domain, settings)
             view_table = effective_view_table(domain)
-            graph_store = get_triplestore(domain, settings, backend="graph")
+            graph_store = get_graphdb(domain, settings)
             graph_ok = False
             graph_count = 0
             graph_path = None
@@ -888,9 +889,9 @@ class DigitalTwin:
         engine.  Future engines plug in via ``back/core/graphdb/<engine>/``
         and update :class:`back.core.graphdb.GraphDBFactory`.
         """
-        from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        raw = TripleStoreFactory._resolve_graph_engine(domain, settings) or "lakebase"
+        raw = GraphDBFactory._resolve_graph_engine(domain, settings) or "lakebase"
         return raw if raw == "lakebase" else "lakebase"
 
     async def fetch_digital_twin_existence(self, settings) -> Dict[str, Any]:
@@ -908,15 +909,16 @@ class DigitalTwin:
 
         from back.core.helpers import (
             effective_graph_name,
+            effective_graph_query_table,
             effective_view_table,
             run_blocking,
         )
-        from back.core.triplestore import get_triplestore
+        from back.core.graphdb import get_graphdb
 
         domain = self._domain
         graph_engine = DigitalTwin.resolve_graph_engine(domain, settings)
         view_table = effective_view_table(domain)
-        graph_name = effective_graph_name(domain)
+        graph_name = effective_graph_query_table(domain, settings)
         last_built = domain.last_build or None
         last_update = domain.last_update or None
 
@@ -942,14 +944,14 @@ class DigitalTwin:
         lk_table = ""
         lk_synced_uc_cfg = ""
         try:
-            from back.core.triplestore import TripleStoreFactory
+            from back.core.graphdb import GraphDBFactory
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
                 resolve_sync_uc_fallback_catalog,
                 resolve_lakebase_graph_schema,
             )
             from back.core.graphdb.lakebase._companion_ddl import synced_phy
 
-            engine_config = TripleStoreFactory._resolve_graph_engine_config(
+            engine_config = GraphDBFactory._resolve_graph_engine_config(
                 domain, settings
             ) or {}
             lk_sync_mode = str(engine_config.get("sync_mode") or "app_managed").strip() or "app_managed"
@@ -979,7 +981,7 @@ class DigitalTwin:
             if "." not in view_table:
                 return None, f"Resolved view name is not fully qualified: {view_table}"
             try:
-                view_store = get_triplestore(domain, settings, backend="view")
+                view_store = get_graphdb(domain, settings, engine="view")
                 if not view_store:
                     return None, (
                         "No SQL warehouse available "
@@ -1009,7 +1011,7 @@ class DigitalTwin:
                     resolve_sync_uc_fallback_catalog,
                 )
 
-                graph_store = get_triplestore(domain, settings, backend="graph")
+                graph_store = get_graphdb(domain, settings)
                 if graph_store:
                     lk_schema_live = getattr(graph_store, "graph_schema", "") or ""
                     tbl_fn = getattr(graph_store, "physical_table_id", None)
@@ -1052,7 +1054,7 @@ class DigitalTwin:
             if not uc_fqn:
                 return None
             try:
-                view_store_uc = get_triplestore(domain, settings, backend="view")
+                view_store_uc = get_graphdb(domain, settings, engine="view")
                 if view_store_uc:
                     exists = await run_blocking(view_store_uc.table_exists, uc_fqn)
                     logger.info(
@@ -2523,7 +2525,7 @@ class DigitalTwin:
         """Run SHACL / SWRL / DT / aggregate checks inside a worker thread."""
         import time
 
-        from back.core.triplestore import get_triplestore as _get_ts
+        from back.core.graphdb import get_graphdb as _get_graphdb
 
         task_ref = SimpleNamespace(id=task_id)
         t0 = time.time()
@@ -2533,7 +2535,9 @@ class DigitalTwin:
                 task_id, f"Running {total} data quality checks ({backend})..."
             )
 
-            store = _get_ts(domain_snap, settings, backend=backend)
+            store = _get_graphdb(
+                domain_snap, settings, engine=(None if backend == "graph" else backend)
+            )
             if not store:
                 tm.fail_task(task_id, f"Could not initialize {backend} backend")
                 return
@@ -2744,7 +2748,7 @@ class DigitalTwin:
         from back.core.helpers import get_databricks_client, is_uri
         from back.core.reasoning import ReasoningService
         from back.core.reasoning.models import ReasoningResult as _RR
-        from back.core.triplestore import get_triplestore
+        from back.core.graphdb import get_graphdb
 
         is_api = build_kind == "api"
         try:
@@ -2755,7 +2759,7 @@ class DigitalTwin:
             tm.start_task(task_id)
             tm.update_progress(task_id, 10, "Initialising triple store")
 
-            store = get_triplestore(domain_snap, settings, backend="graph")
+            store = get_graphdb(domain_snap, settings)
             if store is None:
                 if is_api:
                     logger.info(
@@ -2767,7 +2771,7 @@ class DigitalTwin:
                         "Reasoning task %s: graph store unavailable, falling back to view",
                         task_id,
                     )
-                store = get_triplestore(domain_snap, settings, backend="view")
+                store = get_graphdb(domain_snap, settings, engine="view")
             logger.info(
                 "Reasoning task %s: store=%s",
                 task_id,
@@ -2837,9 +2841,7 @@ class DigitalTwin:
                     task_id, 92, "Appending inferred triples to graph..."
                 )
                 try:
-                    graph_store = get_triplestore(
-                        domain_snap, settings, backend="graph"
-                    )
+                    graph_store = get_graphdb(domain_snap, settings)
                     if graph_store is None:
                         logger.warning(
                             "API inference %s: cannot append to graph — store unavailable",
