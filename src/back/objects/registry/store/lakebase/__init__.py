@@ -14,7 +14,7 @@ Submodules
   ``__SCHEMA__`` token at runtime.
 
 Authentication is handled by
-:class:`back.core.databricks.LakebaseAuth` (sources ``PG*`` env vars
+:class:`back.core.databricks.lakebase.LakebaseAuth` (sources ``PG*`` env vars
 and mints short-lived Lakebase JWTs via the workspace SDK).
 """
 

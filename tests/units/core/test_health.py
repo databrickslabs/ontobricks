@@ -18,7 +18,9 @@ from shared.fastapi import health
 
 # These imports work around __init__.py re-exports that shadow module paths.
 _VFS_MOD = importlib.import_module("back.core.databricks.VolumeFileService")
-_LBA_MOD = importlib.import_module("back.core.databricks.LakebaseAuth")
+# ``health`` imports ``get_lakebase_auth`` from the shared lakebase package,
+# so patch the symbol on that package (not the auth submodule).
+_LBA_MOD = importlib.import_module("back.core.databricks.lakebase")
 
 
 # ---------------------------------------------------------------------------

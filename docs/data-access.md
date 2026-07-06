@@ -20,7 +20,7 @@ languages, two are engine-facing dialects the platform translates *down to*.
 | **REST** | user-facing | `api/external_app.py`, `api/routers/...`, `api/routers/internal/dtwin.py` | Calls into Python services (`DigitalTwin`, `DomainQueryService`, registry, …) |
 | **GraphQL** | user-facing | `back/core/graphql/GraphQLSchemaBuilder.py`, `ResolverFactory.py`, `back/fastapi/graphql_routes.py` | Resolvers internally call SPARQL / triples-find → Spark SQL |
 | **SPARQL** | user-facing (read-only in chat) | `back/core/w3c/sparql/SparqlTranslator.py`, `SparqlQueryRunner.py`, `DomainQueryService.py` | Translated to **Spark SQL** via R2RML mappings |
-| **Spark SQL** | engine-facing | `back/core/triplestore/delta/DeltaTripleStore.py` | Native execution on Databricks SQL Warehouse against Delta views in Unity Catalog |
+| **Spark SQL** | engine-facing | `back/core/graphdb/delta/DeltaFlatStore.py` | Native execution on Databricks SQL Warehouse against Delta views in Unity Catalog |
 | **Cypher** *(reserved for future engines)* | engine-facing | `back/core/graphdb/GraphDBBackend.py` + concrete engines under `back/core/graphdb/<engine>/` (`supports_cypher = True`, `query_dialect = "cypher"`) | None of the currently shipped engines speaks Cypher — Lakebase Postgres is SQL-only. The capability flags are kept as a seam for plugging in Cypher / Gremlin / SPARQL-store engines. |
 
 ### Supporting W3C standards (not query languages)
@@ -40,19 +40,19 @@ constraints, and rule definitions:
 ## 2. Storage backends — which engine speaks which language
 
 Which engine actually runs your query depends on the domain's configured
-triple-store backend (`TripleStoreFactory.create(...)`):
+triple-store backend (`GraphDBFactory.create(...)`):
 
 | Layer | Storage | Native engine | SPARQL path | Cypher path |
 |---|---|---|---|---|
-| Delta view (`DeltaTripleStore`) | Delta view in Unity Catalog | **Spark SQL** (Databricks SQL Warehouse) | SPARQL → Spark SQL via R2RML | n/a |
-| Graph DB engine (`GraphDBBackend`) | Engine-specific (Lakebase Postgres flat table today) | **Postgres SQL** | SPARQL → engine SQL | Reserved for future Cypher engines |
+| Delta engine (`DeltaFlatStore`) | Delta view in Unity Catalog | **Spark SQL** (Databricks SQL Warehouse) | SPARQL → Spark SQL via R2RML | n/a |
+| Lakebase engine (`LakebaseFlatStore`) | Lakebase Postgres flat table | **Postgres SQL** | SPARQL → engine SQL | Reserved for future Cypher engines |
 
-The selection is made in `back/core/triplestore/TripleStoreFactory.py` and
-`back/core/graphdb/GraphDBFactory.py`. Both layers are always present: the
-Delta view is the governance-controlled snapshot, and the Graph DB engine is
-the queryable mirror used by the Knowledge Graph, reasoning and BFS / cohort
-helpers. The user-facing wrappers (REST / GraphQL / SPARQL) don't change
-when the Graph DB engine is swapped.
+The selection is made in `back/core/graphdb/GraphDBFactory.py`. Both engines
+share the single `GraphDBBackend` contract: the Delta view is the
+governance-controlled snapshot, and the Lakebase engine is the queryable mirror
+used by the Knowledge Graph, reasoning and BFS / cohort helpers. The
+user-facing wrappers (REST / GraphQL / SPARQL) don't change when the engine is
+swapped.
 
 > **GraphDB engines.** `GraphDBBackend` is the abstract base class; concrete
 > engines live under `back/core/graphdb/<engine>/`. The currently shipped
@@ -165,7 +165,7 @@ App, authenticates with an M2M OAuth token, and uses `httpx.AsyncClient`. It
 | `list_domains` | `GET /api/v1/domains` | REST | UC Volume listing |
 | `list_domain_versions` | `GET /api/v1/domain/versions` | REST | UC Volume listing |
 | `get_design_status` | `GET /api/v1/domain/design-status` | REST | Python aggregator |
-| `select_domain` | `GET /api/v1/digitaltwin/status` | REST | DeltaTripleStore status (Spark SQL) or GraphDB status |
+| `select_domain` | `GET /api/v1/digitaltwin/status` | REST | DeltaFlatStore status (Spark SQL) or GraphDB status |
 | `list_entity_types` | `GET /api/v1/digitaltwin/stats` | REST | **Spark SQL** GROUP BY on the triple view (Delta) or GraphDB MATCH counts |
 | `describe_entity` | `GET /api/v1/digitaltwin/triples/find` | REST | SPARQL-style BFS internally → **Spark SQL** (Delta) or **Cypher** (GraphDB) |
 | `get_status` | `GET /api/v1/digitaltwin/status` | REST | Same as `select_domain` |
@@ -364,9 +364,9 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 - REST routes — `src/api/routers/internal/dtwin.py`, `src/api/routers/v1.py`, `src/api/external_app.py`
 - GraphQL — `src/back/fastapi/graphql_routes.py`, `src/back/core/graphql/{GraphQLSchemaBuilder,ResolverFactory,SchemaMetadata}.py`
 - SPARQL — `src/back/core/w3c/sparql/{SparqlTranslator,SparqlQueryRunner,DomainQueryService}.py`
-- Triple-store factory — `src/back/core/triplestore/TripleStoreFactory.py`
-- Delta backend — `src/back/core/triplestore/delta/DeltaTripleStore.py`
-- GraphDB backend — `src/back/core/graphdb/GraphDBBackend.py`, `src/back/core/graphdb/GraphDBFactory.py`
+- Graph DB factory — `src/back/core/graphdb/GraphDBFactory.py`
+- GraphDB backend — `src/back/core/graphdb/GraphDBBackend.py`
+- Delta engine — `src/back/core/graphdb/delta/DeltaFlatStore.py`
 - GraphDB engine (Lakebase Postgres) — `src/back/core/graphdb/lakebase/{LakebaseBase,LakebaseFlatStore,SyncedTableManager}.py`
 - Reasoning — `src/back/core/reasoning/{OWLRLReasoner,SWRLSQLTranslator,SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
 - MCP server — `src/mcp-server/server/app.py`, `src/mcp-server/mcp_server.py`

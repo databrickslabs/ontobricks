@@ -30,9 +30,8 @@ For the developer guide on *adding a new engine*, see `docs/graphdb-integration.
 ┌─────────────────────────────────────────────────┐
 │  OntoBricks (FastAPI)                           │
 │                                                 │
-│  TripleStoreFactory                             │
-│    └─ GraphDBFactory.create(engine="lakebase")  │
-│         └─ LakebaseFlatStore                    │
+│  GraphDBFactory.create(engine="lakebase")       │
+│    └─ LakebaseFlatStore                          │
 │              │                                  │
 │              │  COPY FROM STDIN / INSERT         │
 │              ▼                                  │

@@ -17,10 +17,33 @@ Authentication
    :undoc-members:
    :show-inheritance:
 
-Lakebase Grants
----------------
+Lakebase (shared access layer)
+-------------------------------
 
-.. automodule:: back.core.databricks.lakebase_grants
+Technical access layer for Lakebase (Postgres), shared by the registry
+store and the graph triple store — two independent databases.
+
+.. automodule:: back.core.databricks.lakebase.LakebaseAuth
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.core.databricks.lakebase.LakebaseConnectionPool
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.core.databricks.lakebase.grants
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.core.databricks.lakebase.psycopg_gate
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.core.databricks.lakebase.constants
    :members:
    :undoc-members:
    :show-inheritance:

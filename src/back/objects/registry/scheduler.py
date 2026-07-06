@@ -600,9 +600,7 @@ class BuildScheduler:
                 # Invalidate the in-process global-config cache so other
                 # readers (e.g. settings UI, GlobalConfigService.load) see
                 # the schedule changes on next load.
-                from back.objects.session.global_config import (
-                    global_config_service,
-                )
+                from back.objects.session import global_config_service
 
                 global_config_service._cache = None
                 global_config_service._cache_ts = 0.0
@@ -668,9 +666,7 @@ class BuildScheduler:
             store = self._store_for(host, token, registry_cfg)
             ok, msg = store.save_cohort_schedules(schedules)
             if ok:
-                from back.objects.session.global_config import (
-                    global_config_service,
-                )
+                from back.objects.session import global_config_service
 
                 global_config_service._cache = None
                 global_config_service._cache_ts = 0.0
@@ -1348,11 +1344,11 @@ def _run_scheduled_build(
         # --- Step 3: Populate graph ---
         tm.advance_step(task.id, f"Applying to graph {graph_name}...")
 
-        from back.core.triplestore import get_triplestore
+        from back.core.graphdb import get_graphdb
         from back.objects.digitaltwin.models import DomainSnapshot
 
         snap = DomainSnapshot(domain, host=host, token=token)
-        store = get_triplestore(snap, settings, backend="graph")
+        store = get_graphdb(snap, settings)
         if not store:
             raise InfrastructureError("Could not initialize graph backend")
 
@@ -1545,7 +1541,7 @@ def _run_scheduled_cohort_materialize(
         from back.core.databricks.DatabricksClient import DatabricksClient
         from back.core.databricks.VolumeFileService import VolumeFileService
         from back.core.helpers import resolve_warehouse_id
-        from back.core.triplestore import get_triplestore
+        from back.core.graphdb import get_graphdb
         from back.objects.digitaltwin import CohortService
         from back.objects.digitaltwin.models import DomainSnapshot
 
@@ -1573,7 +1569,7 @@ def _run_scheduled_cohort_materialize(
             )
 
         snap = DomainSnapshot(domain, host=host, token=token)
-        store = get_triplestore(snap, settings, backend="graph")
+        store = get_graphdb(snap, settings)
         if not store:
             raise InfrastructureError("Could not initialize graph backend")
 

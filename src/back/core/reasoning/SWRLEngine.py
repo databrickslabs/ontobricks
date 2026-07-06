@@ -42,7 +42,7 @@ class SWRLEngine:
         Args:
             rules: List of rule dicts with ``name``, ``antecedent``,
                    ``consequent``, and optionally ``description``.
-            store: A :class:`TripleStoreBackend` instance.
+            store: A :class:`GraphDBBackend` instance.
             table_name: The logical triple-store table/graph name.
             materialize: If True, also insert inferred triples into the store.
             inference_limit: Max inferred triples per rule (None = unlimited).

@@ -32,7 +32,7 @@ class TestEffectiveGraphQueryTable:
         domain.current_version = 5
         domain.delta = {"catalog": "benoit_cayla", "schema": "ontobricks"}
         with patch(
-            "back.core.triplestore.TripleStoreFactory.TripleStoreFactory._resolve_triple_store_backend",
+            "back.core.graphdb.GraphDBFactory.GraphDBFactory._resolve_triple_store_backend",
             return_value="databricks",
         ):
             table = effective_graph_query_table(domain, include_inferred=True)
@@ -44,7 +44,7 @@ class TestEffectiveGraphQueryTable:
         domain.current_version = 5
         domain.delta = {"catalog": "benoit_cayla", "schema": "ontobricks"}
         with patch(
-            "back.core.triplestore.TripleStoreFactory.TripleStoreFactory._resolve_triple_store_backend",
+            "back.core.graphdb.GraphDBFactory.GraphDBFactory._resolve_triple_store_backend",
             return_value="databricks",
         ):
             table = effective_graph_query_table(domain, include_inferred=False)
@@ -56,7 +56,7 @@ class TestEffectiveGraphQueryTable:
         domain.current_version = 5
         domain.delta = {}
         with patch(
-            "back.core.triplestore.TripleStoreFactory.TripleStoreFactory._resolve_triple_store_backend",
+            "back.core.graphdb.GraphDBFactory.GraphDBFactory._resolve_triple_store_backend",
             return_value="lakebase",
         ):
             table = effective_graph_query_table(domain)

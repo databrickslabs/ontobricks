@@ -1,0 +1,31 @@
+## Drop app-owned _sync artifacts before Lakeflow sync
+
+Context: Live scenario campaign failed at KG build step 5/7 with
+`must be owner of table test_scenario_1_v1_sync`. A leftover user-owned
+`_sync` table from a prior `app_managed` build blocked Lakeflow's
+`databricks_writer_*` principal from initializing the synced-table pipeline.
+Manual cleanup of PG + UC registration unblocked the campaign; this change
+automates that guard for future builds.
+
+Changes:
+
+1. `src/back/core/graphdb/lakebase/_companion_ddl.py`
+   Add `is_lakeflow_sync_owner()` helper for `databricks_writer_*` roles.
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Add `drop_app_owned_sync_artifacts_if_present()` — drops user-owned `_sync`
+   table and union view before Lakeflow sync when detected.
+3. `src/back/objects/digitaltwin/_build_pipeline.py`
+   Call the guard at managed_synced step 5/7 before `trigger_and_wait`.
+4. `tests/units/core/test_lakebase_flat_store.py`
+   Unit tests for skip (Lakeflow owner) and drop (app user owner) paths.
+5. `Makefile`
+   Fix tab indentation on `deploy-check` help line (broke `make scenario-campaign`).
+
+Modified files:
+- `src/back/core/graphdb/lakebase/_companion_ddl.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `tests/units/core/test_lakebase_flat_store.py`
+- `Makefile`
+
+Tests: `uv run pytest -q -m "not scenario"` → 66 passed (changed modules); live scenario campaign → 4 passed, 1 skipped in 888s (13 validation checks passed).

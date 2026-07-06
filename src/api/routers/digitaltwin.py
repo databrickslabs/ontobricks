@@ -25,7 +25,7 @@ from back.core.errors import ValidationError, NotFoundError, InfrastructureError
 from api.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
-from back.core.triplestore import get_triplestore
+from back.core.graphdb import get_graphdb
 from back.core.helpers import (
     get_databricks_credentials,
     get_databricks_client,
@@ -298,7 +298,7 @@ async def dt_status(
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
 
-    graph_store = get_triplestore(domain, settings, backend="graph")
+    graph_store = get_graphdb(domain, settings)
     if not graph_store:
         return StatusResponse(
             success=True,
@@ -384,7 +384,7 @@ async def dt_stats(
     if not graph_name:
         raise ValidationError("Graph name not configured")
 
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
 
@@ -612,7 +612,7 @@ async def dt_triples_find(
         registry_volume,
         domain_version,
     )
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
 
@@ -761,8 +761,8 @@ async def dt_triples(
         registry_volume,
         domain_version,
     )
-    be = backend or "graph"
-    store = get_triplestore(domain, settings, backend=be)
+    engine = None if (backend or "graph") == "graph" else backend
+    store = get_graphdb(domain, settings, engine=engine)
     if not store:
         raise ValidationError("Backend not configured")
 
@@ -892,7 +892,7 @@ async def dt_dataquality_start(
 
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     triplestore_table = (
         effective_graph_query_table(domain, settings, store=store)
         if body.backend == "graph" and store
@@ -1283,7 +1283,7 @@ def _resolve_cohort_context(
     graph_name = effective_graph_name(domain)
     if not graph_name:
         raise ValidationError("Graph name is not configured")
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise InfrastructureError("Graph backend is not configured")
     query_table = effective_graph_query_table(domain, settings, store=store)

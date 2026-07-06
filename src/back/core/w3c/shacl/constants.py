@@ -83,4 +83,4 @@ XSD_TO_SPARK_TYPE = {
     "xsd:dateTime": "TIMESTAMP",
 }
 
-from back.core.triplestore.constants import RDFS_LABEL  # noqa: F401
+from back.core.graphdb.constants import RDFS_LABEL  # noqa: F401

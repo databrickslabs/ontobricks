@@ -98,9 +98,9 @@ class SQLHelpers:
           otherwise the synced bulk table via *store.synced_table_name*.
         """
         from back.core.errors import ValidationError
-        from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        backend = TripleStoreFactory._resolve_triple_store_backend(domain, settings)
+        backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
         if backend == "databricks":
             if include_inferred:
                 from back.core.graphdb.delta import _table_naming

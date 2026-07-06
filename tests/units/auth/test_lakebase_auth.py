@@ -1,4 +1,4 @@
-"""Unit tests for ``back.core.databricks.LakebaseAuth``.
+"""Unit tests for ``back.core.databricks.lakebase.LakebaseAuth``.
 
 OntoBricks targets Lakebase **Autoscaling exclusively**. These tests
 pin that contract:
@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from back.core.databricks.LakebaseAuth import LakebaseAuth
+from back.core.databricks.lakebase.LakebaseAuth import LakebaseAuth
 from back.core.errors import ValidationError
 
 # ---------------------------------------------------------------------------

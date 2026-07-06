@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from back.core.errors import NotFoundError, ValidationError
-from back.core.triplestore.constants import RDF_TYPE
+from back.core.graphdb.constants import RDF_TYPE
 from back.objects.digitaltwin import DigitalTwin
 
 

@@ -3,7 +3,7 @@
 from functools import lru_cache
 
 from back.core.databricks.DatabricksAuth import DatabricksAuth  # noqa: F401
-from back.core.databricks.LakebaseAuth import (  # noqa: F401
+from back.core.databricks.lakebase import (  # noqa: F401
     LakebaseAuth,
     get_lakebase_auth,
 )

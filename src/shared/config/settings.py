@@ -107,7 +107,7 @@ class Settings(BaseSettings):
         env_file=".env",
         # ``PGHOST``/``PGPORT``/``PGDATABASE``/``PGUSER`` and
         # ``LAKEBASE_PROJECT`` are consumed directly via
-        # ``os.environ`` by :class:`back.core.databricks.LakebaseAuth`
+        # ``os.environ`` by :class:`back.core.databricks.lakebase.LakebaseAuth`
         # — they don't need to be Pydantic fields. ``ignore`` keeps
         # the .env file tolerant of extra Lakebase-related entries.
         extra="ignore",

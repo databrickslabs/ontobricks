@@ -24,23 +24,19 @@ classDiagram
 
     %% ─── Storage / Backend Hierarchy ───────────────────────────────────────────
     class ABC
-    class TripleStoreBackend {
+    class GraphDBBackend {
         <<ABC>>
         +create_table()
-        +drop_table()
-        +insert_triples()
-        +delete_triples()
-        +query_triples()
-    }
-    class DeltaTripleStore {
-        +create_table()
         +insert_triples()
         +query_triples()
-    }
-    class GraphDBBackend {
         +supports_cypher()
         +query_dialect()
         +get_connection()
+    }
+    class DeltaFlatStore {
+        +create_table()
+        +insert_triples()
+        +get_inferred_triple_count()
     }
     class LakebaseBase {
         +physical_table_id()
@@ -57,9 +53,8 @@ classDiagram
         +close()
     }
 
-    ABC              <|-- TripleStoreBackend
-    TripleStoreBackend <|-- DeltaTripleStore
-    TripleStoreBackend <|-- GraphDBBackend
+    ABC              <|-- GraphDBBackend
+    GraphDBBackend   <|-- DeltaFlatStore
     GraphDBBackend   <|-- LakebaseBase
     GraphDBBackend   <|-- ExampleStore
     LakebaseBase     <|-- LakebaseFlatStore

@@ -19,24 +19,25 @@ OntoBricks currently ships with one **runtime** graph engine, selectable under *
 
 ## 1. Architecture Overview
 
-OntoBricks has two storage layers for graph viewer data:
+OntoBricks stores all graph viewer data through a single abstraction:
 
 | Layer | Package | Purpose |
 |-------|---------|---------|
-| **Triple Store** | `back.core.triplestore` | Permanent storage in Unity Catalog (Delta views, SQL queries). |
-| **Graph DB** | `back.core.graphdb` | Local/embedded graph engine for Cypher queries, traversal, reasoning, and analytics. |
+| **Graph DB** | `back.core.graphdb` | The single triple store / graph DB layer. Ships Lakebase Postgres and Unity Catalog Delta engines; pluggable for embedded/Cypher engines for traversal, reasoning, and analytics. |
 
-The `TripleStoreFactory` delegates to `GraphDBFactory` when `backend="graph"`.
-The factory reads the configured engine name from `GlobalConfigService` and
-passes it to `GraphDBFactory.create(engine=...)`.
+The single `GraphDBFactory` reads the configured engine name from
+`GlobalConfigService` and constructs the matching backend. Calling
+`get_graphdb(domain, settings)` with no engine auto-resolves; passing
+`engine="view"` returns a raw read-only Delta store for health probes.
 
 ```
-TripleStoreFactory.create(domain, settings, backend="graph")
+get_graphdb(domain, settings)          # engine=None → auto-resolve
     │
-    ├─ _resolve_graph_engine()  →  GlobalConfigService.get_graph_engine()
-    │                                returns e.g. "kuzu"
-    └─ get_graphdb(domain, settings, engine="kuzu")
+    └─ GraphDBFactory.create(engine=None)
            │
+           ├─ _resolve_triple_store_backend()  →  "lakebase" | "databricks"
+           ├─ _resolve_graph_engine()          →  GlobalConfigService.get_graph_engine()
+           │                                        returns e.g. "kuzu"
            └─ GraphDBFactory.create(domain, settings, engine="kuzu")
                   │
                   └─ _create_kuzu(domain, settings)  →  KuzuStore(...)
@@ -46,9 +47,10 @@ TripleStoreFactory.create(domain, settings, backend="graph")
 
 | File | Role |
 |------|------|
-| `src/back/core/triplestore/TripleStoreBackend.py` | Abstract base — triple CRUD + named query methods (SQL defaults). |
-| `src/back/core/graphdb/GraphDBBackend.py` | Graph DB abstract base — extends `TripleStoreBackend` with capability flags, connection management, sync, reasoning. |
-| `src/back/core/graphdb/GraphDBFactory.py` | Factory — maps engine names to constructor methods. |
+| `src/back/core/graphdb/GraphDBBackend.py` | The single abstract base — triple CRUD, named query + reasoning methods (SQL defaults), capability flags, connection management, sync. |
+| `src/back/core/graphdb/GraphDBFactory.py` | Factory — engine resolution + maps engine names to constructor methods. |
+| `src/back/core/graphdb/constants.py` | Shared RDF constants (`RDF_TYPE`, `RDFS_LABEL`). |
+| `src/back/core/graphdb/delta/DeltaFlatStore.py` | Unity Catalog Delta engine (also the raw `view` store). |
 | `src/back/core/graphdb/__init__.py` | Package exports (`get_graphdb`, `GRAPHDB_AVAILABLE`). |
 | `src/back/objects/session/GlobalConfigService.py` | Persists the selected engine name in `.global_config.json`. |
 
@@ -56,9 +58,9 @@ TripleStoreFactory.create(domain, settings, backend="graph")
 
 ## 2. The Contract
 
-A new engine must implement **two levels of abstraction**:
+A new engine implements the single `GraphDBBackend` abstraction:
 
-### 2.1 `TripleStoreBackend` (core CRUD)
+### 2.1 `GraphDBBackend` (core CRUD)
 
 These abstract methods **must** be implemented:
 
@@ -89,7 +91,7 @@ if your engine does not speak SQL:
 - `delete_triples` (raises `NotImplementedError` by default)
 - `optimize_table` (no-op by default)
 
-### 2.2 `GraphDBBackend` (graph-specific)
+### 2.2 `GraphDBBackend` (graph-specific methods)
 
 **Constructor parameter** — every engine receives `engine_config: Dict[str, Any]`
 (default `{}`) from the factory.  This is a free-form JSON dict set by the
@@ -386,9 +388,9 @@ capability flags to decide which translator to use.  If your engine speaks
 Cypher, set the flag and return the appropriate translator from
 `get_query_translator()`.  If SQL, the defaults work.
 
-**Q: Do I need to touch `TripleStoreFactory`?**
-No.  `TripleStoreFactory` reads the engine from `GlobalConfigService` and
-passes it to `GraphDBFactory`.  You only edit `GraphDBFactory`.
+**Q: Which factory do I edit?**
+Only `GraphDBFactory`.  It reads the engine from `GlobalConfigService` and
+dispatches to the matching `_create_<engine>` constructor.
 
 ---
 

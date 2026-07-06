@@ -155,13 +155,13 @@ templates.env.filters["random"] = random_filter
 def triplestore_page_context(domain_session, settings=None) -> dict:
     """Build the triplestore-related template context shared by dtwin and domain pages."""
     from back.core.helpers import effective_view_table, effective_graph_name, effective_databricks_table
-    from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
     triple_store_backend = (
-        TripleStoreFactory._resolve_triple_store_backend(domain_session, settings)
+        GraphDBFactory._resolve_triple_store_backend(domain_session, settings)
         or "lakebase"
     )
-    _raw = TripleStoreFactory._resolve_graph_engine(domain_session, settings) or "lakebase"
+    _raw = GraphDBFactory._resolve_graph_engine(domain_session, settings) or "lakebase"
     graph_engine = _raw if _raw == "lakebase" else "lakebase"
 
     return {

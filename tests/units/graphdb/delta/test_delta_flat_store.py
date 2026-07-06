@@ -25,7 +25,9 @@ class TestDeltaFlatStoreInferredRouting:
                 "object": "http://ex/o",
             }
         ]
-        with patch.object(store._store, "insert_triples", return_value=1) as mock_insert:
+        with patch.object(
+            store, "_execute_insert_triples", return_value=1
+        ) as mock_insert:
             with patch(
                 "back.core.graphdb.delta.materialize.ensure_inferred_table"
             ) as mock_ensure_inf:
@@ -44,7 +46,7 @@ class TestDeltaFlatStoreInferredRouting:
             "cat.sch.triplestore_mydomain_V1_inferred",
         )
         mock_insert.assert_called_once_with(
-            "cat.sch.triplestore_mydomain_V1_inferred", triples, batch_size=2000, on_progress=None
+            "cat.sch.triplestore_mydomain_V1_inferred", triples, 2000, None
         )
 
     def test_synced_table_name_strips_graph_suffix(self):

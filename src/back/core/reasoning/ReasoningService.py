@@ -539,9 +539,9 @@ class ReasoningService:
         Returns:
             Number of triples inserted.
         """
-        from back.core.triplestore.delta.DeltaTripleStore import DeltaTripleStore
+        from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
 
-        store = DeltaTripleStore(client)
+        store = DeltaFlatStore(client)
         logger.info("Materialise to Delta: ensuring table %s exists", table_name)
         store.create_table(table_name)
 

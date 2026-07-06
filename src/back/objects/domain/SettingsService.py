@@ -1601,7 +1601,7 @@ class SettingsService:
         import os
 
         from back.core.databricks import get_lakebase_auth
-        from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+        from back.core.databricks.lakebase import BranchLakebaseAuth
         from back.core.graphdb.lakebase.LakebaseBase import (
             default_schema,
             validate_graph_schema,
@@ -2111,7 +2111,7 @@ class SettingsService:
         Returns ``(auth, database)``; raises on irrecoverable failures.
         """
         from back.core.databricks import get_lakebase_auth
-        from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+        from back.core.databricks.lakebase import BranchLakebaseAuth
 
         branch_path = form_branch_path.strip()
         database = form_database.strip()

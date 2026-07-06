@@ -11,7 +11,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.objects.digitaltwin._build_pipeline import (
     _BuildPipeline,
     collect_domain_stats,
@@ -217,8 +217,8 @@ class TestResolveLakebaseMode:
         pipe = _bare_pipeline()
 
         with (
-            patch.object(TripleStoreFactory, "_resolve_graph_engine", return_value="lakebase"),
-            patch.object(TripleStoreFactory, "_resolve_graph_engine_config", return_value={"sync_mode": "managed_synced"}),
+            patch.object(GraphDBFactory, "_resolve_graph_engine", return_value="lakebase"),
+            patch.object(GraphDBFactory, "_resolve_graph_engine_config", return_value={"sync_mode": "managed_synced"}),
         ):
             pipe._resolve_lakebase_mode()
 
@@ -229,8 +229,8 @@ class TestResolveLakebaseMode:
         pipe = _bare_pipeline()
 
         with (
-            patch.object(TripleStoreFactory, "_resolve_graph_engine", return_value="lakebase"),
-            patch.object(TripleStoreFactory, "_resolve_graph_engine_config", return_value={}),
+            patch.object(GraphDBFactory, "_resolve_graph_engine", return_value="lakebase"),
+            patch.object(GraphDBFactory, "_resolve_graph_engine_config", return_value={}),
         ):
             pipe._resolve_lakebase_mode()
 
@@ -241,8 +241,8 @@ class TestResolveLakebaseMode:
         pipe = _bare_pipeline()
 
         with (
-            patch.object(TripleStoreFactory, "_resolve_graph_engine", return_value="other"),
-            patch.object(TripleStoreFactory, "_resolve_graph_engine_config", return_value={"sync_mode": "managed_synced"}),
+            patch.object(GraphDBFactory, "_resolve_graph_engine", return_value="other"),
+            patch.object(GraphDBFactory, "_resolve_graph_engine_config", return_value={"sync_mode": "managed_synced"}),
         ):
             pipe._resolve_lakebase_mode()
 

@@ -22,7 +22,7 @@ from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
 from back.core.databricks import DatabricksClient, is_databricks_app
-from back.core.triplestore import get_triplestore
+from back.core.graphdb import get_graphdb
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 from back.objects.domain import HomeService, Domain
 from back.core.helpers import (
@@ -290,10 +290,10 @@ async def start_triplestore_sync(
     # is absent when GlobalConfigService is the sole persistence layer
     # (common in the deployed App where the mirror write never fires).
     try:
-        from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        _engine = TripleStoreFactory._resolve_graph_engine(domain, settings, force=True) or ""
-        _ecfg = TripleStoreFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
+        _engine = GraphDBFactory._resolve_graph_engine(domain, settings, force=True) or ""
+        _ecfg = GraphDBFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
     except Exception as _exc:  # noqa: BLE001
         logger.debug("Engine config resolution failed, defaulting to non-synced: %s", _exc)
         _engine = ""
@@ -797,11 +797,11 @@ def _require_graph_store(domain, settings):
 
     Centralises the five-line guard that every graph-facing route repeated::
 
-        store = get_triplestore(domain, settings, backend="graph")
+        store = get_graphdb(domain, settings)
         if not store:
             raise InfrastructureError("Graph backend is not configured")
     """
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise InfrastructureError("Graph backend is not configured")
     return store
@@ -1245,10 +1245,10 @@ async def databricks_build_info(
     from back.core.graphdb.delta import _table_naming
     from back.core.graphdb.delta.health import probe_from_client
     from back.core.graphdb.delta.DeltaBase import create_databricks_client
-    from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
     domain = get_domain(session_mgr)
-    backend = TripleStoreFactory._resolve_triple_store_backend(domain, settings)
+    backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
     readiness = HomeService.validate_status(domain)
     view_table = effective_view_table(domain)
     data_table = effective_databricks_table(domain, settings)
@@ -1277,7 +1277,7 @@ async def start_databricks_triplestore_build(
     """Materialize UC Delta triple store (VIEW → TABLE); no Lakebase sync."""
     import threading
     from back.core.task_manager import get_task_manager
-    from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
     from back.objects.digitaltwin._databricks_triplestore_build import (
         run_databricks_triplestore_build,
     )
@@ -1285,7 +1285,7 @@ async def start_databricks_triplestore_build(
     await request.json()
 
     domain = get_domain(session_mgr)
-    if TripleStoreFactory._resolve_triple_store_backend(domain, settings) != "databricks":
+    if GraphDBFactory._resolve_triple_store_backend(domain, settings) != "databricks":
         raise ValidationError(
             "Databricks triple-store build is only available when "
             "triple_store_backend is 'databricks' (Settings → Triple store)."
@@ -1491,7 +1491,9 @@ async def execute_dataquality_check(
 
         from back.core.w3c import SHACLService
 
-        store = get_triplestore(domain, settings, backend=backend)
+        store = get_graphdb(
+            domain, settings, engine=(None if backend == "graph" else backend)
+        )
         if not store:
             raise InfrastructureError(f"Could not initialize {backend} backend")
 
@@ -1734,7 +1736,7 @@ async def materialize_inferred(
 
     if do_graph and uri_triples:
         try:
-            store = get_triplestore(domain_snap, settings, backend="graph")
+            store = get_graphdb(domain_snap, settings)
             if store is None:
                 result["materialize_graph_error"] = "Graph store not available"
             else:
@@ -2346,7 +2348,6 @@ async def dtwin_graphql_execute(
     to resolve the query.
     """
     from back.core.graphql import build_schema_for_domain, DEFAULT_DEPTH, MAX_DEPTH
-    from back.core.triplestore import get_triplestore
     from back.core.helpers import effective_graph_name
 
     domain = get_domain(session_mgr)

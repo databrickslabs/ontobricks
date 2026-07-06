@@ -103,9 +103,12 @@ back/core/
 ├── helpers/          <- Cross-cutting utilities (DatabricksHelpers, SQLHelpers, URIHelpers)
 ├── logging/          <- LogManager, setup_logging(), get_logger()
 ├── task_manager/     <- Async in-memory task tracking
-├── triplestore/      <- Triple store backends (Delta views in UC)
-├── graphdb/          <- Pluggable graph DB engine abstraction (Lakebase Postgres, …)
+├── graphdb/          <- Single triple store / graph DB abstraction (Lakebase Postgres, Delta UC, view)
 ├── databricks/       <- Typed facades for Databricks API surfaces
+│   └── lakebase/     <- Shared Lakebase (Postgres) technical access: auth,
+│                        JWT mint, connection pool, psycopg gate, grants.
+│                        Consumed by both the registry store and the graph
+│                        triple store (two independent databases).
 ├── graphql/          <- Strawberry GraphQL schema builder
 ├── w3c/              <- W3C standard parsers/generators (OWL, RDFS, R2RML, SPARQL, SHACL)
 ├── industry/         <- Standard industry ontology importers (CDISC, FIBO, IOF)
@@ -130,7 +133,7 @@ api/
 
 | Location | Purpose |
 |----------|---------|
-| `back/core/<pkg>/` | Shared infrastructure (Databricks, triplestore, W3C, reasoning, …). No HTTP dependency. |
+| `back/core/<pkg>/` | Shared infrastructure (Databricks, graphdb, W3C, reasoning, …). No HTTP dependency. |
 | `back/objects/<pkg>/` | Application domain classes (Ontology, Mapping, DigitalTwin, Domain, registry, session). No `Request`/`Response`. |
 | `front/routes/<area>.py` | HTML routing only — parameter extraction, domain method call, `TemplateResponse`. |
 | `api/routers/internal/` | Internal JSON API — session-aware, delegates to domain classes. |

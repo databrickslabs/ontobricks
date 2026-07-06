@@ -72,3 +72,270 @@ Modified files:
 - src/back/objects/mapping/Mapping.py
 
 Tests: uv run pytest -q -m "not scenario" → 3137 passed, 275 skipped, 5 deselected in 20.17s
+
+## Consolidate Lakebase technical access into a shared subpackage
+
+Context: The psycopg connection pool was duplicated between the registry store
+(`back/objects/registry/store/lakebase/store.py`) and the graph engine
+(`back/core/graphdb/lakebase/pool.py`) — the latter's docstring even said so.
+Auth (`LakebaseAuth`) and grants (`lakebase_grants.py`) already lived under
+`back/core/databricks/`. This extracts one technical access layer shared by
+both consumers while keeping the Registry and Triple Store as two independent
+databases (each supplies its own auth + schema + database; pools never merge).
+
+Changes:
+
+1. src/back/core/databricks/lakebase/constants.py
+   New: cold-start SQLSTATEs, retry/backoff, pool sizing, JWT TTL, and the
+   `ontobricks-registry` / `ontobricks-graphdb` workload labels.
+2. src/back/core/databricks/lakebase/psycopg_gate.py
+   New: `require_psycopg()` — the single lazy-import gate (raises ImportError).
+3. src/back/core/databricks/lakebase/LakebaseConnectionPool.py
+   New: unified `LakebaseConnectionPool`, `get_lakebase_pool(auth, schema,
+   database, *, application_name, error_factory)`, `lakebase_cursor()`, and
+   `LakebaseConnectionError`. Pool key is the full connection identity plus the
+   workload label, so different projects/databases/schemas never share a pool.
+4. src/back/core/databricks/lakebase/LakebaseAuth.py (moved from parent)
+   `LakebaseAuth` / `BranchLakebaseAuth` / `get_lakebase_auth`; token TTL now
+   sourced from `constants.TOKEN_TTL_S`.
+5. src/back/core/databricks/lakebase/Grants.py (moved from lakebase_grants.py)
+   Reusable grant primitives, unchanged.
+6. src/back/core/databricks/LakebaseAuth.py, src/back/core/databricks/lakebase_grants.py
+   Now backward-compat shims re-exporting from the subpackage (test monkeypatch
+   targets and existing imports preserved).
+7. src/back/core/graphdb/lakebase/pool.py
+   Reduced to a shim: `get_lakebase_graph_pool` / `_require_psycopg` /
+   `LakebaseGraphPoolError` delegate to the shared layer (graph label).
+8. src/back/objects/registry/store/lakebase/store.py
+   Deleted the embedded `_LakebasePool` + duplicated constants/helpers; `_get_pool`
+   and `_require_psycopg` are now thin wrappers over the shared layer (registry
+   label, errors wrapped as `StoreError`). Behaviour identical.
+9. src/back/core/databricks/__init__.py
+   Re-export `LakebaseAuth` / `get_lakebase_auth` from the subpackage.
+10. docs/code_organization.md
+   Documented the `databricks/lakebase/` subpackage in the `back/core` tree.
+
+Modified files:
+- src/back/core/databricks/lakebase/__init__.py (new)
+- src/back/core/databricks/lakebase/constants.py (new)
+- src/back/core/databricks/lakebase/psycopg_gate.py (new)
+- src/back/core/databricks/lakebase/LakebaseConnectionPool.py (new)
+- src/back/core/databricks/lakebase/LakebaseAuth.py (moved)
+- src/back/core/databricks/lakebase/Grants.py (moved)
+- src/back/core/databricks/LakebaseAuth.py (shim)
+- src/back/core/databricks/lakebase_grants.py (shim)
+- src/back/core/databricks/__init__.py
+- src/back/core/graphdb/lakebase/pool.py
+- src/back/objects/registry/store/lakebase/store.py
+- docs/code_organization.md
+
+Tests: uv run pytest -q -m "not scenario" → 3161 passed, 275 skipped, 5 deselected in 26.18s
+
+## Remove Lakebase backward-compat shims (finish the move)
+
+Context: The previous change moved `LakebaseAuth` and the grant primitives into
+`back/core/databricks/lakebase/` but left re-export shims at the old paths
+(`back/core/databricks/LakebaseAuth.py`, `back/core/databricks/lakebase_grants.py`).
+The shims were only kept for in-tree importers and test monkeypatch targets, so
+all callers were repointed at the subpackage and the shims deleted. Also renamed
+`Grants.py` → `grants.py` to follow the repo convention (lowercase for modules
+with no primary class; `grants` is all functions).
+
+Changes:
+
+1. src/shared/fastapi/health.py
+   Import `BranchLakebaseAuth` / `get_lakebase_auth` from `back.core.databricks.lakebase`
+   (3 call sites).
+2. src/back/objects/domain/SettingsService.py
+   Import `BranchLakebaseAuth` from the subpackage (2 call sites).
+3. src/back/core/graphdb/GraphDBFactory.py
+   Import `BranchLakebaseAuth` from the subpackage.
+4. src/back/objects/registry/store/lakebase/store.py
+   Import grant primitives from `back.core.databricks.lakebase.grants`; fix the
+   `LakebaseAuth` cross-reference in the module docstring.
+5. src/back/core/graphdb/lakebase/provisioner.py
+   Import grant primitives from `back.core.databricks.lakebase.grants`.
+6. src/back/core/databricks/lakebase/grants.py
+   Renamed from `Grants.py` (convention: lowercase module, no class).
+7. src/back/core/databricks/lakebase/__init__.py
+   Re-export grants from the lowercase module.
+8. tests/units/auth/test_lakebase_auth.py
+   Import `LakebaseAuth` from `back.core.databricks.lakebase.LakebaseAuth`.
+9. tests/units/core/test_health.py
+   Patch `get_lakebase_auth` on `back.core.databricks.lakebase` (the module
+   `health` now imports from).
+10. src/shared/config/settings.py, src/back/objects/registry/store/lakebase/__init__.py
+   Update `LakebaseAuth` docstring cross-references to the new path.
+11. docs/sphinx/api/app.core.databricks.rst
+   Replace the `lakebase_grants` autodoc block with a "Lakebase (shared access
+   layer)" section documenting `LakebaseAuth`, `LakebaseConnectionPool`,
+   `grants`, `psycopg_gate`, and `constants`.
+
+Deleted files:
+- src/back/core/databricks/LakebaseAuth.py (shim)
+- src/back/core/databricks/lakebase_grants.py (shim)
+
+Modified files:
+- src/shared/fastapi/health.py
+- src/back/objects/domain/SettingsService.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- src/back/core/graphdb/lakebase/provisioner.py
+- src/back/core/databricks/lakebase/grants.py (renamed from Grants.py)
+- src/back/core/databricks/lakebase/__init__.py
+- src/shared/config/settings.py
+- tests/units/auth/test_lakebase_auth.py
+- tests/units/core/test_health.py
+- docs/sphinx/api/app.core.databricks.rst
+
+Tests: uv run pytest -q -m "not scenario" → 3161 passed, 275 skipped, 5 deselected in 20.49s
+
+## Reframe graph-db pool.py as the graph connection profile
+
+Context: After the shared Lakebase layer landed, `back/core/graphdb/lakebase/pool.py`
+described itself as a "thin shim / backward-compat wrapper". That framing was
+misleading — the module is legitimately the graph engine's connection profile:
+it binds the shared pool to the `ontobricks-graphdb` workload label and
+`LakebaseGraphPoolError`, and exposes the psycopg gate under the graph package's
+own name (imported by 11 graph call sites). Rewrote the module + function
+docstrings to present it as intentional design (the analogue of the registry
+store's own connection helpers). No code/behaviour change.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/pool.py
+   Rewrote module docstring and the `_require_psycopg` / `get_lakebase_graph_pool`
+   docstrings; dropped the "shim"/"backward-compat" language.
+
+Modified files:
+- src/back/core/graphdb/lakebase/pool.py
+
+Tests: uv run pytest -q -m "not scenario" (graph suites) → 143 passed in 0.63s
+
+## Remove redundant global_config alias module
+
+Context: Reviewed the codebase for standalone re-export "shim" modules (as
+opposed to the mandated `__init__.py` backward-compat wrappers and
+parameter/data-shape compat). `back/objects/session/global_config.py` was a
+pure alias of `GlobalConfigService.py`, but `back/objects/session/__init__.py`
+already re-exports `GlobalConfigService` + `global_config_service`, and every
+caller except `scheduler.py` used that package re-export. Removed the alias and
+pointed `scheduler.py` at the package, matching the rest of the codebase.
+
+Changes:
+
+1. src/back/objects/registry/scheduler.py
+   Two `from back.objects.session.global_config import global_config_service`
+   imports repointed to `from back.objects.session import global_config_service`.
+2. docs/sphinx/api/app.objects.session.rst
+   "Global config" autodoc now targets `GlobalConfigService` (the canonical
+   module) instead of the deleted alias.
+
+Deleted files:
+- src/back/objects/session/global_config.py (alias module)
+
+Modified files:
+- src/back/objects/registry/scheduler.py
+- docs/sphinx/api/app.objects.session.rst
+
+Note: left in place by design — `api/service.py` (external REST API facade /
+stable name surface for `api.routers.v1` + integration tests) and all the
+`__init__.py` backward-compat wrappers (project convention per
+`.cursor/07 §__init__.py Conventions`).
+
+Tests: uv run pytest -q -m "not scenario" → 3161 passed, 275 skipped, 5 deselected in 20.75s
+
+## Merge `triplestore` into `graphdb` (one abstraction)
+
+Context: `back/core/triplestore` and `back/core/graphdb` were the same concept
+split in two — two base classes (`GraphDBBackend` inherited from
+`TripleStoreBackend`), two factories (`TripleStoreFactory` delegated to
+`GraphDBFactory`), and two Delta stores (`DeltaFlatStore` wrapped
+`DeltaTripleStore`). This is a full conceptual merge into a single `graphdb`
+package with one base ABC, one Delta store, and one factory. No back-compat
+shims; all imports/call sites repointed and the `triplestore` package deleted.
+Behaviour is identical — only structure and names consolidate.
+
+Changes:
+
+1. src/back/core/graphdb/constants.py (new)
+   `RDF_TYPE` / `RDFS_LABEL` moved from `triplestore/constants.py`; ~10 importers
+   and 2 tests repointed to `back.core.graphdb.constants`.
+2. src/back/core/graphdb/GraphDBBackend.py
+   Absorbed the full `TripleStoreBackend` body (CRUD + ~600-line named-query /
+   reasoning surface) as the single ABC; dropped the `TripleStoreBackend`
+   inheritance. `get_connection` / `close` stay abstract.
+3. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Inlined `DeltaTripleStore`'s raw SQL methods (create/drop/insert/query/count/
+   exists/status/optimize/execute); removed the `self._store` delegate. Added a
+   domain-less "raw" mode (`domain is None`) so writes go to the exact FQN — used
+   by the materialize path and health probes.
+4. src/back/core/graphdb/GraphDBFactory.py
+   Absorbed `TripleStoreFactory`'s config-resolution statics + view path.
+   `create(engine=None)` auto-resolves (former `backend="graph"`);
+   `engine="view"` returns a raw read-only `DeltaFlatStore`. `get_graphdb` stays
+   the public entry.
+5. src/back/core/reasoning/ReasoningService.py, src/back/core/graphdb/delta/health.py
+   Construct `DeltaFlatStore(client)` instead of `DeltaTripleStore(client)`.
+6. Call sites repointed `get_triplestore(...backend=...)` → `get_graphdb(...engine=...)`
+   and `TripleStoreFactory` → `GraphDBFactory`:
+   src/back/objects/digitaltwin/DigitalTwin.py, _build_pipeline.py,
+   src/api/routers/digitaltwin.py, src/api/routers/internal/dtwin.py,
+   src/back/fastapi/graphql_routes.py, src/back/objects/registry/scheduler.py,
+   src/front/fastapi/dependencies.py, src/back/core/helpers/SQLHelpers.py.
+7. src/back/core/graphdb/__init__.py
+   Exports `GraphDBBackend`, `GraphDBFactory`, `get_graphdb`, `GRAPHDB_AVAILABLE`,
+   `RDF_TYPE`, `RDFS_LABEL`.
+8. Tests updated: test_triplestore_factory.py rewritten for the merged factory
+   (auto-resolve + view paths); test_delta_flat_store.py, test_digitaltwin_api.py,
+   test_build_pipeline_streaming.py, test_triple_store_backend_config.py patch
+   targets repointed to `back.core.graphdb.*`.
+9. Docs/rules/diagrams: .cursor/04-project-structure.mdc, src/.coding_rules.md,
+   docs/{architecture,code_organization,data-access,graphdb-integration,lakebase-graphdb,development}.md,
+   docs/diagrams/class-hierarchy.mmd, docs/sphinx (deleted app.core.triplestore.rst,
+   updated app.core.graphdb.rst + app.core.rst toctree), ci/coverage_thresholds.yaml.
+
+Deleted files:
+- src/back/core/triplestore/__init__.py
+- src/back/core/triplestore/TripleStoreBackend.py
+- src/back/core/triplestore/TripleStoreFactory.py
+- src/back/core/triplestore/constants.py
+- src/back/core/triplestore/delta/DeltaTripleStore.py
+- src/back/core/triplestore/delta/__init__.py
+- docs/sphinx/api/app.core.triplestore.rst
+
+Modified files:
+- src/back/core/graphdb/constants.py (new)
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/__init__.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/delta/health.py
+- src/back/core/graphdb/_starter_kit/ExampleStore.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/reasoning/SWRLEngine.py
+- src/back/core/reasoning/constants.py
+- src/back/core/graph_analysis/{GraphMetrics,GraphBuilder,CohortBuilder}.py
+- src/back/core/graphql/constants.py
+- src/back/core/w3c/shacl/SHACLService.py
+- src/back/core/w3c/shacl/constants.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/objects/digitaltwin/{DigitalTwin,_build_pipeline,constants}.py
+- src/back/objects/registry/scheduler.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- src/back/fastapi/graphql_routes.py
+- src/front/fastapi/dependencies.py
+- tests/units/dtwin/{test_triplestore_factory,test_digitaltwin_api,test_dtwin_cohort,test_cohort_builder,test_build_pipeline_streaming}.py
+- tests/units/graphdb/delta/{test_delta_flat_store,test_triple_store_backend_config}.py
+- tests/units/settings/test_graph_engine_config.py
+- .cursor/04-project-structure.mdc
+- src/.coding_rules.md
+- ci/coverage_thresholds.yaml
+- docs/{architecture,code_organization,data-access,graphdb-integration,lakebase-graphdb,development}.md
+- docs/diagrams/class-hierarchy.mmd
+- docs/sphinx/api/{app.core.graphdb,app.core}.rst
+
+Tests: uv run pytest -q -m "not scenario" → 3161 passed, 275 skipped, 5 deselected in 20.26s

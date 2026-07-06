@@ -1,134 +1,117 @@
-"""Tests for triplestore factory."""
+"""Tests for the merged graph DB factory (auto-resolve + view paths)."""
 
-import importlib
-import pytest
 from unittest.mock import patch, MagicMock
-from back.core.triplestore import TripleStoreFactory, get_triplestore
 
-# Submodule (module object), not the class re-exported on back.core.triplestore
-_triple_store_factory_mod = importlib.import_module(
-    "back.core.triplestore.TripleStoreFactory",
-)
-_delta_triple_store_mod = importlib.import_module(
-    "back.core.triplestore.delta.DeltaTripleStore",
-)
+from back.core.graphdb import GraphDBFactory, get_graphdb
 
 
 def _mock_domain(host="https://h", token="tok", warehouse_id="wh"):
     domain = MagicMock()
-    domain.triplestore = {}
     domain.databricks = {"host": host, "token": token, "warehouse_id": warehouse_id}
     domain.info = {"name": "TestDomain"}
     return domain
 
 
-class TestGetTriplestore:
-    def test_unknown_backend_returns_none(self):
+class TestGetGraphdb:
+    def test_unknown_engine_returns_none(self):
         domain = _mock_domain()
-        result = get_triplestore(domain, backend="unknown")
+        result = get_graphdb(domain, engine="unknown")
         assert result is None
 
-    def test_default_backend_is_graph(self):
-        """When backend is None, default to graph (GraphDBFactory)."""
+    def test_auto_resolves_to_lakebase(self):
+        """When engine is None, auto-resolve dispatches to the lakebase engine."""
         domain = _mock_domain()
         with (
-            patch("back.core.graphdb.get_graphdb") as mock_gdb,
             patch.object(
-                TripleStoreFactory, "_resolve_graph_engine", return_value="lakebase"
+                GraphDBFactory, "_resolve_triple_store_backend", return_value="lakebase"
             ),
             patch.object(
-                TripleStoreFactory, "_resolve_graph_engine_config", return_value={}
+                GraphDBFactory, "_resolve_graph_engine", return_value="lakebase"
             ),
+            patch.object(
+                GraphDBFactory, "_resolve_graph_engine_config", return_value={}
+            ),
+            patch.object(
+                GraphDBFactory, "_create_lakebase", return_value=MagicMock()
+            ) as mock_lb,
         ):
-            mock_gdb.return_value = MagicMock()
-            result = get_triplestore(domain)
-            mock_gdb.assert_called_once_with(
-                domain, None, engine="lakebase", engine_config={}
-            )
-
-    def test_graph_backend_lakebase_engine(self):
-        domain = _mock_domain()
-        with (
-            patch("back.core.graphdb.get_graphdb") as mock_gdb,
-            patch.object(
-                TripleStoreFactory, "_resolve_graph_engine", return_value="lakebase"
-            ),
-            patch.object(
-                TripleStoreFactory,
-                "_resolve_graph_engine_config",
-                return_value={"database": "db1", "schema": "g"},
-            ),
-        ):
-            mock_gdb.return_value = MagicMock()
-            result = get_triplestore(domain)
-            mock_gdb.assert_called_once_with(
-                domain,
-                None,
-                engine="lakebase",
-                engine_config={"database": "db1", "schema": "g"},
-            )
+            result = get_graphdb(domain)
             assert result is not None
+            mock_lb.assert_called_once()
+            _, kwargs = mock_lb.call_args
+            assert kwargs["engine_config"] == {}
 
-    def test_registry_mirror_engine_overrides_global(self):
-        """POST /dtwin/sync/filter must honour the registry mirror over global config."""
+    def test_auto_databricks_backend_uses_delta(self):
         domain = _mock_domain()
-        domain.settings = {
-            "registry": {
-                "graph_engine": "lakebase",
-                "graph_engine_config": {"schema": "custom_graph"},
-            }
-        }
         with (
-            patch("back.core.graphdb.get_graphdb") as mock_gdb,
             patch.object(
-                TripleStoreFactory,
-                "_read_global_config",
-                side_effect=[
-                    "lakebase",
-                    None,
-                    {},
-                ],
+                GraphDBFactory,
+                "_resolve_triple_store_backend",
+                return_value="databricks",
             ),
+            patch.object(
+                GraphDBFactory, "_create_delta", return_value=MagicMock()
+            ) as mock_delta,
         ):
-            mock_gdb.return_value = MagicMock()
-            result = get_triplestore(domain)
-            mock_gdb.assert_called_once_with(
-                domain,
-                None,
-                engine="lakebase",
-                engine_config={"schema": "custom_graph"},
-            )
+            result = get_graphdb(domain)
             assert result is not None
+            mock_delta.assert_called_once()
 
-    @patch.object(
-        _triple_store_factory_mod,
-        "get_databricks_host_and_token",
-        return_value=("", ""),
-    )
-    def test_view_missing_host_returns_none(self, mock_get):
+    def test_auto_passes_resolved_engine_config(self):
+        domain = _mock_domain()
+        cfg = {"database": "db1", "schema": "g"}
+        with (
+            patch.object(
+                GraphDBFactory, "_resolve_triple_store_backend", return_value="lakebase"
+            ),
+            patch.object(
+                GraphDBFactory, "_resolve_graph_engine", return_value="lakebase"
+            ),
+            patch.object(
+                GraphDBFactory, "_resolve_graph_engine_config", return_value=cfg
+            ),
+            patch.object(
+                GraphDBFactory, "_create_lakebase", return_value=MagicMock()
+            ) as mock_lb,
+        ):
+            result = get_graphdb(domain)
+            assert result is not None
+            _, kwargs = mock_lb.call_args
+            assert kwargs["engine_config"] == cfg
+
+    def test_view_missing_host_returns_none(self):
         domain = _mock_domain(host="", token="")
-        domain.databricks = {"host": "", "token": "", "warehouse_id": "wh"}
-        result = get_triplestore(
-            domain, settings=MagicMock(databricks_sql_warehouse_id="wh"), backend="view"
-        )
+        with (
+            patch(
+                "back.core.helpers.get_databricks_host_and_token",
+                return_value=("", ""),
+            ),
+            patch("back.core.helpers.resolve_warehouse_id", return_value="wh"),
+            patch("back.core.databricks.is_databricks_app", return_value=False),
+        ):
+            result = get_graphdb(
+                domain,
+                settings=MagicMock(databricks_sql_warehouse_id="wh"),
+                engine="view",
+            )
         assert result is None
 
-    @patch.object(
-        _triple_store_factory_mod,
-        "get_databricks_host_and_token",
-        return_value=("https://h", "tok"),
-    )
-    @patch.object(_triple_store_factory_mod, "resolve_warehouse_id", return_value="wh")
-    def test_view_success(self, mock_wh, mock_get):
+    def test_view_success(self):
         domain = _mock_domain()
         settings = MagicMock()
         settings.databricks_sql_warehouse_id = "wh"
-
         with (
+            patch(
+                "back.core.helpers.get_databricks_host_and_token",
+                return_value=("https://h", "tok"),
+            ),
+            patch("back.core.helpers.resolve_warehouse_id", return_value="wh"),
             patch("back.core.databricks.DatabricksClient") as mock_client_cls,
-            patch.object(_delta_triple_store_mod, "DeltaTripleStore") as mock_delta_cls,
+            patch(
+                "back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore"
+            ) as mock_delta_cls,
         ):
             mock_client_cls.return_value = MagicMock()
             mock_delta_cls.return_value = MagicMock()
-            result = get_triplestore(domain, settings=settings, backend="view")
+            result = get_graphdb(domain, settings=settings, engine="view")
             assert result is not None
