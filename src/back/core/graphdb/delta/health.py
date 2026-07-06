@@ -96,6 +96,7 @@ def settings_health_summary(
     return {
         "success": client is not None,
         "warehouse_configured": client is not None,
+        "warehouse_id": getattr(client, "warehouse_id", "") if client else "",
         "registry_catalog": registry_catalog,
         "registry_schema": registry_schema,
         "storage_location": storage_location,

@@ -238,13 +238,13 @@ class GraphDBFactory:
             from back.core.databricks import DatabricksClient, is_databricks_app
             from back.core.helpers import (
                 get_databricks_host_and_token,
-                resolve_warehouse_id,
+                resolve_delta_warehouse_id,
             )
             from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
 
             if settings is not None:
                 host, token = get_databricks_host_and_token(domain, settings)
-                warehouse_id = resolve_warehouse_id(domain, settings)
+                warehouse_id = resolve_delta_warehouse_id(domain, settings)
             else:
                 db = domain.databricks or {}
                 host = db.get("host", "")

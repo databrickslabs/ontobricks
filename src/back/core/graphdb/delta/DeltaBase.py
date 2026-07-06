@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional, Tuple
 
 from back.core.databricks import is_databricks_app
-from back.core.helpers import get_databricks_host_and_token, resolve_warehouse_id
+from back.core.helpers import get_databricks_host_and_token, resolve_delta_warehouse_id
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -21,7 +21,7 @@ def create_databricks_client(
 
         if settings is not None:
             host, token = get_databricks_host_and_token(domain, settings)
-            warehouse_id = resolve_warehouse_id(domain, settings)
+            warehouse_id = resolve_delta_warehouse_id(domain, settings)
         else:
             db = getattr(domain, "databricks", None) or {}
             host = db.get("host", "")

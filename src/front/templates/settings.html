@@ -137,68 +137,134 @@
                         </div>
                     </div>
 
-                    <div class="alert alert-info border-0 small mb-4">
-                        <h6 class="alert-heading fw-semibold mb-2">
-                            <i class="bi bi-info-circle me-1"></i>How it works
-                        </h6>
-                        <p class="mb-2">
-                            With <strong>Delta</strong> selected as the triple-store backend, OntoBricks stores triples
-                            directly in governed Delta tables in Unity Catalog. There is nothing extra to configure on
-                            this page: the <strong>Registry catalog and schema</strong> (Settings → Registry) define
-                            where all triple-store objects live for every domain.
-                        </p>
-                        <p class="mb-0">
-                            SQL Warehouse access comes from <strong>Settings → Databricks</strong>. After mapping is
-                            ready, run <strong>Knowledge Graph → Build</strong> to create the R2RML VIEW and
-                            materialize the <code>_data</code> Delta table.
-                        </p>
+                    <div id="deltaSectionBanner" class="alert alert-light border d-none align-items-center justify-content-center gap-2 py-3 mb-3" role="status" aria-live="polite">
+                        <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                        <span class="small text-muted">Loading Delta configuration…</span>
                     </div>
 
-                    <div class="card border mb-3">
-                        <div class="card-body small">
-                            <h6 class="fw-semibold mb-2"><i class="bi bi-archive me-1"></i>Storage location</h6>
-                            <p class="text-muted mb-2">
-                                Triple-store artefacts are created under the Registry UC location
-                                (<code>catalog.schema</code>), alongside domain metadata — not in a separate catalog.
-                            </p>
-                            <dl class="row mb-0">
-                                <dt class="col-sm-3">Registry</dt>
-                                <dd class="col-sm-9 font-monospace" id="deltaRegistryLocation">—</dd>
-                                <dt class="col-sm-3">Active domain</dt>
-                                <dd class="col-sm-9" id="deltaActiveDomain">—</dd>
-                            </dl>
-                        </div>
-                    </div>
+                    <div id="deltaGraphPanel" style="display:none;">
 
-                    <div class="card border mb-3">
-                        <div class="card-body small">
-                            <h6 class="fw-semibold mb-2"><i class="bi bi-tags me-1"></i>Per-domain object names</h6>
-                            <p class="text-muted mb-2">
-                                For each domain version, OntoBricks derives the following objects in the Registry schema
-                                (example for domain <code>MyDomain</code> version <code>1</code>):
-                            </p>
-                            <ul class="mb-0 font-monospace" style="font-size:.85rem;">
-                                <li><code>triplestore_mydomain_V1</code> — R2RML SQL VIEW (mapping SQL)</li>
-                                <li><code>triplestore_mydomain_V1_data</code> — clustered Delta TABLE (materialized triples)</li>
-                                <li><code>triplestore_mydomain_V1_inferred</code> — companion TABLE (reasoning / app triples)</li>
-                                <li><code>triplestore_mydomain_V1_graph</code> — union VIEW (<code>_data</code> ∪ <code>_inferred</code>) for graph queries</li>
-                            </ul>
-                        </div>
-                    </div>
+                        <ul class="nav nav-tabs ob-tabs" id="deltaTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="dttab-overview" data-bs-toggle="tab"
+                                        data-bs-target="#dtpane-overview" type="button" role="tab"
+                                        aria-controls="dtpane-overview" aria-selected="true">
+                                    <i class="bi bi-info-circle me-1"></i> Overview
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="dttab-warehouse" data-bs-toggle="tab"
+                                        data-bs-target="#dtpane-warehouse" type="button" role="tab"
+                                        aria-controls="dtpane-warehouse" aria-selected="false">
+                                    <i class="bi bi-hdd-network me-1"></i> SQL Warehouse
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="dttab-storage" data-bs-toggle="tab"
+                                        data-bs-target="#dtpane-storage" type="button" role="tab"
+                                        aria-controls="dtpane-storage" aria-selected="false">
+                                    <i class="bi bi-archive me-1"></i> Storage
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="dttab-health" data-bs-toggle="tab"
+                                        data-bs-target="#dtpane-health" type="button" role="tab"
+                                        aria-controls="dtpane-health" aria-selected="false">
+                                    <i class="bi bi-heart-pulse me-1"></i> Health
+                                </button>
+                            </li>
+                        </ul>
 
-                    <div class="card border mb-4">
-                        <div class="card-body small">
-                            <h6 class="fw-semibold mb-2"><i class="bi bi-heart-pulse me-1"></i>Status</h6>
-                            <p class="text-muted mb-3">
-                                Probes the SQL Warehouse and, when a domain is open in the session, the active
-                                domain&rsquo;s VIEW and <code>_data</code> table.
-                            </p>
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnDeltaTripleStoreHealth">
-                                <i class="bi bi-arrow-clockwise me-1"></i> Refresh status
-                            </button>
-                            <div id="deltaHealthResult" class="mt-3"></div>
-                        </div>
-                    </div>
+                        <div class="tab-content ob-tab-content" id="deltaTabContent">
+
+                            <!-- ── TAB 1 · Overview ── -->
+                            <div class="tab-pane fade show active" id="dtpane-overview" role="tabpanel" aria-labelledby="dttab-overview">
+                                <div class="alert alert-info border-0 small mb-0">
+                                    <h6 class="alert-heading fw-semibold mb-2">
+                                        <i class="bi bi-info-circle me-1"></i>How it works
+                                    </h6>
+                                    <p class="mb-2">
+                                        With <strong>Delta</strong> selected as the triple-store backend, OntoBricks stores triples
+                                        directly in governed Delta tables in Unity Catalog. The
+                                        <strong>Registry catalog and schema</strong> (Settings → Registry) define
+                                        where all triple-store objects live for every domain.
+                                    </p>
+                                    <p class="mb-0">
+                                        Pick a dedicated SQL Warehouse on the <strong>SQL Warehouse</strong> tab for Delta graph
+                                        queries and builds. When unset, the global warehouse from
+                                        <strong>Settings → Databricks</strong> is used. After mapping is ready, run
+                                        <strong>Knowledge Graph → Build</strong> to create the R2RML VIEW and materialize the
+                                        <code>_data</code> Delta table.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- ── TAB 2 · SQL Warehouse ── -->
+                            <div class="tab-pane fade" id="dtpane-warehouse" role="tabpanel" aria-labelledby="dttab-warehouse">
+                                <p class="small text-muted mb-3">
+                                    Used only when <strong>Delta</strong> is the triple-store backend — graph queries,
+                                    health probes, and Delta builds run against this warehouse. Click <strong>Apply</strong>
+                                    to persist the selection in the registry.
+                                </p>
+                                <label for="deltaWarehouseSelect" class="form-label small fw-semibold mb-1">Warehouse</label>
+                                <div id="deltaWarehouseLoading"
+                                     class="d-flex align-items-center gap-2 text-muted small py-1">
+                                    <span class="spinner-border spinner-border-sm" role="status"
+                                          aria-hidden="true"></span>
+                                    <span>Loading warehouses…</span>
+                                </div>
+                                <div id="deltaWarehouseControls"
+                                     class="d-none d-flex flex-wrap gap-2 align-items-center">
+                                    <select id="deltaWarehouseSelect"
+                                            class="form-select form-select-sm flex-grow-1"
+                                            style="min-width: 12rem;"
+                                            aria-busy="true"></select>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                            id="btnRefreshDeltaWarehouses" disabled>
+                                        <i class="bi bi-arrow-clockwise me-1"></i> Refresh list
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-primary text-nowrap"
+                                            id="btnApplyDeltaWarehouse" disabled>
+                                        <i class="bi bi-check2 me-1"></i> Apply
+                                    </button>
+                                </div>
+                                <p class="text-muted mb-0 mt-2" id="deltaWarehouseHelp">
+                                    <span id="deltaEffectiveWarehouse"></span>
+                                </p>
+                            </div>
+
+                            <!-- ── TAB 3 · Storage ── -->
+                            <div class="tab-pane fade" id="dtpane-storage" role="tabpanel" aria-labelledby="dttab-storage">
+                                <p class="small text-muted mb-3">
+                                    Lists triple-store objects in the Registry UC schema
+                                    (<code>catalog.schema</code>) for <strong>all domains</strong>.
+                                    Use <strong>Drop</strong> to remove a single object or every artefact
+                                    for one domain version (views are dropped before tables).
+                                </p>
+                                <dl class="row small mb-3">
+                                    <dt class="col-sm-3">Registry</dt>
+                                    <dd class="col-sm-9 font-monospace" id="deltaRegistryLocation">—</dd>
+                                </dl>
+                                <button type="button" class="btn btn-sm btn-outline-secondary mb-3" id="btnLoadDeltaObjects">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Load objects
+                                </button>
+                                <div id="deltaObjectsResult"></div>
+                            </div>
+
+                            <!-- ── TAB 4 · Health ── -->
+                            <div class="tab-pane fade" id="dtpane-health" role="tabpanel" aria-labelledby="dttab-health">
+                                <p class="small text-muted mb-3">
+                                    Probes the SQL Warehouse and, when a domain is open in the session, the active
+                                    domain&rsquo;s VIEW and <code>_data</code> table.
+                                </p>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="btnDeltaTripleStoreHealth">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Refresh status
+                                </button>
+                                <div id="deltaHealthResult" class="mt-3"></div>
+                            </div>
+
+                        </div><!-- /#deltaTabContent -->
+                    </div><!-- /#deltaGraphPanel -->
                 </div>
             </div>
 

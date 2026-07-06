@@ -64,3 +64,197 @@ Modified files:
 - `docs/architecture.md`, `docs/development.md`
 
 Tests: `uv run pytest -q -m "not scenario"` → 3163 passed, 275 skipped, 0 failed in 29.4s.
+
+## Delta triple-store SQL Warehouse setting
+
+Context: Delta graph queries and builds shared the global SQL Warehouse with
+all other Databricks SQL work. Admins can now pick a dedicated warehouse under
+Settings → Triple store → Delta; when unset, the global warehouse is used.
+
+Changes:
+
+1. `src/back/objects/session/GlobalConfigService.py`
+   Add `delta_warehouse_id` key with get/set helpers.
+2. `src/back/core/helpers/DatabricksHelpers.py`
+   Add `resolve_delta_warehouse_id`, `get_delta_databricks_credentials`, and
+   `get_triplestore_sql_credentials` (Delta backend only).
+3. `src/back/core/graphdb/delta/DeltaBase.py`, `GraphDBFactory.py`, `health.py`
+   Route Delta graph SQL through the Delta warehouse resolver.
+4. `src/back/objects/domain/SettingsService.py`, `src/api/routers/internal/settings.py`
+   Expose `delta_warehouse_id` on GET triple-store-backend; add POST
+   `/settings/select-delta-warehouse`.
+5. `src/front/templates/settings.html`, `src/front/static/config/js/settings.js`
+   Warehouse dropdown in the Delta section; persisted on global Save.
+6. `src/api/routers/internal/dtwin.py`, `src/api/routers/digitaltwin.py`
+   Use Delta-aware credentials for triple-store builds when backend is Delta.
+7. `tests/units/settings/test_delta_warehouse_config.py`
+   Unit tests for config persistence and warehouse resolution.
+
+Modified files:
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/core/helpers/DatabricksHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/core/graphdb/delta/DeltaBase.py`
+- `src/back/core/graphdb/delta/health.py`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/api/routers/digitaltwin.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `tests/units/settings/test_delta_warehouse_config.py`
+- `tests/units/dtwin/test_triplestore_factory.py`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3173 passed, 275 skipped, 0 failed in 23.15s.
+
+## Fix Delta warehouse persistence on Settings Save
+
+Context: The Delta SQL Warehouse dropdown reset after Save because the value
+was only posted via a separate endpoint when the triple-store backend was
+Delta, the warehouse list was lazy-loaded, and the choice was not mirrored
+into the registry domain export.
+
+Changes:
+
+1. `SettingsService.set_triple_store_backend_result`
+   Accept `delta_warehouse_id` on POST `/settings/triple-store-backend` and
+   persist it to registry `global_config` in the same save.
+2. `SettingsService._mirror_graph_engine_to_domain_registry`
+   Mirror `delta_warehouse_id` into `domain.settings.registry`.
+3. `SettingsService.build_registry_get_payload`
+   Include `delta_warehouse_id` in GET `/settings/registry`.
+4. `settings.js`
+   Preload triple-store settings on page load; send `delta_warehouse_id` with
+   triple-store save; keep saved warehouse selected after warehouse list loads.
+
+Modified files:
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/static/config/js/settings.js`
+- `tests/units/settings/test_delta_warehouse_config.py`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3174 passed, 275 skipped, 0 failed in 27.28s.
+
+## Delta warehouse status shows warehouse name
+
+Context: The Delta settings panel displayed the raw warehouse ID in the
+effective-warehouse helper line.
+
+Changes:
+
+1. `src/front/static/config/js/settings.js`
+   Resolve warehouse display name from the dropdown options and show
+   ``Current SQL Warehouse used for Delta queries: {name}``.
+
+Modified files:
+- `src/front/static/config/js/settings.js`
+
+Tests: UI-only change; no test run required.
+
+## Delta warehouse dropdown loading spinner
+
+Context: The Delta SQL Warehouse select showed a placeholder ``— loading —``
+option while warehouses were fetched.
+
+Changes:
+
+1. `src/front/templates/settings.html`
+   Spinner while loading; dropdown hidden until the warehouse list is ready.
+2. `src/front/static/config/js/settings.js`
+   `setDeltaWarehouseLoading()` toggles spinner, select visibility, and refresh button.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+Tests: UI-only change; no test run required.
+
+## Delta warehouse Apply button and status fix
+
+Context: The status line always showed the global warehouse name because it used
+``effective_delta_warehouse_id`` (global fallback) instead of the saved
+``delta_warehouse_id``. Domain Save does not persist this instance setting.
+
+Changes:
+
+1. `settings.html` / `settings.js`
+   Add **Apply** button next to the Delta warehouse dropdown; posts to
+   ``/settings/select-delta-warehouse`` and writes registry ``global_config``.
+   Status line reflects the saved Delta override vs global fallback.
+2. `SettingsService.select_delta_warehouse`
+   Allow clearing the override (empty string); force-reload global config cache.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `src/back/objects/domain/SettingsService.py`
+- `tests/units/settings/test_delta_warehouse_config.py`
+
+Tests: `uv run pytest -q tests/units/settings/test_delta_warehouse_config.py` → 12 passed.
+
+## Delta warehouse controls on one line
+
+Context: Dropdown, Refresh, and Apply were stacked in two columns.
+
+Changes:
+
+1. `src/front/templates/settings.html` — single flex row for select + buttons.
+2. `src/front/static/config/js/settings.js` — toggle ``deltaWarehouseControls`` during load.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+Tests: UI-only; no test run.
+
+## Delta settings tabs (Lakebase-style)
+
+Context: Delta triple-store settings were a long scroll of cards. Reorganize into
+tabs matching the Lakebase section pattern (`ob-tabs`).
+
+Changes:
+
+1. `src/front/templates/settings.html`
+   Add Overview, SQL Warehouse, Storage, and Health tabs under `#deltaGraphPanel`
+   with loading banner; move existing controls into tab panes.
+2. `src/front/static/config/js/settings.js`
+   Mirror Lakebase load banner/panel toggles; lazy-load health on first Health
+   tab visit; refresh storage fields without health spinner on section enter.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3175 passed.
+
+## Delta Storage tab — list all domain objects with drop
+
+Context: The Delta Storage tab only showed static naming examples and the active
+domain. Users need the same per-domain object browser as Lakebase (load, expand,
+drop single object or whole domain).
+
+Changes:
+
+1. `src/back/core/graphdb/delta/objects.py`
+   UC listing helpers: group ``triplestore_*`` objects by domain version, sort for
+   safe drop order (views before tables).
+2. `src/back/objects/domain/SettingsService.py`
+   ``triple_store_databricks_objects_result`` — enumerate Registry schema via UC API.
+3. `src/api/routers/internal/settings.py`
+   ``GET /settings/triple-store/databricks-objects``.
+4. `src/front/templates/settings.html` / `settings.js`
+   Storage tab: Load objects button, collapsible domain cards, per-object and
+   per-domain delete (reuses Lakebase confirm modal + ``drop-uc-object`` API).
+5. `tests/units/settings/test_delta_objects.py`
+   Unit tests for grouping and service result.
+
+Modified files:
+- `src/back/core/graphdb/delta/objects.py` (new)
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `tests/units/settings/test_delta_objects.py` (new)
+
+Tests: `uv run pytest -q -m "not scenario"` → 3180 passed.

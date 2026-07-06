@@ -31,11 +31,14 @@ from back.core.databricks import (  # noqa: F401  — re-exported for backward c
 # Backward-compatible function wrappers
 run_blocking = DatabricksHelpers.run_blocking
 resolve_warehouse_id = DatabricksHelpers.resolve_warehouse_id
+resolve_delta_warehouse_id = DatabricksHelpers.resolve_delta_warehouse_id
 resolve_default_base_uri = DatabricksHelpers.resolve_default_base_uri
 resolve_default_emoji = DatabricksHelpers.resolve_default_emoji
 resolve_use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch
 get_databricks_client = DatabricksHelpers.get_databricks_client
 get_databricks_credentials = DatabricksHelpers.get_databricks_credentials
+get_delta_databricks_credentials = DatabricksHelpers.get_delta_databricks_credentials
+get_triplestore_sql_credentials = DatabricksHelpers.get_triplestore_sql_credentials
 get_databricks_host_and_token = DatabricksHelpers.get_databricks_host_and_token
 require_serving_llm = DatabricksHelpers.require_serving_llm
 
@@ -45,11 +48,14 @@ __all__ = [
     "URIHelpers",
     "run_blocking",
     "resolve_warehouse_id",
+    "resolve_delta_warehouse_id",
     "resolve_default_base_uri",
     "resolve_default_emoji",
     "resolve_use_cloud_fetch",
     "get_databricks_client",
     "get_databricks_credentials",
+    "get_delta_databricks_credentials",
+    "get_triplestore_sql_credentials",
     "get_databricks_host_and_token",
     "make_volume_file_service",
     "require_serving_llm",

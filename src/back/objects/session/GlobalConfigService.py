@@ -134,6 +134,12 @@ class GlobalConfigService:
         """Return the globally configured SQL Warehouse ID (or empty string)."""
         return self.get(host, token, registry_cfg, "warehouse_id")
 
+    def get_delta_warehouse_id(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> str:
+        """Return the Delta triple-store SQL Warehouse ID (or empty string)."""
+        return self.get(host, token, registry_cfg, "delta_warehouse_id")
+
     def get_default_base_uri(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> str:
@@ -222,6 +228,18 @@ class GlobalConfigService:
     ) -> Tuple[bool, str]:
         """Persist a new SQL Warehouse ID in the global config file."""
         return self._save(host, token, registry_cfg, {"warehouse_id": warehouse_id})
+
+    def set_delta_warehouse_id(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        warehouse_id: str,
+    ) -> Tuple[bool, str]:
+        """Persist the SQL Warehouse used for Delta triple-store queries."""
+        return self._save(
+            host, token, registry_cfg, {"delta_warehouse_id": warehouse_id}
+        )
 
     def set_default_base_uri(
         self,
@@ -406,6 +424,7 @@ class GlobalConfigService:
         return {
             "version": 1,
             "warehouse_id": "",
+            "delta_warehouse_id": "",
             "default_base_uri": "",
             "default_emoji": "",
             "navbar_logo": "",

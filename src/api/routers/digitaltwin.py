@@ -27,7 +27,7 @@ from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.graphdb import get_graphdb
 from back.core.helpers import (
-    get_databricks_credentials,
+    get_triplestore_sql_credentials,
     get_databricks_client,
     sql_escape,
     effective_view_table,
@@ -492,7 +492,7 @@ async def dt_build(
     if not r2rml:
         raise ValidationError("No R2RML mapping available")
 
-    host, token, warehouse_id = get_databricks_credentials(domain, settings)
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
     if not host or not token:
         raise ValidationError("Databricks not configured")
     if not warehouse_id:

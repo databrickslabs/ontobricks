@@ -86,7 +86,7 @@ class TestGetGraphdb:
                 "back.core.helpers.get_databricks_host_and_token",
                 return_value=("", ""),
             ),
-            patch("back.core.helpers.resolve_warehouse_id", return_value="wh"),
+            patch("back.core.helpers.resolve_delta_warehouse_id", return_value="wh"),
             patch("back.core.databricks.is_databricks_app", return_value=False),
         ):
             result = get_graphdb(
@@ -105,7 +105,7 @@ class TestGetGraphdb:
                 "back.core.helpers.get_databricks_host_and_token",
                 return_value=("https://h", "tok"),
             ),
-            patch("back.core.helpers.resolve_warehouse_id", return_value="wh"),
+            patch("back.core.helpers.resolve_delta_warehouse_id", return_value="wh"),
             patch("back.core.databricks.DatabricksClient") as mock_client_cls,
             patch(
                 "back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore"

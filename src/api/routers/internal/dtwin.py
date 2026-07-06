@@ -31,7 +31,7 @@ from back.core.helpers import (
     effective_graph_query_table,
     effective_view_table,
     get_databricks_client,
-    get_databricks_credentials,
+    get_triplestore_sql_credentials,
     get_databricks_host_and_token,
     make_volume_file_service,
     is_uri,
@@ -258,7 +258,7 @@ async def start_triplestore_sync(
             "No R2RML mapping available. Please ensure ontology and assignments are configured."
         )
 
-    host, token, warehouse_id = get_databricks_credentials(domain, settings)
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
     if not host and not is_databricks_app():
         raise ValidationError("Databricks not configured")
     if not token and not is_databricks_app():
@@ -1307,7 +1307,7 @@ async def start_databricks_triplestore_build(
             "No R2RML mapping available. Configure ontology and assignments first."
         )
 
-    host, token, warehouse_id = get_databricks_credentials(domain, settings)
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
     if not host and not is_databricks_app():
         raise ValidationError("Databricks not configured")
     if not token and not is_databricks_app():

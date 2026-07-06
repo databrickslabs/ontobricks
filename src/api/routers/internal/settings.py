@@ -125,6 +125,26 @@ async def select_warehouse(
     )
 
 
+@router.post("/select-delta-warehouse")
+async def select_delta_warehouse(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Select the SQL warehouse used for Delta triple-store graph queries."""
+    data = await request.json()
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.select_delta_warehouse(
+        data.get("warehouse_id"),
+        email,
+        user_token,
+        session_mgr,
+        settings,
+    )
+
+
 # ===========================================
 # Catalog/Schema/Volume Navigation
 # ===========================================
@@ -881,7 +901,13 @@ async def set_triple_store_backend(
         _settings_request_identity(request)
     )
     return config_service.set_triple_store_backend_result(
-        backend, email, user_token, session_mgr, settings
+        backend,
+        email,
+        user_token,
+        session_mgr,
+        settings,
+        delta_warehouse_id=data.get("delta_warehouse_id"),
+        persist_delta_warehouse="delta_warehouse_id" in data,
     )
 
 
@@ -893,6 +919,18 @@ async def get_triple_store_databricks_health(
     """Probe SQL Warehouse + UC Delta triple-store artefacts."""
     with map_route_errors("Databricks triple store health", logger):
         return config_service.triple_store_databricks_health_result(
+            session_mgr, settings
+        )
+
+
+@router.get("/triple-store/databricks-objects")
+async def get_triple_store_databricks_objects(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List UC triple-store objects in the Registry schema, grouped by domain."""
+    with map_route_errors("Databricks triple store objects", logger):
+        return config_service.triple_store_databricks_objects_result(
             session_mgr, settings
         )
 
