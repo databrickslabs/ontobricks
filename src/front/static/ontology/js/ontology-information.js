@@ -376,6 +376,10 @@ async function parseAndLoadOwl(content, filename) {
                     description: cls.comment || '',
                     parent: cls.parent || '',
                     emoji: cls.emoji || OntologyState.defaultClassEmoji,
+                    dashboard: cls.dashboard || '',
+                    dashboardParams: cls.dashboardParams || {},
+                    bridges: cls.bridges || [],
+                    dataset: cls.dataset || null,
                     dataProperties: merged
                 };
             });

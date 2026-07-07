@@ -1583,6 +1583,7 @@ class Ontology:
                 "dashboardParams", existing.get("dashboardParams", {})
             ),
             "bridges": data.get("bridges", existing.get("bridges", [])),
+            "dataset": data.get("dataset", existing.get("dataset", None)),
         }
 
     @staticmethod

@@ -89,6 +89,48 @@ class UnityCatalog:
             logger.exception("Error fetching tables: %s", exc)
             return []
 
+    def list_tables_and_views(
+        self, catalog: str, schema: str
+    ) -> List[Dict[str, str]]:
+        """Return tables and views in *catalog*.*schema* via the UC REST API.
+
+        Unlike ``get_tables`` (SQL ``SHOW TABLES``), the REST endpoint reports
+        each asset's ``table_type`` so callers can distinguish views from
+        tables. No warehouse required. Returns an empty list on error.
+
+        Each dict has ``name``, ``full_name``, ``table_type`` and ``comment``.
+        """
+        if not self._auth.host or not self._auth.has_valid_auth():
+            return []
+        try:
+            host = self._auth.host.rstrip("/")
+            headers = self._auth.get_auth_headers()
+            url = f"{host}/api/2.1/unity-catalog/tables"
+            params = {"catalog_name": catalog, "schema_name": schema}
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            raw = response.json().get("tables", []) or []
+            assets: List[Dict[str, str]] = []
+            for tbl in raw:
+                name = (tbl.get("name") or "").strip()
+                if not name:
+                    continue
+                assets.append(
+                    {
+                        "name": name,
+                        "full_name": (
+                            tbl.get("full_name")
+                            or f"{catalog}.{schema}.{name}"
+                        ).strip(),
+                        "table_type": str(tbl.get("table_type", "") or ""),
+                        "comment": tbl.get("comment", "") or "",
+                    }
+                )
+            return assets
+        except Exception as exc:
+            logger.exception("Error listing tables and views: %s", exc)
+            return []
+
     def probe_schema_has_tables(self, catalog: str, schema: str) -> int:
         """Return the number of tables in *catalog*.*schema* via information_schema.
 

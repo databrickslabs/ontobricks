@@ -443,6 +443,29 @@ class SettingsService:
             raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
 
     @staticmethod
+    async def fetch_uc_assets(
+        catalog: str,
+        schema: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        log_label: str = "Get UC assets",
+    ) -> Dict[str, Any]:
+        """List tables and views in *catalog*.*schema* (with ``table_type``)."""
+        try:
+            client = get_databricks_client(get_domain(session_mgr), settings)
+            if not client:
+                raise ValidationError("Databricks not configured")
+            assets = await run_blocking(
+                client.list_tables_and_views, catalog, schema
+            )
+            return {"success": True, "assets": assets}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("%s failed: %s", log_label, e)
+            raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
+
+    @staticmethod
     async def check_lakebase_permissions(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:

@@ -1,0 +1,58 @@
+## Add `ontobricks:dataset` class annotation (link a class to a UC table/view)
+
+Context: Classes in the ontology can now be linked to a single Unity Catalog
+table or view. The link is stored as a new custom OWL annotation
+`ontobricks:dataset` (JSON literal) carrying everything needed to re-list the
+asset later: catalog, schema, asset name, type (TABLE/VIEW) and fullName. It is
+configured from the Designer right pane -> Actions -> new "Dataset" entry, via a
+catalog -> schema -> table/view picker that supports views (REST-based).
+
+### Changes
+
+1. `src/back/core/databricks/uc/UnityCatalog.py`
+   Added `list_tables_and_views(catalog, schema)` using the UC REST API
+   (`/api/2.1/unity-catalog/tables`) so results include `table_type` and thus
+   distinguish views from tables (SQL `SHOW TABLES` cannot). Returns
+   `[{name, full_name, table_type, comment}]`; empty list on error.
+2. `src/back/core/databricks/DatabricksClient.py`
+   Added `list_tables_and_views` passthrough to the `UnityCatalog` facade.
+3. `src/back/objects/domain/SettingsService.py`
+   Added `fetch_uc_assets(catalog, schema, ...)` returning
+   `{"success": True, "assets": [...]}`.
+4. `src/api/routers/internal/settings.py`
+   Added `GET /settings/uc-assets?catalog=&schema=` endpoint.
+5. `src/back/objects/ontology/Ontology.py`
+   `build_class_from_data` now threads a `dataset` field (defaults to `None`).
+6. `src/back/core/w3c/owl/OntologyGenerator.py`
+   `_add_class` emits `ONTOBRICKS_NS.dataset` as a JSON literal when set.
+7. `src/back/core/w3c/owl/OntologyParser.py`
+   `get_classes` parses `ONTOBRICKS_NS.dataset` back into the class dict
+   (docstring updated).
+8. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Added the "Dataset" entry to the Actions tab: state var, markup block,
+   `renderSharedEntityDataset` / `removeSharedEntityDataset`, load on
+   edit/view, reset on close, save into `classData`, and the
+   `openDatasetSelectorModal` catalog->schema->asset picker (table/view badge)
+   calling `/settings/uc-assets`.
+9. `src/front/static/global/js/ontology-design.js`
+   Preserve `dataset` when the Visual Designer canvas syncs back.
+10. `src/front/static/ontology/js/ontology-information.js`
+    Carry `dataset` (plus dashboard/dashboardParams/bridges) through the OWL
+    import class mapping, which previously dropped custom annotations.
+
+### Modified files
+
+- `src/back/core/databricks/uc/UnityCatalog.py`
+- `src/back/core/databricks/DatabricksClient.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/back/core/w3c/owl/OntologyGenerator.py`
+- `src/back/core/w3c/owl/OntologyParser.py`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/global/js/ontology-design.js`
+- `src/front/static/ontology/js/ontology-information.js`
+- `tests/units/ontology/test_owl_generator.py`
+- `tests/units/ontology/test_ontology_service.py`
+
+Tests: `uv run pytest -q -m "not scenario"` -> 3204 passed, 275 skipped.

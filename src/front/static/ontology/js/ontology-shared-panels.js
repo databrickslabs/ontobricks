@@ -74,6 +74,7 @@ let sharedPanelElement = null;  // Reference to the current panel DOM element fo
 let sharedPanelDashboardUrl = null;  // Dashboard URL for the entity
 let sharedPanelDashboardParams = {};  // Dashboard parameter mappings { paramName: attributeName }
 let sharedPanelBridges = [];  // Cross-domain entity bridges
+let sharedPanelDataset = null;  // Linked Unity Catalog dataset { catalog, schema, asset, type, fullName }
 let sharedPanelDirty = false;
 
 // Remembered active tab per panel type — persists across entity/relationship selections
@@ -380,6 +381,7 @@ function closeSharedPanel() {
     sharedPanelDashboardUrl = null;
     sharedPanelDashboardParams = {};
     sharedPanelBridges = [];
+    sharedPanelDataset = null;
     sharedPanelDirty = false;
 }
 
@@ -435,6 +437,7 @@ async function openEntityPanel(options = {}) {
     sharedPanelDashboardUrl = null;  // Reset dashboard for new entity
     sharedPanelDashboardParams = {};  // Reset dashboard parameter mappings
     sharedPanelBridges = [];  // Reset bridges for new entity
+    sharedPanelDataset = null;  // Reset dataset for new entity
     
     openSharedPanel();
     
@@ -477,6 +480,7 @@ async function openEntityPanelForEdit(idx, options = {}) {
     sharedPanelDashboardUrl = cls.dashboard || null;  // Load existing dashboard URL
     sharedPanelDashboardParams = cls.dashboardParams || {};  // Load existing parameter mappings
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
+    sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
 
     console.log('[SharedPanel] Edit - Loaded class:', cls.name, 'dataProperties:', (cls.dataProperties || []).length);
     
@@ -514,6 +518,7 @@ async function openEntityPanelForView(idx, options = {}) {
     sharedPanelDashboardUrl = cls.dashboard || null;  // Load existing dashboard URL
     sharedPanelDashboardParams = cls.dashboardParams || {};  // Load existing parameter mappings
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
+    sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
 
     sharedPanelInheritedAttributes = getSharedInheritedProperties(cls.parent);
     const inheritedNames = new Set(sharedPanelInheritedAttributes.map(a => a.name));
@@ -595,7 +600,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
             <ul class="form-tabs-nav">
                 <li><a class="form-tab-link ${_eTab === 'details' ? 'active' : ''}" data-form-tab="details" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-info-circle me-1"></i>Details</a></li>
                 <li><a class="form-tab-link ${_eTab === 'attributes' ? 'active' : ''}" data-form-tab="attributes" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-tags me-1"></i>Attributes</a></li>
-                <li><a class="form-tab-link ${_eTab === 'actions' ? 'active' : ''}" data-form-tab="actions" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-lightning me-1"></i>Actions</a></li>
+                <li><a class="form-tab-link ${_eTab === 'actions' ? 'active' : ''}" data-form-tab="actions" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-lightning me-1"></i>External</a></li>
                 <li><a class="form-tab-link ${_eTab === 'constraints' ? 'active' : ''}" data-form-tab="constraints" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-sliders me-1"></i>Constraints</a></li>
             </ul>
 
@@ -663,6 +668,17 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                 </div>
                 <div class="mb-3">
                     <label class="form-label d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-table me-1"></i>Dataset</span>
+                        ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openDatasetSelectorModal()"><i class="bi bi-search"></i> Select</button>' : ''}
+                    </label>
+                    <div id="sharedEntityDataset" class="border rounded p-2" style="background: #ffffff;">
+                        <div id="sharedEntityDatasetContent">
+                            <small class="text-muted">No dataset assigned</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-signpost-2 me-1"></i>Bridges</span>
                         ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBridgeSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
                     </label>
@@ -719,6 +735,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
     
     renderSharedEntityAttributes(viewOnly);
     renderSharedEntityDashboard(viewOnly);
+    renderSharedEntityDataset(viewOnly);
     renderSharedEntityBridges(viewOnly);
     if (!viewOnly) {
         var _btnEl = panelGetById('sharedEntityEmojiBtn');
@@ -915,6 +932,256 @@ function removeSharedEntityDashboard() {
     sharedPanelDashboardParams = {};
     markPanelDirty();
     renderSharedEntityDashboard(false);
+}
+
+// =====================================================
+// UNITY CATALOG DATASET
+// =====================================================
+
+/**
+ * Render the linked Unity Catalog dataset in the entity form
+ */
+function renderSharedEntityDataset(viewOnly = false) {
+    const container = panelGetById('sharedEntityDatasetContent');
+    if (!container) return;
+
+    const ds = sharedPanelDataset;
+    if (ds && ds.asset) {
+        const isView = (ds.type || '').toUpperCase() === 'VIEW';
+        const badge = isView
+            ? '<span class="badge bg-info text-dark">View</span>'
+            : '<span class="badge bg-secondary">Table</span>';
+        const fullName = ds.fullName || `${ds.catalog}.${ds.schema}.${ds.asset}`;
+        container.innerHTML = `
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-table text-primary"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">${escapeHtml(ds.asset)} ${badge}</div>
+                    <small class="text-muted">${escapeHtml(fullName)}</small>
+                </div>
+                ${!viewOnly ? `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSharedEntityDataset()" title="Remove dataset"><i class="bi bi-x"></i></button>` : ''}
+            </div>
+        `;
+    } else {
+        container.innerHTML = '<small class="text-muted">No dataset assigned</small>';
+    }
+}
+
+/**
+ * Remove the assigned dataset
+ */
+function removeSharedEntityDataset() {
+    sharedPanelDataset = null;
+    markPanelDirty();
+    renderSharedEntityDataset(false);
+}
+
+// Selector state
+let _datasetSelCatalog = '';
+let _datasetSelSchema = '';
+let _datasetAllAssets = [];
+
+/**
+ * Open the dataset selector modal (catalog -> schema -> table/view).
+ */
+async function openDatasetSelectorModal() {
+    const modalId = 'datasetSelectorModal';
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    _datasetSelCatalog = '';
+    _datasetSelSchema = '';
+    _datasetAllAssets = [];
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-table me-2"></i>Select a Unity Catalog Table or View</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Catalog</label>
+                                <select class="form-select form-select-sm" id="datasetCatalogSelect" onchange="_datasetOnCatalogChange()">
+                                    <option value="">Loading...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Schema</label>
+                                <select class="form-select form-select-sm" id="datasetSchemaSelect" onchange="_datasetOnSchemaChange()" disabled>
+                                    <option value="">Select a catalog first</option>
+                                </select>
+                            </div>
+                        </div>
+                        <input type="text" class="form-control form-control-sm mb-2" id="datasetAssetSearch" placeholder="Search tables and views..." oninput="_filterDatasetAssets()" disabled>
+                        <div id="datasetAssetList" class="list-group" style="max-height: 320px; overflow-y: auto;">
+                            <div class="text-muted p-3 text-center">Select a catalog and schema to list tables and views</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById(modalId));
+    modal.show();
+
+    // Pre-select the current dataset's catalog/schema when editing
+    const preCatalog = sharedPanelDataset?.catalog || '';
+    const preSchema = sharedPanelDataset?.schema || '';
+
+    try {
+        const resp = await fetch('/settings/catalogs', { credentials: 'same-origin' });
+        const data = await resp.json();
+        const sel = document.getElementById('datasetCatalogSelect');
+        if (!sel) return;
+        const catalogs = data.catalogs || [];
+        sel.innerHTML = '<option value="">Select a catalog...</option>' +
+            catalogs.map(c => `<option value="${escapeHtml(c)}"${c === preCatalog ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+        if (preCatalog) {
+            _datasetSelCatalog = preCatalog;
+            await _datasetLoadSchemas(preCatalog, preSchema);
+        }
+    } catch (err) {
+        console.error('[Dataset] Error loading catalogs:', err);
+        const sel = document.getElementById('datasetCatalogSelect');
+        if (sel) sel.innerHTML = '<option value="">Failed to load catalogs</option>';
+    }
+}
+
+async function _datasetOnCatalogChange() {
+    const catalog = document.getElementById('datasetCatalogSelect')?.value || '';
+    _datasetSelCatalog = catalog;
+    _datasetSelSchema = '';
+    _datasetAllAssets = [];
+    const searchInput = document.getElementById('datasetAssetSearch');
+    if (searchInput) searchInput.disabled = true;
+    const list = document.getElementById('datasetAssetList');
+    if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list tables and views</div>';
+    if (catalog) {
+        await _datasetLoadSchemas(catalog);
+    } else {
+        const schemaSel = document.getElementById('datasetSchemaSelect');
+        if (schemaSel) {
+            schemaSel.disabled = true;
+            schemaSel.innerHTML = '<option value="">Select a catalog first</option>';
+        }
+    }
+}
+
+async function _datasetLoadSchemas(catalog, preSchema = '') {
+    const schemaSel = document.getElementById('datasetSchemaSelect');
+    if (!schemaSel) return;
+    schemaSel.disabled = true;
+    schemaSel.innerHTML = '<option value="">Loading...</option>';
+    try {
+        const resp = await fetch(`/settings/schemas/${encodeURIComponent(catalog)}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        const schemas = data.schemas || [];
+        schemaSel.innerHTML = '<option value="">Select a schema...</option>' +
+            schemas.map(s => `<option value="${escapeHtml(s)}"${s === preSchema ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('');
+        schemaSel.disabled = false;
+        if (preSchema) {
+            _datasetSelSchema = preSchema;
+            await _datasetLoadAssets(catalog, preSchema);
+        }
+    } catch (err) {
+        console.error('[Dataset] Error loading schemas:', err);
+        schemaSel.innerHTML = '<option value="">Failed to load schemas</option>';
+    }
+}
+
+async function _datasetOnSchemaChange() {
+    const schema = document.getElementById('datasetSchemaSelect')?.value || '';
+    _datasetSelSchema = schema;
+    if (schema && _datasetSelCatalog) {
+        await _datasetLoadAssets(_datasetSelCatalog, schema);
+    } else {
+        const list = document.getElementById('datasetAssetList');
+        if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list tables and views</div>';
+    }
+}
+
+async function _datasetLoadAssets(catalog, schema) {
+    const list = document.getElementById('datasetAssetList');
+    if (list) list.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading tables and views...</div>';
+    try {
+        const resp = await fetch(`/settings/uc-assets?catalog=${encodeURIComponent(catalog)}&schema=${encodeURIComponent(schema)}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        _datasetAllAssets = (data.success && data.assets) ? data.assets : [];
+        const searchInput = document.getElementById('datasetAssetSearch');
+        if (searchInput) searchInput.disabled = _datasetAllAssets.length === 0;
+        if (!_datasetAllAssets.length) {
+            if (list) list.innerHTML = '<div class="text-muted p-3 text-center">No tables or views found in this schema</div>';
+            return;
+        }
+        _renderDatasetAssetList(_datasetAllAssets);
+    } catch (err) {
+        console.error('[Dataset] Error loading assets:', err);
+        if (list) list.innerHTML = '<div class="text-danger p-2"><i class="bi bi-exclamation-triangle"></i> Failed to load tables and views</div>';
+    }
+}
+
+function _renderDatasetAssetList(assets) {
+    const list = document.getElementById('datasetAssetList');
+    if (!list) return;
+    list.innerHTML = assets.map(a => {
+        const isView = (a.table_type || '').toUpperCase() === 'VIEW';
+        const badge = isView
+            ? '<span class="badge bg-info text-dark">View</span>'
+            : '<span class="badge bg-secondary">Table</span>';
+        const icon = isView ? 'bi-eye' : 'bi-table';
+        return `
+            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                    onclick='_datasetSelectAsset(${JSON.stringify(a).replace(/'/g, "&#39;")})'>
+                <i class="bi ${icon} text-primary"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">${escapeHtml(a.name)} ${badge}</div>
+                    ${a.comment ? `<small class="text-muted">${escapeHtml(String(a.comment).substring(0, 80))}</small>` : ''}
+                </div>
+                <i class="bi bi-chevron-right text-muted"></i>
+            </button>
+        `;
+    }).join('');
+}
+
+function _filterDatasetAssets() {
+    const q = (document.getElementById('datasetAssetSearch')?.value || '').toLowerCase();
+    const filtered = _datasetAllAssets.filter(a =>
+        (a.name || '').toLowerCase().includes(q) ||
+        (a.comment || '').toLowerCase().includes(q)
+    );
+    _renderDatasetAssetList(filtered);
+}
+
+function _datasetSelectAsset(asset) {
+    sharedPanelDataset = {
+        catalog: _datasetSelCatalog,
+        schema: _datasetSelSchema,
+        asset: asset.name,
+        type: (asset.table_type || '').toUpperCase() === 'VIEW' ? 'VIEW' : 'TABLE',
+        fullName: asset.full_name || `${_datasetSelCatalog}.${_datasetSelSchema}.${asset.name}`
+    };
+    markPanelDirty();
+    renderSharedEntityDataset(false);
+    closeDatasetSelectorModal();
+    showNotification(`Dataset linked: ${sharedPanelDataset.fullName}`, 'success', 3000);
+}
+
+function closeDatasetSelectorModal() {
+    const modal = document.getElementById('datasetSelectorModal');
+    if (modal) {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) bsModal.hide();
+        modal.addEventListener('hidden.bs.modal', () => modal.remove(), { once: true });
+    }
+    _datasetSelCatalog = '';
+    _datasetSelSchema = '';
+    _datasetAllAssets = [];
 }
 
 // =====================================================
@@ -1606,7 +1873,8 @@ async function saveSharedEntity() {
         dataProperties: validAttributes,
         dashboard: sharedPanelDashboardUrl || undefined,
         dashboardParams: Object.keys(sharedPanelDashboardParams).length > 0 ? sharedPanelDashboardParams : undefined,
-        bridges: sharedPanelBridges.length > 0 ? sharedPanelBridges : undefined
+        bridges: sharedPanelBridges.length > 0 ? sharedPanelBridges : undefined,
+        dataset: sharedPanelDataset || undefined
     };
     
     console.log('[SharedPanel] Saving - classData.dashboardParams:', JSON.stringify(classData.dashboardParams));

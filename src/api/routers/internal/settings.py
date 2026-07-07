@@ -212,6 +212,17 @@ async def get_volumes_path(
     )
 
 
+@router.get("/uc-assets")
+async def get_uc_assets(
+    catalog: str,
+    schema: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Unity Catalog tables and views in a schema (with table_type)."""
+    return await config_service.fetch_uc_assets(catalog, schema, session_mgr, settings)
+
+
 # ===========================================
 # Domain Registry
 # ===========================================
