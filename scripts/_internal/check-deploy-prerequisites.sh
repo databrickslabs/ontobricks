@@ -8,11 +8,11 @@ set -euo pipefail
 # schema migration blockers early.
 #
 # Usage:
-#   scripts/check-deploy-prerequisites.sh              # full deploy preflight (default target)
-#   scripts/check-deploy-prerequisites.sh --local      # local dev install only (setup.sh)
-#   scripts/check-deploy-prerequisites.sh --volume     # dev target (no Lakebase checks)
-#   scripts/check-deploy-prerequisites.sh --provision  # setup-lakebase.sh prerequisites
-#   scripts/check-deploy-prerequisites.sh --lakebase   # Lakebase bootstrap checks only
+#   scripts/_internal/check-deploy-prerequisites.sh              # full deploy preflight (default target)
+#   scripts/_internal/check-deploy-prerequisites.sh --local      # local dev install only (setup.sh)
+#   scripts/_internal/check-deploy-prerequisites.sh --volume     # dev target (no Lakebase checks)
+#   scripts/_internal/check-deploy-prerequisites.sh --provision  # setup-lakebase.sh prerequisites
+#   scripts/_internal/check-deploy-prerequisites.sh --lakebase   # Lakebase bootstrap checks only
 #
 # Exit 0 when no blocking issues; non-zero otherwise. Warnings are printed
 # but do not fail the script unless they represent a hard error inside
@@ -158,7 +158,7 @@ except Exception:
             && printf '%s' "$_pg_dbs" | grep -q "${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"; then
             _preflight_ok "Lakebase database segment present on ${_branch_path}"
         else
-            _preflight_warn "Lakebase database not verified under ${_branch_path} — run scripts/setup-lakebase.sh if missing"
+            _preflight_warn "Lakebase database not verified under ${_branch_path} — run scripts/bootstrap/setup-lakebase.sh if missing"
         fi
     else
         _preflight_fail "Could not list Lakebase databases for ${_branch_path}"

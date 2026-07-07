@@ -27,7 +27,7 @@ set -euo pipefail
 #     deployed so the target schema already exists. Run the schema
 #     bootstrap first if needed::
 #
-#         scripts/bootstrap-lakebase-perms.sh
+#         scripts/bootstrap/lakebase-perms.sh
 #
 # Usage:
 #   scripts/migrate-registry-to-lakebase.sh \\

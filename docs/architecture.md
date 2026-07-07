@@ -661,7 +661,7 @@ The `DomainSession` class (`src/back/objects/session/DomainSession.py`) provides
 Since v0.4.0 the domain registry lives in **Databricks Lakebase**
 (Postgres). The historical JSON-on-Volume backend was removed —
 operators with pre-v0.4.0 deployments must run
-`scripts/migrate-registry-to-lakebase.sh` once before upgrading. The
+`scripts/migrations/migrate-registry-to-lakebase.sh` once before upgrading. The
 Unity Catalog Volume is still wired in but is now reserved for binary
 artefacts (`documents/` uploads and registry export bundles).
 
@@ -1374,7 +1374,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 > backend is unavailable (e.g. the table is missing) `EditLockService._shape`
 > degrades to permissive rather than presenting a phantom "another user" lock.
 > `domain_edit_locks` is provisioned as the schema owner by the deploy
-> migration (`scripts/bootstrap-lakebase-perms.sh`), because the app service
+> migration (`scripts/bootstrap/lakebase-perms.sh`), because the app service
 > principal cannot self-heal the table's FK to `domains`.
 >
 > The lifecycle replaces the old per-version "Active"/`mcp_enabled` toggle.

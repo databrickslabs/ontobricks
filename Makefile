@@ -54,7 +54,7 @@ help:
 	@echo "    make bootstrap-perms     - Grant the app SP CAN_MANAGE on itself (first-run fix)"
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
 	@echo "    make bundle-validate     - Validate the bundle config (Lakebase target)"
-	@echo "    make deploy-check      - Read-only deploy prerequisite check (see scripts/DEPLOY_CHECKLIST.md)"
+	@echo "    make deploy-check      - Read-only deploy prerequisite check (see docs/DEPLOY_CHECKLIST.md)"
 	@echo ""
 	@echo "  Maintenance:"
 	@echo "    make clean        - Remove generated files"
@@ -160,18 +160,18 @@ deploy-no-run:
 
 render-app-yaml:
 	@echo "Rendering app.yaml from app.yaml.template + $(CONFIG)..."
-	@. ./$(CONFIG) && python3 scripts/_render-app-yaml.py
+	@. ./$(CONFIG) && python3 scripts/_internal/_render-app-yaml.py
 
 bootstrap-perms:
 	@echo "Bootstrapping app self-permissions (config: $(CONFIG))..."
-	chmod +x scripts/bootstrap-app-permissions.sh
-	@. ./$(CONFIG) && scripts/bootstrap-app-permissions.sh
+	chmod +x scripts/bootstrap/app-permissions.sh
+	@. ./$(CONFIG) && scripts/bootstrap/app-permissions.sh
 
 bootstrap-lakebase:
 	@echo "Granting Lakebase schema USAGE/DML to sandbox apps (config: $(CONFIG))..."
-	chmod +x scripts/bootstrap-lakebase-perms.sh
+	chmod +x scripts/bootstrap/lakebase-perms.sh
 	@. ./$(CONFIG) && \
-	  scripts/bootstrap-lakebase-perms.sh \
+	  scripts/bootstrap/lakebase-perms.sh \
 	    -i "$$LAKEBASE_PROJECT" \
 	    -b "$$LAKEBASE_BRANCH" \
 	    -d "$$LAKEBASE_DATABASE" \
@@ -196,7 +196,7 @@ bundle-summary:
 	@echo "Bundle summary (target: dev-lakebase)..."
 	databricks bundle summary -t dev-lakebase
 
-# Check deployment prerequisites (read-only — see scripts/DEPLOY_CHECKLIST.md)
+# Check deployment prerequisites (read-only — see docs/DEPLOY_CHECKLIST.md)
 deploy-check:
-	@chmod +x scripts/check-deploy-prerequisites.sh
-	@scripts/check-deploy-prerequisites.sh
+	@chmod +x scripts/deploy.sh
+	@scripts/deploy.sh --dry-run

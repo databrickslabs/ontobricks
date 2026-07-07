@@ -12,11 +12,11 @@ set -euo pipefail
 # CAN_MANAGE on its own app. It is idempotent and safe to re-run.
 #
 # Usage:
-#   scripts/bootstrap-app-permissions.sh                        # bootstrap default sandbox apps
-#   scripts/bootstrap-app-permissions.sh ontobricks-030         # explicit (positional)
-#   scripts/bootstrap-app-permissions.sh a b c                  # bootstrap several apps
-#   APP_NAME=ontobricks-040 scripts/bootstrap-app-permissions.sh   # override default sandbox app
-#   MCP_APP_NAME=mcp-foo  scripts/bootstrap-app-permissions.sh    # override default sandbox MCP
+#   scripts/bootstrap/app-permissions.sh                        # bootstrap default sandbox apps
+#   scripts/bootstrap/app-permissions.sh ontobricks-030         # explicit (positional)
+#   scripts/bootstrap/app-permissions.sh a b c                  # bootstrap several apps
+#   APP_NAME=ontobricks-040 scripts/bootstrap/app-permissions.sh   # override default sandbox app
+#   MCP_APP_NAME=mcp-foo  scripts/bootstrap/app-permissions.sh    # override default sandbox MCP
 #
 # Prerequisites:
 #   - Databricks CLI authenticated (databricks auth login ...)
@@ -26,7 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 # Default sandbox app pair. Override via env (e.g.
-# `APP_NAME=ontobricks-040 scripts/bootstrap-app-permissions.sh`) to
+# `APP_NAME=ontobricks-040 scripts/bootstrap/app-permissions.sh`) to
 # target a parallel sandbox without editing this file. Positional
 # args, when provided, take precedence over both the env vars and
 # these defaults. The names below match the Makefile's $(APP_NAME)

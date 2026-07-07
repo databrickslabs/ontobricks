@@ -48,12 +48,12 @@ set -euo pipefail
 # Manual runs:
 #
 #     # Registry
-#     scripts/bootstrap-lakebase-perms.sh \
+#     scripts/bootstrap/lakebase-perms.sh \
 #       -i ontobricks-app -b production -d ontobricks_registry \
 #       -s ontobricks_registry -a ontobricks-030 -a mcp-ontobricks
 #
 #     # Graph DB (use the graph project/branch/database — may differ)
-#     scripts/bootstrap-lakebase-perms.sh \
+#     scripts/bootstrap/lakebase-perms.sh \
 #       -i <graph-project> -b <graph-branch> -d <graph-database> \
 #       -s ontobricks_graph -a ontobricks-030 -a mcp-ontobricks
 #

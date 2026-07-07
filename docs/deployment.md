@@ -278,9 +278,9 @@ All four layers must be satisfied before the application is fully functional. Th
   button. The UI uses `POST /api/2.0/postgres/projects`, which produces an
   autoscaling-only project that is **incompatible** with the Synced Tables
   API (`POST /api/2.0/database/synced_tables`) used by the Knowledge Graph
-  build. Use `scripts/setup-lakebase.sh` to create the project correctly
+  build. Use `scripts/bootstrap/setup-lakebase.sh` to create the project correctly
   (see §2 prerequisites below).
-- `psql` (libpq client) on `PATH` for `scripts/bootstrap-lakebase-perms.sh`
+- `psql` (libpq client) on `PATH` for `scripts/bootstrap/lakebase-perms.sh`
   (`brew install libpq && brew link --force libpq` on macOS).
 
 ### Installation
@@ -370,10 +370,10 @@ Deployment uses **Databricks Asset Bundles** to deploy both the main app and the
 | SQL Warehouse | A running SQL Warehouse in the workspace |
 | Apps feature | Databricks Apps must be enabled on the workspace |
 | Unity Catalog | A catalog, schema, and volume for the project registry |
-| **Lakebase project** | Must be provisioned via `scripts/setup-lakebase.sh` — **do not** use the Databricks UI "New project" button (calls wrong API, incompatible with Synced Tables). The script uses `POST /api/2.0/database/instances` and prints the `db-…` resource id to put in `scripts/deploy.config.sh > DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT`. See §2a below. |
-| `psql` on PATH | Required by `scripts/bootstrap-lakebase-perms.sh` (`brew install libpq && brew link --force libpq` on macOS). |
+| **Lakebase project** | Must be provisioned via `scripts/bootstrap/setup-lakebase.sh` — **do not** use the Databricks UI "New project" button (calls wrong API, incompatible with Synced Tables). The script uses `POST /api/2.0/database/instances` and prints the `db-…` resource id to put in `scripts/deploy.config.sh > DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT`. See §2a below. |
+| `psql` on PATH | Required by `scripts/bootstrap/lakebase-perms.sh` (`brew install libpq && brew link --force libpq` on macOS). |
 | UC grants for the app SP | The app runs as a service principal. See [§3 Unity Catalog Permissions for the Service Principal](#3-unity-catalog-permissions-for-the-service-principal) for the exact grants required on the registry catalog/schema, the registry volume, and your source tables. |
-| Lakebase grants for the app SP | `CAN_USE` on the Lakebase instance + `USAGE/DML` on the registry / graph / sync schemas. Bootstrap with `scripts/bootstrap-lakebase-perms.sh` (`make bootstrap-lakebase`) — `scripts/deploy.sh` runs it automatically on the `dev-lakebase` target. |
+| Lakebase grants for the app SP | `CAN_USE` on the Lakebase instance + `USAGE/DML` on the registry / graph / sync schemas. Bootstrap with `scripts/bootstrap/lakebase-perms.sh` (`make bootstrap-lakebase`) — `scripts/deploy.sh` runs it automatically on the `dev-lakebase` target. |
 
 ### Step 0 — Create the Lakebase project (first-time only)
 
@@ -381,11 +381,11 @@ Deployment uses **Databricks Asset Bundles** to deploy both the main app and the
 > `POST /api/2.0/postgres/projects` which creates an autoscaling-only project.
 > That API is **incompatible** with the Synced Tables API
 > (`POST /api/2.0/database/synced_tables`) used by the Knowledge Graph build.
-> You must use `scripts/setup-lakebase.sh` instead.
+> You must use `scripts/bootstrap/setup-lakebase.sh` instead.
 
 ```bash
 # Create the project (once per workspace):
-./scripts/setup-lakebase.sh --name ontobricks-demo --capacity CU_2
+./scripts/bootstrap/setup-lakebase.sh --name ontobricks-demo --capacity CU_2
 
 # The script prints the db-… resource id at the end — copy it into
 # deploy.config.sh > DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT.
@@ -423,7 +423,7 @@ databricks current-user me
 
 **Important.** `app.yaml` is **generated** at deploy time from
 `app.yaml.template` + `scripts/deploy.config.sh` by
-`scripts/_render-app-yaml.py` (called from `scripts/deploy.sh`). The
+`scripts/_internal/_render-app-yaml.py` (called from `scripts/deploy.sh`). The
 generated file is `.gitignored`. **Do not edit `app.yaml` by hand** —
 edit `scripts/deploy.config.sh` instead.
 
@@ -453,7 +453,7 @@ WAREHOUSE_ID=abc123def456 make deploy
 LAKEBASE_PROJECT=other-project LAKEBASE_BRANCH=staging make deploy
 ```
 
-`scripts/_render-app-yaml.py` substitutes `${APP_*}` placeholders in
+`scripts/_internal/_render-app-yaml.py` substitutes `${APP_*}` placeholders in
 `app.yaml.template` into the generated `app.yaml`.
 
 ### Step 3 — `databricks.yml` (bundle variables)
@@ -552,7 +552,7 @@ Or run `scripts/deploy.sh --bind -t dev-lakebase` to bind the **main** app only 
 Databricks does **not** auto-grant the app service principal anything
 on Lakebase Postgres objects, even when the `postgres` resource
 binding is wired correctly. `scripts/deploy.sh` calls
-`scripts/bootstrap-lakebase-perms.sh` automatically on the
+`scripts/bootstrap/lakebase-perms.sh` automatically on the
 `dev-lakebase` target (you can re-run it manually any time — it is
 idempotent).
 
@@ -592,7 +592,7 @@ Manual invocation:
 
 ```bash
 # Registry schema
-scripts/bootstrap-lakebase-perms.sh \
+scripts/bootstrap/lakebase-perms.sh \
   -i "<lakebase_project>" \
   -b "<lakebase_branch>" \
   -d ontobricks_registry \
@@ -602,7 +602,7 @@ scripts/bootstrap-lakebase-perms.sh \
 
 # Graph schema (run after first Build — use the graph DB's own
 # project/branch/database, which MAY differ from the registry)
-scripts/bootstrap-lakebase-perms.sh \
+scripts/bootstrap/lakebase-perms.sh \
   -i "<graph_project>" -b "<graph_branch>" \
   -d "<graph_database>" -s ontobricks_graph \
   -a ontobricks-XXX -a mcp-ontobricks
@@ -683,7 +683,7 @@ scripts/deploy.sh --bind             # bind main app resource key → existing a
 
 > **Generated file — do not edit `app.yaml` directly.** It is rendered
 > at deploy time from `app.yaml.template` + `scripts/deploy.config.sh`
-> by `scripts/_render-app-yaml.py`. Edit the config, then run
+> by `scripts/_internal/_render-app-yaml.py`. Edit the config, then run
 > `make deploy` (or `make render-app-yaml` to only re-render).
 
 The rendered `app.yaml` controls the Databricks App runtime. Here is
@@ -944,7 +944,7 @@ Databricks Apps do not grant the freshly-created service principal any permissio
 
 ```bash
 make bootstrap-perms
-# equivalent to: scripts/bootstrap-app-permissions.sh ontobricks-XXX mcp-ontobricks
+# equivalent to: scripts/bootstrap/app-permissions.sh ontobricks-XXX mcp-ontobricks
 ```
 
 The script is idempotent. It discovers each app's service principal via `databricks apps get` and grants it `CAN_MANAGE` on itself. If the first post-deploy page load shows a **"First-deploy bootstrap required"** banner, that is exactly the situation — run the command and reload.
@@ -999,7 +999,7 @@ databricks current-user me
 
 ```bash
 # Create the project via the correct API (synced-tables-compatible):
-./scripts/setup-lakebase.sh --name ontobricks-demo --capacity CU_2
+./scripts/bootstrap/setup-lakebase.sh --name ontobricks-demo --capacity CU_2
 
 # Copy the printed db-… segment into deploy.config.sh (DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT)
 ```
@@ -1102,7 +1102,7 @@ databricks bundle run mcp_ontobricks_app -t dev-lakebase
 [ ] 1.  databricks auth login --host https://<new-workspace>
 [ ] 2.  Verify: databricks current-user me
 [ ] 3.  Create Unity Catalog resources (catalog, schema, volume)
-[ ] 4.  Create Lakebase project via `scripts/setup-lakebase.sh` (run BEFORE deploy — copy the `db-…` id into `deploy.config.sh`)
+[ ] 4.  Create Lakebase project via `scripts/bootstrap/setup-lakebase.sh` (run BEFORE deploy — copy the `db-…` id into `deploy.config.sh`)
         Resolve the db-… resource id with:
           databricks postgres list-databases \
             "projects/<project>/branches/<branch>" -o json
@@ -1121,7 +1121,7 @@ databricks bundle run mcp_ontobricks_app -t dev-lakebase
         registry USE CATALOG / USE SCHEMA / CREATE TABLE / CREATE VIEW +
         volume READ/WRITE + source-table SELECT
 [ ] 11. Open app → Settings → Registry → Initialize
-[ ] 12. Re-run make deploy (or scripts/bootstrap-lakebase-perms.sh) so the
+[ ] 12. Re-run make deploy (or scripts/bootstrap/lakebase-perms.sh) so the
         registry / graph / sync schema GRANTs apply against the just-
         created schemas
 [ ] 13. Verify both apps are RUNNING
@@ -1147,7 +1147,7 @@ The Graph DB layer runs on the App-bound Lakebase Postgres instance. The Apps ru
 - `app_managed` (default): the FastAPI app streams R2RML rows in `fetchmany` batches and ingests via `COPY FROM STDIN` + `INSERT … ON CONFLICT DO NOTHING`.
 - `managed_synced`: Databricks Lakeflow keeps a Postgres synced table in lock-step with the Delta view; OntoBricks orchestrates `SyncedTableManager.ensure` + `trigger_and_wait`. A writable companion table absorbs reasoning / cohort writes; readers see both via a UNION view.
 
-The `scripts/bootstrap-lakebase-perms.sh` script grants the app SP the required Lakebase / Postgres privileges (`CREATE` on the schema, `INSERT/SELECT/DELETE` on the per-domain tables). Run it once after the bundle is deployed.
+The `scripts/bootstrap/lakebase-perms.sh` script grants the app SP the required Lakebase / Postgres privileges (`CREATE` on the schema, `INSERT/SELECT/DELETE` on the per-domain tables). Run it once after the bundle is deployed.
 
 ---
 
@@ -1396,8 +1396,8 @@ make deploy-volume       # Volume-only: scripts/deploy.sh -t dev
 make deploy-no-run       # Deploy without bundle run
 make bundle-validate     # databricks bundle validate -t dev-lakebase
 make bundle-summary      # databricks bundle summary -t dev-lakebase
-make bootstrap-perms     # app SP CAN_MANAGE on self (see scripts/bootstrap-app-permissions.sh)
-make bootstrap-lakebase  # Lakebase schema grants (see scripts/bootstrap-lakebase-perms.sh)
+make bootstrap-perms     # app SP CAN_MANAGE on self (see scripts/bootstrap/app-permissions.sh)
+make bootstrap-lakebase  # Lakebase schema grants (see scripts/bootstrap/lakebase-perms.sh)
 ```
 
 ### File Sync
@@ -1429,7 +1429,7 @@ Use this checklist when deploying OntoBricks from scratch on any workspace:
         [ ] A catalog you can use (e.g., main or your personal catalog)
         [ ] A schema within that catalog (e.g., ontobricks)
         [ ] A Volume for the project registry (e.g., OntoBricksRegistry)
-[ ] 4.  Lakebase project created via `scripts/setup-lakebase.sh` (`db-…` id copied into `deploy.config.sh`)
+[ ] 4.  Lakebase project created via `scripts/bootstrap/setup-lakebase.sh` (`db-…` id copied into `deploy.config.sh`)
         (required since v0.4.0 — Provisioned tier is not supported).
         Resolve the db-… resource id:
           databricks postgres list-databases \

@@ -7,7 +7,7 @@ import unittest
 _ROOT = pathlib.Path(__file__).resolve().parents[3]
 _SPEC = importlib.util.spec_from_file_location(
     "_lakebase_resolve_db",
-    _ROOT / "scripts" / "_lakebase-resolve-db.py",
+    _ROOT / "scripts" / "_internal" / "_lakebase-resolve-db.py",
 )
 _mod = importlib.util.module_from_spec(_SPEC)
 assert _SPEC.loader is not None

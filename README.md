@@ -91,9 +91,9 @@ make deploy
 
 `scripts/deploy.sh` generates `app.yaml` from `app.yaml.template` +
 `scripts/deploy.config.sh`, validates and deploys the DAB bundle on
-target `dev-lakebase`, runs `scripts/bootstrap-app-permissions.sh`
+target `dev-lakebase`, runs `scripts/bootstrap/app-permissions.sh`
 (app SP `CAN_MANAGE` on itself), then runs
-`scripts/bootstrap-lakebase-perms.sh` on the registry / graph / sync
+`scripts/bootstrap/lakebase-perms.sh` on the registry / graph / sync
 schemas. All steps are idempotent.
 
 After the first deploy, bind the **sql-warehouse**, **volume**, and
@@ -108,7 +108,7 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 > **"Create graph DB from scratch"** button that provisions the Lakebase
 > instance + database + schema and applies all grants (app + MCP service
 > principals) as an async job with live progress. It automates
-> `scripts/setup-lakebase.sh` + `scripts/bootstrap-lakebase-perms.sh` (which
+> `scripts/bootstrap/setup-lakebase.sh` + `scripts/bootstrap/lakebase-perms.sh` (which
 > remain the fallback when the app SP lacks instance-creation rights). See
 > `docs/lakebase-graphdb.md` §3.1b.
 
@@ -126,12 +126,12 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 
 > **Upgrading from a pre-v0.4.0 deployment.** Pre-v0.4.0 stored the
 > entire registry as JSON on the Unity Catalog Volume. Run
-> `scripts/migrate-registry-to-lakebase.sh` once before upgrading to
+> `scripts/migrations/migrate-registry-to-lakebase.sh` once before upgrading to
 > v0.4.0+ to copy every JSON-shaped artefact (domains, versions,
 > permissions, schedules, global config) into Lakebase. Binary
 > artefacts on the Volume are left untouched.
 
-> **First deploy only:** `make deploy` runs `scripts/bootstrap-app-permissions.sh` automatically, which grants each app's service principal `CAN_MANAGE` on itself. Without that grant the middleware cannot read the app's own ACL and every first-time visitor — including the deploying `CAN_MANAGE` user — lands on the access-denied page. If you deploy via `databricks bundle deploy` directly, run `make bootstrap-perms` once afterwards (it is idempotent).
+> **First deploy only:** `make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically, which grants each app's service principal `CAN_MANAGE` on itself. Without that grant the middleware cannot read the app's own ACL and every first-time visitor — including the deploying `CAN_MANAGE` user — lands on the access-denied page. If you deploy via `databricks bundle deploy` directly, run `make bootstrap-perms` once afterwards (it is idempotent).
 
 See [Deployment Guide](docs/deployment.md) for the full checklist including resource configuration and permissions.
 
@@ -186,7 +186,7 @@ The **graph** triple-store backend is pluggable; the abstraction (`GraphDBFactor
 
 Engine-specific options are stored as global JSON (`graph_engine_config`). For Lakebase the supported keys are **`database`** (optional override of `PGDATABASE`), **`schema`** (optional, default `ontobricks_graph`), **`sync_mode`** (`app_managed` default, or `managed_synced` to delegate bulk ingest to a Databricks Lakeflow snapshot pipeline), **`sync_table_mode`** (`snapshot` / `triggered` / `continuous` — `snapshot` is the recommended mode), **`sync_timeout_s`** (default 600), **`sync_uc_catalog`** (UC catalog the synced table is registered in; defaults to the snapshot Delta catalog when unset), and **`sync_uc_schema`** (UC schema segment for the synced-table FQN; defaults to the registry UC schema so the Lakeflow object lands in the same UC namespace as other registry artefacts). See `docs/lakebase-graphdb.md` for the full reference.
 
-> **Lakebase permission grants.** The app service principal needs `USAGE + DML` on each Postgres schema it touches — granted by `scripts/bootstrap-lakebase-perms.sh`:
+> **Lakebase permission grants.** The app service principal needs `USAGE + DML` on each Postgres schema it touches — granted by `scripts/bootstrap/lakebase-perms.sh`:
 >
 > | Schema | When to run | Who runs it |
 > |---|---|---|

@@ -75,7 +75,7 @@ The Graph DB engine is selected under **Settings → Graph DB** and is always `l
 | SQL Warehouse | Standard or Serverless; bound as the `sql-warehouse` resource |
 | Unity Catalog | A catalog + schema for the registry and triplestore views |
 | Lakebase feature | Must be enabled on the workspace (contact workspace admin if absent) |
-| `psql` on PATH | Required by `scripts/bootstrap-lakebase-perms.sh` (`brew install libpq && brew link --force libpq` on macOS) |
+| `psql` on PATH | Required by `scripts/bootstrap/lakebase-perms.sh` (`brew install libpq && brew link --force libpq` on macOS) |
 
 ### 2.2 — Python dependencies
 
@@ -103,7 +103,7 @@ Lakebase has **two project-creation APIs** with different capabilities:
 
 The **Databricks UI "New project" button** calls the new API and produces a project
 that is **incompatible** with `POST /api/2.0/database/synced_tables` (used by the
-Knowledge Graph `managed_synced` build mode). Always use `scripts/setup-lakebase.sh`
+Knowledge Graph `managed_synced` build mode). Always use `scripts/bootstrap/setup-lakebase.sh`
 to provision the project.
 
 ---
@@ -115,7 +115,7 @@ to provision the project.
 Run once per workspace before the first deploy:
 
 ```bash
-./scripts/setup-lakebase.sh --name ontobricks-demo --capacity CU_2
+./scripts/bootstrap/setup-lakebase.sh --name ontobricks-demo --capacity CU_2
 ```
 
 The script:
@@ -146,7 +146,7 @@ compute capacity, branch, Postgres database, graph schema, and the MCP app
 name, then click **Create graph DB**. The action runs as an async job (a
 progress bar + per-step log update live, polling `GET /tasks/{id}` like a
 Knowledge Graph build) and performs the same flow as
-`scripts/setup-lakebase.sh` + `scripts/bootstrap-lakebase-perms.sh`:
+`scripts/bootstrap/setup-lakebase.sh` + `scripts/bootstrap/lakebase-perms.sh`:
 
 1. Create the Lakebase instance (via the synced-tables-compatible
    `/api/2.0/database/instances` API) and wait for `AVAILABLE`.
@@ -164,7 +164,7 @@ On success the chosen project/branch/database/schema are written into
 > step with a clear message. Schema grants to the MCP SP are best-effort and
 > surfaced as warnings when the MCP Postgres role does not exist yet. In those
 > cases the shell scripts (`POST /api/2.0/database/instances` as a human owner)
-> remain the documented fallback — re-run `scripts/bootstrap-lakebase-perms.sh`
+> remain the documented fallback — re-run `scripts/bootstrap/lakebase-perms.sh`
 > after the apps have connected once.
 
 ### 3.2 — After the script
@@ -316,10 +316,10 @@ Enable it with:
 - The app process should not be the bottleneck during builds.
 
 **Additional requirements for `managed_synced`:**
-- The Lakebase project must be provisioned via `scripts/setup-lakebase.sh`
+- The Lakebase project must be provisioned via `scripts/bootstrap/setup-lakebase.sh`
   (provisioned instance, not autoscaling-only) — see §2.3.
 - The app SP needs `CAN_USE` on the Lakebase database instance — applied by
-  `scripts/bootstrap-lakebase-perms.sh`.
+  `scripts/bootstrap/lakebase-perms.sh`.
 - The UC schema for the synced table must exist before the first build
   (`CREATE SCHEMA IF NOT EXISTS` is run automatically by the build pipeline).
 
@@ -363,43 +363,43 @@ All SPARQL queries and graph traversal operations target the back-compat name
 
 ## 7. Scripts reference
 
-### `scripts/setup-lakebase.sh`
+### `scripts/bootstrap/setup-lakebase.sh`
 
 Provisions a Lakebase project via `POST /api/2.0/database/instances` (synced-tables-compatible).
 
 ```bash
 # Basic usage
-./scripts/setup-lakebase.sh --name my-project --capacity CU_2
+./scripts/bootstrap/setup-lakebase.sh --name my-project --capacity CU_2
 
 # Dry-run to preview
-./scripts/setup-lakebase.sh --name my-project --dry-run
+./scripts/bootstrap/setup-lakebase.sh --name my-project --dry-run
 
 # Custom profile
-./scripts/setup-lakebase.sh --name my-project --profile prod-workspace
+./scripts/bootstrap/setup-lakebase.sh --name my-project --profile prod-workspace
 ```
 
 **Outputs:** prints the `db-…` resource id that goes into `deploy.config.sh > DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT`.
 
-### `scripts/bootstrap-lakebase-perms.sh`
+### `scripts/bootstrap/lakebase-perms.sh`
 
 Grants the app service principals the Postgres and control-plane permissions
 they need to operate. **Idempotent — safe to run repeatedly.**
 
 ```bash
 # Registry schema
-scripts/bootstrap-lakebase-perms.sh \
+scripts/bootstrap/lakebase-perms.sh \
   -i ontobricks-demo2 -b production \
   -d ontobricks_demo -s ontobricks_registry \
   -a ontobricks-030 -a mcp-ontobricks
 
 # Graph DB schema (run after first Build)
-scripts/bootstrap-lakebase-perms.sh \
+scripts/bootstrap/lakebase-perms.sh \
   -i ontobricks-demo2 -b production \
   -d ontobricks_demo -s ontobricks_graph \
   -a ontobricks-030 -a mcp-ontobricks
 
 # Sync schema (managed_synced only — run after first Lakeflow snapshot)
-scripts/bootstrap-lakebase-perms.sh \
+scripts/bootstrap/lakebase-perms.sh \
   -i ontobricks-demo2 -b production \
   -d ontobricks_demo -s ontobricks \
   -a ontobricks-030 -a mcp-ontobricks
@@ -522,7 +522,7 @@ The Synced Tables API only accepts provisioned instance names.
 
 **Fix:**
 1. Delete the old project from the UI.
-2. Re-create it with `scripts/setup-lakebase.sh`.
+2. Re-create it with `scripts/bootstrap/setup-lakebase.sh`.
 3. Update `DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT` in `deploy.config.sh`.
 4. `make deploy`.
 
@@ -681,7 +681,7 @@ instead of `window.confirm()`. If you see this on an older deployment,
 
 ```
 [ ] 1. Create Lakebase project:
-        ./scripts/setup-lakebase.sh --name <name> --capacity CU_2
+        ./scripts/bootstrap/setup-lakebase.sh --name <name> --capacity CU_2
 [ ] 2. Copy the printed db-… id into deploy.config.sh:
         DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT="db-xxxx-xxxxxxxxxx"
 [ ] 3. Set DEFAULT_LAKEBASE_PROJECT and DEFAULT_LAKEBASE_BRANCH in deploy.config.sh

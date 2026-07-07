@@ -6,7 +6,7 @@ instance). Automate most checks with:
 ```bash
 make deploy-check
 # or, equivalently:
-scripts/check-deploy-prerequisites.sh
+scripts/_internal/check-deploy-prerequisites.sh
 scripts/deploy.sh --dry-run
 ```
 
@@ -27,7 +27,7 @@ scripts/deploy.sh --dry-run
 Local-only check:
 
 ```bash
-scripts/check-deploy-prerequisites.sh --local
+scripts/_internal/check-deploy-prerequisites.sh --local
 ```
 
 ---
@@ -54,7 +54,7 @@ Configure in `scripts/deploy.config.sh` (single source of truth).
 | **SQL warehouse** | `DEFAULT_WAREHOUSE_ID` | CAN USE |
 | **Unity Catalog catalog** | `DEFAULT_REGISTRY_CATALOG` | USE CATALOG, CREATE SCHEMA (first time) |
 | **UC schema + Volume** | `DEFAULT_REGISTRY_SCHEMA`, `DEFAULT_REGISTRY_VOLUME` | ALL PRIVILEGES on schema (or CREATE TABLE/VOLUME) |
-| **Lakebase project** | `DEFAULT_LAKEBASE_PROJECT` | CAN USE on project; create via `scripts/setup-lakebase.sh` if missing |
+| **Lakebase project** | `DEFAULT_LAKEBASE_PROJECT` | CAN USE on project; create via `scripts/bootstrap/setup-lakebase.sh` if missing |
 | **Lakebase branch** | `DEFAULT_LAKEBASE_BRANCH` | Usually `production` |
 | **Postgres database (datname)** | `DEFAULT_LAKEBASE_DATABASE` | Created by `setup-lakebase.sh` or UI — use `status.postgres_database` from `list-databases`, **not** the hyphenated `db-…` id |
 | **Postgres registry schema** | `DEFAULT_LAKEBASE_SCHEMA` | Created by **Settings → Registry → Initialize** in the app (after first deploy) |
@@ -89,7 +89,7 @@ make bootstrap-lakebase
 Preflight (read-only):
 
 ```bash
-scripts/check-deploy-prerequisites.sh --lakebase
+scripts/_internal/check-deploy-prerequisites.sh --lakebase
 ```
 
 ---
@@ -98,9 +98,9 @@ scripts/check-deploy-prerequisites.sh --lakebase
 
 For **in-place upgrades** of an existing Lakebase registry, schema DDL must be applied **as the schema owner**. OntoBricks applies the same objects in three ways (pick one):
 
-1. **`make bootstrap-lakebase`** / `scripts/bootstrap-lakebase-perms.sh` (recommended — idempotent Step 2b)
-2. **`scripts/upgrade_lakebase_0.4_To_0.5.sql`** — adds `domain_versions.status` + backfill from `mcp_enabled`
-3. **`scripts/upgrade_lakebase_0.5_To_0.6.sql`** — collaborative tables, graph analytics, edit locks, change events
+1. **`make bootstrap-lakebase`** / `scripts/bootstrap/lakebase-perms.sh` (recommended — idempotent Step 2b)
+2. **`scripts/migrations/upgrade_0.4_to_0.5.sql`** — adds `domain_versions.status` + backfill from `mcp_enabled`
+3. **`scripts/migrations/upgrade_0.5_to_0.6.sql`** — collaborative tables, graph analytics, edit locks, change events
 
 Preflight reports **pending** or **stale** migration objects before deploy:
 
@@ -117,7 +117,7 @@ Manual upgrade example:
 ```bash
 psql "host=<endpoint> dbname=<datname> sslmode=require user=<you>" \
   -v reg_schema=<schema> \
-  -f scripts/upgrade_lakebase_0.5_To_0.6.sql
+  -f scripts/migrations/upgrade_0.5_to_0.6.sql
 ```
 
 ---
@@ -142,7 +142,7 @@ make bootstrap-perms
 
 ```text
 [ ] Edit scripts/deploy.config.sh (DEFAULT_APP_NAME, Lakebase coords, warehouse, UC)
-[ ] scripts/check-deploy-prerequisites.sh          # or make deploy-check
+[ ] scripts/_internal/check-deploy-prerequisites.sh          # or make deploy-check
 [ ] make deploy-dry-run                            # read-only full orchestrator check
 [ ] make deploy                                    # deploy + bootstrap
 [ ] Databricks Apps UI: bind sql-warehouse, volume, postgres (first time only)
@@ -159,7 +159,7 @@ make bootstrap-perms
 |------|-------------|
 | **`uv sync --extra pitfalls`** | ML-based pitfalls detection panel |
 | **`managed_synced` graph mode** | UC catalog ALL_PRIVILEGES (`-c` / `UC_CATALOG` on bootstrap script) |
-| **Lakebase via UI “New project”** | **Avoid** for Synced Tables — use `scripts/setup-lakebase.sh` instead |
+| **Lakebase via UI “New project”** | **Avoid** for Synced Tables — use `scripts/bootstrap/setup-lakebase.sh` instead |
 | **Volume-only backend** | Deploy with `make deploy-volume` (`-t dev`) — skips Lakebase checks |
 
 ---
@@ -168,10 +168,10 @@ make bootstrap-perms
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/check-deploy-prerequisites.sh` | Read-only preflight (this checklist, automated) |
+| `scripts/_internal/check-deploy-prerequisites.sh` | Read-only preflight (this checklist, automated) |
 | `scripts/deploy.sh --dry-run` | Full DAB validate + resource checks, no mutations |
-| `scripts/setup-lakebase.sh` | Create Synced-Tables-compatible Lakebase project |
-| `scripts/bootstrap-lakebase-perms.sh` | CAN_USE + schema GRANTs + registry migrations |
-| `scripts/bootstrap-app-permissions.sh` | App SP self-perms + MCP CAN_USE + UC schema grants |
-| `scripts/upgrade_lakebase_0.4_To_0.5.sql` | Explicit 0.4→0.5 lifecycle migration |
-| `scripts/upgrade_lakebase_0.5_To_0.6.sql` | Explicit 0.5→0.6 collaborative / analytics migration |
+| `scripts/bootstrap/setup-lakebase.sh` | Create Synced-Tables-compatible Lakebase project |
+| `scripts/bootstrap/lakebase-perms.sh` | CAN_USE + schema GRANTs + registry migrations |
+| `scripts/bootstrap/app-permissions.sh` | App SP self-perms + MCP CAN_USE + UC schema grants |
+| `scripts/migrations/upgrade_0.4_to_0.5.sql` | Explicit 0.4→0.5 lifecycle migration |
+| `scripts/migrations/upgrade_0.5_to_0.6.sql` | Explicit 0.5→0.6 collaborative / analytics migration |

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._lakebase_preflight import (
+from scripts._internal._lakebase_preflight import (
     EXPECTED_COLUMNS,
     EXPECTED_TABLES,
     STALE_COLUMNS,

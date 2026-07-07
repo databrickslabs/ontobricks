@@ -88,16 +88,16 @@ _preflight_check_deploy_files() {
     _preflight_require_file "databricks.yml"
     _preflight_require_file "app.yaml.template"
     _preflight_require_file "src/mcp-server/app.yaml.template"
-    _preflight_require_file "scripts/_render-app-yaml.py"
+    _preflight_require_file "scripts/_internal/_render-app-yaml.py"
     _preflight_require_file "scripts/deploy.config.sh"
-    _preflight_require_file "scripts/bootstrap-app-permissions.sh"
+    _preflight_require_file "scripts/bootstrap/app-permissions.sh"
     _preflight_require_file "run.py"
     _preflight_require_file "pyproject.toml"
     if [[ "$include_lakebase" == "true" ]]; then
-        _preflight_require_file "scripts/bootstrap-lakebase-perms.sh"
-        _preflight_require_file "scripts/_lakebase_preflight.py"
-        _preflight_require_file "scripts/upgrade_lakebase_0.4_To_0.5.sql"
-        _preflight_require_file "scripts/upgrade_lakebase_0.5_To_0.6.sql"
+        _preflight_require_file "scripts/bootstrap/lakebase-perms.sh"
+        _preflight_require_file "scripts/_internal/_lakebase_preflight.py"
+        _preflight_require_file "scripts/migrations/upgrade_0.4_to_0.5.sql"
+        _preflight_require_file "scripts/migrations/upgrade_0.5_to_0.6.sql"
     fi
     _preflight_ok "required project files present"
 }
@@ -129,7 +129,7 @@ _preflight_check_lakebase_bootstrap() {
     done
 
     local rc=0
-    if ! python3 scripts/_lakebase_preflight.py \
+    if ! python3 scripts/_internal/_lakebase_preflight.py \
             --project "$project" \
             --branch "$branch" \
             --database "$database" \
@@ -178,7 +178,7 @@ _preflight_summary() {
     echo ""
     if [[ $_PREFLIGHT_FAILED -gt 0 ]]; then
         echo "${_PF_C_RED}Preflight FAILED${_PF_C_RST}: ${_PREFLIGHT_FAILED} blocking issue(s), ${_PREFLIGHT_WARNINGS} warning(s)"
-        echo "See scripts/DEPLOY_CHECKLIST.md for the full deployment requirements."
+        echo "See docs/DEPLOY_CHECKLIST.md for the full deployment requirements."
         return 1
     fi
     if [[ $_PREFLIGHT_WARNINGS -gt 0 ]]; then

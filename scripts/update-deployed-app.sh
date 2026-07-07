@@ -20,7 +20,7 @@ set -euo pipefail
 #      Run with --skip-app-yaml (keep the fetched app.yaml) and
 #      --no-bootstrap (we bootstrap below with the introspected schema, not
 #      the deploy.config.sh default).
-#   2. scripts/bootstrap-lakebase-perms.sh — re-grant the app SPs on the
+#   2. scripts/bootstrap/lakebase-perms.sh — re-grant the app SPs on the
 #      registry schema (a redeploy rebinds postgres and can drop grants)
 #      and apply the idempotent registry-schema migrations (status,
 #      review_quorum, build_runs, domain_review_events, domain_comments,
@@ -290,12 +290,12 @@ ok "code synced + apps restarted"
 if $IS_LAKEBASE; then
     begin_step "Update SQL (registry schema migrations + SP grants)"
     require_cmd psql "the libpq client is needed for the SQL step — brew install libpq && brew link --force libpq"
-    chmod +x scripts/bootstrap-lakebase-perms.sh
+    chmod +x scripts/bootstrap/lakebase-perms.sh
 
     _UC_CATALOG_ARG=()
     [[ -n "$REGISTRY_CATALOG" ]] && _UC_CATALOG_ARG=(-c "$REGISTRY_CATALOG")
 
-    if scripts/bootstrap-lakebase-perms.sh \
+    if scripts/bootstrap/lakebase-perms.sh \
             -i "$LAKEBASE_PROJECT" \
             -b "$LAKEBASE_BRANCH" \
             -d "$LAKEBASE_DATABASE" \

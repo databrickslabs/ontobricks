@@ -388,3 +388,61 @@ Modified files:
 - `src/front/static/config/js/settings.js`
 
 Tests: UI-only change; `uv run pytest -q -m "not scenario"` → 3180 passed.
+
+---
+
+## scripts/ folder reorganization
+
+Context: Too many scripts at the root of `scripts/` made navigation difficult.
+Reorganized into logical subfolders without changing behaviour.
+
+### Changes
+
+1. `scripts/bootstrap/` — three bootstrap scripts moved here
+   - `bootstrap-app-permissions.sh` → `bootstrap/app-permissions.sh`
+   - `bootstrap-lakebase-perms.sh` → `bootstrap/lakebase-perms.sh`
+   - `setup-lakebase.sh` → `bootstrap/setup-lakebase.sh`
+2. `scripts/migrations/` — SQL + migration script moved here
+   - `migrate-registry-to-lakebase.sh` → `migrations/migrate-registry-to-lakebase.sh`
+   - `upgrade_lakebase_0.4_To_0.5.sql` → `migrations/upgrade_0.4_to_0.5.sql`
+   - `upgrade_lakebase_0.5_To_0.6.sql` → `migrations/upgrade_0.5_to_0.6.sql`
+3. `scripts/_internal/` — private helpers moved here
+   - `_deploy-preflight.sh`, `_lakebase-diag.sh`, `_lakebase-resolve-db.py`,
+     `_lakebase_preflight.py`, `_render-app-yaml.py`, `check-deploy-prerequisites.sh`
+4. `ci/` — CI/dev tools extracted from `scripts/`
+   - `build_docs.sh`, `check_coverage.py`, `check-mypy-diff.py`,
+     `generate-mypy-baseline.sh`, `provision_supervisor.py`
+5. `docs/DEPLOY_CHECKLIST.md` — moved from `scripts/DEPLOY_CHECKLIST.md`
+6. `Makefile` `deploy-check` target now calls `scripts/deploy.sh --dry-run`
+   instead of the relocated `check-deploy-prerequisites.sh`
+7. All cross-references updated in `deploy.sh`, `Makefile`,
+   `update-deployed-app.sh`, `setup.sh`, `bootstrap/setup-lakebase.sh`,
+   docs, README, and tests.
+
+### Modified files
+
+- `scripts/bootstrap/app-permissions.sh` (moved + internal refs updated)
+- `scripts/bootstrap/lakebase-perms.sh` (moved + internal refs updated)
+- `scripts/bootstrap/setup-lakebase.sh` (moved)
+- `scripts/migrations/migrate-registry-to-lakebase.sh` (moved)
+- `scripts/migrations/upgrade_0.4_to_0.5.sql` (moved + renamed)
+- `scripts/migrations/upgrade_0.5_to_0.6.sql` (moved + renamed)
+- `scripts/_internal/_deploy-preflight.sh` (moved + paths updated)
+- `scripts/_internal/_lakebase-diag.sh` (moved)
+- `scripts/_internal/_lakebase-resolve-db.py` (moved)
+- `scripts/_internal/_lakebase_preflight.py` (moved)
+- `scripts/_internal/_render-app-yaml.py` (moved)
+- `scripts/_internal/check-deploy-prerequisites.sh` (moved)
+- `ci/build_docs.sh`, `ci/check_coverage.py`, `ci/check-mypy-diff.py`,
+  `ci/generate-mypy-baseline.sh`, `ci/provision_supervisor.py` (moved from scripts/)
+- `docs/DEPLOY_CHECKLIST.md` (moved from scripts/)
+- `scripts/deploy.sh` (paths updated)
+- `scripts/setup.sh` (paths updated)
+- `scripts/update-deployed-app.sh` (paths updated)
+- `Makefile` (paths + deploy-check target updated)
+- `docs/deployment.md`, `docs/lakebase-graphdb.md`, `docs/get-started.md`,
+  `docs/architecture.md`, `README.md`, `.claude/skills/deploy/SKILL.md` (doc refs updated)
+- `tests/units/scripts/test_lakebase_preflight.py` (import path updated)
+- `tests/units/scripts/test_lakebase_resolve_db.py` (file path updated)
+
+Tests: `uv run pytest -q -m "not scenario"` → 3199 passed.

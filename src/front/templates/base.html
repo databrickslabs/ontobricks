@@ -231,7 +231,7 @@
                         {% set ns = namespace(first_group=true) %}
                         {% for group in domain_m.v.groups %}
                         {% if group.id != 'domain-design' and not group.sidebar_only|default(false) %}
-                        <li><hr class="dropdown-divider"></li>
+                        {% if not ns.first_group %}<li><hr class="dropdown-divider"></li>{% endif %}
                         <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> <span{% if ns.first_group %} id="domainSectionName"{% endif %}>{{ group.title }}</span></h6></li>
                         {% set ns.first_group = false %}
                         {% for item in group['items'] %}

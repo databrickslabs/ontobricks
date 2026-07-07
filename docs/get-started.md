@@ -187,10 +187,10 @@ When running as a Databricks App, OntoBricks enforces role-based access control:
 
 To manage permissions, you must:
 1. Have **CAN_MANAGE** set on the app in the Databricks UI (Compute → Apps → ontobricks → Permissions)
-2. The app's service principal must have **CAN_MANAGE** on itself — `make deploy` runs `scripts/bootstrap-app-permissions.sh` automatically; otherwise run `make bootstrap-perms`. See the [Deployment Guide](deployment.md#4-permission-management).
+2. The app's service principal must have **CAN_MANAGE** on itself — `make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically; otherwise run `make bootstrap-perms`. See the [Deployment Guide](deployment.md#4-permission-management).
 3. The app's service principal must have **USAGE + DML** on the Lakebase
    registry / graph / sync schemas — `scripts/deploy.sh` runs
-   `scripts/bootstrap-lakebase-perms.sh` automatically on the
+   `scripts/bootstrap/lakebase-perms.sh` automatically on the
    `dev-lakebase` target; otherwise run `make bootstrap-lakebase`. See
    the [Deployment Guide §2 Step 5b](deployment.md#step-5b--lakebase-schema-grants-target-dev-lakebase-only).
 4. The app's service principal must have **Unity Catalog** privileges

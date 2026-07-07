@@ -44,7 +44,7 @@ The canonical deploy steps are in **`README.md §Deploying / Installing`** and
 | `make bundle-validate` | validate `databricks.yml` only |
 | `make bundle-summary` | preview what will deploy |
 
-`make deploy` runs `scripts/bootstrap-app-permissions.sh` automatically on
+`make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically on
 the first deploy (see README.md). If the user runs `databricks bundle
 deploy` directly, run `make bootstrap-perms` once afterwards (idempotent).
 
