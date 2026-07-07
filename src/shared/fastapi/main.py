@@ -5,6 +5,8 @@ This is the main FastAPI application (UI, GraphQL, health).
 Run with: uvicorn shared.fastapi.main:app --reload --port 8000
 """
 
+import os
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +15,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from contextlib import asynccontextmanager
-import os
 
 from shared.config.settings import get_settings
 from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
