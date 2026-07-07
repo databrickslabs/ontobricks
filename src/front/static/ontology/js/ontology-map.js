@@ -1595,17 +1595,29 @@ async function deleteRelationshipFromMap(propertyName) {
  * @param {string} type - 'relationship' or 'inheritance'
  */
 function startMapConnectionMode(sourceEntity, container, type = 'relationship') {
-    // Get the SVG element
-    const svg = container.querySelector('svg');
+    // Use the map SVG specifically. NOTE: `container` (#ontology-map-container)
+    // also holds the loading-spinner SVG, so `container.querySelector('svg')`
+    // would wrongly return the spinner. `ontologyMapSvg` is the graph SVG; fall
+    // back to the first *direct-child* svg of the container (the map is appended
+    // directly, the spinner is nested inside the loading overlay).
+    const svg = (ontologyMapSvg && ontologyMapSvg.node())
+        || container.querySelector(':scope > svg');
     if (!svg) return;
-    
+
     // Get the main group (g element with transform)
     const mainGroup = svg.querySelector('g');
     if (!mainGroup) return;
     
-    // Create a temporary line for visual feedback
+    // Create a temporary line for visual feedback. Inline stroke attributes
+    // are a belt-and-suspenders fallback so the thread is visible even if the
+    // CSS class fails to apply for any reason.
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('class', type === 'inheritance' ? 'map-connection-line map-inheritance-line' : 'map-connection-line');
+    line.setAttribute('stroke', type === 'inheritance' ? '#6f42c1' : '#0d6efd');
+    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-dasharray', type === 'inheritance' ? '5,5' : '8,4');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('pointer-events', 'none');
     line.setAttribute('x1', sourceEntity.x);
     line.setAttribute('y1', sourceEntity.y);
     line.setAttribute('x2', sourceEntity.x);
@@ -1658,32 +1670,15 @@ function startMapConnectionMode(sourceEntity, container, type = 'relationship') 
  */
 function handleMapConnectionMouseMove(event) {
     if (!mapConnectionMode) return;
-    
-    const svg = mapConnectionMode.svg;
+
     const mainGroup = mapConnectionMode.mainGroup;
     const line = mapConnectionMode.lineElement;
-    
-    // Get current transform of main group
-    const transform = mainGroup.getAttribute('transform');
-    let translateX = 0, translateY = 0, scale = 1;
-    
-    if (transform) {
-        const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-        if (translateMatch) {
-            translateX = parseFloat(translateMatch[1]);
-            translateY = parseFloat(translateMatch[2]);
-        }
-        const scaleMatch = transform.match(/scale\(([^)]+)\)/);
-        if (scaleMatch) {
-            scale = parseFloat(scaleMatch[1]);
-        }
-    }
-    
-    // Calculate mouse position in SVG coordinates
-    const rect = svg.getBoundingClientRect();
-    const mouseX = (event.clientX - rect.left - translateX) / scale;
-    const mouseY = (event.clientY - rect.top - translateY) / scale;
-    
+
+    // d3.pointer maps the event into the local coordinate space of mainGroup,
+    // correctly accounting for the zoom/pan transform on the group (and any
+    // svg viewBox scaling) — so the thread tracks the cursor at any zoom level.
+    const [mouseX, mouseY] = d3.pointer(event, mainGroup);
+
     // Update line end position
     line.setAttribute('x2', mouseX);
     line.setAttribute('y2', mouseY);

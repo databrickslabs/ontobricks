@@ -56,3 +56,32 @@ catalog -> schema -> table/view picker that supports views (REST-based).
 - `tests/units/ontology/test_ontology_service.py`
 
 Tests: `uv run pytest -q -m "not scenario"` -> 3204 passed, 275 skipped.
+
+---
+
+## Fix: connection-mode visual thread not appearing in Ontology Designer map
+
+Context: When right-clicking an entity in Ontology/Designer and choosing
+"Create Relationship" or "Inherit from…", the dashed thread from the source
+entity to the cursor never appeared (the cursor turned into a crosshair but no
+line was drawn).
+
+### Changes
+
+1. `src/front/static/ontology/js/ontology-map.js`
+   - Root cause: `#ontology-map-container` also holds the loading-spinner SVG,
+     so `container.querySelector('svg')` returned the (hidden) spinner instead
+     of the graph SVG. The temp line was appended into the spinner and the
+     `mousemove` listener bound to it, so nothing rendered. Now select the graph
+     SVG via the module-level `ontologyMapSvg` (fallback: container direct-child
+     `:scope > svg`).
+   - `handleMapConnectionMouseMove` uses `d3.pointer(event, mainGroup)` for
+     zoom/pan-correct cursor coordinates instead of manual transform parsing.
+   - Added inline stroke attributes on the temp line as a CSS-independent
+     visibility fallback.
+
+### Modified files
+
+- `src/front/static/ontology/js/ontology-map.js`
+
+Tests: front-end only change (no Python impact); `uv run pytest -q -m "not scenario"` unaffected.
