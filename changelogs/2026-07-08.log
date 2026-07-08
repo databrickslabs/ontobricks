@@ -1,0 +1,106 @@
+## Add managed-sync index hook for Lakebase _sync tables
+
+Context: In managed_synced mode, Lakeflow creates the Postgres _sync table.
+The app already created indexes for app-managed tables and companion tables,
+but there was no explicit index ensure step for Lakeflow-created _sync tables.
+This could leave BFS joins slower than expected after sync materialization or
+physical table recreation.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Add ensure_graph_indexes(cur, table_ref) helper that creates idempotent
+   graph indexes (subject,predicate), (predicate,object), (object,predicate)
+   for bare or schema-qualified table references.
+
+2. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Refactor ensure_synced() and ensure_companion() to call
+   ensure_graph_indexes() instead of duplicating index DDL loops.
+
+3. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   In ensure_synced_union_view(), call ensure_graph_indexes() for the visible
+   _sync table before creating the union view. Guard with warning-only fallback
+   so ownership/permission mismatches do not block build completion.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+
+Tests: skipped — not run in this environment
+
+---
+
+## Refine URI alias expansion with bucketed ANY probes
+
+Context: Follow-up benchmarking on production-like Lakebase data showed the
+VALUES-join alias expansion path was slower than OR-LIKE under high pattern
+counts. A bucketed fixed-length suffix probe strategy completed large sets
+reliably (including ~1300 IDs) with materially lower latency.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Replace VALUES join in find_subjects_by_patterns() with suffix-length
+   buckets using RIGHT(subject, k) = ANY(ARRAY[...]) and batched arrays.
+
+2. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Add defaultdict-based grouping by suffix length and keep generic LIKE
+   fallback only for non-``%/<id>`` patterns.
+
+3. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Tune _ALIAS_VALUES_BATCH from 1000 to 500 for safer statement size.
+
+Modified files:
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+
+Tests: skipped — not run in this environment
+
+---
+
+## Optimize describe_entity alias expansion on large ID sets
+
+Context: Chat/describe_entity generated slow SQL with 1000+ OR-LIKE suffix
+predicates (``subject LIKE '%/WTG:...'``), causing long-running statements and
+timeouts despite table indexing.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Add Lakebase override for find_subjects_by_patterns() that uses a set-based
+   VALUES join for the common ``%/<local-id>`` suffix pattern instead of one
+   giant OR chain. Keep fallback path for generic patterns.
+
+2. src/back/objects/digitaltwin/DigitalTwin.py
+   Add alias-expansion guardrail: skip URI alias expansion when local-id set
+   size exceeds 400 to keep chat responses responsive under high fan-out.
+
+Modified files:
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+
+Tests: skipped — not run in this environment
+
+---
+
+## Harden managed-sync indexing for partitioned _sync tables
+
+Context: Lakebase query logs showed managed sync using partition lifecycle
+operations (including DETACH PARTITION) on the _sync table. This means index
+state can drift at the leaf-partition level even when parent-level index DDL
+exists. To keep BFS and neighbour traversals stable after partition churn,
+index ensure needs to cover child partitions too.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Extend ensure_graph_indexes() to discover leaf partitions via pg_inherits
+   and apply idempotent indexes to each child table.
+
+2. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Add deterministic partition index naming helper using md5 token suffix to
+   avoid collisions under PostgreSQL's 63-char identifier cap.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+
+Tests: skipped — not run in this environment

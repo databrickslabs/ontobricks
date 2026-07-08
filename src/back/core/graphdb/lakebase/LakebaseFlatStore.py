@@ -17,6 +17,7 @@ Two operating modes are supported:
 
 from __future__ import annotations
 
+from collections import defaultdict
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple
 
@@ -39,6 +40,9 @@ _COPY_DELETE_TEMP = "_ob_del_stage"
 
 SYNC_MODE_APP = "app_managed"
 SYNC_MODE_MANAGED = "managed_synced"
+
+# Cap ARRAY payload size used by alias-expansion suffix probes.
+_ALIAS_VALUES_BATCH = 500
 
 
 class LakebaseFlatStore(LakebaseBase):
@@ -363,6 +367,62 @@ class LakebaseFlatStore(LakebaseBase):
                 if cur.description:
                     return [dict(row) for row in cur.fetchall()]
                 return []
+
+    def find_subjects_by_patterns(
+        self, table_name: str, like_patterns: List[str]
+    ) -> set[str]:
+        """Optimized alias expansion for Lakebase Postgres.
+
+        ``describe_entity`` may pass hundreds or thousands of ``%/<local-id>``
+        patterns when expanding URI aliases. Building one giant OR-LIKE chain
+        performs poorly and can hit statement timeouts.
+
+        For fixed suffix patterns (``%/<id>``), group IDs by suffix length and
+        issue ``RIGHT(subject, k) = ANY(ARRAY[...])`` probes. This scales with
+        distinct suffix lengths (typically 1-3), not with total pattern count.
+        """
+        if not like_patterns:
+            return set()
+
+        rel = self._sql_relation(table_name)
+        by_suffix_len: dict[int, list[str]] = defaultdict(list)
+        generic_patterns: list[str] = []
+
+        for raw in like_patterns:
+            p = (raw or "").strip()
+            if not p:
+                continue
+            # Fast-path only exact suffix patterns like "%/WTG:123".
+            if p.startswith("%/") and ("%" not in p[2:]) and ("_" not in p[2:]):
+                local_id = p[2:]
+                suffix_len = len(local_id) + 1
+                by_suffix_len[suffix_len].append(local_id)
+            else:
+                generic_patterns.append(p)
+
+        out: set[str] = set()
+
+        for suffix_len, ids in by_suffix_len.items():
+            uniq_ids = sorted({i for i in ids if i})
+            for i in range(0, len(uniq_ids), _ALIAS_VALUES_BATCH):
+                chunk = uniq_ids[i : i + _ALIAS_VALUES_BATCH]
+                array_lit = ", ".join(f"'/{self._sql_escape(v)}'" for v in chunk)
+                sql = (
+                    f"SELECT DISTINCT subject FROM {rel} "
+                    f"WHERE RIGHT(subject, {suffix_len}) = ANY(ARRAY[{array_lit}])"
+                )
+                rows = self.execute_query(sql) or []
+                out.update(r["subject"] for r in rows if r.get("subject"))
+
+        if generic_patterns:
+            like_clauses = " OR ".join(
+                f"subject LIKE '{self._sql_escape(p)}'" for p in generic_patterns
+            )
+            sql = f"SELECT DISTINCT subject FROM {rel} WHERE {like_clauses}"
+            rows = self.execute_query(sql) or []
+            out.update(r["subject"] for r in rows if r.get("subject"))
+
+        return out
 
     def create_table(self, table_name: str) -> None:
         validate_table_name(table_name)
