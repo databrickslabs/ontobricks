@@ -508,8 +508,17 @@ class _BuildPipeline:
         )
         try:
             catalog, schema, vname = self.parts
+            view_sql = self.spark_sql
+            if self._is_lakebase_synced:
+                # managed_synced: Lakeflow keys the synced PK on ``object_hash``
+                # so literals larger than the Postgres B-tree limit (2704 bytes)
+                # can sync. app_managed skips this — its Postgres DDL generates
+                # the hash column locally, so the extra Spark compute is avoided.
+                from back.core.helpers import add_object_hash_column
+
+                view_sql = add_object_hash_column(view_sql)
             view_ok, view_msg = self.source_client.create_or_replace_view(
-                catalog, schema, vname, self.spark_sql
+                catalog, schema, vname, view_sql
             )
             if not view_ok:
                 if self.is_api:
@@ -891,7 +900,10 @@ class _BuildPipeline:
             _synced_obj = mgr.ensure(
                 synced_uc,
                 source_table_full_name=self.view_table,
-                primary_key_columns=["subject", "predicate", "object"],
+                # PK on the SHA-256 ``object_hash`` (emitted by the VIEW) rather
+                # than the raw ``object`` so literals over the Postgres B-tree
+                # limit (2704 bytes) can sync. See add_object_hash_column.
+                primary_key_columns=["subject", "predicate", "object_hash"],
                 sync_mode=self.store.sync_table_mode,
             )
             # ensure() may have used a fallback name (ghost control-plane state);

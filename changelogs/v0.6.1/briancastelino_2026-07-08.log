@@ -1,0 +1,51 @@
+## Fix triple store sync failure on large literal objects (issue #108)
+
+### Context
+Building or synchronizing the Knowledge Graph aborted whenever a mapped
+literal `object` exceeded the Postgres B-tree limit of 2704 bytes, surfacing
+as an opaque "Triple store sync failed" with an underlying
+`psycopg.errors.ProgramLimitExceeded: index row size ... exceeds btree ...`.
+This is realistic data, not an edge case: long text columns (descriptions,
+notes, log messages) are common and Auto-Map maps every column by default, so
+the literal becomes part of an index tuple. The root cause is that every index
+containing the raw `object` column is subject to the limit: the
+`(subject, predicate, object)` primary key on the `_sync` and `__app` tables,
+the `(predicate, object)` and `(object, predicate)` secondary indexes, and,
+in `managed_synced` mode, the Lakeflow-created synced table keyed on the same
+columns.
+
+### Changes
+1. `src/back/core/graphdb/lakebase/_companion_ddl.py`: I key the primary key of
+   the `_sync` and `__app` tables on a generated `object_hash bytea GENERATED
+   ALWAYS AS (sha256(convert_to(object, 'UTF8'))) STORED` column instead of the
+   raw `object`, so arbitrarily long literals load while triple uniqueness is
+   preserved. `sha256` / `convert_to` are Postgres built-ins, so no `pgcrypto`
+   extension is required. The object-bearing secondary indexes are made
+   size-guarded partial indexes (`WHERE octet_length(object) <= 2000`) so normal
+   data keeps identical query plans and oversized literals are simply not
+   indexed by value. I added `ensure_object_hash_pk`, an idempotent, best-effort
+   migration that upgrades pre-existing tables (adds the column, swaps a legacy
+   `(subject, predicate, object)` primary key, drops the legacy full-object
+   indexes) without ever aborting a build.
+2. `src/back/core/helpers/SQLHelpers.py` (+ `__init__.py`): I added
+   `add_object_hash_column`, which wraps the triple-producing Spark SELECT so
+   the Delta view also emits `sha2(object, 256) AS object_hash` for
+   `managed_synced` synced tables.
+3. `src/back/objects/digitaltwin/_build_pipeline.py` and
+   `src/back/objects/registry/scheduler.py`: in `managed_synced` mode the Delta
+   view now emits `object_hash` and the Lakebase synced table is keyed on
+   `["subject", "predicate", "object_hash"]` instead of the raw `object`.
+
+### Modified files
+- `src/back/core/graphdb/lakebase/_companion_ddl.py`
+- `src/back/core/helpers/SQLHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/objects/registry/scheduler.py`
+- `tests/units/core/test_companion_ddl_object_hash.py`
+- `tests/units/dtwin/test_build_pipeline_streaming.py`
+
+### Test results
+I ran `tests/units/core` and `tests/units/dtwin` and got 654 passed, 1 skipped
+(the psycopg-gated `test_lakebase_flat_store` module, which requires psycopg in
+CI), including the new `test_companion_ddl_object_hash` suite.

@@ -12,6 +12,7 @@ from back.core.helpers.URIHelpers import URIHelpers  # noqa: F401
 # imports can pull ``back.core.helpers`` again while this module is still
 # initializing (e.g. triplestore → helpers for ``sql_escape``).
 sql_escape = SQLHelpers.sql_escape
+add_object_hash_column = SQLHelpers.add_object_hash_column
 validate_table_name = SQLHelpers.validate_table_name
 effective_view_table = SQLHelpers.effective_view_table
 effective_graph_name = SQLHelpers.effective_graph_name

@@ -1011,7 +1011,15 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
     )
     res = sparql.translate_sparql_to_spark(sparql_q, ent, None, rels, dialect="spark")
 
-    return res["sql"], view_table, graph_name, base_uri, ent, rels
+    # Emit an ``object_hash`` column so a managed_synced Lakebase table can key
+    # its PK on the hash instead of the raw ``object`` (literals over the
+    # Postgres B-tree limit of 2704 bytes would otherwise abort the sync). The
+    # column is ignored by the app_managed streaming reader, which selects
+    # subject/predicate/object explicitly.
+    from back.core.helpers import add_object_hash_column
+
+    view_sql = add_object_hash_column(res["sql"])
+    return view_sql, view_table, graph_name, base_uri, ent, rels
 
 
 def _stream_into_store(store, src, graph_name: str, select_sql: str, batch: int = 5000) -> int:
@@ -1076,7 +1084,9 @@ def _apply_synced_pipeline(
     mgr.ensure(
         synced_uc,
         source_table_full_name=view_table,
-        primary_key_columns=["subject", "predicate", "object"],
+        # PK on the SHA-256 ``object_hash`` emitted by the VIEW (see
+        # _generate_sql_from_r2rml) so oversized literals can sync.
+        primary_key_columns=["subject", "predicate", "object_hash"],
         sync_mode=store.sync_table_mode,
     )
     store.ensure_synced_companion(graph_name)

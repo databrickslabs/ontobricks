@@ -19,9 +19,30 @@ side so SPARQL / KG-search readers see a uniform schema.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from back.core.helpers import safe_identifier
+
+logger = logging.getLogger(__name__)
+
+# Generated column carrying a fixed-width SHA-256 digest of ``object``.
+# Postgres B-tree index entries cannot exceed ~2704 bytes, so a triple whose
+# literal ``object`` is larger than that aborts any index that includes the raw
+# column (the primary key and the object-bearing secondary indexes).  Keying the
+# primary key on this 32-byte digest instead of the unbounded ``object`` lets
+# arbitrarily long literals load while preserving triple uniqueness.  ``sha256``
+# / ``convert_to`` are Postgres built-ins (no ``pgcrypto`` extension needed).
+_OBJECT_HASH_COL = (
+    "object_hash bytea GENERATED ALWAYS AS "
+    "(sha256(convert_to(object, 'UTF8'))) STORED"
+)
+
+# Secondary indexes that include the raw ``object`` are made partial so they
+# still serve normal-sized data (identical query plans) but simply skip the rare
+# oversized literal rather than failing the insert.  2000 bytes leaves head-room
+# under the 2704 limit for the accompanying ``predicate`` / ``subject`` columns.
+_LONG_OBJECT_PARTIAL = " WHERE octet_length(object) <= 2000"
 
 
 def _safe(name: str) -> str:
@@ -68,18 +89,84 @@ def ensure_synced(cur: Any, schema: str, synced: str) -> None:
             object TEXT NOT NULL,
             datatype TEXT,
             lang TEXT,
-            PRIMARY KEY (subject, predicate, object)
+            {_OBJECT_HASH_COL},
+            PRIMARY KEY (subject, predicate, object_hash)
         )
         """
     )
-    for sfx, cols in (
-        ("sp", "subject, predicate"),
-        ("po", "predicate, object"),
-        ("ops", "object, predicate"),
+    ensure_object_hash_pk(cur, synced)
+    _ensure_triple_indexes(cur, synced)
+
+
+def _ensure_triple_indexes(cur: Any, table: str) -> None:
+    """Create the standard triple-lookup indexes.
+
+    ``sp`` covers subject/predicate access; ``po`` / ``ops`` cover object-bearing
+    access but are made partial (:data:`_LONG_OBJECT_PARTIAL`) so an oversized
+    literal never trips the B-tree row-size limit at insert time.
+    """
+    for sfx, cols, partial in (
+        ("sp", "subject, predicate", ""),
+        ("po", "predicate, object", _LONG_OBJECT_PARTIAL),
+        ("ops", "object, predicate", _LONG_OBJECT_PARTIAL),
     ):
         cur.execute(
-            f"CREATE INDEX IF NOT EXISTS {_idx_name(synced, sfx)} "
-            f"ON {synced} ({cols})"
+            f"CREATE INDEX IF NOT EXISTS {_idx_name(table, sfx)} "
+            f"ON {table} ({cols}){partial}"
+        )
+
+
+def ensure_object_hash_pk(cur: Any, table: str) -> None:
+    """Idempotently migrate an existing triples table to the hashed-object PK.
+
+    Adds the generated ``object_hash`` column, swaps a legacy
+    ``(subject, predicate, object)`` primary key for
+    ``(subject, predicate, object_hash)``, and drops the legacy full-object
+    B-tree indexes so the size-guarded partial ones created by
+    :func:`_ensure_triple_indexes` take over.  A brand-new table created with the
+    current DDL is already in the target shape, so every step is a no-op.
+
+    Best-effort: a table owned by a different role (e.g. a Lakeflow-created
+    ``_sync`` left behind by a previous ``managed_synced`` build) cannot be
+    altered by the app service principal; the failure is logged and swallowed so
+    a build is never aborted by the migration itself.
+    """
+    bare = table.split(".")[-1].strip("\"")
+    try:
+        cur.execute(
+            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {_OBJECT_HASH_COL}"
+        )
+        cur.execute(
+            "DO $$ "
+            "DECLARE pk_name text; pk_cols text; "
+            "BEGIN "
+            "  SELECT c.conname, "
+            "         string_agg(a.attname, ',' ORDER BY k.ord) "
+            "    INTO pk_name, pk_cols "
+            "  FROM pg_constraint c "
+            "  JOIN pg_class t ON t.oid = c.conrelid "
+            "  JOIN pg_namespace n ON n.oid = t.relnamespace "
+            "  JOIN unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) ON true "
+            "  JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum "
+            f"  WHERE t.relname = {bare!r} "
+            "    AND n.nspname = ANY(current_schemas(false)) "
+            "    AND c.contype = 'p' "
+            "  GROUP BY c.conname; "
+            "  IF pk_cols = 'subject,predicate,object' THEN "
+            f"    EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', {bare!r}, pk_name); "
+            f"    EXECUTE format('ALTER TABLE %I ADD PRIMARY KEY "
+            f"(subject, predicate, object_hash)', {bare!r}); "
+            "  END IF; "
+            "END $$"
+        )
+        cur.execute(f"DROP INDEX IF EXISTS {_idx_name(bare, 'po')}")
+        cur.execute(f"DROP INDEX IF EXISTS {_idx_name(bare, 'ops')}")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "object_hash migration skipped for %s (non-fatal; new tables already "
+            "use the hashed PK): %s",
+            table,
+            exc,
         )
 
 
@@ -121,19 +208,13 @@ def ensure_companion(cur: Any, schema: str, companion: str) -> None:
             object TEXT NOT NULL,
             datatype TEXT,
             lang TEXT,
-            PRIMARY KEY (subject, predicate, object)
+            {_OBJECT_HASH_COL},
+            PRIMARY KEY (subject, predicate, object_hash)
         )
         """
     )
-    for sfx, cols in (
-        ("sp", "subject, predicate"),
-        ("po", "predicate, object"),
-        ("ops", "object, predicate"),
-    ):
-        cur.execute(
-            f"CREATE INDEX IF NOT EXISTS {_idx_name(companion, sfx)} "
-            f"ON {companion} ({cols})"
-        )
+    ensure_object_hash_pk(cur, companion)
+    _ensure_triple_indexes(cur, companion)
 
 
 def ensure_union_view(

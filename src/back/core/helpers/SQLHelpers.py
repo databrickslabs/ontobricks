@@ -24,6 +24,30 @@ class SQLHelpers:
         return str(value).replace("\\", "\\\\").replace("'", "''")
 
     @staticmethod
+    def add_object_hash_column(select_sql: str) -> str:
+        """Wrap a triple-producing SELECT so it also emits an ``object_hash`` column.
+
+        ``managed_synced`` Lakebase tables key their primary key on
+        ``object_hash`` (a SHA-256 of the literal ``object``) instead of the raw
+        ``object`` column, so literals larger than the Postgres B-tree limit
+        (2704 bytes) can be synced without aborting the pipeline.  ``sha2`` is a
+        Spark SQL built-in; the extra column is ignored by the ``app_managed``
+        read paths, which select ``subject`` / ``predicate`` / ``object``
+        explicitly.
+
+        The wrap uses a derived table so it composes with the CTE-based SQL the
+        SPARQL→Spark translator emits.
+        """
+        inner = (select_sql or "").strip().rstrip(";")
+        if not inner:
+            return select_sql
+        return (
+            "SELECT _obh.*, "
+            "sha2(CAST(_obh.object AS STRING), 256) AS object_hash\n"
+            f"FROM (\n{inner}\n) _obh"
+        )
+
+    @staticmethod
     def validate_table_name(table_name: str) -> None:
         """Raise :class:`~back.core.errors.ValidationError` if *table_name* is empty.
 
