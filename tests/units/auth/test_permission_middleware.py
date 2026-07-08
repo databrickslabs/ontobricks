@@ -1308,3 +1308,15 @@ class TestLifecycleGateInDispatch:
             path="/ontology/entities",
         )
         assert result.get("passed")
+
+    @pytest.mark.parametrize("status", ["PUBLISHED", "IN-REVIEW"])
+    def test_kg_filter_allowed_on_non_draft(self, status):
+        """KG filtering is read-only; it must stay available on locked versions."""
+        _, _, result = _dispatch_with_status(
+            ROLE_APP_USER, ROLE_BUILDER,
+            version_status=status,
+            path="/dtwin/sync/filter",
+        )
+        assert result.get("passed"), (
+            f"KG filter should be allowed on {status} version"
+        )

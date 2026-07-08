@@ -19,6 +19,7 @@ Thank you to everyone who has contributed to OntoBricks!
 | Name | GitHub | Contribution |
 |------|--------|--------------|
 | Andreas Niehaus | [@a-niehaus](https://github.com/a-niehaus) | Fix for Claude serving endpoints returning list-style `message.content` ([#107](https://github.com/databrickslabs/ontobricks/issues/107), [#109](https://github.com/databrickslabs/ontobricks/pull/109)) |
+| Brian Castelino | [@bcastelino](https://github.com/bcastelino) | Regression test for KG `/sync/filter` on non-DRAFT versions ([#110](https://github.com/databrickslabs/ontobricks/pull/110)) |
 | Ulrik Møller | [@ulsmo](https://github.com/ulsmo) | Contributor |
 
 ## How to Contribute
