@@ -1,0 +1,29 @@
+## Add managed-sync index hook for Lakebase _sync tables
+
+Context: In managed_synced mode, Lakeflow creates the Postgres _sync table.
+The app already created indexes for app-managed tables and companion tables,
+but there was no explicit index ensure step for Lakeflow-created _sync tables.
+This could leave BFS joins slower than expected after sync materialization or
+physical table recreation.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Add ensure_graph_indexes(cur, table_ref) helper that creates idempotent
+   graph indexes (subject,predicate), (predicate,object), (object,predicate)
+   for bare or schema-qualified table references.
+
+2. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Refactor ensure_synced() and ensure_companion() to call
+   ensure_graph_indexes() instead of duplicating index DDL loops.
+
+3. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   In ensure_synced_union_view(), call ensure_graph_indexes() for the visible
+   _sync table before creating the union view. Guard with warning-only fallback
+   so ownership/permission mismatches do not block build completion.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+
+Tests: skipped — not run in this environment

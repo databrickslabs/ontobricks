@@ -278,6 +278,17 @@ class LakebaseFlatStore(LakebaseBase):
             _time.sleep(min(poll_interval_s, remaining))
 
         with self._cursor() as cur:
+            # managed_synced: Lakeflow creates the _sync table. Re-apply index
+            # DDL idempotently so BFS and neighbour traversals stay performant
+            # even if the physical _sync table was recreated upstream.
+            try:
+                _companion_ddl.ensure_graph_indexes(cur, synced)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "ensure_synced_union_view: could not ensure indexes on %s: %s",
+                    synced,
+                    exc,
+                )
             _companion_ddl.ensure_union_view(cur, view, synced, companion)
 
     @staticmethod

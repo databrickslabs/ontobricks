@@ -52,6 +52,25 @@ def _idx_name(table: str, suffix: str) -> str:
     return base[:63]
 
 
+def ensure_graph_indexes(cur: Any, table_ref: str) -> None:
+    """Create standard graph lookup indexes on *table_ref* if absent.
+
+    ``table_ref`` may be bare (``g_x_v1_sync``) or schema-qualified
+    (``"schema".g_x_v1_sync``). Index names are based on the physical table
+    name only so they remain stable regardless of qualification.
+    """
+    table_name = table_ref.split(".")[-1].strip('"')
+    for sfx, cols in (
+        ("sp", "subject, predicate"),
+        ("po", "predicate, object"),
+        ("ops", "object, predicate"),
+    ):
+        cur.execute(
+            f"CREATE INDEX IF NOT EXISTS {_idx_name(table_name, sfx)} "
+            f"ON {table_ref} ({cols})"
+        )
+
+
 def ensure_synced(cur: Any, schema: str, synced: str) -> None:
     """Create the *_sync bulk-data table + standard B-tree indexes if absent.
 
@@ -72,15 +91,7 @@ def ensure_synced(cur: Any, schema: str, synced: str) -> None:
         )
         """
     )
-    for sfx, cols in (
-        ("sp", "subject, predicate"),
-        ("po", "predicate, object"),
-        ("ops", "object, predicate"),
-    ):
-        cur.execute(
-            f"CREATE INDEX IF NOT EXISTS {_idx_name(synced, sfx)} "
-            f"ON {synced} ({cols})"
-        )
+    ensure_graph_indexes(cur, synced)
 
 
 def drop_synced(cur: Any, synced: str) -> None:
@@ -125,15 +136,7 @@ def ensure_companion(cur: Any, schema: str, companion: str) -> None:
         )
         """
     )
-    for sfx, cols in (
-        ("sp", "subject, predicate"),
-        ("po", "predicate, object"),
-        ("ops", "object, predicate"),
-    ):
-        cur.execute(
-            f"CREATE INDEX IF NOT EXISTS {_idx_name(companion, sfx)} "
-            f"ON {companion} ({cols})"
-        )
+    ensure_graph_indexes(cur, companion)
 
 
 def ensure_union_view(
