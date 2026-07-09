@@ -19,12 +19,19 @@ side so SPARQL / KG-search readers see a uniform schema.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from back.core.helpers import safe_identifier
+from back.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+# SQLSTATE 42501 (insufficient_privilege) is what Postgres raises for
+# ``must be owner of table`` / ``permission denied``.  These are the only
+# migration failures we treat as non-fatal: a triples table owned by a
+# different role (e.g. a Lakeflow-created ``_sync`` from a previous
+# ``managed_synced`` build) simply cannot be altered by the app principal.
+_OWNERSHIP_SQLSTATES = frozenset({"42501"})
 
 # Generated column carrying a fixed-width SHA-256 digest of ``object``.
 # Postgres B-tree index entries cannot exceed ~2704 bytes, so a triple whose
@@ -116,6 +123,22 @@ def _ensure_triple_indexes(cur: Any, table: str) -> None:
         )
 
 
+def _is_ownership_error(exc: Exception) -> bool:
+    """Return ``True`` only for the expected ownership/permission failure.
+
+    Prefers the psycopg ``sqlstate`` (42501) and falls back to a message probe
+    so the check still works if the driver wraps or re-raises the error without
+    preserving the SQLSTATE.
+    """
+    sqlstate = getattr(exc, "sqlstate", None) or getattr(
+        getattr(exc, "diag", None), "sqlstate", None
+    )
+    if sqlstate in _OWNERSHIP_SQLSTATES:
+        return True
+    msg = str(exc).lower()
+    return "must be owner" in msg or "permission denied" in msg
+
+
 def ensure_object_hash_pk(cur: Any, table: str) -> None:
     """Idempotently migrate an existing triples table to the hashed-object PK.
 
@@ -162,9 +185,15 @@ def ensure_object_hash_pk(cur: Any, table: str) -> None:
         cur.execute(f"DROP INDEX IF EXISTS {_idx_name(bare, 'po')}")
         cur.execute(f"DROP INDEX IF EXISTS {_idx_name(bare, 'ops')}")
     except Exception as exc:  # noqa: BLE001
+        # Only ownership/permission failures are expected and non-fatal; any
+        # other error (undefined function, syntax error, ...) is a real defect
+        # that must surface rather than silently leave the legacy PK/index shape
+        # in place and re-trigger the original ProgramLimitExceeded later.
+        if not _is_ownership_error(exc):
+            raise
         logger.warning(
-            "object_hash migration skipped for %s (non-fatal; new tables already "
-            "use the hashed PK): %s",
+            "object_hash migration skipped for %s (non-fatal; table is owned by "
+            "another role and new tables already use the hashed PK): %s",
             table,
             exc,
         )

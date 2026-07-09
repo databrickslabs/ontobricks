@@ -10,6 +10,8 @@ Spark-side ``object_hash`` column used by ``managed_synced``.
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.helpers import add_object_hash_column
 
@@ -72,6 +74,21 @@ class TestObjectHashMigration:
         cur.execute.side_effect = RuntimeError("must be owner of table g_v1_sync")
         # Must not raise: a table owned by another role should never abort a build.
         _companion_ddl.ensure_object_hash_pk(cur, "g_v1_sync")
+
+    def test_migration_is_best_effort_on_insufficient_privilege_sqlstate(self):
+        cur = MagicMock()
+        exc = RuntimeError("permission problem")
+        exc.sqlstate = "42501"  # insufficient_privilege
+        cur.execute.side_effect = exc
+        _companion_ddl.ensure_object_hash_pk(cur, "g_v1_sync")
+
+    def test_migration_reraises_unexpected_error(self):
+        cur = MagicMock()
+        # A real DDL defect (e.g. undefined function) must surface, not be
+        # swallowed, so it cannot silently leave the legacy PK/index shape.
+        cur.execute.side_effect = RuntimeError("function sha256(bytea) does not exist")
+        with pytest.raises(RuntimeError, match="does not exist"):
+            _companion_ddl.ensure_object_hash_pk(cur, "g_v1_sync")
 
 
 class TestAddObjectHashColumn:
