@@ -41,9 +41,6 @@ _COPY_DELETE_TEMP = "_ob_del_stage"
 SYNC_MODE_APP = "app_managed"
 SYNC_MODE_MANAGED = "managed_synced"
 
-# Cap ARRAY payload size used by alias-expansion suffix probes.
-_ALIAS_VALUES_BATCH = 500
-
 
 class LakebaseFlatStore(LakebaseBase):
     """Flat-model triple store on Lakebase Postgres.
@@ -378,8 +375,10 @@ class LakebaseFlatStore(LakebaseBase):
         performs poorly and can hit statement timeouts.
 
         For fixed suffix patterns (``%/<id>``), group IDs by suffix length and
-        issue ``RIGHT(subject, k) = ANY(ARRAY[...])`` probes. This scales with
-        distinct suffix lengths (typically 1-3), not with total pattern count.
+        build a single SQL statement with one ``RIGHT(subject, k) = ANY(...)``
+        clause per distinct suffix length. This scales with distinct suffix
+        lengths (typically 1-3), not with total pattern count, while keeping
+        the lookup to a single round-trip.
         """
         if not like_patterns:
             return set()
@@ -402,17 +401,21 @@ class LakebaseFlatStore(LakebaseBase):
 
         out: set[str] = set()
 
-        for suffix_len, ids in by_suffix_len.items():
-            uniq_ids = sorted({i for i in ids if i})
-            for i in range(0, len(uniq_ids), _ALIAS_VALUES_BATCH):
-                chunk = uniq_ids[i : i + _ALIAS_VALUES_BATCH]
-                array_lit = ", ".join(f"'/{self._sql_escape(v)}'" for v in chunk)
-                sql = (
-                    f"SELECT DISTINCT subject FROM {rel} "
-                    f"WHERE RIGHT(subject, {suffix_len}) = ANY(ARRAY[{array_lit}])"
+        if by_suffix_len:
+            or_clauses = [
+                "RIGHT(subject, {}) = ANY(ARRAY[{}])".format(
+                    suffix_len,
+                    ", ".join(
+                        f"'/{self._sql_escape(v)}'"
+                        for v in sorted({value for value in ids if value})
+                    ),
                 )
-                rows = self.execute_query(sql) or []
-                out.update(r["subject"] for r in rows if r.get("subject"))
+                for suffix_len, ids in sorted(by_suffix_len.items())
+            ]
+            rows = self.execute_query(
+                f"SELECT DISTINCT subject FROM {rel} WHERE {' OR '.join(or_clauses)}"
+            ) or []
+            out.update(r["subject"] for r in rows if r.get("subject"))
 
         if generic_patterns:
             like_clauses = " OR ".join(

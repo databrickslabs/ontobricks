@@ -30,25 +30,24 @@ Tests: skipped — not run in this environment
 
 ---
 
-## Refine URI alias expansion with bucketed ANY probes
+## Refine URI alias expansion with OR-of-ANY probes
 
 Context: Follow-up benchmarking on production-like Lakebase data showed the
 VALUES-join alias expansion path was slower than OR-LIKE under high pattern
-counts. A bucketed fixed-length suffix probe strategy completed large sets
-reliably (including ~1300 IDs) with materially lower latency.
+counts. Further benchmarking showed the fastest stable strategy was a single
+SQL statement with one fixed-length ``RIGHT(subject, k) = ANY(ARRAY[...])``
+clause per distinct suffix length, avoiding both giant OR-LIKE chains and
+multi-round-trip bucket execution.
 
 Changes:
 
 1. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
-   Replace VALUES join in find_subjects_by_patterns() with suffix-length
-   buckets using RIGHT(subject, k) = ANY(ARRAY[...]) and batched arrays.
+   Replace VALUES join in find_subjects_by_patterns() with a single OR-of-ANY
+   query across suffix-length buckets.
 
 2. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
    Add defaultdict-based grouping by suffix length and keep generic LIKE
    fallback only for non-``%/<id>`` patterns.
-
-3. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
-   Tune _ALIAS_VALUES_BATCH from 1000 to 500 for safer statement size.
 
 Modified files:
 - src/back/core/graphdb/lakebase/LakebaseFlatStore.py
