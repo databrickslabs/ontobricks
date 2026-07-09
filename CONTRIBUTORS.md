@@ -14,6 +14,12 @@ Thank you to everyone who has contributed to OntoBricks!
 | Ulrik Møller | [@ulsmo](https://github.com/ulsmo) | Contributor |
 | Mitul | [@kmitul](https://github.com/kmitul) | Contributor |
 
+## Community Contributors
+
+| Name | GitHub | Contribution |
+|------|--------|--------------|
+| Andreas Niehaus | [@a-niehaus](https://github.com/a-niehaus) | Fix for Claude serving endpoints returning list-style `message.content` ([#107](https://github.com/databrickslabs/ontobricks/issues/107), [#109](https://github.com/databrickslabs/ontobricks/pull/109)) |
+
 ## How to Contribute
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get involved.
