@@ -1,0 +1,48 @@
+## Perf: make Settings / Back End tab load fast (defer Lakebase/Delta cascade)
+
+Context: The Settings → "Back End" tab felt slow because its loading spinner
+gated the (minimal) backend selector on `refreshGraphDbTabFromServer()`, which
+always ran the full Graph DB pipeline the Back End panel does not even display:
+Delta warehouse listing, the Lakebase project→branch→database→schema cascade,
+the Lakebase health probe (endpoint resolution + JWT mint + synchronous
+Postgres connect), and optionally the UC catalog `SHOW CATALOGS`. That is
+6–10 remote round-trips, mostly sequential, on every page load.
+
+Fix: the Back End sub-page load now fetches ONLY the triple-store backend value
+(a single GET behind its spinner). The graph engine JSON config and the
+Lakebase/Delta remote cascade are deferred — loaded lazily the first time the
+Lakebase/Delta sections are opened, or just-in-time before a Lakebase Save.
+
+### Changes
+
+1. `src/front/static/config/js/settings.js`
+   - Split `refreshGraphDbTabFromServer()` into three:
+     - `loadTripleStoreBackend()` — single GET `/settings/triple-store-backend`
+       (the only thing the Back End sub-page displays).
+     - `loadGraphEngineConfig()` — GETs `/graph-engine` + `/graph-engine-config`
+       plus local-only form mirroring (`applyLakebaseFormFromConfigTextarea`,
+       `prefillLakebaseConnectionFromConfig`). Needed by a Lakebase Save and as a
+       prerequisite for the heavy cascade.
+     - `loadGraphDbHeavyFromServer()` — Delta warehouse select, Lakebase project
+       cascade, Lakebase health probe, and (managed_synced only) UC catalogs;
+       loads `loadGraphEngineConfig()` first if not already done.
+   - Split `setGraphDbTabLoading()` into `setBackendTabLoading()` (Back End
+     banner/content only) and `setGraphDbHeavyLoading()` (Lakebase + Delta
+     banners/panels only), so the Back End spinner covers only its own GET.
+   - Page load now runs only `loadTripleStoreBackend()` and reveals the Back End
+     panel immediately; everything else is deferred.
+   - `sidebarSectionChanged`: lazily runs `loadGraphDbHeavyFromServer()` the
+     first time `lakebase`/`delta` is opened (tracked by `graphDbHeavyLoaded`);
+     revisiting `lakebase` refreshes health only.
+   - Save path hardened: a Lakebase save first ensures `loadGraphEngineConfig()`
+     ran (so the merge cannot blank the saved config); the Delta warehouse id is
+     taken from the saved `currentDeltaWarehouseId` (not the empty live dropdown)
+     when the heavy load has not run, and the post-save warehouse re-list is
+     skipped unless the dropdown is live. New flags: `graphEngineConfigLoaded`,
+     `graphDbHeavyLoaded`.
+
+### Modified files
+
+- `src/front/static/config/js/settings.js`
+
+Tests: front-end only change (no Python impact); `uv run pytest -q -m "not scenario"` unaffected.

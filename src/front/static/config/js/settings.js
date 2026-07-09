@@ -7,8 +7,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let currentWarehouseId = null;
     let currentDeltaWarehouseId = null;
+    let effectiveDeltaWarehouseId = '';
     let warehouseLocked = false;
+    // graphDbLoaded → the triple-store backend value is loaded (all the Back End
+    // sub-page needs). graphEngineConfigLoaded → the graph engine + JSON config
+    // textarea are loaded (needed by a Lakebase Save and by the heavy cascade).
+    // graphDbHeavyLoaded → the remote Lakebase/Delta cascade + health have been
+    // fetched (deferred until the Lakebase/Delta sections are opened).
     let graphDbLoaded = false;
+    let graphEngineConfigLoaded = false;
+    let graphDbHeavyLoaded = false;
     // Registry rebuilt on every loadLakebaseObjects call; keyed by domain base name.
     // Avoids embedding JSON in onclick HTML attributes (double quotes break the attribute).
     let _lkDomainRegistry = {};
@@ -26,13 +34,15 @@ document.addEventListener('DOMContentLoaded', function () {
     loadRegistryCacheTtl();
     loadEditLockTtl();
     loadNavbarLogo();
-    // Preload triple-store / Delta warehouse so global Save can persist them
-    // even when the operator never opened the Graph DB sidebar sections.
-    setGraphDbTabLoading(true);
-    refreshGraphDbTabFromServer()
+    // Preload ONLY the triple-store backend value — that is all the Back End
+    // sub-page shows, so its spinner clears after a single GET. Everything else
+    // (graph engine config, Lakebase/Delta cascade) is deferred to the first
+    // visit of those sections / to Save (sidebarSectionChanged, saveGraphDbSettings).
+    setBackendTabLoading(true);
+    loadTripleStoreBackend()
         .then(() => { graphDbLoaded = true; })
         .catch((e) => console.log('Graph DB preload failed', e))
-        .finally(() => { setGraphDbTabLoading(false); });
+        .finally(() => { setBackendTabLoading(false); });
 
     // =====================================================================
     //  DATABRICKS TAB
@@ -1034,24 +1044,33 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function setGraphDbTabLoading(loading) {
-        const lkBanner  = document.getElementById('lakebaseSectionBanner');
-        const lkPanel   = document.getElementById('lakebaseGraphPanel');
-        const dtBanner  = document.getElementById('deltaSectionBanner');
-        const dtPanel   = document.getElementById('deltaGraphPanel');
+    // Spinner scoped to the Back End section only (fast, light load).
+    function setBackendTabLoading(loading) {
         const beBanner  = document.getElementById('backendSectionBanner');
         const beContent = document.getElementById('graphDbTabContent');
-        [lkBanner, dtBanner, beBanner].forEach(function (banner) {
+        if (beBanner) {
+            beBanner.classList.toggle('d-none', !loading);
+            beBanner.classList.toggle('d-flex', loading);
+        }
+        if (beContent) beContent.style.display = loading ? 'none' : '';
+    }
+
+    // Spinner scoped to the Lakebase + Delta sections (deferred heavy load).
+    function setGraphDbHeavyLoading(loading) {
+        const lkBanner = document.getElementById('lakebaseSectionBanner');
+        const lkPanel  = document.getElementById('lakebaseGraphPanel');
+        const dtBanner = document.getElementById('deltaSectionBanner');
+        const dtPanel  = document.getElementById('deltaGraphPanel');
+        [lkBanner, dtBanner].forEach(function (banner) {
             if (!banner) return;
             banner.classList.toggle('d-none', !loading);
             banner.classList.toggle('d-flex', loading);
         });
         if (loading) {
-            if (lkPanel)   lkPanel.style.display   = 'none';
-            if (dtPanel)   dtPanel.style.display   = 'none';
-            if (beContent) beContent.style.display = 'none';
+            if (lkPanel) lkPanel.style.display = 'none';
+            if (dtPanel) dtPanel.style.display = 'none';
         } else {
-            if (beContent) beContent.style.display = '';
+            applyGraphDbEnginePanels();
         }
     }
 
@@ -1064,43 +1083,68 @@ document.addEventListener('DOMContentLoaded', function () {
                 : '(not configured — set Registry catalog & schema)');
     }
 
-    async function refreshGraphDbTabFromServer() {
+    // Back End sub-page load: fetch ONLY the triple-store backend value — that
+    // is all the Back End panel displays. Single GET, so its spinner clears
+    // fast. The graph engine config and the Lakebase/Delta remote cascade are
+    // deferred (see loadGraphEngineConfig / loadGraphDbHeavyFromServer).
+    async function loadTripleStoreBackend() {
         const tsSel = document.getElementById('tripleStoreBackendSelect');
-        const sel = document.getElementById('graphEngineSelect');
-        const ta  = document.getElementById('graphEngineConfig');
         if (!tsSel) return;
         try {
-            const [tsResp, engResp, cfgResp] = await Promise.all([
-                fetch('/settings/triple-store-backend', { credentials: 'same-origin' }),
-                fetch('/settings/graph-engine',        { credentials: 'same-origin' }),
+            const resp = await fetch('/settings/triple-store-backend', { credentials: 'same-origin' });
+            const tsData = resp.ok ? await resp.json() : {};
+            const rawTs = tsData.triple_store_backend;
+            if (tsData.success && rawTs) {
+                const allowedTs = Array.isArray(tsData.allowed_backends) ? tsData.allowed_backends : [];
+                tsSel.value = (allowedTs.length === 0 || allowedTs.indexOf(rawTs) >= 0) ? rawTs : 'lakebase';
+            }
+            currentDeltaWarehouseId = tsData.delta_warehouse_id || '';
+            effectiveDeltaWarehouseId = tsData.effective_delta_warehouse_id || '';
+            applyDeltaRegistryLocation(tsData);
+        } catch (e) {
+            console.log('Triple store backend load failed', e);
+        }
+    }
+
+    // Graph engine + JSON config load. Needed by a Lakebase global Save (the
+    // config textarea) and as a prerequisite for the heavy cascade. Local-only
+    // form mirroring runs here so saved values are pre-selected.
+    async function loadGraphEngineConfig() {
+        const sel = document.getElementById('graphEngineSelect');
+        const ta  = document.getElementById('graphEngineConfig');
+        try {
+            const [engResp, cfgResp] = await Promise.all([
+                fetch('/settings/graph-engine', { credentials: 'same-origin' }),
                 ta ? fetch('/settings/graph-engine-config', { credentials: 'same-origin' }) : Promise.resolve(null),
             ]);
-            const tsData = tsResp.ok ? await tsResp.json() : {};
             const engData = engResp.ok ? await engResp.json() : {};
             const cfgData = cfgResp && cfgResp.ok ? await cfgResp.json() : {};
             if (ta && cfgData.success) {
                 ta.value = JSON.stringify(cfgData.graph_engine_config || {}, null, 2);
             }
-            const rawTs = tsData.triple_store_backend;
-            if (tsData.success && rawTs) {
-                const allowedTs = Array.isArray(tsData.allowed_backends) ? tsData.allowed_backends : [];
-                if (allowedTs.length === 0 || allowedTs.indexOf(rawTs) >= 0) {
-                    tsSel.value = rawTs;
-                } else {
-                    tsSel.value = 'lakebase';
-                }
-            }
             if (sel) {
                 const rawEng = engData.graph_engine;
                 if (engData.success && rawEng) sel.value = rawEng;
             }
-            currentDeltaWarehouseId = tsData.delta_warehouse_id || '';
-            applyDeltaRegistryLocation(tsData);
+            applyLakebaseFormFromConfigTextarea();
+            prefillLakebaseConnectionFromConfig();
+            graphEngineConfigLoaded = true;
+        } catch (e) {
+            console.log('Graph engine config load failed', e);
+        }
+    }
+
+    // Heavy load: the remote Lakebase/Delta cascade — Delta warehouse listing,
+    // Lakebase project→branch→db→schema pickers, the Lakebase health probe and
+    // (managed_synced only) the UC catalog listing. Deferred until the user
+    // actually opens the Lakebase or Delta sidebar section.
+    async function loadGraphDbHeavyFromServer() {
+        try {
+            if (!graphEngineConfigLoaded) await loadGraphEngineConfig();
             await loadDeltaWarehouseSelect(
                 currentDeltaWarehouseId,
-                tsData.effective_delta_warehouse_id
+                effectiveDeltaWarehouseId
             );
-            applyLakebaseFormFromConfigTextarea();
             await loadLakebaseProjects();
             prefillLakebaseConnectionFromConfig();
             await loadLakebaseGraphHealth();
@@ -1109,7 +1153,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 await loadUcCatalogsForGraphEngine();
             }
         } catch (e) {
-            console.log('Graph DB tab refresh failed', e);
+            console.log('Graph DB heavy refresh failed', e);
         } finally {
             applyGraphDbEnginePanels();
         }
@@ -2498,8 +2542,13 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const deltaSelect = document.getElementById('deltaWarehouseSelect');
             const tsBody = { triple_store_backend: tsSel.value };
-            if (deltaSelect) {
+            // The Delta warehouse dropdown is only populated by the heavy load.
+            // Read the live select only once that has run; otherwise fall back to
+            // the saved id so a Save from the Back End tab can't blank it out.
+            if (deltaSelect && graphDbHeavyLoaded) {
                 tsBody.delta_warehouse_id = deltaSelect.value || '';
+            } else if (currentDeltaWarehouseId) {
+                tsBody.delta_warehouse_id = currentDeltaWarehouseId;
             }
             const tsResp = await fetch('/settings/triple-store-backend', {
                 method: 'POST',
@@ -2515,9 +2564,12 @@ document.addEventListener('DOMContentLoaded', function () {
             if (tsResult.delta_warehouse_id != null) {
                 currentDeltaWarehouseId = tsResult.delta_warehouse_id || '';
             }
-            if (deltaSelect) {
+            // Only re-list warehouses when the heavy load already ran (i.e. the
+            // dropdown is live/visible); otherwise skip the remote call to keep
+            // Save fast — the saved id is preserved regardless.
+            if (deltaSelect && graphDbHeavyLoaded) {
                 await loadDeltaWarehouseSelect(currentDeltaWarehouseId);
-            } else {
+            } else if (!deltaSelect) {
                 setDeltaWarehouseStatus();
             }
 
@@ -2587,16 +2639,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('sidebarSectionChanged', async (e) => {
         const s = e.detail?.section;
-        if (s === 'lakebase' && graphDbLoaded) {
-            await loadLakebaseGraphHealth();
-        }
-        if ((s === 'ts-global' || s === 'lakebase' || s === 'delta') && !graphDbLoaded) {
-            graphDbLoaded = true;
-            setGraphDbTabLoading(true);
+        if (s !== 'ts-global' && s !== 'lakebase' && s !== 'delta') return;
+
+        // Ensure the triple-store backend value is present (covers a deep-link
+        // race where the section activates before the page-load preload resolves).
+        if (!graphDbLoaded) {
+            setBackendTabLoading(true);
             try {
-                await refreshGraphDbTabFromServer();
+                await loadTripleStoreBackend();
+                graphDbLoaded = true;
             } finally {
-                setGraphDbTabLoading(false);
+                setBackendTabLoading(false);
+            }
+        }
+
+        // The heavy Lakebase/Delta data is only needed by those two sections;
+        // load it lazily the first time either is opened.
+        if (s === 'lakebase' || s === 'delta') {
+            if (!graphDbHeavyLoaded) {
+                graphDbHeavyLoaded = true;
+                setGraphDbHeavyLoading(true);
+                try {
+                    await loadGraphDbHeavyFromServer();
+                } finally {
+                    setGraphDbHeavyLoading(false);
+                }
+            } else if (s === 'lakebase') {
+                // Revisit → refresh the Lakebase health probe only.
+                await loadLakebaseGraphHealth();
             }
         }
     });
@@ -2682,10 +2752,20 @@ document.addEventListener('DOMContentLoaded', function () {
         // 4. Graph DB engine + JSON config (same tab; top Save only)
         if (!graphDbLoaded) {
             try {
-                await refreshGraphDbTabFromServer();
+                await loadTripleStoreBackend();
                 graphDbLoaded = true;
             } catch (e) {
                 console.log('Graph DB refresh before save failed', e);
+            }
+        }
+        // A Lakebase save persists the graph engine JSON config; make sure it is
+        // loaded first so the merge/save cannot blank out the saved config.
+        const tsSelForSave = document.getElementById('tripleStoreBackendSelect');
+        if (tsSelForSave && tsSelForSave.value === 'lakebase' && !graphEngineConfigLoaded) {
+            try {
+                await loadGraphEngineConfig();
+            } catch (e) {
+                console.log('Graph engine config load before save failed', e);
             }
         }
         await saveGraphDbSettings(errors);
