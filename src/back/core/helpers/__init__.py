@@ -3,6 +3,7 @@
 from back.core.helpers.DatabricksHelpers import (  # noqa: F401
     DatabricksHelpers,
     effective_uc_version_path,
+    get_blocking_pool_stats,
     make_volume_file_service,
 )
 from back.core.helpers.SQLHelpers import SQLHelpers  # noqa: F401
@@ -58,6 +59,7 @@ __all__ = [
     "get_triplestore_sql_credentials",
     "get_databricks_host_and_token",
     "make_volume_file_service",
+    "get_blocking_pool_stats",
     "require_serving_llm",
     "effective_uc_version_path",
     "sql_escape",

@@ -1793,6 +1793,37 @@ _CHAT_DEFAULT_LIMIT = 20         # number of user+assistant turns kept per domai
 _CHAT_MIN_LIMIT = 5
 _CHAT_MAX_LIMIT = 100
 
+# Surfaced to the Graph Chat UI (inline + global toast) when the blocking
+# thread pool is saturated, so users understand why responses are slow and
+# admins know the actionable remedy.
+_UPGRADE_INSTANCE_ADVICE = (
+    "OntoBricks is under heavy load - the request worker pool is saturated, so "
+    "responses may be slow. If this happens often, upgrade the Databricks App "
+    "instance size (Apps UI -> Compute) for more concurrency."
+)
+
+
+def _resource_pressure_payload() -> dict:
+    """Return a resource-pressure advisory when the blocking pool is saturated.
+
+    Sampled around a Graph Chat turn so the UI can nudge the user toward a
+    larger Databricks App instance instead of silently appearing to hang.
+    Never raises - pressure detection must not break the chat response.
+    """
+    try:
+        from back.core.helpers import get_blocking_pool_stats
+
+        stats = get_blocking_pool_stats()
+    except Exception:  # noqa: BLE001
+        return {"resource_pressure": False}
+    if stats.get("saturated"):
+        return {
+            "resource_pressure": True,
+            "resource_advice": _UPGRADE_INSTANCE_ADVICE,
+            "pool_stats": stats,
+        }
+    return {"resource_pressure": False}
+
 
 def _chat_cache(session_mgr: SessionManager) -> dict:
     """Return the Graph Chat session cache, creating an empty one if absent."""
@@ -2059,6 +2090,7 @@ async def dtwin_assistant_chat(
         "tools": tool_calls,
         "iterations": agent_result.iterations,
         "usage": agent_result.usage,
+        **_resource_pressure_payload(),
     }
 
 
@@ -2212,6 +2244,7 @@ async def dtwin_assistant_chat_stream(
                             "iterations": agent_result.iterations,
                             "usage": agent_result.usage,
                             "success": agent_result.success,
+                            **_resource_pressure_payload(),
                         }) + "\n\n"
                         break
 
@@ -2425,12 +2458,13 @@ async def dtwin_triples_find(
     published as a version.
     """
     from back.core.helpers import sql_escape
+    from back.core.query_limits import get_graph_chat_result_cap
 
     if not entity_type and not search:
         raise ValidationError("Provide at least entity_type or search")
 
     depth = max(1, min(int(depth or 1), 10))
-    limit = max(1, min(int(limit or 1000), 10000))
+    limit = max(1, min(int(limit or 1000), get_graph_chat_result_cap()))
     offset = max(0, int(offset or 0))
 
     domain = get_domain(session_mgr)

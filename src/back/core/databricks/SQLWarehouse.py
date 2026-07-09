@@ -137,15 +137,36 @@ class SQLWarehouse:
         except Exception as exc:
             return False, f"Connection failed: {exc}"
 
-    def execute_query(self, query: str) -> List[Dict[str, Any]]:
-        """Execute *query* and return rows as a list of dicts."""
+    def execute_query(
+        self, query: str, statement_timeout_s: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Execute *query* and return rows as a list of dicts.
+
+        When *statement_timeout_s* is a positive integer the query is bounded
+        by a session ``STATEMENT_TIMEOUT`` so the warehouse cancels a runaway
+        statement server-side. The bound is reset before the (pooled)
+        connection is returned so it never leaks to the next borrower. Used by
+        the graph read path (:class:`DeltaTripleStore`); left unset for the
+        build pipeline and full-graph dumps which may legitimately run longer.
+        """
         self._require_warehouse()
+        bounded = bool(statement_timeout_s and int(statement_timeout_s) > 0)
         try:
             with self._borrow() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(query)
-                    columns = [desc[0] for desc in cur.description]
-                    return [dict(zip(columns, row)) for row in cur.fetchall()]
+                    if bounded:
+                        cur.execute(
+                            f"SET STATEMENT_TIMEOUT = {int(statement_timeout_s)}"
+                        )
+                    try:
+                        cur.execute(query)
+                        columns = [desc[0] for desc in cur.description]
+                        return [dict(zip(columns, row)) for row in cur.fetchall()]
+                    finally:
+                        if bounded:
+                            # 0 disables the per-session bound (workspace default
+                            # applies) so the recycled connection is unaffected.
+                            cur.execute("SET STATEMENT_TIMEOUT = 0")
         except Exception as exc:
             logger.exception("Error executing query: %s", exc)
             raise

@@ -472,11 +472,19 @@ class LakebaseFlatStore(LakebaseBase):
         return _require_psycopg()
 
     def execute_query(self, query: str) -> List[Dict[str, Any]]:
+        from back.core.query_limits import get_graph_query_timeout_s
+
         _, dict_row = self._require_pg()
         pool = self._pool()
+        timeout_ms = get_graph_query_timeout_s() * 1000
         with pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(f'SET search_path TO "{self._schema}", public')
+                # Bound graph reads so a runaway traversal is cancelled
+                # server-side instead of pinning the connection (and, via the
+                # loopback agent, the event loop). Reset by ``_cursor`` for the
+                # DDL path which may legitimately run longer.
+                cur.execute(f"SET statement_timeout = {int(timeout_ms)}")
                 cur.execute(query)
                 if cur.description:
                     return [dict(row) for row in cur.fetchall()]

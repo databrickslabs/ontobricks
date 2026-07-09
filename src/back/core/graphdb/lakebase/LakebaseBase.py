@@ -190,4 +190,8 @@ class LakebaseBase(GraphDBBackend):
         with pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(f'SET search_path TO "{self._schema}", public')
+                # DDL / migration work may legitimately exceed the bounded
+                # graph-read timeout set by ``execute_query`` on this (pooled,
+                # reused) connection — clear it so schema changes aren't cancelled.
+                cur.execute("SET statement_timeout = 0")
                 yield cur

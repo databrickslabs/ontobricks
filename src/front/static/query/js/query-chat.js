@@ -42,15 +42,15 @@
     // DOM helpers
     // =====================================================
 
-    function el(id)        { return document.getElementById(id); }
-    function messagesEl()  { return el('chatMessages'); }
-    function inputEl()     { return el('chatInput'); }
-    function sendBtn()     { return el('chatSendBtn'); }
-    function clearBtn()    { return el('chatClearBtn'); }
+    function el(id) { return document.getElementById(id); }
+    function messagesEl() { return el('chatMessages'); }
+    function inputEl() { return el('chatInput'); }
+    function sendBtn() { return el('chatSendBtn'); }
+    function clearBtn() { return el('chatClearBtn'); }
     function clearBtnTop() { return el('chatClearBtnTop'); }
-    function limitEl()     { return el('chatHistoryLimit'); }
-    function depthEl()     { return el('chatDepth'); }
-    function getDepth()    { return parseInt(depthEl()?.value || '1', 10); }
+    function limitEl() { return el('chatHistoryLimit'); }
+    function depthEl() { return el('chatDepth'); }
+    function getDepth() { return parseInt(depthEl()?.value || '1', 10); }
 
     // =====================================================
     // Markdown rendering
@@ -276,6 +276,41 @@
         container.scrollTop = container.scrollHeight;
     }
 
+    /**
+     * Inline advisory shown in the chat when the server reports resource
+     * pressure (blocking thread pool saturated). Nudges the user toward a
+     * larger Databricks App instance instead of appearing to hang.
+     */
+    function appendResourceAdvisory(text) {
+        const container = messagesEl();
+        if (!container) return;
+        const div = document.createElement('div');
+        div.className = 'alert alert-warning py-2 px-3 small graph-chat-resource-advisory d-flex align-items-start';
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-exclamation-triangle-fill me-2 mt-1';
+        const span = document.createElement('span');
+        span.textContent = text;
+        div.appendChild(icon);
+        div.appendChild(span);
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    /**
+     * Surface the resource-pressure advisory both inline (in the chat) and via
+     * the global NotificationCenter toast, when the server flags it.
+     */
+    function maybeShowResourcePressure(event) {
+        if (!event || !event.resource_pressure) return;
+        const msg = event.resource_advice ||
+            'OntoBricks is under heavy load; responses may be slow. Consider ' +
+            'upgrading the Databricks App instance size.';
+        appendResourceAdvisory(msg);
+        if (typeof window.showNotification === 'function') {
+            try { window.showNotification(msg, 'warning'); } catch (_) { /* best effort */ }
+        }
+    }
+
     function showThinking() {
         const container = messagesEl();
         if (!container) return;
@@ -485,6 +520,7 @@
                     role: 'assistant',
                     content: doneEvent.reply || '',
                 });
+                maybeShowResourcePressure(doneEvent);
             } else {
                 errorStreamingBubble(bubble, 'Stream ended without a final response.');
             }

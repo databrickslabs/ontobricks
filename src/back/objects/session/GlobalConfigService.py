@@ -19,6 +19,10 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 from back.core.logging import get_logger
+from back.core.query_limits import (
+    set_graph_chat_result_cap_override,
+    set_graph_query_timeout_override,
+)
 from back.objects.registry.registry_cache import set_registry_cache_ttl
 
 logger = get_logger(__name__)
@@ -91,6 +95,17 @@ class GlobalConfigService:
                 self._cache_ts = now
                 if "registry_cache_ttl" in data:
                     set_registry_cache_ttl(int(data["registry_cache_ttl"]))
+                # Apply the persisted graph-read bounds so admin overrides
+                # survive a cold restart (0 / unset clears the override, so
+                # the env var / built-in default applies).
+                if "graph_query_timeout_s" in data:
+                    set_graph_query_timeout_override(
+                        int(data["graph_query_timeout_s"] or 0) or None
+                    )
+                if "graph_chat_result_cap" in data:
+                    set_graph_chat_result_cap_override(
+                        int(data["graph_chat_result_cap"] or 0) or None
+                    )
                 logger.info(
                     "Loaded global config (backend=%s)", store.backend
                 )
@@ -385,6 +400,60 @@ class GlobalConfigService:
         set_registry_cache_ttl(ttl)
         return self._save(host, token, registry_cfg, {"registry_cache_ttl": ttl})
 
+    def get_graph_query_timeout_s(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> int:
+        """Return the effective graph-read statement timeout (seconds).
+
+        Returns the persisted admin value when set, otherwise the
+        env-var / built-in default resolved by :mod:`back.core.query_limits`.
+        """
+        from back.core.query_limits import get_graph_query_timeout_s as _effective
+
+        val = self.get(host, token, registry_cfg, "graph_query_timeout_s", "")
+        if val and str(val).isdigit() and int(val) > 0:
+            return int(val)
+        return _effective()
+
+    def set_graph_query_timeout_s(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        seconds: int,
+    ) -> Tuple[bool, str]:
+        """Persist and apply the graph-read statement timeout (``0`` = unset)."""
+        seconds = max(0, int(seconds))
+        set_graph_query_timeout_override(seconds or None)
+        return self._save(
+            host, token, registry_cfg, {"graph_query_timeout_s": seconds}
+        )
+
+    def get_graph_chat_result_cap(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> int:
+        """Return the effective Graph Chat triple result cap."""
+        from back.core.query_limits import get_graph_chat_result_cap as _effective
+
+        val = self.get(host, token, registry_cfg, "graph_chat_result_cap", "")
+        if val and str(val).isdigit() and int(val) > 0:
+            return int(val)
+        return _effective()
+
+    def set_graph_chat_result_cap(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        count: int,
+    ) -> Tuple[bool, str]:
+        """Persist and apply the Graph Chat triple result cap (``0`` = unset)."""
+        count = max(0, int(count))
+        set_graph_chat_result_cap_override(count or None)
+        return self._save(
+            host, token, registry_cfg, {"graph_chat_result_cap": count}
+        )
+
     def get_edit_lock_ttl_s(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> Optional[int]:
@@ -430,6 +499,9 @@ class GlobalConfigService:
             "navbar_logo": "",
             "use_cloud_fetch": True,
             "registry_cache_ttl": 300,
+            # 0 = unset → env var / built-in default from back.core.query_limits.
+            "graph_query_timeout_s": 0,
+            "graph_chat_result_cap": 0,
             "graph_engine": "lakebase",
             "graph_engine_config": {},
             "triple_store_backend": "lakebase",

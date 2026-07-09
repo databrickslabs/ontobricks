@@ -126,6 +126,36 @@
                                 <option value="lakebase">Lakebase (Postgres)</option>
                             </select>
                         </div>
+
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold mb-2">
+                                Graph read limits
+                                <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                    <i class="bi bi-shield-lock me-1"></i>Admin only
+                                </span>
+                            </label>
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-6">
+                                    <label for="graphQueryTimeoutS" class="form-label small fw-semibold mb-1">Statement timeout (seconds)</label>
+                                    <input type="number" min="0" step="5" class="form-control form-control-sm"
+                                           id="graphQueryTimeoutS" placeholder="60">
+                                    <div class="form-text small mt-1 mb-0 text-muted">
+                                        Max time a single graph read (e.g. a Graph Chat traversal) may run before the
+                                        database cancels it — applies to both Lakebase and the SQL warehouse. <code>0</code>
+                                        uses the built-in default. Prevents a broad query from freezing the app.
+                                    </div>
+                                </div>
+                                <div class="col-12 col-lg-6">
+                                    <label for="graphChatResultCap" class="form-label small fw-semibold mb-1">Graph Chat result cap (triples)</label>
+                                    <input type="number" min="0" step="100" class="form-control form-control-sm"
+                                           id="graphChatResultCap" placeholder="10000">
+                                    <div class="form-text small mt-1 mb-0 text-muted">
+                                        Hard ceiling on triples returned to the Graph Chat agent per query.
+                                        <code>0</code> uses the built-in default.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
