@@ -1,75 +1,175 @@
-{# Settings → Health tab body.
-
-   Calls GET /health (the public readiness probe defined in
-   shared/fastapi/health.py) and renders the result with the same KPI-tile
-   shape used by Mapping diagnostics.  Lazy-loaded on first tab open by
-   /static/config/js/settings-health.js so the eight backend probes do
-   not run on every page load.
+{# Settings → Health section.
+   Two tabs:
+     1. Databricks — existing readiness probes from GET /health
+        (runtime, filesystem, auth, warehouse, CloudFetch, registry config)
+     2. Diagnostics — grouped deep-dive: UC privileges, Lakebase registry tables,
+        Graph DB, Delta.  Powered by GET /settings/diagnostics (admin-only).
+   Both tabs are lazy-loaded on first show.
 #}
-<div class="alert alert-info small d-flex align-items-start mb-3" role="alert">
-    <i class="bi bi-info-circle me-2 mt-1"></i>
-    <div>
-        Live readiness probes against every dependency the application needs to
-        run: <code>/tmp</code>, the session and log directories, Databricks
-        authentication, the SQL warehouse, the registry UC volume (read +
-        write), the registry catalog/schema view DDL and Lakebase.  This is
-        the same payload that <code>GET /health</code> returns to external
-        load-balancer probes — overall <code>status</code> is the worst
-        severity across all checks.
-    </div>
-</div>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h6 class="mb-0">
-        <i class="bi bi-heart-pulse me-1"></i> Application readiness
-        <span id="healthOverallBadge" class="badge bg-secondary ms-2">Pending</span>
-    </h6>
-    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshHealth" title="Re-run all readiness probes">
-        <i class="bi bi-arrow-clockwise me-1"></i> Refresh
-    </button>
-</div>
+<!-- Tab strip -->
+<ul class="nav nav-tabs ob-tabs mb-0" id="healthTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="htab-databricks" data-bs-toggle="tab"
+                data-bs-target="#hpane-databricks" type="button" role="tab"
+                aria-controls="hpane-databricks" aria-selected="true">
+            <i class="bi bi-database me-1"></i> Databricks
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="htab-diagnostics" data-bs-toggle="tab"
+                data-bs-target="#hpane-diagnostics" type="button" role="tab"
+                aria-controls="hpane-diagnostics" aria-selected="false">
+            <i class="bi bi-stethoscope me-1"></i> Diagnostics
+        </button>
+    </li>
+</ul>
 
-<div id="healthKpiTiles" class="row g-3 mb-3 d-none">
-    <div class="col">
-        <div class="ob-kpi-tile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-list-check"></i></div>
-            <div class="ob-kpi-tile-value" id="healthTotalCount">0</div>
-            <div class="ob-kpi-tile-label">Total Checks</div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="ob-kpi-tile tile-accent-success">
-            <div class="ob-kpi-tile-icon text-success"><i class="bi bi-check-circle-fill"></i></div>
-            <div class="ob-kpi-tile-value text-success" id="healthOkCount">0</div>
-            <div class="ob-kpi-tile-label">Passed</div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="ob-kpi-tile tile-accent-warning">
-            <div class="ob-kpi-tile-icon text-warning"><i class="bi bi-exclamation-triangle-fill"></i></div>
-            <div class="ob-kpi-tile-value text-warning" id="healthWarningCount">0</div>
-            <div class="ob-kpi-tile-label">Warnings</div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="ob-kpi-tile tile-accent-danger">
-            <div class="ob-kpi-tile-icon text-danger"><i class="bi bi-x-circle-fill"></i></div>
-            <div class="ob-kpi-tile-value text-danger" id="healthErrorCount">0</div>
-            <div class="ob-kpi-tile-label">Errors</div>
-        </div>
-    </div>
-</div>
+<div class="tab-content ob-tab-content" id="healthTabContent">
 
-<div id="healthChecksContainer">
-    <div class="text-center text-muted small py-4">
-        <span class="spinner-border spinner-border-sm me-1"></span>
-        Running readiness probes…
-    </div>
-</div>
+    <!-- ══════════════════════════════════════════════════════
+         TAB 1 · Databricks — readiness probes (GET /health)
+         ══════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade show active" id="hpane-databricks" role="tabpanel"
+         aria-labelledby="htab-databricks">
 
-<p class="text-muted small mt-3 mb-0">
-    <i class="bi bi-info-circle me-1"></i>
-    The same JSON is available at <a href="/health" target="_blank"><code>/health</code></a>
-    for external uptime probes; <code>/health</code> is anonymous and bypasses
-    permission, CSRF and timing middleware.
-</p>
+        <div class="alert alert-info small d-flex align-items-start mb-3" role="alert">
+            <i class="bi bi-info-circle me-2 mt-1"></i>
+            <div>
+                Live readiness probes for every dependency the application needs to run:
+                <code>/tmp</code>, session and log directories, Databricks authentication,
+                SQL warehouse, CloudFetch capability, registry UC volume (read + write),
+                registry catalog/schema DDL and Lakebase.
+                This is the same payload that <code>GET /health</code> returns to external
+                load-balancer and uptime probes — overall <code>status</code> is the worst
+                severity across all probes.
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">
+                <i class="bi bi-heart-pulse me-1"></i> Application readiness
+                <span id="healthOverallBadge" class="badge bg-secondary ms-2">Pending</span>
+            </h6>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    id="btnRefreshHealth" title="Re-run all readiness probes">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+            </button>
+        </div>
+
+        <div id="healthKpiTiles" class="row g-3 mb-3 d-none">
+            <div class="col">
+                <div class="ob-kpi-tile">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-list-check"></i></div>
+                    <div class="ob-kpi-tile-value" id="healthTotalCount">0</div>
+                    <div class="ob-kpi-tile-label">Total Checks</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="ob-kpi-tile tile-accent-success">
+                    <div class="ob-kpi-tile-icon text-success"><i class="bi bi-check-circle-fill"></i></div>
+                    <div class="ob-kpi-tile-value text-success" id="healthOkCount">0</div>
+                    <div class="ob-kpi-tile-label">Passed</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="ob-kpi-tile tile-accent-warning">
+                    <div class="ob-kpi-tile-icon text-warning"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                    <div class="ob-kpi-tile-value text-warning" id="healthWarningCount">0</div>
+                    <div class="ob-kpi-tile-label">Warnings</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="ob-kpi-tile tile-accent-danger">
+                    <div class="ob-kpi-tile-icon text-danger"><i class="bi bi-x-circle-fill"></i></div>
+                    <div class="ob-kpi-tile-value text-danger" id="healthErrorCount">0</div>
+                    <div class="ob-kpi-tile-label">Errors</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="healthChecksContainer">
+            <div class="text-center text-muted small py-4">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Click <strong>Refresh</strong> to run readiness probes.
+            </div>
+        </div>
+
+        <p class="text-muted small mt-3 mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            The same JSON is available at
+            <a href="/health" target="_blank"><code>/health</code></a>
+            for external uptime probes; <code>/health</code> is anonymous and bypasses
+            permission, CSRF and timing middleware.
+        </p>
+    </div><!-- /#hpane-databricks -->
+
+    <!-- ══════════════════════════════════════════════════════
+         TAB 2 · Diagnostics — grouped deep-dive checks
+         ══════════════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="hpane-diagnostics" role="tabpanel"
+         aria-labelledby="htab-diagnostics">
+
+        <div class="alert alert-info small d-flex align-items-start mb-3" role="alert">
+            <i class="bi bi-stethoscope me-2 mt-1"></i>
+            <div>
+                Deep-dive diagnostics grouped by subsystem — checks Unity Catalog privileges
+                (USE CATALOG, USE SCHEMA, CREATE VIEW, READ/WRITE VOLUME), Lakebase registry
+                tables and Postgres permissions, Graph DB schema and table permissions, and
+                Delta triple-store objects and Accelerated Sync availability.
+                Each group includes a description of what is required and what to do if a
+                check fails.
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">
+                <i class="bi bi-stethoscope me-1"></i> Subsystem diagnostics
+                <span id="diagOverallBadge" class="badge bg-secondary ms-2">Pending</span>
+            </h6>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    id="btnRefreshDiagnostics" title="Re-run all diagnostic checks">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+            </button>
+        </div>
+
+        <div id="diagKpiTiles" class="row g-3 mb-3 d-none">
+            <div class="col">
+                <div class="ob-kpi-tile">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-list-check"></i></div>
+                    <div class="ob-kpi-tile-value" id="diagTotalCount">0</div>
+                    <div class="ob-kpi-tile-label">Total Checks</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="ob-kpi-tile tile-accent-success">
+                    <div class="ob-kpi-tile-icon text-success"><i class="bi bi-check-circle-fill"></i></div>
+                    <div class="ob-kpi-tile-value text-success" id="diagOkCount">0</div>
+                    <div class="ob-kpi-tile-label">Passed</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="ob-kpi-tile tile-accent-warning">
+                    <div class="ob-kpi-tile-icon text-warning"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                    <div class="ob-kpi-tile-value text-warning" id="diagWarningCount">0</div>
+                    <div class="ob-kpi-tile-label">Warnings</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="ob-kpi-tile tile-accent-danger">
+                    <div class="ob-kpi-tile-icon text-danger"><i class="bi bi-x-circle-fill"></i></div>
+                    <div class="ob-kpi-tile-value text-danger" id="diagErrorCount">0</div>
+                    <div class="ob-kpi-tile-label">Errors</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="diagChecksContainer">
+            <div class="text-center text-muted small py-4">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Click <strong>Refresh</strong> to run diagnostic checks.
+            </div>
+        </div>
+    </div><!-- /#hpane-diagnostics -->
+
+</div><!-- /#healthTabContent -->

@@ -1304,6 +1304,33 @@ async def release_edit_lock_admin(
 
 
 # ===========================================
+# Diagnostics
+# ===========================================
+
+
+@router.get(
+    "/diagnostics",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def run_diagnostics(settings: Settings = Depends(get_settings)):
+    """Run grouped diagnostic checks for all application subsystems (admin only).
+
+    Returns four check groups:
+
+    * **Unity Catalog — Registry** — catalog/schema/volume access + DDL privileges
+    * **Lakebase — Registry** — Postgres connection, registry tables, permissions
+    * **Lakebase — Graph DB** — graph schema connectivity, tables, permissions
+    * **Delta Triple Store** — Delta warehouse, UC objects, Accelerated Sync
+
+    Each group contains individual ``{name, label, status, detail, duration_ms}``
+    checks that mirror the shape used by ``GET /health``.
+    """
+    from shared.fastapi.health import run_diagnostics_checks
+
+    return await run_blocking(run_diagnostics_checks, settings)
+
+
+# ===========================================
 # Application Logs
 # ===========================================
 

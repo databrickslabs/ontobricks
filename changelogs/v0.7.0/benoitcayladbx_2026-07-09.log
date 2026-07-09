@@ -46,3 +46,133 @@ Lakebase/Delta sections are opened, or just-in-time before a Lakebase Save.
 - `src/front/static/config/js/settings.js`
 
 Tests: front-end only change (no Python impact); `uv run pytest -q -m "not scenario"` unaffected.
+
+---
+
+## Feature: Settings → Health page — 2-tab layout (Databricks + Diagnostics)
+
+Context: The existing Settings → Health section showed a flat list of readiness
+probes from `GET /health`. Requested: split it into two tabs — one for the
+existing Databricks probes and a new Diagnostics tab with comprehensive,
+grouped checks for every subsystem (UC privileges, Lakebase registry tables,
+Graph DB, Delta), each with an explanation of what is required and what to do
+if a check fails.
+
+### Changes
+
+1. `src/shared/fastapi/health.py`
+   - Added `_check_uc_catalog_privileges()` — verifies USE CATALOG on the
+     registry catalog (tries `get_schemas(catalog)`).
+   - Added `_check_uc_schema_privileges()` — verifies USE SCHEMA on the
+     registry schema (tries `list_tables_and_views(catalog, schema)`).
+   - Added `_check_lakebase_registry_tables()` — queries `information_schema`
+     to verify all 14 expected registry tables exist; distinguishes core
+     (blocking) vs optional (advisory) tables.
+   - Added `_check_graphdb_tables()` — reports table/view count in the
+     configured graph DB schema.
+   - Added `_check_graphdb_permissions()` — verifies USAGE + SELECT/INSERT/
+     UPDATE/DELETE on graph DB tables for the connecting role.
+   - Added `_check_delta_warehouse()` — checks whether the Delta warehouse is
+     configured and reachable (skips gracefully when Delta is not the active
+     backend).
+   - Added `_check_delta_objects_exist()` — counts VIEWs and _data tables in
+     the registry UC schema for the Delta backend.
+   - Added `run_diagnostics_checks()` — returns four subsystem groups
+     (Unity Catalog — Registry, Lakebase — Registry, Lakebase — Graph DB,
+     Delta Triple Store) each with `{id, title, description, checks}` plus a
+     top-level summary and overall `status`.
+
+2. `src/api/routers/internal/settings.py`
+   - Added `GET /settings/diagnostics` (admin-only) backed by
+     `run_diagnostics_checks(settings)`.
+
+3. `src/front/templates/partials/settings/_settings_health.html`
+   - Replaced flat content with a two-tab layout:
+     - **Databricks** tab — existing KPI tiles + check table fed by
+       `GET /health`.
+     - **Diagnostics** tab — KPI tiles + group cards fed by
+       `GET /settings/diagnostics`.
+
+4. `src/front/static/config/js/settings-health.js`
+   - Rewrote to manage both tabs:
+     - `loadHealth()` — unchanged logic for the Databricks tab.
+     - `loadDiagnostics()` — fetches `/settings/diagnostics`, renders group
+       cards (card header with pass/fail count badge + group icon, description
+       paragraph, check rows).
+     - Lazy-loads each tab on first `shown.bs.tab` event; refresh buttons
+       reset the `loaded` flag and re-fetch.
+     - Handles 403 on diagnostics (non-admin) gracefully.
+
+### Modified files
+
+- `src/shared/fastapi/health.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/templates/partials/settings/_settings_health.html`
+- `src/front/static/config/js/settings-health.js`
+
+Tests: `uv run pytest -q -m "not scenario"` — 3204 passed, 275 skipped.
+
+---
+
+## Fix: Health → Diagnostics — fill gaps in prerequisite coverage
+
+Context: Audit of the new Diagnostics tab revealed 7 gaps where silent
+failures would not surface clearly: psycopg driver, PG* env vars, CREATE TABLE
+vs just CREATE VIEW, sequences existence vs just permissions, registry row
+existence, lazy domain_change_events table explanation, and missing CREATE TABLE
+probe for Delta.
+
+### Changes
+
+1. `src/shared/fastapi/health.py`
+   - Added `_check_uc_create_table_privilege()` — tests `CREATE TABLE IF NOT EXISTS
+     ... USING DELTA` + `DROP TABLE` in the registry schema (distinct from the
+     CREATE VIEW probe since grants can differ).
+   - Added `_check_lakebase_env_vars()` — explicitly reports PGHOST, PGDATABASE,
+     PGUSER presence/absence; also recognises LAKEBASE_PROJECT + LAKEBASE_BRANCH
+     local-dev alternatives; gives exact fix instructions per scenario.
+   - Added `_check_lakebase_psycopg()` — verifies psycopg v3 is importable;
+     reports version; gives install command if missing.
+   - Added `_check_lakebase_registry_initialized()` — dedicated probe for the
+     registry row in the 'registries' table (catalog/schema/volume stored there);
+     distinguishes no_registry_row / no_registries_table / no_usage.
+   - Updated `_check_lakebase_registry_tables()`:
+     - Now queries sequences alongside tables.
+     - Distinguishes core (blocking) / optional (advisory) / lazy (expected absent)
+       table tiers; `domain_change_events` is documented as lazy.
+     - Expected sequences: schedule_runs_id_seq, build_runs_id_seq,
+       graph_analytics_runs_id_seq — reports missing sequences as warnings.
+   - Updated `run_diagnostics_checks()` to include new probes in ordered groups:
+     UC group gains `uc.table_ddl`; Lakebase group gains `lakebase.psycopg`,
+     `lakebase.env_vars`, `lakebase.initialized` (and reorders for logical flow).
+     Group descriptions updated with numbered prerequisites.
+
+### Modified files
+
+- `src/shared/fastapi/health.py`
+
+Tests: `uv run pytest -q -m "not scenario" tests/units/core/test_health.py
+tests/units/settings/` — 33 + 143 passed.
+
+## Health diagnostics — no auto-run + Graph DB permission fixes
+
+### Context
+Two follow-up fixes to the Health page introduced earlier today:
+1. Both tabs (Databricks + Diagnostics) were auto-loading on navigation — changed to require explicit Refresh.
+2. The Graph DB diagnostic was silently ignoring the `CREATE` privilege on the Postgres schema and had no check for the `managed_synced` UC catalog grant.
+
+### Changes
+1. `src/front/static/config/js/settings-health.js` — removed `sidebarSectionChanged` auto-trigger and both `shown.bs.tab` auto-loaders; Refresh buttons are now the only entry point. Removed stale `healthLoaded`/`diagnosticsLoaded` flag assignments.
+2. `src/front/templates/partials/settings/_settings_health.html` — idle state in both tabs now shows "Click Refresh to run…" instead of a spinner.
+3. `src/shared/fastapi/health.py`:
+   - `_check_graphdb_permissions`: `has_create` was fetched but never checked; now included in `missing` list — failing if the SP lacks `CREATE` on the graph schema (needed to create triple tables per KG build).
+   - New `_check_graphdb_uc_catalog`: for `managed_synced` mode, checks `ALL_PRIVILEGES` on `sync_uc_catalog` via the UC permissions API; returns OK/informational when `sync_mode != managed_synced`.
+   - `run_diagnostics_checks`: registered `graphdb.uc_catalog` in the Graph DB group; updated group description to document the `CREATE` schema and UC catalog requirements.
+
+### Modified files
+- `src/front/static/config/js/settings-health.js`
+- `src/front/templates/partials/settings/_settings_health.html`
+- `src/shared/fastapi/health.py`
+
+### Test result
+`uv run pytest -q -m "not scenario"` — 3204 passed, 275 skipped.
