@@ -176,3 +176,27 @@ Two follow-up fixes to the Health page introduced earlier today:
 
 ### Test result
 `uv run pytest -q -m "not scenario"` — 3204 passed, 275 skipped.
+
+---
+
+## Fix: Claude serving endpoints — flatten list-style message content
+
+Context: Databricks Claude serving endpoints (`databricks-claude-*`) return
+`choices[0].message.content` as a list of content blocks instead of a plain
+string. `extract_message_content` passed that through, so downstream `.strip()`
+calls crashed (`'list' object has no attribute 'strip'`), breaking Ontology
+Wizard → Generate and Mapping → Auto-Map. Cherry-picked from community PR #109
+(author: [@a-niehaus](https://github.com/a-niehaus), fixes #107).
+
+### Changes
+
+1. `src/agents/engine_base.py`
+   - Flatten list content blocks to a single string in `extract_message_content`;
+     OpenAI/Gemini string responses unchanged.
+
+### Modified files
+
+- `src/agents/engine_base.py`
+
+Tests: `uv run pytest -q tests/units/agents/test_agent_engine_base.py` — 22 passed.
+Full suite: 3187 passed, 2 failed, 15 errors (pre-existing, unrelated to this change).
