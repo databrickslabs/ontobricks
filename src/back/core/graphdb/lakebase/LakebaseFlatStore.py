@@ -37,8 +37,42 @@ _BULK_DELETE_THRESHOLD = 50
 _COPY_INSERT_TEMP = "_ob_copy_stage"
 _COPY_DELETE_TEMP = "_ob_del_stage"
 
+# Postgres btree version-4 index entry limit (bytes).
+_PG_BTREE_INDEX_MAX_BYTES = 2704
+
 SYNC_MODE_APP = "app_managed"
 SYNC_MODE_MANAGED = "managed_synced"
+
+
+def _is_index_row_size_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    if "index row size" in msg and "btree" in msg:
+        return True
+    return exc.__class__.__name__ == "ProgramLimitExceeded"
+
+
+def _long_literal_detail(batch: List[Dict[str, str]]) -> str:
+    worst = max(
+        batch,
+        key=lambda t: len((t.get("object") or "").encode("utf-8")),
+    )
+    obj_bytes = len((worst.get("object") or "").encode("utf-8"))
+    predicate = worst.get("predicate") or "?"
+    return f"predicate={predicate!r}, object_size={obj_bytes} bytes"
+
+
+def _reraise_lakebase_index_limit(
+    exc: BaseException, batch: List[Dict[str, str]]
+) -> None:
+    if not _is_index_row_size_error(exc):
+        raise exc
+    detail = _long_literal_detail(batch)
+    raise InfrastructureError(
+        "Lakebase triple insert failed: a literal object exceeds the Postgres "
+        f"btree index size limit ({detail}). Run a full Knowledge Graph rebuild "
+        "to apply the object_hash schema, or exclude very long text columns "
+        "from mapping."
+    ) from exc
 
 
 class LakebaseFlatStore(LakebaseBase):
@@ -393,6 +427,31 @@ class LakebaseFlatStore(LakebaseBase):
             f"ALTER TABLE {phy} ADD COLUMN IF NOT EXISTS datatype TEXT"
         )
         cur.execute(f"ALTER TABLE {phy} ADD COLUMN IF NOT EXISTS lang TEXT")
+        self._warn_legacy_object_pk(cur, phy)
+
+    @staticmethod
+    def _warn_legacy_object_pk(cur: Any, phy: str) -> None:
+        """Log when an existing table still keys on full ``object`` text."""
+        bare = phy.split(".")[-1].strip('"')
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = ANY(current_schemas(false))
+              AND table_name = %s
+              AND column_name = 'object_hash'
+            LIMIT 1
+            """,
+            (bare,),
+        )
+        if cur.fetchone() is None:
+            logger.warning(
+                "Lakebase table %s uses the legacy PRIMARY KEY (subject, predicate, object) "
+                "and cannot store literal objects longer than %d bytes. "
+                "Run a full Knowledge Graph rebuild to migrate to object_hash.",
+                phy,
+                _PG_BTREE_INDEX_MAX_BYTES,
+            )
 
     @staticmethod
     def _require_pg():
@@ -520,33 +579,36 @@ class LakebaseFlatStore(LakebaseBase):
         """
         if not batch:
             return 0
-        with self._txn_cursor() as (_, cur):
-            cur.execute(
-                f"CREATE TEMP TABLE {_COPY_INSERT_TEMP} ("
-                "subject TEXT, predicate TEXT, object TEXT, "
-                "datatype TEXT, lang TEXT) ON COMMIT DROP"
-            )
-            copy_sql = (
-                f"COPY {_COPY_INSERT_TEMP} "
-                "(subject, predicate, object, datatype, lang) FROM STDIN"
-            )
-            with cur.copy(copy_sql) as cp:
-                for t in batch:
-                    dt, lg = self._literal_meta(t)
-                    cp.write_row(
-                        (
-                            (t.get("subject", "") or ""),
-                            (t.get("predicate", "") or ""),
-                            (t.get("object", "") or ""),
-                            dt,
-                            lg,
+        try:
+            with self._txn_cursor() as (_, cur):
+                cur.execute(
+                    f"CREATE TEMP TABLE {_COPY_INSERT_TEMP} ("
+                    "subject TEXT, predicate TEXT, object TEXT, "
+                    "datatype TEXT, lang TEXT) ON COMMIT DROP"
+                )
+                copy_sql = (
+                    f"COPY {_COPY_INSERT_TEMP} "
+                    "(subject, predicate, object, datatype, lang) FROM STDIN"
+                )
+                with cur.copy(copy_sql) as cp:
+                    for t in batch:
+                        dt, lg = self._literal_meta(t)
+                        cp.write_row(
+                            (
+                                (t.get("subject", "") or ""),
+                                (t.get("predicate", "") or ""),
+                                (t.get("object", "") or ""),
+                                dt,
+                                lg,
+                            )
                         )
-                    )
-            cur.execute(
-                f"INSERT INTO {phy} (subject, predicate, object, datatype, lang) "
-                f"SELECT subject, predicate, object, datatype, lang "
-                f"FROM {_COPY_INSERT_TEMP} ON CONFLICT DO NOTHING"
-            )
+                cur.execute(
+                    f"INSERT INTO {phy} (subject, predicate, object, datatype, lang) "
+                    f"SELECT subject, predicate, object, datatype, lang "
+                    f"FROM {_COPY_INSERT_TEMP} ON CONFLICT DO NOTHING"
+                )
+        except Exception as exc:
+            _reraise_lakebase_index_limit(exc, batch)
         return len(batch)
 
     def _copy_insert_batch(

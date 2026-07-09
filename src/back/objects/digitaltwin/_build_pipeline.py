@@ -508,8 +508,15 @@ class _BuildPipeline:
         )
         try:
             catalog, schema, vname = self.parts
+            view_sql = self.spark_sql
+            if self._lakebase_managed_synced():
+                from back.core.graphdb.lakebase._companion_ddl import (
+                    wrap_triple_view_sql_for_lakeflow,
+                )
+
+                view_sql = wrap_triple_view_sql_for_lakeflow(view_sql)
             view_ok, view_msg = self.source_client.create_or_replace_view(
-                catalog, schema, vname, self.spark_sql
+                catalog, schema, vname, view_sql
             )
             if not view_ok:
                 if self.is_api:
@@ -888,10 +895,14 @@ class _BuildPipeline:
                 self.view_table,
                 self.store.sync_table_mode,
             )
+            from back.core.graphdb.lakebase._companion_ddl import (
+                LAKEFLOW_SYNC_PRIMARY_KEY,
+            )
+
             _synced_obj = mgr.ensure(
                 synced_uc,
                 source_table_full_name=self.view_table,
-                primary_key_columns=["subject", "predicate", "object"],
+                primary_key_columns=list(LAKEFLOW_SYNC_PRIMARY_KEY),
                 sync_mode=self.store.sync_table_mode,
             )
             # ensure() may have used a fallback name (ghost control-plane state);
@@ -1389,8 +1400,24 @@ class _BuildPipeline:
             duration,
             exc,
         )
-        if self.is_api:
-            self.tm.fail_task(self.task_id, str(exc))
-        else:
-            self.tm.fail_task(self.task_id, "Triple store sync failed")
+        self.tm.fail_task(self.task_id, self._sync_failure_message(exc))
         self._record_build_run("error", error=str(exc))
+
+    def _sync_failure_message(self, exc: Exception) -> str:
+        from back.core.errors import InfrastructureError
+        from back.core.graphdb.lakebase.LakebaseFlatStore import (
+            _is_index_row_size_error,
+        )
+
+        if isinstance(exc, InfrastructureError):
+            return str(exc)
+        if _is_index_row_size_error(exc):
+            return (
+                "Triple store sync failed: a mapped literal object exceeds the "
+                "Postgres btree index size limit. Run a full Knowledge Graph rebuild "
+                "to apply the object_hash schema fix, or exclude very long text "
+                "columns from mapping."
+            )
+        if self.is_api:
+            return str(exc)
+        return f"Triple store sync failed: {exc}"

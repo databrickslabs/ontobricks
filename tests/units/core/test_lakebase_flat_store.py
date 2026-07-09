@@ -7,6 +7,7 @@ import pytest
 
 pytest.importorskip("psycopg")
 
+from back.core.errors import InfrastructureError
 from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
 
 
@@ -77,6 +78,9 @@ def test_create_table_issues_schema_ddl_and_indexes(auth):
     # Union view must be created.
     assert any("CREATE OR REPLACE VIEW" in s and "mydomain_v1" in s for s in executed)
     assert any("CREATE INDEX" in s for s in executed)
+    assert any("CREATE EXTENSION IF NOT EXISTS pgcrypto" in s for s in executed)
+    assert any("object_hash" in s and "digest" in s for s in create_tables)
+    assert any("PRIMARY KEY (subject, predicate, object_hash)" in s for s in create_tables)
 
 
 def test_writable_table_id_is_companion_for_app_managed(auth):
@@ -693,4 +697,37 @@ class TestResolveSyncUcFallbackCatalog:
                 {"catalog": "benoit_cayla"},
             )
         assert out == "legacy_catalog"
+
+
+def test_copy_insert_batch_phy_reraises_index_limit_with_predicate_detail(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    long_object = "x" * 4000
+    batch = [
+        {
+            "subject": "http://ex/s",
+            "predicate": "http://ex/longMessage",
+            "object": long_object,
+        }
+    ]
+
+    class _ProgramLimitExceeded(Exception):
+        pass
+
+    def _boom(*_args, **_kwargs):
+        raise _ProgramLimitExceeded(
+            'index row size 7480 exceeds btree version 4 maximum 2704 for index "g_v1_sync_pkey"'
+        )
+
+    with patch.object(store, "_txn_cursor", side_effect=_boom):
+        with pytest.raises(InfrastructureError, match="predicate='http://ex/longMessage'"):
+            store._copy_insert_batch_phy("g_v1_sync", batch)
+
+
+def test_wrap_triple_view_sql_for_lakeflow_adds_object_hash():
+    from back.core.graphdb.lakebase._companion_ddl import wrap_triple_view_sql_for_lakeflow
+
+    inner = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
+    wrapped = wrap_triple_view_sql_for_lakeflow(inner)
+    assert "sha2(cast(object AS string), 256) AS object_hash" in wrapped
+    assert wrapped.endswith("FROM (SELECT 's' AS subject, 'p' AS predicate, 'o' AS object) AS _ob_triples")
 

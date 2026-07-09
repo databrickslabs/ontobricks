@@ -1069,10 +1069,12 @@ def _apply_synced_pipeline(
         synced_uc,
         task_log_prefix=f"Scheduled build [{domain_name}]",
     )
+    from back.core.graphdb.lakebase._companion_ddl import LAKEFLOW_SYNC_PRIMARY_KEY
+
     mgr.ensure(
         synced_uc,
         source_table_full_name=view_table,
-        primary_key_columns=["subject", "predicate", "object"],
+        primary_key_columns=list(LAKEFLOW_SYNC_PRIMARY_KEY),
         sync_mode=store.sync_table_mode,
     )
     store.ensure_synced_companion(graph_name)

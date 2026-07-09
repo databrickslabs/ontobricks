@@ -23,6 +23,31 @@ from typing import Any
 
 from back.core.helpers import safe_identifier
 
+# Lakeflow synced-table PK (object_hash comes from the Delta warehouse view).
+LAKEFLOW_SYNC_PRIMARY_KEY: tuple[str, ...] = (
+    "subject",
+    "predicate",
+    "object_hash",
+)
+
+_TRIPLE_TABLE_COLUMNS = """
+            subject TEXT NOT NULL,
+            predicate TEXT NOT NULL,
+            object TEXT NOT NULL,
+            object_hash BYTEA GENERATED ALWAYS AS (
+                digest(coalesce(object, ''), 'sha256')
+            ) STORED,
+            datatype TEXT,
+            lang TEXT,
+            PRIMARY KEY (subject, predicate, object_hash)
+"""
+
+_TRIPLE_TABLE_INDEXES: tuple[tuple[str, str], ...] = (
+    ("sp", "subject, predicate"),
+    ("po", "predicate, object_hash"),
+    ("oph", "object_hash, predicate"),
+)
+
 
 def _safe(name: str) -> str:
     return (safe_identifier(name) or "triples").lower()
@@ -52,6 +77,37 @@ def _idx_name(table: str, suffix: str) -> str:
     return base[:63]
 
 
+def ensure_pgcrypto(cur: Any) -> None:
+    """Enable ``digest()`` for generated ``object_hash`` columns."""
+    cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+
+
+def wrap_triple_view_sql_for_lakeflow(spark_sql: str) -> str:
+    """Wrap translated Spark SQL so the view exposes ``object_hash`` for Lakeflow."""
+    inner = spark_sql.strip().rstrip(";")
+    return (
+        "SELECT subject, predicate, object, "
+        "sha2(cast(object AS string), 256) AS object_hash "
+        f"FROM ({inner}) AS _ob_triples"
+    )
+
+
+def _create_triple_table(cur: Any, schema: str, table: str) -> None:
+    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {table} (
+        {_TRIPLE_TABLE_COLUMNS}
+        )
+        """
+    )
+    for sfx, cols in _TRIPLE_TABLE_INDEXES:
+        cur.execute(
+            f"CREATE INDEX IF NOT EXISTS {_idx_name(table, sfx)} "
+            f"ON {table} ({cols})"
+        )
+
+
 def ensure_synced(cur: Any, schema: str, synced: str) -> None:
     """Create the *_sync bulk-data table + standard B-tree indexes if absent.
 
@@ -59,28 +115,8 @@ def ensure_synced(cur: Any, schema: str, synced: str) -> None:
     warehouse-streamed triples.  In ``managed_synced`` mode this table is
     created by Lakebase/Lakeflow instead.
     """
-    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
-    cur.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {synced} (
-            subject TEXT NOT NULL,
-            predicate TEXT NOT NULL,
-            object TEXT NOT NULL,
-            datatype TEXT,
-            lang TEXT,
-            PRIMARY KEY (subject, predicate, object)
-        )
-        """
-    )
-    for sfx, cols in (
-        ("sp", "subject, predicate"),
-        ("po", "predicate, object"),
-        ("ops", "object, predicate"),
-    ):
-        cur.execute(
-            f"CREATE INDEX IF NOT EXISTS {_idx_name(synced, sfx)} "
-            f"ON {synced} ({cols})"
-        )
+    ensure_pgcrypto(cur)
+    _create_triple_table(cur, schema, synced)
 
 
 _LAKEFLOW_SYNC_OWNER_PREFIX = "databricks_writer"
@@ -120,28 +156,8 @@ def drop_synced(cur: Any, synced: str) -> None:
 
 def ensure_companion(cur: Any, schema: str, companion: str) -> None:
     """Create the writable companion table + standard B-tree indexes if absent."""
-    cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
-    cur.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {companion} (
-            subject TEXT NOT NULL,
-            predicate TEXT NOT NULL,
-            object TEXT NOT NULL,
-            datatype TEXT,
-            lang TEXT,
-            PRIMARY KEY (subject, predicate, object)
-        )
-        """
-    )
-    for sfx, cols in (
-        ("sp", "subject, predicate"),
-        ("po", "predicate, object"),
-        ("ops", "object, predicate"),
-    ):
-        cur.execute(
-            f"CREATE INDEX IF NOT EXISTS {_idx_name(companion, sfx)} "
-            f"ON {companion} ({cols})"
-        )
+    ensure_pgcrypto(cur)
+    _create_triple_table(cur, schema, companion)
 
 
 def ensure_union_view(

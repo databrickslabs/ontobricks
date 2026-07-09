@@ -359,6 +359,22 @@ All SPARQL queries and graph traversal operations target the back-compat name
 3. `app_managed`: `DROP TABLE IF EXISTS g_<domain>_v<n>_sync` (sync table)
    `managed_synced`: `SyncedTableManager.delete(uc_name, purge_data=True)` — removes the UC synced-table registration and the underlying Postgres `_sync` table
 
+### 6.4 — Long literal objects (`object_hash`)
+
+Postgres btree indexes (including the composite primary key) cannot index TEXT
+values longer than ~2704 bytes. OntoBricks therefore stores the full `object`
+literal for reads/deletes but keys uniqueness on a generated `object_hash`
+column (`digest(object, 'sha256')` via the `pgcrypto` extension).
+
+- **`app_managed`**: `*_sync` and `*__app` tables are created with
+  `PRIMARY KEY (subject, predicate, object_hash)`.
+- **`managed_synced`**: the Delta warehouse VIEW exposes `object_hash`
+  (`sha2(object, 256)`) and Lakeflow uses
+  `primary_key_columns = [subject, predicate, object_hash]`.
+
+Graphs created before this layout need a **full Knowledge Graph rebuild** (drop
++ recreate) to pick up the new schema.
+
 ---
 
 ## 7. Scripts reference

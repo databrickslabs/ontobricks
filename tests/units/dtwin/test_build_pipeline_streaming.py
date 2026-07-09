@@ -183,7 +183,7 @@ class TestApplyViaSyncedPipeline:
         assert ensure_kwargs["primary_key_columns"] == [
             "subject",
             "predicate",
-            "object",
+            "object_hash",
         ]
         assert ensure_kwargs["sync_mode"] == "snapshot"
         pipe.store.ensure_synced_companion.assert_called_once_with(pipe.graph_name)
