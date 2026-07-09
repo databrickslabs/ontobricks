@@ -482,13 +482,22 @@ class LakebaseFlatStore(LakebaseBase):
                 cur.execute(f'SET search_path TO "{self._schema}", public')
                 # Bound graph reads so a runaway traversal is cancelled
                 # server-side instead of pinning the connection (and, via the
-                # loopback agent, the event loop). Reset by ``_cursor`` for the
-                # DDL path which may legitimately run longer.
+                # loopback agent, the event loop).
+                #
+                # The pool hands out ``autocommit=True`` connections, so this is
+                # a *session* GUC that would otherwise persist to the next
+                # borrower (e.g. a bulk COPY/INSERT or DDL path) and cancel it
+                # mid-write. Reset it in ``finally`` so the bound is scoped to
+                # this read only. In autocommit mode a statement_timeout cancel
+                # leaves no open transaction to abort, so the RESET runs cleanly.
                 cur.execute(f"SET statement_timeout = {int(timeout_ms)}")
-                cur.execute(query)
-                if cur.description:
-                    return [dict(row) for row in cur.fetchall()]
-                return []
+                try:
+                    cur.execute(query)
+                    if cur.description:
+                        return [dict(row) for row in cur.fetchall()]
+                    return []
+                finally:
+                    cur.execute("RESET statement_timeout")
 
     def find_subjects_by_patterns(
         self, table_name: str, like_patterns: List[str]

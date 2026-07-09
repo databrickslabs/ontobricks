@@ -20,6 +20,8 @@ from typing import Any, Dict, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.query_limits import (
+    get_graph_chat_result_cap as _effective_result_cap,
+    get_graph_query_timeout_s as _effective_timeout_s,
     set_graph_chat_result_cap_override,
     set_graph_query_timeout_override,
 )
@@ -405,15 +407,16 @@ class GlobalConfigService:
     ) -> int:
         """Return the effective graph-read statement timeout (seconds).
 
-        Returns the persisted admin value when set, otherwise the
-        env-var / built-in default resolved by :mod:`back.core.query_limits`.
+        The persisted admin value is re-applied through the central clamp in
+        :mod:`back.core.query_limits` so the Settings UI shows the same
+        (bounded) value the database actually enforces — never a stale
+        out-of-range number.
         """
-        from back.core.query_limits import get_graph_query_timeout_s as _effective
-
         val = self.get(host, token, registry_cfg, "graph_query_timeout_s", "")
-        if val and str(val).isdigit() and int(val) > 0:
-            return int(val)
-        return _effective()
+        s = str(val).strip() if val is not None else ""
+        if s.isdigit():
+            set_graph_query_timeout_override(int(s) or None)
+        return _effective_timeout_s()
 
     def set_graph_query_timeout_s(
         self,
@@ -425,20 +428,26 @@ class GlobalConfigService:
         """Persist and apply the graph-read statement timeout (``0`` = unset)."""
         seconds = max(0, int(seconds))
         set_graph_query_timeout_override(seconds or None)
+        # Persist the clamped effective value (not the raw input) so config and
+        # the Settings UI can never show a timeout the database won't honour.
+        to_save = 0 if seconds <= 0 else _effective_timeout_s()
         return self._save(
-            host, token, registry_cfg, {"graph_query_timeout_s": seconds}
+            host, token, registry_cfg, {"graph_query_timeout_s": to_save}
         )
 
     def get_graph_chat_result_cap(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> int:
-        """Return the effective Graph Chat triple result cap."""
-        from back.core.query_limits import get_graph_chat_result_cap as _effective
+        """Return the effective Graph Chat triple result cap.
 
+        Re-applies the persisted admin value through the central clamp so the
+        Settings UI shows the same bounded cap that is actually enforced.
+        """
         val = self.get(host, token, registry_cfg, "graph_chat_result_cap", "")
-        if val and str(val).isdigit() and int(val) > 0:
-            return int(val)
-        return _effective()
+        s = str(val).strip() if val is not None else ""
+        if s.isdigit():
+            set_graph_chat_result_cap_override(int(s) or None)
+        return _effective_result_cap()
 
     def set_graph_chat_result_cap(
         self,
@@ -450,8 +459,11 @@ class GlobalConfigService:
         """Persist and apply the Graph Chat triple result cap (``0`` = unset)."""
         count = max(0, int(count))
         set_graph_chat_result_cap_override(count or None)
+        # Persist the clamped effective value so config/UI stay consistent with
+        # the enforced cap.
+        to_save = 0 if count <= 0 else _effective_result_cap()
         return self._save(
-            host, token, registry_cfg, {"graph_chat_result_cap": count}
+            host, token, registry_cfg, {"graph_chat_result_cap": to_save}
         )
 
     def get_edit_lock_ttl_s(

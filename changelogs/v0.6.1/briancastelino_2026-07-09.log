@@ -99,10 +99,29 @@ an app-wide freeze. Trade-off: on an unindexed large graph a legitimate read may
 now hit the default 60s timeout and be cancelled; the admin knob (≤900s) covers
 that until #112/#115 land.
 
+### Review fixups (Copilot, PR #116)
+- **[High] Lakebase statement_timeout leak.** The pool hands out
+  `autocommit=True` connections, so the per-read `SET statement_timeout` in
+  `LakebaseFlatStore.execute_query` persisted to the next borrower and could
+  cancel a bulk COPY/INSERT or DDL mid-write. Now wrapped in `try/finally` with
+  `RESET statement_timeout` so the bound is scoped to the read (safe in
+  autocommit — a timeout cancel leaves no open transaction to abort).
+- **[Med] Settings input validation.** `save-graph-limits` `_opt_int` now raises
+  `ValidationError` on non-integer input instead of letting `int()` bubble as a
+  500.
+- **[Med] Config/UI vs runtime consistency.** `GlobalConfigService`
+  get/set for `graph_query_timeout_s` and `graph_chat_result_cap` now route the
+  persisted value through the central clamp (`back.core.query_limits`) so the
+  Settings UI never shows or re-saves an out-of-range value that differs from the
+  enforced effective bound.
+- Added `TestLakebaseStatementTimeoutReset` (reset on success and on error) to
+  `tests/units/core/test_graph_query_bounds.py`.
+
 ### Tests
 `uv` is not installed in this dev environment and system Python lacks `psycopg`,
 so the full `uv run pytest -q -m "not scenario"` suite could not be run here.
 Ran the targeted subset with system Python + pytest:
 `python -m pytest tests/units/core/test_query_limits.py tests/units/core/test_graph_query_bounds.py tests/units/core/test_sql_warehouse.py -q`
-→ **39 passed** in 3.37s (includes the pre-existing `test_sql_warehouse.py` — no
-regression). Full-suite run still required in a `uv`/`psycopg` environment before merge.
+→ **41 passed** (includes the pre-existing `test_sql_warehouse.py` and the two new
+Lakebase timeout-reset tests — no regression). Full-suite run still required in a
+`uv`/`psycopg` environment before merge.

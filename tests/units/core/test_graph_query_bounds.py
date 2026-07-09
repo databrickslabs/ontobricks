@@ -11,6 +11,8 @@ Covers the two guards that stop a broad Graph Chat query from freezing the app:
 import importlib
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
 from back.core.databricks.DatabricksAuth import DatabricksAuth
 from back.core.databricks.SQLWarehouse import SQLWarehouse
 
@@ -87,6 +89,61 @@ class TestDeltaStoreBoundsReads:
         sql_service.execute_query.assert_called_once_with(
             "SELECT 1", statement_timeout_s=42
         )
+
+
+class TestLakebaseStatementTimeoutReset:
+    """The pool hands out ``autocommit=True`` connections, so a read's
+    ``statement_timeout`` must be reset or it leaks to the next borrower
+    (a bulk write/DDL) and cancels it mid-flight."""
+
+    def _store(self, cur):
+        from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+
+        store = object.__new__(LakebaseFlatStore)
+        store._schema = "s"
+        conn = MagicMock()
+        conn.__enter__ = Mock(return_value=conn)
+        conn.__exit__ = Mock(return_value=False)
+        conn.cursor.return_value.__enter__ = Mock(return_value=cur)
+        conn.cursor.return_value.__exit__ = Mock(return_value=False)
+        pool = MagicMock()
+        pool.connection.return_value = conn
+        store._pool = lambda: pool
+        store._require_pg = lambda: (None, dict)
+        return store
+
+    def test_resets_after_success(self, monkeypatch):
+        monkeypatch.setattr(
+            "back.core.query_limits.get_graph_query_timeout_s", lambda: 30
+        )
+        cur = MagicMock()
+        cur.description = [("s",)]
+        cur.fetchall.return_value = [{"s": "x"}]
+
+        out = self._store(cur).execute_query("SELECT 1")
+
+        assert out == [{"s": "x"}]
+        stmts = _executed(cur)
+        assert any("SET statement_timeout = 30000" in s for s in stmts)
+        assert stmts[-1] == "RESET statement_timeout"
+
+    def test_resets_even_when_query_raises(self, monkeypatch):
+        monkeypatch.setattr(
+            "back.core.query_limits.get_graph_query_timeout_s", lambda: 30
+        )
+        cur = MagicMock()
+        cur.description = None
+
+        def _exec(sql, *a, **k):
+            if sql == "BOOM":
+                raise RuntimeError("cancelled by statement_timeout")
+
+        cur.execute.side_effect = _exec
+
+        with pytest.raises(RuntimeError):
+            self._store(cur).execute_query("BOOM")
+
+        assert "RESET statement_timeout" in _executed(cur)
 
 
 class TestBlockingPoolAutoTune:

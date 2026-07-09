@@ -650,7 +650,10 @@ async def save_graph_limits(
     def _opt_int(key: str):
         if key not in data or data[key] is None or data[key] == "":
             return None
-        return int(data[key])
+        try:
+            return int(data[key])
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"{key} must be an integer") from exc
 
     email, _display_name, user_token, _user_role, _user_domain_role = (
         _settings_request_identity(request)
