@@ -46,4 +46,4 @@ Modified files:
 - `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
 - `tests/units/core/test_lakebase_flat_store.py`
 
-Tests: pending full suite run after merge to develop.
+Tests: `uv run pytest -q -m "not scenario"` → 3210 passed, 275 skipped in 27.44s.
