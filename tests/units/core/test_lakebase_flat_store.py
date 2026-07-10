@@ -763,3 +763,56 @@ def test_scheduled_view_sql_wraps_object_hash_for_managed_synced():
     assert _view_sql_for_graph_store(inner, app_managed) == inner
     assert _view_sql_for_graph_store(inner, None) == inner
 
+
+def test_find_subjects_by_patterns_empty(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(store, "execute_query") as mock_eq:
+        result = store.find_subjects_by_patterns("MyGraph_V1", [])
+    assert result == set()
+    mock_eq.assert_not_called()
+
+
+def test_find_subjects_by_patterns_suffix_fast_path(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(store, "execute_query", return_value=[{"subject": "http://ex/WTG:1"}]) as mock_eq:
+        result = store.find_subjects_by_patterns(
+            "MyGraph_V1",
+            ["%/WTG:1", "%/WTG:2", "%/CUST:10"],
+        )
+    assert result == {"http://ex/WTG:1"}
+    mock_eq.assert_called_once()
+    sql = mock_eq.call_args[0][0]
+    assert "RIGHT(subject," in sql
+    assert "ANY(ARRAY" in sql
+    assert "LIKE" not in sql
+    assert "'/WTG:1'" in sql
+    assert "'/WTG:2'" in sql
+    assert "'/CUST:10'" in sql
+
+
+def test_find_subjects_by_patterns_generic_fallback(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(
+        store,
+        "execute_query",
+        side_effect=[
+            [{"subject": "http://ex/a"}],
+            [{"subject": "http://ex/b"}],
+        ],
+    ) as mock_eq:
+        result = store.find_subjects_by_patterns(
+            "MyGraph_V1",
+            ["%/WTG:1", "%/foo%bar"],
+        )
+    assert result == {"http://ex/a", "http://ex/b"}
+    assert mock_eq.call_count == 2
+    assert "RIGHT(subject," in mock_eq.call_args_list[0][0][0]
+    assert "LIKE" in mock_eq.call_args_list[1][0][0]
+
+
+def test_find_subjects_by_patterns_escapes_quotes(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(store, "execute_query", return_value=[]) as mock_eq:
+        store.find_subjects_by_patterns("MyGraph_V1", ["%/O'Brien"])
+    sql = mock_eq.call_args[0][0]
+    assert "O''Brien" in sql
