@@ -42,15 +42,15 @@
     // DOM helpers
     // =====================================================
 
-    function el(id) { return document.getElementById(id); }
-    function messagesEl() { return el('chatMessages'); }
-    function inputEl() { return el('chatInput'); }
-    function sendBtn() { return el('chatSendBtn'); }
-    function clearBtn() { return el('chatClearBtn'); }
+    function el(id)        { return document.getElementById(id); }
+    function messagesEl()  { return el('chatMessages'); }
+    function inputEl()     { return el('chatInput'); }
+    function sendBtn()     { return el('chatSendBtn'); }
+    function clearBtn()    { return el('chatClearBtn'); }
     function clearBtnTop() { return el('chatClearBtnTop'); }
-    function limitEl() { return el('chatHistoryLimit'); }
-    function depthEl() { return el('chatDepth'); }
-    function getDepth() { return parseInt(depthEl()?.value || '1', 10); }
+    function limitEl()     { return el('chatHistoryLimit'); }
+    function depthEl()     { return el('chatDepth'); }
+    function getDepth()    { return parseInt(depthEl()?.value || '1', 10); }
 
     // =====================================================
     // Markdown rendering

@@ -422,11 +422,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const changeBtn = document.getElementById('changeDefaultEmoji');
     if (changeBtn) {
         EmojiPicker.create({
-            triggerEl: changeBtn,
-            previewEl: document.getElementById('currentDefaultEmoji'),
+            triggerEl:   changeBtn,
+            previewEl:   document.getElementById('currentDefaultEmoji'),
             containerEl: document.getElementById('defaultEmojiPickerMount'),
-            showSearch: false,
-            onSelect: function (emoji) { selectDefaultEmoji(emoji); }
+            showSearch:  false,
+            onSelect:    function (emoji) { selectDefaultEmoji(emoji); }
         });
     }
 
@@ -452,9 +452,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const logoFileInput = document.getElementById('navbarLogoFile');
     const logoUploadBtn = document.getElementById('btnUploadNavbarLogo');
-    const logoResetBtn = document.getElementById('btnResetNavbarLogo');
+    const logoResetBtn  = document.getElementById('btnResetNavbarLogo');
     const logoPreviewEl = document.getElementById('navbarLogoPreview');
-    const logoStatusEl = document.getElementById('navbarLogoStatus');
+    const logoStatusEl  = document.getElementById('navbarLogoStatus');
 
     if (logoFileInput) {
         logoFileInput.addEventListener('change', () => {
@@ -580,8 +580,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function _getCurrentSchemaValue() {
         const schSel = document.getElementById('lakebaseGraphSchema');
-        const schIn = document.getElementById('lakebaseGraphSchemaInput');
-        const btn = document.getElementById('btnToggleLakebaseSchemaInput');
+        const schIn  = document.getElementById('lakebaseGraphSchemaInput');
+        const btn    = document.getElementById('btnToggleLakebaseSchemaInput');
         if (btn && btn.dataset.mode === 'input') {
             return (schIn ? schIn.value : '').trim() || 'ontobricks_graph';
         }
@@ -591,12 +591,12 @@ document.addEventListener('DOMContentLoaded', function () {
     // ── cascading pickers ─────────────────────────────────────────────────────
 
     async function loadLakebaseProjects() {
-        const projSel = document.getElementById('lakebaseProject');
+        const projSel   = document.getElementById('lakebaseProject');
         const branchSel = document.getElementById('lakebaseBranch');
-        const dbSel = document.getElementById('lakebaseGraphDb');
-        const schSel = document.getElementById('lakebaseGraphSchema');
-        const btn = document.getElementById('btnLoadLakebaseProjects');
-        const help = document.getElementById('lakebaseProjectHelp');
+        const dbSel     = document.getElementById('lakebaseGraphDb');
+        const schSel    = document.getElementById('lakebaseGraphSchema');
+        const btn       = document.getElementById('btnLoadLakebaseProjects');
+        const help      = document.getElementById('lakebaseProjectHelp');
         if (!projSel) return;
 
         _setSelectLoading(projSel, 'Loading projects…');
@@ -606,10 +606,10 @@ document.addEventListener('DOMContentLoaded', function () {
         let cfgDb = '', cfgProject = '', cfgBranch = '';
         try {
             const o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}');
-            cfgDb = o.database || '';
+            cfgDb      = o.database || '';
             cfgProject = o.lakebase_project || '';
-            cfgBranch = o.lakebase_branch || '';
-        } catch (_) { }
+            cfgBranch  = o.lakebase_branch  || '';
+        } catch (_) {}
 
         try {
             const resp = await fetch('/settings/graph-engine/lakebase-projects', { credentials: 'same-origin' });
@@ -646,7 +646,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadLakebaseBranches(projectPath, cfgBranch, cfgDb) {
         const branchSel = document.getElementById('lakebaseBranch');
-        const help = document.getElementById('lakebaseBranchHelp');
+        const help      = document.getElementById('lakebaseBranchHelp');
         if (!branchSel || !projectPath) return;
 
         _setSelectLoading(branchSel, 'Loading branches…');
@@ -686,9 +686,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function loadLakebasePgDatabases(branchPath, cfgDb) {
-        const dbSel = document.getElementById('lakebaseGraphDb');
+        const dbSel  = document.getElementById('lakebaseGraphDb');
         const schSel = document.getElementById('lakebaseGraphSchema');
-        const help = document.getElementById('lakebaseGraphDbHelp');
+        const help   = document.getElementById('lakebaseGraphDbHelp');
         if (!dbSel || !branchPath) return;
 
         _setSelectLoading(dbSel, 'Loading databases…');
@@ -699,7 +699,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}');
             if (o.schema) cfgSchema = o.schema;
-        } catch (_) { }
+        } catch (_) {}
 
         try {
             const resp = await fetch(
@@ -734,8 +734,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadLakebasePgSchemas(database, cfgSchema, branchPath) {
         const schSel = document.getElementById('lakebaseGraphSchema');
-        const schIn = document.getElementById('lakebaseGraphSchemaInput');
-        const help = document.getElementById('lakebaseGraphSchemaHelp');
+        const schIn  = document.getElementById('lakebaseGraphSchemaInput');
+        const help   = document.getElementById('lakebaseGraphSchemaHelp');
         if (!schSel || !database) return;
 
         _setSelectLoading(schSel, 'Loading schemas…');
@@ -782,9 +782,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // ── schema toggle (select ↔ manual input) ────────────────────────────────
 
     function _initSchemaToggle() {
-        const btn = document.getElementById('btnToggleLakebaseSchemaInput');
+        const btn   = document.getElementById('btnToggleLakebaseSchemaInput');
         const schSel = document.getElementById('lakebaseGraphSchema');
-        const schIn = document.getElementById('lakebaseGraphSchemaInput');
+        const schIn  = document.getElementById('lakebaseGraphSchemaInput');
         if (!btn || !schSel || !schIn) return;
 
         btn.addEventListener('click', function () {
@@ -820,27 +820,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /** Merge Lakebase form fields + optional managed-sync options into the JSON textarea. */
     function mergeLakebasePanelIntoConfigTextarea() {
-        const ta = document.getElementById('graphEngineConfig');
-        const dbSel = document.getElementById('lakebaseGraphDb');
-        const projSel = document.getElementById('lakebaseProject');
-        const branchSel = document.getElementById('lakebaseBranch');
+        const ta         = document.getElementById('graphEngineConfig');
+        const dbSel      = document.getElementById('lakebaseGraphDb');
+        const projSel    = document.getElementById('lakebaseProject');
+        const branchSel  = document.getElementById('lakebaseBranch');
         const syncModeEl = document.getElementById('lakebaseSyncMode');
         if (!ta || !dbSel) return;
         let o = {};
         try { o = JSON.parse(ta.value || '{}'); } catch (_) { o = {}; }
         if (typeof o !== 'object' || Array.isArray(o)) o = {};
 
-        o.database = dbSel.value || '';
-        o.schema = _getCurrentSchemaValue();
-        o.lakebase_project = (projSel ? projSel.value : '') || '';
-        o.lakebase_branch = (branchSel ? branchSel.value : '') || '';
+        o.database          = dbSel.value || '';
+        o.schema            = _getCurrentSchemaValue();
+        o.lakebase_project  = (projSel   ? projSel.value   : '') || '';
+        o.lakebase_branch   = (branchSel ? branchSel.value : '') || '';
 
         const mode = (syncModeEl && syncModeEl.value === 'managed_synced') ? 'managed_synced' : 'app_managed';
         if (mode === 'managed_synced') {
             o.sync_mode = 'managed_synced';
-            const stEl = document.getElementById('lakebaseSyncTableMode');
+            const stEl   = document.getElementById('lakebaseSyncTableMode');
             const toutEl = document.getElementById('lakebaseSyncTimeout');
-            const ucCat = document.getElementById('lakebaseUcCatalog');
+            const ucCat  = document.getElementById('lakebaseUcCatalog');
             if (stEl) o.sync_table_mode = stEl.value || 'snapshot';
             if (toutEl) {
                 const n = parseInt(toutEl.value, 10);
@@ -861,7 +861,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function toggleLakebaseManagedSyncPanel() {
-        const sm = document.getElementById('lakebaseSyncMode');
+        const sm    = document.getElementById('lakebaseSyncMode');
         const panel = document.getElementById('lakebaseManagedSyncPanel');
         if (!sm || !panel) return;
         panel.classList.toggle('d-none', sm.value !== 'managed_synced');
@@ -869,7 +869,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateLakebaseSyncModeHelp() {
         const sm = document.getElementById('lakebaseSyncMode');
-        const v = sm && sm.value === 'managed_synced' ? 'managed_synced' : 'app_managed';
+        const v  = sm && sm.value === 'managed_synced' ? 'managed_synced' : 'app_managed';
         document.querySelectorAll('[data-lk-mode]').forEach(function (el) {
             el.classList.toggle('d-none', el.getAttribute('data-lk-mode') !== v);
         });
@@ -879,8 +879,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadUcCatalogsForGraphEngine() {
         const catSel = document.getElementById('lakebaseUcCatalog');
-        const msg = document.getElementById('lakebaseUcCatalogLoadMsg');
-        const btn = document.getElementById('btnLoadUcCatalogs');
+        const msg    = document.getElementById('lakebaseUcCatalogLoadMsg');
+        const btn    = document.getElementById('btnLoadUcCatalogs');
         if (!catSel) return;
         if (msg) { msg.classList.remove('d-none'); msg.className = 'form-text small mt-1 text-muted'; msg.textContent = 'Loading catalogs…'; }
         if (btn) btn.disabled = true;
@@ -889,7 +889,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}');
             cfgCat = o.sync_uc_catalog || '';
-        } catch (_) { }
+        } catch (_) {}
 
         try {
             const resp = await fetch('/settings/graph-engine/uc-catalogs', { credentials: 'same-origin' });
@@ -950,28 +950,28 @@ document.addEventListener('DOMContentLoaded', function () {
      */
     function prefillLakebaseConnectionFromConfig() {
         let o = {};
-        try { o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}'); } catch (_) { }
+        try { o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}'); } catch (_) {}
         // Connection tab — all 4 cascading selects
-        _ensureSelectedOption(document.getElementById('lakebaseProject'), o.lakebase_project || '');
-        _ensureSelectedOption(document.getElementById('lakebaseBranch'), o.lakebase_branch || '');
-        _ensureSelectedOption(document.getElementById('lakebaseGraphDb'), o.database || '');
-        _ensureSelectedOption(document.getElementById('lakebaseGraphSchema'), o.schema || '');
+        _ensureSelectedOption(document.getElementById('lakebaseProject'),    o.lakebase_project || '');
+        _ensureSelectedOption(document.getElementById('lakebaseBranch'),     o.lakebase_branch  || '');
+        _ensureSelectedOption(document.getElementById('lakebaseGraphDb'),    o.database         || '');
+        _ensureSelectedOption(document.getElementById('lakebaseGraphSchema'), o.schema          || '');
         const schIn = document.getElementById('lakebaseGraphSchemaInput');
         if (schIn && o.schema) schIn.value = o.schema;
         // Bulk loading tab — UC catalog (managed_synced mode)
-        _ensureSelectedOption(document.getElementById('lakebaseUcCatalog'), o.sync_uc_catalog || '');
+        _ensureSelectedOption(document.getElementById('lakebaseUcCatalog'),  o.sync_uc_catalog  || '');
     }
 
     function applyLakebaseFormFromConfigTextarea() {
-        const ta = document.getElementById('graphEngineConfig');
+        const ta         = document.getElementById('graphEngineConfig');
         const syncModeEl = document.getElementById('lakebaseSyncMode');
         if (!ta) return;
         let o = {};
-        try { o = JSON.parse(ta.value || '{}'); } catch (_) { }
+        try { o = JSON.parse(ta.value || '{}'); } catch (_) {}
 
         if (syncModeEl) syncModeEl.value = (o.sync_mode === 'managed_synced') ? 'managed_synced' : 'app_managed';
 
-        const stEl = document.getElementById('lakebaseSyncTableMode');
+        const stEl   = document.getElementById('lakebaseSyncTableMode');
         if (stEl && o.sync_table_mode) stEl.value = o.sync_table_mode;
 
         const toutEl = document.getElementById('lakebaseSyncTimeout');
@@ -1046,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Spinner scoped to the Back End section only (fast, light load).
     function setBackendTabLoading(loading) {
-        const beBanner = document.getElementById('backendSectionBanner');
+        const beBanner  = document.getElementById('backendSectionBanner');
         const beContent = document.getElementById('graphDbTabContent');
         if (beBanner) {
             beBanner.classList.toggle('d-none', !loading);
@@ -1058,9 +1058,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Spinner scoped to the Lakebase + Delta sections (deferred heavy load).
     function setGraphDbHeavyLoading(loading) {
         const lkBanner = document.getElementById('lakebaseSectionBanner');
-        const lkPanel = document.getElementById('lakebaseGraphPanel');
+        const lkPanel  = document.getElementById('lakebaseGraphPanel');
         const dtBanner = document.getElementById('deltaSectionBanner');
-        const dtPanel = document.getElementById('deltaGraphPanel');
+        const dtPanel  = document.getElementById('deltaGraphPanel');
         [lkBanner, dtBanner].forEach(function (banner) {
             if (!banner) return;
             banner.classList.toggle('d-none', !loading);
@@ -1111,7 +1111,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // form mirroring runs here so saved values are pre-selected.
     async function loadGraphEngineConfig() {
         const sel = document.getElementById('graphEngineSelect');
-        const ta = document.getElementById('graphEngineConfig');
+        const ta  = document.getElementById('graphEngineConfig');
         try {
             const [engResp, cfgResp] = await Promise.all([
                 fetch('/settings/graph-engine', { credentials: 'same-origin' }),
@@ -1422,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 body: JSON.stringify({ full_name: fullName, is_sync: false }),
             });
             let data = {};
-            try { data = await resp.json(); } catch (_) { }
+            try { data = await resp.json(); } catch (_) {}
             if (data.success) {
                 showNotification('Dropped ' + fullName, 'success');
                 await loadDeltaObjects();
@@ -1480,7 +1480,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     body: JSON.stringify({ full_name: o.full_name, is_sync: false }),
                 });
                 let data = {};
-                try { data = await resp.json(); } catch (_) { }
+                try { data = await resp.json(); } catch (_) {}
                 if (!data.success) {
                     const detail = data.detail || data.message || (resp.ok ? 'server returned failure' : 'HTTP ' + resp.status);
                     errors.push(label + ': ' + detail);
@@ -1555,18 +1555,18 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btnLoadLakebaseProjects')?.addEventListener('click', () => loadLakebaseProjects());
     document.getElementById('lakebaseProject')?.addEventListener('change', async function () {
         const branchSel = document.getElementById('lakebaseBranch');
-        const dbSel = document.getElementById('lakebaseGraphDb');
-        const schSel = document.getElementById('lakebaseGraphSchema');
+        const dbSel     = document.getElementById('lakebaseGraphDb');
+        const schSel    = document.getElementById('lakebaseGraphSchema');
         _setSelectLoading(branchSel, '(select a project first)');
-        _setSelectLoading(dbSel, '(select a branch first)');
-        _setSelectLoading(schSel, '(select a database first)');
+        _setSelectLoading(dbSel,     '(select a branch first)');
+        _setSelectLoading(schSel,    '(select a database first)');
         mergeLakebasePanelIntoConfigTextarea();
         if (this.value) await loadLakebaseBranches(this.value, '', '');
     });
     document.getElementById('lakebaseBranch')?.addEventListener('change', async function () {
-        const dbSel = document.getElementById('lakebaseGraphDb');
+        const dbSel  = document.getElementById('lakebaseGraphDb');
         const schSel = document.getElementById('lakebaseGraphSchema');
-        _setSelectLoading(dbSel, '(select a branch first)');
+        _setSelectLoading(dbSel,  '(select a branch first)');
         _setSelectLoading(schSel, '(select a database first)');
         mergeLakebasePanelIntoConfigTextarea();
         if (this.value) await loadLakebasePgDatabases(this.value, '');
@@ -1593,7 +1593,7 @@ document.addEventListener('DOMContentLoaded', function () {
         mergeLakebasePanelIntoConfigTextarea();
     });
     document.getElementById('lakebaseSyncTableMode')?.addEventListener('change', mergeLakebasePanelIntoConfigTextarea);
-    document.getElementById('lakebaseSyncTimeout')?.addEventListener('input', mergeLakebasePanelIntoConfigTextarea);
+    document.getElementById('lakebaseSyncTimeout')?.addEventListener('input',  mergeLakebasePanelIntoConfigTextarea);
     document.getElementById('lakebaseSyncTimeout')?.addEventListener('change', mergeLakebasePanelIntoConfigTextarea);
 
     // UC catalog change
@@ -1604,15 +1604,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Lakebase objects (schemas / tables / views) ──────────────────────────
     async function loadLakebaseObjects() {
-        const btn = document.getElementById('btnLoadLakebaseObjects');
+        const btn    = document.getElementById('btnLoadLakebaseObjects');
         const result = document.getElementById('lakebaseObjectsResult');
-        const dbSel = document.getElementById('lakebaseGraphDb');
+        const dbSel  = document.getElementById('lakebaseGraphDb');
         if (!result) return;
 
         // Always query the BOUND Lakebase host (where GraphDBFactory writes data).
         // The branch_path from the Connection form refers to the provisioner target
         // project — not the actual connection host — so it must NOT be forwarded here.
-        const database = dbSel?.value || '';
+        const database   = dbSel?.value   || '';
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Loading…';
@@ -1634,9 +1634,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const cu = data.current_user || '';
             const regSchema = data.registry_schema || 'ontobricks_registry';
-            const schemas = (data.schemas || []).filter(o => o.name !== regSchema);
-            const tables = (data.tables || []).filter(o => o.schema !== regSchema);
-            const views = (data.views || []).filter(o => o.schema !== regSchema);
+            const schemas = (data.schemas || []).filter(o => o.name   !== regSchema);
+            const tables  = (data.tables  || []).filter(o => o.schema !== regSchema);
+            const views   = (data.views   || []).filter(o => o.schema !== regSchema);
 
             if (schemas.length === 0 && tables.length === 0 && views.length === 0) {
                 result.innerHTML = '<p class="small text-muted mt-2">No objects owned by you in this database.</p>';
@@ -1646,9 +1646,9 @@ document.addEventListener('DOMContentLoaded', function () {
             // ── helpers ─────────────────────────────────────────────────────
             function mkDropBtn(kind, schema, name) {
                 return '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 lk-drop-obj-btn"'
-                    + ' data-lk-kind="' + escapeHtmlSettings(kind) + '"'
+                    + ' data-lk-kind="'   + escapeHtmlSettings(kind)   + '"'
                     + ' data-lk-schema="' + escapeHtmlSettings(schema) + '"'
-                    + ' data-lk-name="' + escapeHtmlSettings(name) + '"'
+                    + ' data-lk-name="'   + escapeHtmlSettings(name)   + '"'
                     + ' title="Drop ' + escapeHtmlSettings(kind) + '">'
                     + '<i class="bi bi-trash3"></i></button>';
             }
@@ -1687,14 +1687,14 @@ document.addEventListener('DOMContentLoaded', function () {
             _lkUCRegistry = {};
 
             [...tables.map(o => ({ kind: 'table', schemaName: o.schema, name: o.name })),
-            ...views.map(o => ({ kind: 'view', schemaName: o.schema, name: o.name }))]
-                .forEach(o => {
-                    const base = objectBase(o.name, o.kind);
-                    if (!_lkDomainRegistry[base]) {
-                        _lkDomainRegistry[base] = { base, schema: o.schemaName, items: [] };
-                    }
-                    _lkDomainRegistry[base].items.push(o);
-                });
+             ...views.map(o => ({ kind: 'view',  schemaName: o.schema, name: o.name }))]
+            .forEach(o => {
+                const base = objectBase(o.name, o.kind);
+                if (!_lkDomainRegistry[base]) {
+                    _lkDomainRegistry[base] = { base, schema: o.schemaName, items: [] };
+                }
+                _lkDomainRegistry[base].items.push(o);
+            });
 
             // ── render ───────────────────────────────────────────────────────
             let html = '<p class="small text-muted mt-2 mb-3">Connected as: <code>'
@@ -1818,7 +1818,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 body: JSON.stringify({ kind, schema, name, database: database || '' }),
             });
             let data = {};
-            try { data = await resp.json(); } catch (_) { }
+            try { data = await resp.json(); } catch (_) {}
             if (data.success) {
                 showNotification('Dropped ' + kind + ' ' + label, 'success');
                 await loadLakebaseObjects();
@@ -1840,7 +1840,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const label = kind === 'schema' ? '"' + name + '"' : '"' + schema + '"."' + name + '"';
         const cascade = kind === 'schema' ? '<br><small class="text-muted">This will also drop all tables and views inside it (CASCADE).</small>' : '';
         const modalEl = document.getElementById('lkDropConfirmModal');
-        const bodyEl = document.getElementById('lkDropConfirmModalBody');
+        const bodyEl  = document.getElementById('lkDropConfirmModalBody');
         const confirmBtn = document.getElementById('lkDropConfirmBtn');
         if (!modalEl || !bodyEl || !confirmBtn) {
             // Fallback for contexts where the modal wasn't injected yet
@@ -1886,8 +1886,8 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const resp = await fetch('/settings/graph-engine/lakebase-grant-superuser', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_email: email }),
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({user_email: email}),
             });
             const data = await resp.json();
             if (!resp.ok || !data.success) throw new Error(data.detail || data.message || 'Failed');
@@ -1900,11 +1900,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function loadLakebasePermissions() {
-        const loading = document.getElementById('lkPermLoading');
+        const loading   = document.getElementById('lkPermLoading');
         const tableWrap = document.getElementById('lkPermTableWrap');
-        const tbody = document.getElementById('lkPermTbody');
-        const empty = document.getElementById('lkPermEmpty');
-        const selUser = document.getElementById('lkPermUserSelect');
+        const tbody     = document.getElementById('lkPermTbody');
+        const empty     = document.getElementById('lkPermEmpty');
+        const selUser   = document.getElementById('lkPermUserSelect');
         if (!loading) return;
 
         const bannerEl = document.getElementById('lkPermBanner');
@@ -1933,8 +1933,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const extraRoles = (data.roles || []).filter(r => !appEmails.has(r.email.toLowerCase()));
 
         const allRows = [
-            ...appUsers.map(u => ({ email: u.email, display: u.display_name, fromApp: true })),
-            ...extraRoles.map(r => ({ email: r.email, display: r.email, fromApp: false })),
+            ...appUsers.map(u => ({email: u.email, display: u.display_name, fromApp: true})),
+            ...extraRoles.map(r => ({email: r.email, display: r.email, fromApp: false})),
         ];
 
         // Populate dropdown
@@ -1954,9 +1954,9 @@ document.addEventListener('DOMContentLoaded', function () {
         tbody.innerHTML = '';
         empty.classList.toggle('d-none', allRows.length > 0);
         allRows.forEach(row => {
-            const em = row.email.toLowerCase();
+            const em   = row.email.toLowerCase();
             const role = roleMap[em];
-            const hasRole = Boolean(role);
+            const hasRole      = Boolean(role);
             const hasSuperuser = hasRole && role.has_superuser;
 
             const tr = document.createElement('tr');
@@ -1966,7 +1966,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tdUser.className = 'align-middle';
             tdUser.innerHTML = row.display !== row.email
                 ? '<span class="fw-semibold">' + _lkPermEsc(row.display) + '</span>'
-                + ' <span class="text-muted small">' + _lkPermEsc(row.email) + '</span>'
+                  + ' <span class="text-muted small">' + _lkPermEsc(row.email) + '</span>'
                 : '<span class="font-monospace small">' + _lkPermEsc(row.email) + '</span>';
             tr.appendChild(tdUser);
 
@@ -2009,8 +2009,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Wire Permissions tab listeners once
     (function () {
-        const tabBtn = document.getElementById('lktab-perms');
-        const grantBtn = document.getElementById('btnLkPermGrant');
+        const tabBtn     = document.getElementById('lktab-perms');
+        const grantBtn   = document.getElementById('btnLkPermGrant');
         const refreshBtn = document.getElementById('btnLkPermRefresh');
         let loaded = false;
 
@@ -2041,8 +2041,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const { schema, sortedItems: items } = entry;
         const ucItems = _lkUCRegistry[domainKey] || [];
-        const database = document.getElementById('lakebaseGraphDb')?.value || '';
-        const branchPath = document.getElementById('lakebaseBranch')?.value || '';
+        const database   = document.getElementById('lakebaseGraphDb')?.value  || '';
+        const branchPath = document.getElementById('lakebaseBranch')?.value   || '';
         const count = items.length + ucItems.length;
 
         const pgListHtml = items.map(o =>
@@ -2056,15 +2056,15 @@ document.addEventListener('DOMContentLoaded', function () {
         ).join('');
         const listHtml = pgListHtml + (ucListHtml
             ? '<li class="small text-muted mt-1 fw-semibold" style="list-style:none;margin-left:-1rem">Unity Catalog</li>'
-            + ucListHtml
+              + ucListHtml
             : '');
 
         const bodyContent = 'Drop all <strong>' + count + ' object' + (count !== 1 ? 's' : '')
             + '</strong> for domain <code>' + escapeHtmlSettings(domainKey) + '</code>?'
             + '<ul class="mt-2 mb-0 ps-3">' + listHtml + '</ul>';
 
-        const modalEl = document.getElementById('lkDropConfirmModal');
-        const bodyEl = document.getElementById('lkDropConfirmModalBody');
+        const modalEl  = document.getElementById('lkDropConfirmModal');
+        const bodyEl   = document.getElementById('lkDropConfirmModalBody');
         const confirmBtn = document.getElementById('lkDropConfirmBtn');
 
         if (!modalEl || !bodyEl || !confirmBtn) {
@@ -2188,7 +2188,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             const params = new URLSearchParams();
-            if (database) params.set('database', database);
+            if (database)   params.set('database',    database);
             if (branchPath) params.set('branch_path', branchPath);
             const url = '/settings/graph-engine/lakebase-sync-objects'
                 + (params.toString() ? '?' + params.toString() : '');
@@ -2247,13 +2247,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Lakeflow synced-table registration row
                         const pipelineLink = t.pipeline_id
                             ? ' <a href="#" class="lk-sync-pipeline-link small text-muted ms-1"'
-                            + ' data-lk-pipeline-id="' + escapeHtmlSettings(t.pipeline_id) + '"'
-                            + ' title="Copy pipeline ID: ' + escapeHtmlSettings(t.pipeline_id) + '">'
-                            + '<i class="bi bi-clipboard" style="font-size:.7rem"></i></a>'
+                              + ' data-lk-pipeline-id="' + escapeHtmlSettings(t.pipeline_id) + '"'
+                              + ' title="Copy pipeline ID: ' + escapeHtmlSettings(t.pipeline_id) + '">'
+                              + '<i class="bi bi-clipboard" style="font-size:.7rem"></i></a>'
                             : '';
                         const errorTip = t.error
                             ? ' <span class="text-danger ms-1" title="' + escapeHtmlSettings(t.error) + '">'
-                            + '<i class="bi bi-exclamation-circle" style="font-size:.75rem"></i></span>'
+                              + '<i class="bi bi-exclamation-circle" style="font-size:.75rem"></i></span>'
                             : '';
                         h += '<tr>'
                             + '<td style="width:90px"><span class="badge border bg-warning-subtle text-warning-emphasis lk-sync-badge">sync</span></td>'
@@ -2324,8 +2324,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const warn = isSync
             ? '<br><small class="text-muted">This will also remove the Lakeflow pipeline registration.</small>'
             : '';
-        const modalEl = document.getElementById('lkDropConfirmModal');
-        const bodyEl = document.getElementById('lkDropConfirmModalBody');
+        const modalEl  = document.getElementById('lkDropConfirmModal');
+        const bodyEl   = document.getElementById('lkDropConfirmModalBody');
         const confirmBtn = document.getElementById('lkDropConfirmBtn');
         if (!modalEl || !bodyEl || !confirmBtn) { return; }
 
@@ -2379,9 +2379,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!list || !task || !Array.isArray(task.steps)) return;
         const icon = (s) => {
             if (s === 'completed') return '<i class="bi bi-check-circle-fill text-success me-2"></i>';
-            if (s === 'running') return '<span class="spinner-border spinner-border-sm text-primary me-2"></span>';
-            if (s === 'failed') return '<i class="bi bi-x-circle-fill text-danger me-2"></i>';
-            if (s === 'skipped') return '<i class="bi bi-dash-circle text-muted me-2"></i>';
+            if (s === 'running')   return '<span class="spinner-border spinner-border-sm text-primary me-2"></span>';
+            if (s === 'failed')    return '<i class="bi bi-x-circle-fill text-danger me-2"></i>';
+            if (s === 'skipped')   return '<i class="bi bi-dash-circle text-muted me-2"></i>';
             return '<i class="bi bi-circle text-muted me-2"></i>';
         };
         const rows = task.steps.map(s => {

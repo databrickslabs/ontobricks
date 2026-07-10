@@ -117,6 +117,22 @@ that until #112/#115 land.
 - Added `TestLakebaseStatementTimeoutReset` (reset on success and on error) to
   `tests/units/core/test_graph_query_bounds.py`.
 
+### Rebase onto `develop` (v0.7.0, PR #116)
+Retargeted from `master` to the `develop` integration branch. `develop` had
+already migrated `triplestore` → `graphdb` and added its own `run_blocking`
+offloading for the graph routes, so the redundant offloading half of this change
+was dropped in favour of develop's, and only the unique bounding/advisory layer
+was kept:
+- `triplestore/delta/DeltaTripleStore.py` was deleted on `develop`; the bounded
+  read was ported to `graphdb/delta/DeltaFlatStore.execute_query`.
+- `dtwin.py` kept only the resource-pressure advisory (`_resource_pressure_payload`
+  in the chat + SSE responses) and the `get_graph_chat_result_cap()` clamp on
+  `triples/find`; the `run_blocking` wrapping is now inherited from `develop`.
+- `settings.js` kept only `loadGraphLimits()` + the save handler; the Graph DB tab
+  refactor is `develop`'s.
+- Changelog moved from `v0.6.1/` to `v0.7.0/` to match the `develop` version line.
+- `TestDeltaStoreBoundsReads` updated to target `DeltaFlatStore`.
+
 ### Tests
 `uv` is not installed in this dev environment and system Python lacks `psycopg`,
 so the full `uv run pytest -q -m "not scenario"` suite could not be run here.
