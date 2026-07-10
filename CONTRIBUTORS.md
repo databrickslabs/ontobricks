@@ -12,8 +12,6 @@ Thank you to everyone who has contributed to OntoBricks!
 | Eric Poilvet | [@epoilvet](https://github.com/epoilvet) | Contributor |
 | Fiifi Botchway | [@FiifiB](https://github.com/FiifiB) | Contributor |
 
-| Mitul | [@kmitul](https://github.com/kmitul) | Contributor |
-
 ## Community Contributors
 
 | Name | GitHub | Contribution |
@@ -21,6 +19,7 @@ Thank you to everyone who has contributed to OntoBricks!
 | Andreas Niehaus | [@a-niehaus](https://github.com/a-niehaus) | Fix for Claude serving endpoints returning list-style `message.content` ([#107](https://github.com/databrickslabs/ontobricks/issues/107), [#109](https://github.com/databrickslabs/ontobricks/pull/109)) |
 | Brian Castelino | [@bcastelino](https://github.com/bcastelino) | Regression test for KG `/sync/filter` on non-DRAFT versions ([#110](https://github.com/databrickslabs/ontobricks/pull/110)) |
 | Ulrik Møller | [@ulsmo](https://github.com/ulsmo) | Contributor |
+| Mitul | [@kmitul](https://github.com/kmitul) | Contributor |
 
 ## How to Contribute
 
