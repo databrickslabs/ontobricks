@@ -43,7 +43,8 @@ class TestGetDatabricksClient:
         assert client is not None
 
     @patch("back.core.databricks.is_databricks_app", return_value=False)
-    def test_returns_none_without_credentials(self, _):
+    def test_returns_none_without_credentials(self, _, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
         domain = _make_domain()
         settings = _make_settings(databricks_host="", databricks_token="")
         client = get_databricks_client(domain, settings)
@@ -189,6 +190,7 @@ class TestNoneDomainSafety:
         assert host and token and wh
 
     @patch("back.core.databricks.is_databricks_app", return_value=False)
-    def test_get_databricks_client_none_domain_no_creds_returns_none(self, _):
+    def test_get_databricks_client_none_domain_no_creds_returns_none(self, _, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
         settings = _make_settings(databricks_host="", databricks_token="")
         assert get_databricks_client(None, settings) is None

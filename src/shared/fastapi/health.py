@@ -164,9 +164,10 @@ def _check_log_dir() -> Tuple[str, str]:
 def _check_databricks_auth() -> Tuple[str, str]:
     """Verify the app has usable Databricks credentials.
 
-    In Apps mode we additionally exercise the M2M OAuth path so a
-    misconfigured ``DATABRICKS_CLIENT_ID`` / ``CLIENT_SECRET`` fails
-    here rather than at the first warehouse call.
+    Exercises the active auth path eagerly (M2M OAuth for App mode, the
+    Databricks SDK ``Config.authenticate`` call for CLI mode) so a
+    misconfigured workspace fails here rather than at the first warehouse
+    call.
     """
     from back.core.databricks.DatabricksAuth import DatabricksAuth
 
@@ -179,14 +180,26 @@ def _check_databricks_auth() -> Tuple[str, str]:
             )
         return (
             _ERROR,
-            "Local mode but DATABRICKS_TOKEN is not set",
+            "Local mode but DATABRICKS_TOKEN is not set and no Databricks CLI "
+            "profile was found in ~/.databrickscfg "
+            "(run `databricks auth login` to configure one)",
         )
-    if auth.is_app_mode:
+    if auth.auth_mode == "app":
         try:
             auth.get_oauth_token()
         except Exception as exc:  # noqa: BLE001 — vendor surface
             return _ERROR, f"OAuth token request failed: {exc}"
         return _OK, f"App mode OAuth credentials valid (host={auth.host})"
+    if auth.auth_mode == "cli":
+        try:
+            auth.get_bearer_token()
+        except Exception as exc:  # noqa: BLE001 — vendor surface
+            return _ERROR, f"Databricks CLI profile authentication failed: {exc}"
+        return (
+            _OK,
+            f"Databricks CLI profile '{auth.cli_profile_name}' configured "
+            f"(host={auth.host})",
+        )
     return _OK, f"Personal Access Token configured (host={auth.host})"
 
 
