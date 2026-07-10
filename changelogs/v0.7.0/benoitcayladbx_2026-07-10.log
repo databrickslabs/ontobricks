@@ -20,3 +20,30 @@ Modified files:
 - `tests/units/core/test_lakebase_flat_store.py`
 
 Tests: `uv run pytest -q tests/units/core/test_lakebase_flat_store.py::test_scheduled_view_sql_wraps_object_hash_for_managed_synced tests/units/core/test_lakebase_flat_store.py::test_wrap_triple_view_sql_for_lakeflow_adds_object_hash` → 2 passed.
+
+---
+
+## Fix: ensure graph indexes on Lakeflow-managed _sync tables (issue #112, PR #113)
+
+Context: In `managed_synced` mode, Lakeflow creates the Postgres `_sync` table.
+App-managed tables and companions already got graph lookup indexes at DDL time,
+but Lakeflow-owned `_sync` tables had no ensure step after snapshot materialization
+or physical recreation — BFS / neighbour traversals could degrade badly (issue #112).
+
+Changes:
+
+1. `src/back/core/graphdb/lakebase/_companion_ddl.py`
+   - Extract `ensure_graph_indexes()` from `_create_triple_table()` using
+     `_TRIPLE_TABLE_INDEXES` (`object_hash` layout).
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   - Call `ensure_graph_indexes()` in `ensure_synced_union_view()` before the
+     union view DDL; warning-only fallback on permission/ownership errors.
+3. `tests/units/core/test_lakebase_flat_store.py`
+   - Regression test asserting three index DDL statements precede view creation.
+
+Modified files:
+- `src/back/core/graphdb/lakebase/_companion_ddl.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `tests/units/core/test_lakebase_flat_store.py`
+
+Tests: pending full suite run after merge to develop.

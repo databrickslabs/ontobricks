@@ -92,6 +92,20 @@ def wrap_triple_view_sql_for_lakeflow(spark_sql: str) -> str:
     )
 
 
+def ensure_graph_indexes(cur: Any, table_ref: str) -> None:
+    """Create standard graph lookup indexes on *table_ref* if absent.
+
+    ``table_ref`` may be bare (``g_x_v1_sync``) or schema-qualified
+    (``"schema".g_x_v1_sync``). Index names use the physical table name only.
+    """
+    table_name = table_ref.split(".")[-1].strip('"')
+    for sfx, cols in _TRIPLE_TABLE_INDEXES:
+        cur.execute(
+            f"CREATE INDEX IF NOT EXISTS {_idx_name(table_name, sfx)} "
+            f"ON {table_ref} ({cols})"
+        )
+
+
 def _create_triple_table(cur: Any, schema: str, table: str) -> None:
     cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
     cur.execute(
@@ -101,11 +115,7 @@ def _create_triple_table(cur: Any, schema: str, table: str) -> None:
         )
         """
     )
-    for sfx, cols in _TRIPLE_TABLE_INDEXES:
-        cur.execute(
-            f"CREATE INDEX IF NOT EXISTS {_idx_name(table, sfx)} "
-            f"ON {table} ({cols})"
-        )
+    ensure_graph_indexes(cur, table)
 
 
 def ensure_synced(cur: Any, schema: str, synced: str) -> None:

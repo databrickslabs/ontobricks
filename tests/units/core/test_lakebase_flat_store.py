@@ -520,6 +520,22 @@ class TestManagedSyncedRouting:
         assert "FROM g_v1_sync" in view_ddl
         assert '"ontobricks_graph"' not in view_ddl
 
+    def test_ensure_synced_union_view_ensures_graph_indexes_on_sync_table(self, synced_store):
+        """managed_synced builds re-apply graph indexes on Lakeflow-owned _sync tables."""
+        cur = MagicMock()
+        with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
+            synced_store.ensure_synced_union_view("G_V1")
+        executed = [str(c[0][0]) for c in cur.execute.call_args_list]
+        index_ddls = [s for s in executed if "CREATE INDEX IF NOT EXISTS" in s]
+        assert len(index_ddls) == 3
+        assert all("ON g_v1_sync" in s for s in index_ddls)
+        assert any("subject, predicate" in s for s in index_ddls)
+        assert any("predicate, object_hash" in s for s in index_ddls)
+        assert any("object_hash, predicate" in s for s in index_ddls)
+        view_idx = next(i for i, s in enumerate(executed) if "CREATE OR REPLACE VIEW" in s)
+        first_index_idx = next(i for i, s in enumerate(executed) if "CREATE INDEX IF NOT EXISTS" in s)
+        assert first_index_idx < view_idx
+
     def test_ensure_synced_companion_skips_union_view(self, synced_store):
         cur = MagicMock()
         with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
