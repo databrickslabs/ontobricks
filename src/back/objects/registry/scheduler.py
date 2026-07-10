@@ -1023,6 +1023,17 @@ def _is_managed_synced(store) -> bool:
     return bool(getattr(store, "is_synced", False))
 
 
+def _view_sql_for_graph_store(sql_text: str, store) -> str:
+    """Return VIEW DDL, emitting ``object_hash`` when Lakeflow sync is active."""
+    if store and _is_managed_synced(store):
+        from back.core.graphdb.lakebase._companion_ddl import (
+            wrap_triple_view_sql_for_lakeflow,
+        )
+
+        return wrap_triple_view_sql_for_lakeflow(sql_text)
+    return sql_text
+
+
 def _apply_synced_pipeline(
     store,
     src,
@@ -1324,13 +1335,22 @@ def _run_scheduled_build(
             shacl_shapes=getattr(domain, "shacl_shapes", None),
         )
 
+        # Resolve graph backend before VIEW creation so managed_synced builds
+        # can emit object_hash (Lakeflow keys the synced PK on that column).
+        from back.core.graphdb import get_graphdb
+        from back.objects.digitaltwin.models import DomainSnapshot
+
+        snap = DomainSnapshot(domain, host=host, token=token)
+        store = get_graphdb(snap, settings)
+
         # --- Step 2: Create VIEW ---
         tm.advance_step(task.id, f"Creating VIEW {view_table}...")
         src = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
 
+        view_sql = _view_sql_for_graph_store(sql_text, store)
         cat, sch, vname = view_table.split(".")
         logger.info("Scheduled build [%s]: creating VIEW %s", domain_name, view_table)
-        view_ok, view_msg = src.create_or_replace_view(cat, sch, vname, sql_text)
+        view_ok, view_msg = src.create_or_replace_view(cat, sch, vname, view_sql)
         if not view_ok:
             from back.objects.digitaltwin import DigitalTwin
 
@@ -1346,11 +1366,6 @@ def _run_scheduled_build(
         # --- Step 3: Populate graph ---
         tm.advance_step(task.id, f"Applying to graph {graph_name}...")
 
-        from back.core.graphdb import get_graphdb
-        from back.objects.digitaltwin.models import DomainSnapshot
-
-        snap = DomainSnapshot(domain, host=host, token=token)
-        store = get_graphdb(snap, settings)
         if not store:
             raise InfrastructureError("Could not initialize graph backend")
 

@@ -1,0 +1,22 @@
+## Fix: scheduled managed_synced builds emit object_hash in warehouse VIEW (issue #108)
+
+Context: The object_hash primary-key fix for long literal objects (#108) wrapped
+the Delta VIEW in the interactive DT build pipeline but not in the registry
+scheduler path. Scheduled managed_synced builds therefore created a VIEW without
+`object_hash` while Lakeflow expected `primary_key_columns = [subject, predicate,
+object_hash]`, breaking scheduled KG rebuilds on Lakebase.
+
+Changes:
+
+1. `src/back/objects/registry/scheduler.py`
+   - Resolve the graph store before VIEW creation; add
+     `_view_sql_for_graph_store` to wrap SQL with `object_hash` when
+     `managed_synced` is active (mirrors `_BuildPipeline._create_view`).
+2. `tests/units/core/test_lakebase_flat_store.py`
+   - Regression test for `_view_sql_for_graph_store` managed vs app_managed.
+
+Modified files:
+- `src/back/objects/registry/scheduler.py`
+- `tests/units/core/test_lakebase_flat_store.py`
+
+Tests: `uv run pytest -q tests/units/core/test_lakebase_flat_store.py::test_scheduled_view_sql_wraps_object_hash_for_managed_synced tests/units/core/test_lakebase_flat_store.py::test_wrap_triple_view_sql_for_lakeflow_adds_object_hash` → 2 passed.

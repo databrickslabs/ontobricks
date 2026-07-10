@@ -731,3 +731,19 @@ def test_wrap_triple_view_sql_for_lakeflow_adds_object_hash():
     assert "sha2(cast(object AS string), 256) AS object_hash" in wrapped
     assert wrapped.endswith("FROM (SELECT 's' AS subject, 'p' AS predicate, 'o' AS object) AS _ob_triples")
 
+
+def test_scheduled_view_sql_wraps_object_hash_for_managed_synced():
+    from back.objects.registry.scheduler import _view_sql_for_graph_store
+
+    inner = "SELECT subject, predicate, object FROM t"
+    managed = MagicMock()
+    managed.is_synced = True
+    wrapped = _view_sql_for_graph_store(inner, managed)
+    assert "object_hash" in wrapped
+    assert inner in wrapped
+
+    app_managed = MagicMock()
+    app_managed.is_synced = False
+    assert _view_sql_for_graph_store(inner, app_managed) == inner
+    assert _view_sql_for_graph_store(inner, None) == inner
+
