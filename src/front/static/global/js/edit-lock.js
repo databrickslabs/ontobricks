@@ -29,11 +29,13 @@
 //      editing" button that renews on the spot. If they ignore the warning
 //      the lease lapses: the lock is *released* server-side (so another user
 //      can take it immediately) and this browser flips to read-only with a
-//      "session expired" banner. A per-version sticky flag (sessionStorage)
-//      then keeps it read-only across incidental reloads / navigation — the
-//      still-free lock is not silently re-grabbed — until the user clicks
-//      "Resume editing". A lease lost to a take-over / stale reclaim flips to
-//      read-only the same way (without the sticky, since it is already gone).
+//      yellow **Resume editing** button in the L2 subnav (left of Save; the
+//      expiry message is a hover tooltip). A per-version sticky flag
+//      (sessionStorage) then keeps it read-only across incidental reloads /
+//      navigation — the still-free lock is not silently re-grabbed — until the
+//      user clicks **Resume editing**. A lease lost to a take-over / stale
+//      reclaim flips to read-only the same way (without the sticky, since it
+//      is already gone).
 //      Hovering the navbar domain badge (#currentDomainName) shows the
 //      remaining-lease countdown while editing.
 //
@@ -70,7 +72,7 @@
     // free lock to the loader) and hand editing straight back — undoing the
     // timeout. The sticky flag (per version, in sessionStorage so it survives
     // reloads but not a new tab) keeps the browser read-only until the user
-    // *explicitly* resumes (the banner's "Resume editing" button).
+    // *explicitly* resumes (the subnav "Resume editing" button).
 
     var STICKY_KEY = 'ob:editLockExpired';
     // "folder\u0000version" of the loaded lockable version, once known.
@@ -174,40 +176,44 @@
         document.body.insertBefore(banner, document.body.firstChild);
     }
 
-    function renderExpiredBanner() {
-        var existing = document.getElementById('editLockBanner');
-        if (existing) existing.remove();
-        var banner = document.createElement('div');
-        banner.id = 'editLockBanner';
+    var resumeTip = null;
 
-        var msg = document.createElement('span');
-        msg.className = 'edit-lock-msg';
-        msg.innerHTML =
-            '<i class="bi bi-hourglass-bottom me-1"></i>' +
-            'Your editing session expired after a period of inactivity — you ' +
-            'now have <strong>read-only</strong> access and saving is disabled. ' +
-            'Click <strong>Resume editing</strong> to reconnect (you regain ' +
-            'editing if no one else has taken over).';
-        banner.appendChild(msg);
+    function expiredTooltipText() {
+        return 'Your editing session expired after a period of inactivity — you ' +
+            'now have read-only access and saving is disabled. Click Resume ' +
+            'editing to reconnect (you regain editing if no one else has taken over).';
+    }
 
-        var actions = document.createElement('span');
-        actions.className = 'edit-lock-actions';
+    function onResumeEditingClick() {
+        // Explicit reconnect: drop the sticky "expired" flag so the reload
+        // is allowed to re-acquire the (still-free) lock.
+        stickyClear();
+        window.location.reload();
+    }
 
-        var reload = document.createElement('button');
-        reload.type = 'button';
-        reload.className = 'btn btn-sm btn-warning';
-        reload.innerHTML =
-            '<i class="bi bi-arrow-clockwise me-1"></i>Resume editing';
-        reload.addEventListener('click', function () {
-            // Explicit reconnect: drop the sticky "expired" flag so the reload
-            // is allowed to re-acquire the (still-free) lock.
-            stickyClear();
-            window.location.reload();
-        });
-        actions.appendChild(reload);
+    function renderResumeEditingButton() {
+        if (document.getElementById('editLockResumeBtn')) return;
 
-        banner.appendChild(actions);
-        document.body.insertBefore(banner, document.body.firstChild);
+        var saveBtn = document.querySelector('.ob-subnav-save-btn');
+        if (!saveBtn || !saveBtn.parentNode) return;
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'editLockResumeBtn';
+        btn.className = 'ob-subnav-resume-btn';
+        btn.innerHTML =
+            '<i class="bi bi-arrow-clockwise"></i> Resume editing';
+        btn.setAttribute('aria-label', expiredTooltipText());
+        btn.addEventListener('click', onResumeEditingClick);
+        saveBtn.parentNode.insertBefore(btn, saveBtn);
+
+        if (window.bootstrap && window.bootstrap.Tooltip) {
+            resumeTip = new window.bootstrap.Tooltip(btn, {
+                title: expiredTooltipText(),
+                trigger: 'hover focus',
+                placement: 'bottom',
+            });
+        }
     }
 
     // ----- lease keep-alive (renew) ---------------------------------
@@ -268,7 +274,7 @@
         teardownLeaseTooltip();
         window.editLockMode = 'view';
         enterReadOnly({});
-        renderExpiredBanner();
+        renderResumeEditingButton();
     }
 
     // Lease lapsed through inactivity: give the lock up server-side (so another
@@ -562,7 +568,7 @@
                 window.editLockMode = 'view';
                 releaseLock();
                 enterReadOnly({});
-                renderExpiredBanner();
+                renderResumeEditingButton();
             } else {
                 // This browser holds the lock — keep its lease alive.
                 window.editLockMode = 'edit';
