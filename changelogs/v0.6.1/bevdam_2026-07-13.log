@@ -1,0 +1,48 @@
+# fix(scripts): setup-lakebase.sh compatibility with current Databricks CLI
+
+## Context
+
+Running `scripts/setup-lakebase.sh` with a current Databricks CLI fails
+silently (exit 1, no output). Three stale assumptions about CLI/API output
+formats had accumulated:
+
+1. `databricks auth env` now prints JSON (`{"env": {…}}`) instead of
+   `export KEY="…"` lines, so the `_cfg` helper resolved empty host/token.
+   Worse, the bare `grep` in `_cfg` tripped `set -o pipefail`, aborting the
+   script before the diagnostic guard could print anything.
+2. OAuth profiles (`auth_type=databricks-cli`, the default since PATs were
+   de-emphasised) expose no `DATABRICKS_TOKEN` in `auth env` at all — a
+   token must be minted via `databricks auth token`.
+3. `databricks postgres list-databases` now prints a bare JSON array rather
+   than `{"databases": […]}`, so existing databases were never detected and
+   the script attempted duplicate creation. The creation fallback payload
+   (`{"name": …}`) was also stale: the databases API now requires
+   `{"spec": {"postgres_database": …, "role": "projects/…/roles/…"}}`.
+
+## Changes
+
+1. `scripts/setup-lakebase.sh` — `_cfg` now parses both the JSON and legacy
+   `export`-line formats of `databricks auth env`, and always exits 0 so the
+   empty-value guard is reached and fails loudly.
+2. `scripts/setup-lakebase.sh` — when `auth env` yields no token (OAuth
+   profiles), mint a short-lived access token via `databricks auth token`.
+3. `scripts/setup-lakebase.sh` — database/endpoint/role list parsers accept
+   both bare-array and wrapped-object JSON shapes.
+4. `scripts/setup-lakebase.sh` — database creation now resolves the branch's
+   first Postgres role and posts the current
+   `{"spec": {"postgres_database", "role"}}` payload; failures are fatal
+   with the API response logged instead of being swallowed.
+
+## Modified files
+
+- scripts/setup-lakebase.sh
+
+## Test result
+
+`uv run pytest -q -m "not scenario"` — 2993 passed, 275 skipped,
+5 deselected in 121.97s.
+
+Live verification against an AWS workspace (CLI v0.250+, OAuth
+profile): fresh-provision path validated piecewise via the same API
+calls (instance + database created); idempotent re-run of the fixed
+script detects the existing instance and database and exits 0.
