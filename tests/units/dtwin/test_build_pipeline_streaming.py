@@ -25,6 +25,7 @@ def _bare_pipeline(**overrides):
     pipe.task_id = "t-test"
     pipe.graph_name = "G_V1"
     pipe.view_table = "cat.sch.v_g"
+    pipe.parts = pipe.view_table.split(".")
     pipe.source_client = MagicMock()
     pipe.store = MagicMock()
     pipe.tm = MagicMock()
@@ -165,6 +166,8 @@ class TestApplyViaSyncedPipeline:
         pipe.store.ensure_synced_union_view = MagicMock()
         pipe.store.truncate_companion = MagicMock()
         pipe._count_view_triples = MagicMock(return_value=1234)
+        pipe.spark_sql = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
+        pipe.source_client.create_or_replace_view.return_value = (True, "ok")
         pipe._mgr = mgr
         # _raise_if_cancelled calls tm.is_cancelled(); return False so cancel
         # checks don't abort the pipeline in unit tests.
@@ -247,6 +250,35 @@ class TestResolveLakebaseMode:
             pipe._resolve_lakebase_mode()
 
         assert pipe._is_lakebase_synced is False
+
+
+class TestLakeflowViewWrap:
+    """VIEW DDL must expose object_hash whenever the graph store is managed_synced."""
+
+    def test_wrap_follows_opened_store_when_mode_resolution_missed(self):
+        pipe = _bare_pipeline(_is_lakebase_synced=False)
+        pipe.spark_sql = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
+        pipe.store.is_synced = True
+
+        pipe._sync_flags_from_store()
+
+        assert pipe._is_lakebase_synced is True
+        assert pipe._wrap_view_sql_for_lakeflow() is True
+        wrapped = pipe._view_sql_for_build()
+        assert "object_hash" in wrapped
+
+    def test_ensure_lakeflow_source_view_refreshes_view(self):
+        pipe = _bare_pipeline(_is_lakebase_synced=True)
+        pipe.spark_sql = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
+        pipe.parts = ("cat", "sch", "v_g")
+        pipe.store.is_synced = True
+        pipe.source_client.create_or_replace_view.return_value = (True, "ok")
+
+        assert pipe._ensure_lakeflow_source_view() is True
+
+        args = pipe.source_client.create_or_replace_view.call_args.args
+        assert args[:3] == ("cat", "sch", "v_g")
+        assert "object_hash" in args[3]
 
 
 class TestCollectDomainStats:
