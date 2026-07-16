@@ -83,13 +83,33 @@ _err() { echo "[setup-lakebase] ERR $*" >&2; exit 1; }
 _dry() { echo "[setup-lakebase] DRY $*"; }
 
 # ── Resolve Databricks host + token from CLI config ──────────────────────────
+# `databricks auth env` prints JSON on current CLIs and `export KEY="…"`
+# lines on older ones — handle both. Always exits 0 so the empty-value
+# guard below is reached (a bare grep would trip `set -o pipefail` and
+# abort the script before it can print a diagnostic).
 _cfg() {
-  databricks auth env --profile "$PROFILE" 2>/dev/null \
-    | grep "^export $1=" | sed "s/^export $1=\"//;s/\"$//"
+  databricks auth env --profile "$PROFILE" 2>/dev/null | python3 -c "
+import sys, json, re
+raw = sys.stdin.read()
+try:
+    print(json.loads(raw).get('env', {}).get(sys.argv[1], ''))
+except ValueError:
+    m = re.search(r'^export %s=\"(.*)\"$' % re.escape(sys.argv[1]), raw, re.M)
+    print(m.group(1) if m else '')
+" "$1"
 }
 
 HOST=$(_cfg DATABRICKS_HOST)
 TOKEN=$(_cfg DATABRICKS_TOKEN)
+
+# OAuth profiles (auth_type=databricks-cli) expose no DATABRICKS_TOKEN in
+# `auth env` — mint a short-lived OAuth access token instead.
+if [[ -z "$TOKEN" ]]; then
+  TOKEN=$(databricks auth token --profile "$PROFILE" 2>/dev/null | python3 -c "
+import sys, json
+print(json.load(sys.stdin).get('access_token', ''))
+" 2>/dev/null || true)
+fi
 
 [[ -z "$HOST" || -z "$TOKEN" ]] && \
   _err "Could not resolve DATABRICKS_HOST / DATABRICKS_TOKEN from profile '$PROFILE'."
@@ -159,7 +179,7 @@ EP_JSON=$(curl -sf "$HOST/api/2.0/postgres/projects/$NAME/branches/$BRANCH/endpo
 EP_HOST=$(echo "$EP_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-eps = data.get('endpoints', [])
+eps = data if isinstance(data, list) else (data or {}).get('endpoints', [])
 for ep in eps:
     st = ep.get('status', {})
     if st.get('state') in ('EP_STATE_ACTIVE', 'AVAILABLE', None):
@@ -181,7 +201,8 @@ DB_LIST=$(databricks postgres list-databases "projects/$NAME/branches/$BRANCH" \
 DB_SEGMENT=$(echo "$DB_LIST" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-dbs = data.get('databases', [])
+# Current CLIs print a bare JSON array; older ones wrap it in {'databases': […]}.
+dbs = data if isinstance(data, list) else (data or {}).get('databases', [])
 for db in dbs:
     status = db.get('status', {})
     pg_db  = status.get('postgres_database', '')
@@ -195,19 +216,26 @@ if [[ -n "$DB_SEGMENT" ]]; then
   _ok "Database '$DATABASE' already exists: segment='$DB_SEGMENT'"
 else
   _log "Creating Postgres database '$DATABASE' inside '$NAME/$BRANCH' …"
-  CREATE_OUT=$(databricks postgres create-database \
-    "projects/$NAME/branches/$BRANCH" \
-    --name "$DATABASE" \
-    --profile "$PROFILE" -o json 2>&1) || {
-      _log "  (create-database failed — database may already exist or CLI command unavailable)"
-      _log "  Raw output: $CREATE_OUT"
-      _log "  Falling back to API …"
-      DB_API_OUT=$(curl -sf -X POST \
-        "$HOST/api/2.0/postgres/projects/$NAME/branches/$BRANCH/databases" \
-        -H "Authorization: Bearer $TOKEN" \
-        -H "Content-Type: application/json" \
-        -d "{\"name\":\"$DATABASE\"}" 2>&1) || true
+  # The databases API requires spec.postgres_database plus spec.role in
+  # full resource-path form; resolve the branch's first role (the
+  # creator's) rather than hardcoding one.
+  ROLE_PATH=$(curl -sf "$HOST/api/2.0/postgres/projects/$NAME/branches/$BRANCH/roles" \
+    -H "Authorization: Bearer $TOKEN" 2>/dev/null | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+roles = data if isinstance(data, list) else (data or {}).get('roles', [])
+print(roles[0]['name'] if roles else '')
+" 2>/dev/null || true)
+  [[ -z "$ROLE_PATH" ]] && \
+    _err "Could not resolve a Postgres role on '$NAME/$BRANCH' to own '$DATABASE'."
+
+  DB_API_OUT=$(curl -sf -X POST \
+    "$HOST/api/2.0/postgres/projects/$NAME/branches/$BRANCH/databases" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"spec\":{\"postgres_database\":\"$DATABASE\",\"role\":\"$ROLE_PATH\"}}" 2>&1) || {
       _log "  API output: $DB_API_OUT"
+      _err "Failed to create database '$DATABASE' on '$NAME/$BRANCH'."
     }
 
   # Re-list to get the db-* segment
@@ -217,7 +245,8 @@ else
   DB_SEGMENT=$(echo "$DB_LIST" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-for db in data.get('databases', []):
+dbs = data if isinstance(data, list) else (data or {}).get('databases', [])
+for db in dbs:
     pg_db = db.get('status', {}).get('postgres_database', '')
     seg   = db.get('name','').split('/')[-1]
     if pg_db == sys.argv[1] or seg == sys.argv[1]:
