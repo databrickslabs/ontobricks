@@ -1,0 +1,35 @@
+# fix(scripts): setup-lakebase.sh compatibility with current Databricks CLI
+
+## Context
+
+`scripts/setup-lakebase.sh` failed silently (exit 1, no output) with
+Databricks CLI v0.250+. Four stale assumptions about CLI/API output formats
+had accumulated; the fix is ported from PR #118 and applied to the 0.6.3
+maintenance branch (closes #117).
+
+## Changes
+
+1. `scripts/setup-lakebase.sh` — `_cfg` now parses both the JSON
+   (`{"env": {…}}`) and legacy `export KEY="…"` formats of
+   `databricks auth env`, and always exits 0 so the empty-value guard is
+   reached and fails loudly instead of aborting silently under `pipefail`.
+2. `scripts/setup-lakebase.sh` — when `auth env` yields no token
+   (OAuth / `auth_type=databricks-cli` profiles), mint a short-lived access
+   token via `databricks auth token`.
+3. `scripts/setup-lakebase.sh` — endpoint, database, and role list parsers
+   now accept both a bare JSON array (current CLI) and the legacy
+   `{"databases": […]}` / `{"endpoints": […]}` wrapped-object shapes,
+   restoring idempotency on re-runs.
+4. `scripts/setup-lakebase.sh` — database creation now resolves the branch's
+   first Postgres role and posts the current
+   `{"spec": {"postgres_database": …, "role": "…"}}` payload; failures are
+   fatal with the API response logged instead of being swallowed.
+
+## Modified files
+
+- scripts/setup-lakebase.sh
+
+## Test result
+
+`uv run pytest -q -m "not scenario"` — 3007 passed, 275 skipped,
+5 deselected, 23 warnings in 20.87s.
