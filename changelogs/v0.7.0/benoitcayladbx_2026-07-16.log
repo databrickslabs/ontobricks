@@ -33,3 +33,50 @@ applied here to both the develop and 0.6.3 branches (closes #117).
 
 `uv run pytest -q -m "not scenario"` — 3231 passed, 275 skipped,
 5 deselected, 23 warnings in 29.27s.
+
+## Replace Back End dropdown with selectable cards
+
+Context: Settings → Triple store — Back End used a compact dropdown for the
+global triple-store backend choice. The page now uses large two-column cards
+with icons and one-line taglines so admins can compare Lakebase vs Delta at a
+glance.
+
+Changes:
+
+1. `src/front/templates/settings.html`
+   Replaced `#tripleStoreBackendSelect` dropdown with a 2-column radio card grid.
+2. `src/front/static/global/css/config.css`
+   Added `.ob-backend-card` styles (option circle, icon, selected state).
+3. `src/front/static/config/js/settings.js`
+   Added `getTripleStoreBackendValue` / `setTripleStoreBackendValue` helpers for the card radios.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/global/css/config.css
+- src/front/static/config/js/settings.js
+
+Tests: `uv run pytest -q -m "not scenario"` → 3231 passed, 275 skipped, 5 deselected, 23 warnings in 30.41s.
+
+## Fix Back End cards hidden during load
+
+Context: The Back End section hid `#graphDbTabContent` while fetching the saved
+backend, so a slow or hanging API left the page with no visible cards. Bootstrap
+`btn-check` also hid the native radio controls. Cards now stay visible during
+load, use visible `form-check-input` radios inside each card, and `config.css`
+is cache-busted with `asset_version`.
+
+Changes:
+
+1. `src/front/templates/settings.html`
+   Restructured backend cards with in-card radios; added `?v={{ asset_version }}` on config.css.
+2. `src/front/static/global/css/config.css`
+   Switched selected-state selectors from `btn-check` siblings to `:has(.ob-backend-card-radio:checked)`.
+3. `src/front/static/config/js/settings.js`
+   `setBackendTabLoading` no longer hides `#graphDbTabContent`.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/global/css/config.css
+- src/front/static/config/js/settings.js
+
+Tests: `uv run pytest -q -m "not scenario"` → 3231 passed, 275 skipped, 5 deselected, 23 warnings in 28.52s.

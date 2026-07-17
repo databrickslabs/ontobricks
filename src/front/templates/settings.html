@@ -4,7 +4,7 @@
 {% block title %}Settings - OntoBricks{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -102,17 +102,39 @@
 
                     <div id="graphDbTabContent">
                         <div class="mb-4">
-                            <label for="tripleStoreBackendSelect" class="form-label fw-semibold mb-2">
-                                Triple store backend
-                                <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                            <div class="d-flex align-items-center flex-wrap gap-2 mb-3" id="tripleStoreBackendLabel">
+                                <span class="form-label fw-semibold mb-0">Triple store backend</span>
+                                <span class="badge bg-warning-subtle text-warning-emphasis border settings-badge-admin-note">
                                     <i class="bi bi-shield-lock me-1"></i>Admin only
                                 </span>
-                            </label>
-                            <select class="form-select form-select-sm" id="tripleStoreBackendSelect">
-                                <option value="lakebase">Lakebase (Postgres) + graph viewer sync</option>
-                                <option value="databricks">Delta (Unity Catalog TABLE)</option>
-                            </select>
-                            <small class="text-muted d-block mt-2">
+                            </div>
+                            <div class="row g-3 ob-backend-card-grid" role="radiogroup" aria-labelledby="tripleStoreBackendLabel">
+                                <div class="col-md-6">
+                                    <label class="ob-backend-card h-100" for="tripleStoreBackendLakebase">
+                                        <input type="radio" class="form-check-input ob-backend-card-radio"
+                                               name="triple_store_backend" id="tripleStoreBackendLakebase"
+                                               value="lakebase" autocomplete="off" checked>
+                                        <span class="ob-backend-card-icon"><i class="bi bi-diagram-3" aria-hidden="true"></i></span>
+                                        <span class="ob-backend-card-text">
+                                            <span class="ob-backend-card-title">Lakebase</span>
+                                            <span class="ob-backend-card-tagline">Postgres graph database with graph viewer sync for interactive exploration.</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="ob-backend-card h-100" for="tripleStoreBackendDatabricks">
+                                        <input type="radio" class="form-check-input ob-backend-card-radio"
+                                               name="triple_store_backend" id="tripleStoreBackendDatabricks"
+                                               value="databricks" autocomplete="off">
+                                        <span class="ob-backend-card-icon"><i class="bi bi-layers" aria-hidden="true"></i></span>
+                                        <span class="ob-backend-card-text">
+                                            <span class="ob-backend-card-title">Delta</span>
+                                            <span class="ob-backend-card-tagline">Governed Unity Catalog Delta tables with no separate graph database to provision.</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-3">
                                 Selects where triples are stored and how the Knowledge Graph is built.
                                 <strong>Save</strong> at the top persists the choice. Lakebase and Delta
                                 settings pages stay available regardless of this selection.

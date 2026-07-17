@@ -27,6 +27,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function escapeHtmlSettings(str) { return escapeHtml(str); }
 
+    function getTripleStoreBackendValue() {
+        const checked = document.querySelector('input[name="triple_store_backend"]:checked');
+        return checked ? checked.value : 'lakebase';
+    }
+
+    function setTripleStoreBackendValue(value) {
+        const radios = document.querySelectorAll('input[name="triple_store_backend"]');
+        if (!radios.length) return;
+        let matched = false;
+        radios.forEach(function (radio) {
+            const on = radio.value === value;
+            radio.checked = on;
+            if (on) matched = true;
+        });
+        if (!matched) radios[0].checked = true;
+    }
+
+    function hasTripleStoreBackendPicker() {
+        return document.querySelector('input[name="triple_store_backend"]') != null;
+    }
+
     loadCurrentConfig();
     loadBaseUri();
     loadCurrentDefaultEmoji();
@@ -1045,14 +1066,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Spinner scoped to the Back End section only (fast, light load).
+    // Cards are static markup — keep them visible while the saved value loads.
     function setBackendTabLoading(loading) {
-        const beBanner  = document.getElementById('backendSectionBanner');
-        const beContent = document.getElementById('graphDbTabContent');
+        const beBanner = document.getElementById('backendSectionBanner');
         if (beBanner) {
             beBanner.classList.toggle('d-none', !loading);
             beBanner.classList.toggle('d-flex', loading);
         }
-        if (beContent) beContent.style.display = loading ? 'none' : '';
     }
 
     // Spinner scoped to the Lakebase + Delta sections (deferred heavy load).
@@ -1088,15 +1108,16 @@ document.addEventListener('DOMContentLoaded', function () {
     // fast. The graph engine config and the Lakebase/Delta remote cascade are
     // deferred (see loadGraphEngineConfig / loadGraphDbHeavyFromServer).
     async function loadTripleStoreBackend() {
-        const tsSel = document.getElementById('tripleStoreBackendSelect');
-        if (!tsSel) return;
+        if (!hasTripleStoreBackendPicker()) return;
         try {
             const resp = await fetch('/settings/triple-store-backend', { credentials: 'same-origin' });
             const tsData = resp.ok ? await resp.json() : {};
             const rawTs = tsData.triple_store_backend;
             if (tsData.success && rawTs) {
                 const allowedTs = Array.isArray(tsData.allowed_backends) ? tsData.allowed_backends : [];
-                tsSel.value = (allowedTs.length === 0 || allowedTs.indexOf(rawTs) >= 0) ? rawTs : 'lakebase';
+                setTripleStoreBackendValue(
+                    (allowedTs.length === 0 || allowedTs.indexOf(rawTs) >= 0) ? rawTs : 'lakebase'
+                );
             }
             currentDeltaWarehouseId = tsData.delta_warehouse_id || '';
             effectiveDeltaWarehouseId = tsData.effective_delta_warehouse_id || '';
@@ -1519,14 +1540,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnLoadDeltaObjects')?.addEventListener('click', loadDeltaObjects);
 
-    document.getElementById('tripleStoreBackendSelect')?.addEventListener('change', async function () {
-        // Backend choice is persisted via Save on Back End; do not hide Lakebase/Delta nav items.
-        if (this.value === 'lakebase') {
-            applyLakebaseFormFromConfigTextarea();
-            await loadLakebaseProjects();
-            prefillLakebaseConnectionFromConfig();
-            await loadLakebaseGraphHealth();
-        }
+    document.querySelectorAll('input[name="triple_store_backend"]').forEach(function (radio) {
+        radio.addEventListener('change', async function () {
+            // Backend choice is persisted via Save on Back End; do not hide Lakebase/Delta nav items.
+            if (this.value === 'lakebase') {
+                applyLakebaseFormFromConfigTextarea();
+                await loadLakebaseProjects();
+                prefillLakebaseConnectionFromConfig();
+                await loadLakebaseGraphHealth();
+            }
+        });
     });
 
     // cascading project → branch → database → schema
@@ -2531,17 +2554,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /** Persist graph engine and JSON config (used by global Save). */
     async function saveGraphDbSettings(errors) {
-        const tsSel = document.getElementById('tripleStoreBackendSelect');
         const sel = document.getElementById('graphEngineSelect');
         const ta = document.getElementById('graphEngineConfig');
         const errDiv = document.getElementById('graphEngineConfigError');
-        if (!tsSel) return;
+        if (!hasTripleStoreBackendPicker()) return;
 
         if (errDiv) errDiv.style.display = 'none';
 
         try {
             const deltaSelect = document.getElementById('deltaWarehouseSelect');
-            const tsBody = { triple_store_backend: tsSel.value };
+            const tsValue = getTripleStoreBackendValue();
+            const tsBody = { triple_store_backend: tsValue };
             // The Delta warehouse dropdown is only populated by the heavy load.
             // Read the live select only once that has run; otherwise fall back to
             // the saved id so a Save from the Back End tab can't blank it out.
@@ -2573,7 +2596,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 setDeltaWarehouseStatus();
             }
 
-            if (tsSel.value !== 'lakebase' || !sel || !ta) {
+            if (tsValue !== 'lakebase' || !sel || !ta) {
                 applyGraphDbEnginePanels();
                 return;
             }
@@ -2760,8 +2783,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         // A Lakebase save persists the graph engine JSON config; make sure it is
         // loaded first so the merge/save cannot blank out the saved config.
-        const tsSelForSave = document.getElementById('tripleStoreBackendSelect');
-        if (tsSelForSave && tsSelForSave.value === 'lakebase' && !graphEngineConfigLoaded) {
+        const tsValueForSave = getTripleStoreBackendValue();
+        if (tsValueForSave === 'lakebase' && !graphEngineConfigLoaded) {
             try {
                 await loadGraphEngineConfig();
             } catch (e) {

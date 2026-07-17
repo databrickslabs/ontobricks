@@ -31,6 +31,90 @@
 }
 
 /* ==========================================================================
+   Triple store backend selection cards (Settings → Back End)
+   ========================================================================== */
+.ob-backend-card-grid .ob-backend-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+    margin-bottom: 0;
+    border: 2px solid var(--db-border, #E0E0E0);
+    border-radius: 0.5rem;
+    background: #ffffff;
+    cursor: pointer;
+    transition: border-color var(--db-transition-fast, 0.15s ease),
+                box-shadow var(--db-transition-fast, 0.15s ease),
+                background-color var(--db-transition-fast, 0.15s ease);
+    min-height: 8rem;
+}
+
+.ob-backend-card-grid .ob-backend-card:hover {
+    box-shadow: var(--db-shadow-sm);
+}
+
+.ob-backend-card-grid .ob-backend-card:has(.ob-backend-card-radio:checked) {
+    border-color: var(--db-primary, #FF3621);
+    background: var(--db-primary-light, rgba(255, 54, 33, 0.1));
+    box-shadow: var(--db-shadow-primary, 0 0.125rem 0.5rem rgba(255, 54, 33, 0.15));
+}
+
+.ob-backend-card-radio {
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0.2rem 0 0;
+    cursor: pointer;
+}
+
+.ob-backend-card-radio:focus {
+    box-shadow: 0 0 0 0.2rem rgba(var(--db-primary-rgb, 255, 54, 33), 0.25);
+}
+
+.ob-backend-card-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.5rem;
+    background: var(--db-light-gray, #F7F7F7);
+    color: var(--db-text-secondary, #6B6C6D);
+    font-size: 1.5rem;
+}
+
+.ob-backend-card-grid .ob-backend-card:has(.ob-backend-card-radio:checked) .ob-backend-card-icon {
+    color: var(--db-primary, #FF3621);
+    background: rgba(255, 54, 33, 0.12);
+}
+
+.ob-backend-card-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.ob-backend-card-title {
+    display: block;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--db-text, #1E1E1E);
+    margin-bottom: 0.35rem;
+}
+
+.ob-backend-card-tagline {
+    display: block;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: var(--db-text-muted, #666666);
+}
+
+.ob-backend-card-grid .ob-backend-card:has(.ob-backend-card-radio:focus-visible) {
+    outline: 2px solid var(--db-primary, #FF3621);
+    outline-offset: 2px;
+}
+
+/* ==========================================================================
    Registry Select Spinners
    ========================================================================== */
 .registry-select-spinner {
