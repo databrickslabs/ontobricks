@@ -118,6 +118,25 @@ class TestSaveDomainInfo:
         )
         assert domain.ontology["base_uri"].endswith("/AcmeSales#")
 
+    def test_auto_base_uri_sanitizes_spaces_in_domain_name(self):
+        """Domain names with spaces must not produce illegal IRI paths."""
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"name": "WRFM - Shell"})
+        assert " " not in result["base_uri"]
+        assert result["base_uri"].endswith("/WRFM_-_Shell#")
+
+    def test_custom_base_uri_with_spaces_is_sanitized(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info(
+            {
+                "name": "WRFM",
+                "base_uri": "https://databricks-ontology.com/WRFM - Shell#",
+                "base_uri_auto": False,
+            }
+        )
+        assert " " not in domain.ontology["base_uri"]
+        assert "%20" in domain.ontology["base_uri"]
+
     def test_save_review_quorum(self):
         domain = _mock_domain()
         result = Domain(domain).save_domain_info({"review_quorum": 3})

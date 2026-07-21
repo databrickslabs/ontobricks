@@ -1,0 +1,26 @@
+## Fix R2RML generation when ontology URIs contain spaces
+
+Context: R2RML Turtle serialization failed (502) when the domain or ontology
+name contained spaces. Changing ontology.base_uri alone did not rewrite stale
+class, property, and mapping IRIs, which RDFLib then refused to serialize.
+
+Changes:
+
+1. src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Percent-encode illegal IRI characters in base_uri and config-derived URIRefs.
+2. src/back/objects/domain/Domain.py
+   Sanitize auto-generated and custom base URIs.
+3. tests/units/mapping/test_r2rml_generator.py
+   Cover spaced base URIs and class URIs.
+4. tests/units/domain/test_domain_service.py
+   Cover auto and custom base URI sanitization.
+
+Modified files:
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/back/objects/domain/Domain.py
+- tests/units/mapping/test_r2rml_generator.py
+- tests/units/domain/test_domain_service.py
+- changelogs/v0.6.3/benoitcayladbx_2026-07-21.log
+
+Tests: uv run pytest -q -m "not scenario" → 3011 passed, 275 skipped,
+5 deselected, 23 warnings in 29.50s

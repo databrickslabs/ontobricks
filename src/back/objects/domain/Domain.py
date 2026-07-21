@@ -12,7 +12,7 @@ import os
 import re
 import threading
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from shared.config.settings import Settings
 from back.core.errors import (
@@ -327,27 +327,59 @@ class Domain:
         except (TypeError, ValueError):
             return 1
 
+    @staticmethod
+    def _sanitize_base_uri(uri: str) -> str:
+        """Percent-encode illegal IRI characters (e.g. spaces) in a base URI.
+
+        Preserves a trailing ``#`` or ``/`` separator used by ontology namespaces.
+        """
+        if not uri:
+            return uri
+        raw = str(uri).strip()
+        ends_hash = raw.endswith("#")
+        ends_slash = (not ends_hash) and raw.endswith("/")
+        parts = urlsplit(raw)
+        safe = "/:@-._~!$&'()*+,;=%"
+        out = urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                quote(parts.path, safe=safe),
+                parts.query,
+                quote(parts.fragment, safe=safe),
+            )
+        )
+        if ends_hash and not out.endswith("#"):
+            return out + "#"
+        if ends_slash and not out.endswith("/"):
+            return out + "/"
+        return out
+
     def _resolve_base_uri(
         self, domain_name: str, provided: str = "", *, auto: bool = True
     ) -> str:
         """Return the effective ontology base URI for ``domain_name``.
 
         Mirrors the frontend ``updateAutoBaseUri`` (``{default}/{Name}#``):
-        a custom (non-auto) value is kept as-is, while auto mode — or an empty
-        custom value — is generated from the globally configured default base
-        URI domain and the domain name. Guarantees a non-empty, well-formed URI
-        so a new domain never persists an empty or sentinel base_uri.
+        a custom (non-auto) value is kept (after IRI sanitization), while auto
+        mode — or an empty custom value — is generated from the globally
+        configured default base URI domain and a sanitized domain name.
+        Guarantees a non-empty, well-formed URI so a new domain never persists
+        an empty or sentinel base_uri.
         """
         if not auto and provided:
-            return provided
+            return self._sanitize_base_uri(provided)
         try:
             default_domain = resolve_default_base_uri(self._s, self._settings)
         except Exception as exc:  # noqa: BLE001 — never fail a save on URI gen
             logger.debug("default base URI resolve failed: %s", exc)
             default_domain = ""
         default_domain = (default_domain or DEFAULT_BASE_URI).rstrip("/#")
-        safe_name = (domain_name or "").strip() or "MyDomain"
-        return f"{default_domain}/{safe_name}#"
+        # Domain display names often contain spaces ("WRFM - Shell"); those
+        # must not leak into the IRI path or R2RML Turtle serialization fails.
+        raw_name = (domain_name or "").strip() or "MyDomain"
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", raw_name).strip("_") or "MyDomain"
+        return self._sanitize_base_uri(f"{default_domain}/{safe_name}#")
 
     def get_domain_template_data(self) -> Dict[str, Any]:
         """Get project data for template rendering.
