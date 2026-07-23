@@ -44,6 +44,8 @@ from back.objects.registry.registry_cache import (
     set_cached_registry_details,
     get_cached_registry_names,
     set_cached_registry_names,
+    get_cached_published_domain,
+    set_cached_published_domain,
     invalidate_registry_cache,
 )
 
@@ -633,27 +635,39 @@ class RegistryService:
         ``True`` only domains whose MCP version has a non-empty ``classes``
         list are included.
         """
-        ok, names, msg = self._store.list_domain_folders()
+        # Fast path: the cached two-query metadata listing already carries
+        # per-version ``status`` + description, so a domain's PUBLISHED
+        # membership can be decided without the O(domains × versions)
+        # full-document scan the previous implementation performed.
+        ok, details, msg = self.list_domain_details_cached()
         if not ok:
             return False, [], msg
 
         result: List[Dict[str, str]] = []
-        for name in names:
-            try:
-                mcp_ver, mcp_data = self.find_mcp_version(name)
-                if not mcp_ver:
-                    continue
-                info = mcp_data.get("info", {})
-                if require_ontology:
+        for d in details:
+            name = d.get("name", "")
+            has_published = any(
+                (v.get("status") or "").upper() == "PUBLISHED"
+                for v in d.get("versions", [])
+            )
+            if not has_published:
+                continue
+            if require_ontology:
+                # Metadata only carries the latest version's ontology, so
+                # confirm the PUBLISHED version has classes with one targeted
+                # read (still far cheaper than scanning every version).
+                try:
+                    mcp_ver, mcp_data = self.find_published_version(name)
+                    if not mcp_ver:
+                        continue
                     ver_data = mcp_data.get("versions", {}).get(mcp_ver, {})
                     ont = ver_data.get("ontology", mcp_data.get("ontology", {}))
                     if not ont.get("classes"):
                         continue
-                result.append(
-                    {"name": name, "description": info.get("description", "")}
-                )
-            except Exception:
-                logger.debug("Could not inspect domain %s", name)
+                except Exception:
+                    logger.debug("Could not inspect ontology for domain %s", name)
+                    continue
+            result.append({"name": name, "description": d.get("description", "")})
         return True, result, ""
 
     def delete_domain(self, folder: str) -> List[str]:
@@ -909,6 +923,25 @@ class RegistryService:
             "",
             f'No PUBLISHED version available for domain "{folder}"',
         )
+
+    def load_published_domain_data_cached(
+        self, folder: str
+    ) -> Tuple[bool, dict, str, str]:
+        """Like :meth:`load_published_domain_data` but memoised (TTL).
+
+        Read-only API/MCP surfaces resolve the same PUBLISHED document on
+        every call. Caching it removes the newest→oldest ``read_version``
+        scan from the hot path. The cache is invalidated on any version
+        write / status change via :func:`invalidate_registry_cache`.
+        """
+        cached = get_cached_published_domain(self.cache_key, folder)
+        if cached is not None:
+            ver, data = cached
+            return True, data, ver, ""
+        ok, data, ver, err = self.load_published_domain_data(folder)
+        if ok:
+            set_cached_published_domain(self.cache_key, folder, ver, data)
+        return ok, data, ver, err
 
     def set_version_status(
         self, folder: str, version: str, status: str

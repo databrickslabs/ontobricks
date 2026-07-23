@@ -16,6 +16,8 @@ targets a specific version; when omitted, the latest version is used.
 Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
 
+import time
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Dict, List, Optional
@@ -44,6 +46,14 @@ _expand_uri_aliases = DigitalTwin.expand_uri_aliases
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+# Short-TTL, in-process cache for ``GET /stats`` results keyed by the graph
+# query table. Triple-store stats only change on a build, so a small TTL
+# removes the 3–4 full-table aggregate scans from repeated read-only tool
+# calls (e.g. an agent probing ``list_entity_types`` several times) while
+# staying fresh within a working session.
+_STATS_CACHE_TTL_SECONDS = 60
+_stats_cache: Dict[str, Dict[str, Any]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +303,7 @@ async def dt_status(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
@@ -375,6 +386,7 @@ async def dt_stats(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     graph_name = effective_graph_name(domain)
 
@@ -385,25 +397,25 @@ async def dt_stats(
     if not store:
         raise ValidationError("Graph backend not configured")
 
-    try:
+    cached = _stats_cache.get(graph_name)
+    if cached and (time.monotonic() - cached["_ts"]) < _STATS_CACHE_TTL_SECONDS:
+        logger.info("dt_stats: cache hit for %s", graph_name)
+        return cached["resp"]
+
+    def _compute_stats() -> StatsResponse:
         stats = store.get_aggregate_stats(graph_name)
         total = stats["total"]
-        subj = stats["distinct_subjects"]
-        pred = stats["distinct_predicates"]
         type_cnt = stats["type_assertion_count"]
         lbl = stats["label_count"]
 
         entity_rows = store.get_type_distribution(graph_name)
         pred_rows = store.get_predicate_distribution(graph_name)
 
-        rel_cnt = max(total - type_cnt - lbl, 0)
-        inferred_cnt = store.get_inferred_triple_count(graph_name)
-
         return StatsResponse(
             success=True,
             total_triples=total,
-            distinct_subjects=subj,
-            distinct_predicates=pred,
+            distinct_subjects=stats["distinct_subjects"],
+            distinct_predicates=stats["distinct_predicates"],
             entity_types=[
                 EntityTypeStat(uri=r["type_uri"], count=int(r["cnt"]))
                 for r in entity_rows
@@ -414,9 +426,22 @@ async def dt_stats(
             ],
             label_count=lbl,
             type_assertion_count=type_cnt,
-            relationship_count=rel_cnt,
-            inferred_triples=inferred_cnt,
+            relationship_count=max(total - type_cnt - lbl, 0),
+            inferred_triples=store.get_inferred_triple_count(graph_name),
         )
+
+    try:
+        t0 = time.perf_counter()
+        # Run the (blocking) SQL off the event loop so a slow scan does not
+        # stall other concurrent MCP tool calls.
+        resp = await run_blocking(_compute_stats)
+        logger.info(
+            "dt_stats: computed for %s in %.0fms",
+            graph_name,
+            (time.perf_counter() - t0) * 1000,
+        )
+        _stats_cache[graph_name] = {"resp": resp, "_ts": time.monotonic()}
+        return resp
     except Exception as e:
         logger.exception("dt_stats failed: %s", e)
         raise InfrastructureError(
@@ -606,6 +631,7 @@ async def dt_triples_find(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     table = effective_graph_name(domain)
     if not table:
@@ -617,7 +643,7 @@ async def dt_triples_find(
 
     rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
-    try:
+    def _run_find() -> FindResponse:
         rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
 
         seed_conditions: list[str] = []
@@ -696,6 +722,22 @@ async def dt_triples_find(
             offset=offset,
             entity_count=len(all_entities),
         )
+
+    try:
+        t0 = time.perf_counter()
+        # BFS traversal + alias expansion + bulk triple fetch are all
+        # blocking SQL; run them off the event loop so a dense neighbourhood
+        # walk does not stall other concurrent MCP tool calls.
+        resp = await run_blocking(_run_find)
+        logger.info(
+            "dt_triples_find: search=%r type=%r depth=%d → %d triples in %.0fms",
+            search,
+            entity_type,
+            depth,
+            resp.total,
+            (time.perf_counter() - t0) * 1000,
+        )
+        return resp
     except Exception as e:
         logger.exception("dt_triples_find failed: %s", e)
         raise InfrastructureError("Triple search failed", detail=str(e)) from e
