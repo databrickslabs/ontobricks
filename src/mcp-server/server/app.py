@@ -17,7 +17,9 @@ Workflow:
   2. ``list_domain_versions`` / ``get_design_status`` (optional) —
      versions and design readiness before heavy queries.
   3. ``select_domain`` — choose which domain to work with.
-  4. ``list_entity_types`` / ``describe_entity`` / ``get_status`` —
+  4. ``describe_ontology`` (optional) — recap the conceptual model
+     (classes/relationships with descriptions) before querying.
+  5. ``list_entity_types`` / ``describe_entity`` / ``get_status`` —
      query the selected domain's Knowledge Graph.
 
 Three operating modes controlled by the ``mode`` argument:
@@ -59,6 +61,7 @@ _OAUTH_TOKEN_TTL = 3000  # refresh well before the typical 3600 s expiry
 API_V1_DOMAINS = "/api/v1/domains"
 API_V1_DOMAIN_VERSIONS = "/api/v1/domain/versions"
 API_V1_DOMAIN_DESIGN_STATUS = "/api/v1/domain/design-status"
+API_V1_DOMAIN_ONTOLOGY_DESIGN = "/api/v1/domain/ontology-design"
 API_V1_DT_REGISTRY = "/api/v1/digitaltwin/registry"
 API_V1_DT_STATUS = "/api/v1/digitaltwin/status"
 API_V1_DT_STATS = "/api/v1/digitaltwin/stats"
@@ -106,6 +109,75 @@ def _is_uri(value: str) -> bool:
 def _is_label_predicate(pred: str) -> bool:
     ln = _local_name(pred).lower()
     return ln in ("label", "name") or pred == RDFS_LABEL
+
+
+# ── Ontology-design formatting ────────────────────────────────────────────
+
+
+def _format_ontology_design(data: dict) -> str:
+    """Render the ``/domain/ontology-design`` payload as a terse recap.
+
+    Produces an agent-friendly semantic map: classes with descriptions and
+    attributes (name:datatype), then relationships as ``source → target``.
+    """
+    if not data.get("success"):
+        return data.get("message", "Could not load ontology design.")
+
+    name = data.get("domain_name", "")
+    base = data.get("base_uri") or ""
+    desc = data.get("description") or ""
+    classes = data.get("classes", [])
+    relationships = data.get("relationships", [])
+
+    header = f"Ontology Design — {name}"
+    if base:
+        header += f"   (base: {base})"
+    lines: list[str] = [header, "=" * 50]
+    if desc:
+        lines.append(desc)
+    lines.append("")
+
+    lines.append(f"CLASSES ({len(classes)})")
+    lines.append("-" * 50)
+    if not classes:
+        lines.append("  (none)")
+    for c in classes:
+        display = c.get("label") or c.get("name", "")
+        cdesc = c.get("description") or ""
+        line = f"  • {display}"
+        if cdesc:
+            line += f" — {cdesc}"
+        lines.append(line)
+        attrs = c.get("attributes", [])
+        if attrs:
+            rendered = ", ".join(
+                (
+                    f"{a.get('name', '')}:{_local_name(a.get('datatype', ''))}"
+                    if a.get("datatype")
+                    else a.get("name", "")
+                )
+                for a in attrs
+                if a.get("name")
+            )
+            if rendered:
+                lines.append(f"    attrs: {rendered}")
+    lines.append("")
+
+    lines.append(f"RELATIONSHIPS ({len(relationships)})")
+    lines.append("-" * 50)
+    if not relationships:
+        lines.append("  (none)")
+    for r in relationships:
+        rname = r.get("name", "")
+        src = r.get("source", "") or "?"
+        tgt = r.get("target", "") or "?"
+        rdesc = r.get("description") or ""
+        line = f"  • {rname}: {src} → {tgt}"
+        if rdesc:
+            line += f" — {rdesc}"
+        lines.append(line)
+
+    return "\n".join(lines)
 
 
 # ── Triple formatting ────────────────────────────────────────────────────
@@ -696,7 +768,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             "to inspect versions or design readiness (ontology, mappings, build_ready).\n"
             "3. Call 'select_domain' with the domain name that best matches "
             "the user's question.\n"
-            "4. Use 'list_entity_types' and 'describe_entity' for exploration, "
+            "4. Optionally call 'describe_ontology' to see the domain's "
+            "conceptual model (classes & relationships with descriptions) "
+            "before planning queries.\n"
+            "5. Use 'list_entity_types' and 'describe_entity' for exploration, "
             "or GraphQL tools for typed queries.\n\n"
             "DATA SOURCES — three tools, three different scopes:\n"
             "- 'describe_entity': GROUND TRUTH. Queries the raw triple store "
@@ -866,6 +941,44 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             lines.append(f"Note: {data['message']}")
 
         return "\n".join(lines)
+
+    @mcp.tool()
+    async def describe_ontology(domain_name: Optional[str] = None) -> str:
+        """Recap the ontology DESIGN (semantic model) of a domain.
+
+        Returns the conceptual model — the classes and relationships as
+        DESIGNED, with their descriptions — rather than the data. For each
+        class: its label, description, and attributes (with datatypes). For
+        each relationship (object property): ``source → target`` class and
+        its description.
+
+        Unlike ``get_graphql_schema`` (types/fields with no meaning) or
+        ``list_entity_types`` (instance counts in the data), this tool tells
+        you what the domain's concepts MEAN. Call it right after
+        ``select_domain`` and BEFORE planning a ``query_graphql`` or
+        ``describe_entity`` call, so your queries are grounded in the real
+        semantics of the model.
+
+        Uses ``GET /api/v1/domain/ontology-design``.
+
+        Args:
+            domain_name: Registry domain name, or omit to use the currently
+                selected domain (after ``select_domain``).
+        """
+        await _ensure_registry()
+        name = domain_name or _selected_domain["name"]
+        if not name:
+            return (
+                "No domain selected. Call list_domains first, then "
+                "select_domain (or pass domain_name)."
+            )
+        params = _registry_params()
+        params["domain_name"] = name
+
+        async with _client() as client:
+            data = await _get(client, API_V1_DOMAIN_ONTOLOGY_DESIGN, params=params)
+
+        return _format_ontology_design(data)
 
     @mcp.tool()
     async def select_domain(domain_name: str) -> str:

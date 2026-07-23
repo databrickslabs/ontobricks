@@ -351,6 +351,132 @@ def DigitalTwin_is_datatype_range(range_val):
 
 
 # =========================================================================
+# domains.py — GET /api/v1/domain/ontology-design
+# =========================================================================
+
+
+class TestDomainOntologyDesign:
+    """Tests for GET /api/v1/domain/ontology-design."""
+
+    @staticmethod
+    def _domain():
+        domain = MagicMock()
+        domain.domain_folder = "sales"
+        domain.info = {"name": "sales"}
+        domain.get_classes.return_value = [
+            {
+                "uri": "http://ex/Customer",
+                "name": "Customer",
+                "label": "Customer",
+                "comment": "A person who places orders",
+                "dataProperties": [],
+            },
+            {
+                "uri": "http://ex/Order",
+                "name": "Order",
+                "label": "Order",
+                "description": "A purchase placed by a customer",
+                "dataProperties": [],
+            },
+            {
+                "uri": "http://ex/Secret",
+                "name": "Secret",
+                "label": "Secret",
+                "dataProperties": [],
+            },
+        ]
+        domain.ontology = {
+            "base_uri": "http://ex/",
+            "description": "Sales ontology",
+            "properties": [
+                {
+                    "uri": "http://ex/placesOrder",
+                    "name": "placesOrder",
+                    "label": "places order",
+                    "type": "ObjectProperty",
+                    "domain": "Customer",
+                    "range": "Order",
+                    "comment": "links a customer to their orders",
+                },
+                {
+                    "uri": "http://ex/email",
+                    "name": "email",
+                    "type": "DatatypeProperty",
+                    "domain": "Customer",
+                    "range": "xsd:string",
+                    "comment": "email address",
+                },
+                {
+                    "uri": "http://ex/secretRel",
+                    "name": "secretRel",
+                    "type": "ObjectProperty",
+                    "domain": "Customer",
+                    "range": "Secret",
+                },
+            ],
+        }
+        # 'Secret' class is excluded via its entity mapping.
+        domain.get_entity_mappings.return_value = [
+            {"ontology_class": "http://ex/Secret", "excluded": True}
+        ]
+        domain.get_relationship_mappings.return_value = []
+        return domain
+
+    @patch("api.routers.domains.DigitalTwin")
+    def test_ontology_design_success(self, mock_dt, client):
+        """Active classes/relationships are returned with descriptions + attrs."""
+        mock_dt.resolve_domain.return_value = self._domain()
+        mock_dt.is_datatype_range = DigitalTwin_is_datatype_range
+
+        response = client.get("/api/v1/domain/ontology-design?domain_name=sales")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["domain_name"] == "sales"
+        assert data["base_uri"] == "http://ex/"
+        assert data["description"] == "Sales ontology"
+
+        # 'Secret' is excluded → only Customer + Order remain.
+        names = {c["name"] for c in data["classes"]}
+        assert names == {"Customer", "Order"}
+
+        customer = next(c for c in data["classes"] if c["name"] == "Customer")
+        assert customer["description"] == "A person who places orders"
+        attr_names = {a["name"] for a in customer["attributes"]}
+        assert attr_names == {"email"}
+        email = customer["attributes"][0]
+        assert email["datatype"] == "xsd:string"
+
+        # 'secretRel' points to an excluded class → filtered out.
+        rel_names = {r["name"] for r in data["relationships"]}
+        assert rel_names == {"placesOrder"}
+        placed = data["relationships"][0]
+        assert placed["source"] == "Customer"
+        assert placed["target"] == "Order"
+        assert placed["description"] == "links a customer to their orders"
+
+    @patch("api.routers.domains.DigitalTwin")
+    def test_ontology_design_empty(self, mock_dt, client):
+        """A domain with no ontology returns empty lists, not an error."""
+        domain = MagicMock()
+        domain.domain_folder = "empty"
+        domain.info = {"name": "empty"}
+        domain.get_classes.return_value = []
+        domain.ontology = {"properties": [], "base_uri": "", "description": ""}
+        domain.get_entity_mappings.return_value = []
+        domain.get_relationship_mappings.return_value = []
+        mock_dt.resolve_domain.return_value = domain
+        mock_dt.is_datatype_range = DigitalTwin_is_datatype_range
+
+        response = client.get("/api/v1/domain/ontology-design?domain_name=empty")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["classes"] == []
+        assert data["relationships"] == []
+
+
+# =========================================================================
 # domains.py — GET /api/v1/domain/ontology (GET variant)
 # =========================================================================
 

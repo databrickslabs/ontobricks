@@ -63,3 +63,52 @@ Modified files:
 
 Tests: uv run pytest -q -m "not scenario" → 3015 passed, 275 skipped,
 5 deselected, 23 warnings in 26.02s.
+
+---
+
+## Add `describe_ontology` MCP tool + `/domain/ontology-design` endpoint
+
+Context: The MCP surface could list domains, versions, readiness counts, entity
+types (data-level instance counts), and the GraphQL SDL — but nothing returned
+the ontology *as designed with its semantics*. The SDL carries no descriptions
+(a field named `hasOrder` says nothing about what it means), and `design-status`
+only reports counts. Agents therefore had to infer meaning from names alone. New
+deterministic read tool that returns the conceptual model (active classes and
+relationships with their descriptions, attributes with datatypes, and
+domain→range endpoints) so an LLM can ground query planning in the real
+semantics. Not an LLM/agent tool, so the AI-feature eval gate (CNS §3.5) does
+not apply.
+
+Changes:
+
+1. src/api/routers/domains.py
+   Extract the active/excluded ontology-filtering logic (previously inline in
+   `get_domain_design_status`) into a shared `_resolve_active_ontology(domain)`
+   helper (`_ActiveOntology` dataclass) — single source of truth now used by
+   both `design-status` and the new endpoint. Add `GET /domain/ontology-design`
+   (read-only resolve) returning `OntologyDesignResponse`: base_uri,
+   description, active classes (label/description/attributes with datatypes
+   derived from datatype properties), and active object properties as
+   source→target relationships. Excluded classes/properties are filtered out.
+2. src/mcp-server/server/app.py
+   Add `API_V1_DOMAIN_ONTOLOGY_DESIGN` constant, a module-level
+   `_format_ontology_design` formatter (terse agent-facing recap), and the
+   `describe_ontology(domain_name=None)` tool. Surface the tool in the module
+   docstring workflow and the FastMCP `instructions` (step 4: recap the model
+   before querying).
+3. tests/units/api/test_external_api.py
+   `TestDomainOntologyDesign`: success path (excluded class/relationship
+   filtering, datatype attributes, descriptions) + empty-domain path.
+4. tests/mcp/integration/test_smoke_tools.py
+   `TestDescribeOntology`: routes through MockTransport, asserts formatted
+   classes/relationships + endpoint hit.
+
+Modified files:
+- src/api/routers/domains.py
+- src/mcp-server/server/app.py
+- tests/units/api/test_external_api.py
+- tests/mcp/integration/test_smoke_tools.py
+- changelogs/v0.6.3/benoitcayladbx_2026-07-23.log
+
+Tests: uv run pytest -q -m "not scenario" → 3018 passed, 275 skipped,
+5 deselected, 23 warnings in 29.11s.

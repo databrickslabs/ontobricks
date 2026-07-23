@@ -206,6 +206,57 @@ class TestGetDesignStatus:
 
 @pytest.mark.mcp
 @pytest.mark.asyncio
+class TestDescribeOntology:
+    async def test_formats_classes_and_relationships(self, patched_mcp):
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/digitaltwin/registry",
+            json={
+                "registry_catalog": "test_cat",
+                "registry_schema": "test_sch",
+                "registry_volume": "test_vol",
+            },
+        )
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/domain/ontology-design",
+            json={
+                "success": True,
+                "domain_name": "sales",
+                "base_uri": "http://ex/",
+                "description": "Sales ontology",
+                "classes": [
+                    {
+                        "name": "Customer",
+                        "label": "Customer",
+                        "description": "A buyer",
+                        "attributes": [
+                            {"name": "email", "datatype": "xsd:string"}
+                        ],
+                    }
+                ],
+                "relationships": [
+                    {
+                        "name": "placesOrder",
+                        "source": "Customer",
+                        "target": "Order",
+                        "description": "links customer to order",
+                    }
+                ],
+            },
+        )
+        result = await patched_mcp.call("describe_ontology", domain_name="sales")
+        text = _result_text(result)
+        assert "Customer" in text
+        assert "A buyer" in text
+        assert "email" in text
+        assert "placesOrder" in text
+        assert "Customer → Order" in text
+        patched_mcp.assert_called("GET", "/domain/ontology-design")
+
+
+@pytest.mark.mcp
+@pytest.mark.asyncio
 class TestErrorPaths:
     async def test_unknown_tool_raises(self, patched_mcp):
         with pytest.raises(Exception):

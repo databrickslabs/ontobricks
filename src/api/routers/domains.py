@@ -3,7 +3,8 @@
 Mounted at ``/api/v1/domains`` and ``/api/v1/domain/...`` (prefix ``/v1`` on the sub-app).
 """
 
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -107,6 +108,37 @@ class DesignStatusResponse(BaseModel):
     message: Optional[str] = None
 
 
+class OntologyAttribute(BaseModel):
+    name: str
+    datatype: str = ""
+    description: str = ""
+
+
+class OntologyClassDesign(BaseModel):
+    name: str
+    label: str = ""
+    description: str = ""
+    attributes: List[OntologyAttribute] = Field(default_factory=list)
+
+
+class OntologyRelationshipDesign(BaseModel):
+    name: str
+    label: str = ""
+    description: str = ""
+    source: str = ""  # rdfs:domain — the subject class
+    target: str = ""  # rdfs:range — the object class
+
+
+class OntologyDesignResponse(BaseModel):
+    success: bool
+    domain_name: Optional[str] = None
+    base_uri: Optional[str] = None
+    description: str = ""
+    classes: List[OntologyClassDesign] = Field(default_factory=list)
+    relationships: List[OntologyRelationshipDesign] = Field(default_factory=list)
+    message: Optional[str] = None
+
+
 class VersionInfo(BaseModel):
     version: str
     is_latest: bool = False
@@ -120,6 +152,89 @@ class VersionsResponse(BaseModel):
     versions: List[VersionInfo] = Field(default_factory=list)
     latest_version: Optional[str] = None
     message: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Shared ontology-resolution helper
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _ActiveOntology:
+    """Resolved ontology view with excluded classes/properties filtered out.
+
+    Single source of truth for the active/excluded filtering shared by the
+    ``design-status`` (readiness counts + mapping progress) and
+    ``ontology-design`` (semantic recap) endpoints, so the exclusion rules
+    live in exactly one place.
+    """
+
+    base_uri: str = ""
+    description: str = ""
+    classes: List[Dict[str, Any]] = field(default_factory=list)
+    properties: List[Dict[str, Any]] = field(default_factory=list)
+    all_entities: List[Dict[str, Any]] = field(default_factory=list)
+    all_relationships: List[Dict[str, Any]] = field(default_factory=list)
+    excluded_class_uris: set = field(default_factory=set)
+    excluded_class_names: set = field(default_factory=set)
+    active_classes: List[Dict[str, Any]] = field(default_factory=list)
+    active_object_properties: List[Dict[str, Any]] = field(default_factory=list)
+
+
+def _resolve_active_ontology(domain) -> _ActiveOntology:
+    """Compute the active (non-excluded) classes and object properties.
+
+    A class is excluded when its entity mapping is flagged ``excluded``.
+    An object property is excluded when it is itself flagged, or when
+    either endpoint (domain/range) references an excluded class.
+    """
+    classes = domain.get_classes() or []
+    properties = domain.ontology.get("properties", [])
+    all_entities = domain.get_entity_mappings() or []
+    all_relationships = domain.get_relationship_mappings() or []
+
+    excluded_class_uris = {
+        m.get("ontology_class") for m in all_entities if m.get("excluded")
+    }
+    active_classes = [
+        c for c in classes if c.get("uri") and c["uri"] not in excluded_class_uris
+    ]
+
+    obj_properties = [
+        p
+        for p in properties
+        if p.get("type") in ("ObjectProperty", "owl:ObjectProperty")
+        or (
+            not p.get("type")
+            and p.get("range")
+            and not DigitalTwin.is_datatype_range(p.get("range", ""))
+        )
+    ]
+    excluded_class_names = {
+        c.get("name") or c.get("localName", "")
+        for c in classes
+        if c.get("uri") in excluded_class_uris
+    }
+    active_object_properties = [
+        p
+        for p in obj_properties
+        if not p.get("excluded")
+        and p.get("domain", "") not in excluded_class_names
+        and p.get("range", "") not in excluded_class_names
+    ]
+
+    return _ActiveOntology(
+        base_uri=domain.ontology.get("base_uri", ""),
+        description=domain.ontology.get("description", ""),
+        classes=classes,
+        properties=properties,
+        all_entities=all_entities,
+        all_relationships=all_relationships,
+        excluded_class_uris=excluded_class_uris,
+        excluded_class_names=excluded_class_names,
+        active_classes=active_classes,
+        active_object_properties=active_object_properties,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -291,10 +406,11 @@ async def get_domain_design_status(
 
     dname = domain.domain_folder or (domain.info or {}).get("name", "")
 
-    classes = domain.get_classes() or []
-    properties = domain.ontology.get("properties", [])
+    ont = _resolve_active_ontology(domain)
+    classes = ont.classes
+    properties = ont.properties
     constraints = domain.constraints or []
-    base_uri = domain.ontology.get("base_uri", "")
+    base_uri = ont.base_uri
     ontology_valid = domain.is_ontology_valid()
 
     domain.ensure_generated_content()
@@ -318,38 +434,10 @@ async def get_domain_design_status(
         table_count=len(tables),
     )
 
-    all_entities = domain.get_entity_mappings() or []
-    all_relationships = domain.get_relationship_mappings() or []
-
-    excluded_class_uris = {
-        m.get("ontology_class") for m in all_entities if m.get("excluded")
-    }
-    active_classes = [
-        c for c in classes if c.get("uri") and c["uri"] not in excluded_class_uris
-    ]
-
-    obj_properties = [
-        p
-        for p in properties
-        if p.get("type") in ("ObjectProperty", "owl:ObjectProperty")
-        or (
-            not p.get("type")
-            and p.get("range")
-            and not DigitalTwin.is_datatype_range(p.get("range", ""))
-        )
-    ]
-    excluded_class_names = {
-        c.get("name") or c.get("localName", "")
-        for c in classes
-        if c.get("uri") in excluded_class_uris
-    }
-    active_properties = [
-        p
-        for p in obj_properties
-        if not p.get("excluded")
-        and p.get("domain", "") not in excluded_class_names
-        and p.get("range", "") not in excluded_class_names
-    ]
+    all_entities = ont.all_entities
+    all_relationships = ont.all_relationships
+    active_classes = ont.active_classes
+    active_properties = ont.active_object_properties
 
     entity_total = len(active_classes)
     relationship_total = len(active_properties)
@@ -429,6 +517,124 @@ async def get_domain_design_status(
         metadata=metadata_status,
         assignment=assignment_status,
         build_ready=build_ready,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /domain/ontology-design
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/domain/ontology-design",
+    response_model=OntologyDesignResponse,
+    summary="Get ontology design recap",
+    description="Return the domain's conceptual model — active classes and "
+    "relationships as designed, with their descriptions, attributes (with "
+    "datatypes), and domain→range endpoints. The semantic layer an agent "
+    "needs to plan queries, distinct from data-level stats or the GraphQL SDL.",
+)
+async def get_domain_ontology_design(
+    domain_name: Optional[str] = Query(
+        None,
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        description="Domain version to load (uses latest version if omitted)",
+    ),
+    registry_catalog: Optional[str] = Query(
+        None, description="Override registry catalog"
+    ),
+    registry_schema: Optional[str] = Query(
+        None, description="Override registry schema"
+    ),
+    registry_volume: Optional[str] = Query(
+        None, description="Override registry volume"
+    ),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+        read_only=True,
+    )
+
+    dname = domain.domain_folder or (domain.info or {}).get("name", "")
+    ont = _resolve_active_ontology(domain)
+
+    # Datatype properties → attributes, grouped by their domain (class name).
+    # These carry the datatype in ``range`` (e.g. xsd:string), which the raw
+    # class ``dataProperties`` list does not.
+    attrs_by_class: Dict[str, List[OntologyAttribute]] = {}
+    for p in ont.properties:
+        is_datatype = p.get("type") in ("DatatypeProperty", "owl:DatatypeProperty") or (
+            not p.get("type") and DigitalTwin.is_datatype_range(p.get("range", ""))
+        )
+        if not is_datatype:
+            continue
+        owner = p.get("domain", "")
+        if not owner or owner in ont.excluded_class_names:
+            continue
+        attrs_by_class.setdefault(owner, []).append(
+            OntologyAttribute(
+                name=p.get("name") or p.get("localName", ""),
+                datatype=p.get("range", ""),
+                description=p.get("comment") or p.get("description", ""),
+            )
+        )
+
+    classes: List[OntologyClassDesign] = []
+    for c in ont.active_classes:
+        cname = c.get("name") or c.get("localName", "")
+        attributes = attrs_by_class.get(cname)
+        if not attributes:
+            # Fallback: class-embedded dataProperties (names only, no datatype).
+            attributes = [
+                OntologyAttribute(name=dp.get("name") or dp.get("localName", ""))
+                for dp in c.get("dataProperties", [])
+                if dp.get("name") or dp.get("localName")
+            ]
+        classes.append(
+            OntologyClassDesign(
+                name=cname,
+                label=c.get("label") or cname,
+                description=c.get("description") or c.get("comment", ""),
+                attributes=attributes,
+            )
+        )
+
+    relationships = [
+        OntologyRelationshipDesign(
+            name=p.get("name") or p.get("localName", ""),
+            label=p.get("label", ""),
+            description=p.get("comment") or p.get("description", ""),
+            source=p.get("domain", ""),
+            target=p.get("range", ""),
+        )
+        for p in ont.active_object_properties
+    ]
+
+    logger.info(
+        "API: ontology-design for '%s' — %d classes, %d relationships",
+        dname,
+        len(classes),
+        len(relationships),
+    )
+
+    return OntologyDesignResponse(
+        success=True,
+        domain_name=dname,
+        base_uri=ont.base_uri or None,
+        description=ont.description,
+        classes=classes,
+        relationships=relationships,
     )
 
 
