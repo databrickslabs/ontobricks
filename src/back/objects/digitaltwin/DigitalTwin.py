@@ -3080,13 +3080,31 @@ class DigitalTwin:
         registry_schema=None,
         registry_volume=None,
         domain_version=None,
+        *,
+        read_only=False,
     ):
-        """Return the session to operate on; optionally load from registry by name/version."""
+        """Return the session to operate on; optionally load from registry by name/version.
+
+        ``read_only`` (default ``False``) tunes the resolve for read-only
+        query paths (status / stats / triples-find / GraphQL reads):
+
+        * the PUBLISHED document is served from a TTL cache
+          (:meth:`RegistryService.load_published_domain_data_cached`),
+          skipping the newest→oldest version scan;
+        * OWL/R2RML are **not** regenerated (read paths never consume
+          generated content); and
+        * the session is **not** persisted (``save()`` skipped).
+
+        Write/generation paths (build, ontology/R2RML export,
+        design-status) must keep the default ``read_only=False``.
+        """
         from back.objects.registry import RegistryCfg, RegistryService
 
         domain = get_domain(session_mgr)
         if not domain_name:
             return domain
+
+        t0 = time.perf_counter()
         reg = DigitalTwin.resolve_registry(
             session_mgr, settings, registry_catalog, registry_schema, registry_volume
         )
@@ -3108,19 +3126,39 @@ class DigitalTwin:
                     f"PUBLISHED; the API only serves PUBLISHED versions"
                 )
             version = domain_version
+        elif read_only:
+            ok, data, version, err = svc.load_published_domain_data_cached(domain_name)
+            if not ok:
+                raise NotFoundError(err)
         else:
             ok, data, version, err = svc.load_published_domain_data(domain_name)
             if not ok:
                 raise NotFoundError(err)
+        t_registry = time.perf_counter()
+
         domain.clear_generated_content()
         domain.import_from_file(data, version=version)
         domain.domain_folder = domain_name
-        domain.ensure_generated_content()
-        domain.save()
+        t_import = time.perf_counter()
+
+        t_gen = t_import
+        if not read_only:
+            domain.ensure_generated_content()
+            t_gen = time.perf_counter()
+            domain.save()
+        t_end = time.perf_counter()
+
         logger.info(
-            "DigitalTwin: loaded domain '%s' version %s from registry",
+            "DigitalTwin: loaded domain '%s' version %s from registry "
+            "[read_only=%s registry=%.0fms import=%.0fms gen=%.0fms save=%.0fms total=%.0fms]",
             domain_name,
             version,
+            read_only,
+            (t_registry - t0) * 1000,
+            (t_import - t_registry) * 1000,
+            (t_gen - t_import) * 1000,
+            (t_end - t_gen) * 1000,
+            (t_end - t0) * 1000,
         )
         return domain
 

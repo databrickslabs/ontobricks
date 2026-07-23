@@ -220,10 +220,11 @@ async def list_domain_versions(
     latest = versions_sorted[0]
 
     def _status_for(version: str) -> str:
-        ok, data, _ = svc.read_version(domain_name, version)
-        if not ok:
-            return "DRAFT"
-        return (data.get("info", {}).get("status") or "DRAFT").upper()
+        # Cheap single-column status lookup instead of loading the full
+        # version document (ontology + assignment + layout + metadata)
+        # just to read one field.
+        status = svc.get_version_status(domain_name, version)
+        return (status or "DRAFT").upper()
 
     versions = []
     for v in versions_sorted:
