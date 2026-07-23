@@ -17,6 +17,64 @@ from api.routers.digitaltwin import (
     _expand_uri_aliases,
 )
 from back.core.graphdb import GraphDBBackend
+from back.objects.digitaltwin import DigitalTwin
+
+
+# ---------------------------------------------------------------------------
+# DigitalTwin.resolve_domain — read_only fast path
+# ---------------------------------------------------------------------------
+
+
+class TestResolveDomainReadOnly:
+    """read_only resolves from the cached loader and skips generation/save."""
+
+    def _patch(self, svc):
+        return (
+            patch(
+                "back.objects.digitaltwin.DigitalTwin.get_domain"
+            ),
+            patch.object(
+                DigitalTwin,
+                "resolve_registry",
+                return_value={"catalog": "c", "schema": "s", "volume": "v"},
+            ),
+            patch.object(DigitalTwin, "uc_from_domain", return_value=MagicMock()),
+            patch("back.objects.registry.RegistryService", return_value=svc),
+        )
+
+    def test_read_only_uses_cache_and_skips_gen_and_save(self):
+        svc = MagicMock()
+        svc.load_published_domain_data_cached.return_value = (True, {"info": {}}, "2", "")
+        p_get, p_reg, p_uc, p_svc = self._patch(svc)
+        with p_get as get_domain, p_reg, p_uc, p_svc:
+            domain = MagicMock()
+            get_domain.return_value = domain
+
+            out = DigitalTwin.resolve_domain(
+                "mydom", MagicMock(), MagicMock(), read_only=True
+            )
+
+        assert out is domain
+        svc.load_published_domain_data_cached.assert_called_once_with("mydom")
+        svc.load_published_domain_data.assert_not_called()
+        domain.import_from_file.assert_called_once()
+        domain.ensure_generated_content.assert_not_called()
+        domain.save.assert_not_called()
+
+    def test_write_path_generates_and_saves(self):
+        svc = MagicMock()
+        svc.load_published_domain_data.return_value = (True, {"info": {}}, "2", "")
+        p_get, p_reg, p_uc, p_svc = self._patch(svc)
+        with p_get as get_domain, p_reg, p_uc, p_svc:
+            domain = MagicMock()
+            get_domain.return_value = domain
+
+            DigitalTwin.resolve_domain("mydom", MagicMock(), MagicMock())
+
+        svc.load_published_domain_data.assert_called_once_with("mydom")
+        svc.load_published_domain_data_cached.assert_not_called()
+        domain.ensure_generated_content.assert_called_once()
+        domain.save.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

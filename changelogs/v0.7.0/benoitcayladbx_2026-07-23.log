@@ -1,0 +1,68 @@
+## Optimize MCP server answer latency (6-phase perf pass)
+
+Context: MCP tool answers were slow. Tracing the path (MCP proxy → external
+REST → DigitalTwin.resolve_domain → SQL graph store) showed the dominant cost
+was per-request work paid on *every* read-only tool call: reloading the
+PUBLISHED domain from the registry (newest→oldest version scan), regenerating
+OWL/R2RML, and persisting the session. Secondary costs: an O(domains ×
+versions) scan behind `list_domains`, a version N+1 for `/domain/versions`,
+repeated full-table stats scans, a broken/wasted ontology-label POST in
+`select_domain`, a fresh httpx client per tool call, and stacked cold-start
+retries. This pass adds instrumentation and removes the waste without changing
+read-path results.
+
+Changes:
+
+1. src/back/objects/registry/registry_cache.py
+   Add a TTL-cached PUBLISHED-domain store (get/set_cached_published_domain)
+   and invalidate it (namespaced `<cache_key>::<folder>`) alongside the
+   existing registry caches.
+2. src/back/objects/registry/RegistryService.py
+   Add `load_published_domain_data_cached` (memoised published resolution) and
+   rewrite `list_mcp_domains` to use the cached two-query metadata listing
+   (filter by per-version PUBLISHED status) instead of scanning every version
+   document; `require_ontology` still does a single targeted read per
+   published domain.
+3. src/back/objects/digitaltwin/DigitalTwin.py
+   `resolve_domain(..., read_only=False)`: read_only paths serve the cached
+   PUBLISHED doc, skip `ensure_generated_content()`, and skip `save()`. Added
+   phase timing (registry/import/gen/save/total ms) log line.
+4. src/api/routers/digitaltwin.py
+   `dt_status`/`dt_stats`/`dt_triples_find` resolve with `read_only=True`.
+   `dt_stats`: 60s in-process result cache keyed by query table + `run_blocking`
+   + timing. `dt_triples_find`: BFS/alias/fetch moved off the event loop via
+   `run_blocking` + timing.
+5. src/api/routers/domains.py
+   `/domain/versions` reads lifecycle status via the cheap `get_version_status`
+   single-column lookup instead of loading each full version document.
+6. src/mcp-server/server/app.py
+   Shared pooled httpx AsyncClient (keep-alive reuse) via a non-closing
+   async context manager; per-request GET/POST elapsed-ms logging; retry
+   backoff trimmed to (2,5,10) and disabled for localhost/mounted mode;
+   removed the broken ontology-label POST from `select_domain`; lowered
+   `describe_entity` default limit 500 → 100.
+7. tests/units/registry/test_registry_store.py
+   In-memory store now returns realistic version metadata + `get_version_status`.
+8. tests/units/registry/test_registry_published.py
+   Cover cached published resolution (hit + service-write invalidation) and the
+   metadata-based `list_mcp_domains` PUBLISHED filter.
+9. tests/units/dtwin/test_digitaltwin_api.py
+   Cover `resolve_domain` read_only (cache + skip gen/save) vs write path.
+10. tests/units/api/test_external_api.py
+    Update `/domain/versions` test to mock `get_version_status`.
+
+Modified files:
+- src/back/objects/registry/registry_cache.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/domains.py
+- src/mcp-server/server/app.py
+- tests/units/registry/test_registry_store.py
+- tests/units/registry/test_registry_published.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- tests/units/api/test_external_api.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-23.log
+
+Tests: uv run pytest -q -m "not scenario" → 3250 passed, 275 skipped,
+5 deselected, 23 warnings in 22.98s.
