@@ -49,3 +49,38 @@ with develop-takes-priority conflict resolution. Version: 0.7.0.
 `uv run pytest -q -m "not scenario"` → **3248 passed, 309 skipped, 2 pre-existing failures**
 (both failures confirmed pre-existing on PR branch before merge; not introduced by conflict
 resolution).
+
+---
+
+## Add Neo4j card to Back End settings page
+
+### Context
+
+The Back End page (Settings → Triple Store → Back End) only showed Lakebase and Delta.
+Neo4j was already a supported graph engine (from PR#47) but was hidden behind a
+legacy dropdown. Added a third card for Neo4j at parity with the other two backends.
+
+### Changes
+
+1. **src/front/templates/settings.html** — Added Neo4j card to the backend card grid;
+   changed grid columns from `col-md-6` (2-col) to `col-md-4` (3-col); updated helper
+   text. Neo4j card pre-selected server-side when `graph_engine == "neo4j"`.
+
+2. **src/front/static/config/js/settings.js**:
+   - `isNeo4jCardSelected()` helper added.
+   - `applyNeo4jCardFromEngine()` helper selects the Neo4j card when engine=neo4j.
+   - `loadTripleStoreBackend()` now also fetches `/settings/graph-engine` in parallel
+     and selects the Neo4j card when graph_engine=neo4j.
+   - `saveGraphDbSettings()` translates the Neo4j card selection to
+     `triple_store_backend=lakebase` + `graph_engine=neo4j` before posting.
+   - Radio change listener triggers `applyNeo4jAuthMethodVisibility()` and
+     `prefillNeo4jConnectionFromConfig()` when Neo4j card is selected.
+
+### Modified files
+
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+### Test results
+
+`uv run pytest -q -m "not scenario"` (settings + contract) → 161 passed, 2 pre-existing failures.
