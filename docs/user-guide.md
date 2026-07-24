@@ -2,7 +2,7 @@
 
 ## Introduction
 
-OntoBricks is a visual tool for designing ontologies, mapping them to Databricks tables, generating R2RML mappings, synchronizing data to a triple store, and exploring your knowledge graph visually. This guide walks you through the complete workflow.
+OntoBricks is a visual tool for designing ontologies, mapping them to Databricks tables, generating R2RML mappings, synchronizing data to a triple store, and exploring your graph viewer visually. This guide walks you through the complete workflow.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ Before starting, ensure you have:
 OntoBricks follows a 3-step workflow:
 
 ```
-1. Design Ontology → 2. Assign Data Sources → 3. Digital Twin (Sync & Explore)
+1. Design Ontology → 2. Assign Data Sources → 3. Knowledge Graph (Sync & Explore)
 ```
 
 ---
@@ -28,7 +28,7 @@ Navigate to the **Ontology** page by clicking "Ontology" in the navigation bar.
 
 ### Option A: Visual Designer (Recommended)
 
-Click **Design** in the sidebar to use the visual drag-and-drop interface.
+Click **Business Views** in the sidebar to use the visual drag-and-drop interface.
 
 #### Creating Entities
 
@@ -171,29 +171,6 @@ Consequent: hasManager(?x, ?y)
 
 Rules are compiled to **Spark/Postgres SQL** for execution in the Reasoning pipeline. The capability flags on `GraphDBBackend` reserve a slot for a future Cypher / Gremlin engine.
 
-#### Property Constraints
-
-Click **Constraints** in the sidebar to define cardinality and value restrictions.
-
-1. Click **Add Constraint** button
-2. Select **Constraint Type**:
-   - **Cardinality**: Min/Max/Exact number of values
-   - **Value Restrictions**: allValuesFrom, someValuesFrom, hasValue
-   - **Property Characteristics**: Functional, Transitive, Symmetric, etc.
-3. Select the **Class** and **Property** to constrain
-4. Configure type-specific options
-5. Click **Save Constraint**
-
-**Example Constraints:**
-
-| Type | Property | Class | Value |
-|------|----------|-------|-------|
-| Exact Cardinality | hasManager | Employee | 1 |
-| Max Cardinality | hasPhone | Person | 3 |
-| All Values From | worksIn | Person | Department |
-| Functional | hasBirthDate | Person | - |
-| Transitive | isPartOf | Organization | - |
-
 #### Expressions & Axioms
 
 Click **Expr. & Axioms** in the sidebar to define OWL class expressions and axioms.
@@ -239,11 +216,11 @@ Click **Data Quality** in the sidebar to define data quality rules using W3C SHA
 
 **Import/Export**: Shapes can be exported as W3C-compliant SHACL Turtle and imported from existing SHACL files.
 
-**Validation**: Shapes are executed against the triple store in the Digital Twin → Data Quality section, either via SQL compilation or PySHACL in-memory validation.
+**Validation**: Shapes are executed against the triple store in the Knowledge Graph → Data Quality section, either via SQL compilation or PySHACL in-memory validation.
 
 ### Dashboard Mapping
 
-You can assign Databricks dashboards to entity types for embedded visualization in the Digital Twin:
+You can assign Databricks dashboards to entity types for embedded visualization in the Knowledge Graph:
 
 1. Go to **Ontology** → **Entities**
 2. Select an entity type (e.g., Customer, Meter)
@@ -260,11 +237,11 @@ When a dashboard has filter parameters (e.g., customer_id, meter_id), you can ma
 - `__ID__`: The entity's unique identifier (extracted from URI)
 - Any attribute defined on the entity type
 
-When viewing an entity in the Digital Twin visualization, the dashboard will be embedded with the correct parameter values.
+When viewing an entity in the Knowledge Graph visualization, the dashboard will be embedded with the correct parameter values.
 
 ### Option C: AI-Powered Wizard
 
-Click **Wizard** in the sidebar to generate an ontology automatically from your database schema using an LLM.
+Click **Generate** in the sidebar to generate an ontology automatically from your database schema using an LLM.
 
 1. Select the **LLM Endpoint** (a Databricks Model Serving endpoint)
 2. Choose which **catalog/schema** metadata to include
@@ -316,7 +293,7 @@ Industry-standard modules are fetched directly from their official servers/repos
 
 ### Preview OWL Output
 
-Click **OWL Content** in the sidebar to see the generated OWL in Turtle format.
+Click **OWL** in the sidebar to see the generated OWL in Turtle format.
 
 ### Save Your Ontology
 
@@ -405,23 +382,49 @@ FROM main.default.person_collaboration
 
 Click **Manual** in the sidebar for a tree-based view of all entities and relationships organized by mapping status. The bottom panel shares the same UI and functionality as the Designer view panel — clicking an item opens the same Wizard/SQL/Mapping tabs.
 
+#### Excluding and Including Attributes
+
+By default every ontology attribute is **included** in the mapping. The **Status** tab of the bottom panel shows an attributes table where each row has a checkbox:
+
+- **Checked (✓)** — attribute is included; it must be assigned to a SQL column and will be emitted in the R2RML export.
+- **Unchecked** — attribute is excluded; it is shown with strikethrough, skipped in gap reporting, never mapped by Auto-Map, and not emitted in the R2RML export.
+
+To exclude attributes:
+
+1. Open an entity panel (click a node on the canvas).
+2. Select the **Status** tab.
+3. Uncheck any attributes you do not want to map.
+4. Click **Save** — exclusions are persisted immediately.
+
+Two bulk-action buttons are available at the top of the attributes table:
+
+- **Exclude all / Include all** — toggles all attributes at once. When all attributes are currently included the button reads *Exclude all*; once any are excluded it switches to *Include all* so you can restore them in one click.
+- **Exclude unmapped** — excludes only attributes that have no column assignment yet, leaving already-mapped attributes untouched.
+
+> **Tip:** Exclusions survive an Unmap / re-map cycle. If you right-click an entity and choose **Unmap**, the SQL and column assignments are cleared but the attribute checkboxes stay as you left them. Auto-Map also respects exclusions — it will never map or re-include an excluded attribute.
+
+**Effect on the canvas:** An entity node is green only when every *included* attribute has a column assigned. Excluded attributes do not count towards the orange "attributes missing" indicator.
+
+**Effect on the Auto-Map KPI page:** The Attribute gauge and tile count only included attributes. If you have 14 attributes and exclude 1, the tile shows `13 / 13` (100%) rather than `13 / 14`.
+
 ### Auto-Map (Sidebar)
 
 Click **Auto-Map** in the sidebar to batch-assign all unmapped entities and relationships:
 
-1. The page shows counts of unassigned entities and relationships
-2. Click **Start Auto-Map** to launch an asynchronous task
-3. Progress is tracked with a progress bar — you can navigate away and return later
-4. Results are displayed in a report table showing success/failure per item
+1. The page shows counts of unassigned entities and relationships, including how many are excluded (`· N excl.`).
+2. If tables or columns are missing `COMMENT` descriptions, a **metadata quality warning** is displayed with a collapsible list and a link to the Domain → Metadata editor. Poor descriptions reduce LLM mapping accuracy.
+3. Click **Start Auto-Map** to launch an asynchronous task.
+4. Progress is tracked with a progress bar — you can navigate away and return later.
+5. Results are displayed in a report table showing success/failure per item.
 
-**Re-Assign Missing Attributes**: If some entities are assigned but have incomplete attribute mappings, a third card appears showing the count and a **Re-Assign Missing Attributes** button. This re-runs auto-mapping only for those specific entities to fill in the missing attribute mappings.
+**Re-Assign Missing Attributes**: If some entities are assigned but have incomplete attribute mappings, a third card appears showing the count and a **Re-Assign Missing Attributes** button. This re-runs auto-mapping only for those specific entities to fill in the missing *included* attribute mappings (excluded attributes are ignored).
 
 ### Validate Your Mappings
 
 Mapping validation checks:
 - All ontology classes have entity mappings
 - All object properties have relationship mappings
-- All attributes of mapped entities are assigned to columns
+- All *included* attributes of mapped entities are assigned to columns (excluded attributes are ignored)
 - No missing or incomplete mappings
 
 A green checkmark appears in the navbar when all mappings are complete.
@@ -435,42 +438,33 @@ The R2RML mapping output is available in the **Domain** section under **R2RML**.
 
 ---
 
-## Step 3: Digital Twin (Sync & Explore)
+## Step 3: Knowledge Graph (Sync & Explore)
 
-Navigate to the **Digital Twin** page by clicking "Digital Twin" in the navigation bar (URL: `/dtwin`).
+Navigate to the **Knowledge Graph** page by clicking "Knowledge Graph" in the navigation bar (URL: `/dtwin`).
 
 > **Note**: You need both Ontology and Mapping loaded (green checkmarks in navbar). The Sync page shows a readiness status and disables actions until both are ready.
 
-### Sync (Sidebar)
+### Build (Sidebar)
 
-Click **Status** in the sidebar to manage your triple store:
+Click **Build** in the sidebar to manage your triple store:
 
 - **Readiness Status**: Shows whether Ontology and mappings (including attribute mappings) are all complete
 - **Synchronize**: Generates all triples from your mappings and writes them to the Delta view in Unity Catalog and to the configured Graph DB engine (Lakebase Postgres)
 - **Last Updated**: When the table contains data, the status area displays the last modification date and time (for Delta from Unity Catalog metadata; for Lakebase from the Postgres `count_triples` + table metadata)
 
-### Quality (Sidebar)
+### Data Quality (Sidebar)
 
-Click **Quality** in the sidebar to run data quality checks against the triple store:
+Click **Data Quality** in the sidebar to run SHACL-based quality checks against the triple store:
 
 - Quality checks run **asynchronously** as a background task with progress tracking
 - You can navigate away and return — the task resumes from where it left off
-- Validates cardinality constraints, value constraints, property characteristics, and global rules
+- Validates cardinality, value constraints, property characteristics, and global rules
 - Shows pass/fail results with violation details
 - Displays the generated SQL for each check
 
-### Triples (Sidebar)
+### Explorer (Sidebar)
 
-Click **Triples** in the sidebar to view triples in an interactive data grid. Triple store data is **automatically loaded** when you navigate to this section:
-
-- **Sortable columns**: Click headers to sort
-- **Resizable columns**: Drag column borders
-- **Result count**: Shown in tab badge
-- Cells show URIs and literal values
-
-### Knowledge Graph (Sidebar)
-
-Click **Knowledge Graph** in the sidebar to explore triples as an interactive sigma.js WebGL-powered graph. Triple store data is **automatically loaded** when you navigate to this section:
+Click **Explorer** in the sidebar to explore triples as an interactive sigma.js WebGL-powered graph. Triple store data is **automatically loaded** when you navigate to this section:
 
 **Main Graph Area (left):**
 - **Nodes**: Entities (colored by class type with emoji icons in labels)
@@ -515,7 +509,7 @@ Right-click any entity node and pick **Expand neighbours (N hops)** to enrich th
 
 **Data Clusters:**
 
-The Knowledge Graph includes a **Data Clusters** panel (in the View tab) for detecting communities in the graph:
+The Graph Viewer includes a **Data Clusters** panel (in the View tab) for detecting communities in the graph:
 
 1. **Detect clusters (local)**: Runs the Louvain community detection algorithm client-side using Graphology on the currently displayed subgraph. Adjust the **Resolution** slider to control cluster granularity (higher = more clusters).
 2. **Full graph (backend)**: Sends a request to the server which loads the entire triple store into NetworkX and runs the selected algorithm (Louvain, Label Propagation, or Greedy Modularity) on the full dataset. Use this for large graphs that exceed the visible subgraph.
@@ -528,9 +522,85 @@ The cluster panel also displays:
 - A color-coded chip list of all clusters with their sizes
 - Click a chip to toggle collapse/expand for that cluster
 
+### Analytics (Sidebar)
+
+Click **Analytics** in the sidebar to compute and visualise centrality and structural metrics for the entities in your knowledge graph. Analytics runs a server-side NetworkX computation — no sampling is needed for typical graphs.
+
+Because this computation can take a while on large graphs, it runs **asynchronously** in the background. The **last** result is persisted in the registry (the `graph_analytics` table), so re-opening the Analytics page (or the Domain Validation cockpit) shows the previously computed result immediately without recomputing — a "Last computed …" line marks when it was produced.
+
+> **Graph-size limit.** The analysis loads the full triple set into memory (NetworkX), so it is capped at `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` triples (default **500,000**). Because the triple count is already known, the Analytics page warns and disables **Run Analysis** up-front when the graph is over the limit — you never wait for a background job only to see it fail. Class/predicate filters narrow the *charts*, not the load, so they do **not** lift this limit; reduce the synced graph (exclude entity types in **KG → Sync**) or raise the setting.
+
+#### Running an Analysis
+
+1. (Optional) Select an **entity type** from the dropdown to restrict the analysis to one class (e.g. "Customer"). Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. "All types (full graph)" includes every entity.
+2. Click **Run Analysis**. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically: six stat cards appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed) and five interactive charts render below. Each new run replaces the previous stored result for that domain version.
+
+#### History
+
+The **History** tab (after *AI Insights*) lists every analysis launched for the current domain version — newest first — including failed runs. Each row shows when it ran, the scope (a single entity type or *All types*), its status, and the headline metrics (nodes, edges, components, average degree, density) plus the run duration. While the **last** full result is what the other tabs render, this tab keeps a lightweight audit trail of past runs so you can see how the graph evolved over time. The history is capped server-side per domain version.
+
+#### Reading the Charts
+
+One horizontal bar chart is generated for each metric:
+
+| Metric | What it measures |
+|--------|-----------------|
+| **PageRank** | Global influence — nodes that are pointed to by other influential nodes rank highest |
+| **Betweenness Centrality** | Bridging role — nodes that lie on many shortest paths between other nodes |
+| **Degree Centrality** | Raw connectivity — fraction of other nodes this node is directly connected to |
+| **Closeness Centrality** | Reachability — how quickly this node can reach every other node in the graph |
+| **Clustering Coefficient** | Local density — fraction of a node's neighbors that are also connected to each other |
+
+- **Click a bar** to jump directly to that entity in the Graph Viewer (the filter is pre-populated).
+- **Hover a bar** to see all five metric scores for that entity in the tooltip.
+- **Click the `?` button** on any chart card header to open an explanation popup with the formula, a worked example, and guidance on why the metric matters.
+
+Below the charts, a **PageRank Detail Table** lists the top-N entities with all five metrics displayed as mini progress bars, providing full context for why a node ranks highly. Every row is clickable → Graph Viewer.
+
+#### Data Model Health
+
+After an analysis, a **Data Model Health** card shows entity types that may not benefit from graph storage:
+
+| Column | Meaning |
+|--------|---------|
+| **Entity Type** | Class URI local name |
+| **Instances** | Count of instances in the graph |
+| **Rel. Predicates** | Distinct entity-to-entity relationship predicates (excludes `rdf:type`, `rdfs:label`, and literal attributes; counts both incoming and outgoing relationships) |
+| **Temporal** | Whether any predicate name contains a temporal keyword (e.g. `date`, `timestamp`) |
+
+An entity type is flagged as **flat / time-series** when:
+
+- It has **0 relationship predicates** — all instances are fully isolated (no entity-entity relationships)
+- It has **exactly 1 relationship predicate** across more than 20 instances — suggests a one-dimensional link
+
+> Types flagged as flat may not rely on graph semantics. Consider **excluding** them from the sync or **replacing individual rows with aggregated facts** in the ontology.
+
+The AI Interpretation agent also mentions flat types in its Key Findings and Recommendations sections.
+
+#### Adjusting the Top-N and Resetting
+
+Use the **Top N** input at the top of the results section to control how many entities each chart and table shows. Change the entity type dropdown to re-run the analysis on a different class.
+
+#### AI Interpretation
+
+After an analysis completes, an **Interpret** button (✦ icon) appears in the toolbar.
+
+1. Click **Interpret** — an AI agent (`agent_graph_interpreter`) calls the LLM serving endpoint configured for the domain. The agent may call `get_entity_details` one or more times to look up specific top-ranked entities before writing its insights.
+2. The **AI Insights** card renders three structured sections:
+   - **Key Findings** — 2–4 sentences on the graph structure and standout patterns
+   - **Notable Entities** — up to 5 entities with reasons they stand out; clicking an entity name navigates to the Graph Viewer
+   - **Recommendations** — 2–4 actionable suggestions
+3. Click **Add to audit trail** (journal icon in the card header) to save the AI insights as a comment on the current domain version. The discussion panel opens automatically so you can see the new entry.
+
+> **Tip**: The LLM endpoint used is the one set in **Domain → Information → LLM Endpoint**. If none is configured, interpretation is unavailable and the Interpret button will not appear after analysis.
+
+#### Discussion Panel
+
+Click the **Discussion** button (chat-bubble icon, top-right of the Analytics toolbar) to open the comments panel for the current domain version. All review decisions and saved AI insights appear here in chronological order with markdown rendering.
+
 ### Quality Checks (Sidebar)
 
-Click **Quality** in the sidebar to run automated quality checks on your triple store data:
+Click **Data Quality** in the sidebar to run automated quality checks on your triple store data:
 
 **Running Quality Checks:**
 1. Ensure your triple store has been synchronized
@@ -573,7 +643,7 @@ Click **Quality** in the sidebar to run automated quality checks on your triple 
 
 ### Data Quality — SHACL (Sidebar)
 
-Click **Data Quality** in the Digital Twin sidebar to run SHACL shape validations against the triple store:
+Click **Data Quality** in the Knowledge Graph sidebar to run SHACL shape validations against the triple store:
 
 1. Shapes defined in **Ontology → Data Quality** are listed with their category, target class, and severity
 2. Click **Run Validation** to execute all enabled shapes
@@ -581,9 +651,9 @@ Click **Data Quality** in the Digital Twin sidebar to run SHACL shape validation
 4. Results show pass/fail status with violation counts and details
 5. For small datasets, PySHACL can validate in-memory without SQL
 
-### Reasoning (Sidebar)
+### Inference (Sidebar)
 
-Click **Reasoning** in the Digital Twin sidebar to run the multi-phase reasoning pipeline:
+Click **Inference** in the Knowledge Graph sidebar to run the multi-phase reasoning pipeline:
 
 1. **OWL 2 RL** — Forward-chaining deductive closure on the ontology (infers subclass hierarchies, domain/range typing, property entailments)
 2. **SWRL Rules** — Evaluates user-defined rules (violation detection and optional materialization)
@@ -688,7 +758,72 @@ Every domain version carries a **lifecycle status**, shown as a colour-coded bad
 - **PUBLISHED** (green) — locked for editing and served on the API/MCP.
 
 Transitions are made from **Registry → Browse** (or Domain → Information):
-DRAFT → IN-REVIEW → PUBLISHED (admin or builder), IN-REVIEW → DRAFT (admin or builder), and PUBLISHED → DRAFT (admin only). While a version is **not DRAFT**, the ontology/mapping editors, metadata/document writes, and the Build/sync action are read-only — set it back to **DRAFT** to make changes.
+DRAFT → IN-REVIEW → PUBLISHED (admin or builder), IN-REVIEW → DRAFT (admin or builder), and PUBLISHED → DRAFT (admin only). While a version is **not DRAFT**, the ontology/mapping editors, metadata/document writes, and the **Build** (`/dtwin/sync/start`) and **Load** (`/dtwin/sync/load`) actions are blocked server-side — set it back to **DRAFT** to rebuild. Read-only Knowledge Graph operations (Explorer filter/expand, stats, status, etc.) remain fully accessible regardless of lifecycle status.
+
+#### Single-editor concurrency (open in edit vs. view) & the Close button
+
+To keep two people from silently overwriting each other, a **DRAFT** version can only be
+**edited by one user at a time**:
+
+- The **first** person to open a DRAFT domain gets it in **edit mode**.
+- Anyone who opens the **same** domain/version afterwards gets it **read-only (view mode)**,
+  with a banner naming the current editor. All write surfaces are disabled — they can still
+  browse, query and inspect everything.
+- The lock is **held until the editor explicitly closes the domain**, or until their
+  editing session goes idle for the lease period (10 minutes by default). Simply navigating
+  around the app keeps the lease alive automatically, and closing a tab does **not** hand the
+  domain to someone else straight away — the editor keeps it until they click **Close** or
+  the lease lapses. The editor's browser quietly renews the lease in the background while the
+  domain is open, so an actively-used session never expires. **Hover the domain name in the
+  top navbar** while you are editing to see a live countdown of the remaining lease (the time
+  before it would expire if the tab went idle).
+- **Opening a different domain closes the current one for you.** Loading another domain
+  (navbar **Load Domain**, or **Registry → Browse → Load**) releases your lock on the
+  previously-open domain **before** the new one opens, so you never hold two locks at once.
+  Switching to another **version of the same domain** releases the old version's lock
+  **after** the new version loads.
+
+**Closing a domain** — the top sub-navigation shows three buttons: **Save** (persist the
+domain to the registry), **Switch**, and **Close**. Clicking **Close** asks whether to *save
+before closing* (**Save & Close** / **Close without saving** / **Cancel**), then releases the
+edit lock and returns you to the Home page. Once you close, the next person can open the
+domain in edit mode.
+
+**Switching version** — the **Switch** button (between **Save** and **Close**) opens a popup
+listing every version of the currently open domain, with the current one flagged. Pick the
+current version to **reload** it from the Registry (discarding in-session edits) or another
+version to **switch** to it. On a **DRAFT** version, a *"Save my changes before switching"*
+box is ticked by default — leave it on to persist your work first, or untick it to discard
+unsaved changes. On an **IN-REVIEW** or **PUBLISHED** version the version picker stays
+available but the save option is disabled (those versions are read-only).
+
+**Stuck lock?** A lock left behind (e.g. a browser that crashed without closing) clears
+itself: once its lease lapses (no renew for the TTL, 10 minutes by default) the next person
+to open the version silently reclaims it — no admin action needed. If the original editor
+comes back after that, they see a *"your editing session expired"* banner and can **Reload**
+to reconnect (regaining edit if no one else has taken over). For an immediate hand-off there
+are also two manual paths:
+
+- An **app-admin** viewing the locked version gets a **Take over editing** button that
+  reclaims the lock; the previous editor becomes read-only on their next page load.
+- From **Settings → Admin → Locks** (admin only), an admin sees *every* active edit-lock
+  across the registry — domain, version, lifecycle status, who holds it, when it was
+  acquired, and whether its lease has gone stale — and can **force-unlock** any of them
+  without opening that domain first (a confirmation dialog names the domain, version, and
+  holder).
+
+> The lease TTL is configurable from **Settings → Global → Edit Lock Lease (minutes)**
+> (admin-only; default 10 min). It can also be set via the `ONTOBRICKS_EDIT_LOCK_TTL_S`
+> environment variable (seconds; default `600`) — the Settings value takes precedence over
+> the env var when set. Set either to `0` to disable auto-expiry entirely and require an
+> explicit Close / admin take-over, as in earlier releases.
+
+A version also releases its lock automatically when it leaves DRAFT (submitted for review /
+published). The read-only banner and the sidebar role badge both name the current holder,
+so viewers know exactly who to ask to close the domain.
+
+> The same user opening the domain in two tabs shares one lock (it is keyed by e-mail), so
+> a reload or a second tab never locks you out of your own domain.
 
 #### Validation & Review workflow (My Tasks + Domain → Validation)
 
@@ -702,7 +837,7 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
   is met). "Review & sign off" loads the domain and opens its Validation workspace.
 - **Domain → Validation** — the per-version review workspace:
   - **Consistency checks** — a soft readiness summary (ontology valid, mapping complete,
-    warehouse configured, Digital Twin built) with shortcuts to the Cockpit and Pitfalls.
+    warehouse configured, Knowledge Graph built) with shortcuts to the Cockpit and Pitfalls.
     These checks are advisory and never block publishing.
   - **Your actions** — context-aware buttons: Submit for review, **Approve** / **Request
     changes** (with an optional comment for the audit trail), Publish, or Reopen.
@@ -751,7 +886,7 @@ Three related ideas:
 
 ### Domain Save/Load
 
-Domains are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the **Save Domain** and **Load Domain** options in the top menu to persist and restore your work.
+Domains are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the **Save** button (in the domain sub-navigation) and the **Load Domain** option in the top menu to persist and restore your work; the **Switch** button reloads the current domain or loads another of its versions from the Registry, and the **Close** button releases the edit lock and returns you to the Home page.
 
 ### Best Practices for Version Control
 
@@ -782,25 +917,30 @@ Domains are saved in a versioned JSON format and can be stored in Unity Catalog 
 2. **Verify ID Columns**: Ensure IDs are unique and stable
 3. **Test SQL Queries**: Always test relationship queries before saving
 4. **Use Consistent Column Types**: Source/target columns should match entity IDs
+5. **Exclude Irrelevant Attributes Early**: Before running Auto-Map, open each entity's Status tab and uncheck attributes you don't need. Auto-Map will skip excluded attributes, producing leaner SQL with no extra columns.
+6. **Quote Special Column Names**: If a source column contains spaces, hyphens, or dots, use backtick quoting in your SQL (`` `column name` AS column_name ``) so the mapping and R2RML export work correctly.
+7. **Use Metadata Quality Warning**: Check the Auto-Map page for the metadata quality warning before running Auto-Map — adding table and column descriptions in Domain → Metadata significantly improves mapping accuracy.
 
-### Digital Twin Tips
+### Knowledge Graph Tips
 
 1. **Sync After Changes**: Re-synchronize after modifying ontology or mappings
 2. **Check Quality**: Run quality checks after syncing to catch constraint violations early
-3. **Use Knowledge Graph**: The interactive graph is the best way to explore entity relationships
+3. **Use Graph Viewer**: The interactive graph is the best way to explore entity relationships
 4. **Review Triples**: Browse the triples grid to verify the generated data looks correct
 5. **Performance**: The `/stats` API aggregates all scalar metrics in a single SQL query and the `/triples/find` BFS traversal uses a recursive CTE, minimizing SQL Warehouse round trips
-6. **Programmatic Access**: Use the Digital Twin API (`/api/v1/digitaltwin/`) or the MCP server for programmatic and conversational access to your knowledge graph
+6. **Programmatic Access**: Use the Knowledge Graph API (`/api/v1/digitaltwin/`) or the MCP server for programmatic and conversational access to your graph viewer
+7. **Use Analytics for Governance**: Run the Analytics section after each sync to spot high-influence entities (PageRank), bottlenecks (Betweenness), and isolated sub-graphs (connected components count > 1). Use the AI Interpretation feature to get an instant narrative summary of the graph structure.
+8. **Save Insights to Audit Trail**: After interpreting analytics results, click **Add to audit trail** to keep a record of the AI-generated observations in the domain's review history.
 
 ---
 
 ## GraphQL API
 
-Once your triple store is materialized (synced via Digital Twin), OntoBricks automatically provides a **typed GraphQL API** for each domain. The schema is auto-generated from the ontology — no manual configuration required.
+Once your triple store is materialized (synced via Knowledge Graph), OntoBricks automatically provides a **typed GraphQL API** for each domain. The schema is auto-generated from the ontology — no manual configuration required.
 
 ### Accessing GraphQL
 
-1. Navigate to **Digital Twin** → **API** and scroll to the **GraphQL API** section
+1. Navigate to **Knowledge Graph** → **API** and scroll to the **GraphQL API** section
 2. Alternatively, visit `/graphql/{domain_name}` to open the **GraphiQL Playground** directly
 
 ### Available Endpoints
@@ -864,7 +1004,7 @@ Higher depth values allow deeper nested traversal (e.g., `customer → interacti
 
 ## MCP Server (Databricks Playground)
 
-OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clients via the [Model Context Protocol](https://modelcontextprotocol.io/). This enables conversational access to your knowledge graph from the Databricks Playground, Cursor, Claude Desktop, and other MCP-compatible tools.
+OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clients via the [Model Context Protocol](https://modelcontextprotocol.io/). This enables conversational access to your graph viewer from the Databricks Playground, Cursor, Claude Desktop, and other MCP-compatible tools.
 
 ### Available Tools
 
@@ -885,7 +1025,7 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 1. Deploy the MCP server as `mcp-ontobricks` (see [Deployment Guide](deployment.md))
 2. In your Databricks workspace, navigate to **Playground**
 3. Select **mcp-ontobricks** from the MCP Servers list
-4. Ask questions like *"What entity types are in the knowledge graph?"* or *"Tell me about Jacob Martinez"*
+4. Ask questions like *"What entity types are in the graph viewer?"* or *"Tell me about Jacob Martinez"*
 
 ### Enabling Domains for MCP
 
@@ -940,13 +1080,13 @@ See the [MCP Server documentation](mcp.md) for full details including local usag
 | manages | `SELECT manager_id, project_id FROM project_managers` | manager_id | project_id |
 | collaboratesWith | `SELECT person1_id, person2_id FROM collaborations` | person1_id | person2_id |
 
-### Step 3: Explore (Digital Twin)
+### Step 3: Explore (Knowledge Graph)
 
-1. Go to **Digital Twin** → **Status** and click **Synchronize** to generate triples from your mappings
+1. Go to **Knowledge Graph** → **Status** and click **Synchronize** to generate triples from your mappings
 2. Once synced, click **Triples** to browse all generated triples in a sortable grid
-3. Click **Knowledge Graph** to explore the knowledge graph as an interactive sigma.js WebGL graph
+3. Click **Explorer** to explore the graph viewer as an interactive sigma.js WebGL graph
 4. Click on any entity node to see its type, label, attributes, and values in the details panel
-5. Click **Quality** to run automated quality checks against your ontology constraints
+5. Click **Data Quality** to run automated quality checks against your ontology constraints
 
 ---
 
@@ -981,7 +1121,7 @@ See the [MCP Server documentation](mcp.md) for full details including local usag
 - Ensure you have SELECT permissions
 - Only SELECT queries are allowed
 
-### Empty Knowledge Graph
+### Empty Graph Viewer
 
 **Problem**: Graph shows no nodes or edges
 
@@ -1010,7 +1150,7 @@ See the [MCP Server documentation](mcp.md) for full details including local usag
 **Solutions**:
 - Lakebase Postgres is the source of truth for the graph engine — verify the App is bound to the Lakebase instance (`PGHOST` / `PGDATABASE` env vars set by the Apps runtime)
 - If the Lakebase instance was paused or scaled to zero, the connection layer retries on `SQLSTATE 57P03`. Wait a few seconds and re-trigger the build.
-- Re-run the Digital Twin sync — the build is idempotent (`INSERT … ON CONFLICT DO NOTHING`)
+- Re-run the Knowledge Graph sync — the build is idempotent (`INSERT … ON CONFLICT DO NOTHING`)
 - For `managed_synced` mode, check the Lakeflow synced-table status under **Settings → Graph DB**
 
 ### Design Changes Not Saving
@@ -1067,7 +1207,7 @@ See the [MCP Server documentation](mcp.md) for full details including local usag
 
 ## Automated Triple Store Creation
 
-This guide walks you through creating a fully populated **knowledge graph triple store** from scratch using OntoBricks' automated features. With LLM-powered ontology generation, automatic data mapping, and one-click synchronization, you can go from raw Databricks tables to a queryable triple store in minutes.
+This guide walks you through creating a fully populated **graph viewer triple store** from scratch using OntoBricks' automated features. With LLM-powered ontology generation, automatic data mapping, and one-click synchronization, you can go from raw Databricks tables to a queryable triple store in minutes.
 
 ---
 
@@ -1152,7 +1292,7 @@ OntoBricks fetches column names, types, and comments from Unity Catalog for each
 
 ### Step 4: Generate the Ontology with the Wizard
 
-Navigate to **Ontology** in the top navbar, then open **Wizard** in the sidebar.
+Navigate to **Ontology** in the top navbar, then open **Generate** in the sidebar.
 
 The Wizard uses your LLM endpoint and the imported metadata to automatically design an ontology.
 
@@ -1208,7 +1348,7 @@ You can verify individual mappings by switching to the **Designer** view:
 
 ### Step 6: Synchronize to the Triple Store
 
-Navigate to **Digital Twin** in the top navbar. The **Status** section opens by default.
+Navigate to **Knowledge Graph** in the top navbar. The **Status** section opens by default.
 
 Before syncing, OntoBricks validates readiness:
 - **Ontology**: At least one entity with a valid URI
@@ -1235,7 +1375,7 @@ If all checks pass:
 
 ### Step 7: Validate with Quality Checks
 
-Still in the **Digital Twin** section, open **Quality** in the sidebar.
+Still in the **Knowledge Graph** section, open **Data Quality** in the sidebar.
 
 Quality checks validate the triple store against your ontology using two complementary systems:
 
@@ -1276,7 +1416,7 @@ SHACL shapes are compiled to **Spark SQL** for Delta execution and to **Postgres
 
 ### Step 7b: Run Reasoning (Optional)
 
-Still in the **Digital Twin** section, open **Reasoning** in the sidebar.
+Still in the **Knowledge Graph** section, open **Inference** in the sidebar.
 
 Reasoning discovers new facts (inferred triples) from your ontology rules:
 
@@ -1292,15 +1432,12 @@ Reasoning discovers new facts (inferred triples) from your ontology rules:
 
 ---
 
-### Step 8: Explore Your Knowledge Graph
+### Step 8: Explore Your Graph Viewer
 
 After sync, you can explore the triple store:
 
-#### Triples Grid
-Open **Triples** in the sidebar to browse the raw triple data in a sortable, searchable grid.
-
-#### Knowledge Graph
-Open **Knowledge Graph** in the sidebar to explore the knowledge graph interactively:
+#### Graph Explorer
+Open **Explorer** in the sidebar to explore the graph viewer interactively:
 - **Find** specific entities by name, type, or URI — matching entities and their neighbors are highlighted
 - **Filter** by entity type, field, match type, and relationship depth
 - **Navigate** relationships — click an entity to see its attributes, values, and connected entities in the detail panel
@@ -1316,10 +1453,10 @@ Open **Knowledge Graph** in the sidebar to explore the knowledge graph interacti
 | 1 | Settings | Configure Databricks connection | Manual (one-time) |
 | 2 | Domain > Information | Set LLM endpoint and triple store table | Manual (one-time) |
 | 3 | Domain > Metadata | Import table metadata from Unity Catalog | One click |
-| 4 | Ontology > Wizard | Generate ontology from metadata using LLM | One click |
+| 4 | Ontology > Generate | Generate ontology from metadata using LLM | One click |
 | 5 | Mapping > Auto-Map | Auto-map entities and relationships to SQL | One click |
-| 6 | Digital Twin > Status | Synchronize to triple store | One click |
-| 7 | Digital Twin > Quality | Run quality checks | One click |
+| 6 | Knowledge Graph > Build | Synchronize to triple store | One click |
+| 7 | Knowledge Graph > Data Quality | Run quality checks | One click |
 
 After the initial one-time configuration (steps 1–2), the entire pipeline from metadata to triple store is **four clicks**: Import Metadata, Generate, Auto-Map, Synchronize.
 
@@ -1331,7 +1468,7 @@ After the initial one-time configuration (steps 1–2), the entire pipeline from
 - **Start with a template**: Use one of the Wizard quick-templates (CRM, IoT, etc.) if your domain matches — it provides better guidelines for the LLM.
 - **Review before syncing**: After auto-map, quickly review the Designer view. Fix any red or orange nodes before synchronizing.
 - **Iterate**: The pipeline is not a one-shot process. You can re-generate the ontology, re-run auto-map, or manually adjust individual mappings at any time.
-- **Save your domain**: After achieving a good result, save the domain to Unity Catalog (**Save Domain** in the top menu) so you can reload it later.
+- **Save your domain**: After achieving a good result, save the domain to Unity Catalog (**Save** in the domain sub-navigation) so you can reload it later.
 
 ---
 
@@ -1371,11 +1508,11 @@ Async endpoints return a `task_id`. Poll `GET /tasks/{task_id}/status` for progr
 
 ### Programmatic & MCP Access
 
-After your knowledge graph is built, it can be queried programmatically:
+After your graph viewer is built, it can be queried programmatically:
 
-- **Digital Twin API** (`/api/v1/digitaltwin/`): Stateless REST endpoints for triple store status, entity search, ontology retrieval, and more. See [External API](api.md).
+- **Knowledge Graph API** (`/api/v1/digitaltwin/`): Stateless REST endpoints for triple store status, entity search, ontology retrieval, and more. See [External API](api.md).
 - **GraphQL API** (`/graphql/{domain_name}`): Auto-generated typed schema with nested relationship traversal. See [External API](api.md#graphql-api).
-- **MCP Server**: Expose your knowledge graph to the Databricks Playground and LLM clients. See [MCP Server](mcp.md).
+- **MCP Server**: Expose your graph viewer to the Databricks Playground and LLM clients. See [MCP Server](mcp.md).
 
 ---
 

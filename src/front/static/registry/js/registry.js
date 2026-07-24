@@ -51,15 +51,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     ? '<i class="bi bi-lock-fill text-muted me-1"></i> Configured via Databricks App resource binding (read-only)'
                     : '<i class="bi bi-gear text-muted me-1"></i> Configured via environment variables (<code>.env</code>) — restart the app to change';
             }
-            const btnInit = document.getElementById('btnInitRegistry');
-            if (btnInit) {
-                if (registryCfg.configured) {
-                    btnInit.style.display = 'none';
-                } else {
-                    btnInit.style.display = '';
-                    btnInit.disabled = false;
-                }
-            }
+            updateRegistryLabel();
         } catch (e) {
             console.error('Error loading registry config:', e);
             if (label) {
@@ -145,111 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // Auto-load row counts the first time the panel is displayed,
-        // then keep them around — admins can re-fetch via the Refresh
-        // button. Skipped when not bound (no point hammering the API).
-        if (lb.bound && !panel.dataset.statsLoaded) {
-            panel.dataset.statsLoaded = '1';
-            loadLakebaseStats();
-        }
     }
-
-    async function loadLakebaseStats() {
-        const tbody = document.getElementById('lakebaseStatsBody');
-        const msg = document.getElementById('lakebaseStatsMessage');
-        const btn = document.getElementById('btnRefreshLakebaseStats');
-        if (!tbody) return;
-
-        if (btn) btn.disabled = true;
-        tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2"><span class="spinner-border spinner-border-sm me-1"></span> Loading row counts…</td></tr>';
-        if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
-
-        try {
-            const resp = await fetch('/settings/registry/lakebase-stats', { credentials: 'same-origin' });
-            const data = await resp.json();
-            if (!data.success) {
-                tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">'
-                    + '<i class="bi bi-exclamation-triangle text-warning me-1"></i> '
-                    + escapeHtml(data.message || 'Could not load Lakebase stats')
-                    + '</td></tr>';
-                return;
-            }
-            const rows = Array.isArray(data.tables) ? data.tables : [];
-            if (!rows.length) {
-                tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">No tables to report.</td></tr>';
-                return;
-            }
-            const total = rows.reduce((s, r) => s + (Number(r.rows) || 0), 0);
-            tbody.innerHTML = rows.map(r => (
-                '<tr>'
-                + '<td class="ps-0 font-monospace">' + escapeHtml(r.name) + '</td>'
-                + '<td class="text-end pe-0 font-monospace">' + (Number(r.rows) || 0).toLocaleString() + '</td>'
-                + '</tr>'
-            )).join('') + (
-                '<tr class="border-top">'
-                + '<td class="ps-0 fw-semibold">Total</td>'
-                + '<td class="text-end pe-0 fw-semibold font-monospace">' + total.toLocaleString() + '</td>'
-                + '</tr>'
-            );
-            if (msg) {
-                if (data.initialized) {
-                    msg.style.display = '';
-                    msg.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i> Schema <code>'
-                        + escapeHtml(data.schema || '') + '</code> initialized.';
-                } else {
-                    msg.style.display = '';
-                    // Reason-aware copy: ``no_usage`` is a permission
-                    // problem (admin must run bootstrap-lakebase-perms),
-                    // not a bare "not initialised" — surfacing it
-                    // explicitly avoids the misleading "0 rows /
-                    // not initialised" trap when data is actually
-                    // present but the SP can't see it.
-                    //
-                    // For ``no_usage`` we prefer the backend ``message``
-                    // verbatim because it now carries the live
-                    // ``(database, role, schema_exists)`` triplet the
-                    // probe ran against — operators need that to spot
-                    // grants that landed on a different database than
-                    // the one bound by the Apps ``postgres`` resource.
-                    const reason = data.reason || '';
-                    const detail = data.message || '';
-                    let inner;
-                    if (reason === 'no_usage') {
-                        if (detail) {
-                            inner = '<i class="bi bi-shield-exclamation text-danger me-1"></i> '
-                                + escapeHtml(detail);
-                        } else {
-                            inner = '<i class="bi bi-shield-exclamation text-danger me-1"></i> Schema <code>'
-                                + escapeHtml(data.schema || '') + '</code> visible but the app service principal '
-                                + 'lacks <code>USAGE</code>. Run <code>scripts/bootstrap-lakebase-perms.sh</code> '
-                                + '(or grant manually) and refresh.';
-                        }
-                    } else if (reason === 'connect_failed' || reason === 'table_count_failed') {
-                        inner = '<i class="bi bi-x-circle text-danger me-1"></i> '
-                            + escapeHtml(detail || 'Could not reach Lakebase.');
-                    } else if (reason === 'no_registry_row') {
-                        inner = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Schema <code>'
-                            + escapeHtml(data.schema || '') + '</code> exists but has no registry row — click <em>Initialize</em>.';
-                    } else {
-                        inner = '<i class="bi bi-exclamation-triangle text-warning me-1"></i> Schema <code>'
-                            + escapeHtml(data.schema || '') + '</code> not initialized — click <em>Initialize</em>, or run <code>scripts/migrate-registry-to-lakebase.sh</code> to import an existing Volume registry.';
-                    }
-                    msg.innerHTML = inner;
-                }
-            }
-        } catch (e) {
-            tbody.innerHTML = '<tr><td class="ps-0 text-muted" colspan="2">'
-                + '<i class="bi bi-x-circle text-danger me-1"></i> '
-                + escapeHtml(e.message || 'Network error')
-                + '</td></tr>';
-        } finally {
-            if (btn) btn.disabled = false;
-        }
-    }
-
-    document.getElementById('btnRefreshLakebaseStats')?.addEventListener('click', () => {
-        loadLakebaseStats();
-    });
 
     function updateRegistryLabel() {
         const schemaLabel = document.getElementById('registrySchemaLabel');
@@ -266,7 +154,16 @@ document.addEventListener('DOMContentLoaded', function () {
             // Volume line: volume name only
             const volName = registryCfg.volume || 'OntoBricksRegistry';
             if (volumeLabel) volumeLabel.innerHTML = '<span class="font-monospace">' + escapeHtml(volName) + '</span>';
-            if (initBtn) initBtn.style.display = registryCfg.configured ? 'none' : '';
+            if (initBtn) {
+                initBtn.style.display = '';
+                if (registryCfg.configured) {
+                    initBtn.className = 'btn btn-sm btn-outline-secondary';
+                    initBtn.innerHTML = '<i class="bi bi-arrow-up-circle me-1"></i> Apply upgrades';
+                } else {
+                    initBtn.className = 'btn btn-sm btn-outline-success';
+                    initBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Initialize';
+                }
+            }
         } else {
             const empty = '<span class="text-muted">—</span>';
             if (schemaLabel) schemaLabel.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i><span class="text-muted">Not configured</span>';
@@ -357,31 +254,10 @@ document.addEventListener('DOMContentLoaded', function () {
             '<i class="bi bi-' + cfg.icon + ' me-1"></i>' + escapeHtml(cfg.label) + '</span>';
     }
 
-    // Allowed transitions surfaced as buttons. The server is authoritative
-    // for role + precondition; these only present the valid next states.
-    function statusButtons(domainName, ver, status) {
-        const s = (status || 'DRAFT').toUpperCase();
-        const mk = (to, cls, icon, label, title) =>
-            '<button type="button" class="btn btn-sm ' + cls + ' registry-status-btn" ' +
-            'data-domain="' + escapeHtml(domainName) + '" data-version="' + escapeHtml(ver) + '" ' +
-            'data-status="' + to + '" title="' + escapeHtml(title) + '">' +
-            '<i class="bi bi-' + icon + ' me-1"></i>' + escapeHtml(label) + '</button>';
-        if (s === 'DRAFT') {
-            return mk('IN-REVIEW', 'btn-outline-info', 'eye', 'Submit for Review',
-                'Submit this version for review (requires a successful build)');
-        }
-        if (s === 'IN-REVIEW') {
-            return mk('DRAFT', 'btn-outline-secondary', 'arrow-counterclockwise', 'Back to Draft',
-                'Return this version to Draft (re-enables editing)') +
-                mk('PUBLISHED', 'btn-outline-success', 'broadcast', 'Publish',
-                'Publish this version (exposed on the API/MCP)');
-        }
-        if (s === 'PUBLISHED') {
-            return mk('DRAFT', 'btn-outline-secondary', 'arrow-counterclockwise', 'Unpublish',
-                'Return this version to Draft (admin only)');
-        }
-        return '';
-    }
+    // Lifecycle/workflow actions are NOT surfaced here. The Browse view is
+    // read-only with respect to the review workflow: each version exposes a
+    // "Validate" button that loads the version (if needed) and jumps to the
+    // Domain → Validation workspace, the single place to drive the workflow.
 
     // --- Registry domain list ---
 
@@ -481,7 +357,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             ? '<span class="badge bg-primary-subtle text-primary border" style="font-size:.65rem;"><i class="bi bi-check-circle me-1"></i>Loaded</span>'
                             : '';
                         const datesHtml = _formatVersionDates(lastUpdate, lastBuild);
-                        const statusBtns = statusButtons(d.name, ver, status);
+                        const reviewBtn = '<button type="button" class="btn btn-sm btn-outline-info registry-review-btn" ' +
+                            'data-domain="' + escapeHtml(d.name) + '" data-version="' + escapeHtml(ver) + '" ' +
+                            'data-loaded="' + (isLoaded ? '1' : '') + '" ' +
+                            'title="Open this version in the Validation workspace to manage its review workflow">' +
+                            '<i class="bi bi-ui-checks me-1"></i>Validate</button>';
                         const loadBtn = isLoaded
                             ? ''
                             : '<button type="button" class="btn btn-sm btn-outline-primary registry-load-version-btn" ' +
@@ -498,7 +378,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             '<div class="d-flex align-items-center gap-2">' + statusLabel + loadedLabel + '</div>' +
                             datesHtml +
                             '<span class="flex-grow-1"></span>' +
-                            '<div class="d-flex align-items-center gap-1">' + statusBtns + loadBtn + deleteBtn + '</div>' +
+                            '<div class="d-flex align-items-center gap-1">' + reviewBtn + loadBtn + deleteBtn + '</div>' +
                         '</div>';
                     });
                     html += '</div></td></tr>';
@@ -544,10 +424,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             });
 
-            listDiv.querySelectorAll('.registry-status-btn:not([disabled])').forEach(btn => {
+            listDiv.querySelectorAll('.registry-review-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    setRegistryVersionStatus(btn.dataset.domain, btn.dataset.version, btn.dataset.status);
+                    openVersionInValidation(
+                        btn.dataset.domain, btn.dataset.version, btn.dataset.loaded === '1'
+                    );
                 });
             });
 
@@ -643,50 +525,41 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function setRegistryVersionStatus(domainName, version, newStatus) {
-        const target = (newStatus || '').toUpperCase();
-        const labels = {
-            'DRAFT': 'Draft', 'IN-REVIEW': 'In Review', 'PUBLISHED': 'Published'
-        };
-        const meta = {
-            'IN-REVIEW': { title: 'Submit for Review', confirm: 'Submit', cls: 'btn-info', icon: 'eye',
-                msg: 'Submit <strong>v' + escapeHtml(version) + '</strong> of <strong>' + escapeHtml(domainName) +
-                     '</strong> for review? Editing will be locked until it is returned to Draft.' },
-            'PUBLISHED': { title: 'Publish Version', confirm: 'Publish', cls: 'btn-success', icon: 'broadcast',
-                msg: 'Publish <strong>v' + escapeHtml(version) + '</strong> of <strong>' + escapeHtml(domainName) +
-                     '</strong>? It will be served on the API/MCP surface.' },
-            'DRAFT': { title: 'Return to Draft', confirm: 'Return to Draft', cls: 'btn-secondary', icon: 'arrow-counterclockwise',
-                msg: 'Return <strong>v' + escapeHtml(version) + '</strong> of <strong>' + escapeHtml(domainName) +
-                     '</strong> to Draft? This re-enables editing.' }
-        }[target];
-        if (!meta) return;
-
+    // Jump to the Domain → Validation workspace for a registry version,
+    // loading it from Unity Catalog first when it is not already current.
+    async function openVersionInValidation(domainName, version, alreadyLoaded) {
+        if (alreadyLoaded) {
+            window.location.href = '/domain/?section=review';
+            return;
+        }
         const confirmed = await showConfirmDialog({
-            title: meta.title,
-            message: meta.msg,
-            confirmText: meta.confirm,
-            confirmClass: meta.cls,
-            icon: meta.icon
+            title: 'Open in Validation',
+            message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' +
+                escapeHtml(version) + '</strong> and open its Validation workspace? ' +
+                'Any unsaved changes to the current domain will be lost.',
+            confirmText: 'Open',
+            confirmClass: 'btn-info',
+            icon: 'ui-checks'
         });
         if (!confirmed) return;
 
         try {
-            const resp = await fetch('/domain/set-version-status', {
+            showNotification('Opening ' + domainName + ' v' + version + '…', 'info', 5000);
+            const resp = await fetch('/domain/load-from-uc', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ domain_name: domainName, version: version, status: target })
+                body: JSON.stringify({ domain: domainName, version: version })
             });
             const data = await resp.json();
             if (resp.ok && data.success) {
-                showNotification('v' + version + ' is now ' + (labels[target] || target) + ' for ' + domainName, 'success');
                 if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
-                loadRegistryDomains();
+                window.location.href = '/domain/?section=review';
             } else {
-                showNotification('Error: ' + (data.message || 'Failed to change status'), 'error');
+                showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
             }
         } catch (e) {
-            showNotification('Error: ' + e.message, 'error');
+            showNotification('Error loading domain: ' + e.message, 'error');
         }
     }
 
@@ -1557,8 +1430,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnInitRegistry')?.addEventListener('click', async () => {
         const btn = document.getElementById('btnInitRegistry');
+        const wasConfigured = registryCfg.configured;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Initializing...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
+            + (wasConfigured ? 'Applying upgrades…' : 'Initializing…');
         try {
             const resp = await fetch('/settings/registry/initialize', {
                 method: 'POST',
@@ -1572,6 +1447,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 registryCfg.configured = true;
                 updateRegistryLabel();
                 updateRegistryStatus(registryCfg);
+                // Surface the Lakebase grants applied during Initialize
+                // (in-app port of bootstrap-lakebase-perms.sh). Rendered by
+                // the inline script in _registry_configuration.html.
+                if (data.permissions && typeof window._obRenderRegistryGrants === 'function') {
+                    window._obRenderRegistryGrants(data.permissions);
+                    const warns = (data.permissions.warnings || []).length;
+                    if (warns) {
+                        showNotification(
+                            (wasConfigured ? 'Upgrade applied, but ' : 'Registry initialized, but ')
+                            + warns + ' permission grant warning'
+                            + (warns === 1 ? '' : 's') + ' — see Permission Grants below.',
+                            'warning'
+                        );
+                    }
+                }
             } else {
                 showNotification('Error: ' + data.message, 'error');
             }
@@ -1579,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotification('Error: ' + e.message, 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Initialize';
+            updateRegistryLabel();  // restore correct label/style for current state
         }
     });
 });

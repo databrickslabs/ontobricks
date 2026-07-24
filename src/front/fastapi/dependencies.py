@@ -153,22 +153,22 @@ templates.env.filters["random"] = random_filter
 
 
 def triplestore_page_context(domain_session, settings=None) -> dict:
-    """Build the triplestore-related template context shared by dtwin and domain pages.
+    """Build the triplestore-related template context shared by dtwin and domain pages."""
+    from back.core.helpers import effective_view_table, effective_graph_name, effective_databricks_table
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-    Returns dict with ``view_table``, ``graph_name``, ``triplestore_cache``, and
-    ``graph_engine``. The engine is resolved through
-    :pymeth:`TripleStoreFactory._resolve_graph_engine`, which walks the
-    domain-override → global-setting → ``"lakebase"`` chain. ``GlobalConfigService``
-    has already validated the value against ``ALLOWED_GRAPH_ENGINES``.
-    """
-    from back.core.helpers import effective_view_table, effective_graph_name
-    from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
-
-    graph_engine = TripleStoreFactory._resolve_graph_engine(domain_session, settings) or "lakebase"
+    triple_store_backend = (
+        GraphDBFactory._resolve_triple_store_backend(domain_session, settings)
+        or "lakebase"
+    )
+    _raw = GraphDBFactory._resolve_graph_engine(domain_session, settings) or "lakebase"
+    graph_engine = _raw
 
     return {
         "view_table": effective_view_table(domain_session),
         "graph_name": effective_graph_name(domain_session),
+        "data_table": effective_databricks_table(domain_session, settings),
         "triplestore_cache": (domain_session.triplestore or {}).get("stats", {}),
         "graph_engine": graph_engine,
+        "triple_store_backend": triple_store_backend,
     }

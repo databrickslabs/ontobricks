@@ -57,6 +57,23 @@ async def review_detail(
     )
 
 
+@router.get("/{folder}/{version}/team")
+async def review_team(
+    folder: str,
+    version: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Domain access list (who can view / edit / build) for the domain.
+
+    ``version`` is part of the path for URL symmetry with the other
+    review endpoints; the access list is per-domain, not per-version.
+    """
+    del version
+    return ReviewService.review_team(request, session_mgr, settings, folder)
+
+
 @router.post("/{folder}/{version}/submit")
 async def submit(
     folder: str,
@@ -139,7 +156,7 @@ async def reopen(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Reopen a PUBLISHED version for editing (admin only)."""
+    """Send an IN-REVIEW or PUBLISHED version back to Draft (admin only)."""
     comment = await _comment(request)
     user_role, domain_role = _roles(request, folder, settings)
     return ReviewService.reopen(

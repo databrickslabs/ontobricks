@@ -28,9 +28,9 @@ from back.core.errors import (
     InfrastructureError,
 )
 from back.objects.registry import RegistryService
-from back.core.triplestore import get_triplestore
+from back.core.graphdb import get_graphdb
 from shared.config.constants import DEFAULT_BASE_URI
-from back.core.helpers import effective_graph_name
+from back.core.helpers import effective_graph_name, effective_graph_query_table
 
 logger = get_logger(__name__)
 
@@ -45,6 +45,17 @@ def _graphql_safe_error_message(exc: BaseException) -> str:
     if isinstance(original, OntoBricksError):
         return original.message
     return "The query could not be executed."
+
+
+def _is_external_request(request: Request) -> bool:
+    """Whether the request hit the public external GraphQL mount.
+
+    Reads the raw routed path (``scope["path"]``) rather than
+    ``request.url.path``: the latter is reconstructed from the Host header and
+    could be poisoned to flip the external/internal gate (BadHost /
+    CVE-2026-48710).
+    """
+    return request.scope["path"].startswith(EXTERNAL_GRAPHQL_PUBLIC_PREFIX)
 
 
 # ------------------------------------------------------------------
@@ -111,7 +122,7 @@ def _load_domain_from_registry(domain_name, session_mgr, settings, *, external=F
     # If the user already has this registry folder open at a chosen version,
     # keep it. Otherwise GraphQL would resolve to the latest PUBLISHED
     # version — often an older v3 while the user is on v4 — and would open
-    # the wrong graph store snapshot for subsequent Digital Twin /
+    # the wrong graph store snapshot for subsequent Knowledge Graph /
     # data-quality calls.
     session_folder = (getattr(domain, "domain_folder", None) or "").strip()
     session_ver = (getattr(domain, "current_version", None) or "").strip()
@@ -223,13 +234,13 @@ def _get_schema_and_context(domain, settings):
 
     schema, metadata = result
 
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise InfrastructureError(
             "Graph backend not configured or unreachable."
         )
 
-    table = effective_graph_name(domain)
+    table = effective_graph_query_table(domain, settings, store=store)
 
     logger.info(
         "GraphQL context: table=%s, store=%s, classes=%d",
@@ -306,7 +317,7 @@ async def graphql_playground(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    is_external = request.url.path.startswith(EXTERNAL_GRAPHQL_PUBLIC_PREFIX)
+    is_external = _is_external_request(request)
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )
@@ -332,7 +343,7 @@ async def graphql_execute(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    is_external = request.url.path.startswith(EXTERNAL_GRAPHQL_PUBLIC_PREFIX)
+    is_external = _is_external_request(request)
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )
@@ -382,7 +393,7 @@ async def graphql_sdl(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    is_external = request.url.path.startswith(EXTERNAL_GRAPHQL_PUBLIC_PREFIX)
+    is_external = _is_external_request(request)
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )
@@ -430,7 +441,7 @@ async def graphql_debug(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    is_external = request.url.path.startswith(EXTERNAL_GRAPHQL_PUBLIC_PREFIX)
+    is_external = _is_external_request(request)
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )

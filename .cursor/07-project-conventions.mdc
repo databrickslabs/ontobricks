@@ -115,3 +115,39 @@ scope:
   # Bad
   from back.objects.registry import RegistryService
   ```
+
+### Merge Safety (feature branch → develop)
+
+When merging `develop` into a long-lived feature branch (or resolving conflicts before a PR):
+
+1. **Feature branch is always the source of truth.** Resolve every conflict with `--ours`
+   unless the change from `develop` is a genuine independent improvement to a shared file.
+
+2. **Auto-merges are not safe.** Git can silently resolve a file with no conflict markers
+   while still discarding feature content (it picks one side's structure). Always verify
+   critical wiring files after the merge, even when git reports success.
+
+3. **After any merge, diff these files between the pre-merge tip and the new HEAD:**
+   ```bash
+   git diff <pre-merge-tip> HEAD -- \
+     src/front/templates/base.html \
+     src/front/templates/domain.html \
+     src/front/config/menu_config.json \
+     src/api/routers/internal/__init__.py \
+     src/front/static/ontology/js/ontology-map.js
+   ```
+   These are the most likely victims of silent auto-merge data loss because both branches
+   edit them for unrelated reasons.
+
+4. **Restore silently-lost files** from the pre-merge feature commit:
+   ```bash
+   git checkout <pre-merge-feature-sha> -- <file>
+   git add <file>
+   ```
+
+5. **Run the full test suite** (`pytest tests/units/ -q`) before committing the merge.
+   A passing suite does not guarantee the UI is intact, but a failing one always indicates
+   a problem.
+
+6. **Commit message** for the merge should list which conflict types were resolved and
+   which files were restored, so reviewers can audit the decision.

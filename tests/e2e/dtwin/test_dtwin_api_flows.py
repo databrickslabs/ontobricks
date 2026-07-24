@@ -1,7 +1,7 @@
 """
-E2E — Digital Twin internal API (/dtwin/…).
+E2E — Knowledge Graph internal API (/dtwin/…).
 
-Covers read + write API endpoints that the Digital Twin page uses for
+Covers read + write API endpoints that the Knowledge Graph page uses for
 syncing, querying, and running analytics on the knowledge graph.
 
 In the test harness the graph store is empty (no Databricks backend),

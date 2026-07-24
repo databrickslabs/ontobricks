@@ -144,7 +144,7 @@
 
 #resultsContainer .gridjs-footer {
     flex-shrink: 0;
-    background: #f8f9fa;
+    background: #ffffff;
     border-top: 1px solid #e9ecef;
 }
 
@@ -159,7 +159,7 @@
 }
 
 #resultsContainer .gridjs-th {
-    background: #f8f9fa !important;
+    background: #ffffff !important;
     color: #212529;
     font-weight: 600;
     font-size: 0.85rem;
@@ -176,7 +176,7 @@
 }
 
 #resultsContainer .gridjs-tr:hover td {
-    background: #f8f9fa;
+    background: #ffffff;
 }
 
 #resultsContainer .gridjs-pagination {
@@ -408,14 +408,14 @@
     display: flex;
     align-items: center;
     padding: 10px 16px;
-    background: #f8f9fa;
+    background: #ffffff;
     cursor: pointer;
     user-select: none;
     transition: background-color 0.15s;
 }
 
 .group-header:hover {
-    background: #e9ecef;
+    background: #ffffff;
 }
 
 .group-chevron {
@@ -455,7 +455,7 @@
 }
 
 .group-content .table tbody tr:hover {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
 }
 
 /* ==========================================================================

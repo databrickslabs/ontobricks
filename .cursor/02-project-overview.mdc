@@ -7,13 +7,13 @@ scope:
 
 ### Project Overview
 
-OntoBricks is a **Python FastAPI** web application designed to run as a **Databricks App**. It provides ontology management, knowledge graph engineering, and metadata governance tools on top of Databricks Unity Catalog.
+OntoBricks is a **Python FastAPI** web application designed to run as a **Databricks App**. It provides ontology management, graph viewer engineering, and metadata governance tools on top of Databricks Unity Catalog.
 
 **Core Features:**
 
 - **Ontology Management:** OWL/RDFS/SHACL import/export, class/property CRUD, URI management, industry ontology imports (CDISC, FIBO, IOF). Managed by the `Ontology` domain class.
 - **Mapping:** Entity/relationship mapping CRUD, R2RML generation/parsing, SQL validation, LLM-assisted auto-assign. Managed by the `Mapping` domain class.
-- **Digital Twin:** Knowledge graph build, sync, SPARQL query, quality checks, graph visualization, community detection. Managed by the `DigitalTwin` domain class.
+- **Knowledge Graph:** Knowledge graph build, sync, SPARQL query, quality checks, graph visualization, community detection. Managed by the `DigitalTwin` domain class.
 - **Domain Management:** Unity Catalog save/load, version status, metadata, design layout persistence. Managed by the `Domain` domain class.
 - **Registry:** Dual-mode domain registry with permissions and scheduled builds. Two storage modes, picked from the Databricks App config and surfaced in the **Settings → Registry** tab:
   1. **Volume-only** — everything (metadata, indexes, documents, binaries) lives in a UC Volume.

@@ -28,7 +28,7 @@ Domain session
 Global config
 -------------
 
-.. automodule:: back.objects.session.global_config
+.. automodule:: back.objects.session.GlobalConfigService
    :members:
    :undoc-members:
    :show-inheritance:

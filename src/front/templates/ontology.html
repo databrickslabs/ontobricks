@@ -86,7 +86,7 @@
                 {% include "partials/ontology/_ontology_business_rules.html" %}
             </div>
 
-            <!-- Cohort Discovery — DESIGN (Run/preview lives in Digital Twin) -->
+            <!-- Cohort Discovery — DESIGN (Run/preview lives in Knowledge Graph) -->
             <div id="cohorts-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_cohorts.html" %}
             </div>
@@ -127,12 +127,13 @@
 <script src="{{ url_for('static', filename='ontology/js/ontology-axioms.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-swrl.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-business-rules.js') }}?v={{ asset_version }}"></script>
-<!-- Cohort Discovery design UI (same module powers the Digital Twin run page) -->
+<!-- Cohort Discovery design UI (same module powers the Knowledge Graph run page) -->
 <script src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-owl-content.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-information.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-import.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-groups.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='global/js/task-progress-ui.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-wizard.js') }}?v={{ asset_version }}"></script>
 <!-- Markdown rendering for assistant chat -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

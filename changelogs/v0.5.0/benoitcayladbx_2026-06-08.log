@@ -288,9 +288,15 @@ default `1`; no backfill of the old global key (it becomes dead).
 **Test result**: `pytest tests/units` -> 2242 passed, 15 skipped.
 
 **Migration note**: existing Lakebase deployments self-heal the new column on first read/write
-(`ADD COLUMN IF NOT EXISTS`, owner-aware); if the app SP lacks table ownership, run
-`make bootstrap-lakebase` as the schema owner. The old registry-wide `review_quorum` in
-`global_config` is no longer read.
+(`ADD COLUMN IF NOT EXISTS`, owner-aware). Because the `domains` table already exists,
+`schema.sql`'s `CREATE TABLE IF NOT EXISTS` does NOT add the column on redeploy, so the
+deploy-time migration was added to `scripts/bootstrap-lakebase-perms.sh`
+(`ALTER TABLE domains ADD COLUMN IF NOT EXISTS review_quorum integer NOT NULL DEFAULT 1`,
+run as the schema owner). Run `make bootstrap-lakebase` to apply it to an already-deployed
+instance. The old registry-wide `review_quorum` in `global_config` is no longer read.
+
+> Deployed to `fe-vm-bcayla-demos` (apps `ontobricks-050` + `mcp-ontobricks-050`) on 2026-06-09;
+> Lakebase `domains.review_quorum` migration applied; both apps RUNNING, UI `/healthz` 200.
 
 ---
 
@@ -322,3 +328,62 @@ without being blocked by the quorum, so a domain is never stuck waiting on sign-
 - `docs/user-guide.md`
 
 **Test result**: `pytest tests/units` -> 2247 passed, 15 skipped. `node --check` clean.
+
+---
+
+## Fix: version filter dropdowns disabled on read-only domains (Runs / Audit trail)
+
+**Context**: On a read-only domain version (status IN-REVIEW or PUBLISHED, or an older/inactive
+version → `body.read-only-version`), the **Version** filter `<select>` on **Domain → Runs** and
+**Domain → Audit trail** was greyed out and unusable. Those dropdowns only filter a read-only
+timeline by version — they don't mutate anything — so they must stay interactive for readers.
+
+**Root cause**: The catch-all read-only gate in `permissions.css` disables every `<select>` except
+an explicit allow-list (`#domainVersionSelect`, `#loadDomainSelect`, `#loadVersionSelect`). The
+two filters (`#auditVersionFilter`, `#runsVersionFilter`) weren't listed, and the sibling
+`[id*="filter"]` input exemption is case-sensitive (lowercase), so it would not have matched the
+capital-F ids regardless.
+
+**Changes**:
+1. `src/front/static/global/css/permissions.css` — added `:not(#auditVersionFilter)` and
+   `:not(#runsVersionFilter)` to the read-only `select` gate, and documented them in the
+   exemption-list comment.
+
+**Modified files**:
+- `src/front/static/global/css/permissions.css`
+
+**Test result**: CSS-only change; no test suite impact.
+
+---
+
+## Track the user behind every status change (direct lifecycle transitions)
+
+**Context**: The review workflow (Submit / Approve / Request changes / Publish / Reopen) already
+records who did what in `domain_review_events` (actor + action + from→to + timestamp + comment).
+But the **direct lifecycle dropdown** (`POST /domain/set-version-status`, used from Registry →
+Browse / Domain → Versions) changed the status **without** writing an audit row, so those changes
+were not attributed to any user.
+
+**Changes**:
+1. `src/api/routers/internal/domain.py` — `set_version_status` endpoint now resolves the caller's
+   email (`request.state.user_email` / `x-forwarded-email`) and forwards it as `actor_email`.
+2. `src/back/objects/domain/SettingsService.py` — `set_registry_version_status_result` accepts
+   `actor_email` and, after a successful transition, records a `domain_review_events` row
+   (best-effort; never rolls back the transition). The target status maps to the action tag:
+   IN-REVIEW→`submitted`, PUBLISHED→`published`, DRAFT→`reopened`; `meta.source="lifecycle"`
+   distinguishes these from review-workflow rows.
+3. `tests/units/settings/test_settings_version_status.py` — `_run` passes `actor_email`; added
+   `test_status_change_records_actor_in_audit_log`,
+   `test_publish_status_change_maps_to_published_action`,
+   `test_reopen_status_change_maps_to_reopened_action`.
+
+**Modified files**:
+- `src/api/routers/internal/domain.py`
+- `src/back/objects/domain/SettingsService.py`
+- `tests/units/settings/test_settings_version_status.py`
+
+**Test result**: `pytest tests/units` -> 2250 passed, 15 skipped.
+
+**Note**: attribution relies on the forwarded user identity. Running locally (no
+`x-forwarded-email`) the actor is empty, exactly like the review-workflow sign-offs; deployed as a
+Databricks App the email is populated and every transition is attributed.

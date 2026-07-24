@@ -39,7 +39,7 @@ jobs:
           - agent_auto_icon_assign
           - agent_dtwin_chat
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -86,7 +86,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Open or update the eval-drift tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,7 +108,7 @@ jobs:
     # GATE: enable when the integration MCP server is reachable and secrets are set.
     if: ${{ vars.ONTOBRICKS_INT_MCP_REACHABLE == 'true' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -169,7 +169,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Open or update the mcp-smoke tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

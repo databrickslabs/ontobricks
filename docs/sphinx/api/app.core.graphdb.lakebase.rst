@@ -31,7 +31,7 @@ Flat store
 Bulk ingestion contract
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-The Digital Twin build pipeline never holds the full graph in memory when
+The Knowledge Graph build pipeline never holds the full graph in memory when
 the active engine is Lakebase. Triples flow from the Databricks SQL
 warehouse to Postgres in fixed-size batches via the streaming bulk paths:
 

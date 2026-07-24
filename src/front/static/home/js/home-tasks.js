@@ -22,12 +22,14 @@
                 credentials: 'same-origin',
             });
             const data = await resp.json();
-            const tasks = (resp.ok && data.success && data.tasks) ? data.tasks : [];
-            if (!tasks.length) {
+            const ok = resp.ok && data.success;
+            const tasks = (ok && data.tasks) ? data.tasks : [];
+            const assigned = (ok && data.assigned_tasks) ? data.assigned_tasks : [];
+            if (!tasks.length && !assigned.length) {
                 section.style.display = 'none';
                 return;
             }
-            render(container, tasks);
+            render(container, tasks, assigned);
             section.style.display = '';
         } catch (err) {
             // Home page must stay usable even if the review API is down.
@@ -36,11 +38,10 @@
         }
     }
 
-    function render(container, tasks) {
+    function render(container, tasks, assigned) {
+        assigned = assigned || [];
         const rows = tasks.map((t) => {
-            const actions = (t.actions || [])
-                .map((a) => actionButton(t, a))
-                .join(' ');
+            const actions = validateButton(t);
             return '<tr>' +
                 '<td class="fw-medium">' + escapeHtml(t.domain) + '</td>' +
                 '<td>v' + escapeHtml(t.version) + '</td>' +
@@ -51,22 +52,79 @@
                 '</td></tr>';
         }).join('');
 
-        container.innerHTML =
-            '<div class="table-responsive">' +
-            '<table class="table table-sm align-middle my-tasks-table mb-0">' +
-            '<thead><tr>' +
-            '<th>Domain</th><th>Version</th><th>Status</th>' +
-            '<th>Approvals</th><th class="text-end">Your action</th>' +
-            '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+        const reviewBlock = tasks.length
+            ? '<div class="table-responsive">' +
+              '<table class="table table-sm align-middle my-tasks-table mb-0">' +
+              '<thead><tr>' +
+              '<th>Domain</th><th>Version</th><th>Status</th>' +
+              '<th>Approvals</th><th class="text-end">Review</th>' +
+              '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+            : '';
 
-        container.querySelectorAll('button[data-action]').forEach((btn) => {
-            btn.addEventListener('click', onAction);
+        container.innerHTML = reviewBlock + assignedBlock(assigned);
+
+        container.querySelectorAll('button[data-validate]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                loadDomainAndReview(btn.dataset.domain, btn.dataset.version);
+            });
         });
         container.querySelectorAll('button[data-comments]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 ReviewModals.showComments(btn.dataset.domain, btn.dataset.version);
             });
         });
+        container.querySelectorAll('button[data-task-done]').forEach((btn) => {
+            btn.addEventListener('click', () => completeTask(btn));
+        });
+    }
+
+    function assignedBlock(assigned) {
+        if (!assigned.length) return '';
+        const rows = assigned.map((t) =>
+            '<tr>' +
+            '<td class="fw-medium">' + escapeHtml(t.title) + '</td>' +
+            '<td>' + escapeHtml(t.folder) + ' v' + escapeHtml(t.version) + '</td>' +
+            '<td>' + escapeHtml((t.status || 'open').replace('_', ' ')) + '</td>' +
+            '<td class="text-end">' +
+            '<button type="button" class="btn btn-sm btn-success" data-task-done="1" ' +
+            'data-folder="' + escapeAttr(t.folder) + '" ' +
+            'data-version="' + escapeAttr(t.version) + '" ' +
+            'data-task-id="' + escapeAttr(t.id) + '">' +
+            '<i class="bi bi-check2 me-1"></i>Done</button></td></tr>'
+        ).join('');
+        return '<div class="mt-3 mb-2 fw-medium small text-uppercase text-muted">' +
+            '<i class="bi bi-person-check me-1"></i>Assigned to me</div>' +
+            '<div class="table-responsive">' +
+            '<table class="table table-sm align-middle my-tasks-table mb-0">' +
+            '<thead><tr><th>Task</th><th>Domain</th><th>Status</th>' +
+            '<th class="text-end">Action</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody></table></div>';
+    }
+
+    async function completeTask(btn) {
+        const { folder, version, taskId } = btn.dataset;
+        try {
+            const resp = await fetch(
+                '/comments/' + encodeURIComponent(folder) + '/' +
+                encodeURIComponent(version) + '/tasks/' +
+                encodeURIComponent(taskId) + '/status',
+                {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'done' }),
+                }
+            );
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                showNotification(data.message || 'Failed to update task', 'error');
+                return;
+            }
+            showNotification('Task completed.', 'success');
+            loadTasks();
+        } catch (err) {
+            showNotification('Error: ' + err.message, 'error');
+        }
     }
 
     function commentsButton(task) {
@@ -78,86 +136,16 @@
             '<i class="bi bi-chat-dots"></i></button>';
     }
 
-    function actionButton(task, action) {
-        const cls = action.id === 'publish'
-            ? 'btn-success'
-            : (action.id === 'review' ? 'btn-primary' : 'btn-outline-secondary');
-        const icon = action.id === 'publish'
-            ? 'broadcast'
-            : (action.id === 'review' ? 'patch-check' : 'send');
-        return '<button type="button" class="btn btn-sm ' + cls + ' ms-1" ' +
-            'data-action="' + escapeAttr(action.id) + '" ' +
+    // The worklist no longer drives the workflow inline. Every task links
+    // to the Domain → Validation workspace (loading the version first), the
+    // single place to submit / approve / publish / send back to draft.
+    function validateButton(task) {
+        return '<button type="button" class="btn btn-sm btn-outline-info ms-1" ' +
+            'data-validate="1" ' +
             'data-domain="' + escapeAttr(task.domain) + '" ' +
-            'data-version="' + escapeAttr(task.version) + '">' +
-            '<i class="bi bi-' + icon + ' me-1"></i>' +
-            escapeHtml(action.label) + '</button>';
-    }
-
-    async function onAction(e) {
-        const btn = e.currentTarget;
-        const action = btn.dataset.action;
-        const domain = btn.dataset.domain;
-        const version = btn.dataset.version;
-
-        if (action === 'review') {
-            await loadDomainAndReview(domain, version);
-            return;
-        }
-        if (action === 'submit') {
-            await transition(domain, version, 'submit', {
-                title: 'Submit for review',
-                message: 'Submit <strong>' + escapeHtml(domain) + '</strong> v' +
-                    escapeHtml(version) + ' for review? Editing locks until it is returned to Draft.',
-                confirmText: 'Submit',
-                icon: 'eye',
-            });
-            return;
-        }
-        if (action === 'publish') {
-            await transition(domain, version, 'publish', {
-                title: 'Publish version',
-                message: 'Publish <strong>' + escapeHtml(domain) + '</strong> v' +
-                    escapeHtml(version) + '? It becomes the live version on the API/MCP surface.',
-                confirmText: 'Publish',
-                icon: 'broadcast',
-            });
-        }
-    }
-
-    async function transition(domain, version, endpoint, dialog) {
-        const r = await ReviewModals.promptComment({
-            title: dialog.title,
-            message: dialog.message,
-            confirmText: dialog.confirmText,
-            confirmClass: 'btn-primary',
-            icon: dialog.icon,
-        });
-        if (!r.confirmed) return;
-
-        try {
-            const resp = await fetch(
-                '/review/' + encodeURIComponent(domain) + '/' +
-                encodeURIComponent(version) + '/' + endpoint,
-                {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ comment: r.comment }),
-                }
-            );
-            const data = await resp.json();
-            if (!resp.ok || !data.success) {
-                showNotification(data.message || 'Action failed', 'error');
-                return;
-            }
-            showNotification(
-                domain + ' v' + version + ' is now ' + (data.status || '') + '.',
-                'success'
-            );
-            loadTasks();
-        } catch (err) {
-            showNotification('Error: ' + err.message, 'error');
-        }
+            'data-version="' + escapeAttr(task.version) + '" ' +
+            'title="Open this version in the Validation workspace">' +
+            '<i class="bi bi-ui-checks me-1"></i>Validate</button>';
     }
 
     async function loadDomainAndReview(domain, version) {
@@ -182,14 +170,16 @@
 
     function statusBadge(status) {
         const map = {
-            'DRAFT': 'bg-secondary',
-            'IN-REVIEW': 'bg-warning text-dark',
-            'PUBLISHED': 'bg-success',
+            'DRAFT': 'bg-warning-subtle text-dark border-warning',
+            'IN-REVIEW': 'bg-info-subtle text-dark border-info',
+            'PUBLISHED': 'bg-success-subtle text-dark border-success',
         };
-        const cls = map[status] || 'bg-secondary';
+        const cls = map[status] || map['DRAFT'];
         const label = status === 'IN-REVIEW' ? 'In Review'
-            : (status.charAt(0) + status.slice(1).toLowerCase());
-        return '<span class="badge ' + cls + '">' + escapeHtml(label) + '</span>';
+            : ((status || 'DRAFT').charAt(0) +
+               (status || 'DRAFT').slice(1).toLowerCase());
+        return '<span class="badge border ' + cls + '">' +
+            escapeHtml(label) + '</span>';
     }
 
     function escapeHtml(text) {

@@ -9,6 +9,7 @@ import re
 from typing import Callable, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.sqlwizard.SQLWizardService import SQLWizardService
 from agents.tools.context import ToolContext
 
 logger = get_logger(__name__)
@@ -17,6 +18,13 @@ logger = get_logger(__name__)
 # =====================================================
 # Tool implementations
 # =====================================================
+
+
+def _strip_backticks(value: str) -> str:
+    """Remove surrounding backticks from a column name if present."""
+    if value and value.startswith("`") and value.endswith("`") and len(value) > 1:
+        return value[1:-1]
+    return value
 
 
 def tool_submit_entity_mapping(
@@ -28,9 +36,26 @@ def tool_submit_entity_mapping(
     id_column: str = "",
     label_column: str = "",
     attribute_mappings: Optional[dict] = None,
+    unmapped_attributes: Optional[list] = None,
     **_kwargs,
 ) -> str:
-    """Record a completed entity mapping."""
+    """Record a completed entity mapping.
+
+    ``unmapped_attributes`` lets the Generator stage declare ontology attributes
+    it intentionally did not map to a column, with a one-sentence ``reason``.
+    Items may be either bare strings (attribute name only) or dicts of shape
+    ``{"name": str, "reason": str}`` — the richer dict form is preferred for
+    downstream consumption but bare strings round-trip too. Anything else is
+    coerced to a string for safety. This enforces the PGE "no silent drops"
+    invariant: every ontology attribute is either in ``attribute_mappings`` or
+    in ``unmapped_attributes``.
+    """
+    # Normalise column names: strip any surrounding backticks the LLM may have added.
+    id_column = _strip_backticks(id_column)
+    label_column = _strip_backticks(label_column)
+    if attribute_mappings:
+        attribute_mappings = {k: _strip_backticks(v) for k, v in attribute_mappings.items()}
+
     logger.info("tool_submit_entity_mapping: '%s' (uri=%s)", class_name, class_uri)
     if not class_uri or not sql_query:
         logger.warning("tool_submit_entity_mapping: missing required fields")
@@ -41,24 +66,36 @@ def tool_submit_entity_mapping(
         .strip()
         .rstrip(";")
     )
-
-    mapping = {
-        "ontology_class": class_uri,
-        "class_name": class_name,
-        "sql_query": clean_sql,
-        "id_column": id_column,
-        "label_column": label_column,
-        "attribute_mappings": attribute_mappings or {},
-    }
-
-    logger.debug(
-        "tool_submit_entity_mapping: '%s' — ID=%s, Label=%s, attrs=%d",
-        class_name,
-        id_column,
-        label_column,
-        len(mapping["attribute_mappings"]),
+    clean_sql = SQLWizardService._deduplicate_select_columns(
+        clean_sql, mapping_type="entity"
     )
 
+    # Normalise ``unmapped_attributes`` — accept either form, persist as-is for
+    # dicts, leave bare strings as strings (validation/coverage is downstream).
+    normalised_unmapped: List = []
+    for item in unmapped_attributes or []:
+        if isinstance(item, dict) and "name" in item:
+            normalised_unmapped.append(
+                {
+                    "name": str(item.get("name", "")),
+                    "reason": str(item.get("reason", "")),
+                }
+            )
+        elif isinstance(item, str):
+            normalised_unmapped.append(item)
+        else:
+            normalised_unmapped.append(str(item))
+
+    # Restrict attribute_mappings to attributes declared in the ontology for this entity.
+    # This prevents the LLM from inventing mappings for columns that are not ontology
+    # data properties (e.g. mapping all table columns when the entity has none).
+    declared_attrs: set = set()
+    for entity in (ctx.ontology or {}).get("entities", []):
+        if entity.get("uri") == class_uri or entity.get("name") == class_name:
+            declared_attrs = set(entity.get("attributes", []))
+            break
+
+    # Retrieve the existing mapping so we can preserve user-set excluded_attributes.
     existing_idx = next(
         (
             i
@@ -67,6 +104,56 @@ def tool_submit_entity_mapping(
         ),
         -1,
     )
+    existing_excl: list = (
+        ctx.entity_mappings[existing_idx].get("excluded_attributes", [])
+        if existing_idx >= 0
+        else []
+    )
+
+    raw_attr_mappings = attribute_mappings or {}
+    if declared_attrs:
+        filtered_mappings = {k: v for k, v in raw_attr_mappings.items() if k in declared_attrs}
+    else:
+        # Entity has no ontology attributes — discard anything the LLM may have invented.
+        filtered_mappings = {}
+
+    # Honour user-excluded attributes: remove them even if the agent tried to map them.
+    if existing_excl:
+        filtered_mappings = {k: v for k, v in filtered_mappings.items() if k not in existing_excl}
+
+    if len(filtered_mappings) < len(raw_attr_mappings):
+        discarded = set(raw_attr_mappings) - set(filtered_mappings)
+        logger.warning(
+            "tool_submit_entity_mapping: '%s' — discarded %d attribute mapping(s) "
+            "(non-ontology or user-excluded): %s",
+            class_name,
+            len(discarded),
+            discarded,
+        )
+
+    mapping = {
+        "ontology_class": class_uri,
+        "class_name": class_name,
+        "sql_query": clean_sql,
+        "id_column": id_column,
+        "label_column": label_column,
+        "attribute_mappings": filtered_mappings,
+        "unmapped_attributes": normalised_unmapped,
+    }
+    # Preserve user-set excluded_attributes across auto-map runs.
+    if existing_excl:
+        mapping["excluded_attributes"] = existing_excl
+
+    logger.debug(
+        "tool_submit_entity_mapping: '%s' — ID=%s, Label=%s, attrs=%d, excl=%d, unmapped=%d",
+        class_name,
+        id_column,
+        label_column,
+        len(mapping["attribute_mappings"]),
+        len(existing_excl),
+        len(normalised_unmapped),
+    )
+
     if existing_idx >= 0:
         ctx.entity_mappings[existing_idx] = mapping
         logger.debug(
@@ -78,12 +165,14 @@ def tool_submit_entity_mapping(
         logger.debug("tool_submit_entity_mapping: appended new mapping")
 
     mapped_attrs = len(mapping["attribute_mappings"])
+    unmapped_count = len(mapping["unmapped_attributes"])
     logger.info(
-        "tool_submit_entity_mapping: '%s' recorded — ID=%s, Label=%s, %d attr(s) mapped",
+        "tool_submit_entity_mapping: '%s' recorded — ID=%s, Label=%s, %d attr(s) mapped, %d unmapped",
         class_name,
         id_column,
         label_column,
         mapped_attrs,
+        unmapped_count,
     )
     return json.dumps(
         {
@@ -92,6 +181,7 @@ def tool_submit_entity_mapping(
             "id_column": id_column,
             "label_column": label_column,
             "attributes_mapped": mapped_attrs,
+            "attributes_unmapped": unmapped_count,
             "total_entity_mappings": len(ctx.entity_mappings),
         }
     )
@@ -111,6 +201,10 @@ def tool_submit_relationship_mapping(
     **_kwargs,
 ) -> str:
     """Record a completed relationship mapping."""
+    # Normalise column names: strip any surrounding backticks the LLM may have added.
+    source_id_column = _strip_backticks(source_id_column)
+    target_id_column = _strip_backticks(target_id_column)
+
     logger.info(
         "tool_submit_relationship_mapping: '%s' (uri=%s)", property_name, property_uri
     )
@@ -122,6 +216,9 @@ def tool_submit_relationship_mapping(
         re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql_query, flags=re.IGNORECASE)
         .strip()
         .rstrip(";")
+    )
+    clean_sql = SQLWizardService._deduplicate_select_columns(
+        clean_sql, mapping_type="relationship"
     )
 
     def _extract_label(value: str) -> str:
@@ -140,6 +237,21 @@ def tool_submit_relationship_mapping(
     else:
         src_class, tgt_class = domain, range_class
 
+    # Preserve user-set excluded_attributes from the existing relationship mapping.
+    existing_idx = next(
+        (
+            i
+            for i, m in enumerate(ctx.relationships)
+            if m.get("property") == property_uri
+        ),
+        -1,
+    )
+    existing_excl: list = (
+        ctx.relationships[existing_idx].get("excluded_attributes", [])
+        if existing_idx >= 0
+        else []
+    )
+
     mapping = {
         "property": property_uri,
         "property_name": property_name,
@@ -155,23 +267,18 @@ def tool_submit_relationship_mapping(
         "source_class_label": _extract_label(src_class),
         "target_class_label": _extract_label(tgt_class),
     }
+    if existing_excl:
+        mapping["excluded_attributes"] = existing_excl
 
     logger.debug(
-        "tool_submit_relationship_mapping: '%s' — src_col=%s, tgt_col=%s, direction=%s",
+        "tool_submit_relationship_mapping: '%s' — src_col=%s, tgt_col=%s, direction=%s, excl=%d",
         property_name,
         source_id_column,
         target_id_column,
         direction,
+        len(existing_excl),
     )
 
-    existing_idx = next(
-        (
-            i
-            for i, m in enumerate(ctx.relationships)
-            if m.get("property") == property_uri
-        ),
-        -1,
-    )
     if existing_idx >= 0:
         ctx.relationships[existing_idx] = mapping
         logger.debug(
@@ -243,6 +350,30 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
                         ),
                         "additionalProperties": {"type": "string"},
                     },
+                    "unmapped_attributes": {
+                        "type": "array",
+                        "description": (
+                            "Ontology attributes you intentionally did NOT map to a column, "
+                            "each with a one-sentence reason. Use this to satisfy the "
+                            'no-silent-drops invariant. Preferred shape: '
+                            '[{"name": "apgarScore", "reason": "absent from source table"}]. '
+                            "Bare strings are also accepted but discouraged."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "description": "Ontology attribute name.",
+                                },
+                                "reason": {
+                                    "type": "string",
+                                    "description": "Why this attribute was not mapped.",
+                                },
+                            },
+                            "required": ["name", "reason"],
+                        },
+                    },
                 },
                 "required": [
                     "class_uri",
@@ -279,11 +410,19 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
                     },
                     "source_id_column": {
                         "type": "string",
-                        "description": "Column name for the source entity identifier.",
+                        "description": (
+                            "The output-column alias in sql_query that holds the "
+                            "source id — alias it AS source_id and pass "
+                            '"source_id" here (NOT the entity\'s id_column).'
+                        ),
                     },
                     "target_id_column": {
                         "type": "string",
-                        "description": "Column name for the target entity identifier.",
+                        "description": (
+                            "The output-column alias in sql_query that holds the "
+                            "target id — alias it AS target_id and pass "
+                            '"target_id" here (NOT the entity\'s id_column).'
+                        ),
                     },
                     "domain": {
                         "type": "string",
@@ -316,4 +455,11 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
 MAPPING_TOOL_HANDLERS: Dict[str, Callable] = {
     "submit_entity_mapping": tool_submit_entity_mapping,
     "submit_relationship_mapping": tool_submit_relationship_mapping,
+}
+
+# Name-indexed view of MAPPING_TOOL_DEFINITIONS so callers needing a single
+# definition (e.g. the EntityGenerator, which only exposes the entity submit
+# tool) can look it up by name without re-scanning the list.
+MAPPING_TOOL_DEFINITIONS_BY_NAME: Dict[str, dict] = {
+    d["function"]["name"]: d for d in MAPPING_TOOL_DEFINITIONS
 }

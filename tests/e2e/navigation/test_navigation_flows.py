@@ -27,7 +27,7 @@ class TestNavigation:
             ("/ontology", "Ontology"),
             ("/mapping", "Mapping"),
             ("/domain", "Domain"),
-            ("/dtwin/", "Digital Twin"),
+            ("/dtwin/", "Knowledge Graph"),
             ("/about", "About"),
         ],
     )
@@ -62,10 +62,14 @@ class TestHomePage:
         assert hero.is_visible()
         assert "OntoBricks" in hero.text_content()
 
-    def test_domain_panel_visible(self, page, live_server):
+    def test_all_domains_gateway_visible(self, page, live_server):
+        # The KPI band moved to Domain → Information and the Settings / About
+        # quick links were removed; the Home page leads with My Tasks + the
+        # All Domains gateway grid.
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
-        assert page.locator("#sessionPanel").is_visible()
+        assert page.locator("#domainGateway").count() >= 1
+        assert page.locator("a.quick-link-sm").count() == 0
 
     def test_workflow_cards_present(self, page, live_server):
         page.goto(live_server)

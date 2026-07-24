@@ -26,7 +26,7 @@ Create a TodoWrite with one item per `.cursorrules` review step, in order:
 4. **Session-data audit** — open `src/back/objects/session/DomainSession.py`
    and any other session storage. For each field output `field | used? |
    derivable? | recommendation`.
-5. **Tests** — `uv run pytest -q`. Report PASS/FAIL counts.
+5. **Tests** — `uv run pytest -q -m "not scenario"` (scenarios are opt-in — see `.cursor/08-testing-and-deployment`). Report PASS/FAIL counts.
 6. **Documentation** — Sphinx + README per `.cursor/08-testing-and-deployment §Documentation Rules`.
 
 End with a summary block:

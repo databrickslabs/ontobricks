@@ -11,16 +11,21 @@ const Breadcrumb = {
         '/domain/':   { label: 'Domain',       icon: 'bi-folder2' },
         '/ontology/': { label: 'Ontology',     icon: 'bi-bezier2' },
         '/mapping/':  { label: 'Mapping',      icon: 'bi-shuffle' },
-        '/dtwin/':    { label: 'Digital Twin', icon: 'bi-box-fill' },
+        '/dtwin/':    { label: 'Knowledge Graph', icon: 'bi-box-fill' },
         '/settings':  { label: 'Settings',     icon: 'bi-gear-fill' },
     },
 
     _HIERARCHY: ['/registry/', '/domain/', '/ontology/', '/mapping/', '/dtwin/'],
 
     init() {
-        const nav = document.getElementById('obBreadcrumb');
+        const wrap = document.getElementById('obBreadcrumbWrap');
         const list = document.getElementById('obBreadcrumbList');
-        if (!nav || !list) return;
+
+        // Always compute chrome height so sidebar-layout uses the correct
+        // offset even on pages where the breadcrumb stays hidden.
+        this._updateChromeHeight();
+
+        if (!wrap || !list) return;
 
         const path = window.location.pathname;
         const crumbs = this._buildCrumbs(path);
@@ -29,15 +34,12 @@ const Breadcrumb = {
         list.innerHTML = crumbs.map((c, i) => {
             const isLast = i === crumbs.length - 1;
             if (isLast) {
-                return '<li class="breadcrumb-item active" aria-current="page">' +
-                    '<i class="bi ' + (c.icon || '') + ' me-1"></i>' + c.label + '</li>';
+                return '<li class="breadcrumb-item active" aria-current="page">' + c.label + '</li>';
             }
-            return '<li class="breadcrumb-item">' +
-                '<a href="' + c.href + '"><i class="bi ' + (c.icon || '') + ' me-1"></i>' +
-                c.label + '</a></li>';
+            return '<li class="breadcrumb-item"><a href="' + c.href + '">' + c.label + '</a></li>';
         }).join('');
 
-        nav.classList.remove('d-none');
+        wrap.classList.remove('d-none');
         this._updateChromeHeight();
 
         document.addEventListener('sidebarSectionChanged', (e) => this._updateSection(e.detail.section));
@@ -80,13 +82,14 @@ const Breadcrumb = {
     },
 
     _updateChromeHeight() {
-        const nav = document.getElementById('obBreadcrumb');
-        if (!nav || nav.classList.contains('d-none')) return;
-        // Chrome = navbar (60px) + breadcrumb. Read-only no longer adds
-        // a banner — the indicator is now a navbar pill — so the same
-        // height applies whether or not the user is in read-only mode.
-        const bcHeight = nav.offsetHeight;
-        document.documentElement.style.setProperty('--ob-chrome-height', (60 + bcHeight) + 'px');
+        const navbar  = document.querySelector('nav.navbar');
+        const subnav  = document.getElementById('obSubnav');
+        const navH    = navbar ? navbar.offsetHeight : 60;
+        // Breadcrumb is now inside the subnav row, so subnav height covers both.
+        const subnavH = (subnav && !subnav.classList.contains('d-none')) ? subnav.offsetHeight : 0;
+        document.documentElement.style.setProperty(
+            '--ob-chrome-height', (navH + subnavH) + 'px'
+        );
     },
 
     _updateSection(sectionName) {
@@ -121,12 +124,7 @@ const Breadcrumb = {
         const li = document.createElement('li');
         li.className = 'breadcrumb-item active breadcrumb-section';
         li.setAttribute('aria-current', 'page');
-        if (iconClass) {
-            const iconHtml = '<i class="bi ' + iconClass + ' me-1"></i>';
-            li.innerHTML = iconHtml + this._escapeHtml(label);
-        } else {
-            li.textContent = label;
-        }
+        li.textContent = label;
         list.appendChild(li);
     },
 
@@ -137,4 +135,5 @@ const Breadcrumb = {
     }
 };
 
+window.OBBreadcrumb = Breadcrumb;
 document.addEventListener('DOMContentLoaded', () => Breadcrumb.init());

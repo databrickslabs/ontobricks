@@ -75,8 +75,10 @@ if __name__ == '__main__':
             log_config=None,
         )
     else:
-        uvicorn.run(
-            "shared.fastapi.main:app",
+        # Pass env_file so uvicorn reload workers also see the .env
+        # variables without re-running load_dotenv inside the app module.
+        _env_file = os.path.join(os.path.dirname(__file__), ".env")
+        _uvicorn_kwargs = dict(
             host='127.0.0.1',
             port=port,
             reload=True,
@@ -84,3 +86,6 @@ if __name__ == '__main__':
             log_level="info",
             log_config=None,
         )
+        if os.path.isfile(_env_file):
+            _uvicorn_kwargs["env_file"] = _env_file
+        uvicorn.run("shared.fastapi.main:app", **_uvicorn_kwargs)

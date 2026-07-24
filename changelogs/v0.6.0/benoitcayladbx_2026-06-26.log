@@ -1,0 +1,179 @@
+## Fix: Settings/Lakebase Connection tab — dropdowns not pre-selected on page load
+
+### Context
+In the Settings → Lakebase → Connection tab, the Project, Branch, and Database dropdowns were always shown blank on initial page load (only the Postgres schema field was pre-populated). The root cause: the stored `graph_engine_config` in the registry only has `schema` set by default; the `lakebase_project`, `lakebase_branch`, and `database` fields are empty until the user explicitly saves them via the cascading Load → Select flow. The `prefillLakebaseConnectionFromConfig()` JS function uses `_ensureSelectedOption(sel, value)` which returns immediately when `value` is empty — so those three dropdowns stayed blank.
+
+### Fix
+`SettingsService.get_graph_engine_config_result` now overlays env-var fallbacks (`LAKEBASE_PROJECT`, `LAKEBASE_BRANCH`, `PGDATABASE`/`LAKEBASE_DATABASE`) for any empty field before returning the config. This ensures the Connection tab always reflects the current platform binding even when the stored config is sparse.
+
+### Changes
+
+1. `src/back/objects/domain/SettingsService.py` — `get_graph_engine_config_result` now merges env-var defaults for `lakebase_project`, `lakebase_branch`, and `database` before returning the config dict.
+
+### Modified Files
+- `src/back/objects/domain/SettingsService.py`
+
+### Test Results
+- Unit tests unaffected (env-var overlay only; no stored data changed).
+
+---
+
+## Fix: Settings/Lakebase Bulk loading tab — UC catalog not pre-selected; engine change missing catalog reload
+
+### Context
+Two related issues in the Bulk loading tab:
+1. `prefillLakebaseConnectionFromConfig()` covered only the 4 Connection-tab cascading selects but not the `lakebaseUcCatalog` dropdown in the Bulk loading tab (managed_synced mode). When a `sync_uc_catalog` value was saved to the registry config, it would not be pre-selected after page load.
+2. The `graphEngineSelect` change handler triggered the `loadLakebaseProjects` cascade but did not re-trigger `loadUcCatalogsForGraphEngine` even when the saved mode was `managed_synced`.
+
+### Changes
+
+1. `src/front/static/config/js/settings.js` — `prefillLakebaseConnectionFromConfig` extended to call `_ensureSelectedOption` for `lakebaseUcCatalog`.
+2. `src/front/static/config/js/settings.js` — `graphEngineSelect` change handler now triggers `loadUcCatalogsForGraphEngine()` when the saved sync mode is `managed_synced`.
+
+### Modified Files
+- `src/front/static/config/js/settings.js`
+
+### Test Results
+- JS-only changes; no backend impact.
+
+---
+
+## Fix: App startup crash — `Any` not imported in UnityCatalog
+
+### Context
+After the Registry access-check feature was merged (`check_schema_access` / `check_volume_access`), the new method `check_schema_access` used `Dict[str, Any]` as its return type annotation but `Any` was never added to the `typing` import line. This raised `NameError: name 'Any' is not defined` at module load time, preventing the entire application from starting.
+
+### Changes
+
+1. `src/back/core/databricks/UnityCatalog.py` — added `Any` to the `from typing import …` statement (line 10).
+
+### Modified Files
+- `src/back/core/databricks/UnityCatalog.py`
+
+### Test Results
+- App starts cleanly. Full test suite unaffected (typing fix only).
+
+---
+
+## Fix: Runs page JS crash — `#runDetailsBody` null when modal missing from dtwin template
+
+### Context
+The Runs section is shared between the Domain page (`domain.html`) and the Knowledge Graph page (`dtwin.html`). The partial `_domain_runs.html` was included in `dtwin.html` but the `runDetailsModal` (with `id="runDetailsBody"`) was not yet added to that template. When a user clicked the details eye-button on the Runs section of the dtwin page, `showRunDetailsObj()` in `domain-runs.js` called `document.getElementById('runDetailsBody')`, got `null`, and crashed with `Uncaught TypeError: Cannot set properties of null (setting 'innerHTML')`.
+
+### Fix
+1. Added the `runDetailsModal` HTML to `dtwin.html` (at page level, outside `.sidebar-section`).
+2. Added the `domain-runs.js` deferred script tag to `dtwin.html`.
+3. Added a defensive null guard in `showRunDetailsObj()` with a `console.error` so any future modal-missing scenario fails gracefully instead of throwing.
+
+### Changes
+
+1. `src/front/templates/dtwin.html` — added run-details modal and `domain-runs.js` script.
+2. `src/front/static/domain/js/domain-runs.js` — null guard for `body` in `showRunDetailsObj()`.
+
+### Modified Files
+- `src/front/templates/dtwin.html`
+- `src/front/static/domain/js/domain-runs.js`
+
+### Test Results
+- Server restarted; updated template now served. Browser hard-refresh clears the stale page.
+
+---
+
+## Feature: Domain menu restructure — Metadata section, Cockpit in Management, no separator
+
+### Context
+The Domain sidebar menu needed three UX improvements: the "Domain details" group label was a redundant separator before the nav links; Data Sources and Documents had no logical grouping; and Cockpit (domain health dashboard) belonged under Management rather than the general detail list.
+
+### Changes
+
+1. `src/front/config/menu_config.json` — domain menu:
+   - `domain-main` group title set to `""` (hides the "Domain details" label).
+   - New `domain-metadata` group ("Metadata") added after `domain-main`, containing Data Sources and Documents.
+   - `validation` (Cockpit) moved from `domain-main` to `domain-management` at position 1 (before Audit trail).
+2. `src/front/templates/partials/layout/_sidebar_nav.html` — sidebar-title div now only rendered when `group.title` is non-empty, preventing an empty spacer div.
+
+### Modified Files
+- `src/front/config/menu_config.json`
+- `src/front/templates/partials/layout/_sidebar_nav.html`
+
+### Test Results
+- Visual: sidebar nav renders without the "Domain details" header; Metadata section visible; Cockpit is first item in Management.
+
+---
+
+## Feature: Runs section auto-loads on navigation
+
+### Context
+Clicking the "Runs" sidebar link did nothing until the user manually hit the Refresh button. The section should load its data automatically on first visit.
+
+### Changes
+
+1. `src/front/static/domain/js/domain-runs.js` — added two listeners:
+   - `sidebarSectionChanged`: calls `loadDomainRuns()` when the `runs` section becomes active and data hasn't been loaded yet.
+   - `DOMContentLoaded`: calls `loadDomainRuns()` if the page is opened with `runs` already the active section (e.g. deep-link `?section=runs`).
+
+### Modified Files
+- `src/front/static/domain/js/domain-runs.js`
+
+### Test Results
+- Navigating to Runs loads the table without requiring a manual Refresh click.
+
+---
+
+## Fix: deploy.sh — lakebase_database_resource_segment empty in DAB command
+
+### Context
+`make deploy` on the `dev-lakebase` target was failing with:
+```
+INVALID_PARAMETER_VALUE: Field 'name' expects
+'projects/{project_id}/branches/{branch_id}/databases/{database_id}' format,
+got 'projects/…/databases/'
+```
+Root cause: `_dab_var_overrides` array was built before `LAKEBASE_DATABASE_RESOURCE_SEGMENT` was resolved from the Databricks API, so the DAB `--var=lakebase_database_resource_segment=` entry was always empty.
+
+### Fix
+After resolution, the script now patches the matching entry in `_dab_var_overrides` with the resolved `db-…` segment, ensuring the correct database path is forwarded to `databricks bundle deploy`.
+
+### Changes
+
+1. `scripts/deploy.sh` — patch `_dab_var_overrides` entry for `lakebase_database_resource_segment` after the segment is resolved.
+
+### Modified Files
+- `scripts/deploy.sh`
+
+### Test Results
+- `make deploy` completed successfully: bundle deployed, apps started, Lakebase schema migrations applied.
+
+---
+
+## Fix: Knowledge Graph Explorer — right-click context menu hover invisible (white on white)
+
+### Context
+In the Knowledge Graph → Explorer (sigmagraph), right-clicking a node showed a context menu but hovering over items was invisible because `.graph-context-menu .ctx-item:hover` set `background: #ffffff` (white on white). The Ontology → Designer uses `.map-context-item:hover { background: #e8f4fd; color: #1a73e8; }` which is clearly visible.
+
+### Fix
+Updated `.graph-context-menu .ctx-item:hover` in `query-visualization.css` to use the same blue-tint hover style as the ontology map context menu.
+
+### Changes
+
+1. `src/front/static/query/css/query-visualization.css` — `.ctx-item:hover` now uses `background: #e8f4fd; color: #1a73e8` and icon inherits the blue color on hover.
+
+### Modified Files
+- `src/front/static/query/css/query-visualization.css`
+
+### Test Results
+- Visual fix only; no logic changes.
+
+---
+
+## Fix (correction): Knowledge Graph Explorer — context menu hover fix was in wrong CSS file
+
+### Context
+The previous fix targeted `.graph-context-menu .ctx-item:hover` in `query-visualization.css`, but `#sgContextMenu` and `#sgNodeContextMenu` have their own ID-scoped rules in `query-sigmagraph.css` that are more specific and override the class selector. Both ID rules had `background: #ffffff` on hover (white on white).
+
+### Changes
+
+1. `src/front/static/query/css/query-sigmagraph.css` — fixed `#sgContextMenu .ctx-item:hover` and `#sgNodeContextMenu .ctx-item:hover` to use `background: #e8f4fd; color: #1a73e8` with matching icon color.
+
+### Modified Files
+- `src/front/static/query/css/query-sigmagraph.css`

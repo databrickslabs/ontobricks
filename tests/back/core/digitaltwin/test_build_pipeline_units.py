@@ -10,6 +10,8 @@ This file covers the **pure** surface:
 - `__init__` derived state (`is_api`, `domain_name`, `parts`,
   `phase_times` initialization, lazy-state defaults).
 - `_log_phase` — records elapsed time on `self.phase_times` and logs.
+- `_persist_last_build_to_registry` — registry write after a successful
+  build so the Submit-for-Review gate is unblocked.
 
 Behaviour-rich phases (the various ``_apply_*`` and ``_*_progress``
 methods) are exercised end-to-end in higher tiers.
@@ -20,11 +22,12 @@ from __future__ import annotations
 import time
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from back.objects.digitaltwin._build_pipeline import _BuildPipeline
+from back.objects.registry.RegistryService import RegistryService
 
 
 def _make_pipeline(**overrides: Any) -> _BuildPipeline:
@@ -175,3 +178,127 @@ class TestLogPhase:
         pipe._log_phase("apply", now - 0.1)
         second = pipe.phase_times["apply"]
         assert second < first  # The retry was faster than the first attempt.
+
+
+# --- _persist_last_build_to_registry ------------------------------------
+
+
+def _make_domain(
+    *,
+    last_build: str = "2026-06-19T09:00:00+00:00",
+    current_version: str = "1",
+    uc_domain_folder: str = "supplychain",
+    name: str = "supplychain",
+) -> SimpleNamespace:
+    """Create a minimal domain stand-in for persist tests."""
+    return SimpleNamespace(
+        info={"name": name},
+        last_build=last_build,
+        current_version=current_version,
+        uc_domain_folder=uc_domain_folder,
+        export_for_save=lambda: {"info": {"last_build": last_build}},
+    )
+
+
+def _make_registry_svc(write_ok: bool = True, write_msg: str = "") -> MagicMock:
+    """Return a mock RegistryService whose _store.write_version returns (write_ok, write_msg)."""
+    svc = MagicMock()
+    svc._store.write_version.return_value = (write_ok, write_msg)
+    return svc
+
+
+@pytest.mark.unit
+class TestPersistLastBuildToRegistry:
+    """_persist_last_build_to_registry writes domain.last_build to the registry DB."""
+
+    def _make_pipe(self, domain=None, **overrides):
+        dom = domain or _make_domain()
+        snap = MagicMock()
+        snap.current_version = dom.current_version
+        return _make_pipeline(domain=dom, domain_snap=snap, **overrides)
+
+    def test_calls_write_version_on_success(self) -> None:
+        """Happy path: write_version is called once with folder + version."""
+        pipe = self._make_pipe()
+        svc = _make_registry_svc()
+
+        with patch.object(RegistryService, "from_context", return_value=svc):
+            pipe._persist_last_build_to_registry()
+
+        svc._store.write_version.assert_called_once()
+        call_args = svc._store.write_version.call_args
+        folder, version, _ = call_args.args
+        assert folder == "supplychain"
+        assert version == "1"
+
+    def test_domain_data_includes_last_build(self) -> None:
+        """The domain_data passed to write_version carries last_build."""
+        pipe = self._make_pipe()
+        svc = _make_registry_svc()
+
+        with patch.object(RegistryService, "from_context", return_value=svc):
+            pipe._persist_last_build_to_registry()
+
+        _, _, domain_data = svc._store.write_version.call_args.args
+        assert domain_data["info"]["last_build"] == "2026-06-19T09:00:00+00:00"
+
+    def test_api_build_stamps_last_build_when_empty(self) -> None:
+        """API build path: domain.last_build is empty before the build; the method
+        stamps it so the registry write carries a non-empty timestamp."""
+        dom = _make_domain(last_build="")
+        snap = MagicMock()
+        snap.current_version = dom.current_version
+        # export_for_save must reflect the updated last_build after stamping.
+        def _export():
+            return {"info": {"last_build": dom.last_build}}
+        dom.export_for_save = _export
+
+        pipe = _make_pipeline(domain=dom, domain_snap=snap, build_kind="api")
+        svc = _make_registry_svc()
+
+        with patch.object(RegistryService, "from_context", return_value=svc):
+            pipe._persist_last_build_to_registry()
+
+        assert dom.last_build  # was stamped
+        _, _, domain_data = svc._store.write_version.call_args.args
+        assert domain_data["info"]["last_build"]
+
+    def test_skips_when_folder_cannot_be_resolved(self) -> None:
+        """No folder available → method returns early without calling write_version."""
+        snap = MagicMock()
+        snap.current_version = ""
+        pipe = _make_pipeline(domain=SimpleNamespace(
+            info={},  # name not set → sanitize_domain_folder returns ""
+            last_build="ts",
+            current_version="",
+            uc_domain_folder="",
+            export_for_save=lambda: {},
+        ), domain_snap=snap)
+        svc = _make_registry_svc()
+
+        with (
+            patch.object(RegistryService, "from_context", return_value=svc),
+            patch("back.objects.session.sanitize_domain_folder", return_value=""),
+        ):
+            pipe._persist_last_build_to_registry()
+
+        svc._store.write_version.assert_not_called()
+
+    def test_handles_write_version_failure_gracefully(self) -> None:
+        """write_version returning (False, msg) is logged but does not raise."""
+        pipe = self._make_pipe()
+        svc = _make_registry_svc(write_ok=False, write_msg="DB error")
+
+        with patch.object(RegistryService, "from_context", return_value=svc):
+            pipe._persist_last_build_to_registry()  # must not raise
+
+        svc._store.write_version.assert_called_once()
+
+    def test_handles_registry_service_exception_gracefully(self) -> None:
+        """An exception from RegistryService.from_context must not propagate."""
+        pipe = self._make_pipe()
+
+        with patch.object(
+            RegistryService, "from_context", side_effect=RuntimeError("connection refused")
+        ):
+            pipe._persist_last_build_to_registry()  # must not raise

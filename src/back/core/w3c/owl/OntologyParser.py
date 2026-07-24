@@ -189,7 +189,7 @@ class OntologyParser:
         are returned by :meth:`get_groups` instead).
 
         Returns:
-            List of dicts with 'uri', 'name', 'label', 'comment', 'emoji', 'parent', 'group', 'dashboard', 'dashboardParams', 'dataProperties'
+            List of dicts with 'uri', 'name', 'label', 'comment', 'emoji', 'parent', 'group', 'dashboard', 'dashboardParams', 'bridges', 'dataset', 'dataProperties'
         """
         classes = []
         group_uris = self._get_group_class_uris()
@@ -270,6 +270,15 @@ class OntologyParser:
                     pass
                 break
 
+            # Get linked Unity Catalog dataset from OntoBricks custom property
+            dataset = None
+            for ds in self.graph.objects(cls, ONTOBRICKS_NS.dataset):
+                try:
+                    dataset = json.loads(str(ds))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                break
+
             # Get parent class (subClassOf)
             parent = None
             for parent_cls in self.graph.objects(cls, RDFS.subClassOf):
@@ -299,6 +308,7 @@ class OntologyParser:
                     "dashboard": dashboard or "",
                     "dashboardParams": dashboard_params,
                     "bridges": bridges,
+                    "dataset": dataset,
                     "dataProperties": data_properties,
                 }
             )
@@ -552,8 +562,12 @@ class OntologyParser:
                 "namespace": namespace,
             }
 
+        # No owl:Ontology declaration in the file. Fall back to the default
+        # base URI for BOTH ``uri`` and ``namespace`` — never the literal
+        # "Unknown", which used to leak into the domain's stored base_uri and
+        # surface on the Registry Browse page.
         return {
-            "uri": "Unknown",
+            "uri": DEFAULT_BASE_URI,
             "label": "Unknown Ontology",
             "comment": "",
             "namespace": DEFAULT_BASE_URI,

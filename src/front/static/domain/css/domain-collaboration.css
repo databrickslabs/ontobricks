@@ -1,0 +1,113 @@
+/* Domain → Collaboration: discussions activity timeline */
+
+.oc-timeline {
+    position: relative;
+    padding-left: 0.5rem;
+}
+
+.oc-timeline-day {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    margin: 1rem 0 0.5rem;
+    padding-left: 2.75rem;
+}
+
+.oc-timeline-day:first-child {
+    margin-top: 0;
+}
+
+.oc-tl-item {
+    position: relative;
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem 0.6rem 0;
+    cursor: pointer;
+    border-radius: 0.5rem;
+    transition: background-color 0.12s ease;
+}
+
+.oc-tl-item:hover {
+    background-color: #f6f8fa;
+}
+
+/* Vertical connector line through the avatars. */
+.oc-tl-marker {
+    position: relative;
+    flex: 0 0 2.25rem;
+    display: flex;
+    justify-content: center;
+}
+
+.oc-tl-marker::before {
+    content: "";
+    position: absolute;
+    top: -0.6rem;
+    bottom: -0.6rem;
+    left: 50%;
+    width: 2px;
+    background: #e9ecef;
+    transform: translateX(-50%);
+    z-index: 0;
+}
+
+.oc-tl-item:first-of-type .oc-tl-marker::before {
+    top: 0.9rem;
+}
+
+.oc-tl-marker .oc-avatar {
+    position: relative;
+    z-index: 1;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #e9ecef;
+}
+
+.oc-tl-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.oc-tl-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.15rem;
+    font-size: 0.85rem;
+}
+
+.oc-tl-head .oc-author {
+    font-weight: 600;
+    color: #212529;
+}
+
+.oc-tl-head .oc-time {
+    font-size: 0.72rem;
+    color: #adb5bd;
+    white-space: nowrap;
+}
+
+.oc-anchor-badge {
+    background: #eef2ff;
+    color: #4338ca;
+    font-weight: 500;
+}
+
+.oc-tl-text {
+    font-size: 0.9rem;
+    color: #343a40;
+    margin-top: 0.15rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}

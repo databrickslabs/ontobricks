@@ -2,10 +2,14 @@
 <!-- Import Section -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
-        <div>
+        <div class="me-auto">
             <h4 class="mb-1"><i class="bi bi-box-arrow-in-down me-2"></i>Import</h4>
             <p class="text-muted mb-0 small">Import ontologies from local files or load industry-standard ontologies.</p>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the ontology discussion" onclick="openOntologyDiscussion()">
+            <i class="bi bi-chat-dots"></i>
+        </button>
     </div>
 
     <!-- Tab Navigation -->
@@ -55,6 +59,25 @@
         <div class="tab-pane fade show active" id="pane-owl" role="tabpanel" aria-labelledby="tab-owl">
             <h6 class="mb-2"><i class="bi bi-file-earmark-code"></i> Import OWL Ontology</h6>
             <p class="text-muted small mb-3">Import an OWL (Web Ontology Language) file to load classes, properties, and relationships.</p>
+
+            <!-- Import mode selector -->
+            <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="radio" name="owlImportMode" id="owlModeReplace" value="replace" checked>
+                    <label class="form-check-label small" for="owlModeReplace">
+                        <i class="bi bi-arrow-repeat text-warning me-1"></i>Replace
+                        <span class="text-muted">(current behaviour)</span>
+                    </label>
+                </div>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="radio" name="owlImportMode" id="owlModeAppend" value="append">
+                    <label class="form-check-label small" for="owlModeAppend">
+                        <i class="bi bi-plus-circle text-success me-1"></i>Append
+                        <span class="text-muted">(merge, detect conflicts)</span>
+                    </label>
+                </div>
+            </div>
+
             <div class="d-flex gap-2 flex-wrap">
                 <button type="button" class="btn btn-outline-primary btn-sm" id="importOwlLocalBtn">
                     <i class="bi bi-hdd"></i> From Local File
@@ -66,6 +89,23 @@
         <div class="tab-pane fade" id="pane-rdfs" role="tabpanel" aria-labelledby="tab-rdfs">
             <h6 class="mb-2"><i class="bi bi-diagram-2"></i> Import RDFS Schema</h6>
             <p class="text-muted small mb-3">Import an RDFS (RDF Schema) file to load class hierarchies and property definitions.</p>
+
+            <!-- Import mode selector -->
+            <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="radio" name="rdfsImportMode" id="rdfsModeReplace" value="replace" checked>
+                    <label class="form-check-label small" for="rdfsModeReplace">
+                        <i class="bi bi-arrow-repeat text-warning me-1"></i>Replace
+                    </label>
+                </div>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="radio" name="rdfsImportMode" id="rdfsModeAppend" value="append">
+                    <label class="form-check-label small" for="rdfsModeAppend">
+                        <i class="bi bi-plus-circle text-success me-1"></i>Append
+                    </label>
+                </div>
+            </div>
+
             <div class="d-flex gap-2 flex-wrap">
                 <button type="button" class="btn btn-outline-info btn-sm" id="importRdfsLocalBtn">
                     <i class="bi bi-hdd"></i> From Local File
@@ -450,4 +490,68 @@
     <!-- Hidden file inputs -->
     <input type="file" id="importOwlFileInput" accept=".ttl,.owl,.rdf,.xml" class="d-none">
     <input type="file" id="importRdfsFileInput" accept=".ttl,.rdf,.xml,.rdfs,.n3,.nt" class="d-none">
+
+    <!-- ================================================================
+         Import Status Panel — persistent in-page feedback for all imports
+         ================================================================ -->
+    <div id="importStatusPanel" class="d-none mt-4">
+        <hr class="my-0 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0"><i class="bi bi-activity me-2"></i>Import Status</h6>
+            <button type="button" class="btn-close btn-close-sm" id="importStatusDismiss"
+                    title="Dismiss" aria-label="Close"></button>
+        </div>
+
+        <!-- Step timeline -->
+        <div id="importStatusSteps" class="mb-3"></div>
+
+        <!-- Conflict resolution area (append-mode only) -->
+        <div id="importConflictArea" class="d-none">
+            <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                <span class="badge bg-success" id="importBadgeNew"></span>
+                <span class="badge bg-secondary" id="importBadgeDup"></span>
+                <span class="badge bg-warning text-dark" id="importBadgeConflict"></span>
+            </div>
+
+            <!-- No-conflict shortcut -->
+            <div id="importNoConflictMsg" class="alert alert-success py-2 small d-none">
+                <i class="bi bi-check-circle me-1"></i>No conflicts detected — all new items are safe to append.
+            </div>
+
+            <!-- Conflict table -->
+            <div id="importConflictTableWrap" class="d-none">
+                <p class="small text-warning mb-2">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Choose how to resolve each conflict before proceeding.
+                </p>
+                <div class="table-responsive" style="max-height:360px;overflow-y:auto;">
+                    <table class="table table-sm table-bordered small mb-2" id="importConflictTable">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Type</th>
+                                <th>Name</th>
+                                <th>Conflict</th>
+                                <th>Existing definition</th>
+                                <th style="min-width:180px">Resolution</th>
+                            </tr>
+                        </thead>
+                        <tbody id="importConflictTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Confirm / Cancel -->
+            <div class="d-flex gap-2 mt-3">
+                <button type="button" class="btn btn-success btn-sm" id="importMergeConfirmBtn">
+                    <i class="bi bi-plus-circle me-1"></i>Confirm &amp; Append
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="importMergeCancelBtn">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Final result banner -->
+        <div id="importFinalResult" class="d-none"></div>
+    </div>
 </div>

@@ -87,13 +87,27 @@ class Settings(BaseSettings):
     session_dir: str = _get_default_session_dir()
     session_max_age: int = 86400  # 24 hours
 
+    # Knowledge-graph analytics safety guard: the maximum number of triples
+    # loaded into memory for the NetworkX centrality / structure analysis.
+    # Graphs larger than this are rejected before compute (the Analytics page
+    # warns up-front using the known triple count, so the user never waits for
+    # a background task only to see it fail). Raise with care — the full triple
+    # set is held in memory during the computation.
+    analytics_max_triples: int = Field(
+        default=500_000,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_ANALYTICS_MAX_TRIPLES",
+            "analytics_max_triples",
+        ),
+    )
+
     model_config = ConfigDict(
         env_prefix="",
         case_sensitive=False,
         env_file=".env",
         # ``PGHOST``/``PGPORT``/``PGDATABASE``/``PGUSER`` and
         # ``LAKEBASE_PROJECT`` are consumed directly via
-        # ``os.environ`` by :class:`back.core.databricks.LakebaseAuth`
+        # ``os.environ`` by :class:`back.core.databricks.lakebase.LakebaseAuth`
         # — they don't need to be Pydantic fields. ``ignore`` keeps
         # the .env file tolerant of extra Lakebase-related entries.
         extra="ignore",

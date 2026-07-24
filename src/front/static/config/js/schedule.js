@@ -1,6 +1,6 @@
 /**
  * OntoBricks - schedule.js
- * Unified Schedule tab: CRUD for both per-domain Digital Twin builds
+ * Unified Schedule tab: CRUD for both per-domain Knowledge Graph builds
  * and per-(domain, rule) cohort materialisations. The type pill in the
  * table and the "Type" radio group in the modal route each action to
  * the right backend endpoint:

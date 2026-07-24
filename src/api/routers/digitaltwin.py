@@ -1,5 +1,5 @@
 """
-Digital Twin External REST API
+Knowledge Graph External REST API
 
 Provides programmatic access to the triple store: status, insights,
 build trigger, and triple retrieval.
@@ -16,6 +16,8 @@ targets a specific version; when omitted, the latest version is used.
 Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
 
+import time
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Dict, List, Optional
@@ -25,13 +27,14 @@ from back.core.errors import ValidationError, NotFoundError, InfrastructureError
 from api.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
-from back.core.triplestore import get_triplestore
+from back.core.graphdb import get_graphdb
 from back.core.helpers import (
-    get_databricks_credentials,
+    get_triplestore_sql_credentials,
     get_databricks_client,
     sql_escape,
     effective_view_table,
     effective_graph_name,
+    effective_graph_query_table,
     run_blocking,
 )
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
@@ -44,6 +47,14 @@ _expand_uri_aliases = DigitalTwin.expand_uri_aliases
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+# Short-TTL, in-process cache for ``GET /stats`` results keyed by the graph
+# query table. Triple-store stats only change on a build, so a small TTL
+# removes the 3–4 full-table aggregate scans from repeated read-only tool
+# calls (e.g. an agent probing ``list_entity_types`` several times) while
+# staying fresh within a working session.
+_STATS_CACHE_TTL_SECONDS = 60
+_stats_cache: Dict[str, Dict[str, Any]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -293,11 +304,12 @@ async def dt_status(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
 
-    graph_store = get_triplestore(domain, settings, backend="graph")
+    graph_store = get_graphdb(domain, settings)
     if not graph_store:
         return StatusResponse(
             success=True,
@@ -306,15 +318,17 @@ async def dt_status(
             reason="Graph backend not configured",
         )
 
+    query_table = effective_graph_query_table(domain, settings, store=graph_store)
+
     try:
-        if not graph_store.table_exists(graph_name):
+        if not graph_store.table_exists(query_table):
             return StatusResponse(
                 success=True,
                 view_table=view_table,
                 graph_name=graph_name,
                 reason="Graph does not exist yet",
             )
-        status = graph_store.get_status(graph_name)
+        status = graph_store.get_status(query_table)
         count = status.get("count", 0)
         last_mod = status.get("last_modified")
         return StatusResponse(
@@ -328,7 +342,7 @@ async def dt_status(
     except Exception as e:
         logger.exception("dt_status failed: %s", e)
         raise InfrastructureError(
-            "Digital Twin status check failed", detail=str(e)
+            "Knowledge Graph status check failed", detail=str(e)
         ) from e
 
 
@@ -375,35 +389,38 @@ async def dt_stats(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     graph_name = effective_graph_name(domain)
 
     if not graph_name:
         raise ValidationError("Graph name not configured")
 
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
 
-    try:
-        stats = store.get_aggregate_stats(graph_name)
+    query_table = effective_graph_query_table(domain, settings, store=store)
+
+    cached = _stats_cache.get(query_table)
+    if cached and (time.monotonic() - cached["_ts"]) < _STATS_CACHE_TTL_SECONDS:
+        logger.info("dt_stats: cache hit for %s", query_table)
+        return cached["resp"]
+
+    def _compute_stats() -> StatsResponse:
+        stats = store.get_aggregate_stats(query_table)
         total = stats["total"]
-        subj = stats["distinct_subjects"]
-        pred = stats["distinct_predicates"]
         type_cnt = stats["type_assertion_count"]
         lbl = stats["label_count"]
 
-        entity_rows = store.get_type_distribution(graph_name)
-        pred_rows = store.get_predicate_distribution(graph_name)
-
-        rel_cnt = max(total - type_cnt - lbl, 0)
-        inferred_cnt = store.get_inferred_triple_count(graph_name)
+        entity_rows = store.get_type_distribution(query_table)
+        pred_rows = store.get_predicate_distribution(query_table)
 
         return StatsResponse(
             success=True,
             total_triples=total,
-            distinct_subjects=subj,
-            distinct_predicates=pred,
+            distinct_subjects=stats["distinct_subjects"],
+            distinct_predicates=stats["distinct_predicates"],
             entity_types=[
                 EntityTypeStat(uri=r["type_uri"], count=int(r["cnt"]))
                 for r in entity_rows
@@ -414,9 +431,22 @@ async def dt_stats(
             ],
             label_count=lbl,
             type_assertion_count=type_cnt,
-            relationship_count=rel_cnt,
-            inferred_triples=inferred_cnt,
+            relationship_count=max(total - type_cnt - lbl, 0),
+            inferred_triples=store.get_inferred_triple_count(query_table),
         )
+
+    try:
+        t0 = time.perf_counter()
+        # Run the (blocking) SQL off the event loop so a slow scan does not
+        # stall other concurrent MCP tool calls.
+        resp = await run_blocking(_compute_stats)
+        logger.info(
+            "dt_stats: computed for %s in %.0fms",
+            query_table,
+            (time.perf_counter() - t0) * 1000,
+        )
+        _stats_cache[query_table] = {"resp": resp, "_ts": time.monotonic()}
+        return resp
     except Exception as e:
         logger.exception("dt_stats failed: %s", e)
         raise InfrastructureError(
@@ -432,7 +462,7 @@ async def dt_stats(
 @router.post(
     "/build",
     response_model=BuildStartedResponse,
-    summary="Start a Digital Twin build",
+    summary="Start a Knowledge Graph build",
     description="Generate all triples from the current ontology + mapping configuration "
     "and write them to the configured triple store backend. "
     "Returns a `task_id` that can be polled via `GET /build/{task_id}`.",
@@ -487,7 +517,7 @@ async def dt_build(
     if not r2rml:
         raise ValidationError("No R2RML mapping available")
 
-    host, token, warehouse_id = get_databricks_credentials(domain, settings)
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
     if not host or not token:
         raise ValidationError("Databricks not configured")
     if not warehouse_id:
@@ -502,7 +532,7 @@ async def dt_build(
 
     tm = get_task_manager()
     task = tm.create_task(
-        name="Digital Twin Build (API)",
+        name="Knowledge Graph Build (API)",
         task_type="triplestore_sync",
         steps=[
             {"name": "prepare", "description": "Preparing"},
@@ -606,18 +636,19 @@ async def dt_triples_find(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
-    table = effective_graph_name(domain)
-    if not table:
-        raise ValidationError("Graph name not configured")
-
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
 
+    table = effective_graph_query_table(domain, settings, store=store)
+    if not table:
+        raise ValidationError("Graph name not configured")
+
     rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
-    try:
+    def _run_find() -> FindResponse:
         rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
 
         seed_conditions: list[str] = []
@@ -696,6 +727,22 @@ async def dt_triples_find(
             offset=offset,
             entity_count=len(all_entities),
         )
+
+    try:
+        t0 = time.perf_counter()
+        # BFS traversal + alias expansion + bulk triple fetch are all
+        # blocking SQL; run them off the event loop so a dense neighbourhood
+        # walk does not stall other concurrent MCP tool calls.
+        resp = await run_blocking(_run_find)
+        logger.info(
+            "dt_triples_find: search=%r type=%r depth=%d → %d triples in %.0fms",
+            search,
+            entity_type,
+            depth,
+            resp.total,
+            (time.perf_counter() - t0) * 1000,
+        )
+        return resp
     except Exception as e:
         logger.exception("dt_triples_find failed: %s", e)
         raise InfrastructureError("Triple search failed", detail=str(e)) from e
@@ -756,18 +803,18 @@ async def dt_triples(
         registry_volume,
         domain_version,
     )
-    be = backend or "graph"
+    engine = None if (backend or "graph") == "graph" else backend
+    store = get_graphdb(domain, settings, engine=engine)
+    if not store:
+        raise ValidationError("Backend not configured")
+
     table = (
         effective_view_table(domain, settings).strip()
         if be == "view"
-        else effective_graph_name(domain)
+        else effective_graph_query_table(domain, settings, store=store)
     )
     if not table:
         raise ValidationError("Triple store not configured")
-
-    store = get_triplestore(domain, settings, backend=be)
-    if not store:
-        raise ValidationError("Backend not configured")
 
     try:
         conditions = []
@@ -887,7 +934,12 @@ async def dt_dataquality_start(
 
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
-    triplestore_table = graph_name if body.backend == "graph" else view_table
+    store = get_graphdb(domain, settings)
+    triplestore_table = (
+        effective_graph_query_table(domain, settings, store=store)
+        if body.backend == "graph" and store
+        else view_table
+    )
     if not triplestore_table:
         raise ValidationError("Triple store not configured")
 
@@ -1119,7 +1171,7 @@ async def dt_inference_progress(task_id: str):
 # parameters used by the rest of this router.
 #
 # Why under ``/digitaltwin``:
-#   The cohort engine writes to the *digital twin's* knowledge graph (and
+#   The cohort engine writes to the *knowledge graph's* graph store (and
 #   optionally a UC Delta table). Grouping the routes here keeps a single
 #   resource path for everything that operates on the materialised twin —
 #   ``status``, ``stats``, ``triples``, ``inference``, and now ``cohorts``.
@@ -1273,10 +1325,11 @@ def _resolve_cohort_context(
     graph_name = effective_graph_name(domain)
     if not graph_name:
         raise ValidationError("Graph name is not configured")
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise InfrastructureError("Graph backend is not configured")
-    return domain, store, graph_name, CohortService(domain)
+    query_table = effective_graph_query_table(domain, settings, store=store)
+    return domain, store, query_table, CohortService(domain)
 
 
 # ---------------------------------------------------------------------------

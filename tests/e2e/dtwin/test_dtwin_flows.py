@@ -1,5 +1,5 @@
 """
-E2E — Digital Twin page.
+E2E — Knowledge Graph page.
 
 Merges two previously separate test files:
 
@@ -25,7 +25,7 @@ DTWIN_SECTIONS = [
 
 
 class TestDigitalTwinSidebar:
-    """Basic structural checks for the Digital Twin page."""
+    """Basic structural checks for the Knowledge Graph page."""
 
     def test_sigmagraph_section_visible_by_default(self, page, live_server):
         page.goto(f"{live_server}/dtwin/")

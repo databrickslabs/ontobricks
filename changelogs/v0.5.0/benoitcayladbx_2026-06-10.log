@@ -1,0 +1,551 @@
+# v0.5.0 — 2026-06-10 — benoitcayladbx
+
+## Fix #48: R2RML relationship URIs use the class label instead of the entity name
+
+**Context**: GitHub issue [#48](https://github.com/databrickslabs/ontobricks/issues/48). In the
+Digital Twin graph view, relationships between entities were never rendered in Filter → Expand
+mode: only `rdf:type` assertions and datatype-property triples came back, and the BFS expansion
+reported `expanded_count == initial_count` (no neighbours discovered). Root cause was a URI
+namespace mismatch in the R2RML generator. `_add_entity_mapping` builds entity subject URIs from
+the **local name of the ontology class URI** (`{base}{localName}/{id}`), whereas
+`_resolve_class_name` — used by `_add_relationship_mapping` for the subject/object templates —
+prioritised the **`ontology_class_label`**. When a class label differs from the local name of its
+class URI, entity triples and relationship triples were written to two different URI namespaces and
+were therefore never linked in the graph.
+
+**Changes**:
+1. `src/back/core/w3c/r2rml/R2RMLGenerator.py` — extracted a single shared helper
+   `_entity_uri_name(class_uri, class_label, table)` that reproduces the entity subject-URI naming
+   rule (local name of the class URI, else label, else table) as the **single source of truth** for
+   the class-name segment of an entity URI. `_add_entity_mapping` now calls it (replacing the inline
+   duplicate). `_resolve_class_name` now, for a matched entity, returns `_entity_uri_name(...)` using
+   the matched entity's own `ontology_class` / `ontology_class_label` / table — guaranteeing the
+   relationship subject/object URIs land byte-for-byte in the same namespace as the entity URIs. The
+   former Priority 1 (entity label first) was the bug and is removed; the no-entity-matched fallback
+   path (resolved URI → config label → class URI → table) is preserved unchanged.
+2. `tests/units/mapping/test_r2rml_generator.py` — added
+   `test_relationship_uris_match_entity_uris_when_label_differs`, a regression test for #48 where the
+   class URI local names (`Cust`, `Ord`) deliberately differ from the labels (`Customer`, `Order`).
+   It asserts that both entity and relationship templates use the `Cust`/`Ord` namespace and that the
+   label namespace (`Customer/`, `Order/`) never appears.
+
+**Modified files**:
+- `src/back/core/w3c/r2rml/R2RMLGenerator.py`
+- `tests/units/mapping/test_r2rml_generator.py`
+
+**Test result**: `python -m pytest tests/units` -> **2266 passed, 15 skipped**. Targeted
+`tests/units/mapping tests/units/dtwin` -> 262 passed. (`tests/property` skipped: `hypothesis` not
+installed in this env — nightly-only.)
+
+## UI: replace all grey backgrounds with white across the front app
+
+**Context**: Requested change to drop the grey surface palette and make every background
+white throughout the frontend — page shell, cards/panels, section/card headers, tab strips,
+toolbars, hover surfaces, the breadcrumb, and the OntoViz canvas. Borders, status/semantic
+tints (success/danger/info), scrollbar thumbs, interaction overlays (`rgba(0,0,0,.1/.15)`)
+and disabled/read-only input cues (`#e9ecef !important`) were intentionally left intact so
+contrast and affordances survive on a white surface.
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — flipped the page-background token
+   `--db-light-gray` from `#F7F7F7` to `#FFFFFF`; added `--db-bg-secondary: #FFFFFF`
+   (previously always fell back to grey); forced the Bootstrap surface tokens
+   `--bs-light` / `--bs-light-rgb` / `--bs-secondary-bg` / `--bs-tertiary-bg` to white so
+   every `var(--bs-light, …)` etc. resolves white.
+2. `src/front/static/global/ontoviz/css/ontoviz-variables.css` — `--ovz-bg-surface` and
+   `--ovz-bg-overlay` set to `#ffffff`; the subtle grey `--ovz-entity-header-bg` gradient
+   flattened to `#ffffff`.
+3. Swept every hardcoded grey surface background (`#f8f9fa`, `#fafafa`, `#f5f5f5`,
+   `#f1f3f5`, `#f9fafb`, `#fafbfc`, `#f8fafc`, `#f1f5f9`, `#f0f1f2`, `#f3f4f6`, non-`!important`
+   `#e9ecef` / `#f0f0f0`, translucent `rgba(248,249,250,…)`, and grey-only `linear-gradient`s)
+   to white across ~30 area CSS files and the inline `style="…background…"` strings in a few
+   JS/HTML templates. Only `background` / `background-color` declarations were touched —
+   borders, `fill`, chart data colours, and `!important` disabled cues were preserved.
+
+**Modified files** (CSS unless noted):
+- `src/front/static/global/css/main.css`, `components.css`, `pages.css`, `config.css`,
+  `help-modal.css`, `mapping.css`, `ontology.css`, `query.css`
+- `src/front/static/global/ontoviz/css/ontoviz-variables.css`, `ontoviz-ui.css`,
+  `src/front/static/global/ontoviz/index.html`
+- `src/front/static/{ontology,mapping,query,registry,domain}/css/*.css` (assistant,
+  business-rules, groups, map, shared-panels, swrl, wizard; mapping design/diagnostics/
+  manual/shared; query api/chat/sigmagraph/sync/visualization; registry / registry-teams;
+  domain review/validation)
+- inline styles: `ontology/js/ontology-shared-panels.js`, `ontology/js/ontology-wizard.js`,
+  `domain/js/domain-documents.js`, `global/js/uc-location-widget.js`,
+  `query/js/query-ontology-viewer.js`
+
+**Test result**: CSS/HTML-only change. `pytest --ignore=tests/property` -> **2749 passed,
+53 skipped, 16 failed**; the 16 failures are pre-existing backend API/e2e tests
+(review-endpoints async-await harness, dtwin sync, home validation, set_version_status) with
+no relation to frontend styling. `tests/property` skipped (`hypothesis` not installed).
+No new lint errors on the edited assets.
+
+## UI fixup: regressions from the all-white sweep (slider track + graph chat)
+
+**Context**: After the grey→white sweep above, two regressions surfaced (verified against the
+running dev server on `:8000`): (1) the Knowledge Graph **Depth slider** track became invisible,
+and (2) the **Graph Chat** panel kept a grey gradient background. The home-page report ("sections
+still grey") was a stale browser cache — `curl :8000/static/global/css/main.css` confirmed
+`--db-light-gray: #FFFFFF` is served, so the home tiles (`.stat-item` / `.info-card` /
+`.domain-btn` / `.quick-link*` / `.domain-status`, all `var(--db-light-gray)`) already render
+white; the `?v=asset_version` cache-buster only changes on server restart.
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — removed the global `--bs-secondary-bg` and
+   `--bs-tertiary-bg` white overrides. Bootstrap's `.form-range` track and disabled-control
+   surfaces read `--bs-secondary-bg`, so whitening it hid the slider line on the white page.
+   Kept `--bs-light` / `--bs-light-rgb` white (drives `.bg-light` utilities to white, which the
+   sweep intended); all `var(--bs-tertiary-bg, …)` background usages were already flattened to
+   literal `#ffffff` in the sweep, so dropping that override is background-safe. Added a comment
+   documenting why these two tokens must not be whitened.
+2. `src/front/static/query/css/query-chat.css` — `--gc-panel-bg` changed from
+   `linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)` to `#ffffff`. The original sweep only
+   matched `background` / `background-color` declarations, so this grey lived in a CSS custom
+   property and slipped through. `--gc-bot-border: #e9ecef` is a border and was left intact.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+- `src/front/static/query/css/query-chat.css`
+
+**Test result**: CSS-only change; no new lint errors. Verified live via
+`curl :8000/static/...` that the served CSS no longer overrides `--bs-secondary-bg` (slider track
+visible again) and that the chat panel background is `#ffffff`. Browser hard-refresh / dev-server
+restart needed to bust the cached `?v=` stylesheet.
+
+## UI: light-grey navbar + monochrome (dark-grey) accent replacing Databricks Red
+
+**Context**: Follow-up to the all-white theme. Requested: (1) top banner/navbar from black to a
+classic light Databricks grey with black text; (2) navbar dropdown menus to use that same grey,
+with a dark-grey hover instead of red; (3) globally, the red "highlight" buttons (e.g. the Home
+page CTAs) to become dark grey.
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — repointed the whole `--db-primary*` accent family
+   from Databricks Red to a dark-grey palette (`--db-primary: #495057`, `-dark: #3a4046`,
+   `-darker: #2b3035`, `-light: rgba(73,80,87,0.1)`, `-rgb: 73,80,87`). This is the single global
+   lever: every token-based red (Home `.card-action` / `.step-badge` / `.domain-btn:hover` /
+   `.quick-link*:hover`, `.bg-primary` / `.text-primary` / `.border-primary`, workflow step
+   circles, tab underline, focus ring, navbar dropdown hover/active) is now dark grey.
+2. `src/front/static/global/css/main.css` — added navbar chrome tokens
+   (`--db-navbar-bg: #ECECEC`, `--db-navbar-border: #D8D8D8`) and restyled the navbar:
+   light-grey background with a bottom border; brand + all `.nav-link`s (incl. the right-side
+   bell / hourglass / help / gear / warehouse icons, which are `.nav-link`s) set to `--db-text`
+   (black); `.nav-link:hover` / `.active` use the dark-grey accent (active also bold). Dropdown
+   menus (incl. hover-flyout submenus) now use `--db-navbar-bg` with `--db-text` items,
+   `--db-text-muted` headers, `--db-navbar-border` dividers, and a lighter shadow; hover/active
+   items use the dark-grey accent with white text.
+3. `src/front/templates/base.html` — navbar class `navbar-dark` → `navbar-light` so the
+   Bootstrap collapse toggler icon renders dark on the light background.
+
+**Out of scope (left red, by design)**: Bootstrap `bg-danger` notification count pills in the
+navbar (semantic), and the self-contained Graph Chat / Ontology Assistant red theme (send button,
+user bubbles, entity-link hovers, FAB, focus rings, shadows — dozens of hardcoded `#FF3621` /
+`rgba(255,54,33,…)` refs). These can be converted to grey too on request.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+- `src/front/templates/base.html`
+
+**Test result**: CSS/template-only change; no new lint errors. Verified live via
+`curl :8000/static/global/css/main.css` that `--db-primary: #495057` and the navbar uses
+`--db-navbar-bg`. Dev-server restart / hard refresh needed to bust the cached `?v=` stylesheet.
+
+## UI fixup: navbar menu labels white on the light banner
+
+**Context**: After the light-grey navbar change, the top-level menu labels (Registry, Domain,
+Digital Twin) stayed white and unreadable. Root cause: each label span carried Bootstrap's
+`.text-light` utility, which resolves through `--bs-light` (set to white in the all-white sweep),
+overriding the black `.nav-link` colour.
+
+**Changes**:
+1. `src/front/templates/base.html` — removed `text-light` from the two navbar menu-label spans
+   (`#currentDomainName` and the generic `{{ menu.label }}` span) so they inherit the black
+   `.nav-link` colour and follow its hover/active (dark-grey) states. Kept `.small`.
+2. `src/front/templates/base.html` + `src/front/static/global/css/main.css` — recoloured the
+   process-chevron separators between menu items (were `stroke="rgba(255,255,255,0.5)"`, invisible
+   on the light banner). The SVG `polyline` now uses `stroke="currentColor"` and
+   `.navbar .nav-chevron` sets `color: var(--db-primary)`, so the chevrons render in the dark-grey
+   accent and stay token-driven.
+
+**Modified files**:
+- `src/front/templates/base.html`
+- `src/front/static/global/css/main.css`
+
+**Test result**: Template/CSS-only change; no lint impact. Hard refresh / dev-server restart
+needed to pick up the changes.
+
+## UI: tooltips use the dark-grey accent
+
+**Context**: Bootstrap tooltips defaulted to black; requested to match the dark-grey accent.
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — added a `.tooltip` override setting
+   `--bs-tooltip-bg: var(--db-primary)` (dark grey; also recolours the arrow, which reads the
+   same variable) and `--bs-tooltip-color: #fff`.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed to
+pick up the change.
+
+## UI: Knowledge Graph search info text — dark grey instead of blue
+
+**Context**: In the Digital Twin → Knowledge Graph (Sigma) view, the Search / Filter info banners
+("Searching…", "Found N entities", etc.) rendered their text in Bootstrap info blue (`.text-info`).
+Requested dark grey instead.
+
+**Changes**:
+1. `src/front/static/query/css/query-sigmagraph.css` — scoped override
+   `#sgSearchInfo .text-info, #sgGraphFilterInfo .text-info { color: var(--db-primary) !important; }`
+   (the `!important` is required because Bootstrap's `.text-info` utility is `!important`). Scoped
+   to the two search/filter banners so `.text-info` elsewhere (entity-detail labels, badges) is
+   untouched.
+
+**Modified files**:
+- `src/front/static/query/css/query-sigmagraph.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed to
+pick up the change.
+
+## UI: navbar OntoBricks version label in black
+
+**Context**: The `v{{ app_version }}` label next to the navbar brand was faded
+(`opacity: 0.55`, no explicit colour) — hard to read on the light banner. Requested black.
+
+**Changes**:
+1. `src/front/static/global/css/components.css` — `.ob-navbar-brand-version` now sets
+   `color: var(--db-text)` and `opacity: 1` (was 0.55).
+
+**Modified files**:
+- `src/front/static/global/css/components.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed to
+pick up the change.
+
+## UI: unify every inline spinner on the OntoBricks brand spinner
+
+**Context**: The app mixed two loading indicators — the OntoBricks branded SVG spinner
+(rings + diamond, used in a handful of panels/overlays) and Bootstrap's plain
+`.spinner-border` ring (used in ~60 templates/JS files, hundreds of call sites,
+including button loading states and JS-generated markup). Requested: the OntoBricks
+spinner everywhere.
+
+**Approach**: Instead of editing every call site (risky across hundreds of varied
+markup snippets, many built in JS strings), unify with a CSS-only override plus a
+self-animating SVG. This covers all existing *and* future spinners with zero markup
+changes.
+
+**Changes**:
+1. `src/front/static/global/img/loading-spinner.svg` — added a SMIL
+   `<animateTransform type="rotate" .../>` to the node-ring group so the file
+   self-animates when referenced as `<img>` or as a CSS `background-image`
+   (the previous animation lived only in `main.css` and didn't apply to the file).
+2. `src/front/static/global/css/main.css` — global override repainting every
+   Bootstrap `.spinner-border` / `.spinner-grow` as the brand spinner:
+   `border: 0`, `border-radius: 0`, `animation: none`,
+   `background: url(/static/global/img/loading-spinner.svg) center / contain no-repeat`
+   (all `!important` to beat Bootstrap's single-class rules), `color: transparent`,
+   `vertical-align: -0.18em`. Bootstrap's own `width/height` (2rem; `-sm` = 1rem) are
+   preserved, so size at each call site is unchanged. Left `.spin-animation`
+   (rotating *status* icon for running tasks) untouched — it's not a loading spinner.
+
+**Modified files**:
+- `src/front/static/global/img/loading-spinner.svg`
+- `src/front/static/global/css/main.css`
+
+**Test result**: `pytest --ignore=tests/property` → 2749 passed, 53 skipped, 16 failed.
+All failures are pre-existing backend API/E2E async issues (review endpoints,
+set-version-status, dtwin/home API flows) unrelated to this CSS/SVG change; property
+tests skipped (no `hypothesis` in env). Verified the SVG (with `animateTransform`) and
+the CSS override are served by the dev server. Hard refresh / dev-server restart needed
+to pick up the change.
+
+## UI: slimmer navbar, no bottom divider
+
+**Context**: Requested a thinner top navbar and removal of its bottom border line.
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — `.navbar`: `border-bottom: none` (was
+   `1px solid var(--db-navbar-border)`), vertical padding `0.5rem` -> `0.2rem`, added
+   `min-height: 0` to drop Bootstrap's default navbar min-height.
+2. `src/front/static/global/css/main.css` — `.navbar .nav-link`: added
+   `padding-top/bottom: 0.25rem` (was Bootstrap's `0.5rem`) so the links no longer
+   pad the bar back out to its old height.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed
+to pick up the change.
+
+## UI: vertically center navbar menu items
+
+**Context**: After slimming the navbar, the menu-item labels/icons weren't reliably
+centered vertically (links sat toward the top of their stretched list items).
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — `.navbar-nav { align-items: center }` so each
+   nav item is centered on the cross axis instead of stretched.
+2. `src/front/static/global/css/main.css` — `.navbar .nav-link`: `display: inline-flex` +
+   `align-items: center` so the icon and text inside each link are centered together.
+3. `src/front/static/global/css/main.css` — `.navbar .nav-chevron`: added `height: 1.5rem`
+   (the chevron SVG is `height: 100%`, and it no longer stretches to full bar height now
+   that the nav row centers its items) so the separators stay visible and centered.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed
+to pick up the change.
+
+## UI: business-user home page reshape (KPI band + All Domains gateway)
+
+**Context**: The home page was builder/jargon-first (hero tagline "...RDF, OWL, and
+R2RML standards", a Save/Load/Reset domain panel, a 3-step build workflow, and three
+OWL/R2RML/Digital-Twin info cards). Requested a reshape "really for a business user".
+Confirmed direction: the home is the **open door for all domains** and **KPIs are the
+priority content** (not a per-user role-gated view — roles belong to domains). Pure
+front-end change reusing existing cheap endpoints (`/domain/info`, `/session-status`,
+`/list-projects`); no backend changes.
+
+**Changes**:
+1. `src/front/templates/home.html` — restructured into five sections:
+   (1) value-first hero ("Explore and govern your organization's knowledge…");
+   (2) **Current Domain KPI / health band** — a 6-tile `.ob-kpi-tile` row (Entities,
+   Relationships, Mappings, Quality, Status, Version) replacing the old 3 `.stat-item`
+   tiles; (3) **All Domains** gateway grid (`#domainGateway` / `.ob-domain-grid`) — the
+   open door to every domain; (4) My Tasks (unchanged); (5) a demoted **Build & Manage**
+   section that folds the Step 1/2/3 workflow cards and the New/Manage/Data Sources/
+   Save/Load buttons. Dropped the jargon-heavy OWL/R2RML/Digital-Twin info cards. Wired
+   the new `home/css/home.css` in `extra_css`.
+2. `src/front/static/home/css/home.css` (new) — `.home-kpi-band` grid, `.ob-domain-grid`
+   / `.ob-domain-card` gateway styles (with `.is-current` highlight + empty-state CTA),
+   and the `.home-build-header` row. All colours via `--db-*` tokens; KPI tiles reuse the
+   shared `.ob-kpi-tile` component.
+3. `src/front/static/home/js/home.js` — rewrote: `loadHomeStatus()` fetches `/domain/info`
+   (status, version, precision score, stats) + `/session-status` in parallel and renders
+   the six KPI tiles (Quality tile colours by precision threshold: ≥80 success / ≥50
+   warning / else danger; Status tile renders a DRAFT/IN-REVIEW/PUBLISHED badge);
+   `loadDomainGateway()` fetches `/list-projects`, renders one card per domain (current
+   domain highlighted) and opens a domain via `POST /domain/load-from-uc` (latest/active
+   version) then routes to `/domain/`; the `data-action` handler is now delegated from
+   `document` so New/Save/Load/Reset keep working from the demoted section.
+4. `src/front/static/global/css/pages.css` — removed the now-unused `.session-stats` /
+   `.stat-item*` and `.info-cards` / `.info-card*` rules (and the `.domain-panel
+   .session-stats` spacing rule) superseded by the KPI band.
+5. `tests/units/api/test_ui_rendering.py` — replaced `test_stat_items` (asserted the old
+   `classCount` / `propCount` / `mappingCount` ids) with `test_kpi_band` (the six new
+   `kpi*` ids) and added `test_domain_gateway` (`#domainGateway`).
+
+**Modified files**:
+- `src/front/templates/home.html`
+- `src/front/static/home/css/home.css` (new)
+- `src/front/static/home/js/home.js`
+- `src/front/static/global/css/pages.css`
+- `tests/units/api/test_ui_rendering.py`
+
+**Test result**: `python -m pytest tests/units` → **2267 passed, 15 skipped**. No lint
+errors on the edited assets. Hard refresh / dev-server restart needed to bust the cached
+`?v=` assets.
+
+## UI: remove the "Build & Manage" section from the home page
+
+**Context**: Follow-up to the business-user home reshape — the demoted "Build & Manage"
+section (the New / Manage / Data Sources / Save / Load buttons and the Step 1/2/3
+workflow cards) was no longer wanted on the home page. The home now ends at the All
+Domains gateway + My Tasks; building/managing happens from the navbar Domain menu and
+the per-area pages.
+
+**Changes**:
+1. `src/front/templates/home.html` — deleted the entire "Build & Manage" `.workflow-section`
+   (header + `.domain-actions` buttons + the three `.workflow-card`s).
+2. `src/front/static/home/js/home.js` — removed the now-dead `updateWorkflowStatus()`
+   (and its call in `loadHomeStatus`), `resetTaxonomy()`, `resetMapping()`, and the
+   `domainSave` / `domainLoad` / `resetTaxonomy` / `resetMapping` branches of the delegated
+   click handler. `newDomain()` is kept (the gateway empty-state "Create your first domain"
+   CTA still uses `data-action="newDomain"`), so `onHomePanelClick` now handles only that.
+3. `src/front/static/home/css/home.css` — removed the `.home-build-header` rules.
+4. `src/front/static/global/css/pages.css` — removed the now-unused home workflow-card
+   block (`.workflow-card*`, `.step-badge`, `.card-icon`, `.card-status*`, `.card-actions`,
+   `.card-action*`, `.card-reset-btn*`) and the `.domain-actions*` / `.domain-btn*` blocks
+   (incl. their responsive rule). Kept `.workflow-section` / `.workflow-section h5` (still
+   used by the All Domains and My Tasks sections) and `.domain-status*` (used by the
+   Current Domain panel status line).
+
+**Modified files**:
+- `src/front/templates/home.html`
+- `src/front/static/home/js/home.js`
+- `src/front/static/home/css/home.css`
+- `src/front/static/global/css/pages.css`
+
+**Test result**: `python -m pytest tests/units` → **2267 passed, 15 skipped**. No lint
+errors on the edited assets. Hard refresh / dev-server restart needed to bust the cached
+`?v=` assets.
+
+## UI fixup: home All Domains gateway — wrong endpoint + brand spinner
+
+**Context**: On the live dev server the home "All Domains" gateway showed "No domains"
+even though many exist. Root cause: the gateway fetched `/list-projects`, but that route
+is mounted under the `/domain` prefix, so it 404'd (`GET /list-projects → 404` in the
+server log). The navbar's own loader already uses the correct `/domain/list-projects`.
+Also requested: use the usual (OntoBricks brand) spinner while the section loads instead
+of the placeholder hourglass + text.
+
+**Changes**:
+1. `src/front/static/home/js/home.js` — `loadDomainGateway()` now fetches
+   `/domain/list-projects` (was `/list-projects`). Response shape is unchanged
+   (`{success, domains: [names]}`).
+2. `src/front/templates/home.html` — the gateway loading placeholder now uses a Bootstrap
+   `.spinner-border` (globally repainted to the OntoBricks brand spinner via
+   `main.css`) + "Loading domains..." text, instead of the `bi-hourglass-split` glyph.
+
+**Modified files**:
+- `src/front/static/home/js/home.js`
+- `src/front/templates/home.html`
+
+**Test result**: `python -m pytest tests/units/api/test_ui_rendering.py` → **109 passed**.
+No lint errors. Verified against the running dev server log that `/domain/list-projects`
+returns 200 (the navbar uses the same path). Hard refresh / dev-server restart needed to
+bust the cached `?v=` assets.
+
+## UI: navbar Digital Twin icon + per-domain version dropdown on the home gateway
+
+**Context**: Two small home/navbar tweaks. (1) The navbar "Digital Twin" entry used the
+filled `bi-box-fill` glyph; requested the outline variant. (2) The home "All Domains"
+gateway cards should let the user pick which version to open per domain.
+
+**Changes**:
+1. `src/front/config/menu_config.json` — `digitaltwin` menu `icon` changed from
+   `bi-box-fill` to `bi-box` (outline). Only occurrence; menu icons are declarative so the
+   navbar/sidebar both pick it up.
+2. `src/front/static/home/js/home.js` — each gateway card is now a `<div>` (was a
+   `<button>`, which can't legally contain a `<select>`) with a footer holding a version
+   `<select>` + an explicit **Open** button. Versions are **lazy-loaded** on first card
+   hover / select focus via `/domain/list-versions?domain_name=…` (avoids one slow
+   registry call per domain on page load), sorted latest-first and labelled
+   `v{n} — {Draft|In Review|Published}`. `openDomain(name, version)` now sends the chosen
+   version (falls back to latest/active when the dropdown is left on "Latest").
+3. `src/front/static/home/css/home.css` — added `.ob-domain-card-footer` (select + Open
+   button row), `.ob-domain-version` sizing, restyled `.ob-domain-card-open` as a compact
+   primary button, moved the "Current" badge to the right of the card's top row, and
+   dropped the whole-card `cursor: pointer` (the card is no longer one big click target).
+
+**Modified files**:
+- `src/front/config/menu_config.json`
+- `src/front/static/home/js/home.js`
+- `src/front/static/home/css/home.css`
+
+**Test result**: `python -m pytest tests/units/api/test_ui_rendering.py` → **109 passed**.
+No lint errors. Hard refresh / dev-server restart needed to bust the cached `?v=` assets.
+
+## UI: stronger highlight for the current domain in the home gateway
+
+**Context**: The current domain card in the "All Domains" gateway only had a coloured
+border + "Current" badge; requested a more obvious highlight.
+
+**Changes**:
+1. `src/front/static/home/css/home.css` — `.ob-domain-card.is-current` now also gets a
+   tinted background (`--db-primary-light`), and its icon chip is filled with
+   `--db-primary` (white glyph), on top of the existing accent border, shadow and
+   "Current" badge.
+
+**Modified files**:
+- `src/front/static/home/css/home.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed
+to bust the cached `?v=` asset.
+
+## Docs/rules: codify the single inline-spinner style
+
+**Context**: Make the "one brand spinner everywhere" convention explicit in the Cursor
+frontend rules so future work doesn't reintroduce ad-hoc spinners (the home gateway
+loader had used a `bi-hourglass` glyph before being switched to the brand spinner).
+
+**Changes**:
+1. `.cursor/11-frontend-design.mdc` — added a **Loading Spinners** subsection documenting
+   the single brand spinner: inline via plain Bootstrap `.spinner-border` /
+   `.spinner-grow` (auto-repainted by the `main.css` override), large/centered via
+   `.ob-loading-spinner`, full-page via `#domainLoadingOverlay`; clarified that
+   `.spin-animation` is a status icon, not a loading spinner; listed don'ts (no second
+   spinner style, no `.spinner-border` overrides, no redrawing the brand SVG). Updated the
+   Reusable Components Catalog "Loading spinner" entry and added a matching bullet to
+   "What NOT to Do".
+
+**Modified files**:
+- `.cursor/11-frontend-design.mdc`
+
+**Test result**: Rules/docs-only change — no code touched, no tests required.
+
+## UI: dark-grey bottom border on the navbar
+
+**Context**: Requested a bottom line under the navbar in dark grey (the bottom border had
+previously been removed when the navbar was slimmed).
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — `.navbar` `border-bottom: none` →
+   `1px solid var(--db-navbar-border)` (#D8D8D8, soft grey divider). Iterated from the
+   initial `--db-gray` #2C2D2E (too dark) → `--db-gray-600` #6c757d (still too dark) →
+   the navbar-border token.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed
+to bust the cached `?v=` asset.
+
+## UI: match Databricks (apps-v2) navbar text size
+
+**Context**: Requested the navbar to reuse the same font/size as the Databricks apps-v2
+top nav. Per the no-webfont rule (`.cursor/11-frontend-design.mdc`), we keep the system
+font stack and match the **size/weight only**: Databricks renders top-nav text at ~13px,
+weight 400.
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — set `.navbar .nav-link` to
+   `font-size: 0.8125rem` (13px) / `font-weight: 400`, and pinned the inner Bootstrap
+   `.small` menu-label span to `font-size: 1em` so labels land at 13px (they were being
+   shrunk to ~11px by `.small`'s 0.875em). Dropdown menu items
+   (`.navbar .dropdown-menu .dropdown-item`) reduced from `0.875rem` to `0.8125rem` to
+   match. Brand size left unchanged.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed
+to bust the cached `?v=` asset.
+
+## UI: non-bold text in the navbar and menus
+
+**Context**: Requested a lighter, non-bold text style across the navbar and its dropdown
+menus.
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — dropped `font-weight: 600` to `400` on
+   `.navbar-brand`, `.navbar .nav-link.active`, and `.navbar .dropdown-menu
+   .dropdown-header`. The active nav item still reads as active via its `--db-primary`
+   colour; dropdown headers stay distinguishable via their muted colour, uppercase and
+   letter-spacing. Dropdown items were already normal weight.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed
+to bust the cached `?v=` asset.
+
+## UI: restore icon-to-label spacing in navbar menu items
+
+**Context**: Making `.nav-link` a flexbox (previous change) collapsed the whitespace
+between each icon and its label (whitespace-only flex items are not rendered), so the
+text sat too close to the icon.
+
+**Changes**:
+1. `src/front/static/global/css/main.css` — `.navbar .nav-link`: added `gap: 0.4rem`
+   to space the icon and label apart again.
+
+**Modified files**:
+- `src/front/static/global/css/main.css`
+
+**Test result**: CSS-only change; no lint errors. Hard refresh / dev-server restart needed
+to pick up the change.

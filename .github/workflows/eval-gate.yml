@@ -31,7 +31,7 @@ jobs:
     outputs:
       changed_agents: ${{ steps.diff.outputs.changed_agents }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -55,7 +55,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.changed_agents != ''
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Each changed agent has a SPEC.md
         env:
@@ -110,7 +110,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.changed_agents != ''
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Each changed agent has tests/eval/datasets/<agent>/baseline.jsonl
         env:

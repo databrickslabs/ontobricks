@@ -43,9 +43,24 @@ def normalize_name(name: str) -> str:
     return "".join(ch.lower() for ch in str(name) if ch.isalnum())
 
 
+def _assert_safe_nltk_resource(resource_path: str) -> None:
+    """Reject the attack shapes behind GHSA-p4gq-832x-fm9v (CVE-2026-54293).
+
+    ``nltk.data.find()`` in nltk<=3.9.4 runs its unsafe-path regex against the
+    still-encoded string and only decodes ``%xx`` afterwards, so percent-encoded
+    separators/traversal (``%2f``, ``%2e%2e``) bypass the check and read
+    arbitrary files. All our callers pass hardcoded resource names, so this
+    guard is defense-in-depth that makes the flaw unreachable until we can pin
+    nltk>=3.10.0.
+    """
+    if "%" in resource_path or ".." in resource_path or resource_path.startswith(("/", "\\")):
+        raise ValueError(f"Unsafe NLTK resource path rejected: {resource_path!r}")
+
+
 def ensure_nltk_resource(resource_path: str, download_name: str) -> None:
     import nltk  # optional dep — only needed for semantic checks
 
+    _assert_safe_nltk_resource(resource_path)
     try:
         nltk.data.find(resource_path)
     except LookupError:

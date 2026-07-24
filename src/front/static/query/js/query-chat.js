@@ -4,7 +4,7 @@
  *
  * Re-uses the .assistant-* DOM class family for bubbles / thinking /
  * input styling (see /static/ontology/css/ontology-assistant.css), but
- * runs embedded inside the Digital Twin sidebar section -- no floating
+ * runs embedded inside the Knowledge Graph sidebar section -- no floating
  * popup, no FAB.
  *
  * Talks to POST /dtwin/assistant/chat which drives the
@@ -56,6 +56,35 @@
     // Markdown rendering
     // =====================================================
 
+    const UNREADABLE_REPLY = "I couldn't display that answer. Please try again.";
+
+    function _extractReadableParts(value) {
+        if (typeof value === 'string') return value.trim() ? [value] : [];
+        if (Array.isArray(value)) {
+            return value.flatMap(function (item) {
+                return _extractReadableParts(item);
+            });
+        }
+        if (value && typeof value === 'object') {
+            const type = value.type;
+            if (type && type !== 'text' && type !== 'output_text') return [];
+            for (const key of ['text', 'content', 'value']) {
+                if (Object.prototype.hasOwnProperty.call(value, key)) {
+                    return _extractReadableParts(value[key]);
+                }
+            }
+        }
+        return [];
+    }
+
+    function readableMessage(value) {
+        if (typeof value === 'string' && value.trim()) return value;
+        const parts = _extractReadableParts(value)
+            .map(function (part) { return part.trim(); })
+            .filter(Boolean);
+        return parts.length ? parts.join('\n\n') : UNREADABLE_REPLY;
+    }
+
     function renderMarkdown(text) {
         if (typeof marked !== 'undefined' && marked.parse) {
             try {
@@ -88,7 +117,7 @@
         a.classList.add('graph-chat-entity-link');
         a.setAttribute(
             'title',
-            'Open in the Knowledge Graph viewer'
+            'Open in the Graph Viewer viewer'
         );
         a.setAttribute('target', '_self');
         a.setAttribute('rel', 'noopener');
@@ -210,7 +239,7 @@
         if (isUser) {
             body.textContent = text;
         } else {
-            body.innerHTML = renderMarkdown(text);
+            body.innerHTML = renderMarkdown(readableMessage(text));
             enhanceEntityLinks(body);
         }
 
@@ -365,7 +394,7 @@
         }
 
         // Render the final markdown reply
-        const reply = event.reply || '(no reply)';
+        const reply = readableMessage(event.reply);
         bodyEl.innerHTML = renderMarkdown(reply);
         enhanceEntityLinks(bodyEl);
 
@@ -375,6 +404,7 @@
 
         const container = messagesEl();
         if (container) container.scrollTop = container.scrollHeight;
+        return reply;
     }
 
     /**
@@ -480,10 +510,10 @@
             const doneEvent = await _consumeStream(bubble, response);
 
             if (doneEvent) {
-                finalizeStreamingBubble(bubble, doneEvent);
+                const reply = finalizeStreamingBubble(bubble, doneEvent);
                 conversationHistory.push({
                     role: 'assistant',
-                    content: doneEvent.reply || '',
+                    content: reply,
                 });
             } else {
                 errorStreamingBubble(bubble, 'Stream ended without a final response.');
@@ -537,10 +567,13 @@
         hideWelcome();
         conversationHistory = [];
         messages.forEach(function (m) {
-            if (!m || typeof m.content !== 'string') return;
+            if (!m || !Object.prototype.hasOwnProperty.call(m, 'content')) return;
             const role = m.role === 'assistant' ? 'assistant' : 'user';
-            appendMessage(role, m.content);
-            conversationHistory.push({ role: role, content: m.content });
+            const content = role === 'assistant'
+                ? readableMessage(m.content)
+                : String(m.content || '');
+            appendMessage(role, content);
+            conversationHistory.push({ role: role, content: content });
         });
     }
 
@@ -703,4 +736,10 @@
     });
 
     window.initGraphChat = init;
+    window.chatSendMessage = function (text) { sendMessage(text); };
+    window.appendChatAssistantMessage = function (text) {
+        const content = readableMessage(text);
+        appendMessage('assistant', content);
+        conversationHistory.push({ role: 'assistant', content: content });
+    };
 })();

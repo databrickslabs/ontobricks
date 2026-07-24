@@ -11,6 +11,7 @@ from api.routers.internal.mapping import router as mapping_router
 from api.routers.internal.dtwin import router as dtwin_router
 from api.routers.internal.domain import router as domain_router
 from api.routers.internal.review import router as review_router
+from api.routers.internal.comments import router as comments_router
 from api.routers.internal.tasks import router as tasks_router
 from api.routers.internal.help import router as help_router
 
@@ -22,6 +23,7 @@ all_internal_routers = [
     dtwin_router,
     domain_router,
     review_router,
+    comments_router,
     tasks_router,
     help_router,
 ]

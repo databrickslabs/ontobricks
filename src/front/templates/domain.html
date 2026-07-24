@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-validation.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-review.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-audit.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-collaboration.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
 {% endblock %}
 
@@ -41,6 +42,16 @@
             <!-- Review / Validation workflow Section -->
             <div id="review-section" class="sidebar-section">
                 {% include "partials/domain/_domain_review.html" %}
+            </div>
+
+            <!-- Collaboration: My Tasks Section -->
+            <div id="mytasks-section" class="sidebar-section">
+                {% include "partials/domain/_domain_mytasks.html" %}
+            </div>
+
+            <!-- Collaboration: Discussions timeline Section -->
+            <div id="discussions-section" class="sidebar-section">
+                {% include "partials/domain/_domain_discussions.html" %}
             </div>
             
             <!-- Versions Section -->
@@ -126,6 +137,7 @@
 <script src="{{ url_for('static', filename='domain/js/domain-versions.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-runs.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-audit.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-collaboration.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-documents.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-owl-content.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-r2rml.js') }}?v={{ asset_version }}"></script>

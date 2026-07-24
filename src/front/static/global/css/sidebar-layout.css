@@ -68,6 +68,8 @@ body.full-width-layout {
     overflow-y: auto;
     height: 100%;
     transition: width 0.25s ease, min-width 0.25s ease;
+    display: flex;
+    flex-direction: column;
 }
 
 .sidebar-nav .sidebar-title {
@@ -248,7 +250,7 @@ body.full-width-layout {
 }
 
 /* ==========================================================================
-   Knowledge Graph Sections - No scroll, full height
+   Graph Viewer Sections - No scroll, full height
    ========================================================================== */
 .sidebar-content:has(#sigmagraph-section.active),
 .sidebar-content:has(#graphql-section.active),
@@ -262,6 +264,19 @@ body.full-width-layout {
     height: calc(100vh - 80px);
     max-height: calc(100vh - 80px);
     overflow: hidden;
+}
+
+/* Logs section fills the viewport so only the console panel scrolls */
+.sidebar-content:has(#logs-section.active) {
+    overflow: hidden;
+    padding: 0;
+}
+
+#logs-section.active {
+    height: calc(100vh - var(--ob-chrome-height, 60px));
+    overflow: hidden;
+    padding: 0.5rem 1rem;
+    box-sizing: border-box;
 }
 
 /* ==========================================================================
@@ -338,5 +353,71 @@ body.full-width-layout {
 
 body:is(.read-only-version, .role-viewer) #design-section #ontology-designer-canvas-wrapper {
     height: calc(100vh - 200px);
+}
+
+/* ==========================================================================
+   Sidebar User / Role Footer
+   Pinned to the bottom of the sidebar via margin-top: auto
+   ========================================================================== */
+.sidebar-user {
+    margin-top: auto;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border-color, rgba(0,0,0,0.08));
+    flex-shrink: 0;
+}
+
+.sidebar-user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    cursor: default;
+}
+
+.sidebar-user-icon {
+    font-size: 1.15rem;
+    color: #666;
+    min-width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.sidebar-user-details {
+    overflow: hidden;
+    min-width: 0;
+    transition: opacity 0.2s ease;
+}
+
+.sidebar-user-email {
+    font-size: 0.7rem;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+    font-weight: 500;
+}
+
+.sidebar-user-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-top: 0.25rem;
+}
+
+.sidebar-role-badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+}
+
+/* Collapsed state: icon-only, hide text */
+.sidebar-nav.collapsed .sidebar-user-info {
+    justify-content: center;
+    padding: 0.4rem 0;
+}
+
+.sidebar-nav.collapsed .sidebar-user-details {
+    display: none;
 }
 

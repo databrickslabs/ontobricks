@@ -464,6 +464,7 @@ async function syncDesignToOntology(showFeedback = false) {
             description: entity.description || existing.comment || '',
             dashboard: existing.dashboard || '',
             dashboardParams: existing.dashboardParams || {},
+            dataset: existing.dataset || null,
             dataProperties: [...ownProperties, ...inheritedProperties]
         };
         
@@ -1517,15 +1518,27 @@ async function loadOntologyIntoDesigner(showAlert = true) {
     
     // First, try to load from saved design layout (domain persistence)
     const savedLayout = await loadDesignLayoutFromProject();
-    
+
+    // Resolve ontology classes up-front. ``OntologyState.config`` can exist while
+    // ``classes`` is still empty (it is populated asynchronously after a reload).
+    // Guarding the merge branch on ``classes.length`` — not just on ``config``
+    // being truthy — stops us from building a zero-entity layout that renders a
+    // blank canvas; we fall through to the saved-layout-only branch instead.
+    const _ontologyReady = typeof OntologyState !== 'undefined' && OntologyState.config;
+    const classes = _ontologyReady ? (OntologyState.config.classes || []) : [];
+    const properties = _ontologyReady ? (OntologyState.config.properties || []) : [];
+
+    // ``center`` only the saved layout when it hides part of the graph (a curated
+    // business view): the visible subset is re-framed so it can't end up
+    // off-screen around now-hidden anchors. Full views keep their exact saved
+    // positions (center: false).
+    const _layoutHasHidden = (savedLayout?.visibility?.hiddenEntities?.length || 0) > 0;
+
     // If we have a saved layout AND ontology data, merge them
     // The saved layout provides positions/anchors, the ontology provides the current data (including properties)
-    if (savedLayout && savedLayout.entities && savedLayout.entities.length > 0 && 
-        typeof OntologyState !== 'undefined' && OntologyState.config) {
-        
-        const classes = OntologyState.config.classes || [];
-        const properties = OntologyState.config.properties || [];
-        
+    if (savedLayout && savedLayout.entities && savedLayout.entities.length > 0 &&
+        classes.length > 0) {
+
         // Create lookup maps
         const savedEntityMap = new Map();
         savedLayout.entities.forEach(e => savedEntityMap.set(e.name, e));
@@ -1703,7 +1716,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         
         const inhCount = mergedLayout.inheritances ? mergedLayout.inheritances.length : 0;
         console.log('Loading merged layout:', mergedLayout.entities.length + ' entities, ' + mergedLayout.relationships.length + ' relationships, ' + inhCount + ' inheritances');
-        ontologyDesigner.fromJSON(mergedLayout, { autoLayout: false, center: false, animate: false });
+        ontologyDesigner.fromJSON(mergedLayout, { autoLayout: false, center: _layoutHasHidden, animate: false });
         
         // Re-enable auto-save after loading completes
         setTimeout(() => {
@@ -1736,7 +1749,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         
         const inhCount = savedLayout.inheritances ? savedLayout.inheritances.length : 0;
         console.log('Loading from saved design layout:', savedLayout.entities.length + ' entities, ' + inhCount + ' inheritances');
-        ontologyDesigner.fromJSON(savedLayout, { autoLayout: false, center: false, animate: false });
+        ontologyDesigner.fromJSON(savedLayout, { autoLayout: false, center: _layoutHasHidden, animate: false });
         
         // Re-enable auto-save after loading completes
         setTimeout(() => {
@@ -1893,7 +1906,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
 }
 
 /**
- * Create a Knowledge Graph group from the current business view's entities.
+ * Create a Graph Viewer group from the current business view's entities.
  */
 function createGroupFromView() {
     if (window.isActiveVersion === false) return;
@@ -1902,14 +1915,17 @@ function createGroupFromView() {
         return;
     }
 
-    const design = ontologyDesigner.toJSON();
-    const entities = design.entities || [];
-    if (entities.length === 0) {
-        showNotification('This view has no entities to group.', 'warning');
+    // Only the entities actually visible in the business view should become
+    // group members — hidden entities (curated out of the view) are excluded.
+    const memberNames = (typeof ontologyDesigner.getVisibleEntityNames === 'function'
+        ? ontologyDesigner.getVisibleEntityNames()
+        : (ontologyDesigner.toJSON().entities || []).map(e => e.name)
+    ).filter(Boolean);
+
+    if (memberNames.length === 0) {
+        showNotification('This view has no visible entities to group.', 'warning');
         return;
     }
-
-    const memberNames = entities.map(e => e.name).filter(Boolean);
     const viewName = currentDesignView || 'default';
     const defaultGroupName = viewName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
 

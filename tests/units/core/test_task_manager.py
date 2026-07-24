@@ -108,6 +108,27 @@ class TestTaskLifecycle:
         assert task.progress == 50
         assert task.message == "Halfway"
 
+    def test_update_progress_appends_log_entries(self, mgr):
+        task = mgr.create_task("T", "t")
+        mgr.start_task(task.id, "Starting")
+        mgr.update_progress(task.id, 10, "Step A")
+        mgr.update_progress(task.id, 20, "Step B")
+        mgr.update_progress(task.id, 30, "Step B")
+        assert [e.message for e in task.log_entries] == ["Starting", "Step A", "Step B"]
+
+    def test_log_entries_skip_iter_payload(self, mgr):
+        task = mgr.create_task("T", "t")
+        mgr.start_task(task.id)
+        mgr.update_progress(task.id, 5, "__iter__:{\"round\":1}")
+        mgr.update_progress(task.id, 10, "Visible")
+        assert [e.message for e in task.log_entries] == ["Starting...", "Visible"]
+
+    def test_to_dict_includes_log_entries(self, mgr):
+        task = mgr.create_task("T", "t")
+        mgr.start_task(task.id, "Go")
+        d = task.to_dict()
+        assert d["log_entries"] == [{"message": "Go", "at": d["log_entries"][0]["at"]}]
+
     def test_progress_clamped(self, mgr):
         task = mgr.create_task("T", "t")
         mgr.update_progress(task.id, 200)

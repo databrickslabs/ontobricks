@@ -25,6 +25,8 @@ async function loadValidationDetails() {
         updateMappingCard(data);
         updateDtwinCard(data);
         updateMissingItems(data);
+        loadPrecisionScore();
+        loadGraphMetricsSummary();
     } catch (error) {
         console.error('Error loading validation:', error);
         const banner = document.getElementById('domainHealthBanner');
@@ -35,6 +37,106 @@ async function loadValidationDetails() {
         }
     } finally {
         hideValidationLoadingOverlay();
+    }
+}
+
+/* ── Ontology precision score ─────────────────── */
+async function loadPrecisionScore() {
+    try {
+        const resp = await fetch('/domain/info', { credentials: 'same-origin' });
+        const data = await resp.json();
+        renderPrecisionScore(data && data.success ? data.precision_score : null);
+    } catch (e) {
+        renderPrecisionScore(null);
+    }
+}
+
+/* ── Graph structure metrics summary ─────────── */
+async function loadGraphMetricsSummary() {
+    const spinner = document.getElementById('graphStructureSpinner');
+    const content = document.getElementById('graphStructureContent');
+    const errorEl = document.getElementById('graphStructureError');
+    const emptyEl = document.getElementById('graphStructureEmpty');
+    const badge = document.getElementById('graphStructureBadge');
+    try {
+        const resp = await fetch('/dtwin/metrics/summary', { credentials: 'same-origin' });
+        const data = await resp.json();
+        // No analysis has been run yet for this version: the metrics are now
+        // computed asynchronously on the KG Analytics page and cached, so show
+        // a prompt instead of recomputing here.
+        if (data.success && data.has_result === false) {
+            if (spinner) spinner.classList.add('d-none');
+            if (emptyEl) emptyEl.classList.remove('d-none');
+            if (badge) { badge.textContent = 'Not computed'; badge.className = 'badge bg-secondary'; }
+            return;
+        }
+        if (!data.success || !data.stats) {
+            if (spinner) spinner.classList.add('d-none');
+            if (errorEl) errorEl.classList.remove('d-none');
+            if (badge) { badge.textContent = 'Unavailable'; badge.className = 'badge bg-secondary'; }
+            return;
+        }
+        const s = data.stats;
+        const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        setText('gsNodeCount', s.node_count != null ? s.node_count.toLocaleString() : '—');
+        setText('gsEdgeCount', s.edge_count != null ? s.edge_count.toLocaleString() : '—');
+        setText('gsComponents', s.connected_components != null ? s.connected_components : '—');
+        setText('gsAvgDegree', s.avg_degree != null ? s.avg_degree.toFixed(2) : '—');
+        setText('gsDensity', s.density != null ? s.density.toFixed(6) : '—');
+
+        const topEl = document.getElementById('gsTopPagerank');
+        if (topEl && data.top_pagerank && data.top_pagerank.length > 0) {
+            const items = data.top_pagerank.slice(0, 5).map(function (uri) {
+                const local = uri.split(/[/#]/).pop() || uri;
+                return '<span class="badge bg-light text-dark border me-1 mb-1" title="' + uri + '">' + local + '</span>';
+            });
+            topEl.innerHTML = items.join('');
+        }
+
+        if (spinner) spinner.classList.add('d-none');
+        if (content) content.classList.remove('d-none');
+        if (badge) { badge.textContent = s.node_count + ' nodes'; badge.className = 'badge bg-success'; }
+    } catch (e) {
+        if (spinner) spinner.classList.add('d-none');
+        if (errorEl) errorEl.classList.remove('d-none');
+        if (badge) { badge.textContent = 'Error'; badge.className = 'badge bg-danger'; }
+        console.warn('[GraphStructure] Could not load metrics summary:', e);
+    }
+}
+
+function renderPrecisionScore(score) {
+    const bar = document.getElementById('domainPrecisionBar');
+    const label = document.getElementById('domainPrecisionLabel');
+    const hint = document.getElementById('domainPrecisionHint');
+    if (!bar || !label) return;
+
+    if (score === null || score === undefined) {
+        bar.style.width = '0%';
+        bar.setAttribute('aria-valuenow', 0);
+        bar.className = 'progress-bar bg-secondary';
+        label.textContent = 'Not analyzed';
+        label.style.color = '';
+        if (hint) {
+            hint.innerHTML = '<i class="bi bi-info-circle me-1"></i>No precision ' +
+                'score yet — run a <strong>Pitfalls</strong> analysis to compute it.';
+        }
+        return;
+    }
+
+    const pct = Math.max(0, Math.min(100, score));
+    bar.style.width = pct + '%';
+    bar.setAttribute('aria-valuenow', pct);
+
+    let colour = 'bg-success';
+    if (pct < 50) colour = 'bg-danger';
+    else if (pct < 80) colour = 'bg-warning';
+    bar.className = 'progress-bar ' + colour;
+
+    label.textContent = pct + ' / 100';
+    label.style.color = pct < 50 ? '#dc3545' : pct < 80 ? '#fd7e14' : '#198754';
+    if (hint) {
+        hint.innerHTML = '<i class="bi bi-info-circle me-1"></i>Last score from the ' +
+            '<strong>Pitfalls</strong> analysis. Run an analysis to refresh.';
     }
 }
 
@@ -52,7 +154,7 @@ function updateHealthBanner(data) {
     if (ready && dtwin.indicator === 'green' && hasWarehouse) {
         banner.className = 'validation-health-banner health-ready mb-4';
         banner.innerHTML = '<i class="bi bi-check-circle-fill health-icon"></i>' +
-            '<div><strong>Domain fully operational</strong> — Ontology, Mapping, Warehouse and Digital Twin are all healthy.</div>';
+            '<div><strong>Domain fully operational</strong> — Ontology, Mapping, Warehouse and Knowledge Graph are all healthy.</div>';
         return;
     }
 
@@ -60,8 +162,8 @@ function updateHealthBanner(data) {
     if (!hasWarehouse) issues.push('SQL Warehouse not configured');
     if (!data.ontology_valid) issues.push('Ontology invalid');
     if (!data.mapping_valid) issues.push('Mapping incomplete');
-    if (dtwin.indicator === 'red') issues.push('Digital Twin not built');
-    else if (dtwin.indicator === 'orange') issues.push('Digital Twin partially ready');
+    if (dtwin.indicator === 'red') issues.push('Knowledge Graph not built');
+    else if (dtwin.indicator === 'orange') issues.push('Knowledge Graph partially ready');
 
     if (!data.ontology_valid || !data.mapping_valid || !hasWarehouse) {
         banner.className = 'validation-health-banner health-error mb-4';
@@ -349,7 +451,7 @@ function updateMappingCard(data) {
         : '';
 }
 
-/* ── Digital Twin detail card ─────────────────── */
+/* ── Knowledge Graph detail card ─────────────────── */
 
 /** Reusable existence badge (same pattern as query-sync.js _badge) */
 function _dtBadge(flag, okText, failText, unknownText) {

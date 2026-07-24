@@ -17,6 +17,14 @@ Permissions
    :undoc-members:
    :show-inheritance:
 
+Edit Lock (single-editor)
+--------------------------
+
+.. automodule:: back.objects.registry.lockmgt.EditLockService
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Build Scheduler
 ---------------
 

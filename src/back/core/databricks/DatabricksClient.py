@@ -10,8 +10,7 @@ from typing import Optional
 
 from .DatabricksAuth import DatabricksAuth
 from .SQLWarehouse import SQLWarehouse
-from .UnityCatalog import UnityCatalog
-from .VolumeFileService import VolumeFileService
+from .uc import UnityCatalog, VolumeFileService
 from .WorkspaceService import WorkspaceService
 from .DashboardService import DashboardService
 
@@ -101,6 +100,15 @@ class DatabricksClient:
 
     def get_tables(self, catalog, schema):
         return self.catalog.get_tables(catalog, schema)
+
+    def list_tables_and_views(self, catalog, schema):
+        return self.catalog.list_tables_and_views(catalog, schema)
+
+    def probe_schema_has_tables(self, catalog, schema):
+        return self.catalog.probe_schema_has_tables(catalog, schema)
+
+    def check_table_select_permission(self, catalog, schema, table):
+        return self.catalog.check_table_select_permission(catalog, schema, table)
 
     def get_table_columns(self, catalog, schema, table):
         return self.catalog.get_table_columns(catalog, schema, table)

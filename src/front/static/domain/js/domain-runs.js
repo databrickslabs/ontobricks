@@ -192,6 +192,10 @@ function showRunDetailsObj(run) {
     if (!run) return;
 
     const body = document.getElementById('runDetailsBody');
+    if (!body) {
+        console.error('[domain-runs] #runDetailsBody not found — modal missing from page template.');
+        return;
+    }
     const stats = run.stats || {};
 
     let html = '';
@@ -250,3 +254,16 @@ function showRunDetailsObj(run) {
 }
 
 window.showRunDetailsObj = showRunDetailsObj;
+
+document.addEventListener('sidebarSectionChanged', function (e) {
+    if (e.detail && e.detail.section === 'runs' && !_runsLoaded) {
+        loadDomainRuns();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    if (document.getElementById('runs-section') &&
+        document.getElementById('runs-section').classList.contains('active')) {
+        loadDomainRuns();
+    }
+});

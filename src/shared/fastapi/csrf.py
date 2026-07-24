@@ -41,7 +41,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        path = request.url.path
+        # Raw routed path, not request.url.path: the latter is reconstructed
+        # from the Host header and could be poisoned (BadHost / CVE-2026-48710).
+        path = request.scope["path"]
 
         if os.getenv("CSRF_DISABLED"):
             return await call_next(request)

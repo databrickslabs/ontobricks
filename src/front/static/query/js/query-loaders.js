@@ -158,7 +158,7 @@ async function loadOntologyClasses() {
             }
             console.log('Loaded ontology classes:', Object.keys(ontologyClasses).length, 'keys for', (data.config.classes || []).length, 'classes');
 
-            // Load properties (for label lookup in the knowledge graph)
+            // Load properties (for label lookup in the graph viewer)
             for (const prop of (data.config.properties || [])) {
                 const propInfo = {
                     name: prop.name || '',

@@ -70,7 +70,7 @@
   "success": true,
   "domains": [
     { "name": "customer_360", "description": "Customer 360 ontology" },
-    { "name": "supply_chain", "description": "Supply chain knowledge graph" }
+    { "name": "supply_chain", "description": "Supply chain graph viewer" }
   ]
 }</code></pre>
                 <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/domains">
@@ -299,17 +299,17 @@
             </div>
         </div>
 
-        <!-- ========== Digital Twin ========== -->
+        <!-- ========== Knowledge Graph ========== -->
         <div class="mt-2 pt-4 mb-1 border-top">
             <h5 class="fw-semibold mb-2 d-flex align-items-center gap-2">
-                <i class="bi bi-diagram-3 text-primary"></i> Digital Twin
+                <i class="bi bi-diagram-3 text-primary"></i> Knowledge Graph
             </h5>
             <p class="text-muted small mb-2">
                 Registry discovery, triple store operations, builds, triple queries, data quality, and inference.
             </p>
             <p class="small mb-0">
                 <a href="/api/docs#/Digital%20Twin" target="_blank" class="text-decoration-none">
-                    <i class="bi bi-journal-code me-1"></i>OpenAPI: Digital Twin
+                    <i class="bi bi-journal-code me-1"></i>OpenAPI: Knowledge Graph
                 </a>
             </p>
         </div>
@@ -541,7 +541,7 @@ Content-Type: application/json
                 <p class="small mb-2">
                     Search for entities by type and/or label text, then traverse their relationships
                     up to N levels deep (BFS graph walk). Returns all triples discovered during traversal,
-                    similar to the Knowledge Graph's Find &amp; Filter feature.
+                    similar to the Graph Viewer's Find &amp; Filter feature.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
@@ -803,7 +803,7 @@ Content-Type: application/json
                 <p class="small mb-2">
                     Start OWL 2 RL inference, SWRL rule execution, graph reasoning,
                     and constraint checking as an asynchronous task. Each phase can be toggled independently.
-                    Optionally append inferred triples to the knowledge graph or materialise to a Delta table.
+                    Optionally append inferred triples to the graph viewer or materialise to a Delta table.
                     Returns a <code>task_id</code> to poll progress via <code>GET /inference/{task_id}</code>.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
@@ -823,7 +823,7 @@ Content-Type: application/json
                         <tr><td><code>swrl</code></td><td>boolean</td><td><code>true</code></td><td>Run SWRL rule execution</td></tr>
                         <tr><td><code>graph</code></td><td>boolean</td><td><code>true</code></td><td>Run graph-structural reasoning</td></tr>
                         <tr><td><code>constraints</code></td><td>boolean</td><td><code>true</code></td><td>Run constraint checks</td></tr>
-                        <tr><td><code>append_graph</code></td><td>boolean</td><td><code>false</code></td><td>Append inferred triples to the knowledge graph</td></tr>
+                        <tr><td><code>append_graph</code></td><td>boolean</td><td><code>false</code></td><td>Append inferred triples to the graph viewer</td></tr>
                         <tr><td><code>materialize</code></td><td>boolean</td><td><code>false</code></td><td>Write inferred triples to a Delta table</td></tr>
                         <tr><td><code>materialize_table</code></td><td>string</td><td><code>null</code></td><td>Fully-qualified table name (catalog.schema.table)</td></tr>
                     </tbody>
@@ -1235,7 +1235,7 @@ Content-Type: application/json
 <pre class="small mb-2"><code>{
   "success": true,
   "domains": [
-    { "name": "customer_360", "description": "Customer 360 knowledge graph" }
+    { "name": "customer_360", "description": "Customer 360 graph viewer" }
   ]
 }</code></pre>
                 <button class="btn btn-sm btn-outline-primary" data-try-endpoint="/api/v1/graphql">
@@ -1285,7 +1285,7 @@ Content-Type: application/json
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Execute a GraphQL query against the domain's knowledge graph.
+                    Execute a GraphQL query against the domain's graph viewer.
                     The schema is derived from the ontology; clients request exactly the fields
                     they need, and relationships are resolved as nested objects.
                 </p>

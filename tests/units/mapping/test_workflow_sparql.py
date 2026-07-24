@@ -45,3 +45,25 @@ class TestSPARQLTranslationPipeline:
             relationship_mappings=relationship_mappings,
         )
         assert "success" in result
+
+    def test_id_column_not_none_after_always_quoted_template(
+        self, sample_ontology_config, sample_mapping_config
+    ):
+        """R2RMLGenerator now always double-quotes column names inside rr:template
+        (e.g. {"customer_id"}).  SparqlQueryRunner must still extract a non-None
+        id_column so the view builder doesn't emit 'Column None not found'.
+        """
+        base_uri = sample_ontology_config["base_uri"]
+        gen = R2RMLGenerator(base_uri)
+        r2rml = gen.generate_mapping(sample_mapping_config, sample_ontology_config)
+
+        entity_mappings, _ = extract_r2rml_mappings(r2rml)
+
+        for class_uri, mapping in entity_mappings.items():
+            assert mapping.get("id_column") is not None, (
+                f"id_column is None for {class_uri} — double-quoted template "
+                f"was not parsed correctly"
+            )
+            assert mapping["id_column"] != "None", (
+                f"id_column is the string 'None' for {class_uri}"
+            )

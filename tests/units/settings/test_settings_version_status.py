@@ -43,6 +43,7 @@ def _run(
     set_result=(True, "ok"),
     loaded_folder="other",
     loaded_version="9",
+    actor_email="alice@acme.com",
 ):
     """Drive ``set_registry_version_status_result`` against mock collaborators.
 
@@ -81,6 +82,7 @@ def _run(
             new_status,
             user_role=user_role,
             user_domain_role=user_domain_role,
+            actor_email=actor_email,
             session_mgr=session_mgr,
             settings=settings,
         )
@@ -251,6 +253,41 @@ def test_caches_invalidated_on_success():
 
     caches["registry"].assert_called_once()
     caches["version"].assert_called_once()
+
+
+# ----------------------------------------------------------------------
+# Audit attribution: who changed the status is recorded
+# ----------------------------------------------------------------------
+
+
+def test_status_change_records_actor_in_audit_log():
+    _, svc, _, _ = _run(
+        new_status="IN-REVIEW",
+        current_status="DRAFT",
+        actor_email="alice@acme.com",
+    )
+
+    svc.record_review_event.assert_called_once()
+    args, kwargs = svc.record_review_event.call_args
+    assert args[0] == "acme"          # folder
+    assert args[1] == "2"             # version
+    assert args[2] == "alice@acme.com"  # actor
+    assert args[3] == "submitted"     # action mapped from -> IN-REVIEW
+    assert kwargs["from_status"] == "DRAFT"
+    assert kwargs["to_status"] == "IN-REVIEW"
+
+
+def test_publish_status_change_maps_to_published_action():
+    _, svc, _, _ = _run(new_status="PUBLISHED", current_status="IN-REVIEW")
+    assert svc.record_review_event.call_args.args[3] == "published"
+
+
+def test_reopen_status_change_maps_to_reopened_action():
+    _, svc, _, _ = _run(
+        new_status="DRAFT", current_status="PUBLISHED",
+        user_role=ROLE_ADMIN, user_domain_role=ROLE_NONE,
+    )
+    assert svc.record_review_event.call_args.args[3] == "reopened"
 
 
 def test_loaded_version_is_synced_in_session():

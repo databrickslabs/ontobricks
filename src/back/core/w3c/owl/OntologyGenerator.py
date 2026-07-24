@@ -54,13 +54,22 @@ class OntologyGenerator:
         self.graph = Graph()
         self.ns = Namespace(self.base_uri)
 
+        # Index of class attributes (local name -> set of attribute local names)
+        # used to drop stale domain-scoped DatatypeProperty shadows on export.
+        self._class_attr_index = self._build_class_attr_index()
+
+        # Derive a clean lowercase prefix from the ontology name (e.g. "MyDomain" -> "mydomain").
+        # Fall back to the empty prefix only when no name is available.
+        _raw = re.sub(r"[^a-zA-Z0-9]", "", self.ontology_name or "").lower()
+        self._domain_prefix = _raw or ""
+
         # Bind namespaces
         self.graph.bind("owl", OWL)
         self.graph.bind("rdf", RDF)
         self.graph.bind("rdfs", RDFS)
         self.graph.bind("xsd", XSD)
         self.graph.bind("ontobricks", ONTOBRICKS_NS)
-        self.graph.bind("", self.ns)
+        self.graph.bind(self._domain_prefix, self.ns)
 
     def generate(self) -> str:
         """Generate OWL content.
@@ -102,6 +111,61 @@ class OntologyGenerator:
 
         # Serialize to Turtle format
         return self.graph.serialize(format="turtle")
+
+    @staticmethod
+    def _local_name(ref: str) -> str:
+        """Return the local name of a URI/CURIE/plain name (after ``#`` or ``/``)."""
+        if not ref:
+            return ""
+        return ref.rsplit("#", 1)[-1].rsplit("/", 1)[-1]
+
+    def _build_class_attr_index(self) -> Dict[str, set]:
+        """Map each class (by name and URI local name) to its attribute names.
+
+        ``classes[].dataProperties`` is the authoritative store for class
+        attributes; this index lets :meth:`_add_property` recognise — and skip —
+        domain-scoped ``DatatypeProperty`` shadows whose attribute was deleted
+        from its owning class (issue #50).
+        """
+        index: Dict[str, set] = {}
+        for cls in self.classes:
+            attrs = set()
+            for dp in cls.get("dataProperties", []) or []:
+                dp_name = dp if isinstance(dp, str) else (
+                    dp.get("name") or dp.get("localName") or ""
+                )
+                local = self._local_name(dp_name).lower()
+                if local:
+                    attrs.add(local)
+
+            keys = set()
+            name = (cls.get("name") or "").strip()
+            if name:
+                keys.add(name.lower())
+                keys.add(self._local_name(name).lower())
+            uri = cls.get("uri") or ""
+            if uri:
+                keys.add(self._local_name(uri).lower())
+            for key in keys:
+                if key:
+                    index.setdefault(key, set()).update(attrs)
+        return index
+
+    def _is_stale_datatype_shadow(self, prop_name: str, domain: str) -> bool:
+        """True when *prop_name* is a domain-scoped datatype attribute the
+        owning class no longer declares.
+
+        Conservative: returns False when the domain is empty or the domain class
+        is unknown to this generator, so only attributes explicitly removed from
+        a known class are dropped.
+        """
+        domain_local = self._local_name(domain).lower()
+        if not domain_local:
+            return False
+        class_attrs = self._class_attr_index.get(domain_local)
+        if class_attrs is None:
+            return False
+        return self._local_name(prop_name).lower() not in class_attrs
 
     def _resolve_uri(self, ref: str):
         """Convert a name or full URI string to a URIRef, or None if empty."""
@@ -433,7 +497,7 @@ class OntologyGenerator:
         """Add a class to the ontology.
 
         Args:
-            cls: Class definition with 'name', 'label', 'comment', 'parent', 'emoji', 'dashboard', 'dataProperties'
+            cls: Class definition with 'name', 'label', 'comment', 'parent', 'emoji', 'dashboard', 'dataset', 'dataProperties'
         """
         class_name = cls.get("name", "").strip()
         if not class_name:
@@ -490,6 +554,13 @@ class OntologyGenerator:
         if bridges:
             self.graph.add(
                 (class_uri, ONTOBRICKS_NS.bridges, Literal(json.dumps(bridges)))
+            )
+
+        # Add linked Unity Catalog dataset (table/view) as JSON string
+        dataset = cls.get("dataset")
+        if dataset:
+            self.graph.add(
+                (class_uri, ONTOBRICKS_NS.dataset, Literal(json.dumps(dataset)))
             )
 
         # Add parent class (subClassOf)
@@ -617,10 +688,25 @@ class OntologyGenerator:
         if not prop_name:
             return
 
-        prop_uri = URIRef(self.base_uri + prop_name)
-
         # Determine property type
         prop_type = prop.get("type", "ObjectProperty")
+
+        # Skip stale class-attribute shadows: a domain-scoped DatatypeProperty
+        # whose owning class no longer declares it (deleted in the designer).
+        # The class's dataProperties list is the single source of truth for
+        # attributes (issue #50).
+        if prop_type == "DatatypeProperty" and self._is_stale_datatype_shadow(
+            prop_name, prop.get("domain", "")
+        ):
+            logger.debug(
+                "Skipping stale datatype attribute shadow: %s (domain %s)",
+                prop_name,
+                prop.get("domain", ""),
+            )
+            return
+
+        prop_uri = URIRef(self.base_uri + prop_name)
+
         if prop_type == "DatatypeProperty":
             self.graph.add((prop_uri, RDF.type, OWL.DatatypeProperty))
         else:

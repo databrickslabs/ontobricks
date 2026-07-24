@@ -48,6 +48,7 @@ opt in to the mutating ones with ``ONTOBRICKS_LIVE_ALLOW_MUTATING=1``
 
 import atexit
 import os
+import pathlib
 import socket
 import subprocess
 import sys
@@ -62,10 +63,40 @@ from tests.fixtures.databricks_auth import DatabricksAuth
 E2E_PORT = 18765
 E2E_BASE = f"http://localhost:{E2E_PORT}"
 
+_E2E_DIR = pathlib.Path(__file__).parent.resolve()
+_SCENARIOS_DIR = _E2E_DIR / "scenarios"
+
 
 def _live_base() -> Optional[str]:
     """Deployed-app base URL for live mode, or None for local mode."""
     return os.environ.get("ONTOBRICKS_LIVE_BASE") or None
+
+
+def _e2e_explicitly_selected(config) -> bool:
+    """True when the caller clearly asked for the e2e browser suite.
+
+    The e2e suite drives a **session-scoped** ``sync_playwright`` browser
+    whose event loop stays alive in-process for the rest of the session; when
+    it runs alongside the unit/mcp suites it breaks ``pytest-asyncio`` for
+    every async test collected after it. It is a *nightly-only* suite, so the
+    routine command (``uv run pytest -q -m "not scenario"``) must not run it —
+    but a developer who explicitly targets it (``pytest tests/e2e``,
+    ``pytest tests/e2e/scenarios/``, ``-m e2e``, ``-m scenario``, or live
+    mode) must still get it.
+    """
+    if _live_base():
+        return True
+    markexpr = (getattr(config.option, "markexpr", "") or "").strip()
+    # ``-m "not scenario"`` must not count as an explicit e2e/scenario request.
+    if markexpr and not markexpr.startswith("not "):
+        if "e2e" in markexpr or "scenario" in markexpr:
+            return True
+    try:
+        args = list(config.invocation_params.args)
+    except Exception:  # noqa: BLE001 — invocation params are best-effort
+        args = []
+    normalized = [str(a).replace("\\", "/") for a in args]
+    return any("tests/e2e" in a or a.endswith("/e2e") for a in normalized)
 
 
 def _install_redirect_fix(ctx, base: str, token: str) -> None:
@@ -379,12 +410,41 @@ _LIVE_SKIP_MUTATING = (
 
 
 def pytest_collection_modifyitems(config, items):
-    """Live-mode gating (additive to the playwright guard in tests/conftest.py).
+    """Tag / gate the e2e browser suite.
 
-    Only acts when ``ONTOBRICKS_LIVE_BASE`` is set: skips environment-specific
-    flows always, and durable-mutating flows unless the caller opts in with
-    ``ONTOBRICKS_LIVE_ALLOW_MUTATING=1``.
+    Two responsibilities:
+
+    1. **Nightly-only isolation** — tag browser e2e tests with the ``e2e``
+       marker and, unless the suite is explicitly targeted, skip **every**
+       test under ``tests/e2e/`` (including ``tests/e2e/scenarios/``).
+       ``test_full_lifecycle.py`` uses the session-scoped Playwright loop too;
+       leaving scenarios un-gated poisons ``pytest-asyncio`` for MCP/API tests
+       collected later in a bare ``pytest -q`` run.
+    2. **Live-mode gating** — when ``ONTOBRICKS_LIVE_BASE`` is set, skip
+       environment-specific flows always and durable-mutating flows unless the
+       caller opts in with ``ONTOBRICKS_LIVE_ALLOW_MUTATING=1``.
+
+    A sub-directory ``conftest`` hook still receives the *whole* session's
+    item list, so we filter to items under this directory first.
     """
+    targeted = _e2e_explicitly_selected(config)
+    skip_nightly = pytest.mark.skip(
+        reason="e2e browser suite is nightly-only; run it explicitly with "
+        "`uv run pytest tests/e2e` or `-m scenario` (skipped in routine runs "
+        "so the session-scoped Playwright loop can't break pytest-asyncio)."
+    )
+    for item in items:
+        item_path = pathlib.Path(
+            str(getattr(item, "path", item.fspath))
+        ).resolve()
+        under_e2e = _E2E_DIR in item_path.parents or item_path == _E2E_DIR
+        under_scenarios = _SCENARIOS_DIR in item_path.parents
+        if under_e2e:
+            if not under_scenarios:
+                item.add_marker(pytest.mark.e2e)
+            if not targeted:
+                item.add_marker(skip_nightly)
+
     if not _live_base():
         return
     allow_mut = os.environ.get("ONTOBRICKS_LIVE_ALLOW_MUTATING") == "1"

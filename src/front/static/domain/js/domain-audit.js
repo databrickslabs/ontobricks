@@ -2,7 +2,8 @@
  * Domain → Audit trail
  *
  * One unified, newest-first activity feed for the loaded domain. It
- * interleaves two registry streams returned by GET /domain/audit-trail:
+ * interleaves three registry streams returned by GET /domain/audit-trail:
+ *   - ontology/mapping change audit (who changed what, and when)
  *   - review/validation decisions (status switches + their comments)
  *   - build-run history (runs + results)
  *
@@ -21,7 +22,37 @@
         commented: { icon: 'chat-left-text', cls: 'text-muted', label: 'Comment' },
     };
 
-    let _cache = { events: [], runs: [], versions: [], current: '' };
+    // Change-event action -> { icon, cls, label }. Falls back to a generic
+    // label built from the action string for any action not listed here.
+    const CHANGE_META = {
+        class_added: { icon: 'plus-circle', cls: 'text-success', label: 'Class added' },
+        class_updated: { icon: 'pencil', cls: 'text-primary', label: 'Class updated' },
+        class_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Class removed' },
+        property_added: { icon: 'plus-circle', cls: 'text-success', label: 'Property added' },
+        property_updated: { icon: 'pencil', cls: 'text-primary', label: 'Property updated' },
+        property_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Property removed' },
+        mapping_entity_added: { icon: 'plus-circle', cls: 'text-success', label: 'Entity mapping added' },
+        mapping_entity_updated: { icon: 'pencil', cls: 'text-primary', label: 'Entity mapping updated' },
+        mapping_entity_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Entity mapping removed' },
+        mapping_relationship_added: { icon: 'plus-circle', cls: 'text-success', label: 'Relationship mapping added' },
+        mapping_relationship_updated: { icon: 'pencil', cls: 'text-primary', label: 'Relationship mapping updated' },
+        mapping_relationship_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Relationship mapping removed' },
+        mapping_excluded: { icon: 'eye-slash', cls: 'text-secondary', label: 'Mappings excluded' },
+        mapping_included: { icon: 'eye', cls: 'text-secondary', label: 'Mappings included' },
+        shacl_added: { icon: 'plus-circle', cls: 'text-success', label: 'SHACL shape added' },
+        shacl_updated: { icon: 'pencil', cls: 'text-primary', label: 'SHACL shape updated' },
+        shacl_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'SHACL shape removed' },
+        swrl_added: { icon: 'plus-circle', cls: 'text-success', label: 'SWRL rule added' },
+        swrl_updated: { icon: 'pencil', cls: 'text-primary', label: 'SWRL rule updated' },
+        swrl_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'SWRL rule removed' },
+        group_added: { icon: 'plus-circle', cls: 'text-success', label: 'Group added' },
+        group_updated: { icon: 'pencil', cls: 'text-primary', label: 'Group updated' },
+        group_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Group removed' },
+        ontology_reset: { icon: 'arrow-counterclockwise', cls: 'text-warning', label: 'Ontology reset' },
+        mapping_reset: { icon: 'arrow-counterclockwise', cls: 'text-warning', label: 'Mappings reset' },
+    };
+
+    let _cache = { events: [], runs: [], changes: [], versions: [], current: '' };
     let _filter = 'all';
     let _version = '';  // '' = all versions
 
@@ -62,6 +93,18 @@
         return div.innerHTML;
     }
 
+    function renderMd(text) {
+        if (!text) return '';
+        if (typeof window.marked !== 'undefined' && window.marked.parse) {
+            try {
+                window.marked.setOptions({ breaks: true, gfm: true });
+                return window.marked.parse(text);
+            } catch (e) { /* fall through */ }
+        }
+        // Fallback: escape and convert newlines to <br>
+        return esc(text).replace(/\n/g, '<br>');
+    }
+
     function fmtTime(iso) {
         if (!iso) return '';
         const d = new Date(iso);
@@ -97,6 +140,7 @@
             _cache = {
                 events: data.events || [],
                 runs: data.runs || [],
+                changes: data.changes || [],
                 versions: data.versions || [],
                 current: data.current_version || '',
             };
@@ -112,16 +156,27 @@
         return _version === '' || String(v == null ? '' : v) === _version;
     }
 
+    function shows(kind) {
+        return _filter === 'all' || _filter === kind;
+    }
+
     function buildItems() {
         const items = [];
-        if (_filter !== 'build') {
+        if (shows('changes')) {
+            _cache.changes.forEach((c) => {
+                if (matchesVersion(c.version)) {
+                    items.push({ kind: 'changes', ts: c.occurred_at || c.created_at, raw: c });
+                }
+            });
+        }
+        if (shows('review')) {
             _cache.events.forEach((e) => {
                 if (matchesVersion(e.version)) {
                     items.push({ kind: 'review', ts: e.created_at, raw: e });
                 }
             });
         }
-        if (_filter !== 'review') {
+        if (shows('build')) {
             _cache.runs.forEach((r, i) => {
                 if (matchesVersion(r.version)) {
                     items.push({ kind: 'build', ts: r.started_at || r.finished_at, raw: r, idx: i });
@@ -143,8 +198,11 @@
             return;
         }
         body.innerHTML = '<div class="audit-timeline">' +
-            items.map((it) => it.kind === 'review'
-                ? reviewItem(it.raw) : buildItem(it.raw, it.idx)).join('') +
+            items.map((it) => {
+                if (it.kind === 'review') return reviewItem(it.raw);
+                if (it.kind === 'changes') return changeItem(it.raw);
+                return buildItem(it.raw, it.idx);
+            }).join('') +
             '</div>';
         body.querySelectorAll('button[data-run-idx]').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -169,7 +227,7 @@
             : '';
         const ver = e.version ? '<span class="badge bg-secondary ms-1">v' + esc(e.version) + '</span>' : '';
         const comment = e.comment
-            ? '<div class="audit-comment">' + esc(e.comment) + '</div>'
+            ? '<div class="audit-comment oc-md">' + renderMd(e.comment) + '</div>'
             : '';
         const head = '<div class="audit-head">' +
             '<span class="audit-title ' + meta.cls + '">' + esc(meta.label) + '</span>' +
@@ -177,6 +235,31 @@
             '<span class="audit-time">' + fmtTime(e.created_at) + '</span></div>';
         const who = '<div class="audit-meta">' + esc(e.actor || 'unknown') + '</div>';
         return node('audit-marker-review', meta.icon, head + comment + who);
+    }
+
+    function prettyAction(action) {
+        return String(action || '')
+            .replace(/_/g, ' ')
+            .replace(/^\w/, (c) => c.toUpperCase());
+    }
+
+    function changeItem(c) {
+        const meta = CHANGE_META[c.action] ||
+            { icon: 'pencil-square', cls: 'text-primary', label: prettyAction(c.action) };
+        const ver = c.version ? '<span class="badge bg-secondary ms-1">v' + esc(c.version) + '</span>' : '';
+        const agent = (c.source === 'agent')
+            ? '<span class="badge bg-info-subtle text-info-emphasis ms-1" title="Change made by the AI assistant">' +
+              '<i class="bi bi-robot me-1"></i>AI</span>'
+            : '';
+        const ref = (c.summary || c.entity_ref)
+            ? '<div class="audit-comment"><code>' + esc(c.summary || c.entity_ref) + '</code></div>'
+            : '';
+        const head = '<div class="audit-head">' +
+            '<span class="audit-title ' + meta.cls + '">' + esc(meta.label) + '</span>' +
+            ver + agent +
+            '<span class="audit-time">' + fmtTime(c.occurred_at || c.created_at) + '</span></div>';
+        const who = '<div class="audit-meta">' + esc(c.actor || 'unknown') + '</div>';
+        return node('audit-marker-change', meta.icon, head + ref + who);
     }
 
     function buildItem(run, idx) {
@@ -196,7 +279,7 @@
         const metaLine = bits.length ? '<div class="audit-meta">' + bits.join(' &middot; ') + '</div>' : '';
         const msg = run.error
             ? '<div class="audit-comment text-danger">' + esc(run.error) + '</div>'
-            : (run.message ? '<div class="audit-comment">' + esc(run.message) + '</div>' : '');
+            : (run.message ? '<div class="audit-comment oc-md">' + renderMd(run.message) + '</div>' : '');
         const detailsBtn = '<button type="button" class="btn btn-sm btn-outline-primary audit-details" ' +
             'data-run-idx="' + idx + '" title="View build run details">' +
             '<i class="bi bi-eye"></i></button>';

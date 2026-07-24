@@ -19,7 +19,7 @@ For the developer guide on *adding a new engine*, see `docs/graphdb-integration.
 6. [Postgres schema layout](#6-postgres-schema-layout)
 7. [Scripts reference](#7-scripts-reference)
 8. [Permissions bootstrap](#8-permissions-bootstrap)
-9. [Digital Twin build — step by step](#9-digital-twin-build--step-by-step)
+9. [Knowledge Graph build — step by step](#9-digital-twin-build--step-by-step)
 10. [Troubleshooting](#10-troubleshooting)
 
 ---
@@ -30,9 +30,8 @@ For the developer guide on *adding a new engine*, see `docs/graphdb-integration.
 ┌─────────────────────────────────────────────────┐
 │  OntoBricks (FastAPI)                           │
 │                                                 │
-│  TripleStoreFactory                             │
-│    └─ GraphDBFactory.create(engine="lakebase")  │
-│         └─ LakebaseFlatStore                    │
+│  GraphDBFactory.create(engine="lakebase")       │
+│    └─ LakebaseFlatStore                          │
 │              │                                  │
 │              │  COPY FROM STDIN / INSERT         │
 │              ▼                                  │
@@ -76,7 +75,7 @@ The Graph DB engine is selected under **Settings → Graph DB** and is always `l
 | SQL Warehouse | Standard or Serverless; bound as the `sql-warehouse` resource |
 | Unity Catalog | A catalog + schema for the registry and triplestore views |
 | Lakebase feature | Must be enabled on the workspace (contact workspace admin if absent) |
-| `psql` on PATH | Required by `scripts/bootstrap-lakebase-perms.sh` (`brew install libpq && brew link --force libpq` on macOS) |
+| `psql` on PATH | Required by `scripts/bootstrap/lakebase-perms.sh` (`brew install libpq && brew link --force libpq` on macOS) |
 
 ### 2.2 — Python dependencies
 
@@ -104,7 +103,7 @@ Lakebase has **two project-creation APIs** with different capabilities:
 
 The **Databricks UI "New project" button** calls the new API and produces a project
 that is **incompatible** with `POST /api/2.0/database/synced_tables` (used by the
-Digital Twin `managed_synced` build mode). Always use `scripts/setup-lakebase.sh`
+Knowledge Graph `managed_synced` build mode). Always use `scripts/bootstrap/setup-lakebase.sh`
 to provision the project.
 
 ---
@@ -116,7 +115,7 @@ to provision the project.
 Run once per workspace before the first deploy:
 
 ```bash
-./scripts/setup-lakebase.sh --name ontobricks-demo --capacity CU_2
+./scripts/bootstrap/setup-lakebase.sh --name ontobricks-demo --capacity CU_2
 ```
 
 The script:
@@ -146,8 +145,8 @@ two scripts by hand. In **Settings → Lakebase → Connection** tab there is a
 compute capacity, branch, Postgres database, graph schema, and the MCP app
 name, then click **Create graph DB**. The action runs as an async job (a
 progress bar + per-step log update live, polling `GET /tasks/{id}` like a
-Digital Twin build) and performs the same flow as
-`scripts/setup-lakebase.sh` + `scripts/bootstrap-lakebase-perms.sh`:
+Knowledge Graph build) and performs the same flow as
+`scripts/bootstrap/setup-lakebase.sh` + `scripts/bootstrap/lakebase-perms.sh`:
 
 1. Create the Lakebase instance (via the synced-tables-compatible
    `/api/2.0/database/instances` API) and wait for `AVAILABLE`.
@@ -165,7 +164,7 @@ On success the chosen project/branch/database/schema are written into
 > step with a clear message. Schema grants to the MCP SP are best-effort and
 > surfaced as warnings when the MCP Postgres role does not exist yet. In those
 > cases the shell scripts (`POST /api/2.0/database/instances` as a human owner)
-> remain the documented fallback — re-run `scripts/bootstrap-lakebase-perms.sh`
+> remain the documented fallback — re-run `scripts/bootstrap/lakebase-perms.sh`
 > after the apps have connected once.
 
 ### 3.2 — After the script
@@ -317,10 +316,10 @@ Enable it with:
 - The app process should not be the bottleneck during builds.
 
 **Additional requirements for `managed_synced`:**
-- The Lakebase project must be provisioned via `scripts/setup-lakebase.sh`
+- The Lakebase project must be provisioned via `scripts/bootstrap/setup-lakebase.sh`
   (provisioned instance, not autoscaling-only) — see §2.3.
 - The app SP needs `CAN_USE` on the Lakebase database instance — applied by
-  `scripts/bootstrap-lakebase-perms.sh`.
+  `scripts/bootstrap/lakebase-perms.sh`.
 - The UC schema for the synced table must exist before the first build
   (`CREATE SCHEMA IF NOT EXISTS` is run automatically by the build pipeline).
 
@@ -335,7 +334,7 @@ OntoBricks uses up to three Postgres schemas in the same Lakebase project:
 | Schema | Default name | Created by | Purpose |
 |--------|-------------|-----------|---------|
 | Registry | `ontobricks_registry` | `Settings → Registry → Initialize` | Project metadata, domain configs, schedule runs |
-| Graph DB | `ontobricks_graph` | First Digital Twin Build | Per-domain triple tables (and views in `managed_synced`) |
+| Graph DB | `ontobricks_graph` | First Knowledge Graph Build | Per-domain triple tables (and views in `managed_synced`) |
 | Sync | *(UC registry schema segment)* | First Lakeflow snapshot | Auto-created by Lakeflow; mirrors the UC `<schema>` segment |
 
 ### 6.2 — Objects per graph version
@@ -360,47 +359,63 @@ All SPARQL queries and graph traversal operations target the back-compat name
 3. `app_managed`: `DROP TABLE IF EXISTS g_<domain>_v<n>_sync` (sync table)
    `managed_synced`: `SyncedTableManager.delete(uc_name, purge_data=True)` — removes the UC synced-table registration and the underlying Postgres `_sync` table
 
+### 6.4 — Long literal objects (`object_hash`)
+
+Postgres btree indexes (including the composite primary key) cannot index TEXT
+values longer than ~2704 bytes. OntoBricks therefore stores the full `object`
+literal for reads/deletes but keys uniqueness on a generated `object_hash`
+column (`digest(object, 'sha256')` via the `pgcrypto` extension).
+
+- **`app_managed`**: `*_sync` and `*__app` tables are created with
+  `PRIMARY KEY (subject, predicate, object_hash)`.
+- **`managed_synced`**: the Delta warehouse VIEW exposes `object_hash`
+  (`sha2(object, 256)`) and Lakeflow uses
+  `primary_key_columns = [subject, predicate, object_hash]`.
+
+Graphs created before this layout need a **full Knowledge Graph rebuild** (drop
++ recreate) to pick up the new schema.
+
 ---
 
 ## 7. Scripts reference
 
-### `scripts/setup-lakebase.sh`
+### `scripts/bootstrap/setup-lakebase.sh`
 
 Provisions a Lakebase project via `POST /api/2.0/database/instances` (synced-tables-compatible).
 
 ```bash
 # Basic usage
-./scripts/setup-lakebase.sh --name my-project --capacity CU_2
+./scripts/bootstrap/setup-lakebase.sh --name my-project --capacity CU_2
 
 # Dry-run to preview
-./scripts/setup-lakebase.sh --name my-project --dry-run
+./scripts/bootstrap/setup-lakebase.sh --name my-project --dry-run
 
 # Custom profile
-./scripts/setup-lakebase.sh --name my-project --profile prod-workspace
+./scripts/bootstrap/setup-lakebase.sh --name my-project --profile prod-workspace
 ```
 
 **Outputs:** prints the `db-…` resource id that goes into `deploy.config.sh > DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT`.
 
-### `scripts/bootstrap-lakebase-perms.sh`
+### `scripts/bootstrap/lakebase-perms.sh`
 
 Grants the app service principals the Postgres and control-plane permissions
 they need to operate. **Idempotent — safe to run repeatedly.**
 
 ```bash
 # Registry schema
-scripts/bootstrap-lakebase-perms.sh \
+scripts/bootstrap/lakebase-perms.sh \
   -i ontobricks-demo2 -b production \
   -d ontobricks_demo -s ontobricks_registry \
   -a ontobricks-030 -a mcp-ontobricks
 
 # Graph DB schema (run after first Build)
-scripts/bootstrap-lakebase-perms.sh \
+scripts/bootstrap/lakebase-perms.sh \
   -i ontobricks-demo2 -b production \
   -d ontobricks_demo -s ontobricks_graph \
   -a ontobricks-030 -a mcp-ontobricks
 
 # Sync schema (managed_synced only — run after first Lakeflow snapshot)
-scripts/bootstrap-lakebase-perms.sh \
+scripts/bootstrap/lakebase-perms.sh \
   -i ontobricks-demo2 -b production \
   -d ontobricks_demo -s ontobricks \
   -a ontobricks-030 -a mcp-ontobricks
@@ -456,7 +471,7 @@ Step 2:  Open app → Settings → Registry → Initialize
          → Creates 'ontobricks_registry' schema in Postgres
 Step 3:  make bootstrap-lakebase  (or make deploy again — idempotent)
          → Applies USAGE + DML on 'ontobricks_registry' schema
-Step 4:  Build a Digital Twin (Settings → Digital Twin → Build)
+Step 4:  Build a Knowledge Graph (Settings → Knowledge Graph → Build)
          → Creates 'ontobricks_graph' schema (first build)
 Step 5:  make bootstrap-lakebase  (or make deploy again)
          → Applies USAGE + DML on 'ontobricks_graph' schema
@@ -488,7 +503,7 @@ databricks permissions get database-instances/<instance-id> -o json
 
 ---
 
-## 9. Digital Twin build — step by step
+## 9. Knowledge Graph build — step by step
 
 This section describes what the Lakebase engine does during a **Build** for the
 `managed_synced` mode. For `app_managed`, steps 3–6 are replaced by direct
@@ -523,7 +538,7 @@ The Synced Tables API only accepts provisioned instance names.
 
 **Fix:**
 1. Delete the old project from the UI.
-2. Re-create it with `scripts/setup-lakebase.sh`.
+2. Re-create it with `scripts/bootstrap/setup-lakebase.sh`.
 3. Update `DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT` in `deploy.config.sh`.
 4. `make deploy`.
 
@@ -635,6 +650,25 @@ and the project+branch pair. This means `lakebase_project` or
 
 ---
 
+### Build uses `app_managed` even though `managed_synced` is configured in Settings
+
+**Symptom:** The build log shows `sync_mode=app_managed` and iterates triples
+through the app process. The Settings → Graph DB page correctly displays the
+saved config with `"sync_mode": "managed_synced"`.
+
+**Cause (fixed in v0.6.0):** On cold start, if the Lakebase store was briefly
+unavailable (typical the first few seconds after the app container started), the
+`GlobalConfigService` in-memory cache was populated with the empty template
+(`_empty()`). Subsequent reads within the 5-minute cache TTL returned the empty
+config, so the build resolved `sync_mode` as missing and silently fell back to
+`app_managed`. The Settings page was not affected because it always forces a
+fresh read.
+
+**Fix:** Upgrade to v0.6.0 — `_resolve_lakebase_mode` now bypasses the cache
+via `force=True`.  No configuration change needed; simply redeploy.
+
+---
+
 ### Settings → Graph DB: catalog list is empty
 
 The UC catalog dropdown uses the configured SQL Warehouse. If the warehouse is not
@@ -663,7 +697,7 @@ instead of `window.confirm()`. If you see this on an older deployment,
 
 ```
 [ ] 1. Create Lakebase project:
-        ./scripts/setup-lakebase.sh --name <name> --capacity CU_2
+        ./scripts/bootstrap/setup-lakebase.sh --name <name> --capacity CU_2
 [ ] 2. Copy the printed db-… id into deploy.config.sh:
         DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT="db-xxxx-xxxxxxxxxx"
 [ ] 3. Set DEFAULT_LAKEBASE_PROJECT and DEFAULT_LAKEBASE_BRANCH in deploy.config.sh
@@ -674,6 +708,6 @@ instead of `window.confirm()`. If you see this on an older deployment,
 [ ] 8. Open Settings → Graph DB
         - Engine: lakebase
         - Config: { "sync_mode": "app_managed" }  (or "managed_synced")
-[ ] 9. Build your first Digital Twin
+[ ] 9. Build your first Knowledge Graph
 [ ] 10. make bootstrap-lakebase again (grants on ontobricks_graph schema)
 ```

@@ -61,6 +61,31 @@ class TestClassGeneration:
         owl = gen.generate()
         assert "👤" in owl
 
+    def test_class_with_dataset_roundtrip(self):
+        dataset = {
+            "catalog": "main",
+            "schema": "sales",
+            "asset": "orders",
+            "type": "TABLE",
+            "fullName": "main.sales.orders",
+        }
+        classes = [{"name": "Customer", "label": "Customer", "dataset": dataset}]
+        gen = _make_generator(classes=classes)
+        owl = gen.generate()
+        assert "dataset" in owl
+
+        parser = OntologyParser(owl_content=owl)
+        parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["dataset"] == dataset
+
+    def test_class_without_dataset_has_none(self):
+        classes = [{"name": "Customer", "label": "Customer"}]
+        gen = _make_generator(classes=classes)
+        owl = gen.generate()
+        parser = OntologyParser(owl_content=owl)
+        parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["dataset"] is None
+
     def test_class_with_data_properties(self):
         classes = [
             {
@@ -186,6 +211,119 @@ class TestExpressionGeneration:
         gen = _make_generator(expressions=expressions)
         owl = gen.generate()
         assert "intersectionOf" in owl
+
+
+class TestDeletedAttributeNotReexported:
+    """Regression tests for issue #50 — deleted attributes reappear in OWL export.
+
+    ``classes[].dataProperties`` is the authoritative store for class attributes.
+    A domain-scoped ``DatatypeProperty`` left in the top-level ``properties[]``
+    list (a parser shadow) must not be re-emitted once the attribute has been
+    removed from its owning class.
+    """
+
+    def test_stale_datatype_shadow_skipped(self):
+        # Designer state after deleting "firstName": only "lastName" remains on
+        # the class, but both shadows still linger in properties[].
+        classes = [
+            {
+                "name": "Customer",
+                "label": "Customer",
+                "dataProperties": [{"name": "lastName", "label": "Last Name"}],
+            }
+        ]
+        properties = [
+            {
+                "name": "firstName",
+                "type": "DatatypeProperty",
+                "domain": "Customer",
+                "range": "xsd:string",
+            },
+            {
+                "name": "lastName",
+                "type": "DatatypeProperty",
+                "domain": "Customer",
+                "range": "xsd:string",
+            },
+        ]
+        gen = _make_generator(classes=classes, properties=properties)
+        owl = gen.generate()
+        assert "lastName" in owl
+        assert "firstName" not in owl
+
+    def test_surviving_datatype_shadow_kept(self):
+        # When the class still declares the attribute, the shadow is preserved
+        # so its declared range survives the round-trip.
+        classes = [
+            {
+                "name": "Customer",
+                "label": "Customer",
+                "dataProperties": [{"name": "age", "label": "Age"}],
+            }
+        ]
+        properties = [
+            {
+                "name": "age",
+                "type": "DatatypeProperty",
+                "domain": "Customer",
+                "range": "xsd:integer",
+            }
+        ]
+        gen = _make_generator(classes=classes, properties=properties)
+        owl = gen.generate()
+        assert "age" in owl
+        assert "xsd:integer" in owl
+
+    def test_datatype_with_unknown_domain_kept(self):
+        # A datatype property whose domain class is not in the generator's class
+        # set cannot be proven stale and must be kept (conservative).
+        properties = [
+            {
+                "name": "globalId",
+                "type": "DatatypeProperty",
+                "domain": "Customer",
+                "range": "xsd:string",
+            }
+        ]
+        gen = _make_generator(properties=properties)
+        owl = gen.generate()
+        assert "globalId" in owl
+
+    def test_roundtrip_delete_then_export(self):
+        owl_in = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix : <http://test.org/ontology#> .
+
+<http://test.org/ontology> a owl:Ontology ; rdfs:label "T" .
+:Customer a owl:Class ; rdfs:label "Customer" .
+:firstName a owl:DatatypeProperty ; rdfs:label "firstName" ;
+    rdfs:domain :Customer ; rdfs:range xsd:string .
+:lastName a owl:DatatypeProperty ; rdfs:label "lastName" ;
+    rdfs:domain :Customer ; rdfs:range xsd:string .
+"""
+        parser = OntologyParser(owl_in)
+        info = parser.get_ontology_info()
+        classes = parser.get_classes()
+        properties = parser.get_properties()
+
+        # Designer deletes "firstName" from the class attribute list only.
+        for cls in classes:
+            if cls["name"] == "Customer":
+                cls["dataProperties"] = [
+                    dp for dp in cls["dataProperties"] if dp["name"] != "firstName"
+                ]
+
+        gen = OntologyGenerator(
+            base_uri=info["namespace"],
+            ontology_name=info["label"],
+            classes=classes,
+            properties=properties,
+        )
+        owl_out = gen.generate()
+        assert "lastName" in owl_out
+        assert "firstName" not in owl_out
 
 
 class TestRoundtrip:

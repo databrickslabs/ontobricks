@@ -1,0 +1,434 @@
+## Feature: AI Agent as a task assignee (auto-routing)
+
+**Context:** Collaborative tasks (created from the comments panel) could only be
+assigned to a human domain member. This feature adds a virtual "AI Agent"
+assignee. When a task is assigned to it, an asynchronous router agent inspects
+the task title/description, picks the best-suited specialized agent from a
+static registry, runs it against the task's domain, and records the outcome back
+on the task (status transitions + audit comments). Only agents that already have
+background-task + domain-context wiring are dispatchable: OWL generator, business
+rules generator, icon assigner, and the auto SQL mapper. Interactive chat agents
+(dtwin chat, ontology assistant, cohort) are intentionally excluded.
+
+**Changes:**
+1. `src/agents/registry.py` — new static `DISPATCHABLE_AGENTS` registry
+   (`AgentSpec` dataclass + `list_agents()` / `get_agent()`), mirroring the
+   repo's static agent-discovery convention. The descriptions double as routing
+   guidance for the router LLM.
+2. `src/agents/agent_task_router/` — new single-shot router agent
+   (`engine.py`, `tools.py`, `__init__.py`). One `call_serving_endpoint` call,
+   JSON in / JSON out (`{"agent": ..., "reasoning": ...}`); validates the chosen
+   key against the registry and degrades gracefully on "none"/unknown/unparseable.
+3. `src/back/objects/registry/agent_task_runner.py` — new orchestrator.
+   `start_agent_task()` launches a `TaskManager` background job (`task_router`
+   type); the worker routes, marks the `domain_tasks` row `in_progress`,
+   dispatches the chosen agent via the existing domain bridges
+   (`Ontology.generate_with_agent` / `generate_rules_with_agent` /
+   `assign_icons_with_agent`, `Mapping.auto_assign_with_agent`), then marks the
+   task `done` and writes audit comments. Defines the `AI_AGENT_PRINCIPAL`
+   sentinel (`agent://router`) and `is_ai_agent()`.
+4. `src/back/objects/registry/CommentService.py` — `create_task()` triggers the
+   orchestrator for the AI-agent sentinel and returns `agent_task_id`;
+   `list_assignees()` now always lists the "AI Agent" first.
+5. `src/front/static/global/js/comments-panel.js` — renders the AI Agent option
+   (robot emoji, "(auto)" suffix) in the assignee picker and, on creation of an
+   AI-agent task, shows an "AI Agent started" toast and refreshes the background
+   task tracker.
+
+**Modified files:**
+- `src/agents/registry.py` (new)
+- `src/agents/agent_task_router/__init__.py` (new)
+- `src/agents/agent_task_router/engine.py` (new)
+- `src/agents/agent_task_router/tools.py` (new)
+- `src/back/objects/registry/agent_task_runner.py` (new)
+- `src/back/objects/registry/CommentService.py`
+- `src/front/static/global/js/comments-panel.js`
+- `tests/units/agents/test_agent_task_router.py` (new)
+- `tests/units/registry/test_agent_task_runner.py` (new)
+- `tests/units/registry/test_comment_service.py`
+- `docs/architecture.md`
+
+**Test result:** 2644 passed, 17 skipped, 12 deselected (full PR gate).
+
+## Fix: no UI entry point to assign a task to the AI Agent
+
+**Context:** After the feature above, task creation was still only reachable as a
+per-comment action ("Create task" on a comment thread). There was no standalone
+way to create a task, so assigning one to the AI Agent was effectively hidden —
+users reported it was "not possible to assign a task to an AI agent in the UI".
+
+**Changes:**
+1. `src/front/static/global/js/comments-panel.js` — added a "New task" button to
+   the discussion panel header that opens a standalone task form (title,
+   assignee picker incl. the AI Agent, optional due date) and posts to
+   `POST /comments/{folder}/{version}/tasks` with no `comment_id` (already
+   supported by the backend). Refactored the per-comment task form into shared
+   `taskFormHtml()` / `wireTaskForm()` / `hideTaskBox()` helpers, reused by both
+   the per-comment and standalone flows. On success the comment timeline reloads.
+
+**Modified files:**
+- `src/front/static/global/js/comments-panel.js`
+
+**Test result:** Backend unchanged; full PR gate still 2644 passed, 17 skipped.
+
+## Fix: AI Agent outcome not visible + task not marked solved
+
+**Context:** After the AI Agent ran, its outcome was only written to the review
+audit log (not the Discussion) and there was no obvious change, so it looked
+like nothing happened. Requirement: post the agent's report into the domain
+Discussion and mark the task solved when the agent finishes.
+
+**Changes:**
+1. `src/back/objects/registry/agent_task_runner.py` —
+   - `_dispatch_agent` now returns `(summary, report, result)`; each agent
+     builds a human-readable markdown `report` (counts, sizes, where to review).
+   - Replaced the audit-only `_audit` with `_report`, which posts the report as
+     a real comment in the domain Discussion (threaded under the originating
+     comment via `_resolve_anchor`, else a domain-level note) AND records the
+     review-audit row. Used for the success report and for failure messages.
+   - On success the task is set to `done` (solved); the routing decision is now
+     folded into the final report instead of a separate audit row.
+2. `tests/units/registry/test_agent_task_runner.py` — updated for the 3-tuple
+   dispatch return and to assert the report is posted as a Discussion comment.
+
+**Modified files:**
+- `src/back/objects/registry/agent_task_runner.py`
+- `tests/units/registry/test_agent_task_runner.py`
+
+**Test result:** 2644 passed, 17 skipped, 12 deselected (full PR gate).
+
+**Note / follow-up:** the remaining specialized agents produce *proposals*
+(ontology draft, business rules, mappings, icons) that are not auto-applied —
+the report points the user to the relevant page to review/apply. Also,
+AI-Agent-assigned tasks are not yet surfaced in the "My Tasks" worklist
+(assignee is the `agent://router` sentinel, not a user email); the status is
+persisted correctly and the Discussion shows the outcome. My-Tasks visibility
+remains an optional follow-up.
+
+## Fix: editing tasks routed to the generator (no applied outcome)
+
+**Context:** An AI Agent task like "evaluate whether the Person class is
+necessary / restructure the hierarchy" was routed to the **Ontology Generator**,
+which only produced a 13k-char Turtle *draft* and never applied it — so the user
+saw a report but the ontology was unchanged. The task was really an *edit* of the
+existing ontology, which the **Ontology Assistant** performs in place (and
+persists). The generator's scope (whole-ontology from-scratch generation) didn't
+match the request, and editing had no dispatch target at all.
+
+**Changes:**
+1. `src/agents/registry.py` —
+   - Added a new `ontology_assistant` dispatchable agent ("Ontology Assistant")
+     whose description steers the router to edit/remove/rename/restructure
+     classes & properties on an existing ontology (changes applied directly).
+   - Tightened the `owl_generator` description to *whole-ontology, from-scratch*
+     generation only, explicitly deferring targeted edits to the assistant.
+2. `src/back/objects/registry/agent_task_runner.py` —
+   - `_dispatch_agent` gained a `task_text` argument (task title + description)
+     and an `ontology_assistant` branch: it runs
+     `agent_ontology_assistant.run_agent` single-turn with the task as the user
+     message and, when `ontology_changed`, calls
+     `Ontology.apply_agent_ontology_changes(...)` which normalizes, prunes orphan
+     mappings, updates the session ontology and **saves** it — a real, applied
+     outcome. The Discussion report carries the assistant's reply + new
+     class/property counts.
+   - `_run` now passes `task_text` into `_dispatch_agent`.
+3. `tests/units/registry/test_agent_task_runner.py` — added coverage for the
+   assistant branch applying + persisting changes, and for the no-change path.
+4. `tests/units/agents/test_agent_task_router.py` — registry assertion now
+   expects `ontology_assistant`.
+
+**Modified files:**
+- `src/agents/registry.py`
+- `src/back/objects/registry/agent_task_runner.py`
+- `tests/units/registry/test_agent_task_runner.py`
+- `tests/units/agents/test_agent_task_router.py`
+
+**Test result:** targeted suites green —
+`test_agent_task_runner.py` + `test_agent_task_router.py` +
+`test_comment_service.py`: 44 passed. Full suite shows 59 pre-existing,
+unrelated failures (API endpoint tests) caused by global test-ordering pollution
+— each affected file passes in isolation, and the failures reproduce without
+these changes.
+
+## Feature: AI Agent asks clarifying questions before running
+
+**Context:** AI-Agent tasks ran fire-and-forget — the router picked an agent and
+it acted immediately, so a vague or mis-routed task (e.g. "evaluate whether the
+Person class is necessary") produced an unwanted result. The AI Agent now
+**always confirms scope first**: it posts a short plan + clarifying questions in
+the task's Discussion thread, parks itself (`in_progress`), and resumes when the
+assignee replies, iterating across multiple rounds until confident before
+running the chosen agent. Designed with the brainstorming → writing-plans →
+subagent-driven-development flow; spec and plan live under
+`docs/superpowers/{specs,plans}/2026-06-18-ai-agent-clarifying-questions*`.
+Zero schema change: parked state reuses `in_progress`, the route is re-derived
+from the deterministic (temp 0) router each pass, and linkage uses the existing
+`comment_id` (a kickoff comment is created for standalone tasks).
+
+**Changes:**
+1. `src/agents/agent_task_planner/` (new: `engine.py`, `__init__.py`, `tools.py`)
+   — single-shot "ready vs. ask" gate mirroring the router. Returns
+   `PlanResult{ready, message}`; degrades safe (never `ready` on LLM/parse
+   failure), so the agent never runs without a human go-ahead.
+2. `src/back/objects/registry/agent_task_runner.py` — reworked the background
+   worker into route → reconstruct thread Q&A (`_thread_history`) → plan →
+   branch (`_run_for_task`): not ready → post the question and park; ready →
+   fold the assignee's answers into the agent input (`_fold_answers`) and run.
+   Added `resume_agent_task` (relaunched on a reply), a `_launch_worker` shared
+   launcher, and an atomic, leak-free in-process concurrency guard
+   (`_ACTIVE_TASKS` + `_ACTIVE_LOCK` + `_claim_task`).
+3. `src/back/objects/registry/CommentService.py` — `create_task` creates a
+   domain-level kickoff comment as the thread root for standalone AI-Agent tasks
+   (warns if it cannot); `add_comment` calls `_maybe_resume_agent`, which resumes
+   the matching active AI-Agent task when a teammate replies on its thread.
+4. `docs/architecture.md` — documented the clarify-then-run loop and added
+   `agent_task_planner/` to the agents listing.
+
+**Modified files:**
+- `src/agents/agent_task_planner/engine.py` (new)
+- `src/agents/agent_task_planner/__init__.py` (new)
+- `src/agents/agent_task_planner/tools.py` (new)
+- `src/back/objects/registry/agent_task_runner.py`
+- `src/back/objects/registry/CommentService.py`
+- `tests/units/agents/test_agent_task_planner.py` (new)
+- `tests/units/registry/test_agent_task_runner.py`
+- `tests/units/registry/test_comment_service.py`
+- `docs/architecture.md`
+
+**Test result:** new + touched suites green —
+`test_agent_task_planner.py` (3), `test_agent_task_runner.py` (14),
+`test_comment_service.py` (32), plus `tests/units/agents` and
+`tests/units/registry` sweeps. The only failures in the registry sweep are 4
+pre-existing `TestLakebaseCollab` cases in `test_registry_store.py` that require
+the optional `psycopg` backend (not installed); they reproduce without these
+changes.
+
+## Fix: ontology design tasks no longer dead-end at routing
+
+**Context:** An AI-Agent task phrased as a design/modeling request (e.g. "create
+an Agent Manager") was routed to "none" and hard-failed with "I could not route
+this task…", because every dispatchable agent's guidance read as narrow
+edit/generate/rules/icons/mapping work and the router treated an unfamiliar
+entity name as off-topic. Ontology design is exactly what the Ontology Assistant
+does, so these tasks should route there.
+
+**Changes:**
+1. `src/agents/registry.py` — broadened the `ontology_assistant` routing
+   description to declare it the DEFAULT agent for ontology modeling/design:
+   create/add/model/design NEW classes/entities/relationships (with an explicit
+   "create an Agent Manager entity" example) in addition to edits/cleanup, and to
+   prefer it over the Generator unless the whole ontology is being (re)built.
+2. `src/agents/agent_task_router/engine.py` — strengthened the router system
+   prompt: the ontology IS the domain model, so design/model/create/structure
+   tasks (and unfamiliar names, likely domain entities) route to the Ontology
+   Assistant; reserve "none" for work clearly unrelated to the ontology, its
+   mappings, rules, or icons.
+3. `tests/units/agents/test_agent_task_router.py` — added guards that the
+   Assistant's description advertises design intent and the router prompt treats
+   the ontology as the domain model and reserves "none" for unrelated tasks.
+
+**Modified files:**
+- `src/agents/registry.py`
+- `src/agents/agent_task_router/engine.py`
+- `tests/units/agents/test_agent_task_router.py`
+
+**Test result:** `test_agent_task_router.py` + `test_agent_task_runner.py` →
+26 passed.
+
+## Feature: AI-Agent async status + answer UX in the Discussion pane
+
+**Context:** When an AI-Agent task ran, its progress was only visible in the
+header task-tracker dropdown, and the Discussion offcanvas (the surface where
+the task lives) never auto-refreshed — so the agent's clarifying question never
+appeared live and there was no obvious way to answer it. The only path was the
+generic "Reply" button on the thread root, which works (a reply resumes the
+agent) but is undiscoverable. This adds inline progress + a clear answering
+affordance, frontend-only, reusing existing endpoints.
+
+**Changes:**
+1. `src/front/static/global/js/comments-panel.js` — added an AI-Agent live-status
+   layer:
+   - `loadAiTasks()` reads `/comments/{f}/{v}/tasks`, keying the version's
+     AI-Agent tasks (`assignee == agent://router`) by their thread-root
+     `comment_id` to drive per-thread state.
+   - `loadAgentRuns()` reads `/tasks/` for active `task_router` background runs;
+     `renderAgentStrip()` shows a top-of-panel progress strip (animated bar +
+     current step) mirroring the header tracker.
+   - Per-thread status chip (`agentChipHtml`): working… / waiting for your reply
+     / queued / done, plus a tinted left edge on AI threads.
+   - Prominent inline "Answer the AI Agent" box (`agentAnswerHtml`) on parked
+     (in_progress, not running) threads; sending posts a reply that resumes the
+     agent. Wired in `bindThreadActions`.
+   - Live polling (`startPanelPolling`/`panelPollTick`, 4s) while the panel is
+     open and any AI work is in flight; change-detected re-render via
+     `listSignature` and deferred while the user is mid-reply (`userIsComposing`)
+     so an open answer box is never clobbered. Stops when idle and on panel
+     close.
+   - `ensureAgentTracking()` kicks the strip + polling after opening a thread,
+     posting any comment/reply, or creating an AI-Agent task.
+2. `src/front/static/global/css/review-modals.css` — styles for the progress
+   strip (spinning robot + striped bar), the AI thread accent edge, the status
+   chips (working/waiting/queued/done), and the answer box.
+
+**Modified files:**
+- `src/front/static/global/js/comments-panel.js`
+- `src/front/static/global/css/review-modals.css`
+
+**Test result:** Frontend-only (vanilla JS/CSS, no JS unit-test harness in repo);
+no Python/backend code touched. Linter clean on both files. Verified the data
+contracts against `CommentService.list_tasks` (DomainTask `assignee`/`status`/
+`comment_id`) and `Task.to_dict` (`task_type="task_router"`, `progress`, `steps`,
+`current_step`).
+
+## Feature: AI-Agent design edits refresh the open pages live
+
+**Context:** When the Ontology Assistant agent edits and saves the ontology in
+place, the open editor pages (ontology designer, mapping) kept showing stale
+data until a manual reload. The agent's outcome was visible in the Discussion,
+but the model itself wasn't refreshed. This wires a live refresh off the
+existing AI-task completion signal — no backend change.
+
+**Changes:**
+1. `src/front/static/global/js/comments-panel.js` — `announceAgentCompletions()`
+   detects when an AI-Agent task transitions to `done` (transition-guarded:
+   baselines on first load, fires only on a live change) and dispatches a global
+   `ontobricks:design-updated` CustomEvent. Snapshot state reset on `openThread`.
+2. `src/front/static/ontology/js/ontology-init.js` — listens for
+   `ontobricks:design-updated`: re-pulls `loadOntologyFromSession()`, refreshes
+   the navbar status, and re-initialises the active section via
+   `_initSectionByName(SidebarNav.getActiveSection())` so the designer / map /
+   entity / relationship views reflect the agent's changes. Version-guarded, so
+   an unchanged ontology is a no-op for the canvas.
+3. `src/front/static/mapping/js/mapping-init.js` — listens for the same event:
+   re-fetches `/ontology/get-loaded-ontology` into `MappingState.loadedOntology`
+   and calls `refreshMappingDesign()` + `updateMappingCompletionStatus()`.
+
+**Modified files:**
+- `src/front/static/global/js/comments-panel.js`
+- `src/front/static/ontology/js/ontology-init.js`
+- `src/front/static/mapping/js/mapping-init.js`
+
+**Test result:** Frontend-only; `node --check` clean on all three files, linter
+clean, no backend code touched. Reuses existing global refresh entry points
+(`loadOntologyFromSession`, `_initSectionByName`, `refreshMappingDesign`).
+
+## Feature: render markdown in the Discussion panel
+
+**Context:** Comment bodies — especially the AI Agent's rich outcome reports —
+are written in markdown but the Discussion offcanvas showed the raw source
+(`**bold**`, `_italics_`, `- bullets`, headings). Rendered them as HTML.
+
+**Changes:**
+1. `src/front/static/global/js/comments-panel.js` — added a `renderMarkdown()`
+   helper that uses the globally-loaded `marked` (same library/options as the
+   ontology chat assistant: `breaks:true, gfm:true`), with a plain-text +
+   `<br>` fallback. `bubble()` now renders the parsed body (tags already
+   stripped via `parseBody`) through it into a `.oc-text.oc-md` container
+   instead of escaping it verbatim.
+2. `src/front/static/global/css/review-modals.css` — tight, bubble-friendly
+   styles for rendered markdown (`.oc-md`): paragraph/list/heading spacing,
+   inline code + code blocks, links, blockquotes, and tables, with
+   `white-space:normal` so block elements lay out correctly.
+
+**Modified files:**
+- `src/front/static/global/js/comments-panel.js`
+- `src/front/static/global/css/review-modals.css`
+
+**Test result:** Frontend-only; `node --check` + linter clean. `marked` is
+already loaded for all pages via `base.html`.
+
+## Tests: Discussion-panel front-end contract tests
+
+**Context:** The Discussion-panel work above (AI-Agent async status + answering,
+the `ontobricks:design-updated` refresh wiring, and markdown rendering) lives
+entirely in static JS/CSS, and the repo has no JS unit-test harness. Added
+Python contract tests that fetch the served assets through the app's `/static`
+mount and assert the wiring is present — same philosophy as
+`tests/units/api/test_ui_rendering.py` — so an accidental removal/rename of a
+key hook is caught by CI.
+
+**Changes:**
+1. `tests/units/api/test_discussion_panel_assets.py` (new) — 16 token-level
+   assertions across four classes:
+   - `TestDiscussionMarkdownRendering` — `renderMarkdown` via global `marked`
+     with a plain-text fallback, bubble renders into `.oc-md`, CSS present.
+   - `TestDiscussionAgentStatus` — `loadAiTasks`/`loadAgentRuns` (`task_router`),
+     `renderAgentStrip` + `oc-agent-strip`, the polling loop
+     (`panelPollTick`/`startPanelPolling`/`userIsComposing`), the per-thread
+     chip (`agentChipHtml`, "waiting for your reply"), and the strip/chip CSS.
+   - `TestAnswerTheAgent` — the "Answer the AI Agent" box, `data-agent-send` →
+     `ensureAgentTracking` wiring, and `.oc-agent-answer` CSS.
+   - `TestDesignUpdatedRefresh` — the panel dispatches
+     `ontobricks:design-updated` (`announceAgentCompletions`), and the ontology
+     page (`loadOntologyFromSession` + `_initSectionByName(...)`) and mapping
+     page (`/ontology/get-loaded-ontology` + `refreshMappingDesign`) listen for
+     it.
+
+**Modified files:**
+- `tests/units/api/test_discussion_panel_assets.py` (new)
+
+**Test result:** `pytest tests/units/api/test_discussion_panel_assets.py` →
+16 passed.
+
+## Feature: render markdown in the Domain → Discussions timeline
+
+**Context:** Markdown rendering was added to the Discussion offcanvas earlier,
+but the Domain → Discussions timeline (a separate surface) still showed raw
+markdown source for each comment. Rendered it there too for parity.
+
+**Changes:**
+1. `src/front/static/domain/js/domain-collaboration.js` — added a
+   `renderMarkdown()` helper (same approach as the panel: global `marked` with a
+   plain-text/`<br>` fallback) and `timelineEntry()` now renders the parsed body
+   through it into a `.oc-tl-text.oc-md` container instead of escaping verbatim.
+2. `src/front/static/global/css/review-modals.css` — broadened the markdown
+   white-space reset from `.oc-text.oc-md` to `.oc-md` so it also applies to the
+   timeline's `.oc-tl-text.oc-md` (which carried `white-space: pre-wrap`). The
+   Domain page already loads `review-modals.css`, so the shared `.oc-md` block
+   styles the timeline with no extra assets.
+3. `tests/units/api/test_discussion_panel_assets.py` — added
+   `TestDiscussionTimelineMarkdown` (3 tests): the timeline defines the marked
+   renderer, `timelineEntry` renders `renderMarkdown(parsed.text)` into `.oc-md`,
+   and the unscoped `.oc-md` reset is present.
+
+**Modified files:**
+- `src/front/static/domain/js/domain-collaboration.js`
+- `src/front/static/global/css/review-modals.css`
+- `tests/units/api/test_discussion_panel_assets.py`
+
+**Test result:** `pytest tests/units/api/test_discussion_panel_assets.py` →
+19 passed. `node --check` + linter clean.
+
+## Change: Discussion panel is a single domain-wide thread (no anchors/tags)
+
+**Context:** Opening the discussion from the Ontology page showed a header badge
+like "Domain · Whole ontology diagram" and separated threads by the selected
+anchor (class/property/mapping/graph). Discussions are meant to be about the
+Domain as a whole, so the per-anchor separation and the entity/relationship tag
+picker were confusing. Unified everything to the Domain.
+
+**Changes:**
+1. `src/front/static/global/js/comments-panel.js`:
+   - `openThread()` now always opens the Domain thread (`anchorType: 'domain'`,
+     `anchorRef: ''`) regardless of the caller's anchor hints, so every entry
+     point (ontology, mapping, graph, domain) shows the same discussion.
+   - `renderAnchorBadge()` dropped the "kind" badge that separated threads; the
+     header subtitle now just names the domain (`folder · vX`).
+   - Removed the entity/relationship tag picker from the compose and reply
+     boxes; new comments post the raw body (no embedded tag marker).
+   - Deleted the now-unused tag-input helpers (`tagWidgetHtml`,
+     `tagSelectOptions`, `setupTagbar`, `addTagChip`, `collectTags`,
+     `encodeBody`). Kept `TAG_MARK` + `parseBody` + `tagsHtml` so older comments
+     that embedded tags still display their chips (read-only). `openForSelection`
+     / `taggableFromOntology` remain as public API but their anchor/taggable
+     args are now ignored by the panel.
+2. `tests/units/api/test_discussion_panel_assets.py` — added
+   `TestDiscussionDomainScope` (4 tests): opens at the domain anchor, no kind
+   badge, no tag picker in compose, and no tag encoding on post.
+
+**Modified files:**
+- `src/front/static/global/js/comments-panel.js`
+- `tests/units/api/test_discussion_panel_assets.py`
+
+**Test result:** `pytest tests/units/api/test_discussion_panel_assets.py` →
+23 passed. `node --check` + linter clean.

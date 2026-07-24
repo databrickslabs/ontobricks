@@ -1,0 +1,24 @@
+# MCP Server: retry on 502/503 (Databricks Apps cold-start)
+
+## Context
+When the MCP server calls the main OntoBricks app during a Databricks Apps
+cold-start or idle-sleep window, the platform proxy returns 502 before the
+app is ready. Previously `_get` and `_post` raised immediately on any 4xx/5xx,
+so a single cold-start would fail the entire MCP tool call.
+
+## Changes
+
+1. `src/mcp-server/server/app.py` — added `import asyncio` (top-level imports)
+2. `src/mcp-server/server/app.py` — added module-level constants `_RETRY_STATUSES = {502, 503}`
+   and `_RETRY_DELAYS = (5, 10, 20)` (seconds between attempts)
+3. `src/mcp-server/server/app.py` — `_get`: retry loop up to 3 times on 502/503,
+   sleeping 5 s → 10 s → 20 s; each retry logged at WARNING level; final attempt
+   still raises via `raise_for_status()`
+4. `src/mcp-server/server/app.py` — `_post`: same retry logic as `_get`
+
+## Modified files
+- `src/mcp-server/server/app.py`
+
+## Test results
+2283 passed, 15 skipped (units only — e2e skipped, Python 3.9 union-type syntax
+incompatibility in conftest.py unrelated to this change)

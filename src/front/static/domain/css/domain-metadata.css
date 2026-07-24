@@ -54,8 +54,13 @@
     width: 6%;
 }
 
+.dm-th-select-perm {
+    width: 7%;
+    text-align: center;
+}
+
 .dm-th-desc {
-    width: 51%;
+    width: 44%;
 }
 
 .dm-th-import-name {
@@ -96,4 +101,11 @@
 
 .meta-cursor-pointer {
     cursor: pointer;
+}
+
+/* Chart.js sets the gauge canvas to display:block, which breaks text-center;
+   center it explicitly within the card body. */
+.dm-gauge {
+    display: block;
+    margin-inline: auto;
 }

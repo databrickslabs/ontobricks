@@ -23,7 +23,7 @@
     margin: 2px;
     border-radius: 12px;
     font-size: 0.8rem;
-    background-color: #f0f0f0;
+    background-color: #ffffff;
     color: #333;
     border: 1px solid #ddd;
 }
@@ -34,7 +34,7 @@
     transition: background-color 0.1s ease;
 }
 .group-members-grid .form-check:hover {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
 }
 
 .group-members-grid .form-check-input:checked + .form-check-label {

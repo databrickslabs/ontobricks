@@ -3,6 +3,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# Preflight before touching the venv or downloading packages.
+chmod +x scripts/_internal/check-deploy-prerequisites.sh
+scripts/_internal/check-deploy-prerequisites.sh --local
+
 echo "====================================="
 echo "  OntoBricks Setup"
 echo "====================================="
@@ -34,7 +41,7 @@ echo ""
 
 # Install dependencies (including optional lakebase and pitfalls extras for local dev)
 echo "Installing dependencies..."
-uv sync --extra lakebase --extra pitfalls
+uv sync --frozen --extra lakebase --extra pitfalls
 echo ""
 
 # Create .env file if it doesn't exist

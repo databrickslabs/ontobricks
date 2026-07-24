@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
-from back.core.triplestore.constants import RDF_TYPE
+from back.core.graphdb.constants import RDF_TYPE
 from back.core.w3c.shacl.constants import (
     QUALITY_CATEGORIES,
     RDFS_LABEL,
@@ -873,7 +873,7 @@ class SHACLService:
         return suggestions
 
     # ------------------------------------------------------------------
-    # SHACL-to-SQL translation (for Digital Twin execution)
+    # SHACL-to-SQL translation (for Knowledge Graph execution)
     # ------------------------------------------------------------------
 
     @staticmethod

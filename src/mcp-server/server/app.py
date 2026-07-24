@@ -1,7 +1,7 @@
 """
 OntoBricks MCP Server
 
-Exposes Domain registry metadata and Digital Twin triple-store capabilities
+Exposes Domain registry metadata and Knowledge Graph triple-store capabilities
 as MCP tools and resources. HTTP calls target the OntoBricks **external REST**
 surface (``/api/v1/...``) and in-app GraphQL (``/graphql/...``).
 
@@ -9,7 +9,7 @@ REST layout (see ``api.external_app``):
 
 - **Domain** — ``GET /api/v1/domains``, ``/api/v1/domain/versions``,
   ``/api/v1/domain/design-status``, ``/api/v1/domain/ontology``, etc.
-- **Digital Twin** — ``GET /api/v1/digitaltwin/registry``, ``status``,
+- **Knowledge Graph** — ``GET /api/v1/digitaltwin/registry``, ``status``,
   ``stats``, ``triples/find``, build, quality, inference, …
 
 Workflow:
@@ -18,7 +18,7 @@ Workflow:
      versions and design readiness before heavy queries.
   3. ``select_domain`` — choose which domain to work with.
   4. ``list_entity_types`` / ``describe_entity`` / ``get_status`` —
-     query the selected domain's Digital Twin.
+     query the selected domain's Knowledge Graph.
 
 Three operating modes controlled by the ``mode`` argument:
 
@@ -35,11 +35,13 @@ Three operating modes controlled by the ``mode`` argument:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from typing import Callable, Optional
 
 import httpx
@@ -423,6 +425,28 @@ def _get_auth_headers(mode: str) -> dict:
     return {}
 
 
+_RETRYABLE_STATUSES = {502, 503}
+_RETRY_DELAYS = (2, 5, 10)  # seconds between successive attempts (3 retries)
+
+
+def _retryable(status: int) -> bool:
+    return status in _RETRYABLE_STATUSES
+
+
+def _retry_delays_for(client: httpx.AsyncClient) -> list[int]:
+    """Retry schedule for *client*.
+
+    502/503 retries exist to ride out Databricks Apps cold-start / proxy
+    transients on the *remote* app hop. When we talk to a same-host app
+    (``mounted`` mode, ``localhost``) there is no proxy in front, so a
+    5xx is a real error — retrying only stacks latency. Disable retries
+    there.
+    """
+    if "localhost" in str(client.base_url) or "127.0.0.1" in str(client.base_url):
+        return []
+    return list(_RETRY_DELAYS)
+
+
 async def _get(
     client: httpx.AsyncClient, path: str, params: dict | None = None
 ) -> dict:
@@ -433,37 +457,86 @@ async def _get(
     empty payloads in the Apps log stream. On non-2xx responses we
     log a body excerpt before re-raising so the caller (and the LLM)
     sees an actionable error instead of a bare ``HTTPStatusError``.
+
+    502/503 responses (Databricks Apps cold-start / proxy transient
+    errors) are retried up to 3 times with increasing delays before
+    the error is propagated.
     """
-    logger.info("GET %s%s params=%s", client.base_url, path, params or {})
-    resp = await client.get(path, params=params, timeout=120)
-    if resp.status_code >= 400:
-        body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
-        logger.warning(
-            "GET %s%s → %s body=%r",
-            client.base_url,
-            path,
-            resp.status_code,
-            body_excerpt,
+    delays = _retry_delays_for(client)
+    attempt = 0
+    while True:
+        logger.info(
+            "GET %s%s params=%s (attempt %d)", client.base_url, path, params or {}, attempt + 1
         )
-    else:
-        logger.info("GET %s%s → %s", client.base_url, path, resp.status_code)
-    resp.raise_for_status()
-    return resp.json()
+        started = time.monotonic()
+        resp = await client.get(path, params=params, timeout=120)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        if resp.status_code >= 400:
+            body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
+            logger.warning(
+                "GET %s%s → %s in %dms body=%r",
+                client.base_url,
+                path,
+                resp.status_code,
+                elapsed_ms,
+                body_excerpt,
+            )
+            if _retryable(resp.status_code) and delays:
+                delay = delays.pop(0)
+                logger.info(
+                    "Retrying in %ds (status=%s, attempt %d)…",
+                    delay,
+                    resp.status_code,
+                    attempt + 1,
+                )
+                await asyncio.sleep(delay)
+                attempt += 1
+                continue
+        else:
+            logger.info("GET %s%s → %s in %dms", client.base_url, path, resp.status_code, elapsed_ms)
+        resp.raise_for_status()
+        return resp.json()
 
 
 async def _post(
     client: httpx.AsyncClient, path: str, json: dict | None = None
 ) -> dict:
-    """POST *path* on *client* with optional JSON body and return the JSON response."""
-    logger.info("POST %s%s", client.base_url, path)
-    resp = await client.post(path, json=json or {}, timeout=120)
-    if resp.status_code >= 400:
-        body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
-        logger.warning("POST %s%s → %s body=%r", client.base_url, path, resp.status_code, body_excerpt)
-    else:
-        logger.info("POST %s%s → %s", client.base_url, path, resp.status_code)
-    resp.raise_for_status()
-    return resp.json()
+    """POST *path* on *client* with optional JSON body and return the JSON response.
+
+    502/503 responses are retried up to 3 times with increasing delays.
+    """
+    delays = _retry_delays_for(client)
+    attempt = 0
+    while True:
+        logger.info("POST %s%s (attempt %d)", client.base_url, path, attempt + 1)
+        started = time.monotonic()
+        resp = await client.post(path, json=json or {}, timeout=120)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        if resp.status_code >= 400:
+            body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
+            logger.warning(
+                "POST %s%s → %s in %dms body=%r",
+                client.base_url,
+                path,
+                resp.status_code,
+                elapsed_ms,
+                body_excerpt,
+            )
+            if _retryable(resp.status_code) and delays:
+                delay = delays.pop(0)
+                logger.info(
+                    "Retrying in %ds (status=%s, attempt %d)…",
+                    delay,
+                    resp.status_code,
+                    attempt + 1,
+                )
+                await asyncio.sleep(delay)
+                attempt += 1
+                continue
+        else:
+            logger.info("POST %s%s → %s in %dms", client.base_url, path, resp.status_code, elapsed_ms)
+        resp.raise_for_status()
+        return resp.json()
 
 
 # ── Factory ───────────────────────────────────────────────────────────────
@@ -501,10 +574,35 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         "_loaded": False,
     }
 
-    def _client() -> httpx.AsyncClient:
-        """Create an httpx client with base URL and auth headers."""
-        headers = {"User-Agent": _USER_AGENT, **_get_auth_headers(mode)}
-        return httpx.AsyncClient(base_url=base, headers=headers)
+    # Single shared client per server so HTTP keep-alive / the connection
+    # pool are reused across tool calls instead of paying a fresh
+    # handshake (and, in databricks mode, a fresh MCP-App → OntoBricks-App
+    # network hop) on every request.
+    _shared_client: dict = {"client": None}
+
+    @asynccontextmanager
+    async def _client():
+        """Yield the shared httpx client with fresh auth headers.
+
+        Intentionally does **not** close the client on exit — it is
+        pooled for the lifetime of the process. Auth headers are
+        refreshed per call (the underlying M2M token is itself cached).
+        """
+        c = _shared_client["client"]
+        if c is None or c.is_closed:
+            c = httpx.AsyncClient(
+                base_url=base,
+                headers={"User-Agent": _USER_AGENT},
+                timeout=120,
+                limits=httpx.Limits(
+                    max_keepalive_connections=10, max_connections=20
+                ),
+            )
+            _shared_client["client"] = c
+        auth = _get_auth_headers(mode)
+        if auth:
+            c.headers.update(auth)
+        yield c
 
     async def _ensure_registry() -> dict:
         """Resolve registry config: volume path → env vars → main app API."""
@@ -587,32 +685,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         key = _local_name(uri).lower()
         return _ontology_labels.get(uri, _ontology_labels.get(key, _local_name(uri)))
 
-    async def _load_ontology_labels(client: httpx.AsyncClient) -> None:
-        """Fetch ontology config and build a URI/name → label lookup map."""
-        _ontology_labels.clear()
-        try:
-            params = _domain_params()
-            resp = await client.post("/api/v1/domain/ontology", json=params, timeout=30)
-            resp.raise_for_status()
-            payload = resp.json()
-            # SuccessResponse wraps the ontology under "data"
-            ontology = payload.get("data", payload) if isinstance(payload, dict) else {}
-            for item in list(ontology.get("classes", [])) + list(ontology.get("properties", [])):
-                lbl = item.get("label") or item.get("name") or ""
-                uri = item.get("uri", "")
-                name = item.get("name", "")
-                if uri and lbl:
-                    _ontology_labels[uri] = lbl
-                if name and lbl:
-                    _ontology_labels[name.lower()] = lbl
-            logger.info("Loaded %d ontology labels", len(_ontology_labels))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not load ontology labels: %s", exc)
-
     mcp = FastMCP(
         "OntoBricks",
         instructions=(
-            "You are connected to OntoBricks: domain registry + Digital Twin "
+            "You are connected to OntoBricks: domain registry + Knowledge Graph "
             "(triple store) over external REST at /api/v1.\n\n"
             "Workflow:\n"
             "1. Call 'list_domains' to see available domains.\n"
@@ -798,7 +874,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         After calling ``list_domains`` to see what is available, call
         this tool with the exact domain name. All subsequent calls to
         ``list_entity_types``, ``describe_entity``, and ``get_status``
-        will operate on this domain's Digital Twin.
+        will operate on this domain's Knowledge Graph.
 
         Args:
             domain_name: Exact domain name as shown by ``list_domains``.
@@ -813,7 +889,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             if not data.get("success") and data.get("message"):
                 return f"Error selecting domain: {data['message']}"
             _selected_domain["name"] = domain_name
-            await _load_ontology_labels(client)
+            # Ontology labels are resolved lazily via ``_label_or_local``
+            # (local-name fallback). A dedicated read-only label endpoint
+            # can repopulate ``_ontology_labels`` here in the future; the
+            # previous eager POST hit the legacy UC handler (wrong
+            # contract) and only added a wasted round trip.
+            _ontology_labels.clear()
 
         has_data = data.get("has_data", False)
         count = data.get("count", 0)
@@ -853,7 +934,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             return data.get("message", "Could not retrieve statistics.")
 
         lines: list[str] = []
-        lines.append(f"Knowledge Graph — {_selected_domain['name']}")
+        lines.append(f"Graph Viewer — {_selected_domain['name']}")
         lines.append("=" * 40)
         inferred = data.get("inferred_triples", 0)
         lines.append(f"Total triples:       {data.get('total_triples', 0):,}")
@@ -947,7 +1028,11 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         params = _domain_params(
             {
                 "depth": min(max(depth, 1), 10),
-                "limit": 500,
+                # Keep the LLM payload tight: 100 triples is plenty to
+                # describe an entity + its immediate neighbours, and cuts
+                # both backend fetch size and token cost. The backend still
+                # reports ``total`` so the model can page for more.
+                "limit": 100,
                 "offset": 0,
             }
         )

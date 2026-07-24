@@ -825,23 +825,24 @@ class DigitalTwin:
             logger.debug("sync_last_build_from_schedule: %s", exc)
 
     # ------------------------------------------------------------------
-    # Live Digital Twin status (instance methods)
+    # Live Knowledge Graph status (instance methods)
     # ------------------------------------------------------------------
 
     async def fetch_graph_triplestore_status(self, settings) -> Dict[str, Any]:
         """Live graph backend row count and paths."""
         from back.core.helpers import (
             effective_graph_name,
+            effective_graph_query_table,
             effective_view_table,
             run_blocking,
         )
-        from back.core.triplestore import get_triplestore
+        from back.core.graphdb import get_graphdb
 
         domain = self._domain
         try:
-            graph_name = effective_graph_name(domain)
+            graph_name = effective_graph_query_table(domain, settings)
             view_table = effective_view_table(domain)
-            graph_store = get_triplestore(domain, settings, backend="graph")
+            graph_store = get_graphdb(domain, settings)
             graph_ok = False
             graph_count = 0
             graph_path = None
@@ -888,9 +889,9 @@ class DigitalTwin:
         engine.  Future engines plug in via ``back/core/graphdb/<engine>/``
         and update :class:`back.core.graphdb.GraphDBFactory`.
         """
-        from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        raw = TripleStoreFactory._resolve_graph_engine(domain, settings) or "lakebase"
+        raw = GraphDBFactory._resolve_graph_engine(domain, settings) or "lakebase"
         return raw if raw == "lakebase" else "lakebase"
 
     async def fetch_digital_twin_existence(self, settings) -> Dict[str, Any]:
@@ -908,15 +909,16 @@ class DigitalTwin:
 
         from back.core.helpers import (
             effective_graph_name,
+            effective_graph_query_table,
             effective_view_table,
             run_blocking,
         )
-        from back.core.triplestore import get_triplestore
+        from back.core.graphdb import get_graphdb
 
         domain = self._domain
         graph_engine = DigitalTwin.resolve_graph_engine(domain, settings)
         view_table = effective_view_table(domain)
-        graph_name = effective_graph_name(domain)
+        graph_name = effective_graph_query_table(domain, settings)
         last_built = domain.last_build or None
         last_update = domain.last_update or None
 
@@ -942,14 +944,14 @@ class DigitalTwin:
         lk_table = ""
         lk_synced_uc_cfg = ""
         try:
-            from back.core.triplestore import TripleStoreFactory
+            from back.core.graphdb import GraphDBFactory
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
                 resolve_sync_uc_fallback_catalog,
                 resolve_lakebase_graph_schema,
             )
             from back.core.graphdb.lakebase._companion_ddl import synced_phy
 
-            engine_config = TripleStoreFactory._resolve_graph_engine_config(
+            engine_config = GraphDBFactory._resolve_graph_engine_config(
                 domain, settings
             ) or {}
             lk_sync_mode = str(engine_config.get("sync_mode") or "app_managed").strip() or "app_managed"
@@ -979,7 +981,7 @@ class DigitalTwin:
             if "." not in view_table:
                 return None, f"Resolved view name is not fully qualified: {view_table}"
             try:
-                view_store = get_triplestore(domain, settings, backend="view")
+                view_store = get_graphdb(domain, settings, engine="view")
                 if not view_store:
                     return None, (
                         "No SQL warehouse available "
@@ -1009,7 +1011,7 @@ class DigitalTwin:
                     resolve_sync_uc_fallback_catalog,
                 )
 
-                graph_store = get_triplestore(domain, settings, backend="graph")
+                graph_store = get_graphdb(domain, settings)
                 if graph_store:
                     lk_schema_live = getattr(graph_store, "graph_schema", "") or ""
                     tbl_fn = getattr(graph_store, "physical_table_id", None)
@@ -1052,7 +1054,7 @@ class DigitalTwin:
             if not uc_fqn:
                 return None
             try:
-                view_store_uc = get_triplestore(domain, settings, backend="view")
+                view_store_uc = get_graphdb(domain, settings, engine="view")
                 if view_store_uc:
                     exists = await run_blocking(view_store_uc.table_exists, uc_fqn)
                     logger.info(
@@ -2465,7 +2467,7 @@ class DigitalTwin:
         *,
         build_kind: str = "session",
     ) -> None:
-        """Execute Digital Twin build/sync in a worker thread (TaskManager progress).
+        """Execute Knowledge Graph build/sync in a worker thread (TaskManager progress).
 
         ``build_kind``:
           * ``"session"`` — UI/internal build (diagnostics, progress callbacks,
@@ -2523,7 +2525,7 @@ class DigitalTwin:
         """Run SHACL / SWRL / DT / aggregate checks inside a worker thread."""
         import time
 
-        from back.core.triplestore import get_triplestore as _get_ts
+        from back.core.graphdb import get_graphdb as _get_graphdb
 
         task_ref = SimpleNamespace(id=task_id)
         t0 = time.time()
@@ -2533,7 +2535,9 @@ class DigitalTwin:
                 task_id, f"Running {total} data quality checks ({backend})..."
             )
 
-            store = _get_ts(domain_snap, settings, backend=backend)
+            store = _get_graphdb(
+                domain_snap, settings, engine=(None if backend == "graph" else backend)
+            )
             if not store:
                 tm.fail_task(task_id, f"Could not initialize {backend} backend")
                 return
@@ -2578,6 +2582,157 @@ class DigitalTwin:
                 tm.fail_task(task_id, failure_message)
 
     @staticmethod
+    def _analytics_run_entry(
+        *,
+        status: str,
+        class_filter: List[str],
+        task_id: str,
+        duration_ms: int,
+        computed_at: str,
+        stats: Optional[Dict[str, Any]] = None,
+        error: str = "",
+    ) -> Dict[str, Any]:
+        """Build one ``graph_analytics_runs`` history row (success or failure).
+
+        Shared by the success and failure paths of :meth:`run_metrics_task` so
+        the lightweight metric metadata is shaped in exactly one place.
+        """
+        stats = stats or {}
+        return {
+            "status": status,
+            "class_filter": class_filter,
+            "node_count": int(stats.get("node_count", 0) or 0),
+            "edge_count": int(stats.get("edge_count", 0) or 0),
+            "connected_components": int(stats.get("connected_components", 0) or 0),
+            "avg_degree": float(stats.get("avg_degree", 0) or 0),
+            "density": float(stats.get("density", 0) or 0),
+            "duration_ms": duration_ms,
+            "task_id": task_id,
+            "error": error,
+            "computed_at": computed_at,
+        }
+
+    @staticmethod
+    def run_metrics_task(
+        tm,
+        task_id: str,
+        domain,
+        settings,
+        store: Any,
+        graph_name: str,
+        *,
+        predicate_filter: Optional[List[str]] = None,
+        class_filter: Optional[List[str]] = None,
+        max_triples: int = 500_000,
+        max_nodes_betweenness: int = 2_000,
+    ) -> None:
+        """Compute graph metrics in a worker thread and persist the LAST result.
+
+        Runs the same NetworkX pipeline as the synchronous
+        :meth:`compute_graph_metrics`, then UPSERTs the result into the
+        registry ``graph_analytics`` cache keyed by ``(folder, version)``
+        so the Analytics page and the Domain Validation cockpit can render
+        from storage. On success the previous cached row is replaced; on
+        failure it is left intact (the error surfaces through the global
+        task tracker, not the cache).
+        """
+        import time as _time
+        from datetime import datetime, timezone
+
+        from back.objects.registry.RegistryService import RegistryService
+
+        folder = getattr(domain, "uc_domain_folder", "") or ""
+        version = str(getattr(domain, "current_version", "") or "")
+        class_filter_list = list(class_filter or [])
+        t0 = _time.time()
+        try:
+            tm.start_task(task_id, "Computing knowledge graph metrics...")
+            tm.update_progress(task_id, 20, "Running centrality analysis")
+
+            dt = DigitalTwin(domain)
+            result = dt.compute_graph_metrics(
+                store,
+                graph_name,
+                predicate_filter=predicate_filter,
+                class_filter=class_filter,
+                max_triples=max_triples,
+                max_nodes_betweenness=max_nodes_betweenness,
+            )
+
+            tm.update_progress(task_id, 85, "Storing analytics result")
+
+            duration_ms = int((_time.time() - t0) * 1000)
+            now_iso = datetime.now(timezone.utc).isoformat()
+            stats = result.get("stats", {}) or {}
+            entry = {
+                "status": "completed",
+                "graph_name": graph_name,
+                "class_filter": class_filter_list,
+                "stats": stats,
+                "top_pagerank": result.get("top_pagerank", []),
+                "result": result,
+                "error": "",
+                "task_id": task_id,
+                "duration_ms": duration_ms,
+                "computed_at": now_iso,
+            }
+            if folder and version:
+                svc = RegistryService.from_context(domain, settings)
+                svc.save_graph_analytics(folder, version, entry)
+                # Append a lightweight row to the run history.
+                svc.record_graph_analytics_run(
+                    folder,
+                    version,
+                    DigitalTwin._analytics_run_entry(
+                        status="completed",
+                        class_filter=class_filter_list,
+                        task_id=task_id,
+                        duration_ms=duration_ms,
+                        computed_at=now_iso,
+                        stats=stats,
+                    ),
+                )
+            else:
+                logger.warning(
+                    "run_metrics_task %s: missing folder/version (%r/%r) — "
+                    "result not persisted",
+                    task_id,
+                    folder,
+                    version,
+                )
+
+            node_count = stats.get("node_count", 0)
+            tm.complete_task(
+                task_id,
+                result={"node_count": node_count, "duration_ms": duration_ms},
+                message=f"Analysis done: {node_count} nodes in {duration_ms} ms",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Graph metrics task failed: %s", exc)
+            # Record the failed run in the history (best-effort) so users can
+            # see it in the Analytics History tab. The last good cached result
+            # is intentionally left untouched.
+            if folder and version:
+                try:
+                    RegistryService.from_context(
+                        domain, settings
+                    ).record_graph_analytics_run(
+                        folder,
+                        version,
+                        DigitalTwin._analytics_run_entry(
+                            status="failed",
+                            class_filter=class_filter_list,
+                            task_id=task_id,
+                            duration_ms=int((_time.time() - t0) * 1000),
+                            computed_at=datetime.now(timezone.utc).isoformat(),
+                            error=str(exc),
+                        ),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            tm.fail_task(task_id, str(exc))
+
+    @staticmethod
     def run_inference_task(
         tm,
         task_id: str,
@@ -2593,7 +2748,7 @@ class DigitalTwin:
         from back.core.helpers import get_databricks_client, is_uri
         from back.core.reasoning import ReasoningService
         from back.core.reasoning.models import ReasoningResult as _RR
-        from back.core.triplestore import get_triplestore
+        from back.core.graphdb import get_graphdb
 
         is_api = build_kind == "api"
         try:
@@ -2604,7 +2759,7 @@ class DigitalTwin:
             tm.start_task(task_id)
             tm.update_progress(task_id, 10, "Initialising triple store")
 
-            store = get_triplestore(domain_snap, settings, backend="graph")
+            store = get_graphdb(domain_snap, settings)
             if store is None:
                 if is_api:
                     logger.info(
@@ -2616,7 +2771,7 @@ class DigitalTwin:
                         "Reasoning task %s: graph store unavailable, falling back to view",
                         task_id,
                     )
-                store = get_triplestore(domain_snap, settings, backend="view")
+                store = get_graphdb(domain_snap, settings, engine="view")
             logger.info(
                 "Reasoning task %s: store=%s",
                 task_id,
@@ -2686,9 +2841,7 @@ class DigitalTwin:
                     task_id, 92, "Appending inferred triples to graph..."
                 )
                 try:
-                    graph_store = get_triplestore(
-                        domain_snap, settings, backend="graph"
-                    )
+                    graph_store = get_graphdb(domain_snap, settings)
                     if graph_store is None:
                         logger.warning(
                             "API inference %s: cannot append to graph — store unavailable",
@@ -2927,13 +3080,31 @@ class DigitalTwin:
         registry_schema=None,
         registry_volume=None,
         domain_version=None,
+        *,
+        read_only=False,
     ):
-        """Return the session to operate on; optionally load from registry by name/version."""
+        """Return the session to operate on; optionally load from registry by name/version.
+
+        ``read_only`` (default ``False``) tunes the resolve for read-only
+        query paths (status / stats / triples-find / GraphQL reads):
+
+        * the PUBLISHED document is served from a TTL cache
+          (:meth:`RegistryService.load_published_domain_data_cached`),
+          skipping the newest→oldest version scan;
+        * OWL/R2RML are **not** regenerated (read paths never consume
+          generated content); and
+        * the session is **not** persisted (``save()`` skipped).
+
+        Write/generation paths (build, ontology/R2RML export,
+        design-status) must keep the default ``read_only=False``.
+        """
         from back.objects.registry import RegistryCfg, RegistryService
 
         domain = get_domain(session_mgr)
         if not domain_name:
             return domain
+
+        t0 = time.perf_counter()
         reg = DigitalTwin.resolve_registry(
             session_mgr, settings, registry_catalog, registry_schema, registry_volume
         )
@@ -2955,19 +3126,39 @@ class DigitalTwin:
                     f"PUBLISHED; the API only serves PUBLISHED versions"
                 )
             version = domain_version
+        elif read_only:
+            ok, data, version, err = svc.load_published_domain_data_cached(domain_name)
+            if not ok:
+                raise NotFoundError(err)
         else:
             ok, data, version, err = svc.load_published_domain_data(domain_name)
             if not ok:
                 raise NotFoundError(err)
+        t_registry = time.perf_counter()
+
         domain.clear_generated_content()
         domain.import_from_file(data, version=version)
         domain.domain_folder = domain_name
-        domain.ensure_generated_content()
-        domain.save()
+        t_import = time.perf_counter()
+
+        t_gen = t_import
+        if not read_only:
+            domain.ensure_generated_content()
+            t_gen = time.perf_counter()
+            domain.save()
+        t_end = time.perf_counter()
+
         logger.info(
-            "DigitalTwin: loaded domain '%s' version %s from registry",
+            "DigitalTwin: loaded domain '%s' version %s from registry "
+            "[read_only=%s registry=%.0fms import=%.0fms gen=%.0fms save=%.0fms total=%.0fms]",
             domain_name,
             version,
+            read_only,
+            (t_registry - t0) * 1000,
+            (t_import - t_registry) * 1000,
+            (t_gen - t_import) * 1000,
+            (t_end - t_gen) * 1000,
+            (t_end - t0) * 1000,
         )
         return domain
 
@@ -3088,13 +3279,117 @@ class DigitalTwin:
             },
         }
 
+    def compute_graph_metrics(
+        self,
+        store: Any,
+        graph_name: str,
+        predicate_filter: Optional[List[str]] = None,
+        class_filter: Optional[List[str]] = None,
+        max_triples: int = 500_000,
+        max_nodes_betweenness: int = 2_000,
+    ) -> Dict[str, Any]:
+        """Compute centrality and structural metrics on the full knowledge graph.
+
+        Delegates to :class:`GraphMetrics` from ``back.core.graph_analysis``.
+        Returns a JSON-serializable dict matching the API contract.
+        """
+        from back.core.graph_analysis import GraphMetrics, MetricsRequest
+
+        request = MetricsRequest(
+            predicate_filter=predicate_filter,
+            class_filter=class_filter,
+            max_triples=max_triples,
+            max_nodes_betweenness=max_nodes_betweenness,
+        )
+        service = GraphMetrics(store, graph_name)
+        result = service.compute(request)
+
+        return {
+            "nodes": {
+                uri: {
+                    "degree": m.degree,
+                    "pagerank": m.pagerank,
+                    "betweenness": m.betweenness,
+                    "closeness": m.closeness,
+                    "clustering": m.clustering,
+                }
+                for uri, m in result.nodes.items()
+            },
+            "stats": {
+                "node_count": result.stats.node_count,
+                "graph_node_count": result.stats.graph_node_count,
+                "edge_count": result.stats.edge_count,
+                "connected_components": result.stats.connected_components,
+                "avg_degree": result.stats.avg_degree,
+                "density": result.stats.density,
+                "elapsed_ms": result.stats.elapsed_ms,
+            },
+            "top_pagerank": result.top_pagerank,
+            "node_types": result.node_types,
+            "node_labels": result.node_labels,
+            "entity_type_profiles": {
+                k: {
+                    "uri": v.uri,
+                    "count": v.count,
+                    "avg_degree": v.avg_degree,
+                    "avg_clustering": v.avg_clustering,
+                    "avg_betweenness": v.avg_betweenness,
+                    "distinct_predicates": v.distinct_predicates,
+                    "has_temporal_predicates": v.has_temporal_predicates,
+                    "is_flat": v.is_flat,
+                    "flat_reasons": v.flat_reasons,
+                }
+                for k, v in result.entity_type_profiles.items()
+            },
+        }
+
+    def interpret_graph_metrics(
+        self,
+        payload: Dict[str, Any],
+        host: str,
+        token: str,
+        endpoint_name: str,
+        base_url: str = "",
+        session_cookies: Optional[Dict[str, str]] = None,
+        session_headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Delegate graph-metrics interpretation to ``agent_graph_interpreter``.
+
+        ``payload`` is the JSON dict returned by ``compute_graph_metrics`` plus an
+        optional ``class_filter`` list added by the API layer.
+        Returns ``{ success, sections: [{ title, body | items }] }``.
+        """
+        from agents.agent_graph_interpreter import run_agent
+
+        # DomainSession stores the name under domain.info["name"], not .name
+        domain_name = ""
+        if self._domain is not None:
+            _info = getattr(self._domain, "info", None) or {}
+            domain_name = (_info.get("name") or "").strip() if isinstance(_info, dict) else ""
+
+        result = run_agent(
+            host=host,
+            token=token,
+            endpoint_name=endpoint_name,
+            metrics_payload=payload,
+            base_url=base_url,
+            domain_name=domain_name,
+            session_cookies=session_cookies or {},
+            session_headers=session_headers,
+        )
+
+        if not result.success:
+            return {"success": False, "sections": [], "error": result.error}
+
+        return {"success": True, "sections": result.sections}
+
     @staticmethod
     def compute_dtwin_indicator(
         domain: Any,
         ts_status: Dict[str, Any],
         dt_exist: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Derive a three-state Digital Twin indicator from live graph and artefact checks.
+        """Derive a three-state Knowledge Graph indicator from live graph and artefact checks.
 
         Returns a dict with:
             indicator: ``'green'`` | ``'orange'`` | ``'red'``
@@ -3106,13 +3401,13 @@ class DigitalTwin:
             if not domain.last_build:
                 return {
                     "indicator": "red",
-                    "title": "Digital Twin never built",
+                    "title": "Knowledge Graph never built",
                     "count": 0,
                     "pending": False,
                 }
             return {
                 "indicator": "orange",
-                "title": "Digital Twin status not yet checked",
+                "title": "Knowledge Graph status not yet checked",
                 "count": 0,
                 "pending": True,
             }
@@ -3127,7 +3422,7 @@ class DigitalTwin:
         if graph_loaded and view_exists is not False:
             return {
                 "indicator": "green",
-                "title": f"Digital Twin active — {count:,} triples",
+                "title": f"Knowledge Graph active — {count:,} triples",
                 "count": count,
                 "pending": False,
             }
@@ -3139,7 +3434,7 @@ class DigitalTwin:
         ):
             return {
                 "indicator": "red",
-                "title": "Digital Twin never built",
+                "title": "Knowledge Graph never built",
                 "count": 0,
                 "pending": False,
             }
@@ -3150,9 +3445,9 @@ class DigitalTwin:
         if not graph_loaded:
             parts.append("graph not loaded")
         title = (
-            "Digital Twin incomplete — " + ", ".join(parts)
+            "Knowledge Graph incomplete — " + ", ".join(parts)
             if parts
-            else "Digital Twin partially available"
+            else "Knowledge Graph partially available"
         )
         return {"indicator": "orange", "title": title, "count": count, "pending": False}
 

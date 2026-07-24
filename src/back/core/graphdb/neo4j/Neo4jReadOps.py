@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Set
 from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
 from back.core.graphdb.neo4j.Neo4jWriteOps import sanitise_label
 from back.core.logging import get_logger
-from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 
 logger = get_logger(__name__)
 

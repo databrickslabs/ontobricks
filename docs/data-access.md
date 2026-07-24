@@ -20,7 +20,7 @@ languages, two are engine-facing dialects the platform translates *down to*.
 | **REST** | user-facing | `api/external_app.py`, `api/routers/...`, `api/routers/internal/dtwin.py` | Calls into Python services (`DigitalTwin`, `DomainQueryService`, registry, …) |
 | **GraphQL** | user-facing | `back/core/graphql/GraphQLSchemaBuilder.py`, `ResolverFactory.py`, `back/fastapi/graphql_routes.py` | Resolvers internally call SPARQL / triples-find → Spark SQL |
 | **SPARQL** | user-facing (read-only in chat) | `back/core/w3c/sparql/SparqlTranslator.py`, `SparqlQueryRunner.py`, `DomainQueryService.py` | Translated to **Spark SQL** via R2RML mappings |
-| **Spark SQL** | engine-facing | `back/core/triplestore/delta/DeltaTripleStore.py` | Native execution on Databricks SQL Warehouse against Delta views in Unity Catalog |
+| **Spark SQL** | engine-facing | `back/core/graphdb/delta/DeltaFlatStore.py` | Native execution on Databricks SQL Warehouse against Delta views in Unity Catalog |
 | **Cypher** *(reserved for future engines)* | engine-facing | `back/core/graphdb/GraphDBBackend.py` + concrete engines under `back/core/graphdb/<engine>/` (`supports_cypher = True`, `query_dialect = "cypher"`) | None of the currently shipped engines speaks Cypher — Lakebase Postgres is SQL-only. The capability flags are kept as a seam for plugging in Cypher / Gremlin / SPARQL-store engines. |
 
 ### Supporting W3C standards (not query languages)
@@ -40,19 +40,19 @@ constraints, and rule definitions:
 ## 2. Storage backends — which engine speaks which language
 
 Which engine actually runs your query depends on the domain's configured
-triple-store backend (`TripleStoreFactory.create(...)`):
+triple-store backend (`GraphDBFactory.create(...)`):
 
 | Layer | Storage | Native engine | SPARQL path | Cypher path |
 |---|---|---|---|---|
-| Delta view (`DeltaTripleStore`) | Delta view in Unity Catalog | **Spark SQL** (Databricks SQL Warehouse) | SPARQL → Spark SQL via R2RML | n/a |
-| Graph DB engine (`GraphDBBackend`) | Engine-specific (Lakebase Postgres flat table today) | **Postgres SQL** | SPARQL → engine SQL | Reserved for future Cypher engines |
+| Delta engine (`DeltaFlatStore`) | Delta view in Unity Catalog | **Spark SQL** (Databricks SQL Warehouse) | SPARQL → Spark SQL via R2RML | n/a |
+| Lakebase engine (`LakebaseFlatStore`) | Lakebase Postgres flat table | **Postgres SQL** | SPARQL → engine SQL | Reserved for future Cypher engines |
 
-The selection is made in `back/core/triplestore/TripleStoreFactory.py` and
-`back/core/graphdb/GraphDBFactory.py`. Both layers are always present: the
-Delta view is the governance-controlled snapshot, and the Graph DB engine is
-the queryable mirror used by the Digital Twin, reasoning and BFS / cohort
-helpers. The user-facing wrappers (REST / GraphQL / SPARQL) don't change
-when the Graph DB engine is swapped.
+The selection is made in `back/core/graphdb/GraphDBFactory.py`. Both engines
+share the single `GraphDBBackend` contract: the Delta view is the
+governance-controlled snapshot, and the Lakebase engine is the queryable mirror
+used by the Knowledge Graph, reasoning and BFS / cohort helpers. The
+user-facing wrappers (REST / GraphQL / SPARQL) don't change when the engine is
+swapped.
 
 > **GraphDB engines.** `GraphDBBackend` is the abstract base class; concrete
 > engines live under `back/core/graphdb/<engine>/`. The currently shipped
@@ -125,18 +125,18 @@ and the engine that ultimately runs (column **Engine**).
 | **R2RML** view | `mapping-r2rml.js` | `/mapping/r2rml/raw` | REST | rdflib serializer |
 | **Spark SQL** preview | `mapping-sparksql.js` | `POST /dtwin/translate` | REST → SPARQL **translation only** | `SparqlTranslator` (no execution; shows the generated SQL) |
 
-### 4.4 Digital Twin (the core read surface)
+### 4.4 Knowledge Graph (the core read surface)
 
-This is where users actually query the knowledge graph. **Knowledge Graph**,
-**GraphQL**, and **Graph Chat** all sit under the *Digital Twin* menu; they
+This is where users actually query the graph viewer. **Graph Viewer**,
+**GraphQL**, and **Graph Chat** all sit under the *Knowledge Graph* menu; they
 hit different wrappers but eventually share the same Delta / GraphDB
 storage.
 
 | UI Feature | JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
 | **Insight / Overview** | `query-sync.js` (stats panel), `query.js` | `GET /dtwin/sync/stats`, `GET /dtwin/sync/status` | REST | Spark SQL aggregates on the Delta view, or Postgres SQL aggregates on the Lakebase Graph DB |
-| **Knowledge Graph** (Sigma.js viz) | `query-sigmagraph.js`, `query-d3graph.js` | `GET /dtwin/groups`, `POST /dtwin/sync/filter`, `GET /dtwin/sync/stats?refresh=true`, `POST /dtwin/clusters/detect`, `GET /dtwin/reasoning/inferred` | REST | Each `/sync/filter` call is a **SPARQL** under the hood, translated to **Spark SQL** (Delta) or **Postgres SQL** (Lakebase Graph DB) |
-| **Knowledge Graph → SPARQL panel** | `query-execute.js` | `POST /dtwin/execute` | **SPARQL** | `SparqlQueryRunner` → **Spark SQL** on the SQL Warehouse (Delta view) |
+| **Graph Viewer** (Sigma.js viz) | `query-sigmagraph.js`, `query-d3graph.js` | `GET /dtwin/groups`, `POST /dtwin/sync/filter`, `GET /dtwin/sync/stats?refresh=true`, `POST /dtwin/clusters/detect`, `GET /dtwin/reasoning/inferred` | REST | Each `/sync/filter` call is a **SPARQL** under the hood, translated to **Spark SQL** (Delta) or **Postgres SQL** (Lakebase Graph DB) |
+| **Graph Viewer → SPARQL panel** | `query-execute.js` | `POST /dtwin/execute` | **SPARQL** | `SparqlQueryRunner` → **Spark SQL** on the SQL Warehouse (Delta view) |
 | **GraphQL** | `query-graphql.js` | `GET /graphql/{domain}/schema`, `POST /graphql/{domain}`, `GET /graphql/settings/depth` | **GraphQL** | Schema generated from OWL; resolvers call `DomainQueryService` → SPARQL → **Spark SQL** |
 | **Graph Chat** | `query-chat.js`, agent `agent_dtwin_chat` | `POST /dtwin/assistant/chat`, `GET/DELETE /dtwin/assistant/history` | REST → LLM tool-calling | LLM calls REST + GraphQL + SPARQL tools (see §6) |
 | **Build** (materialize triple store) | `query-sync.js` | `POST /dtwin/sync/start`, `POST /dtwin/sync/load` | REST | `_BuildPipeline` runs the R2RML SQL on the Warehouse (Delta `CREATE OR REPLACE VIEW`) and streams the rows into the active Graph DB engine via `bulk_insert_iter` (`COPY FROM STDIN` on Lakebase) |
@@ -165,7 +165,7 @@ App, authenticates with an M2M OAuth token, and uses `httpx.AsyncClient`. It
 | `list_domains` | `GET /api/v1/domains` | REST | UC Volume listing |
 | `list_domain_versions` | `GET /api/v1/domain/versions` | REST | UC Volume listing |
 | `get_design_status` | `GET /api/v1/domain/design-status` | REST | Python aggregator |
-| `select_domain` | `GET /api/v1/digitaltwin/status` | REST | DeltaTripleStore status (Spark SQL) or GraphDB status |
+| `select_domain` | `GET /api/v1/digitaltwin/status` | REST | DeltaFlatStore status (Spark SQL) or GraphDB status |
 | `list_entity_types` | `GET /api/v1/digitaltwin/stats` | REST | **Spark SQL** GROUP BY on the triple view (Delta) or GraphDB MATCH counts |
 | `describe_entity` | `GET /api/v1/digitaltwin/triples/find` | REST | SPARQL-style BFS internally → **Spark SQL** (Delta) or **Cypher** (GraphDB) |
 | `get_status` | `GET /api/v1/digitaltwin/status` | REST | Same as `select_domain` |
@@ -312,7 +312,7 @@ Cursor (stdio)  ──FastMCP──▶  src/mcp-server/server/app.py
 
 Wrappers in play: REST (transport) → **GraphQL** (query) → SPARQL → **Spark SQL**.
 
-### 9.3 User opens **Knowledge Graph** tab and applies a filter
+### 9.3 User opens **Graph Viewer** tab and applies a filter
 
 ```text
 Browser  ──POST /dtwin/sync/filter──▶  api/routers/internal/dtwin.py
@@ -344,7 +344,7 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 | Surface | REST | GraphQL | SPARQL | Spark SQL (Delta) | Postgres SQL (Lakebase) |
 |---|:---:|:---:|:---:|:---:|:---:|
 | UI — Registry / Domain / Ontology / Mapping | ✓ | | | sample-only | |
-| UI — Knowledge Graph (Sigma) | ✓ | | (via filter) | ✓ | ✓ |
+| UI — Graph Viewer (Sigma) | ✓ | | (via filter) | ✓ | ✓ |
 | UI — SPARQL panel | | | ✓ | ✓ | |
 | UI — GraphQL tab | | ✓ | (under) | ✓ | |
 | UI — Graph Chat | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -364,9 +364,9 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 - REST routes — `src/api/routers/internal/dtwin.py`, `src/api/routers/v1.py`, `src/api/external_app.py`
 - GraphQL — `src/back/fastapi/graphql_routes.py`, `src/back/core/graphql/{GraphQLSchemaBuilder,ResolverFactory,SchemaMetadata}.py`
 - SPARQL — `src/back/core/w3c/sparql/{SparqlTranslator,SparqlQueryRunner,DomainQueryService}.py`
-- Triple-store factory — `src/back/core/triplestore/TripleStoreFactory.py`
-- Delta backend — `src/back/core/triplestore/delta/DeltaTripleStore.py`
-- GraphDB backend — `src/back/core/graphdb/GraphDBBackend.py`, `src/back/core/graphdb/GraphDBFactory.py`
+- Graph DB factory — `src/back/core/graphdb/GraphDBFactory.py`
+- GraphDB backend — `src/back/core/graphdb/GraphDBBackend.py`
+- Delta engine — `src/back/core/graphdb/delta/DeltaFlatStore.py`
 - GraphDB engine (Lakebase Postgres) — `src/back/core/graphdb/lakebase/{LakebaseBase,LakebaseFlatStore,SyncedTableManager}.py`
 - Reasoning — `src/back/core/reasoning/{OWLRLReasoner,SWRLSQLTranslator,SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
 - MCP server — `src/mcp-server/server/app.py`, `src/mcp-server/mcp_server.py`

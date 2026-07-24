@@ -4,7 +4,7 @@
     <div>
         <h4 class="mb-1"><i class="bi bi-braces-asterisk me-2"></i>GraphQL Playground</h4>
         <p class="text-muted mb-0 small">
-            Query the knowledge graph with the auto-generated GraphQL schema<br>
+            Query the graph viewer with the auto-generated GraphQL schema<br>
             <i class="bi bi-folder2-open"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50 ob-badge-version">v{{ current_version }}</span> <span class="js-version-status-badge badge border bg-warning-subtle text-dark border-warning" style="font-size:0.6rem;">Draft</span><br>
             <i class="bi bi-diagram-3"></i> Graph DB: <code id="graphqlGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
             <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" onclick="_openGraphSwitcherModal()" title="Switch to another domain graph">
@@ -23,6 +23,10 @@
         </button>
         <button class="btn btn-sm btn-outline-secondary" id="graphqlOpenNewTab" title="Open in new tab" style="display:none">
             <i class="bi bi-box-arrow-up-right me-1"></i>New tab
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
+            <i class="bi bi-chat-dots"></i>
         </button>
     </div>
 </div>

@@ -1,0 +1,69 @@
+{# Settings → Logs tab body.
+   Calls GET /settings/logs (admin-only) and renders the last N lines of the
+   rotating application log file — the same output visible in the Databricks
+   Apps console.  Lazy-loaded on first tab open by settings-logs.js.
+#}
+
+<div class="alert alert-info small d-flex align-items-start mb-3" role="alert">
+    <i class="bi bi-info-circle me-2 mt-1"></i>
+    <div>
+        Live tail of the rotating application log file written by
+        <code>LogManager</code>.  This is the same output you see in the
+        Databricks Apps console under <strong>Logs</strong>.
+        The file path and current log level are shown in the footer.
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+
+    <!-- Level filter -->
+    <div class="btn-group btn-group-sm" id="logsLevelFilter" role="group" aria-label="Log level filter">
+        <button type="button" class="btn btn-outline-secondary active" data-level="ALL">All</button>
+        <button type="button" class="btn btn-outline-secondary" data-level="DEBUG">Debug</button>
+        <button type="button" class="btn btn-outline-secondary" data-level="INFO">Info</button>
+        <button type="button" class="btn btn-outline-secondary" data-level="WARNING">Warning</button>
+        <button type="button" class="btn btn-outline-secondary" data-level="ERROR">Error</button>
+    </div>
+
+    <!-- Text search -->
+    <div class="input-group input-group-sm" style="max-width: 280px;">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control font-monospace" id="logsSearchInput"
+               placeholder="Filter lines…" autocomplete="off" spellcheck="false">
+        <button type="button" class="btn btn-outline-secondary" id="btnClearLogsSearch" title="Clear filter">
+            <i class="bi bi-x"></i>
+        </button>
+    </div>
+
+    <!-- Line count selector -->
+    <div class="input-group input-group-sm" style="max-width: 160px;">
+        <label class="input-group-text" for="logsLineCount">Lines</label>
+        <select class="form-select form-select-sm" id="logsLineCount">
+            <option value="100">Last 100</option>
+            <option value="200" selected>Last 200</option>
+            <option value="500">Last 500</option>
+            <option value="1000">Last 1 000</option>
+            <option value="5000">Last 5 000</option>
+        </select>
+    </div>
+
+</div>
+
+<!-- Status bar -->
+<div class="d-flex justify-content-between align-items-center mb-1 small text-muted" id="logsStatusBar">
+    <span id="logsStatusText">Loading…</span>
+    <span id="logsMatchCount"></span>
+</div>
+
+<!-- Log console -->
+<div id="logsConsoleWrap" class="border rounded bg-dark position-relative" style="flex: 1; min-height: 100px; overflow-y: auto;">
+    <div class="text-center text-secondary py-5" id="logsLoadingPlaceholder">
+        <span class="spinner-border spinner-border-sm me-1"></span> Loading log entries…
+    </div>
+    <pre id="logsConsole" class="p-3 mb-0 text-white font-monospace small"
+         style="white-space: pre-wrap; word-break: break-all; display: none;"></pre>
+</div>
+
+<!-- Footer -->
+<p class="text-muted small mt-2 mb-0" id="logsFooter"></p>

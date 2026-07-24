@@ -519,7 +519,7 @@
                 </div>
                 <div class="ovz-palette-content">
                     <div class="ovz-palette-section">
-                        <div class="ovz-palette-section-title">Entities (${this.entities.size})</div>
+                        <div class="ovz-palette-section-title">Entities (${this.getVisibleEntityCount()} / ${this.entities.size} visible)</div>
                         <div class="ovz-palette-items" data-section="entities">
                             ${entitiesHtml || '<div class="ovz-palette-empty">No entities</div>'}
                         </div>
@@ -670,7 +670,10 @@
             }
             // NOTE: Removed _updateRelationshipPaths() call - it was re-rendering elements
             // and losing visibility settings. Visibility toggling doesn't require path re-rendering.
-            
+
+            // Keep the status bar counters in sync with the visible set.
+            this._updateStatusBar();
+
             // Fire visibility change callback (for auto-save)
             if (!skipCallback && this.options.onVisibilityChange) {
                 this.options.onVisibilityChange(type, id, visible);
@@ -781,15 +784,65 @@
             this.statusBar.innerHTML = `
                 <div class="ovz-status-item">
                     <span class="ovz-status-dot"></span>
-                    <span>Entities: ${this.entities.size}</span>
+                    <span>Entities: ${this.getVisibleEntityCount()}</span>
                 </div>
                 <div class="ovz-status-item">
-                    <span>Relationships: ${this.relationships.size}</span>
+                    <span>Relationships: ${this.getVisibleRelationshipCount()}</span>
                 </div>
                 <div class="ovz-status-item">
-                    <span>Inheritances: ${this.inheritances.size}</span>
+                    <span>Inheritances: ${this.getVisibleInheritanceCount()}</span>
                 </div>
             `;
+        }
+
+        /** Count of entities currently visible in the view (not hidden via visibility palette). */
+        getVisibleEntityCount() {
+            let count = 0;
+            this.entities.forEach((entity, id) => {
+                if (this.visibilityState.entities.get(id) !== false) count++;
+            });
+            return count;
+        }
+
+        /**
+         * Count of relationships currently visible in the view. A relationship
+         * is visible only when its own toggle is on AND both connected entities
+         * are visible (mirrors _updateRelationshipVisibility).
+         */
+        getVisibleRelationshipCount() {
+            let count = 0;
+            this.relationships.forEach((rel, id) => {
+                const sourceVisible = this.visibilityState.entities.get(rel.sourceEntityId) !== false;
+                const targetVisible = this.visibilityState.entities.get(rel.targetEntityId) !== false;
+                const explicitlyVisible = this.visibilityState.relationships.get(id) !== false;
+                if (sourceVisible && targetVisible && explicitlyVisible) count++;
+            });
+            return count;
+        }
+
+        /**
+         * Count of inheritance links currently visible in the view. An
+         * inheritance is visible only when its own toggle is on AND both
+         * connected entities are visible (mirrors _updateInheritanceVisibility).
+         */
+        getVisibleInheritanceCount() {
+            let count = 0;
+            this.inheritances.forEach((inh, id) => {
+                const sourceVisible = this.visibilityState.entities.get(inh.sourceEntityId) !== false;
+                const targetVisible = this.visibilityState.entities.get(inh.targetEntityId) !== false;
+                const explicitlyVisible = this.visibilityState.inheritances.get(id) !== false;
+                if (sourceVisible && targetVisible && explicitlyVisible) count++;
+            });
+            return count;
+        }
+
+        /** Names of entities currently visible in the view (not hidden via visibility palette). */
+        getVisibleEntityNames() {
+            const names = [];
+            this.entities.forEach((entity, id) => {
+                if (this.visibilityState.entities.get(id) !== false) names.push(entity.name);
+            });
+            return names;
         }
 
         // ==========================================
@@ -2110,8 +2163,20 @@
                     y: entityCenterY - loopSize * 0.7
                 };
             } else {
-                const dx = points.target.x - points.source.x;
-                const dy = points.target.y - points.source.y;
+                // Normalize the direction vector to a canonical ordering (smaller entity ID
+                // → larger entity ID) so that relationships in opposite directions between
+                // the same entity pair always receive perpendicular offsets that push them
+                // to *opposite* sides rather than the same side. Without this, the sign of
+                // dx/dy flips for a B→A relationship relative to A→B, and since the index
+                // offsets also flip (+15 vs -15), the two perpendicular displacements end up
+                // identical and the labels stack on top of each other.
+                const canonicalForward = relationship.sourceEntityId <= relationship.targetEntityId;
+                const dx = canonicalForward
+                    ? points.target.x - points.source.x
+                    : points.source.x - points.target.x;
+                const dy = canonicalForward
+                    ? points.target.y - points.source.y
+                    : points.source.y - points.target.y;
                 const distance = Math.sqrt(dx * dx + dy * dy) || 1;
                 const perpX = -dy / distance * offset;
                 const perpY = dx / distance * offset;
@@ -3974,11 +4039,20 @@
             const canvasWidth = this.container.offsetWidth || 800;
             const canvasHeight = this.container.offsetHeight || 600;
 
-            // Calculate the bounding box of all entities
+            // Frame the *visible* entities. Curated business views hide part of the
+            // graph, and the hidden entities are often what anchored the original
+            // centre — measuring the bounding box over all of them would push the
+            // few visible cards off-screen, making the view look empty.
+            const visibleEntities = entityList.filter(
+                entity => this.visibilityState?.entities?.get(entity.id) !== false
+            );
+            const boxEntities = visibleEntities.length > 0 ? visibleEntities : entityList;
+
+            // Calculate the bounding box of the visible entities
             let minX = Infinity, minY = Infinity;
             let maxX = -Infinity, maxY = -Infinity;
 
-            entityList.forEach(entity => {
+            boxEntities.forEach(entity => {
                 const bounds = this._getEntityBounds(entity);
                 minX = Math.min(minX, bounds.x);
                 minY = Math.min(minY, bounds.y);

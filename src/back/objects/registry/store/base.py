@@ -61,7 +61,7 @@ class ScheduleHistoryEntry(TypedDict, total=False):
 class BuildRunEntry(TypedDict, total=False):
     """One row in a domain's build-run trace (``build_runs`` table).
 
-    Captures the full statistics of a single Digital Twin build,
+    Captures the full statistics of a single Knowledge Graph build,
     regardless of which path triggered it (``session`` / ``api`` /
     ``scheduled``). The grain is the tuple ``(folder, version)``; many
     entries per tuple are expected and the most recent successful one
@@ -90,6 +90,55 @@ class BuildRunEntry(TypedDict, total=False):
     stats: Dict[str, Any]
 
 
+class GraphAnalyticsResult(TypedDict, total=False):
+    """The LAST computed knowledge-graph metrics for ``(folder, version)``.
+
+    Unlike :class:`BuildRunEntry` this is a *cache*, not a trace: exactly
+    one row per tuple, replaced on every successful recompute (UPSERT).
+    ``result`` carries the full ``DigitalTwin.compute_graph_metrics``
+    payload (nodes, entity_type_profiles, node_types/labels) so the
+    Analytics page and the AI Interpret agent can rebuild every tab from
+    storage. ``stats`` / ``top_pagerank`` are denormalised for the cheap
+    Domain Validation cockpit summary read.
+    """
+
+    version: str
+    status: str                  # 'completed' | 'failed'
+    graph_name: str
+    class_filter: List[str]      # entity-type URIs used ([] = all)
+    stats: Dict[str, Any]
+    top_pagerank: List[Any]
+    result: Dict[str, Any]       # full compute payload
+    error: str
+    task_id: str
+    duration_ms: int
+    computed_at: str             # ISO timestamp
+
+
+class GraphAnalyticsRun(TypedDict, total=False):
+    """One row in the analytics run history (``graph_analytics_runs``).
+
+    Lightweight metadata captured for *every* analysis launched (success
+    or failure) on ``(folder, version)`` — unlike
+    :class:`GraphAnalyticsResult`, which caches only the last full result.
+    Backs the Analytics page "History" tab. Append-only; capped per tuple.
+    """
+
+    id: int                      # row id (0 for stores without a serial PK)
+    version: str
+    status: str                  # 'completed' | 'failed'
+    class_filter: List[str]      # entity-type URIs used ([] = all)
+    node_count: int
+    edge_count: int
+    connected_components: int
+    avg_degree: float
+    density: float
+    duration_ms: int
+    task_id: str
+    error: str
+    computed_at: str             # ISO timestamp
+
+
 class ReviewEvent(TypedDict, total=False):
     """One row in the domain-version review / validation audit log.
 
@@ -110,6 +159,73 @@ class ReviewEvent(TypedDict, total=False):
     comment: str
     meta: Dict[str, Any]
     created_at: str          # ISO timestamp
+
+
+class ChangeEvent(TypedDict, total=False):
+    """One row in the ontology / mapping change audit log.
+
+    Captures a single fine-grained design edit for the tuple
+    ``(folder, version)`` — a class/property/mapping added, updated or
+    removed, an import, a reset, etc. ``source`` distinguishes human
+    (``user``) from AI-assistant (``agent``) edits. ``occurred_at`` is
+    the real edit time (buffered in the session); ``created_at`` is the
+    flush/save-to-registry time. Rows are append-only and ordered by
+    ``occurred_at``.
+    """
+
+    id: str                  # row id (UUID string; "" for stores without one)
+    folder: str              # domain folder (populated by reads)
+    version: str
+    actor: str               # acting user email
+    source: str              # 'user' | 'agent'
+    action: str              # class_added|class_updated|mapping_entity_removed|...
+    entity_type: str         # class | property | shacl | swrl | mapping | ...
+    entity_ref: str          # uri or name of the affected entity
+    summary: str
+    meta: Dict[str, Any]
+    occurred_at: str         # ISO timestamp (real edit time)
+    created_at: str          # ISO timestamp (flush/save time)
+
+
+class DomainComment(TypedDict, total=False):
+    """One threaded comment on a DRAFT domain's discussion.
+
+    Discussions are domain-wide: every comment belongs to the single
+    per-(domain, version) thread. A non-empty ``parent_id`` makes the row a
+    reply in a thread. Rows are append-only and ordered by ``created_at``;
+    ``resolved`` flips a thread closed without deleting the history.
+    """
+
+    id: str                  # row id (UUID string; "" for stores without one)
+    folder: str              # domain folder (populated by reads)
+    version: str
+    parent_id: str           # thread parent comment id ("" for a root comment)
+    author: str              # acting user email
+    body: str
+    resolved: bool
+    created_at: str          # ISO timestamp
+
+
+class DomainTask(TypedDict, total=False):
+    """A personalised work item assigned to a teammate on a DRAFT domain.
+
+    Usually born from a comment (``comment_id``) turned into actionable
+    work, surfaced in the assignee's "My Tasks" worklist. ``status``
+    walks ``open -> in_progress -> done`` (or ``cancelled``).
+    """
+
+    id: str                  # row id (UUID string; "" for stores without one)
+    folder: str              # domain folder (populated by reads)
+    version: str
+    assignee: str            # email the work is assigned to
+    created_by: str          # email that created the task
+    title: str
+    description: str
+    status: str              # open|in_progress|done|cancelled
+    due_date: str            # ISO date ("" when unset)
+    comment_id: str          # originating comment id ("" when standalone)
+    created_at: str          # ISO timestamp
+    updated_at: str          # ISO timestamp
 
 
 class RegistryStore(ABC):
@@ -206,6 +322,20 @@ class RegistryStore(ABC):
         a single (domain, version) without rewriting the full document.
         """
 
+    def get_version_status(
+        self, folder: str, version: str
+    ) -> Optional[str]:
+        """Return the lifecycle status of one version, or ``None`` if absent.
+
+        Default derives it from the full document; stores with a
+        denormalised ``status`` column should override with a cheap query.
+        Must NOT raise on missing domain/version.
+        """
+        ok, data, _ = self.read_version(folder, version)
+        if not ok:
+            return None
+        return (data.get("info", {}) or {}).get("status")
+
     # ------------------------------------------------------------------
     # Domain-level permissions
     # ------------------------------------------------------------------
@@ -247,7 +377,7 @@ class RegistryStore(ABC):
     # ------------------------------------------------------------------
     # Build-run trace (analytics)
     #
-    # One immutable row per Digital Twin build — across every path
+    # One immutable row per Knowledge Graph build — across every path
     # (UI session / external API / scheduler). Linked to the domain
     # row; grain is the tuple ``(folder, version)``. Unlike
     # ``schedule_runs`` this is *not* capped — the whole point is a
@@ -260,6 +390,25 @@ class RegistryStore(ABC):
         """Append a build-run trace row for *folder*. Best-effort; must
         NOT raise (log + swallow on failure).
         """
+
+    def stamp_last_build(
+        self, folder: str, version: str, ts: str
+    ) -> Tuple[bool, str]:
+        """Lightweight update: write *ts* into ``domain_versions.last_build``
+        for ``(folder, version)`` without touching any other column.
+
+        Default implementation falls back to a full ``read_version`` +
+        ``write_version`` round-trip so that stores which do not override
+        this method still work correctly (at higher cost).
+
+        Returns ``(ok, message)``.
+        """
+        ok, data, msg = self.read_version(folder, version)
+        if not ok:
+            return False, f"stamp_last_build read failed: {msg}"
+        info = data.setdefault("info", {})
+        info["last_build"] = ts
+        return self.write_version(folder, version, data)
 
     @abstractmethod
     def load_build_runs(
@@ -301,6 +450,55 @@ class RegistryStore(ABC):
 
         Empty/zeroed dict on any error.
         """
+
+    # ------------------------------------------------------------------
+    # Graph analytics cache
+    #
+    # The LAST computed knowledge-graph metrics per (folder, version) —
+    # a single row replaced on every successful recompute (UPSERT), not
+    # an append-only trace. Powers the asynchronous KG Analytics page
+    # and the Domain Validation cockpit, which render from this row
+    # instead of recomputing NetworkX metrics on request. Best-effort:
+    # a failed write must never break the background analytics task.
+    # Default implementations are no-ops so stores that do not support
+    # the cache degrade gracefully (the page simply shows "no result").
+    # ------------------------------------------------------------------
+
+    def save_graph_analytics(
+        self, folder: str, version: str, entry: GraphAnalyticsResult
+    ) -> None:
+        """UPSERT the latest analytics result for ``(folder, version)``.
+
+        Best-effort; must NOT raise (log + swallow on failure). Default
+        is a no-op for stores without a graph-analytics cache.
+        """
+
+    def load_graph_analytics(
+        self, folder: str, version: str
+    ) -> Optional[GraphAnalyticsResult]:
+        """Return the stored analytics result for ``(folder, version)``,
+        or ``None`` when none exists. Never raises (returns ``None`` on
+        any error). Default is ``None`` for stores without a cache.
+        """
+        return None
+
+    def record_graph_analytics_run(
+        self, folder: str, version: str, entry: GraphAnalyticsRun
+    ) -> None:
+        """Append a run-history row for ``(folder, version)``.
+
+        Best-effort; must NOT raise. Default is a no-op for stores without
+        a run-history table.
+        """
+
+    def load_graph_analytics_runs(
+        self, folder: str, version: str, *, limit: int = 100
+    ) -> List[GraphAnalyticsRun]:
+        """Newest-first analytics run history for ``(folder, version)``,
+        capped at *limit* rows. Empty list on any error. Default is an
+        empty list for stores without a run-history table.
+        """
+        return []
 
     # ------------------------------------------------------------------
     # Review / validation audit log
@@ -346,6 +544,125 @@ class RegistryStore(ABC):
         """All review events across the registry, each enriched with its
         ``folder``. Oldest-first. Backs the cross-domain "My Tasks"
         worklist. Empty list on any error.
+        """
+
+    # ------------------------------------------------------------------
+    # Ontology / mapping change audit (append-only)
+    #
+    # Fine-grained design edits are buffered in the working session and
+    # flushed here in one batch when a domain version is saved to the
+    # registry. Keyed by ``(folder, version)``; reads return
+    # oldest-first (by ``occurred_at``).
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def record_change_events(
+        self,
+        folder: str,
+        version: str,
+        actor: str,
+        events: List[Dict[str, Any]],
+    ) -> Tuple[bool, str]:
+        """Append a batch of change-audit rows for ``(folder, version)``.
+
+        Each entry in *events* is a buffered edit
+        (``action``/``entity_type``/``entity_ref``/``summary``/``source``/
+        ``meta``/``occurred_at``). ``actor`` is the acting user stamped on
+        every row. Best-effort: returns ``(False, msg)`` instead of
+        raising so a save is never rolled back by a failed audit write.
+        """
+
+    @abstractmethod
+    def list_change_events(
+        self, folder: str, version: Optional[str] = None, limit: int = 500
+    ) -> List[ChangeEvent]:
+        """Oldest-first change events for *folder* (optionally a single
+        *version*), capped at *limit*. Empty list on any error.
+        """
+
+    # ------------------------------------------------------------------
+    # Collaborative comments + tasks
+    #
+    # Contextual threaded comments anchored to a DRAFT domain (ontology
+    # class/property, mapping, graph node/edge, or the whole domain) and
+    # the personalised tasks they can spawn. Both are keyed by
+    # ``(folder, version)``. Writes return the created row (or ``None``
+    # on failure) so a comment can be turned into a task in one round
+    # trip; reads return oldest-first. All methods are best-effort and
+    # must NOT raise (log + swallow) — a UI surface should degrade
+    # gracefully when the backend is mid-migration.
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def insert_comment(
+        self,
+        folder: str,
+        version: str,
+        *,
+        author: str,
+        body: str,
+        parent_id: Optional[str] = None,
+    ) -> Optional[DomainComment]:
+        """Append a comment for ``(folder, version)``; return the created
+        row (with its id + timestamp) or ``None`` on failure.
+        """
+
+    @abstractmethod
+    def list_comments(
+        self,
+        folder: str,
+        version: Optional[str] = None,
+        *,
+        include_resolved: bool = True,
+    ) -> List[DomainComment]:
+        """Oldest-first comments for *folder*, optionally scoped to a
+        version. Empty list on any error.
+        """
+
+    @abstractmethod
+    def resolve_comment(
+        self, folder: str, comment_id: str, *, resolved: bool = True
+    ) -> Tuple[bool, str]:
+        """Flip a comment's ``resolved`` flag. ``(False, msg)`` when the
+        comment does not exist or on error.
+        """
+
+    @abstractmethod
+    def insert_task(
+        self,
+        folder: str,
+        version: str,
+        *,
+        assignee: str,
+        created_by: str,
+        title: str,
+        description: str = "",
+        due_date: Optional[str] = None,
+        comment_id: Optional[str] = None,
+    ) -> Optional[DomainTask]:
+        """Create a task for ``(folder, version)``; return the created row
+        or ``None`` on failure.
+        """
+
+    @abstractmethod
+    def list_tasks(
+        self, folder: str, version: Optional[str] = None
+    ) -> List[DomainTask]:
+        """Newest-first tasks for *folder* (optionally one *version*)."""
+
+    @abstractmethod
+    def list_tasks_for_assignee(self, assignee: str) -> List[DomainTask]:
+        """All tasks across the registry assigned to *assignee* (case-
+        insensitive), each enriched with its ``folder``. Newest-first.
+        Backs the assignee's "My Tasks" worklist.
+        """
+
+    @abstractmethod
+    def update_task_status(
+        self, folder: str, task_id: str, status: str
+    ) -> Tuple[bool, str]:
+        """Set a task's ``status``. ``(False, msg)`` when the task does
+        not exist or on error.
         """
 
     # ------------------------------------------------------------------

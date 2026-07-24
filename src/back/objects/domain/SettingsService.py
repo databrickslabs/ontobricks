@@ -21,6 +21,7 @@ from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.core.helpers import (
     get_databricks_client,
     get_databricks_host_and_token,
+    resolve_delta_warehouse_id,
     resolve_warehouse_id,
     run_blocking,
 )
@@ -33,7 +34,12 @@ from back.objects.registry import (
     invalidate_registry_cache,
     obx_format,
 )
-from back.objects.registry.version_lifecycle import check_status_transition
+from back.objects.registry.version_lifecycle import (
+    check_status_transition,
+    STATUS_DRAFT,
+    STATUS_IN_REVIEW,
+    STATUS_PUBLISHED,
+)
 from back.objects.domain.version_status import clear_version_status_cache
 from back.objects.session import (
     SessionManager,
@@ -90,6 +96,8 @@ class SettingsService:
         *,
         engine: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
+        triple_store_backend: Optional[str] = None,
+        delta_warehouse_id: Optional[str] = None,
     ) -> None:
         """Copy graph DB settings into ``domain.settings['registry']`` (best-effort).
 
@@ -98,7 +106,12 @@ class SettingsService:
         or Lakebase ``global_config`` JSONB). Mirroring keeps the domain JSON
         export aligned with the catalog/schema/volume block for operators.
         """
-        if engine is None and config is None:
+        if (
+            engine is None
+            and config is None
+            and triple_store_backend is None
+            and delta_warehouse_id is None
+        ):
             return
         try:
             domain = get_domain(session_mgr)
@@ -107,6 +120,10 @@ class SettingsService:
                 reg["graph_engine"] = engine
             if config is not None:
                 reg["graph_engine_config"] = dict(config)
+            if triple_store_backend is not None:
+                reg["triple_store_backend"] = triple_store_backend
+            if delta_warehouse_id is not None:
+                reg["delta_warehouse_id"] = delta_warehouse_id
             domain.save()
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -325,6 +342,53 @@ class SettingsService:
         return {"success": True, "message": "Warehouse selected"}
 
     @staticmethod
+    def select_delta_warehouse(
+        warehouse_id: Optional[str],
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist Delta triple-store warehouse selection in global config."""
+        if warehouse_id is None:
+            raise ValidationError("No warehouse ID provided")
+
+        wid = (warehouse_id or "").strip()
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        domain, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ok, msg = global_config_service.set_delta_warehouse_id(
+            host,
+            token,
+            registry_cfg,
+            wid,
+        )
+        if not ok:
+            logger.warning(
+                "Delta warehouse save failed: %s",
+                msg,
+            )
+            raise ValidationError(msg)
+        global_config_service.load(host, token, registry_cfg, force=True)
+        SettingsService._mirror_graph_engine_to_domain_registry(
+            session_mgr, delta_warehouse_id=wid
+        )
+        return {
+            "success": True,
+            "message": (
+                "Delta SQL Warehouse selected"
+                if wid
+                else "Delta SQL Warehouse cleared — using global warehouse"
+            ),
+            "delta_warehouse_id": wid,
+            "effective_delta_warehouse_id": resolve_delta_warehouse_id(
+                domain, settings
+            ),
+        }
+
+    @staticmethod
     async def fetch_catalogs(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
@@ -380,6 +444,119 @@ class SettingsService:
             raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
 
     @staticmethod
+    async def fetch_uc_assets(
+        catalog: str,
+        schema: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        log_label: str = "Get UC assets",
+    ) -> Dict[str, Any]:
+        """List tables and views in *catalog*.*schema* (with ``table_type``)."""
+        try:
+            client = get_databricks_client(get_domain(session_mgr), settings)
+            if not client:
+                raise ValidationError("Databricks not configured")
+            assets = await run_blocking(
+                client.list_tables_and_views, catalog, schema
+            )
+            return {"success": True, "assets": assets}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("%s failed: %s", log_label, e)
+            raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
+
+    @staticmethod
+    async def check_lakebase_permissions(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Run a comprehensive Lakebase permission check for the registry schema.
+
+        Delegates to :meth:`LakebaseRegistryStore.check_permissions` which
+        probes connection, schema existence/privileges, and per-table CRUD
+        rights in a single round-trip. Returns ``{"success": False, ...}``
+        when psycopg is not installed or the Lakebase resource is unbound.
+        """
+        rcfg = RegistryCfg.from_session(session_mgr, settings)
+        if not rcfg.is_configured:
+            return {
+                "success": False,
+                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA",
+            }
+        try:
+            from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
+            store = RegistryFactory.lakebase(
+                registry_cfg=rcfg,
+                schema=rcfg.lakebase_schema,
+                database=rcfg.lakebase_database,
+            )
+            return await run_blocking(store.check_permissions)
+        except ImportError:
+            return {
+                "success": False,
+                "error": "psycopg is not installed — Lakebase backend unavailable.",
+            }
+        except Exception as exc:
+            logger.warning("check_lakebase_permissions failed: %s", exc)
+            return {"success": False, "error": str(exc)}
+
+    @staticmethod
+    async def check_registry_access(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Verify that the configured UC schema and Volume exist and are accessible.
+
+        Performs two independent REST API probes (no warehouse required):
+
+        1. ``catalog.schema`` — checks existence and USE SCHEMA privilege.
+        2. ``catalog.schema.volume`` — checks existence and READ VOLUME privilege.
+
+        The result shape::
+
+            {
+              "success": True,
+              "schema": {
+                "path": "my_catalog.my_schema",
+                "exists": bool | None,
+                "accessible": bool,
+                "error": str | None,
+              },
+              "volume": {
+                "name": "OntoBricksRegistry",
+                "path": "my_catalog.my_schema.OntoBricksRegistry",
+                "exists": bool | None,
+                "accessible": bool,
+                "error": str | None,
+                "volume_type": "MANAGED" | "EXTERNAL",
+              },
+            }
+        """
+        rcfg = RegistryCfg.from_session(session_mgr, settings)
+        if not rcfg.is_configured:
+            return {
+                "success": False,
+                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME",
+            }
+
+        client = get_databricks_client(get_domain(session_mgr), settings)
+        if not client:
+            return {"success": False, "error": "Databricks client not available"}
+
+        schema_result = await run_blocking(
+            client.catalog.check_schema_access, rcfg.catalog, rcfg.schema
+        )
+        schema_result["path"] = f"{rcfg.catalog}.{rcfg.schema}"
+
+        vol_name = rcfg.volume or "OntoBricksRegistry"
+        volume_result = await run_blocking(
+            client.catalog.check_volume_access, rcfg.catalog, rcfg.schema, vol_name
+        )
+        volume_result["name"] = vol_name
+        volume_result["path"] = f"{rcfg.catalog}.{rcfg.schema}.{vol_name}"
+
+        return {"success": True, "schema": schema_result, "volume": volume_result}
+
+    @staticmethod
     def build_registry_get_payload(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
@@ -409,6 +586,7 @@ class SettingsService:
 
         graph_engine = "lakebase"
         graph_engine_config: Dict[str, Any] = {}
+        delta_warehouse_id = ""
         if rcfg.is_configured:
             try:
                 _, host, token, registry_cfg = SettingsService._resolve_context(
@@ -419,6 +597,9 @@ class SettingsService:
                     host, token, registry_cfg
                 )
                 graph_engine_config = global_config_service.get_graph_engine_config(
+                    host, token, registry_cfg
+                )
+                delta_warehouse_id = global_config_service.get_delta_warehouse_id(
                     host, token, registry_cfg
                 )
             except Exception:
@@ -435,6 +616,7 @@ class SettingsService:
             "lakebase": SettingsService._lakebase_runtime_info(rcfg),
             "graph_engine": graph_engine,
             "graph_engine_config": graph_engine_config,
+            "delta_warehouse_id": delta_warehouse_id,
         }
 
     @staticmethod
@@ -581,93 +763,6 @@ class SettingsService:
 
 
     @staticmethod
-    def lakebase_stats_result(
-        session_mgr: SessionManager, settings: Settings
-    ) -> Dict[str, Any]:
-        """Return per-table row counts for the Lakebase registry schema.
-
-        Used by the admin Registry Location panel to give a quick at-a-
-        glance inventory of what currently lives in Lakebase.
-        """
-        from back.core.databricks import get_lakebase_auth
-
-        auth = get_lakebase_auth()
-        if not auth.is_available:
-            raise ValidationError(
-                "Lakebase resource not bound (PGHOST/PGUSER missing)"
-            )
-
-        try:
-            domain = get_domain(session_mgr)
-            cfg = RegistryCfg.from_domain(domain, settings)
-            host, token = get_databricks_host_and_token(domain, settings)
-        except Exception as exc:
-            raise InfrastructureError(
-                "Could not resolve registry context", detail=str(exc)
-            ) from exc
-
-        try:
-            from back.objects.registry.store import RegistryFactory
-
-            lakebase_cfg = RegistryCfg(
-                catalog=cfg.catalog,
-                schema=cfg.schema,
-                volume=cfg.volume,
-                lakebase_schema=cfg.lakebase_schema,
-                lakebase_database=cfg.lakebase_database,
-            )
-            store = RegistryFactory.lakebase(
-                registry_cfg=lakebase_cfg,
-                schema=cfg.lakebase_schema,
-                database=cfg.lakebase_database,
-            )
-        except ImportError:
-            raise InfrastructureError(
-                "Lakebase backend not installed (missing psycopg)"
-            )
-        except Exception as exc:
-            raise InfrastructureError(
-                "Could not build Lakebase store", detail=str(exc)
-            ) from exc
-
-        tables = (
-            "registries",
-            "global_config",
-            "domains",
-            "domain_versions",
-            "domain_permissions",
-            "schedules",
-            "schedule_runs",
-        )
-        try:
-            counts = store.table_row_counts(tables)
-        except Exception as exc:
-            logger.exception("Lakebase table_row_counts failed")
-            raise InfrastructureError("Could not query Lakebase", detail=str(exc)) from exc
-        # Use the detailed probe so the UI can distinguish "missing
-        # USAGE on the schema" (silent before — looked like an empty
-        # registry) from genuine first-run states. Falls back to the
-        # plain bool for stores that haven't grown ``init_status``.
-        if hasattr(store, "init_status"):
-            status = store.init_status()
-            initialized = bool(status.get("initialized"))
-            reason = status.get("reason") or ("ok" if initialized else "unknown")
-            error = status.get("error")
-        else:
-            initialized = bool(store.is_initialized())
-            reason = "ok" if initialized else "unknown"
-            error = None
-        payload: Dict[str, Any] = {
-            "success": True,
-            "schema": cfg.lakebase_schema,
-            "initialized": initialized,
-            "reason": reason,
-            "tables": [{"name": t, "rows": counts.get(t, 0)} for t in tables],
-        }
-        if error:
-            payload["message"] = error
-        return payload
-
     @staticmethod
     def initialize_registry_result(
         session_mgr: SessionManager, settings: Settings
@@ -740,7 +835,23 @@ class SettingsService:
                     "Skipping graph_engine seed after registry init",
                     exc_info=True,
                 )
-            return {"success": ok, "message": msg}
+            # Self-serve the Lakebase grants the app + MCP service principals
+            # need (in-app port of scripts/bootstrap-lakebase-perms.sh). The
+            # app SP owns the schema it just created, so the Postgres grants
+            # always apply; CAN_USE / UC grants are best-effort. Failures are
+            # surfaced in the payload, never fatal to Initialize itself.
+            result: Dict[str, Any] = {"success": ok, "message": msg}
+            try:
+                grant_summary = SettingsService._grant_registry_permissions(
+                    session_mgr, settings
+                )
+                if grant_summary is not None:
+                    result["permissions"] = grant_summary
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "Post-initialize permission grant skipped", exc_info=True
+                )
+            return result
         except OntoBricksError:
             raise
         except Exception as e:
@@ -748,6 +859,101 @@ class SettingsService:
             raise InfrastructureError(
                 "Initialize registry failed", detail=str(e)
             ) from e
+
+    @staticmethod
+    def _registry_grant_app_names(settings: Settings) -> List[str]:
+        """Apps whose service principals receive the registry grants.
+
+        The running app first, then the MCP companion (``MCP_APP_NAME`` env
+        → ``mcp-ontobricks`` default) — same resolution as the graph-DB
+        provisioning flow.
+        """
+        app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
+        mcp_app_name = (
+            os.environ.get("MCP_APP_NAME", "").strip() or "mcp-ontobricks"
+        )
+        names: List[str] = []
+        for candidate in (app_name, mcp_app_name):
+            if candidate and candidate not in names:
+                names.append(candidate)
+        return names
+
+    @staticmethod
+    def _grant_registry_permissions(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Optional[Dict[str, Any]]:
+        """Apply Lakebase project + registry-schema + UC grants to the app SPs.
+
+        Synchronous core shared by :meth:`initialize_registry_result`
+        (auto-run) and :meth:`grant_registry_permissions_result` (the
+        explicit *Repair permissions* button). Returns ``None`` when the
+        registry is not configured or the Lakebase backend is unavailable;
+        otherwise the ``grant_app_permissions`` summary dict.
+        """
+        rcfg = RegistryCfg.from_session(session_mgr, settings)
+        if not rcfg.is_configured:
+            return None
+        app_names = SettingsService._registry_grant_app_names(settings)
+        if not app_names:
+            return {
+                "success": False,
+                "granted": [],
+                "warnings": [],
+                "error": (
+                    "Could not determine the app name to grant — set "
+                    "ONTOBRICKS_APP_NAME."
+                ),
+            }
+        try:
+            from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
+
+            store = RegistryFactory.lakebase(
+                registry_cfg=rcfg,
+                schema=rcfg.lakebase_schema,
+                database=rcfg.lakebase_database,
+            )
+        except ImportError:
+            return {
+                "success": False,
+                "granted": [],
+                "warnings": [],
+                "error": "psycopg is not installed — Lakebase backend unavailable.",
+            }
+        return store.grant_app_permissions(
+            app_names=app_names,
+            uc_catalog=(rcfg.catalog or "").strip(),
+        )
+
+    @staticmethod
+    async def grant_registry_permissions_result(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Explicit *Repair permissions* action for the Registry page.
+
+        In-app equivalent of ``scripts/bootstrap-lakebase-perms.sh`` for the
+        registry schema: re-applies CAN_USE on the project, USAGE/DML on the
+        schema, and ALL_PRIVILEGES on the UC catalog to the app + MCP service
+        principals. Idempotent and safe to re-run after a rebind/redeploy.
+        """
+        rcfg = RegistryCfg.from_session(session_mgr, settings)
+        if not rcfg.is_configured:
+            return {
+                "success": False,
+                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA",
+            }
+        try:
+            summary = await run_blocking(
+                SettingsService._grant_registry_permissions, session_mgr, settings
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("grant_registry_permissions failed: %s", exc)
+            return {"success": False, "error": str(exc)}
+        if summary is None:
+            return {
+                "success": False,
+                "error": "Lakebase registry backend is not available.",
+            }
+        return summary
 
     @staticmethod
     def list_registry_domains_result(
@@ -907,6 +1113,7 @@ class SettingsService:
         *,
         user_role: str,
         user_domain_role: str,
+        actor_email: str = "",
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
@@ -917,6 +1124,10 @@ class SettingsService:
         machine (allowed transitions), per-transition role requirements,
         and the DRAFT→IN-REVIEW precondition (the version must have been
         built at least once, i.e. ``last_build`` is set).
+
+        The change is recorded in the ``domain_review_events`` audit log
+        (attributed to ``actor_email``) so direct lifecycle transitions are
+        tracked alongside the review-workflow ones.
         """
         try:
             new_status = (new_status or "").strip().upper()
@@ -949,6 +1160,32 @@ class SettingsService:
             if not ok:
                 raise InfrastructureError(
                     "Failed to update version status", detail=set_msg
+                )
+
+            # Attribute the change in the audit log. Best-effort: never let a
+            # failed audit write roll back the transition itself.
+            try:
+                action = {
+                    STATUS_IN_REVIEW: "submitted",
+                    STATUS_PUBLISHED: "published",
+                    STATUS_DRAFT: "reopened",
+                }.get(new_status, "commented")
+                svc.record_review_event(
+                    domain_name,
+                    version,
+                    actor_email or "",
+                    action,
+                    from_status=current_status,
+                    to_status=new_status,
+                    comment="",
+                    meta={"source": "lifecycle"},
+                )
+            except Exception as audit_exc:  # noqa: BLE001
+                logger.warning(
+                    "audit write skipped for %s/%s status change: %s",
+                    domain_name,
+                    version,
+                    audit_exc,
                 )
 
             invalidate_registry_cache()
@@ -1153,6 +1390,46 @@ class SettingsService:
             raise InfrastructureError("Failed to save registry cache TTL", detail=msg)
         return {"success": True, "registry_cache_ttl": max(10, int(ttl))}
 
+    @staticmethod
+    def get_edit_lock_ttl_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the effective DRAFT edit-lock lease TTL (seconds).
+
+        Mirrors :meth:`EditLockService._ttl_seconds` resolution (global config
+        → ``ONTOBRICKS_EDIT_LOCK_TTL_S`` → built-in default) so the Settings UI
+        shows the value actually in force. ``0`` means the lease is disabled.
+        """
+        from back.objects.registry.lockmgt import EditLockService
+
+        ttl_s = EditLockService._ttl_seconds(session_mgr, settings)
+        return {"success": True, "edit_lock_ttl_s": ttl_s}
+
+    @staticmethod
+    def save_edit_lock_ttl_result(
+        ttl_s: int,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist the DRAFT edit-lock lease TTL globally (admin only, seconds)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ttl_s = max(0, int(ttl_s))
+        ok, msg = global_config_service.set_edit_lock_ttl_s(
+            host, token, registry_cfg, ttl_s
+        )
+        if not ok:
+            raise InfrastructureError(
+                "Failed to save edit-lock lease TTL", detail=msg
+            )
+        return {"success": True, "edit_lock_ttl_s": ttl_s}
+
     # ------------------------------------------------------------------
     #  Graph DB Engine
     # ------------------------------------------------------------------
@@ -1197,16 +1474,192 @@ class SettingsService:
         return {"success": True, "graph_engine": persisted}
 
     @staticmethod
-    def get_graph_engine_config_result(
+    def get_triple_store_backend_result(
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        """Return the engine-specific JSON configuration."""
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         global_config_service.load(host, token, registry_cfg, force=True)
-        cfg = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+        backend = global_config_service.get_triple_store_backend(
+            host, token, registry_cfg
+        )
+        domain = get_domain(session_mgr)
+        delta_wid = global_config_service.get_delta_warehouse_id(
+            host, token, registry_cfg
+        )
+        allowed = list(global_config_service.ALLOWED_TRIPLE_STORE_BACKENDS)
+        reg = registry_cfg if isinstance(registry_cfg, dict) else {}
+        catalog = (reg.get("catalog") or "").strip()
+        schema = (reg.get("schema") or "").strip()
+        storage_location = f"{catalog}.{schema}" if catalog and schema else ""
+        return {
+            "success": True,
+            "triple_store_backend": backend,
+            "allowed_backends": allowed,
+            "delta_warehouse_id": delta_wid,
+            "effective_delta_warehouse_id": resolve_delta_warehouse_id(
+                domain, settings
+            ),
+            "registry_catalog": catalog,
+            "registry_schema": schema,
+            "storage_location": storage_location,
+            "registry_configured": bool(storage_location),
+        }
+
+    @staticmethod
+    def set_triple_store_backend_result(
+        backend: str,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        delta_warehouse_id: Optional[str] = None,
+        persist_delta_warehouse: bool = False,
+    ) -> Dict[str, Any]:
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        domain, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ok, msg = global_config_service.set_triple_store_backend(
+            host, token, registry_cfg, backend
+        )
+        if not ok:
+            raise ValidationError(msg)
+        persisted = global_config_service.get_triple_store_backend(
+            host, token, registry_cfg
+        )
+        persisted_delta = global_config_service.get_delta_warehouse_id(
+            host, token, registry_cfg
+        )
+        if persist_delta_warehouse:
+            wid = (delta_warehouse_id or "").strip()
+            ok, msg = global_config_service.set_delta_warehouse_id(
+                host, token, registry_cfg, wid
+            )
+            if not ok:
+                raise ValidationError(msg)
+            persisted_delta = wid
+        SettingsService._mirror_graph_engine_to_domain_registry(
+            session_mgr,
+            triple_store_backend=persisted,
+            delta_warehouse_id=persisted_delta if persist_delta_warehouse else None,
+        )
+        return {
+            "success": True,
+            "triple_store_backend": persisted,
+            "delta_warehouse_id": persisted_delta,
+            "effective_delta_warehouse_id": resolve_delta_warehouse_id(
+                domain, settings
+            ),
+        }
+
+    @staticmethod
+    def triple_store_databricks_health_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        from back.core.graphdb.delta.health import settings_health_summary
+
+        domain, _, _, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
+        return settings_health_summary(domain, settings, registry_cfg=registry_cfg)
+
+    @staticmethod
+    def triple_store_databricks_objects_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List triple-store UC objects in the Registry schema, grouped by domain version."""
+        from back.core.graphdb.delta.objects import (
+            fetch_uc_schema_tables,
+            group_triplestore_objects,
+        )
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        reg = registry_cfg if isinstance(registry_cfg, dict) else {}
+        catalog = (reg.get("catalog") or "").strip()
+        schema = (reg.get("schema") or "").strip()
+        storage_location = f"{catalog}.{schema}" if catalog and schema else ""
+
+        if not storage_location:
+            return {
+                "success": True,
+                "registry_configured": False,
+                "storage_location": "",
+                "registry_catalog": catalog,
+                "registry_schema": schema,
+                "domains": [],
+                "message": (
+                    "Registry catalog/schema is not configured "
+                    "(Settings → Registry)"
+                ),
+            }
+
+        try:
+            raw_tables = fetch_uc_schema_tables(catalog, schema)
+            groups = group_triplestore_objects(raw_tables, catalog, schema)
+            domains = [
+                {
+                    "base": grp["base"],
+                    "items": [
+                        {
+                            "kind": item["kind"],
+                            "name": item["name"],
+                            "full_name": item["full_name"],
+                        }
+                        for item in grp["sorted_items"]
+                    ],
+                }
+                for grp in sorted(groups.values(), key=lambda g: g["base"])
+            ]
+            return {
+                "success": True,
+                "registry_configured": True,
+                "storage_location": storage_location,
+                "registry_catalog": catalog,
+                "registry_schema": schema,
+                "domains": domains,
+            }
+        except Exception as exc:
+            logger.warning("triple_store_databricks_objects failed: %s", exc)
+            raise InfrastructureError(
+                "list Delta triple-store objects failed", detail=str(exc)
+            ) from exc
+
+    @staticmethod
+    def get_graph_engine_config_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the engine-specific JSON configuration.
+
+        Empty ``lakebase_project``, ``lakebase_branch``, and ``database``
+        fields are overlaid with env-var fallbacks so the Connection tab
+        always reflects the current platform binding, even when the user
+        has not yet explicitly saved those fields through the UI.
+        """
+        import os as _os
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        global_config_service.load(host, token, registry_cfg, force=True)
+        cfg = dict(global_config_service.get_graph_engine_config(host, token, registry_cfg))
+
+        _env_project = _os.environ.get("LAKEBASE_PROJECT", "")
+        _env_branch = _os.environ.get("LAKEBASE_BRANCH", "")
+        _env_db = _os.environ.get("PGDATABASE", "") or _os.environ.get("LAKEBASE_DATABASE", "")
+        if not cfg.get("lakebase_project") and _env_project:
+            cfg["lakebase_project"] = _env_project
+        if not cfg.get("lakebase_branch") and _env_branch:
+            cfg["lakebase_branch"] = _env_branch
+        if not cfg.get("database") and _env_db:
+            cfg["database"] = _env_db
+
         return {"success": True, "graph_engine_config": cfg}
 
     @staticmethod
@@ -1258,7 +1711,7 @@ class SettingsService:
         import os
 
         from back.core.databricks import get_lakebase_auth
-        from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+        from back.core.databricks.lakebase import BranchLakebaseAuth
         from back.core.graphdb.lakebase.LakebaseBase import (
             default_schema,
             validate_graph_schema,
@@ -1393,7 +1846,7 @@ class SettingsService:
         else:
             out["message"] = (
                 f"Connected to graph database {graph_db!r}, but schema {schema!r} "
-                "does not exist yet — run a Digital Twin build or create the schema. "
+                "does not exist yet — run a Knowledge Graph build or create the schema. "
                 f"Registry database: {registry_db!r}."
             )
         return out
@@ -1560,7 +2013,7 @@ class SettingsService:
                     "Configure a SQL warehouse under Settings → Databricks first."
                 )
             from back.core.databricks.DatabricksAuth import DatabricksAuth
-            from back.core.databricks.UnityCatalog import UnityCatalog
+            from back.core.databricks.uc import UnityCatalog
 
             auth = DatabricksAuth(host=host, token=token, warehouse_id=warehouse_id)
             uc = UnityCatalog(auth)
@@ -1902,7 +2355,7 @@ class SettingsService:
         Returns ``(auth, database)``; raises on irrecoverable failures.
         """
         from back.core.databricks import get_lakebase_auth
-        from back.core.databricks.LakebaseAuth import BranchLakebaseAuth
+        from back.core.databricks.lakebase import BranchLakebaseAuth
 
         branch_path = form_branch_path.strip()
         database = form_database.strip()
@@ -2581,7 +3034,7 @@ class SettingsService:
                     "Configure a SQL warehouse under Settings → Databricks first."
                 )
             from back.core.databricks.DatabricksAuth import DatabricksAuth
-            from back.core.databricks.UnityCatalog import UnityCatalog
+            from back.core.databricks.uc import UnityCatalog
 
             auth = DatabricksAuth(host=host, token=token, warehouse_id=warehouse_id)
             uc = UnityCatalog(auth)

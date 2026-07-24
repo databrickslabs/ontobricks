@@ -1,0 +1,651 @@
+## Fix: Relationships in Opposite Directions Overlapping in Designer Views
+
+### Context
+Bug #75: When an ontology has two object properties between the same entity pair in opposite directions (e.g., A->B and B->A), both relationship labels/curves were rendered on top of each other in the Designer views.
+
+The bug affects three graphical components: the Ontology Designer (D3 force-directed graph, menu label "Designer"), the Mapping Designer (D3 force-directed graph), and the Business Views (OntoViz canvas).
+
+### Root Cause (two separate issues)
+
+**Issue 1 - Non-canonical perpendicular direction:** The perpendicular direction vector was computed as dx = target.x - source.x, which depends on the travel direction of each individual link. For two links in opposite directions (A->B and B->A):
+- Link A->B: dx = +400, offset = -20 -> perpY = +1 x -20 = -20
+- Link B->A: dx = -400, offset = +20 -> perpY = -1 x +20 = -20
+Both displacements are equal, so both curves bend the same way.
+
+**Issue 2 - Hitarea/label at control point instead of curve midpoint:** For a quadratic Bezier curve M sx,sy Q cx,cy tx,ty, the visual midpoint at t=0.5 is at (mx + 0.5*perp_offset), NOT at the control point (mx + 1.0*perp_offset). The circles and labels were placed at the control point, which is twice as far from the straight midpoint as the actual curve, making them appear unlinked/floating above or below the lines.
+
+### Fix
+1. Normalize dx/dy to a canonical direction (smaller entity ID -> larger entity ID) so opposite-direction links offset to opposite sides.
+2. Use offset * 0.5 for hitarea and label positions so they land on the Bezier curve midpoint (t=0.5) rather than at the control point.
+
+### Changes
+
+1. src/front/static/ontology/js/ontology-map.js - Ontology Designer (D3)
+   - Fixed path curve control point (canonical direction)
+   - Fixed hitarea cx/cy: canonical direction + offset*0.5
+   - Fixed link label mx/my: canonical direction + offset*0.5
+
+2. src/front/static/mapping/js/mapping-design.js - Mapping Designer (D3)
+   - Same 4 fixes as ontology-map.js
+
+3. src/front/static/global/ontoviz/ontoviz.js - Business Views (OntoViz)
+   - Fixed baseMidPoint perpendicular offset in _renderRelationship (canonical direction)
+
+### Modified Files
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/global/ontoviz/ontoviz.js
+
+### Test Results
+- 2450 unit tests passed, 15 skipped.
+
+---
+
+## Feature: User / Role Info Panel at Bottom of Sidebar
+
+### Context
+Add connected user identity and role information at the bottom of the left collapsible sidebar, visible across all pages that use the shared `_sidebar_nav.html` partial. In collapsed mode only the person icon is shown; expanded mode shows email + role badge(s).
+
+### Changes
+
+1. **`src/front/templates/partials/layout/_sidebar_nav.html`** — Appended a `sidebar-user` footer block inside the `{% if sidebar_menu %}` guard. Uses `get_user_email()`, `get_user_role()`, and `get_user_domain_role()` Jinja2 globals to display the connected user's email and role badges (Admin badge in red, domain role in blue when it differs from the app role).
+2. **`src/front/static/global/css/sidebar-layout.css`** — Added `display: flex; flex-direction: column;` to `.sidebar-nav` so `margin-top: auto` on `.sidebar-user` pins the panel to the bottom. Added full `.sidebar-user`, `.sidebar-user-info`, `.sidebar-user-icon`, `.sidebar-user-details`, `.sidebar-user-email`, `.sidebar-user-badges`, and `.sidebar-role-badge` rules. Added collapsed-state overrides that hide the text/badges and center the icon.
+
+### Modified Files
+- `src/front/templates/partials/layout/_sidebar_nav.html`
+- `src/front/static/global/css/sidebar-layout.css`
+
+### Test Results
+- Pure UI/CSS change; no logic affected. Existing test suite unaffected.
+
+---
+
+## Remove: Role Badge from Navbar
+
+### Context
+Now that the user's role is shown in the sidebar user footer, the redundant role pill in the top-right navbar is removed.
+
+### Changes
+
+1. **`src/front/templates/base.html`** — `#roleNavBadgeItem` marked `d-none` and `aria-hidden="true"`; stripped the icon/label content to leave only the stub needed by JS.
+2. **`src/front/static/global/css/permissions.css`** — Collapsed the two `#roleNavBadgeItem` rules into one that keeps the element `display: none !important` even after `permissions.js` adds the `.is-visible` class.
+
+### Modified Files
+- `src/front/templates/base.html`
+- `src/front/static/global/css/permissions.css`
+
+### Test Results
+- Pure UI/CSS change. JS still runs without errors (guards with `if (!item) return`). Existing test suite unaffected.
+
+---
+
+## Feature: Application Logs Viewer in Settings (Admin)
+
+### Context
+Administrators wanted a way to read the OntoBricks application logs directly in the UI without leaving the Databricks Apps console. A new "Logs" section under Settings → Admin now streams a live tail of the rotating log file (`ontobricks.log`) with level filtering, text search, configurable line count, and auto-refresh.
+
+### Changes
+
+1. **`src/api/routers/internal/settings.py`** — Added `GET /settings/logs?lines=N` endpoint (admin-only via `require(ROLE_ADMIN)`). Uses `LogManager.instance()` to locate the log file path and reads the last *N* lines (default 200, max 5 000) asynchronously via `run_blocking`. Also added `LogManager` to the module import.
+
+2. **`src/front/config/menu_config.json`** — Added `"logs"` item (`bi-terminal` icon) to the `settings-admin` group, `admin_only: true`.
+
+3. **`src/front/templates/partials/settings/_settings_logs.html`** — New partial: toolbar with level-filter buttons (ALL / DEBUG / INFO / WARNING / ERROR), text-search input, line-count selector, auto-refresh toggle and manual Refresh button; a dark `<pre>`-based console panel; and a footer showing the log file path and current level.
+
+4. **`src/front/static/config/js/settings-logs.js`** — New JS module: lazy-loads on `sidebarSectionChanged` with `section === "logs"`, fetches `/settings/logs`, parses text-format and JSON-format log lines, colour-codes by level, applies level and text filters, auto-scrolls to bottom, and starts a 10-second auto-refresh interval on first load.
+
+5. **`src/front/templates/settings.html`** — Added `<div id="logs-section" …>` inside the `{% if user_role == 'admin' %}` block (includes the new partial) and the corresponding `<script>` tag for `settings-logs.js`.
+
+### Modified Files
+- `src/api/routers/internal/settings.py` — `GET /settings/logs` + `GET /settings/logs/download`
+- `src/front/config/menu_config.json`
+- `src/front/templates/partials/settings/_settings_logs.html` (new)
+- `src/front/static/config/js/settings-logs.js` (new)
+- `src/front/templates/settings.html` — Refresh / Auto-refresh / Download controls in section header
+- `src/front/static/global/css/sidebar-layout.css` — logs section fills viewport (same pattern as sigmagraph)
+
+### Test Results
+- 2651 unit/integration tests passed, 57 skipped. Pre-existing `pyshacl not installed` failure unrelated.
+
+---
+
+## Enhancement: Interpret leverages full Data Model Health for ontology improvement recommendations
+
+### Context
+The Interpret button in Graph Analytics only passed flat entity type *names* to the LLM. The full per-type health data (distinct predicates, avg degree, temporal flags, isolation reasons) was computed by `GraphMetrics` but never reached the prompt. This change feeds the complete health table into the LLM and extends the system prompt with targeted ontology-improvement rules.
+
+### Changes
+
+1. **`src/agents/agent_graph_interpreter/engine.py`**
+   - `_build_user_message()`: replaced the minimal `flat_types` list extraction with a full `entity_type_health` table — one entry per entity type with `type`, `count`, `distinct_predicates`, `avg_degree`, `is_flat`, `has_temporal_predicates`, and `reasons[]`. Sorted flat/problematic types first.
+   - `_SYSTEM_PROMPT`: extended with a dedicated *Data Model Health* rules section instructing the LLM to:
+     - Flag and recommend removal/aggregation of flat types
+     - Suggest externalising temporal/time-series types to Delta tables
+     - Call out fully isolated types (no edges) for removal or property promotion
+     - Highlight low-connectivity types for R2RML mapping review
+     - Prioritise recommendations by instance count
+
+### Modified Files
+- `src/agents/agent_graph_interpreter/engine.py` — section order, `_parse_sections` hardening, `max_tokens` 2048
+- `src/front/templates/partials/dtwin/_query_analytics.html` — tabbed layout (PageRank / Betweenness / Degree / Closeness / Clustering / Data Model Health / AI Insights), chart resize on tab show, auto-switch to AI Insights tab on Interpret
+
+### Test Results
+- 2651 unit/integration tests passed, 57 skipped.
+
+---
+
+## fix: OWL export uses domain name as namespace prefix
+
+### Context
+When exporting an OWL file the default namespace was bound to the empty prefix (`@prefix : <...#>`), making the Turtle output harder to read. The domain name (lowercase, alphanumeric) is now used as the prefix so exports produce e.g. `@prefix mydomain: <https://databricks-ontology.com/MyDomain#> .`.
+
+### Changes
+1. `src/back/core/w3c/owl/OntologyGenerator.py` — derive a clean lowercase prefix from `ontology_name` (strip non-alphanumeric chars, lowercase); bind it instead of the empty string `""`.
+
+### Modified files
+- `src/back/core/w3c/owl/OntologyGenerator.py`
+
+### Test Results
+- 28 existing OWL generator / roundtrip unit tests pass.
+
+---
+
+## Feature: Append-mode Ontology Import with Conflict Detection
+
+### Context
+Importing an OWL or RDFS file previously erased the entire ontology (full list replacement via `dict.update()`). Users needed a way to merge multiple ontology files without losing existing work. This feature introduces an append-mode import that first detects conflicts, presents them to the user for resolution, and only then merges the new entities into the current session.
+
+### Changes
+
+1. **`src/back/core/w3c/owl/OntologyConflictDetector.py`** (new) — `OntologyConflictDetector` class with `analyze(existing, incoming)` returning a JSON-serialisable `ConflictReport`. Classifies each incoming entity as `new`, `duplicate`, `uri_conflict`, or `name_conflict` across classes, properties, constraints, SWRL rules, groups, axioms, and expressions.
+
+2. **`src/back/core/w3c/owl/__init__.py`** — exports `OntologyConflictDetector`, `ConflictReport`, `ConflictItem`.
+
+3. **`src/back/objects/ontology/Ontology.py`** — added three methods:
+   - `analyze_import(content, format)` — parse-and-diff, read-only, no session mutation.
+   - `merge_parsed_owl_to_domain(content, resolutions, format)` — append-mode merge with per-entity resolution (skip / overwrite / rename).
+   - `_apply_resolutions(entity_type, existing, report, resolutions)` — static merge helper.
+
+4. **`src/api/routers/internal/ontology.py`** — two new routes:
+   - `POST /ontology/analyze-import` — read-only conflict analysis.
+   - `POST /ontology/merge-import` — append merge accepting `resolutions` map.
+
+5. **`src/shared/fastapi/main.py`** — added `/analyze-import` to `_STATUS_GATE_OPEN_SUFFIXES` (non-mutating, bypass version lock check).
+
+6. **`src/front/templates/partials/ontology/_ontology_import.html`** — OWL and RDFS panes now have a Replace / Append radio selector and a conflict-resolution panel (summary badges, conflict table with per-row resolution dropdown, Confirm & Append button).
+
+7. **`src/front/static/ontology/js/ontology-import.js`** — rewritten OWL and RDFS handlers to support the two-phase flow; FIBO/CDISC/IOF/FHIR handlers unchanged.
+
+### Modified Files
+- `src/back/core/w3c/owl/OntologyConflictDetector.py` (new)
+- `src/back/core/w3c/owl/__init__.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/api/routers/internal/ontology.py`
+- `src/shared/fastapi/main.py`
+- `src/front/templates/partials/ontology/_ontology_import.html`
+- `src/front/static/ontology/js/ontology-import.js`
+- `tests/units/ontology/test_conflict_detector.py` (new)
+
+### Test Results
+- 2467 unit tests passed, 15 skipped. 17 new tests for conflict detection and merge logic.
+
+---
+
+## Enhancement: Persistent Import Status Panel
+
+### Context
+After the append-mode import feature was merged, users reported that nothing appeared to happen when selecting a file — there was no visible feedback beyond a toast notification that disappears quickly, and the conflict resolution panel was buried inside the selected tab pane.
+
+### Changes
+
+1. **`src/front/templates/partials/ontology/_ontology_import.html`**
+   - Removed the per-tab embedded conflict panels from the OWL and RDFS panes (the `owlConflictPanel` / `rdfsConflictPanel` divs).
+   - Added a single `#importStatusPanel` section below all tabs, containing: a dismissable header, a `#importStatusSteps` step timeline, a `#importConflictArea` conflict resolution area with badges + table + Confirm/Cancel, and a `#importFinalResult` result banner.
+
+2. **`src/front/static/ontology/js/ontology-import.js`**
+   - Introduced an `ImportStatus` IIFE module that owns the status panel DOM. Public API: `reset(filename)`, `addStep()`, `updateLastStep()`, `showConflicts(report, onConfirm, onCancel)`, `showResult(success, msg)`, `hide()`.
+   - All import handlers (OWL replace, OWL append, RDFS replace, RDFS append, FIBO, CDISC, FHIR, IOF) now call `ImportStatus.reset()` on start and update the step timeline at each phase.
+   - The `_appendFlow` function drives the two-phase analyse → resolve → merge loop entirely through the status panel, with per-step spinners, counts, and a final banner.
+
+### Modified Files
+- `src/front/templates/partials/ontology/_ontology_import.html`
+- `src/front/static/ontology/js/ontology-import.js`
+
+### Test Results
+- No backend changes. Existing test suite unaffected.
+
+---
+
+## Enhancement: Server-side logging for append-mode import
+
+### Context
+The new `/ontology/analyze-import` and `/ontology/merge-import` routes and their backing methods had no structured logging, making it impossible to trace an import in the server logs.
+
+### Changes
+
+1. **`src/back/objects/ontology/Ontology.py`**
+   - `analyze_import()` — `INFO` on entry (format, content length) and on exit (new/duplicates/conflicts counts); `DEBUG` after parse with per-entity-type counts and before analysis (existing ontology size).
+   - `merge_parsed_owl_to_domain()` — `INFO` on entry (format, content length, resolution count); `DEBUG` after parse; `INFO` after conflict analysis (new/duplicates/conflicts); `INFO` after save (final class/property counts + delta).
+   - `_merge_rdfs()` — same pattern as OWL merge.
+   - `_apply_resolutions()` — `DEBUG` per entity-type showing appended / overwritten / renamed / skipped counts.
+
+2. **`src/api/routers/internal/ontology.py`**
+   - `analyze_import` route — `INFO` on request (format, content length) and on response (summary counts).
+   - `merge_import` route — `INFO` on request (format, content length, resolution count) and on response (full stats).
+
+### Modified Files
+- `src/back/objects/ontology/Ontology.py`
+- `src/api/routers/internal/ontology.py`
+
+### Test Results
+- 17 conflict-detector tests pass. Full suite unaffected.
+
+---
+
+## Fix: SKOS Vocabulary Import Support
+
+### Context
+SKOS taxonomy files (`.ttl`) using `skos:Concept` / `skos:prefLabel` / `skos:broader` were silently producing an empty ontology on import because neither the OWL parser nor the RDFS parser handled SKOS triples. Files like `classification.ttl` (RATP asset taxonomy) could be selected via the file picker (`.ttl` is an accepted extension) but yielded zero classes after parsing.
+
+### Changes
+
+1. **`src/back/core/w3c/rdfs/RDFSParser.py`**
+   - Added `SKOS` namespace constant (`http://www.w3.org/2004/02/skos/core#`).
+   - `get_classes()` — also iterates `skos:Concept` instances in addition to `rdfs:Class` / `owl:Class`.
+   - `_extract_class_info()` — falls back to `skos:prefLabel` when no `rdfs:label` is found; falls back to `skos:definition` for description; resolves `skos:broader` (with label lookup) as the parent when no `rdfs:subClassOf` is present.
+   - `get_ontology_info()` — detects `skos:ConceptScheme` (with `rdfs:label` / `skos:prefLabel`) as the vocabulary root, before falling back to base-URI heuristics.
+
+2. **`src/back/objects/ontology/Ontology.py`**
+   - `analyze_import()` (RDFS branch) — raises `ValidationError` with a descriptive message when zero classes and zero properties are found after parsing, instead of silently returning an empty conflict report.
+   - `_merge_rdfs()` — same guard: raises `ValidationError` with supported-format hints if the parser finds nothing.
+
+### Modified Files
+- `src/back/core/w3c/rdfs/RDFSParser.py`
+- `src/back/objects/ontology/Ontology.py`
+
+### Test Results
+- 428 passed, 11 skipped — full suite green.
+
+---
+
+## Fix: SKOS/RDFS Auto-Fallback in OWL Import Paths
+
+### Context
+Even after the RDFS/SKOS parser fix, files like `classification.ttl` still imported nothing because the UI's OWL import tab (both replace and append modes) sends `format=owl` to the backend. The OWL parser naturally finds no `owl:Class` in a SKOS file and returns empty lists; the RDFS/SKOS-capable parser was never reached.
+
+### Changes
+
+1. **`src/back/objects/ontology/Ontology.py`**
+   - `ingest_owl()` — after OWL parse, if both `classes` and `properties` are empty, automatically retries with `parse_rdfs()` (which now understands SKOS). Falls back silently; if RDFS/SKOS parse also yields nothing the empty result is preserved. Logs at INFO when fallback triggers.
+   - `analyze_import()` (OWL branch) — same auto-fallback after OWL parse yields nothing.
+   - `merge_parsed_owl_to_domain()` (OWL branch) — same auto-fallback.
+
+### Modified Files
+- `src/back/objects/ontology/Ontology.py`
+
+### Test Results
+- 428 passed, 11 skipped — full suite green.
+- Manual E2E: `POST /ontology/analyze-import { format: "owl", content: classification.ttl }` → `success: true, new: 11, duplicates: 0`.
+
+---
+
+## Fix: Alignment/Mapping File Import Support
+
+### Context
+Alignment files like `alignments-era.ttl` use no explicit class type declarations (`rdfs:Class`, `owl:Class`, `skos:Concept`). They define cross-ontology mappings via SKOS alignment predicates (`skos:exactMatch`, `skos:closeMatch`, etc.) and OWL assertions (`owl:equivalentClass`, `owl:differentFrom`). Resources are identified only by `rdfs:label`. Previous parser found 0 classes and 0 properties.
+
+### Changes
+
+1. **`src/back/core/w3c/rdfs/RDFSParser.py`**
+   - `get_classes()` — adds labeled-resources fallback: when no typed classes are found, collects all subjects of `rdfs:label` that are named URIs outside standard W3C/SKOS namespaces. Produces the ERA/RATP external entities as importable classes.
+   - `get_properties()` — adds SKOS alignment property extraction: when `skos:exactMatch`, `skos:closeMatch`, `skos:broadMatch`, `skos:narrowMatch`, `skos:relatedMatch`, `owl:equivalentClass`, or `owl:differentFrom` predicates are actually used in the graph, they are added as `ObjectProperty` entries.
+
+### Modified Files
+- `src/back/core/w3c/rdfs/RDFSParser.py`
+
+### Test Results
+- 428 passed, 11 skipped — full suite green.
+- `alignments-era.ttl`: 29 classes (ERA + RATP-SKOS labeled entities), 7 alignment ObjectProperties.
+
+---
+
+## Fix: SHACL Shapes File Import Support
+
+### Context
+SHACL files like `shapes.ttl` define validation constraints using `sh:NodeShape` + `sh:targetClass`. No explicit `rdfs:Class`, `owl:Class`, or `skos:Concept` declarations → parsers returned empty results.
+
+### Changes
+
+1. **`src/back/core/w3c/rdfs/RDFSParser.py`**
+   - Added `SH` namespace constant (`http://www.w3.org/ns/shacl#`).
+   - `get_classes()` — extracts `sh:targetClass` values from every `sh:NodeShape` as importable classes.
+   - `get_properties()` — extracts property names from `sh:property` URI local segments (`{base}#{ClassName}Shape/{propName}`) as deduplicated `DatatypeProperty` entries, with `domain` set to the owning class.
+
+### Modified Files
+- `src/back/core/w3c/rdfs/RDFSParser.py`
+
+### Test Results
+- 428 passed, 11 skipped — full suite green.
+- `shapes.ttl`: 46 classes, 208 data properties with correct domain assignment.
+
+---
+
+## Fix: SHACL per-class data properties and RDFS post-processing
+
+### Context
+After importing `shapes.ttl`, the UI showed 0 relationships and fewer than 46 entities because:
+1. SHACL `sh:property` URIs are per-class (e.g. `ACTIF_GENERIQUEShape/acronyme`). Storing them as global DatatypeProperties with deduplication by name meant each property was attached to only the first class that declared it — all other classes lost their attributes.
+2. `apply_parsed_rdfs_to_domain` did not call `sync_class_data_properties`, so global DatatypeProperties were never merged into class `dataProperties` lists.
+3. "208 relationships" in the success message was misleading — they are data properties, not ObjectProperties.
+
+### Changes
+
+1. **`src/back/core/w3c/rdfs/RDFSParser.py`**
+   - SHACL extraction in `get_classes()`: now builds `dataProperties` list directly on each class from its `sh:property` URI segments, so every class gets its own complete attribute list.
+   - Removed SHACL property extraction from `get_properties()` — no global properties are emitted for pure SHACL files.
+
+2. **`src/back/objects/ontology/Ontology.py`**
+   - `apply_parsed_rdfs_to_domain()` — now calls `sync_class_data_properties()` after updating the domain, ensuring any global DatatypeProperties with domain references are also merged into class `dataProperties`.
+
+### Modified Files
+- `src/back/core/w3c/rdfs/RDFSParser.py`
+- `src/back/objects/ontology/Ontology.py`
+
+### Test Results
+- 428 passed, 11 skipped — full suite green.
+- `shapes.ttl`: 46 classes each with correct per-class `dataProperties` (e.g. `ACTIF_GENERIQUE` gets all 35 of its own attributes), 0 global properties.
+
+---
+
+## Fix: SHACL files auto-routed to Data Quality instead of ontology classes
+
+### Context
+SHACL shapes (`.ttl` containing `sh:NodeShape`) are data-quality validation rules, not ontology classes. Importing them via the RDFS or OWL import tab was previously creating phantom classes and empty relationship lists in the ontology.
+
+### Changes
+
+1. **`src/back/core/w3c/rdfs/RDFSParser.py`**
+   - Removed all SHACL extraction from `get_classes()` and `get_properties()` — SHACL is no longer treated as vocabulary.
+
+2. **`src/back/objects/ontology/Ontology.py`**
+   - `_try_import_as_shacl(content)` — new helper that checks for `sh:NodeShape` in an RDF graph; if found, calls `SHACLService.import_shapes()`, merges into `domain.shacl_shapes`, saves, and returns a SHACL-specific success payload (with `shacl: True` flag). Returns `None` for non-SHACL content.
+   - `apply_parsed_rdfs_to_domain()` — calls `_try_import_as_shacl` first; if SHACL detected, returns early with dataquality result.
+   - `ingest_owl()` — SHACL check added in the OWL-empty fallback chain, before RDFS retry.
+   - `analyze_import()` RDFS branch — raises `ValidationError` with friendly message if SHACL detected (shapes already auto-imported).
+   - `_merge_rdfs()` — same guard as `analyze_import`.
+
+3. **`src/front/static/ontology/js/ontology-import.js`**
+   - `_replaceOwlFlow` and `_replaceRdfsFlow` — handle `result.shacl === true`: show "imported to Data Quality" message and skip `_reloadOntology()`.
+
+### Modified Files
+- `src/back/core/w3c/rdfs/RDFSParser.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/front/static/ontology/js/ontology-import.js`
+
+### Test Results
+- 428 passed, 11 skipped — full suite green.
+
+---
+
+## Feature: Neighborhood highlight on entity click in Ontology Designer
+
+### Context
+Clicking an entity in the D3 force-directed Designer only selected the node (grey ring). Connected relationships and neighbor entities had no visual distinction, making it hard to read context in a dense graph.
+
+### Changes
+
+1. **`src/front/static/ontology/css/ontology-map.css`**
+   - `.map-node.dimmed` — fades icon and label to 15% opacity for unrelated nodes.
+   - `.map-node.neighbor` — soft blue glow ring on directly connected nodes.
+   - `.map-link.highlighted` — blue stroke on connected links (purple for inheritance).
+   - `.map-link.dimmed` — near-transparent stroke for unrelated links.
+   - `.map-link-label.highlighted / .dimmed` — matching label treatment.
+   - `.map-link-hitarea.highlighted / .dimmed` — dot coloring for relationship midpoints.
+
+2. **`src/front/static/ontology/js/ontology-map.js`**
+   - `highlightNeighborhood(selectedName)` — computes connected links and neighbor nodes from `regularLinks` + `selfLoopLinks`, applies CSS classes via D3.
+   - `clearHighlights()` — strips all highlight/dim classes.
+   - Node click and right-click handlers — call `highlightNeighborhood`.
+   - Background SVG click and link hitarea click — call `clearHighlights`.
+
+### Modified Files
+- `src/front/static/ontology/css/ontology-map.css`
+- `src/front/static/ontology/js/ontology-map.js`
+
+---
+
+## Feature: Inheritance link toggle button in Ontology Designer
+
+### Context
+The Ontology Designer shows both relationship and inheritance links. In complex ontologies the dashed inheritance arrows add visual noise. A persistent toggle button allows hiding them.
+
+### Changes
+
+1. **`src/front/templates/partials/ontology/_ontology_map.html`**
+   - Added `#mapToggleInheritance` button (`bi-diagram-3`) in the top-right toolbar, styled as an active toggle (`btn-outline-secondary active`), between the auto-icons button and the discuss button.
+
+2. **`src/front/static/ontology/js/ontology-map.js`**
+   - Toggle handler wired to `inheritanceLinkElements.style('display', ...)`.
+   - State persisted in `sessionStorage` so the choice survives map re-renders within the session.
+   - Legend item for "Inheritance" hidden/shown in sync.
+   - Button `title` text updates to reflect current state.
+
+### Modified Files
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `src/front/static/ontology/js/ontology-map.js`
+
+---
+
+## Feature: Endpoint highlight on relationship click in Ontology Designer
+
+### Context
+Clicking a relationship midpoint dot now highlights both connected entities (blue glow ring) and the link itself (blue), dimming everything else — symmetric with the existing node-click neighborhood highlight.
+
+### Changes
+
+1. **`src/front/static/ontology/js/ontology-map.js`**
+   - `highlightLink(linkDatum)` — new helper: resolves source/target names, marks both endpoint nodes as `.neighbor`, the clicked link/hitarea/label as `.highlighted`, and everything else as `.dimmed`.
+   - Link hitarea click handler — replaced manual inline attr reset with `highlightLink(d)`.
+
+### Modified Files
+- `src/front/static/ontology/js/ontology-map.js`
+
+---
+
+## Feature: Create Business View from Entity right-click in Ontology Designer
+
+### Context
+Added a "Create Business View" entry to the entity context menu in the D3 Ontology Designer. Right-clicking any entity and choosing this option builds a 1-hop neighbourhood layout (centre entity + all direct neighbours, all connecting relationships/inheritances) and saves it as a new design view. The view is auto-named `Auto_<EntityName>`, with numeric suffixes (`_1`, `_2`, …) to avoid conflicts with existing views. After creation the UI navigates directly to the Business Views (design) section showing the new view.
+
+### Changes
+
+1. **`src/front/static/ontology/js/ontology-map.js`**
+   - Added module-level `ontologyMapLinks` and `ontologyMapNodes` variables; assigned inside `initOntologyMap` after links/nodes arrays are built.
+   - `createBusinessViewFromEntity(entityData)` — new async function: collects 1-hop neighbours from `ontologyMapLinks`, resolves a unique view name via `GET /domain/design-views`, builds a circular entity layout, then calls `create → switch → save-current` and navigates to the design section.
+   - `showMapContextMenu` — added "Create Business View" `<div class="map-context-item">` entry and wired its click handler.
+
+### Modified Files
+- `src/front/static/ontology/js/ontology-map.js`
+
+
+---
+
+## Tests: design-view backend coverage
+
+### Context
+Added 36 unit tests for all seven `Domain` design-view methods (`get_design_views`, `create_design_view`, `switch_design_view`, `get_current_design_view`, `save_current_design_view`, `rename_design_view`, `delete_design_view`) plus an end-to-end flow test that mirrors the JS `createBusinessViewFromEntity` sequence (create → switch → save with `visibility` payload) and a numeric-suffix uniqueness test.
+
+### Changes
+
+1. **`tests/units/domain/test_design_views.py`** (new)
+   - 7 test classes, 36 tests covering happy paths, validation errors, conflict/not-found errors, legacy-layout migration, visibility payload persistence, and the full auto-view creation flow.
+
+### Modified Files
+- `tests/units/domain/test_design_views.py` (new)
+
+---
+
+## Feature: Entity search popup in Ontology Designer
+
+### Context
+Added a search button (🔍) to the Ontology Designer toolbar. Clicking it opens a small floating popup with a sorted dropdown of all entities. Selecting one and clicking "Focus" centres the canvas on that entity (animated pan+zoom to ×1.4) and triggers the neighbourhood highlight — identical to clicking the node directly.
+
+### Changes
+
+1. **`src/front/templates/partials/ontology/_ontology_map.html`**
+   - Added `#mapSearchBtn` toolbar button and `#mapSearchPopup` floating panel (select + Focus button).
+
+2. **`src/front/static/ontology/css/ontology-map.css`**
+   - Added `.map-search-popup`, `.map-search-popup-header`, `.map-search-popup-body` styles with fade-in animation.
+
+3. **`src/front/static/ontology/js/ontology-map.js`**
+   - `initMapSearch(nodes, highlightNeighborhood, clearHighlights, svg, w, h)` — wires open/close, populates the sorted dropdown on each open, handles Enter key, outside-click dismiss.
+   - `focusMapEntity(name, nodes, …)` — pans and zooms the SVG to centre the selected node, then calls `highlightNeighborhood`.
+   - `initOntologyMap` now calls `initMapSearch` at the end of its setup block.
+
+### Modified Files
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `src/front/static/ontology/css/ontology-map.css`
+- `src/front/static/ontology/js/ontology-map.js`
+
+---
+
+## Code review fixes
+
+### Context
+Post-commit code review against `.cursorrules` / `src/.coding_rules.md`. All flagged issues resolved.
+
+### Changes
+
+1. **`src/front/static/ontology/js/ontology-map.js`**
+   - `alert()` → `showNotification(…, 'danger')` (violates `05-code-style §Frontend`)
+   - `switch` and `save-current` fetch responses now checked and throw on non-OK status (functional gap — navigation ran even when POSTs failed)
+   - `ontologyMapInitialized` dead state variable removed (never read, only written — 3 occurrences)
+   - Extracted `_resolveLinkEndpoint(endpoint)` module-level helper; replaced 4 duplicated inline `(link.x && link.x.name) ? link.x.name : link.x` patterns
+   - Search popup visibility now via CSS modifier class `map-search-popup--hidden` (not `style.display`) per `05-code-style §Frontend` (no inline styles)
+
+2. **`src/front/static/ontology/css/ontology-map.css`**
+   - Added `.map-search-popup--hidden { display: none; }` class
+
+3. **`src/front/templates/partials/ontology/_ontology_map.html`**
+   - Removed `style="display:none;"` inline style from `#mapSearchPopup`
+
+4. **`tests/units/domain/test_design_views.py`**
+   - Added `pytestmark = pytest.mark.unit` (required by `.coding_rules.md §10`)
+
+5. **`docs/features.md`**
+   - Documented all new Ontology Model (D3) features: neighbourhood highlight, relationship highlight, inheritance toggle, entity search, Create Business View
+
+### Test results
+2503 passed, 15 skipped
+
+### Modified Files
+- `src/front/static/ontology/js/ontology-map.js`
+- `src/front/static/ontology/css/ontology-map.css`
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `tests/units/domain/test_design_views.py`
+- `docs/features.md`
+
+---
+
+## Enhancement: Analytics — guard Run Analysis + tab fills viewport
+
+### Context
+Two UX issues in the Knowledge Graph / Analytics section:
+1. "Run Analysis" could be clicked even with no graph built, resulting in a backend error with no helpful message.
+2. The `.ob-tab-content` container had a fixed/small height — the bottom of the tab pane was cut off and did not resize with the browser window.
+
+### Changes
+
+1. **`src/front/templates/partials/dtwin/_query_analytics.html`**
+   - Added `_setComputeBtnState(enabled, reason)` — disables/enables `analyticsComputeBtn` and sets tooltip.
+   - Added `_showNoGraphBanner(show)` — inserts/removes a `alert-warning` banner below the section header when no graph is detected.
+   - `_loadEntityTypes()` — now checks `window.__TRIPLESTORE_CONFIG.graph_name` first; if empty, disables the button and shows the banner without making the stats API call. Also disables/shows banner when the `/dtwin/sync/stats` response returns `success: false`.
+   - `analyticsLoadTypes()` — simplified (always calls `_loadEntityTypes()`, removed stale guard).
+   - Added `_initialGuard()` IIFE that disables the button immediately at page paint time if `graph_name` is empty (no API round-trip needed).
+   - Added `<style>` block: `#analyticsResults { display: flex; flex-direction: column; flex: 1; min-height: 0; }` and `#analyticsResults > .ob-tab-content { flex: 1; min-height: 0; overflow-y: auto; }` so the tab pane fills remaining viewport height and scrolls internally, adapting to window resize.
+
+### Modified Files
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test Results
+- Pure frontend/template change. Existing test suite unaffected.
+
+---
+
+## Enhancement: Registry — item descriptions + access-rights check
+
+### Context
+The "Registry Catalog & Volume" panel showed two items (UC schema and UC Volume) with only a single-line hint. Operators had no quick way to understand their exact purpose or to verify that the app service principal had the required privileges.
+
+### Changes
+
+1. **`src/front/templates/partials/registry/_registry_configuration.html`**
+   - Moved the "Check Access" button inline next to the section label.
+   - For each item, added a `0.72rem` description paragraph explaining:
+     - **UC schema**: hosts Delta Lake triples views + Lakebase-backed registry tables; requires `USE CATALOG`, `USE SCHEMA`, `SELECT`, `CREATE TABLE`, `MODIFY`.
+     - **UC Volume**: stores binary document artefacts in `documents/` folders per domain; requires `READ VOLUME` + `WRITE VOLUME`.
+   - Added `#registrySchemaCheckBadge` / `#registryVolumeCheckBadge` inline badge slots.
+   - Added `#registrySchemaCheckDetail` / `#registryVolumeCheckDetail` error-detail slots (hidden until a check runs).
+   - Added an IIFE `<script>` block wiring the `btnCheckRegistryAccess` button: calls `GET /settings/registry/check`, renders per-item badges (OK / Not found / Access denied / Unknown) and error detail, fires a summary `showNotification`.
+
+2. **`src/back/core/databricks/UnityCatalog.py`**
+   - `check_schema_access(catalog, schema)` — REST `GET /api/2.1/unity-catalog/schemas/{catalog}.{schema}`: distinguishes 200 (exists + accessible), 404 (not found), 403 (exists but access denied).
+   - `check_volume_access(catalog, schema, volume)` — REST `GET /api/2.1/unity-catalog/volumes/{catalog}.{schema}.{volume}`: same status-code logic; also returns `volume_type` (MANAGED / EXTERNAL) on success.
+
+3. **`src/back/objects/domain/SettingsService.py`**
+   - `check_registry_access(session_mgr, settings)` — static async method: resolves `RegistryCfg`, calls both check methods, annotates results with `path` / `name` fields.
+
+4. **`src/api/routers/internal/settings.py`**
+   - `GET /settings/registry/check` — thin async route; no warehouse required (REST-only probes).
+
+### Modified Files
+- `src/front/templates/partials/registry/_registry_configuration.html`
+- `src/back/core/databricks/UnityCatalog.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+
+### Test Results
+- Backend-only changes; no existing test paths broken. Frontend-only JS change for the button.
+
+---
+
+## Enhancement: Registry — Check Access extended with Lakebase permission audit
+
+### Context
+The "Check Access" button only verified UC schema/Volume existence via REST. It did not test whether the Lakebase service principal had the Postgres-level privileges required to run the registry (USAGE, CREATE on schema; SELECT/INSERT/UPDATE/DELETE on every registry table).
+
+### Changes
+
+1. **`src/back/objects/registry/store/lakebase/store.py`**
+   - `check_permissions()` — new public method. Single Postgres round-trip that checks:
+     - Connection (SELECT 1 / current_database / current_user)
+     - Schema existence (`pg_namespace`)
+     - `USAGE` on schema (`has_schema_privilege`)
+     - `CREATE` on schema (needed for upgrades that add tables)
+     - Per-table: `SELECT`, `INSERT`, `UPDATE`, `DELETE` via `has_table_privilege` for all 10 tables in `_KNOWN_TABLES`; absent tables reported as `"missing"` (normal before initialization)
+   - Returns structured `{"success", "database", "user", "schema", "checks": [...]}` with per-check `{id, label, status, detail}` where status ∈ `ok | warning | error | missing` and `detail` contains the exact `GRANT` SQL to fix any failing check.
+
+2. **`src/back/objects/domain/SettingsService.py`**
+   - `check_lakebase_permissions(session_mgr, settings)` — static async method delegating to the store; gracefully returns `success: false` if psycopg is absent or the resource is unbound.
+
+3. **`src/api/routers/internal/settings.py`**
+   - `GET /settings/registry/check` — now runs UC and Lakebase checks in parallel via `asyncio.gather`; response wraps both under `{"uc": {...}, "lakebase": {...}}`.
+   - Added `import asyncio`.
+
+4. **`src/front/templates/partials/registry/_registry_configuration.html`**
+   - `btnCheckRegistryAccess` click handler updated to parse `data.uc` / `data.lakebase`.
+   - Added `#lbChecksPanel` section (initially hidden) that renders after a check run:
+     - Header with database/user/schema context and a summary badge (errors / warnings / all passed)
+     - Structural checks (connect, schema_exists, schema_usage, schema_create) shown as inline rows
+     - Table checks in a collapsible `<details>`-like Bootstrap collapse; auto-expanded when any table has errors
+     - Each failing check displays the exact `GRANT … TO "user"` SQL as a code hint
+
+### Modified Files
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/templates/partials/registry/_registry_configuration.html`
+
+### Test Results
+- 66 unit tests passed, 1 skipped. No regressions.

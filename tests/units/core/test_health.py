@@ -14,11 +14,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from back.core.databricks.DatabricksAuth import DatabricksAuth
 from shared.fastapi import health
 
 # These imports work around __init__.py re-exports that shadow module paths.
-_VFS_MOD = importlib.import_module("back.core.databricks.VolumeFileService")
-_LBA_MOD = importlib.import_module("back.core.databricks.LakebaseAuth")
+_VFS_PKG = importlib.import_module("back.core.databricks.uc")
+_LBA_MOD = importlib.import_module("back.core.databricks.lakebase")
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +114,36 @@ class TestCheckDatabricksAuth:
         monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
         status, detail = health._check_databricks_auth()
         assert status == "error"
-        assert "DATABRICKS_TOKEN" in detail
+        assert "Databricks CLI" in detail
+
+    def test_local_mode_with_cli_profile(self, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
+        fake_cfg = MagicMock()
+        fake_cfg.host = "https://cli.databricks.com"
+        fake_cfg.authenticate.return_value = {
+            "Authorization": "Bearer cli-health-token"
+        }
+        with patch.object(
+            DatabricksAuth, "_resolve_cli_config", return_value=fake_cfg
+        ):
+            status, detail = health._check_databricks_auth()
+        assert status == "ok"
+        assert "Databricks CLI profile" in detail
+        assert "default" in detail
+
+    def test_local_mode_cli_authenticate_failure(self, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
+        fake_cfg = MagicMock()
+        fake_cfg.host = "https://cli.databricks.com"
+        fake_cfg.authenticate.side_effect = RuntimeError("expired session")
+        with patch.object(
+            DatabricksAuth, "_resolve_cli_config", return_value=fake_cfg
+        ):
+            status, detail = health._check_databricks_auth()
+        assert status == "error"
+        assert "CLI profile authentication failed" in detail
 
     def test_local_mode_with_pat(self, monkeypatch):
         monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
@@ -187,7 +217,7 @@ class TestCheckRegistryCfg:
 
 class TestCheckRegistryVolumeReadWrite:
     def _patch_svc(self, svc):
-        return patch.object(_VFS_MOD, "VolumeFileService", return_value=svc)
+        return patch.object(_VFS_PKG, "VolumeFileService", return_value=svc)
 
     def test_read_ok(self):
         svc = MagicMock()

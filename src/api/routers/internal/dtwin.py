@@ -1,10 +1,11 @@
 """
-Internal API -- Digital Twin / query JSON endpoints.
+Internal API -- Knowledge Graph / query JSON endpoints.
 
 Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 """
 
 from dataclasses import dataclass
+import os
 import time
 from typing import Any, Optional
 
@@ -21,14 +22,17 @@ from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
 from back.core.databricks import DatabricksClient, is_databricks_app
-from back.core.triplestore import get_triplestore
+from back.core.graphdb import get_graphdb
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 from back.objects.domain import HomeService, Domain
 from back.core.helpers import (
+    effective_databricks_table,
     effective_graph_name,
+    effective_graph_query_table,
     effective_view_table,
     get_databricks_client,
-    get_databricks_credentials,
+    get_triplestore_sql_credentials,
+    get_databricks_host_and_token,
     make_volume_file_service,
     is_uri,
     run_blocking,
@@ -37,6 +41,71 @@ from back.core.helpers import (
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/dtwin", tags=["Query"])
+
+
+def _graph_query_table(
+    domain,
+    settings,
+    store=None,
+    *,
+    include_inferred: bool = True,
+) -> str:
+    """Resolve the physical graph table for read queries (Lakebase or Delta)."""
+    return effective_graph_query_table(
+        domain,
+        settings,
+        include_inferred=include_inferred,
+        store=store,
+    )
+
+# Canonical rdf:type predicate. Neighbour expansion must preserve type
+# triples so the knowledge graph can group/colour expanded nodes by their
+# declared entity type rather than their raw identifier (issue #52).
+_RDF_TYPE_URI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+
+
+def _is_type_predicate(predicate: str) -> bool:
+    """Return True for ``rdf:type`` predicates (full URI or ``#type``/``/type``)."""
+    if not predicate:
+        return False
+    return (
+        predicate == _RDF_TYPE_URI
+        or predicate.endswith("#type")
+        or predicate.endswith("/type")
+    )
+
+
+def _filter_neighbor_triples(
+    rows: list[dict[str, str]],
+    visited: set[str],
+    limit: int,
+) -> list[dict[str, str]]:
+    """Reduce raw store rows to the triples the knowledge graph can render.
+
+    A triple is kept when its object is a literal, when its object URI is
+    part of *visited* (so edges have both endpoints rendered), or when it is
+    an ``rdf:type`` triple. Type triples are preserved even though the class
+    URI is never in *visited*: the front-end groups and colours nodes by
+    their declared type, so dropping them makes freshly expanded nodes fall
+    back to identifier-based grouping with random colours (issue #52).
+    """
+    triples: list[dict[str, str]] = []
+    seen: set = set()
+    for r in rows:
+        s = r.get("subject", "") or ""
+        p = r.get("predicate", "") or ""
+        o = r.get("object", "") or ""
+        key = (s, p, o)
+        if key in seen:
+            continue
+        is_uri_obj = o.startswith("http://") or o.startswith("https://")
+        if is_uri_obj and o not in visited and not _is_type_predicate(p):
+            continue
+        seen.add(key)
+        triples.append({"subject": s, "predicate": p, "object": o})
+        if len(triples) >= limit:
+            break
+    return triples
 
 
 # ===========================================
@@ -159,7 +228,7 @@ async def start_triplestore_sync(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Start async digital twin build: CREATE VIEW then populate the graph store.
+    """Start async knowledge graph build: CREATE VIEW then populate the graph store.
 
     Always performs a full rebuild. When the graph engine is ``lakebase`` in
     ``managed_synced`` mode, the Lakeflow pipeline handles the data-plane
@@ -189,7 +258,7 @@ async def start_triplestore_sync(
             "No R2RML mapping available. Please ensure ontology and assignments are configured."
         )
 
-    host, token, warehouse_id = get_databricks_credentials(domain, settings)
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
     if not host and not is_databricks_app():
         raise ValidationError("Databricks not configured")
     if not token and not is_databricks_app():
@@ -221,10 +290,10 @@ async def start_triplestore_sync(
     # is absent when GlobalConfigService is the sole persistence layer
     # (common in the deployed App where the mirror write never fires).
     try:
-        from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        _engine = TripleStoreFactory._resolve_graph_engine(domain, settings) or ""
-        _ecfg = TripleStoreFactory._resolve_graph_engine_config(domain, settings) or {}
+        _engine = GraphDBFactory._resolve_graph_engine(domain, settings, force=True) or ""
+        _ecfg = GraphDBFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
     except Exception as _exc:  # noqa: BLE001
         logger.debug("Engine config resolution failed, defaulting to non-synced: %s", _exc)
         _engine = ""
@@ -247,11 +316,11 @@ async def start_triplestore_sync(
 
     tm = get_task_manager()
     task = tm.create_task(
-        name="Digital Twin Build",
+        name="Knowledge Graph Build",
         task_type="triplestore_sync",
         steps=[
             {"name": "prepare", "description": "Preparing mappings and generating queries"},
-            {"name": "view",    "description": "Creating the Digital Twin view"},
+            {"name": "view",    "description": "Creating the Knowledge Graph view"},
             *_graph_steps,
         ],
     )
@@ -297,11 +366,10 @@ async def load_triplestore(
         include_inferred = body.get("include_inferred", True)
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
-
         store = _require_graph_store(domain, settings)
-
-        query_table = graph_name if include_inferred else store.synced_table_name(graph_name)
+        query_table = _graph_query_table(
+            domain, settings, store, include_inferred=include_inferred
+        )
 
         try:
             results = store.query_triples(query_table)
@@ -312,7 +380,7 @@ async def load_triplestore(
             error_msg = str(e)
             if "does not exist" in error_msg.lower():
                 raise NotFoundError(
-                    f"Graph {graph_name} does not exist. Run Build first.",
+                    f"Graph {query_table} does not exist. Run Build first.",
                     detail=error_msg,
                 )
             raise InfrastructureError(
@@ -353,14 +421,13 @@ async def detect_clusters(
         resolution = float(data.get("resolution", 1.0))
         predicate_filter = data.get("predicate_filter")
         class_filter = data.get("class_filter")
-        max_triples = int(data.get("max_triples", 500_000))
+        max_triples = int(data.get("max_triples", settings.analytics_max_triples))
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
         if not graph_name:
             raise ValidationError("Graph name is not configured")
-
-        store = _require_graph_store(domain, settings)
 
         dt = DigitalTwin(domain)
         result = await run_blocking(
@@ -384,6 +451,281 @@ async def detect_clusters(
     except Exception as e:
         logger.exception("Cluster detection failed: %s", e)
         raise InfrastructureError("Cluster detection failed", detail=str(e))
+
+
+# ===========================================
+# Graph Metrics
+# ===========================================
+
+
+def _load_stored_metrics(domain, settings) -> Optional[dict]:
+    """Return the cached ``graph_analytics`` row for the active domain/version.
+
+    Resolves ``(folder, version)`` from the domain session and reads the
+    last persisted result via the registry. ``None`` when nothing is
+    stored yet or the lookup is not possible. Never raises.
+    """
+    from back.objects.registry.RegistryService import RegistryService
+
+    folder = getattr(domain, "uc_domain_folder", "") or ""
+    version = str(getattr(domain, "current_version", "") or "")
+    if not folder or not version:
+        return None
+    try:
+        svc = RegistryService.from_context(domain, settings)
+        return svc.load_graph_analytics(folder, version)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("load_graph_analytics failed: %s", exc)
+        return None
+
+
+@router.post("/metrics/compute")
+async def compute_graph_metrics(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Start an asynchronous knowledge-graph metrics computation.
+
+    The NetworkX analysis can take a while on large graphs, so it runs in
+    a background :class:`TaskManager` thread. The result (only the LAST
+    one) is persisted to the registry ``graph_analytics`` cache; clients
+    poll ``/tasks/{task_id}`` and then read ``/dtwin/metrics/latest``.
+    """
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
+    try:
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        predicate_filter = data.get("predicate_filter")
+        class_filter = data.get("class_filter")
+        max_triples = int(data.get("max_triples", settings.analytics_max_triples))
+        max_nodes_betweenness = int(data.get("max_nodes_betweenness", 2_000))
+
+        domain = get_domain(session_mgr)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
+        if not graph_name:
+            raise ValidationError("Graph name is not configured")
+
+        # Fail fast on graphs too large for in-memory analysis — the triple
+        # count is already known, so reject here instead of spawning a
+        # background task that would only fail after loading everything.
+        try:
+            total_triples = int(store.get_aggregate_stats(graph_name).get("total", 0))
+        except Exception:  # noqa: BLE001
+            total_triples = 0
+        if total_triples and total_triples > max_triples:
+            raise ValidationError(
+                f"This Knowledge Graph has {total_triples:,} triples, which "
+                f"exceeds the analytics limit of {max_triples:,}. In-memory "
+                f"centrality/structure analysis is disabled for graphs this "
+                f"large — reduce the synced graph (exclude entity types in "
+                f"KG → Sync) or raise ONTOBRICKS_ANALYTICS_MAX_TRIPLES."
+            )
+
+        tm = get_task_manager()
+        task = tm.create_task(
+            name="Graph Analytics",
+            task_type="graph_analytics",
+            steps=[
+                {"name": "compute", "description": "Computing graph metrics"},
+                {"name": "store", "description": "Storing analytics result"},
+            ],
+        )
+
+        def run_metrics():
+            DigitalTwin.run_metrics_task(
+                tm,
+                task.id,
+                domain,
+                settings,
+                store,
+                graph_name,
+                predicate_filter=predicate_filter,
+                class_filter=class_filter,
+                max_triples=max_triples,
+                max_nodes_betweenness=max_nodes_betweenness,
+            )
+
+        thread = threading.Thread(target=run_metrics, daemon=True)
+        thread.start()
+
+        return {
+            "success": True,
+            "task_id": task.id,
+            "message": "Analysis started",
+        }
+
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except ValueError as e:
+        logger.warning("Graph metrics rejected: %s", e)
+        raise ValidationError("Graph metrics parameters are invalid", detail=str(e))
+    except Exception as e:
+        logger.exception("Graph metrics failed: %s", e)
+        raise InfrastructureError("Graph metrics computation failed", detail=str(e))
+
+
+@router.get("/metrics/latest")
+async def get_latest_graph_metrics(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the LAST persisted metrics result for the active domain/version.
+
+    Reads the ``graph_analytics`` cache populated by the background
+    compute task. ``{success, has_result: false}`` when no analysis has
+    been run yet for this version.
+    """
+    try:
+        domain = get_domain(session_mgr)
+        stored = _load_stored_metrics(domain, settings)
+        if not stored:
+            return {"success": True, "has_result": False}
+
+        result = stored.get("result") or {}
+        return {
+            "success": True,
+            "has_result": True,
+            "computed_at": stored.get("computed_at", ""),
+            "duration_ms": stored.get("duration_ms", 0),
+            "class_filter": stored.get("class_filter") or [],
+            "graph_name": stored.get("graph_name", ""),
+            **result,
+        }
+
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("Loading latest graph metrics failed: %s", e)
+        raise InfrastructureError("Loading latest graph metrics failed", detail=str(e))
+
+
+@router.get("/metrics/history")
+async def get_graph_metrics_history(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the analytics run history (newest-first) for this domain/version.
+
+    Lightweight metadata per run from the ``graph_analytics_runs`` trace —
+    backs the Analytics page "History" tab.
+    """
+    from back.objects.registry.RegistryService import RegistryService
+
+    try:
+        domain = get_domain(session_mgr)
+        folder = getattr(domain, "uc_domain_folder", "") or ""
+        version = str(getattr(domain, "current_version", "") or "")
+        if not folder or not version:
+            return {"success": True, "runs": []}
+
+        svc = RegistryService.from_context(domain, settings)
+        runs = svc.load_graph_analytics_runs(folder, version, limit=100)
+        return {"success": True, "runs": runs}
+
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("Loading graph metrics history failed: %s", e)
+        raise InfrastructureError("Loading graph metrics history failed", detail=str(e))
+
+
+@router.get("/metrics/summary")
+async def get_graph_metrics_summary(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return stored graph structure stats and top-PageRank nodes (cockpit card).
+
+    Reads from the ``graph_analytics`` cache instead of recomputing, so
+    opening the Domain Validation page no longer blocks on a full NetworkX
+    run. ``{success, has_result: false}`` when no analysis has been run.
+    """
+    try:
+        domain = get_domain(session_mgr)
+        stored = _load_stored_metrics(domain, settings)
+        if not stored:
+            return {"success": True, "has_result": False}
+
+        return {
+            "success": True,
+            "has_result": True,
+            "stats": stored.get("stats") or {},
+            "top_pagerank": stored.get("top_pagerank") or [],
+            "computed_at": stored.get("computed_at", ""),
+        }
+
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("Graph metrics summary failed: %s", e)
+        raise InfrastructureError("Graph metrics summary failed", detail=str(e))
+
+
+@router.post("/metrics/interpret")
+async def interpret_graph_metrics(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Run the graph-interpreter agent on the supplied metrics payload.
+
+    Expects the JSON body produced by ``/dtwin/metrics/compute`` plus an
+    optional ``class_filter`` list so the agent knows the entity type.
+    The agent may call ``get_entity_details`` to look up specific entities
+    before producing its structured insights.
+    Returns ``{ success, sections: [{ title, body | items }] }``.
+    """
+    try:
+        data = await request.json()
+        domain = get_domain(session_mgr)
+
+        host, token = get_databricks_host_and_token(domain, settings)
+        if not host or not token:
+            raise ValidationError("Databricks credentials not configured")
+
+        llm_endpoint = (domain.info or {}).get("llm_endpoint", "") or ""
+        if not llm_endpoint:
+            llm_endpoint = _auto_discover_llm_endpoint(domain, settings)
+        if not llm_endpoint:
+            raise ValidationError(
+                "No LLM serving endpoint available. Please set one in Domain Settings."
+            )
+
+        # Build loopback base URL so the agent can call get_entity_details
+        app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+        base_url = f"http://localhost:{app_port}"
+        session_cookies = dict(request.cookies or {})
+        session_headers = {
+            k: v
+            for k, v in request.headers.items()
+            if k.lower().startswith("x-forwarded-") or k.lower() == "x-csrf-token"
+        }
+
+        dt = DigitalTwin(domain)
+        result = await run_blocking(
+            dt.interpret_graph_metrics,
+            data,
+            host,
+            token,
+            llm_endpoint,
+            base_url,
+            session_cookies,
+            session_headers,
+        )
+        return result
+
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("Graph metrics interpretation failed: %s", e)
+        raise InfrastructureError("Graph metrics interpretation failed", detail=str(e))
 
 
 # ===========================================
@@ -425,10 +767,10 @@ def cohort_engine_context(
     backend cannot be instantiated.
     """
     domain = get_domain(session_mgr)
-    graph_name = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    graph_name = _graph_query_table(domain, settings, store)
     if not graph_name:
         raise ValidationError("Graph name is not configured")
-    store = _require_graph_store(domain, settings)
     return CohortEngineContext(
         domain=domain,
         settings=settings,
@@ -455,11 +797,11 @@ def _require_graph_store(domain, settings):
 
     Centralises the five-line guard that every graph-facing route repeated::
 
-        store = get_triplestore(domain, settings, backend="graph")
+        store = get_graphdb(domain, settings)
         if not store:
             raise InfrastructureError("Graph backend is not configured")
     """
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise InfrastructureError("Graph backend is not configured")
     return store
@@ -711,13 +1053,10 @@ async def filter_triplestore(
         include_inferred = data.get("include_inferred", True)
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
-        if not graph_name:
-            raise ValidationError("Graph name is not configured")
-
         store = _require_graph_store(domain, settings)
-
-        query_table = graph_name if include_inferred else store.synced_table_name(graph_name)
+        query_table = _graph_query_table(
+            domain, settings, store, include_inferred=include_inferred
+        )
 
         if phase == "preview":
             entity_type = (data.get("entity_type") or "").strip()
@@ -814,7 +1153,7 @@ async def sync_info(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return all data the Digital Twin Information page needs in one shot.
+    """Return all data the Knowledge Graph Information page needs in one shot.
 
     Graph status and artefact existence are served from the session cache
     when available (populated after each successful build).  On a cache miss
@@ -893,7 +1232,139 @@ async def sync_info(
 
 
 # ===========================================
-# Digital Twin Existence Checks
+# Databricks Triple Store Build (Delta only)
+# ===========================================
+
+
+@router.get("/databricks-build/info")
+async def databricks_build_info(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Readiness + Delta table status for the Databricks triple-store build page."""
+    from back.core.graphdb.delta import _table_naming
+    from back.core.graphdb.delta.health import probe_from_client
+    from back.core.graphdb.delta.DeltaBase import create_databricks_client
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    domain = get_domain(session_mgr)
+    backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
+    readiness = HomeService.validate_status(domain)
+    view_table = effective_view_table(domain)
+    data_table = effective_databricks_table(domain, settings)
+    client = create_databricks_client(domain, settings)
+    data_status = probe_from_client(client, data_table) if data_table else {}
+    return {
+        "success": True,
+        "triple_store_backend": backend,
+        "readiness": readiness,
+        "view_table": view_table,
+        "data_table": data_table,
+        "inferred_table": _table_naming.inferred_table_fqn(domain, settings),
+        "triplestore_status": data_status,
+    }
+
+
+@router.post(
+    "/databricks-build/start",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def start_databricks_triplestore_build(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Materialize UC Delta triple store (VIEW → TABLE); no Lakebase sync."""
+    import threading
+    from back.core.task_manager import get_task_manager
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+    from back.objects.digitaltwin._databricks_triplestore_build import (
+        run_databricks_triplestore_build,
+    )
+
+    await request.json()
+
+    domain = get_domain(session_mgr)
+    if GraphDBFactory._resolve_triple_store_backend(domain, settings) != "databricks":
+        raise ValidationError(
+            "Databricks triple-store build is only available when "
+            "triple_store_backend is 'databricks' (Settings → Triple store)."
+        )
+
+    view_table = effective_view_table(domain)
+    data_table = effective_databricks_table(domain, settings)
+    if len(view_table.split(".")) != 3:
+        raise ValidationError(
+            "View location must be fully qualified: catalog.schema.view_name"
+        )
+    if len(data_table.split(".")) != 3:
+        raise ValidationError("Delta data table FQN could not be resolved")
+
+    domain.ensure_generated_content()
+    r2rml_content = domain.get_r2rml()
+    if not r2rml_content:
+        raise ValidationError(
+            "No R2RML mapping available. Configure ontology and assignments first."
+        )
+
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
+    if not host and not is_databricks_app():
+        raise ValidationError("Databricks not configured")
+    if not token and not is_databricks_app():
+        raise ValidationError("Databricks not configured")
+    if not warehouse_id:
+        raise ValidationError("No SQL warehouse configured")
+
+    domain.triplestore.pop("stats", None)
+    domain.triplestore.pop("_ts_cache_timestamp", None)
+    if domain.last_update:
+        domain.triplestore["build_last_update"] = domain.last_update
+
+    from datetime import datetime, timezone as tz
+
+    domain.last_build = datetime.now(tz.utc).isoformat()
+    domain.save()
+
+    domain_snap = DomainSnapshot(domain)
+    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
+
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Databricks Triple Store Build",
+        task_type="databricks_triplestore_build",
+        steps=[
+            {"name": "prepare", "description": "Preparing mappings and generating queries"},
+            {"name": "view", "description": "Creating the R2RML SQL view"},
+            {"name": "materialize", "description": "Materializing Delta table in Unity Catalog"},
+            {"name": "finalize", "description": "Optimizing Delta table"},
+        ],
+    )
+
+    def run_build():
+        run_databricks_triplestore_build(
+            tm,
+            task.id,
+            domain,
+            settings,
+            domain_snap,
+            host,
+            token,
+            warehouse_id,
+            view_table,
+            data_table,
+            r2rml_content,
+            domain.assignment,
+            domain.ontology,
+            base_uri,
+            build_kind="session",
+        )
+
+    threading.Thread(target=run_build, daemon=True).start()
+    return {"success": True, "task_id": task.id}
+
+
+# ===========================================
+# Knowledge Graph Existence Checks
 # ===========================================
 
 
@@ -902,7 +1373,7 @@ async def dt_existence(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Check existence of each Digital Twin artefact.
+    """Check existence of each Knowledge Graph artefact.
 
     Always probes Databricks/Lakebase live so the result reflects the current
     state (the session cache can carry a stale ``False`` from a transient
@@ -928,7 +1399,8 @@ async def triplestore_stats(
     """Return content statistics about the triple store."""
     try:
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
 
         if not graph_name:
             raise ValidationError("Graph name is not configured")
@@ -974,6 +1446,10 @@ async def triplestore_stats(
             "type_assertion_count": type_count,
             "relationship_count": max(relationship_count, 0),
             "inferred_triples": inferred_count,
+            # Effective KG-analytics safety limit, so the Analytics page can
+            # warn up-front when total_triples exceeds it (in-memory NetworkX
+            # guard; see Settings.analytics_max_triples).
+            "analytics_max_triples": settings.analytics_max_triples,
         }
         DigitalTwin(domain).set_ts_cache("stats", result)
         return result
@@ -1004,7 +1480,7 @@ async def execute_dataquality_check(
         backend = data.get("backend", "view").strip()
         domain = get_domain(session_mgr)
         if backend == "graph":
-            triplestore_table = effective_graph_name(domain).strip()
+            triplestore_table = _graph_query_table(domain, settings).strip()
         else:
             triplestore_table = data.get("triplestore_table", "").strip()
 
@@ -1015,12 +1491,14 @@ async def execute_dataquality_check(
 
         from back.core.w3c import SHACLService
 
-        store = get_triplestore(domain, settings, backend=backend)
+        store = get_graphdb(
+            domain, settings, engine=(None if backend == "graph" else backend)
+        )
         if not store:
             raise InfrastructureError(f"Could not initialize {backend} backend")
 
         if backend == "graph":
-            graph_name = triplestore_table or effective_graph_name(domain)
+            graph_name = triplestore_table or _graph_query_table(domain, settings)
             triples = await run_blocking(store.query_triples, graph_name)
             if not triples:
                 raise ValidationError(f"Graph '{graph_name}' is empty. Build first.")
@@ -1072,7 +1550,7 @@ async def start_dataquality_checks(
 
     domain = get_domain(session_mgr)
     if requested_backend == "graph":
-        triplestore_table = effective_graph_name(domain).strip()
+        triplestore_table = _graph_query_table(domain, settings).strip()
     else:
         triplestore_table = data.get("triplestore_table", "").strip()
 
@@ -1258,7 +1736,7 @@ async def materialize_inferred(
 
     if do_graph and uri_triples:
         try:
-            store = get_triplestore(domain_snap, settings, backend="graph")
+            store = get_graphdb(domain_snap, settings)
             if store is None:
                 result["materialize_graph_error"] = "Graph store not available"
             else:
@@ -1887,7 +2365,6 @@ async def dtwin_graphql_execute(
     to resolve the query.
     """
     from back.core.graphql import build_schema_for_domain, DEFAULT_DEPTH, MAX_DEPTH
-    from back.core.triplestore import get_triplestore
     from back.core.helpers import effective_graph_name
 
     domain = get_domain(session_mgr)
@@ -1919,7 +2396,7 @@ async def dtwin_graphql_execute(
 
     context = {
         "triplestore": store,
-        "table_name": effective_graph_name(domain),
+        "table_name": _graph_query_table(domain, settings, store),
         "base_uri": base_uri,
     }
     if depth is not None:
@@ -1974,11 +2451,10 @@ async def dtwin_triples_find(
     offset = max(0, int(offset or 0))
 
     domain = get_domain(session_mgr)
-    table = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    table = _graph_query_table(domain, settings, store)
     if not table:
         raise ValidationError("Graph name not configured")
-
-    store = _require_graph_store(domain, settings)
 
     rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
     rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
@@ -2081,7 +2557,7 @@ async def dtwin_neighbors(
     """Expand *uri* by ``depth`` BFS hops and return the induced subgraph
     triples.
 
-    Used by the graph viewer's right-click "Expand neighbours" action to
+    Used by the knowledge graph's right-click "Expand neighbours" action to
     enrich the displayed graph with one or more hops of related entities.
     Only triples whose object is a literal *or* whose object is a URI also
     present in the visited set are returned, so the front-end can render
@@ -2094,11 +2570,10 @@ async def dtwin_neighbors(
     limit = max(1, min(int(limit or 2000), 20000))
 
     domain = get_domain(session_mgr)
-    table = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    table = _graph_query_table(domain, settings, store)
     if not table:
         raise ValidationError("Graph name not configured")
-
-    store = _require_graph_store(domain, settings)
 
     query_table = table if include_inferred else store.synced_table_name(table)
 
@@ -2116,22 +2591,7 @@ async def dtwin_neighbors(
 
         rows = store.get_triples_for_subjects(query_table, list(visited))
 
-        triples: list[dict[str, str]] = []
-        seen: set = set()
-        for r in rows:
-            s = r.get("subject", "") or ""
-            p = r.get("predicate", "") or ""
-            o = r.get("object", "") or ""
-            key = (s, p, o)
-            if key in seen:
-                continue
-            is_uri_obj = o.startswith("http://") or o.startswith("https://")
-            if is_uri_obj and o not in visited:
-                continue
-            seen.add(key)
-            triples.append({"subject": s, "predicate": p, "object": o})
-            if len(triples) >= limit:
-                break
+        triples = _filter_neighbor_triples(rows, visited, limit)
 
         return {
             "success": True,

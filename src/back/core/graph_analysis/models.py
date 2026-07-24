@@ -1,4 +1,4 @@
-"""Data models for graph analysis: community detection and cohort discovery."""
+"""Data models for graph analysis: community detection, cohort discovery, and graph metrics."""
 
 from __future__ import annotations
 
@@ -49,6 +49,72 @@ class DetectionResult:
 
     clusters: List[ClusterResult] = field(default_factory=list)
     stats: DetectionStats = field(default_factory=DetectionStats)
+
+
+# ---------------------------------------------------------------------------
+# Graph metrics (centrality & structure)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class MetricsRequest:
+    """Parameters for a graph metrics computation request."""
+
+    predicate_filter: Optional[List[str]] = None
+    class_filter: Optional[List[str]] = None
+    max_triples: int = 500_000
+    max_nodes_betweenness: int = 2_000
+
+
+@dataclass
+class NodeMetrics:
+    """Centrality scores for a single node."""
+
+    degree: float = 0.0
+    pagerank: float = 0.0
+    betweenness: float = 0.0
+    closeness: float = 0.0
+    clustering: float = 0.0
+
+
+@dataclass
+class MetricsStats:
+    """Aggregate structural statistics from a graph metrics run."""
+
+    node_count: int = 0          # filtered nodes (instances of selected type, or all)
+    graph_node_count: int = 0    # total nodes in the computation graph (incl. neighbors)
+    edge_count: int = 0
+    connected_components: int = 0
+    avg_degree: float = 0.0
+    density: float = 0.0
+    elapsed_ms: int = 0
+
+
+@dataclass
+class EntityTypeProfile:
+    """Per-entity-type structural profile and flat-dataset heuristic."""
+
+    uri: str
+    count: int                       # number of instances in the returned nodes
+    avg_degree: float                # mean degree centrality across instances
+    avg_clustering: float            # mean clustering coefficient
+    avg_betweenness: float           # mean betweenness centrality
+    distinct_predicates: int         # distinct non-excluded predicate URIs used by instances
+    has_temporal_predicates: bool    # any predicate local-name contains date/time/ts/at/created
+    is_flat: bool                    # heuristic: True when this type looks like a flat dataset
+    flat_reasons: List[str] = field(default_factory=list)  # human-readable flags (empty if not flat)
+
+
+@dataclass
+class MetricsResult:
+    """Full result of a graph metrics computation."""
+
+    nodes: Dict[str, NodeMetrics] = field(default_factory=dict)
+    stats: MetricsStats = field(default_factory=MetricsStats)
+    top_pagerank: List[str] = field(default_factory=list)
+    node_types: Dict[str, str] = field(default_factory=dict)    # node_uri → class_uri
+    node_labels: Dict[str, str] = field(default_factory=dict)   # node_uri → rdfs:label
+    entity_type_profiles: Dict[str, "EntityTypeProfile"] = field(default_factory=dict)  # class_uri → profile
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,54 @@
+{# Settings → Locks tab body (admin only).
+
+   Lists every active domain edit-lock across the registry and lets an admin
+   force-unlock a stuck one. Lazy-loaded on first tab open by
+   /static/config/js/settings-locks.js. Data comes from GET /settings/locks;
+   force-unlock POSTs to /settings/locks/release.
+#}
+<div class="alert alert-info small d-flex align-items-start mb-3" role="alert">
+    <i class="bi bi-info-circle me-2 mt-1"></i>
+    <div>
+        DRAFT versions use a <strong>single-editor lock</strong>: only one user
+        may edit a given <code>(domain, version)</code> at a time; others land
+        read-only until the holder <strong>closes</strong> the domain. A lock
+        left by a crashed / closed tab &mdash; or by an editor who goes
+        <strong>inactive</strong> (they are warned first) &mdash; is
+        auto-reclaimed once its <strong>lease</strong> lapses (configurable in
+        <strong>Settings &rarr; Global &rarr; Edit Lock Lease</strong>; set to
+        <code>0</code> to disable the lease). You can also clear one here with
+        <strong>force-unlock</strong> — unlocking a version someone is actively
+        editing will drop their edit rights on their next action.
+    </div>
+</div>
+
+<div id="locksTableContainer">
+    <div class="text-center text-muted small py-4">
+        <span class="spinner-border spinner-border-sm me-1"></span> Loading locks…
+    </div>
+</div>
+
+<!-- Force-unlock confirmation modal -->
+<div class="modal fade" id="lockReleaseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-unlock me-2"></i>Force-unlock</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Release the edit lock on this version?</p>
+                <div class="alert alert-warning small mb-0">
+                    <strong>Domain:</strong> <span id="lockReleaseName"></span><br>
+                    <strong>Version:</strong> <span id="lockReleaseVersion"></span><br>
+                    <strong>Held by:</strong> <span id="lockReleaseHolder"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="btnConfirmLockRelease">
+                    <i class="bi bi-unlock me-1"></i> Force-unlock
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

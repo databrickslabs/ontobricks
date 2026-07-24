@@ -133,7 +133,7 @@ def tool_list_entity_types(ctx: ToolContext, **_kwargs) -> str:
         return data.get("message", "Could not retrieve statistics.")
 
     lines: list[str] = []
-    lines.append(f"Knowledge Graph -- {ctx.dtwin_domain_name}")
+    lines.append(f"Graph Viewer -- {ctx.dtwin_domain_name}")
     lines.append("=" * 40)
     inferred = data.get("inferred_triples", 0)
     lines.append(f"Total triples:       {data.get('total_triples', 0):,}")

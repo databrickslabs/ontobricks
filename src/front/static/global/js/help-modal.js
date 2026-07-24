@@ -12,6 +12,9 @@
 
     var MODAL_ID = 'helpModal';
     var TOGGLE_ID = 'helpCenterToggle';
+    var MAXIMIZE_ID = 'helpMaximizeToggle';
+    var MAX_CLASS = 'help-modal-maximized';
+    var MAX_PREF_KEY = 'ob.helpCenter.maximized';
 
     /** Lazily obtain a Bootstrap modal instance. */
     function _getBsModal() {
@@ -243,8 +246,44 @@
         });
     }
 
+    // ── Maximize / full-page toggle ────────────────────────────────────────────
+
+    /** Reflect the maximized state on the modal + the toggle button. */
+    function _applyMaximized(on) {
+        var el = document.getElementById(MODAL_ID);
+        if (!el) return;
+        el.classList.toggle(MAX_CLASS, !!on);
+
+        var btn = document.getElementById(MAXIMIZE_ID);
+        if (!btn) return;
+        var icon = btn.querySelector('i');
+        if (icon) icon.className = on ? 'bi bi-arrows-angle-contract' : 'bi bi-arrows-fullscreen';
+        var label = on ? 'Exit full screen' : 'Expand to full screen';
+        btn.setAttribute('title', label);
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+
+    function _initMaximize() {
+        var btn = document.getElementById(MAXIMIZE_ID);
+        if (!btn) return;
+
+        var saved = false;
+        try { saved = localStorage.getItem(MAX_PREF_KEY) === '1'; } catch (e) { /* private mode */ }
+        _applyMaximized(saved);
+
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var el = document.getElementById(MODAL_ID);
+            var on = !(el && el.classList.contains(MAX_CLASS));
+            _applyMaximized(on);
+            try { localStorage.setItem(MAX_PREF_KEY, on ? '1' : '0'); } catch (e) { /* private mode */ }
+        });
+    }
+
     function init() {
         _initToggle();
+        _initMaximize();
         _initSidebarNav();
         _initJumpLinks();
         _initSearch();

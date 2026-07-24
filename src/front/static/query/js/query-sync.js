@@ -5,6 +5,16 @@
 
 const SYNC_TASK_KEY = 'ontobricks_sync_task';
 
+function _syncTripleStoreBackend() {
+    try {
+        const el = document.getElementById('triplestore-config');
+        if (!el) return 'lakebase';
+        return JSON.parse(el.textContent || '{}').triple_store_backend || 'lakebase';
+    } catch (_) {
+        return 'lakebase';
+    }
+}
+
 /** Whether ontology + assignments are both ready */
 let syncIsReady = false;
 
@@ -348,6 +358,7 @@ let _syncSectionLoaded = false;
  * then drops to reveal the fully-populated page in one shot.
  */
 async function initSyncSection() {
+    if (_syncTripleStoreBackend() === 'databricks') return;
     if (_syncSectionLoaded) return;
     _syncSectionLoaded = true;
 
@@ -404,7 +415,7 @@ async function initSyncSection() {
 
         var targetLabel = document.getElementById('syncTargetLabel');
         if (targetLabel) {
-            targetLabel.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Digital Twin';
+            targetLabel.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Knowledge Graph';
         }
 
         if (typeof refreshNavbarIndicators === 'function') refreshNavbarIndicators();
@@ -417,7 +428,7 @@ async function initSyncSection() {
 
 /**
  * Check whether the ontology or assignments have changed since the last
- * Digital Twin build. Shows a warning banner when a rebuild is recommended.
+ * Knowledge Graph build. Shows a warning banner when a rebuild is recommended.
  */
 async function checkConfigChanges() {
     var warning = document.getElementById('syncRebuildWarning');
@@ -509,9 +520,9 @@ function renderTripleStoreStatus(data) {
         const reason = data.reason || '';
         let msg;
         if (reason.toLowerCase().includes('does not exist')) {
-            msg = 'Digital Twin not built yet. Click <strong>Build</strong> to create the VIEW and graph.';
+            msg = 'Knowledge Graph not built yet. Click <strong>Build</strong> to create the VIEW and graph.';
         } else if (reason.toLowerCase().includes('not configured')) {
-            msg = 'Digital Twin is not configured. Set it in <a href="/domain/#information">Domain Settings</a>.';
+            msg = 'Knowledge Graph is not configured. Set it in <a href="/domain/#information">Domain Settings</a>.';
         } else {
             msg = 'Graph is empty. Run <strong>Synchronize</strong> to generate triples.';
         }
@@ -523,7 +534,7 @@ function renderTripleStoreStatus(data) {
 }
 
 /**
- * Enable or disable the Data section sidebar menus (Quality, Triples, Knowledge Graph).
+ * Enable or disable the Data section sidebar menus (Quality, Triples, Graph Viewer).
  *
  * Menus are enabled ONLY when ALL conditions are met:
  *   1. Ontology + assignments are ready (syncIsReady)
@@ -599,7 +610,7 @@ async function checkAndResumeSyncTask() {
 }
 
 /**
- * Show a confirmation modal before building the Digital Twin.
+ * Show a confirmation modal before building the Knowledge Graph.
  * Always displayed so the domain is saved with the latest changes.
  * Resolves to 'save' (user confirms) or 'cancel'.
  */
@@ -620,7 +631,7 @@ function _showSaveBeforeBuildDialog() {
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p>The domain will be saved to the registry before building the Digital Twin.</p>
+                            <p>The domain will be saved to the registry before building the Knowledge Graph.</p>
                             <p class="mb-0 text-muted">
                                 This ensures the triple store, GraphQL API, and other services
                                 use the latest ontology and mapping configuration.
@@ -781,7 +792,7 @@ async function monitorSyncTask(taskId) {
                 // Refresh artefact existence flags
                 _loadDtExistence();
 
-                // Refresh navbar Digital Twin indicator
+                // Refresh navbar Knowledge Graph indicator
                 if (typeof refreshDigitalTwinStatus === 'function') refreshDigitalTwinStatus();
 
                 if (typeof refreshTasks === 'function') refreshTasks();
@@ -877,7 +888,7 @@ let _syncBuildLogLastTask = null;
 
 /**
  * Show the live build-log card and wipe any previous content. Called when
- * the user clicks Build so the panel slides in next to the Digital Twin
+ * the user clicks Build so the panel slides in next to the Knowledge Graph
  * card and grows row-by-row as the backend reports each phase.
  */
 function showBuildLog() {
@@ -1081,7 +1092,7 @@ function _formatBuildLogAsText(task) {
     const sep = '─'.repeat(60);
 
     lines.push(sep);
-    lines.push('OntoBricks — Digital Twin Build Log');
+    lines.push('OntoBricks — Knowledge Graph Build Log');
     lines.push(sep);
     lines.push('Task ID         : ' + (task.id || ''));
     lines.push('Name            : ' + (task.name || ''));
@@ -1261,7 +1272,7 @@ async function loadTripleStore(options = {}) {
 
         if (!silent) showNotification(`Loaded ${count} triples from triple store`, 'success');
 
-        // Navigate to Knowledge Graph only when explicitly requested
+        // Navigate to Graph Viewer only when explicitly requested
         if (navigate && typeof SidebarNav !== 'undefined' && SidebarNav.switchTo) {
             SidebarNav.switchTo('sigmagraph');
         }
@@ -1492,7 +1503,7 @@ function _escHtml(str) {
 
 /**
  * Fetch artefact existence flags and render check / cross icons
- * next to each Digital Twin line.
+ * next to each Knowledge Graph line.
  */
 async function _loadDtExistence() {
     try {
@@ -1542,7 +1553,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (syncSection) {
         const observer = new MutationObserver(() => {
             if (syncSection.classList.contains('active')) {
-                initSyncSection();
+                if (_syncTripleStoreBackend() === 'databricks') {
+                    if (typeof loadDatabricksBuildInfo === 'function') {
+                        loadDatabricksBuildInfo();
+                    }
+                } else {
+                    initSyncSection();
+                }
             } else {
                 _syncSectionLoaded = false;
             }
@@ -1550,7 +1567,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         observer.observe(syncSection, { attributes: true, attributeFilter: ['class'] });
 
         if (syncSection.classList.contains('active')) {
-            initSyncSection();
+            if (_syncTripleStoreBackend() === 'databricks') {
+                if (typeof loadDatabricksBuildInfo === 'function') {
+                    loadDatabricksBuildInfo();
+                }
+            } else {
+                initSyncSection();
+            }
         }
     }
 });

@@ -1,0 +1,29 @@
+## Fix managed_synced object_hash failures on KG rebuild (backport from 0.6.2)
+
+Context: Interactive managed_synced KG builds failed with
+``column "object_hash" does not exist`` on domains that already had Lakebase
+companions from before the v0.6.2 ``object_hash`` layout. Lakeflow registration
+could succeed while ``ensure_synced_companion`` then tried to index
+``object_hash`` on a legacy ``__app`` table still keyed on full ``object`` text.
+The interactive build pipeline also created the UC VIEW before opening the graph
+store, so the Lakeflow wrapper could be skipped.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Add ``upgrade_legacy_triple_table_to_object_hash`` before index creation.
+2. src/back/objects/digitaltwin/_build_pipeline.py
+   Open graph store before VIEW creation; refresh source VIEW with ``object_hash``
+   before ``SyncedTableManager.ensure``; split companion vs synced-table errors.
+3. tests/units/core/test_lakebase_flat_store.py
+   Unit tests for legacy companion migration DDL.
+4. tests/units/dtwin/test_build_pipeline_streaming.py
+   Cover store-driven VIEW wrapping and Lakeflow source refresh.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- tests/units/core/test_lakebase_flat_store.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+
+Tests: uv run pytest -q -m "not scenario" → 3231 passed, 275 skipped, 5 deselected, 23 warnings in 22.92s

@@ -164,9 +164,10 @@ def _check_log_dir() -> Tuple[str, str]:
 def _check_databricks_auth() -> Tuple[str, str]:
     """Verify the app has usable Databricks credentials.
 
-    In Apps mode we additionally exercise the M2M OAuth path so a
-    misconfigured ``DATABRICKS_CLIENT_ID`` / ``CLIENT_SECRET`` fails
-    here rather than at the first warehouse call.
+    Exercises the active auth path eagerly (M2M OAuth for App mode, the
+    Databricks SDK ``Config.authenticate`` call for CLI mode) so a
+    misconfigured workspace fails here rather than at the first warehouse
+    call.
     """
     from back.core.databricks.DatabricksAuth import DatabricksAuth
 
@@ -179,14 +180,26 @@ def _check_databricks_auth() -> Tuple[str, str]:
             )
         return (
             _ERROR,
-            "Local mode but DATABRICKS_TOKEN is not set",
+            "Local mode but DATABRICKS_TOKEN is not set and no Databricks CLI "
+            "profile was found in ~/.databrickscfg "
+            "(run `databricks auth login` to configure one)",
         )
-    if auth.is_app_mode:
+    if auth.auth_mode == "app":
         try:
             auth.get_oauth_token()
         except Exception as exc:  # noqa: BLE001 — vendor surface
             return _ERROR, f"OAuth token request failed: {exc}"
         return _OK, f"App mode OAuth credentials valid (host={auth.host})"
+    if auth.auth_mode == "cli":
+        try:
+            auth.get_bearer_token()
+        except Exception as exc:  # noqa: BLE001 — vendor surface
+            return _ERROR, f"Databricks CLI profile authentication failed: {exc}"
+        return (
+            _OK,
+            f"Databricks CLI profile '{auth.cli_profile_name}' configured "
+            f"(host={auth.host})",
+        )
     return _OK, f"Personal Access Token configured (host={auth.host})"
 
 
@@ -264,7 +277,7 @@ def _check_registry_volume_read(settings: Settings) -> Tuple[str, str]:
         return _WARNING, "Registry volume not configured — skipped"
 
     from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.VolumeFileService import VolumeFileService
+    from back.core.databricks.uc import VolumeFileService
 
     svc = VolumeFileService(auth=DatabricksAuth())
     if not svc.is_configured():
@@ -288,7 +301,7 @@ def _check_registry_volume_write(settings: Settings) -> Tuple[str, str]:
         return _WARNING, "Registry volume not configured — skipped"
 
     from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.VolumeFileService import VolumeFileService
+    from back.core.databricks.uc import VolumeFileService
 
     svc = VolumeFileService(auth=DatabricksAuth())
     if not svc.is_configured():
@@ -358,7 +371,7 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
     targets the same host as the actual build engine — the graph DB may be
     on a completely different Lakebase project than the registry.
     """
-    from back.core.databricks.LakebaseAuth import BranchLakebaseAuth, get_lakebase_auth
+    from back.core.databricks.lakebase import BranchLakebaseAuth, get_lakebase_auth
 
     cfg = _resolve_registry_cfg(settings)
     try:
@@ -411,7 +424,7 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
         return (
             _WARNING,
             f"Graph DB connected (db={cur_db}) but schema '{schema}' does not exist yet — "
-            "run a Digital Twin build to create it",
+            "run a Knowledge Graph build to create it",
         )
     except Exception as exc:  # noqa: BLE001
         return _ERROR, f"Graph DB probe failed (database={database or 'default'}, schema={schema}): {exc}"
@@ -423,7 +436,7 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
 
 
 def _check_lakebase(settings: Settings) -> Tuple[str, str]:
-    from back.core.databricks.LakebaseAuth import get_lakebase_auth
+    from back.core.databricks.lakebase import get_lakebase_auth
 
     auth = get_lakebase_auth()
     if not auth.is_available:
@@ -457,7 +470,7 @@ def _check_lakebase(settings: Settings) -> Tuple[str, str]:
 
 def _check_lakebase_permissions(settings: Settings) -> Tuple[str, str]:
     """Verify Lakebase registry privileges expected by OntoBricks runtime."""
-    from back.core.databricks.LakebaseAuth import get_lakebase_auth
+    from back.core.databricks.lakebase import get_lakebase_auth
 
     auth = get_lakebase_auth()
     if not auth.is_available:
@@ -637,6 +650,940 @@ def _check_lakebase_accelerated_sync(settings: Optional[Settings] = None) -> Tup
         f"Accelerated Sync probe returned unexpected HTTP {resp.status_code}"
         + (f": {err_msg[:200]}" if err_msg else ""),
     )
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics probes (admin-only, grouped by subsystem)
+# ---------------------------------------------------------------------------
+
+
+def _check_uc_catalog_privileges(settings: Settings) -> Tuple[str, str]:
+    """Verify the app identity can USE the registry UC catalog (list its schemas)."""
+    cfg = _resolve_registry_cfg(settings)
+    if not cfg.catalog:
+        return (
+            _WARNING,
+            "Registry catalog not configured — set REGISTRY_VOLUME_PATH or bind a UC Volume "
+            "resource in app.yaml",
+        )
+    client = _build_health_client(settings)
+    if client is None:
+        return _WARNING, "No Databricks credentials — skipped"
+    try:
+        schemas = client.get_schemas(cfg.catalog)
+        if isinstance(schemas, list):
+            return (
+                _OK,
+                f"USE CATALOG granted on '{cfg.catalog}' — {len(schemas)} schema(s) visible. "
+                "The app service principal can list and access schemas within this catalog.",
+            )
+        return _WARNING, "Could not determine catalog access — unexpected response from UC API"
+    except Exception as exc:
+        err = str(exc)
+        if any(k in err.upper() for k in ("PERMISSION_DENIED", "CATALOG_NOT_FOUND", "UNAUTHORIZED")):
+            return (
+                _ERROR,
+                f"Cannot USE catalog '{cfg.catalog}': {err}. "
+                "Grant USE CATALOG on this catalog to the app service principal via: "
+                f"GRANT USE CATALOG ON CATALOG `{cfg.catalog}` TO `<app-sp>`",
+            )
+        return _ERROR, f"Catalog privilege check failed: {exc}"
+
+
+def _check_uc_schema_privileges(settings: Settings) -> Tuple[str, str]:
+    """Verify USE SCHEMA on the registry schema (list its objects)."""
+    cfg = _resolve_registry_cfg(settings)
+    if not (cfg.catalog and cfg.schema):
+        return _WARNING, "Registry catalog/schema not configured"
+    client = _build_health_client(settings)
+    if client is None:
+        return _WARNING, "No Databricks credentials — skipped"
+    try:
+        objects = client.list_tables_and_views(cfg.catalog, cfg.schema)
+        if isinstance(objects, list):
+            return (
+                _OK,
+                f"USE SCHEMA granted on '{cfg.catalog}.{cfg.schema}' — "
+                f"{len(objects)} object(s) visible. "
+                "The app can list tables and views in this schema.",
+            )
+        return _WARNING, "Could not determine schema access — unexpected response from UC API"
+    except Exception as exc:
+        err = str(exc)
+        if any(k in err.upper() for k in ("PERMISSION_DENIED", "SCHEMA_NOT_FOUND", "UNAUTHORIZED")):
+            return (
+                _ERROR,
+                f"Cannot USE schema '{cfg.schema}': {err}. "
+                f"Grant: USE SCHEMA ON SCHEMA `{cfg.catalog}`.`{cfg.schema}` TO `<app-sp>`",
+            )
+        return _ERROR, f"Schema privilege check failed: {exc}"
+
+
+def _check_uc_create_table_privilege(settings: Settings) -> Tuple[str, str]:
+    """Probe CREATE TABLE + DROP TABLE in the registry schema.
+
+    The Delta triple-store backend creates Delta TABLEs (not just VIEWs) in the
+    registry schema during Knowledge Graph builds.  The existing ``_check_registry_uc_schema_ddl``
+    probe only tests CREATE VIEW — a principal may have CREATE on views but not tables.
+    This probe catches that gap before the first build attempts it.
+    """
+    settings = settings or get_settings()
+    cfg = _resolve_registry_cfg(settings)
+    if not (cfg.catalog and cfg.schema):
+        return _WARNING, "Registry catalog/schema not configured — skipped"
+
+    client = _build_health_client(settings)
+    if client is None:
+        return _WARNING, "No Databricks credentials — skipped"
+    if not getattr(client, "warehouse_id", ""):
+        return _WARNING, "No SQL warehouse configured — CREATE TABLE probe skipped"
+
+    name = f"_ontobricks_health_{uuid.uuid4().hex[:8]}"
+    fqn = f"`{cfg.catalog}`.`{cfg.schema}`.`{name}`"
+    try:
+        client.execute_statement(
+            f"CREATE TABLE IF NOT EXISTS {fqn} (id BIGINT) USING DELTA"
+        )
+    except Exception as exc:
+        return (
+            _ERROR,
+            f"Cannot CREATE TABLE in {cfg.catalog}.{cfg.schema}: {exc}. "
+            "Required for Delta triple-store builds. "
+            f"Grant: CREATE ON SCHEMA `{cfg.catalog}`.`{cfg.schema}` TO `<app-sp>`",
+        )
+    try:
+        client.execute_statement(f"DROP TABLE IF EXISTS {fqn}")
+    except Exception as exc:
+        return (
+            _WARNING,
+            f"Table created but DROP failed for {fqn}: {exc}. "
+            "Please drop it manually.",
+        )
+    return _OK, f"CREATE TABLE / DROP TABLE succeeded in {cfg.catalog}.{cfg.schema}"
+
+
+def _check_lakebase_env_vars() -> Tuple[str, str]:
+    """Verify the Lakebase PG* env vars are present (must be injected by Databricks Apps).
+
+    OntoBricks requires ``PGHOST``, ``PGDATABASE``, and ``PGUSER`` to be set.
+    ``PGPORT`` defaults to 5432 when absent.  The Postgres password is not an
+    env var — it is a short-lived JWT minted by :class:`LakebaseAuth` on demand.
+
+    In a Databricks App these are injected automatically when a ``database``
+    resource is bound in ``app.yaml``. In local development they must be set
+    in ``.env`` (or ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH`` + ``LAKEBASE_DATABASE``
+    can be used instead of raw ``PG*`` values — see ``LakebaseAuth`` docs).
+    """
+    missing: List[str] = []
+    present: List[str] = []
+
+    for var in ("PGHOST", "PGDATABASE", "PGUSER"):
+        if os.environ.get(var, "").strip():
+            present.append(var)
+        else:
+            missing.append(var)
+
+    port = os.environ.get("PGPORT", "5432")
+
+    # Check alternative local-dev vars if PG* are absent
+    alt_project  = os.environ.get("LAKEBASE_PROJECT", "").strip()
+    alt_branch   = os.environ.get("LAKEBASE_BRANCH", "").strip()
+    alt_database = os.environ.get("LAKEBASE_DATABASE", "").strip()
+    alt_present  = [v for v, val in (
+        ("LAKEBASE_PROJECT", alt_project),
+        ("LAKEBASE_BRANCH", alt_branch),
+        ("LAKEBASE_DATABASE", alt_database),
+    ) if val]
+
+    if missing:
+        if alt_project and alt_branch:
+            return (
+                _WARNING,
+                f"PG* vars not set ({', '.join(missing)} missing) — using alternative "
+                f"local-dev vars: {', '.join(alt_present)}. "
+                "In a deployed Databricks App, add a ``database`` resource binding in app.yaml.",
+            )
+        pghost_present = "PGHOST" in present
+        return (
+            _ERROR,
+            f"Required Lakebase env vars missing: {', '.join(missing)}. "
+            f"Present: {', '.join(present) or 'none'}. "
+            "In a deployed Databricks App these are injected automatically from the "
+            "``database`` resource binding in app.yaml. "
+            "In local development: set PGHOST, PGDATABASE, PGUSER in .env, or "
+            "set LAKEBASE_PROJECT + LAKEBASE_BRANCH + LAKEBASE_DATABASE instead.",
+        )
+    pghost = os.environ.get("PGHOST", "")
+    pgdb   = os.environ.get("PGDATABASE", "")
+    pguser = os.environ.get("PGUSER", "")
+    return (
+        _OK,
+        f"PGHOST={pghost} PGDATABASE={pgdb} PGUSER={pguser} PGPORT={port}. "
+        "All required Lakebase env vars are present.",
+    )
+
+
+def _check_lakebase_psycopg() -> Tuple[str, str]:
+    """Verify the ``psycopg`` (v3) driver is installed and importable.
+
+    ``psycopg`` is the only Postgres client used by OntoBricks; it is listed in
+    ``pyproject.toml`` under ``[project.dependencies]`` as ``psycopg[binary]``.
+    A missing or broken install would produce an opaque ``ImportError`` buried
+    inside a connection attempt rather than a clear error.
+    """
+    try:
+        import psycopg as _psycopg  # noqa: F401
+
+        ver = getattr(_psycopg, "__version__", "?")
+        return _OK, f"psycopg {ver} is installed and importable."
+    except ImportError as exc:
+        return (
+            _ERROR,
+            f"psycopg is not importable: {exc}. "
+            "Install it with: pip install 'psycopg[binary]'  "
+            "(or 'psycopg[c]' for the C extension build). "
+            "Check pyproject.toml [project.dependencies].",
+        )
+
+
+def _check_lakebase_registry_initialized(settings: Settings) -> Tuple[str, str]:
+    """Verify the registry schema has been initialized (registries row exists).
+
+    The app cannot function without at least one row in the ``registries`` table
+    that points to the correct catalog/schema/volume. This row is created by
+    Settings → Registry → Initialize (or the ``initialize_registry`` API call).
+    """
+    from back.core.databricks.lakebase import get_lakebase_auth
+
+    auth = get_lakebase_auth()
+    if not auth.is_available:
+        return _WARNING, "Lakebase not bound — skipped"
+
+    cfg = _resolve_registry_cfg(settings)
+    from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
+
+    store = LakebaseRegistryStore(
+        registry_cfg=cfg,
+        schema=cfg.lakebase_schema or "ontobricks_registry",
+        database=cfg.lakebase_database or "",
+    )
+    status_dict = store.init_status()
+    reason = status_dict.get("reason", "unknown")
+    err = status_dict.get("error", "")
+
+    if reason == "ok":
+        try:
+            with store._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f'SELECT catalog, schema, volume FROM "{store.schema}".registries '
+                    "ORDER BY created_at ASC LIMIT 1"
+                )
+                row = cur.fetchone()
+            if row:
+                return (
+                    _OK,
+                    f"Registry row found — catalog={row[0]} schema={row[1]} volume={row[2]}. "
+                    "The registry is initialized and the catalog/schema/volume triplet "
+                    "is correctly stored in Lakebase.",
+                )
+            return (
+                _WARNING,
+                f"Registry schema '{store.schema}' exists but the registries table is empty. "
+                "Run Settings → Registry → Initialize to create the registry row.",
+            )
+        except Exception as exc:
+            return _WARNING, f"Could not read registry row: {exc}"
+
+    if reason == "no_registry_row":
+        return (
+            _ERROR,
+            f"The registries table exists in schema '{store.schema}' but has no row. "
+            "Run Settings → Registry → Initialize to create the registry entry. "
+            "Without this, the app cannot resolve domain paths or load global config.",
+        )
+    if reason == "no_registries_table":
+        return (
+            _ERROR,
+            f"The 'registries' table is missing from schema '{store.schema}'. "
+            "Run Settings → Registry → Initialize to create all registry tables.",
+        )
+    if reason == "no_usage":
+        return (
+            _ERROR,
+            err or f"Role lacks USAGE on schema '{store.schema}'.",
+        )
+    return _ERROR, f"Registry not initialized ({reason}): {err}"
+
+
+def _check_lakebase_registry_tables(settings: Settings) -> Tuple[str, str]:
+    """Verify all expected Lakebase registry tables exist in the registry schema.
+
+    Tables are split into three tiers:
+
+    * **core** — blocking: the app cannot operate without these.
+    * **optional** — created on first use; warning if missing.
+    * **lazy** — created by the first relevant operation (e.g.
+      ``domain_change_events`` is created by the first domain save that
+      flushes the change-audit buffer).  These are expected to be absent
+      on a fresh install and are reported informatively only.
+    """
+    from back.core.databricks.lakebase import get_lakebase_auth
+
+    auth = get_lakebase_auth()
+    if not auth.is_available:
+        return _WARNING, "Lakebase not bound (PG* env vars unset) — skipped"
+
+    cfg = _resolve_registry_cfg(settings)
+    from back.objects.registry.store.lakebase.store import (
+        LakebaseRegistryStore,
+        _KNOWN_TABLES,
+    )
+
+    store = LakebaseRegistryStore(
+        registry_cfg=cfg,
+        schema=cfg.lakebase_schema or "ontobricks_registry",
+        database=cfg.lakebase_database or "",
+    )
+    _CORE_TABLES = frozenset(
+        {
+            "registries",
+            "global_config",
+            "domains",
+            "domain_versions",
+            "domain_permissions",
+            "schedules",
+            "schedule_runs",
+            "build_runs",
+        }
+    )
+    # domain_change_events is created lazily on the first domain save that
+    # flushes the change-audit buffer; it is intentionally absent from
+    # _KNOWN_TABLES so row-count probes skip it.  We note it separately.
+    _LAZY_TABLES = frozenset({"domain_change_events"})
+    # Expected sequences: one per bigserial primary key
+    _EXPECTED_SEQUENCES = frozenset(
+        {"schedule_runs_id_seq", "build_runs_id_seq", "graph_analytics_runs_id_seq"}
+    )
+
+    try:
+        with store._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = %s AND table_type = 'BASE TABLE'",
+                (store.schema,),
+            )
+            existing_tables = {row[0] for row in cur.fetchall()}
+
+            cur.execute(
+                "SELECT sequence_name FROM information_schema.sequences "
+                "WHERE sequence_schema = %s",
+                (store.schema,),
+            )
+            existing_seqs = {row[0] for row in cur.fetchall()}
+
+        missing_core  = _CORE_TABLES - existing_tables
+        missing_opt   = _KNOWN_TABLES - existing_tables - _CORE_TABLES
+        lazy_present  = _LAZY_TABLES & existing_tables
+        missing_seqs  = _EXPECTED_SEQUENCES - existing_seqs
+
+        if missing_core:
+            return (
+                _ERROR,
+                f"Missing core registry tables in schema '{store.schema}': "
+                f"{', '.join(sorted(missing_core))}. "
+                "Run Settings → Registry → Initialize to bootstrap the schema.",
+            )
+
+        present   = existing_tables & _KNOWN_TABLES
+        seq_note  = (
+            f"; sequences: {len(existing_seqs - missing_seqs)}/{len(_EXPECTED_SEQUENCES)} OK"
+            if missing_seqs
+            else f"; {len(existing_seqs)} sequence(s) present"
+        )
+        lazy_note = f"; lazy table 'domain_change_events' present" if lazy_present else ""
+
+        base_msg = (
+            f"{len(present)}/{len(_KNOWN_TABLES)} schema-DDL tables present in "
+            f"'{store.schema}'{seq_note}{lazy_note}"
+        )
+
+        if missing_seqs:
+            return (
+                _WARNING,
+                base_msg
+                + f". Missing sequences: {', '.join(sorted(missing_seqs))} — "
+                "these are created by schema initialization; run "
+                "Settings → Registry → Initialize.",
+            )
+        if missing_opt:
+            return (
+                _WARNING,
+                base_msg
+                + f". Optional tables absent (created on first use): "
+                + ", ".join(sorted(missing_opt)),
+            )
+        return _OK, base_msg
+    except Exception as exc:
+        return _ERROR, f"Registry table existence check failed: {exc}"
+
+
+def _check_graphdb_tables(settings: Settings) -> Tuple[str, str]:
+    """Report how many tables / views are in the configured graph DB schema."""
+    from back.core.databricks.lakebase import BranchLakebaseAuth, get_lakebase_auth
+
+    cfg = _resolve_registry_cfg(settings)
+    try:
+        from back.objects.registry.store import RegistryFactory
+
+        store = RegistryFactory.from_cfg(cfg)
+        global_cfg = store.load_global_config()
+        engine_cfg = global_cfg.get("graph_engine_config") or {}
+    except Exception as exc:
+        return _WARNING, f"Could not load graph engine config: {exc}"
+
+    database = (engine_cfg.get("database") or "").strip()
+    schema = (
+        engine_cfg.get("schema") or engine_cfg.get("graph_schema") or "ontobricks_graph"
+    ).strip()
+    branch_path = (engine_cfg.get("lakebase_branch") or "").strip()
+
+    auth = BranchLakebaseAuth(branch_path, database) if branch_path else get_lakebase_auth()
+    if not auth.is_available:
+        return _WARNING, "Lakebase not bound — Graph DB not probed"
+
+    try:
+        from back.core.graphdb.lakebase.pool import _require_psycopg
+
+        psycopg, _ = _require_psycopg()
+        kwargs = auth.kwargs(application_name="ontobricks-graphdb-diag")
+        if database:
+            kwargs["dbname"] = database
+
+        with psycopg.connect(**kwargs) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = %s",
+                (schema,),
+            )
+            table_count = int((cur.fetchone() or [0])[0])
+            cur.execute(
+                "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = %s",
+                (schema,),
+            )
+            view_count = int((cur.fetchone() or [0])[0])
+
+        if table_count == 0 and view_count == 0:
+            return (
+                _WARNING,
+                f"Graph schema '{schema}' is empty — no tables or views yet. "
+                "Run Knowledge Graph → Build to populate it (one table + one VIEW per "
+                "domain version, e.g. <domain>_<version> + <domain>_<version>_data).",
+            )
+        return (
+            _OK,
+            f"Graph schema '{schema}': {table_count} table(s), {view_count} view(s). "
+            "Each Knowledge Graph build creates a raw triple table and a materialized _data table.",
+        )
+    except Exception as exc:
+        return _ERROR, f"Graph DB table check failed (schema={schema}): {exc}"
+
+
+def _check_graphdb_permissions(settings: Settings) -> Tuple[str, str]:
+    """Verify SELECT / INSERT / UPDATE / DELETE on the graph DB schema tables."""
+    from back.core.databricks.lakebase import BranchLakebaseAuth, get_lakebase_auth
+
+    cfg = _resolve_registry_cfg(settings)
+    try:
+        from back.objects.registry.store import RegistryFactory
+
+        store = RegistryFactory.from_cfg(cfg)
+        global_cfg = store.load_global_config()
+        engine_cfg = global_cfg.get("graph_engine_config") or {}
+    except Exception as exc:
+        return _WARNING, f"Could not load graph engine config: {exc}"
+
+    database = (engine_cfg.get("database") or "").strip()
+    schema = (
+        engine_cfg.get("schema") or engine_cfg.get("graph_schema") or "ontobricks_graph"
+    ).strip()
+    branch_path = (engine_cfg.get("lakebase_branch") or "").strip()
+
+    auth = BranchLakebaseAuth(branch_path, database) if branch_path else get_lakebase_auth()
+    if not auth.is_available:
+        return _WARNING, "Lakebase not bound — Graph DB permissions not probed"
+
+    try:
+        from back.core.graphdb.lakebase.pool import _require_psycopg
+
+        psycopg, _ = _require_psycopg()
+        kwargs = auth.kwargs(application_name="ontobricks-graphdb-diag")
+        if database:
+            kwargs["dbname"] = database
+
+        with psycopg.connect(**kwargs) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT has_schema_privilege(current_user, %s, 'USAGE'), "
+                "       has_schema_privilege(current_user, %s, 'CREATE'), "
+                "       current_user",
+                (schema, schema),
+            )
+            row = cur.fetchone() or (False, False, "?")
+            has_usage, has_create, cur_user = row
+
+            cur.execute(
+                "SELECT "
+                "COALESCE(bool_and(has_table_privilege("
+                "current_user, format('%%I.%%I', table_schema, table_name), 'SELECT')), true), "
+                "COALESCE(bool_and(has_table_privilege("
+                "current_user, format('%%I.%%I', table_schema, table_name), 'INSERT')), true), "
+                "COALESCE(bool_and(has_table_privilege("
+                "current_user, format('%%I.%%I', table_schema, table_name), 'UPDATE')), true), "
+                "COALESCE(bool_and(has_table_privilege("
+                "current_user, format('%%I.%%I', table_schema, table_name), 'DELETE')), true), "
+                "COUNT(*) "
+                "FROM information_schema.tables "
+                "WHERE table_schema = %s AND table_type = 'BASE TABLE'",
+                (schema,),
+            )
+            tbl_sel, tbl_ins, tbl_upd, tbl_del, tbl_count = cur.fetchone() or (
+                True,
+                True,
+                True,
+                True,
+                0,
+            )
+
+        missing: List[str] = []
+        if not has_usage:
+            missing.append("schema USAGE")
+        if not has_create:
+            missing.append("schema CREATE (required to create triple tables per KG build)")
+        if not tbl_sel:
+            missing.append("table SELECT")
+        if not tbl_ins:
+            missing.append("table INSERT")
+        if not tbl_upd:
+            missing.append("table UPDATE")
+        if not tbl_del:
+            missing.append("table DELETE")
+
+        if missing:
+            return (
+                _ERROR,
+                f"Missing Postgres permissions on graph schema '{schema}' for role '{cur_user}': "
+                f"{', '.join(missing)}. "
+                "Run Settings → Lakebase → Permissions to grant superuser, or use "
+                "scripts/bootstrap-lakebase-perms.sh.",
+            )
+        return (
+            _OK,
+            f"Graph DB permissions OK — role '{cur_user}' on schema '{schema}' "
+            f"({int(tbl_count)} table(s)); USAGE + CREATE + SELECT/INSERT/UPDATE/DELETE all granted.",
+        )
+    except Exception as exc:
+        return _ERROR, f"Graph DB permission check failed (schema={schema}): {exc}"
+
+
+def _check_graphdb_uc_catalog(settings: Settings) -> Tuple[str, str]:
+    """Verify UC ALL_PRIVILEGES on sync_uc_catalog when sync_mode == managed_synced.
+
+    In managed_synced mode the app's service principal must hold ALL_PRIVILEGES on
+    the Unity Catalog catalog so Lakeflow can create/refresh the synced Delta table.
+    This check is informational (warning) when sync_mode is not managed_synced.
+    """
+    cfg = _resolve_registry_cfg(settings)
+    try:
+        from back.objects.registry.store import RegistryFactory
+
+        store = RegistryFactory.from_cfg(cfg)
+        global_cfg = store.load_global_config()
+        engine_cfg = global_cfg.get("graph_engine_config") or {}
+    except Exception as exc:
+        return _WARNING, f"Could not load graph engine config: {exc}"
+
+    sync_mode = (engine_cfg.get("sync_mode") or "app_managed").strip()
+    if sync_mode != "managed_synced":
+        return (
+            _OK,
+            f"sync_mode={sync_mode!r} — UC catalog grant not required (only needed for managed_synced)",
+        )
+
+    uc_catalog = (engine_cfg.get("sync_uc_catalog") or "").strip()
+    if not uc_catalog:
+        # Fall back to registry catalog when sync_uc_catalog is not explicit.
+        uc_catalog = (getattr(cfg, "catalog", None) or "").strip()
+
+    if not uc_catalog:
+        return (
+            _ERROR,
+            "sync_mode=managed_synced but sync_uc_catalog is not configured. "
+            "Set graph_engine_config.sync_uc_catalog to the UC catalog where Lakeflow "
+            "will register the synced Delta table.",
+        )
+
+    try:
+        from back.core.databricks.DatabricksClient import DatabricksClient
+
+        client = DatabricksClient()
+        grants = (
+            client.api_client.do(
+                "GET",
+                f"/api/2.1/unity-catalog/permissions/catalog/{uc_catalog}",
+            )
+            or {}
+        )
+        privilege_assignments = grants.get("privilege_assignments") or []
+        # Check that at least one principal holds ALL_PRIVILEGES or a broad superset.
+        _all_priv_markers = {"ALL_PRIVILEGES", "CREATE_TABLE", "CREATE_SCHEMA"}
+        for assignment in privilege_assignments:
+            privs = {p.upper() for p in (assignment.get("privileges") or [])}
+            if "ALL_PRIVILEGES" in privs or _all_priv_markers.issubset(privs):
+                principal = assignment.get("principal") or "?"
+                return (
+                    _OK,
+                    f"UC catalog '{uc_catalog}': ALL_PRIVILEGES confirmed for '{principal}'.",
+                )
+        return (
+            _WARNING,
+            f"UC catalog '{uc_catalog}': ALL_PRIVILEGES not found in grant list. "
+            "Run Settings → Lakebase → Create graph DB (with 'Grant UC catalog' enabled) "
+            "or: GRANT ALL_PRIVILEGES ON CATALOG <catalog> TO <sp_client_id>.",
+        )
+    except Exception as exc:
+        return (
+            _WARNING,
+            f"Could not read UC catalog grants for '{uc_catalog}': {exc}. "
+            "Ensure the service principal has permission to read UC permissions.",
+        )
+
+
+def _check_delta_warehouse(settings: Settings) -> Tuple[str, str]:
+    """Check whether the Delta triple-store warehouse is configured and reachable."""
+    cfg = _resolve_registry_cfg(settings)
+    try:
+        from back.objects.registry.store import RegistryFactory
+
+        store = RegistryFactory.from_cfg(cfg)
+        global_cfg = store.load_global_config()
+        backend = global_cfg.get("triple_store_backend", "lakebase")
+        delta_warehouse_id = (global_cfg.get("delta_warehouse_id") or "").strip()
+    except Exception as exc:
+        return _WARNING, f"Could not read triple-store backend config: {exc}"
+
+    if backend != "databricks":
+        return (
+            _OK,
+            f"Delta backend not selected (current backend: {backend}) — skipped. "
+            "Switch to Delta in Settings → Triple store → Back End to enable.",
+        )
+    if not delta_warehouse_id:
+        return (
+            _WARNING,
+            "Delta backend is selected but no dedicated Delta warehouse is configured. "
+            "Set one in Settings → Delta → SQL Warehouse (falls back to the global warehouse).",
+        )
+
+    client = _build_health_client(settings)
+    if client is None:
+        return _WARNING, "No Databricks credentials — warehouse probe skipped"
+    ok, msg = client.sql.test_connection()
+    return (_OK if ok else _ERROR), f"Delta warehouse {delta_warehouse_id}: {msg}"
+
+
+def _check_delta_objects_exist(settings: Settings) -> Tuple[str, str]:
+    """Check whether Delta triple-store objects exist in the registry UC schema."""
+    cfg = _resolve_registry_cfg(settings)
+    if not (cfg.catalog and cfg.schema):
+        return _WARNING, "Registry catalog/schema not configured — skipped"
+
+    try:
+        from back.objects.registry.store import RegistryFactory
+
+        store = RegistryFactory.from_cfg(cfg)
+        global_cfg = store.load_global_config()
+        backend = global_cfg.get("triple_store_backend", "lakebase")
+    except Exception as exc:
+        return _WARNING, f"Could not read triple-store config: {exc}"
+
+    if backend != "databricks":
+        return (
+            _OK,
+            f"Delta backend not selected (current: {backend}) — skipped. "
+            "Delta objects only exist after a Knowledge Graph build with the Delta backend.",
+        )
+
+    client = _build_health_client(settings)
+    if client is None:
+        return _WARNING, "No Databricks credentials — skipped"
+    if not getattr(client, "warehouse_id", ""):
+        return _WARNING, "No SQL warehouse configured — Delta objects check skipped"
+
+    try:
+        objects = client.list_tables_and_views(cfg.catalog, cfg.schema) or []
+        if not objects:
+            return (
+                _WARNING,
+                f"No objects found in {cfg.catalog}.{cfg.schema}. "
+                "Run Knowledge Graph → Build to create the R2RML VIEW and _data Delta table "
+                "for each domain version.",
+            )
+        data_tables = [o for o in objects if isinstance(o, dict) and o.get("name", "").endswith("_data")]
+        views = [o for o in objects if isinstance(o, dict) and o.get("table_type") == "VIEW"]
+        return (
+            _OK,
+            f"{len(objects)} object(s) in {cfg.catalog}.{cfg.schema}: "
+            f"{len(views)} VIEW(s), {len(data_tables)} _data table(s).",
+        )
+    except Exception as exc:
+        return _ERROR, f"Delta objects check failed: {exc}"
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics aggregator (grouped by subsystem)
+# ---------------------------------------------------------------------------
+
+
+def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
+    """Run comprehensive diagnostics, grouped by subsystem.
+
+    Returns four groups:
+
+    * **Unity Catalog — Registry** — catalog/schema/volume access + DDL privileges
+    * **Lakebase — Registry** — Postgres connection, schema tables, permissions
+    * **Lakebase — Graph DB** — graph schema connectivity, tables, permissions
+    * **Delta Triple Store** — Delta warehouse, UC objects, Accelerated Sync
+
+    The function is synchronous; wrap in :func:`run_blocking` from an ``async`` route.
+    """
+    settings = settings or get_settings()
+    groups = []
+    all_checks: List[Dict[str, Any]] = []
+
+    # ── Group 1: Unity Catalog — Registry ──────────────────────────────────
+    uc_checks = [
+        _safely_run(
+            "uc.config",
+            "Registry configuration resolved",
+            lambda: _check_registry_cfg(settings),
+        ),
+        _safely_run(
+            "uc.catalog",
+            "USE CATALOG privilege",
+            lambda: _check_uc_catalog_privileges(settings),
+        ),
+        _safely_run(
+            "uc.schema",
+            "USE SCHEMA privilege",
+            lambda: _check_uc_schema_privileges(settings),
+        ),
+        _safely_run(
+            "uc.view_ddl",
+            "CREATE VIEW in schema (DDL probe)",
+            _check_registry_uc_schema_ddl,
+        ),
+        _safely_run(
+            "uc.table_ddl",
+            "CREATE TABLE in schema (Delta build probe)",
+            lambda: _check_uc_create_table_privilege(settings),
+        ),
+        _safely_run(
+            "uc.volume_read",
+            "UC Volume — list (READ VOLUME)",
+            lambda: _check_registry_volume_read(settings),
+        ),
+        _safely_run(
+            "uc.volume_write",
+            "UC Volume — write sentinel (WRITE VOLUME)",
+            lambda: _check_registry_volume_write(settings),
+        ),
+    ]
+    groups.append(
+        {
+            "id": "uc_registry",
+            "title": "Unity Catalog — Registry",
+            "description": (
+                "Verifies the privileges the app service principal needs on the Unity Catalog "
+                "registry catalog and schema. "
+                "Required grants: USE CATALOG (to navigate the catalog), "
+                "USE SCHEMA (to list objects in the registry schema), "
+                "CREATE (to materialise R2RML VIEWs and Delta tables during Knowledge Graph builds — "
+                "tested separately for VIEWs and TABLEs since a grant may allow one but not the other), "
+                "READ VOLUME + WRITE VOLUME (to store .obx exports, document uploads, "
+                "and the global config blob on the UC Volume). "
+                "Missing any of these grants will cause builds or registry saves to fail."
+            ),
+            "checks": uc_checks,
+        }
+    )
+    all_checks.extend(uc_checks)
+
+    # ── Group 2: Lakebase — Registry (Postgres) ────────────────────────────
+    lb_checks = [
+        _safely_run(
+            "lakebase.psycopg",
+            "psycopg driver installed",
+            _check_lakebase_psycopg,
+        ),
+        _safely_run(
+            "lakebase.env_vars",
+            "Lakebase PG* env vars present",
+            _check_lakebase_env_vars,
+        ),
+        _safely_run(
+            "lakebase.connection",
+            "Registry Postgres — connection + USAGE check",
+            lambda: _check_lakebase(settings),
+        ),
+        _safely_run(
+            "lakebase.initialized",
+            "Registry row exists (initialized)",
+            lambda: _check_lakebase_registry_initialized(settings),
+        ),
+        _safely_run(
+            "lakebase.tables",
+            "Registry tables + sequences — existence",
+            lambda: _check_lakebase_registry_tables(settings),
+        ),
+        _safely_run(
+            "lakebase.permissions",
+            "Registry schema — Postgres DML privileges",
+            lambda: _check_lakebase_permissions(settings),
+        ),
+    ]
+    groups.append(
+        {
+            "id": "lakebase_registry",
+            "title": "Lakebase — Registry (Postgres)",
+            "description": (
+                "Checks the Lakebase Postgres instance used as the OntoBricks registry back-end. "
+                "Pre-requisites in order: "
+                "(1) psycopg v3 driver installed; "
+                "(2) PGHOST + PGDATABASE + PGUSER env vars injected by Databricks Apps "
+                "(or set manually in .env); "
+                "(3) Postgres connection succeeds and the role has USAGE on the registry schema; "
+                "(4) A registry row exists in the 'registries' table (created by Initialize); "
+                "(5) All 14 schema-DDL tables + 3 sequences are present — "
+                "core tables: registries, global_config, domains, domain_versions, "
+                "domain_permissions, schedules, schedule_runs, build_runs; "
+                "optional tables: graph_analytics, graph_analytics_runs, domain_review_events, "
+                "domain_comments, domain_tasks, domain_edit_locks; "
+                "lazy table: domain_change_events (created on first domain save); "
+                "(6) The role has USAGE/CREATE on the schema + SELECT/INSERT/UPDATE/DELETE "
+                "on all tables + USAGE/SELECT/UPDATE on all sequences. "
+                "Run Settings → Registry → Initialize or scripts/bootstrap-lakebase-perms.sh "
+                "to fix permission and initialization issues."
+            ),
+            "checks": lb_checks,
+        }
+    )
+    all_checks.extend(lb_checks)
+
+    # ── Group 3: Lakebase — Graph DB ───────────────────────────────────────
+    gdb_checks = [
+        _safely_run(
+            "graphdb.connection",
+            "Graph DB — connection + schema exists",
+            lambda: _check_graphdb_lakebase(settings),
+        ),
+        _safely_run(
+            "graphdb.tables",
+            "Graph DB — schema tables & views",
+            lambda: _check_graphdb_tables(settings),
+        ),
+        _safely_run(
+            "graphdb.permissions",
+            "Graph DB — Postgres USAGE + CREATE + DML on schema",
+            lambda: _check_graphdb_permissions(settings),
+        ),
+        _safely_run(
+            "graphdb.uc_catalog",
+            "Graph DB — UC catalog ALL_PRIVILEGES (managed_synced only)",
+            lambda: _check_graphdb_uc_catalog(settings),
+        ),
+    ]
+    groups.append(
+        {
+            "id": "graphdb",
+            "title": "Lakebase — Graph DB",
+            "description": (
+                "Checks the Lakebase Postgres database used to store Knowledge Graph triples. "
+                "This is a separate database from the registry (configured in "
+                "Settings → Lakebase → Connection). "
+                "Triple tables are created per domain+version during a Knowledge Graph build: "
+                "a raw triple table (<domain>_<version>) and a materialized copy "
+                "(<domain>_<version>_data). "
+                "When Managed Sync mode is active, a _sync foreign table is also created. "
+                "Required Postgres grants: (1) USAGE on the graph schema (to connect); "
+                "(2) CREATE on the graph schema (to create new triple tables per KG build — "
+                "one pair of tables is created each time a domain is rebuilt); "
+                "(3) SELECT / INSERT / UPDATE / DELETE on all triple tables. "
+                "In managed_synced mode only: the app's service principal also needs "
+                "ALL_PRIVILEGES on the Unity Catalog catalog (sync_uc_catalog) so Lakeflow "
+                "can create and refresh the synced Delta table inside UC. "
+                "Use Settings → Lakebase → Permissions to grant superuser to users who need "
+                "direct Postgres access. "
+                "Use Settings → Lakebase → Create graph DB (with 'Grant UC catalog' enabled) "
+                "to provision a new instance from scratch."
+            ),
+            "checks": gdb_checks,
+        }
+    )
+    all_checks.extend(gdb_checks)
+
+    # ── Group 4: Delta Triple Store ────────────────────────────────────────
+    delta_checks = [
+        _safely_run(
+            "delta.warehouse",
+            "Delta warehouse — configured + reachable",
+            lambda: _check_delta_warehouse(settings),
+        ),
+        _safely_run(
+            "delta.objects",
+            "Delta triple-store objects in UC schema",
+            lambda: _check_delta_objects_exist(settings),
+        ),
+        _safely_run(
+            "delta.accelerated_sync",
+            "Lakebase Accelerated Sync (optional)",
+            lambda: _check_lakebase_accelerated_sync(settings),
+        ),
+    ]
+    groups.append(
+        {
+            "id": "delta",
+            "title": "Delta Triple Store",
+            "description": (
+                "Checks for the Delta (Unity Catalog) triple-store backend. "
+                "When Delta is selected in Settings → Triple store → Back End, OntoBricks "
+                "stores triples as VIEW + Delta TABLE pairs inside the registry UC schema. "
+                "A dedicated SQL warehouse can be configured in Settings → Delta → SQL Warehouse "
+                "for Delta graph queries (falls back to the global warehouse if unset). "
+                "Lakebase Accelerated Sync (synced_tables API) is an optional feature that "
+                "enables Managed Sync mode: Lakeflow keeps a Postgres mirror of the Delta VIEW "
+                "up to date automatically, replacing the app-managed COPY loop. "
+                "It requires the workspace preview to be enabled."
+            ),
+            "checks": delta_checks,
+        }
+    )
+    all_checks.extend(delta_checks)
+
+    summary = {
+        "total": len(all_checks),
+        "ok": sum(1 for c in all_checks if c["status"] == _OK),
+        "warnings": sum(1 for c in all_checks if c["status"] == _WARNING),
+        "errors": sum(1 for c in all_checks if c["status"] == _ERROR),
+    }
+    overall = max(
+        (c["status"] for c in all_checks),
+        key=lambda s: _SEVERITY_RANK.get(s, 0),
+        default=_OK,
+    )
+    return {
+        "status": overall,
+        "version": APP_VERSION,
+        "summary": summary,
+        "groups": groups,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 <!-- JS: /static/mapping/js/mapping-design.js -->
 <div class="content-section h-100 d-flex flex-column">
     <div class="section-header flex-shrink-0 d-flex justify-content-between align-items-center mb-4">
-        <div>
+        <div class="me-auto">
             <h4 class="mb-1"><i class="bi bi-pencil-square me-2"></i>Visual Mapping Designer</h4>
             <p class="text-muted mb-0 small">Click on an entity or relationship to configure its data mapping.</p>
         </div>
@@ -36,11 +36,15 @@
                 <i class="bi bi-arrow-clockwise"></i>
             </button>
             <div class="vr mx-1"></div>
-            <button class="btn btn-sm btn-outline-warning" id="mappingAutoExclude" title="Auto-exclude: unmapped, orphan, and pure-parent entities (no object-property relationships)" onclick="autoExcludeAll()">
+            <button class="btn btn-sm btn-outline-warning" id="mappingAutoExclude" title="Auto-exclude: orphan entities and entities connected only by inheritance (no object-property relationships)" onclick="autoExcludeAll()">
                 <i class="bi bi-magic"></i> Auto-Exclude
             </button>
             <button class="btn btn-sm btn-outline-success" id="mappingIncludeExcluded" title="Include all excluded entities and relationships" onclick="includeAllExcluded()">
                 <i class="bi bi-eye"></i> Include excluded
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                    title="Open the mappings discussion" onclick="openMappingDiscussion()">
+                <i class="bi bi-chat-dots"></i>
             </button>
         </div>
     </div>
@@ -103,7 +107,7 @@
                     </div>
                     <div class="d-flex flex-column gap-2">
                         <button type="button" class="btn btn-secondary btn-sm panel-action-btn" id="cancelPanelBtn">Cancel</button>
-                        <button type="button" class="btn btn-dark btn-sm panel-action-btn" id="savePanelBtn" disabled>
+                        <button type="button" class="btn btn-dark btn-sm panel-action-btn" id="savePanelBtn">
                             <i class="bi bi-check-circle"></i> Save
                         </button>
                     </div>

@@ -76,16 +76,16 @@
   <text x="70" y="237" font-size="11" fill="#6c757d">Relationships</text>
   
   <rect x="40" y="250" width="160" height="35" fill="transparent"/>
-  <text x="70" y="272" font-size="11" fill="#6c757d">Constraints</text>
+  <text x="70" y="272" font-size="11" fill="#6c757d">Business Rules</text>
   
   <!-- Sidebar Section 2 -->
   <text x="55" y="310" font-size="9" font-weight="600" fill="#6c757d" letter-spacing="1">PREVIEW</text>
   
   <rect x="40" y="320" width="160" height="35" fill="transparent"/>
-  <text x="70" y="342" font-size="11" fill="#6c757d">Design</text>
+  <text x="70" y="342" font-size="11" fill="#6c757d">Business Views</text>
   
   <rect x="40" y="355" width="160" height="35" fill="transparent"/>
-  <text x="70" y="377" font-size="11" fill="#6c757d">OWL Content</text>
+  <text x="70" y="377" font-size="11" fill="#6c757d">OWL</text>
   
   <!-- Content Area -->
   <rect x="200" y="110" width="560" height="370" fill="white"/>

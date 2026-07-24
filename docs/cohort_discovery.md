@@ -25,14 +25,14 @@ A cohort is a set of entities that:
 
 The user writes this as a **CohortRule** in five small sections.  The engine
 runs it, produces deterministic cohort URIs, and writes the result either
-into the knowledge graph (as `:inCohort` triples) or into a Unity Catalog
+into the graph viewer (as `:inCohort` triples) or into a Unity Catalog
 Delta table — or both.
 
 ---
 
 ## 2. Authoring a rule (UX)
 
-In the Digital Twin, open **Advanced → Cohorts**.  The form has five
+In the Knowledge Graph, open **Advanced → Cohorts**.  The form has five
 sections, each with live feedback:
 
 1. **Identity** — *Rule name* + optional *Description*.  The internal id is

@@ -38,15 +38,17 @@ class TestGraphAnalysisModels:
 
 
 class TestCommunityDetector:
+    _NS = "http://ex.org/"
+
     @staticmethod
     def _make_triples():
         return [
-            {"subject": "A", "predicate": "knows", "object": "B"},
-            {"subject": "B", "predicate": "knows", "object": "C"},
-            {"subject": "C", "predicate": "knows", "object": "A"},
-            {"subject": "D", "predicate": "knows", "object": "E"},
-            {"subject": "E", "predicate": "knows", "object": "F"},
-            {"subject": "F", "predicate": "knows", "object": "D"},
+            {"subject": "http://ex.org/A", "predicate": "http://ex.org/knows", "object": "http://ex.org/B"},
+            {"subject": "http://ex.org/B", "predicate": "http://ex.org/knows", "object": "http://ex.org/C"},
+            {"subject": "http://ex.org/C", "predicate": "http://ex.org/knows", "object": "http://ex.org/A"},
+            {"subject": "http://ex.org/D", "predicate": "http://ex.org/knows", "object": "http://ex.org/E"},
+            {"subject": "http://ex.org/E", "predicate": "http://ex.org/knows", "object": "http://ex.org/F"},
+            {"subject": "http://ex.org/F", "predicate": "http://ex.org/knows", "object": "http://ex.org/D"},
         ]
 
     def _make_detector(self, triples=None):
@@ -92,8 +94,8 @@ class TestCommunityDetector:
 
     def test_excludes_rdf_type_predicate(self):
         triples = [
-            {"subject": "A", "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "object": "Class1"},
-            {"subject": "A", "predicate": "knows", "object": "B"},
+            {"subject": "http://ex.org/A", "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "object": "http://ex.org/Class1"},
+            {"subject": "http://ex.org/A", "predicate": "http://ex.org/knows", "object": "http://ex.org/B"},
         ]
         detector = self._make_detector(triples)
         result = detector.detect(ClusterRequest())
@@ -101,22 +103,21 @@ class TestCommunityDetector:
 
     def test_class_filter(self):
         triples = [
-            {"subject": "A", "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "object": "Person"},
-            {"subject": "A", "predicate": "knows", "object": "B"},
-            {"subject": "C", "predicate": "knows", "object": "D"},
+            {"subject": "http://ex.org/A", "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "object": "http://ex.org/Person"},
+            {"subject": "http://ex.org/A", "predicate": "http://ex.org/knows", "object": "http://ex.org/B"},
+            {"subject": "http://ex.org/C", "predicate": "http://ex.org/knows", "object": "http://ex.org/D"},
         ]
         detector = self._make_detector(triples)
-        result = detector.detect(ClusterRequest(class_filter=["Person"]))
-        node_count = result.stats.node_count
-        assert node_count <= 2
+        result = detector.detect(ClusterRequest(class_filter=["http://ex.org/Person"]))
+        assert result.stats.node_count <= 2
 
     def test_predicate_filter(self):
         triples = [
-            {"subject": "A", "predicate": "likes", "object": "B"},
-            {"subject": "A", "predicate": "knows", "object": "C"},
+            {"subject": "http://ex.org/A", "predicate": "http://ex.org/likes", "object": "http://ex.org/B"},
+            {"subject": "http://ex.org/A", "predicate": "http://ex.org/knows", "object": "http://ex.org/C"},
         ]
         detector = self._make_detector(triples)
-        result = detector.detect(ClusterRequest(predicate_filter=["likes"]))
+        result = detector.detect(ClusterRequest(predicate_filter=["http://ex.org/likes"]))
         assert result.stats.edge_count <= 1
 
     def test_clusters_sorted_by_size(self):

@@ -1,0 +1,118 @@
+## Mapping designer — Select/Exclude all attributes toggle button
+
+### Context
+The Attributes table in the bottom panel (entity and relationship) only had an
+"Exclude unmapped" shortcut. Users had no way to quickly include or exclude
+every attribute in one click.
+
+### Changes
+1. `src/front/static/mapping/js/mapping-design.js` — added `toggleAllEntityAttrs()`,
+   `toggleAllRelAttrs()`, `_updateEntityAttrToggleBtn()`, `_updateRelAttrToggleBtn()`
+2. Entity panel header: added `<button id="epAttrToggleAllBtn">` that shows
+   "Exclude all" when all are included and "Include all" when any are excluded
+3. Relationship panel header: same with `id="rpAttrToggleAllBtn"`
+4. Individual checkbox `change` handlers and `autoExcludeUnmapped*` functions
+   now call the respective `_update*ToggleBtn()` to keep the label in sync
+
+### Modified files
+- `src/front/static/mapping/js/mapping-design.js`
+
+### Test results
+2418 passed, 15 skipped — 0 failures
+
+---
+
+## Mapping designer — excluded items still shown after reset
+
+### Context
+`resetAllMappings()` cleared `MappingState.config.entities/relationships` but
+did not call `_stampExcludedFlags()`. The `excluded` boolean lives on the
+ontology objects inside `MappingState.loadedOntology`; it is only written by
+`_stampExcludedFlags()`. Without the call, every class/property that was
+previously excluded kept `excluded: true` even after the reset, so navigating
+back to the designer showed them as excluded.
+
+### Changes
+1. `src/front/static/global/js/mapping-information.js` — call
+   `_stampExcludedFlags()` immediately after wiping `MappingState.config` in
+   `resetAllMappings()`, before the API calls, so the ontology objects are
+   clean before any downstream render.
+
+### Modified files
+- `src/front/static/global/js/mapping-information.js`
+
+### Test results
+2418 passed, 15 skipped — 0 failures
+
+---
+
+## Build pipeline — Lakeflow (managed_synced) silently skipped on cold start
+
+### Context
+`GlobalConfigService` keeps a 5-minute in-memory cache of the global config.
+At cold start, if Lakebase was transiently unavailable, the cache was populated
+with the empty template (`_empty()`). The Settings UI always uses `force=True`
+(so it showed the correct persisted `managed_synced` value), but the build
+pipeline did not — it received `{}` for `graph_engine_config`, saw no
+`sync_mode`, and silently fell back to `app_managed`, skipping Lakeflow
+entirely for up to 5 minutes after cold start.
+
+### Changes
+1. `src/back/core/triplestore/TripleStoreFactory.py` — added `force: bool = False`
+   to `_read_global_config`, `_resolve_graph_engine`, and `_resolve_graph_engine_config`
+2. `src/back/objects/digitaltwin/_build_pipeline.py` — `_resolve_lakebase_mode`
+   now calls both resolver methods with `force=True`
+3. `src/api/routers/internal/dtwin.py` — `start_triplestore_sync` step-list
+   detection also uses `force=True` so task steps match what the pipeline executes
+
+### Modified files
+- `src/back/core/triplestore/TripleStoreFactory.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/api/routers/internal/dtwin.py`
+
+### Test results
+2418 passed, 15 skipped — 0 failures
+
+---
+
+## MCP Server — 502/503 retry logic
+
+### Context
+When the OntoBricks Databricks App is in a cold-start or sleeping state, the
+proxy returns 502 Bad Gateway. The MCP server was propagating this immediately
+as an `HTTPStatusError`, causing every MCP tool call (`select_domain`,
+`list_domains`, etc.) to fail without recovery.
+
+### Changes
+1. `src/mcp-server/server/app.py` — added `import asyncio` to imports
+2. `src/mcp-server/server/app.py` — added constants `_RETRYABLE_STATUSES`
+   (502, 503) and `_RETRY_DELAYS` (5 s, 10 s, 20 s)
+3. `src/mcp-server/server/app.py` — added `_retryable()` helper
+4. `src/mcp-server/server/app.py` — `_get()` retries up to 3 times on 502/503
+   with progressive delays before re-raising
+5. `src/mcp-server/server/app.py` — `_post()` retries up to 3 times on 502/503
+   with progressive delays before re-raising
+
+### Modified files
+- `src/mcp-server/server/app.py`
+
+### Test results
+2418 passed, 15 skipped — 0 failures
+
+---
+
+## Documentation updates
+
+### Context
+Three doc files updated to reflect new features and bug fixes added today.
+
+### Changes
+1. `docs/user-guide.md` — added "Exclude all / Include all" toggle button description alongside the existing "Exclude unmapped" paragraph
+2. `docs/lakebase-graphdb.md` — added troubleshooting entry: "Build uses app_managed even though managed_synced is configured in Settings" (cold-start cache fix explanation)
+
+### Modified files
+- `docs/user-guide.md`
+- `docs/lakebase-graphdb.md`
+
+### Test results
+2418 passed, 15 skipped — 0 failures

@@ -4,22 +4,43 @@ version = "0.7.0"
 description = "Ontology Management Tool for Databricks"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.109.0",
+    # fastapi>=0.129.0 added Starlette 1.0.0+ support (needed for starlette>=1.3.1 below).
+    "fastapi>=0.129.0",
     "uvicorn[standard]>=0.27.0",
     "pydantic>=2.5.0",
-    "pydantic-settings>=2.1.0",
-    "python-multipart>=0.0.27",
-    "starlette>=0.35.0",
+    # pydantic-settings>=2.14.2: NestedSecretsSettingsSource symlink traversal
+    # (GHSA-4xgf-cpjx-pc3j) — symlinks inside secrets_dir pointing outside it were
+    # followed, enabling local file read and bypassing secrets_dir_max_size.
+    "pydantic-settings>=2.14.2",
+    # python-multipart>=0.0.30: three issues fixed in 0.0.30 —
+    #   GHSA-5rvq-cxj2-64vf (CVE-2026-53539)  quadratic-time ';'-sep parsing (DoS)
+    #   GHSA-…               semicolon as querystring separator (parameter smuggling)
+    #   GHSA-…               Content-Disposition RFC 2231/5987 parameter smuggling
+    #   plus negative Content-Length unbounded memory buffer (Low).
+    "python-multipart>=0.0.30",
+    # starlette>=1.3.1:
+    #   GHSA-82w8-qh3p-5jfq (CVE-2026-54283)  request.form() limits ignored for
+    #     application/x-www-form-urlencoded — enables unbounded memory / event-loop DoS.
+    #   GHSA-86qp-5c8j-p5mr (CVE-2026-48710)  BadHost: unvalidated request path
+    #     concatenated into authority poisons request.url.hostname (Low).
+    # Requires fastapi>=0.129 (Starlette 1.0 support added upstream Feb 2026).
+    "starlette>=1.3.1",
     "itsdangerous>=2.1.0",
     "jinja2>=3.1.0",
     "aiofiles>=23.0.0",
     "databricks-sql-connector>=3.0.0",
     "databricks-sdk>=0.20.0",
-    "pyarrow>=14.0.0",
+    # pyarrow>=23.0.1: Arrow C++ IPC use-after-free (CVE-2026-25087 /
+    # GHSA-rgxp-2hwp-jwgg). The Python binding doesn't expose the affected
+    # PreBufferMetadata API, but pin to silence the advisory.
+    "pyarrow>=23.0.1",
     "rdflib>=7.6.0",
     "python-dotenv>=1.2.2",
     "requests>=2.33.0",
-    "strawberry-graphql[fastapi]>=0.315.4",
+    # strawberry-graphql>=0.315.7: MaxAliasesLimiter fragment-spread bypass
+    # (CVE-2026-47707 / GHSA-fr49-mhgj-crfc) and circular-fragment DOS in
+    # QueryDepthLimiter — both DOS via resource exhaustion.
+    "strawberry-graphql[fastapi]>=0.315.7",
     "mlflow>=3.11.1",
     "apscheduler>=3.10,<4",
     "owlrl>=7.0.0",
@@ -48,7 +69,15 @@ neo4j = [
 pitfalls = [
     "sentence-transformers>=3.0.0",
     "scikit-learn>=1.3.0",
-    "nltk>=3.8.0",
+    # TODO: bump to nltk>=3.10.0 once the stable release is on PyPI (currently
+    # only a 3.10.0-rc1 GitHub tag exists; upstream + proxy top out at 3.9.4).
+    # GHSA-p4gq-832x-fm9v (CVE-2026-54293): URL-encoded path traversal in
+    # nltk.data.load() via %2f/%2e%2e — decode-after-check bypass, fixed in
+    # 3.10.0. Until then the flaw is made unreachable in-code by the guard in
+    # ``ensure_nltk_resource`` (back/core/external/pitfalls/utils.py), which
+    # rejects percent-encoded/traversal/absolute resource paths, and by the
+    # fact that we only ever pass hardcoded resource names — never user input.
+    "nltk>=3.9.4",
     "scipy>=1.11.0",
 ]
 
@@ -67,20 +96,22 @@ dev = [
     "myst-parser>=3.0.0",
     "pip-audit>=2.7.0",
     # Test foundations (T-M0 onwards under CNS)
-    "hypothesis>=6.100.0",        # property-based tests (T-M6)
-    "syrupy>=4.6.0",              # snapshot tests for templates + MCP schemas
-    "testcontainers[postgres]>=4.0.0",  # ephemeral Postgres for Lakebase tests (db marker)
-    "fastmcp>=2.3.1",             # in-process MCP server tests (T-M3, mcp marker)
-    "pyyaml>=6.0",                # consumed by scripts/check_coverage.py
+    "hypothesis>=6.100.0", # property-based tests (T-M6)
+    "syrupy>=4.6.0", # snapshot tests for templates + MCP schemas
+    "testcontainers[postgres]>=4.0.0", # ephemeral Postgres for Lakebase tests (db marker)
+    "fastmcp>=2.3.1", # in-process MCP server tests (T-M3, mcp marker)
+    "pyyaml>=6.0", # consumed by scripts/check_coverage.py
     # M3.P1 quality enforcement
-    "ruff>=0.7.4",                # supersedes flake8 once the baseline is clean
-    "mypy>=1.13.0",               # type checker; runs against `mypy_baseline.txt`
+    "ruff>=0.7.4", # supersedes flake8 once the baseline is clean
+    "mypy>=1.13.0", # type checker; runs against `mypy_baseline.txt`
     # Lakebase backend is the production registry path since v0.4.0; the
     # tests that exercise the registry-config gate need psycopg present so
     # the import-time short-circuit in SettingsService doesn't fire.
     # Mirrors `[project.optional-dependencies].lakebase` — kept in sync.
     "psycopg[binary]>=3.2.0",
     "psycopg-pool>=3.2.0",
+    "pytest-html>=4.1.0",
+    "pytest-dependency>=0.6.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -103,6 +134,25 @@ constraint-dependencies = [
     # idna 3.13 closes bypass of CVE-2024-3651 mitigation (GHSA-65pc-fj4g-8rjx):
     #   specially crafted inputs to idna.encode() could still reach quadratic-time path.
     "idna>=3.13",
+    # aiohttp 3.14.0 fixes two issues (pulled in transitively by mlflow):
+    #   GHSA-jg22-mg44-37j8 (CVE-2026-34993)  CookieJar.load() pickle deserialization RCE
+    #   GHSA-hg6j-4rv6-33pg (CVE-2026-47265)  per-request cookies leaked on cross-origin redirect
+    # aiohttp 3.14.1 fixes five additional issues:
+    #   GHSA-xcgm-r5h9-7989 (CVE-2026-54274)  incomplete WebSocket frame payloads bypass mem limits
+    #   GHSA-63hw-fmq6-xxg2 (CVE-2026-54277)  C HTTP parser bypasses max_line_size for frag lines
+    #   GHSA-4fvr-rgm6-gqmc (CVE-2026-54273)  HTTP/1 pipelined requests queue without limit + 5 more
+    "aiohttp>=3.14.1",
+    # pyjwt>=2.13.0 fixes five issues (pulled in transitively):
+    #   GHSA-xgmm-8j9v-c9wx (CVE-2026-48526)  public-key JWK accepted as HMAC secret → token forge
+    #   GHSA-jq35-7prp-9v3f                   algorithm allow-list bypass with PyJWK/PyJWKClient
+    #   GHSA-…                                 + SSRF, Base64URL DoS, JWKS kid DoS
+    "pyjwt>=2.13.0",
+    # msgpack>=1.2.1: out-of-bounds read / crash on Unpacker reuse after a caught error
+    # (GHSA-6v7p-g79w-8964) — DoS when Unpacker is reused on untrusted streaming input.
+    "msgpack>=1.2.1",
+    # cryptography>=48.0.1: statically linked OpenSSL in wheels was vulnerable to
+    # CVE-2026-34180 (GHSA-537c-gmf6-5ccf) — affects pre-built PyPI wheels only.
+    "cryptography>=48.0.1",
 ]
 
 [tool.pytest.ini_options]
@@ -120,6 +170,8 @@ markers = [
     "spark: Requires PySpark/Databricks Connect",
     "external: Hits a real Databricks workspace (nightly only — fevm-ontobricks-int)",
     "live_integration: Probes a deployed OntoBricks instance (requires ONTOBRICKS_LIVE_BASE)",
+    "scenario: End-to-end journey suites under tests/e2e/scenarios/ — excluded from routine/agent runs; only run on explicit request via -m scenario",
+    "dependency: Cross-scenario ordering/dependency (pytest-dependency); only active in the campaign when ONTOBRICKS_SCENARIO_CHAIN=1",
     "property: Hypothesis property-based tests",
     "slow: >2s wall clock",
     "asyncio: anyio/asyncio coroutine",

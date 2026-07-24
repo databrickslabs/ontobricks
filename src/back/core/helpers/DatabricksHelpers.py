@@ -116,6 +116,32 @@ class DatabricksHelpers:
         return os.getenv("DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT", "")
 
     @staticmethod
+    def resolve_delta_warehouse_id(domain, settings) -> str:
+        """Resolve the SQL Warehouse for Delta triple-store graph queries.
+
+        Resolution order:
+
+        1. **Global config** ``delta_warehouse_id`` (Settings → Triple store → Delta)
+        2. Fallback to :meth:`resolve_warehouse_id` (global warehouse)
+        """
+        from back.objects.session import global_config_service
+
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
+
+        if host and registry_cfg.get("catalog") and registry_cfg.get("schema"):
+            try:
+                wid = global_config_service.get_delta_warehouse_id(
+                    host, token, registry_cfg
+                )
+                if wid:
+                    return wid
+            except Exception as exc:
+                logger.debug("Could not read global delta warehouse config: %s", exc)
+
+        return DatabricksHelpers.resolve_warehouse_id(domain, settings)
+
+    @staticmethod
     def _resolve_global_setting(domain, settings, getter_name: str) -> str:
         """Read a single value from the global config (UC Volume), returning '' on failure."""
         from back.objects.session import global_config_service
@@ -224,6 +250,19 @@ class DatabricksHelpers:
                 use_cloud_fetch=use_cloud_fetch,
             )
 
+        # Local CLI auth: ``DatabricksAuth`` resolves a profile from
+        # ``~/.databrickscfg`` and supplies the host. The client itself does
+        # not need a token here — downstream services call back into
+        # ``DatabricksAuth`` for connection params and headers.
+        probe = _databricks.DatabricksAuth(host=host or None)
+        if probe.has_valid_auth():
+            return _databricks.DatabricksClient(
+                host=probe.host,
+                token="",
+                warehouse_id=warehouse_id,
+                use_cloud_fetch=use_cloud_fetch,
+            )
+
         return None
 
     @staticmethod
@@ -242,6 +281,22 @@ class DatabricksHelpers:
         host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
         warehouse_id = DatabricksHelpers.resolve_warehouse_id(domain, settings)
         return host, token, warehouse_id
+
+    @staticmethod
+    def get_delta_databricks_credentials(domain, settings) -> Tuple[str, str, str]:
+        """Return ``(host, token, warehouse_id)`` for Delta triple-store SQL."""
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        warehouse_id = DatabricksHelpers.resolve_delta_warehouse_id(domain, settings)
+        return host, token, warehouse_id
+
+    @staticmethod
+    def get_triplestore_sql_credentials(domain, settings) -> Tuple[str, str, str]:
+        """Return SQL credentials for triple-store builds (Delta-aware warehouse)."""
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        if GraphDBFactory._resolve_triple_store_backend(domain, settings) == "databricks":
+            return DatabricksHelpers.get_delta_databricks_credentials(domain, settings)
+        return DatabricksHelpers.get_databricks_credentials(domain, settings)
 
     @staticmethod
     def get_databricks_host_and_token(domain, settings) -> Tuple[str, str]:
@@ -275,6 +330,23 @@ class DatabricksHelpers:
                     logger.debug("Obtained OAuth token for agent call (host=%s)", host)
                 except Exception as exc:
                     logger.warning("Could not obtain OAuth token in app mode: %s", exc)
+            return _databricks.normalize_host(host), token
+
+        # Local CLI auth fallback for agent / MLflow code paths that need a
+        # bearer token outside the request cycle.
+        if not token:
+            try:
+                auth = _databricks.DatabricksAuth(host=host or None)
+                if auth.has_valid_auth():
+                    if not host:
+                        host = auth.host
+                    token = auth.get_bearer_token()
+                    if token:
+                        logger.debug(
+                            "Obtained CLI profile token for agent call (host=%s)", host
+                        )
+            except Exception as exc:
+                logger.debug("Could not obtain CLI profile token: %s", exc)
 
         return _databricks.normalize_host(host), token
 

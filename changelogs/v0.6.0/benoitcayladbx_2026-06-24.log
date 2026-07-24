@@ -1,0 +1,60 @@
+## Highlight active domain in L1 navbar
+
+**Context:** When a domain is open and the user is on `/domain/`, the Domain
+entry in the top navbar had no visual distinction from inactive items. This
+made it hard to see which "section" of the app was active at a glance.
+
+**Changes:**
+1. `src/front/static/global/js/navbar.js` — extended `initSubnavActiveState()`
+   to also add `.active` to `#domainL1Link` when `window.location.pathname`
+   starts with `/domain/`.
+2. `src/front/static/global/css/main.css` — added `#domainL1Link.active` rule:
+   darker background (`--db-primary-dark`), white text, rounded pill, bold;
+   plus a hover variant using `--db-primary-darker`.
+
+**Modified files:**
+- `src/front/static/global/js/navbar.js`
+- `src/front/static/global/css/main.css`
+
+**Test result:** visual only — no unit tests impacted.
+
+---
+
+## Fix: Base URI persistence across server restarts and domain switches
+
+**Context:** Domains with a custom Base URI were seeing it revert to
+`https://databricks-ontology.com` after a server restart or domain reload.
+This was caused by three compounding gaps: (1) `read_version` never read the
+canonical `domains.base_uri` column from the DB, relying solely on the
+`ontology` JSONB blob; (2) `write_version` could blank the column when the
+ontology JSON held an empty string; (3) empty-string `base_uri` values in
+session were not treated as missing, so `DEFAULT_BASE_URI` fallback was not
+triggered consistently.
+
+**Changes:**
+
+1. `src/back/objects/registry/store/lakebase/store.py` — `read_version`:
+   also SELECT `d.base_uri` and merge it into `ontology.base_uri` when the
+   ontology JSON has no value.
+2. `src/back/objects/registry/store/lakebase/store.py` — `write_version`:
+   use a `CASE WHEN` in the `ON CONFLICT DO UPDATE` so an empty incoming
+   `base_uri` never overwrites an existing value in the `domains` column.
+3. `src/back/objects/session/DomainSession.py` — `export_for_save`: add
+   `base_uri_auto` to the exported ontology blob so the auto/manual flag
+   survives a registry round-trip.
+4. `src/back/objects/session/DomainSession.py` — `ensure_generated_content`:
+   change `get("base_uri", DEFAULT_BASE_URI)` to `get("base_uri") or
+   DEFAULT_BASE_URI` so an empty string also triggers the fallback.
+5. `src/back/objects/ontology/Ontology.py` — `generate_owl`: same empty-
+   string guard.
+6. `src/back/objects/mapping/Mapping.py` — `generate_r2rml`: same guard.
+7. `src/api/routers/domains.py` — four call-sites: same guard.
+
+**Modified files:**
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/session/DomainSession.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/back/objects/mapping/Mapping.py`
+- `src/api/routers/domains.py`
+
+**Test result:** 2450 passed, 15 skipped.

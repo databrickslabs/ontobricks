@@ -80,8 +80,8 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
         "(OWL ontology, R2RML, generated Spark SQL).",
     },
     {
-        "name": "Digital Twin",
-        "description": "**Digital Twin API** — Registry discovery, triple store "
+        "name": "Knowledge Graph",
+        "description": "**Knowledge Graph API** — Registry discovery, triple store "
         "status, build trigger, and triple retrieval.",
     },
     {

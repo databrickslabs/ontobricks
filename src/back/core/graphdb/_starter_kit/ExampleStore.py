@@ -6,7 +6,7 @@ Copy this file, rename it to ``<EngineName>Store.py``, and replace every
 See ``docs/graphdb-integration.md`` for the full integration guide.
 
 Triples are stored as ``(subject, predicate, object)`` rows.  If your engine
-speaks SQL, the inherited named-query defaults from ``TripleStoreBackend``
+speaks SQL, the inherited named-query defaults from ``GraphDBBackend``
 will work out of the box.  If not (Cypher, Gremlin, …), you must override
 every named-query method — see ``LakebaseFlatStore`` for a complete SQL
 reference implementation.
@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from back.core.logging import get_logger
 from back.core.graphdb.GraphDBBackend import GraphDBBackend
-from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
 logger = get_logger(__name__)
@@ -175,7 +175,7 @@ class ExampleStore(GraphDBBackend):
         return super().get_query_translator(table_name)
 
     # ======================================================================
-    #  TripleStoreBackend — core CRUD  (MUST implement)
+    #  GraphDBBackend — core CRUD  (MUST implement)
     # ======================================================================
 
     def create_table(self, table_name: str) -> None:
@@ -289,7 +289,7 @@ class ExampleStore(GraphDBBackend):
         #       Otherwise, raise NotImplementedError:
         raise NotImplementedError(
             "Example backend does not support raw SQL queries. "
-            "Use the named query methods on TripleStoreBackend instead."
+            "Use the named query methods on GraphDBBackend instead."
         )
 
     def optimize_table(self, table_name: str) -> None:
@@ -304,7 +304,7 @@ class ExampleStore(GraphDBBackend):
     #  Named query overrides  (MUST override for non-SQL engines)
     #
     #  If your engine speaks SQL, the inherited defaults from
-    #  TripleStoreBackend will work and you can DELETE this entire section.
+    #  GraphDBBackend will work and you can DELETE this entire section.
     #
     #  If your engine is NON-SQL (Cypher, Gremlin, …), you MUST implement
     #  every method below.  Use LakebaseFlatStore as a SQL reference; for

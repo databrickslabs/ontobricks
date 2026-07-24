@@ -1,17 +1,21 @@
 <!-- CSS: /static/query/css/query-sync.css (shared) -->
 <!-- JS: /static/query/js/query-sync.js (shared — loadInsights, renderInsights) -->
-<!-- Digital Twin Insights — standalone section on /dtwin/ -->
+<!-- Knowledge Graph Insights — standalone section on /dtwin/ -->
 <div class="content-section">
 
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-bar-chart-line me-2"></i>Digital Twin Insights</h4>
+            <h4 class="mb-1"><i class="bi bi-bar-chart-line me-2"></i>Knowledge Graph Insights</h4>
             <p class="text-muted mb-0 small">Content overview of the triple store: entity types and relationships</p>
         </div>
-        <div>
+        <div class="d-flex align-items-center gap-2">
             <button type="button" class="btn btn-sm btn-outline-secondary" id="insightRefreshBtn"
                     title="Reload insights from the triple store">
                 <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                    title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
+                <i class="bi bi-chat-dots"></i>
             </button>
         </div>
     </div>
@@ -20,7 +24,7 @@
     <div id="insightNoData" class="d-none">
         <div class="alert alert-info small mb-0">
             <i class="bi bi-info-circle me-1"></i>
-            No triple store data available. Build the Digital Twin from the
+            No triple store data available. Build the Knowledge Graph from the
             <strong>Domain &rarr; Build</strong> page first.
         </div>
     </div>

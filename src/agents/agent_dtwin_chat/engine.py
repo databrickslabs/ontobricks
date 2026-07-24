@@ -35,6 +35,34 @@ MAX_ITERATIONS = 12
 LLM_TIMEOUT = 120
 
 _TRACE_NAME = "dtwin_chat"
+_UNREADABLE_REPLY = "I couldn't display that answer. Please try again."
+
+
+def _extract_reply_text(content: object) -> list[str]:
+    """Recursively extract user-visible text from model content blocks."""
+    if isinstance(content, str):
+        return [content] if content.strip() else []
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            parts.extend(_extract_reply_text(item))
+        return parts
+    if isinstance(content, dict):
+        block_type = content.get("type")
+        if block_type and block_type not in ("text", "output_text"):
+            return []
+        for key in ("text", "content", "value"):
+            if key in content:
+                return _extract_reply_text(content[key])
+    return []
+
+
+def normalize_reply_content(content: object) -> str:
+    """Return readable Markdown for a model response content payload."""
+    if isinstance(content, str) and content.strip():
+        return content
+    parts = [part.strip() for part in _extract_reply_text(content) if part.strip()]
+    return "\n\n".join(parts) if parts else _UNREADABLE_REPLY
 
 
 @dataclass
@@ -51,7 +79,7 @@ class AgentResult:
 
 SYSTEM_PROMPT = """\
 You are the Graph Chat assistant for OntoBricks. You help the user
-explore a Digital Twin knowledge graph with natural-language questions.
+explore a Knowledge Graph with natural-language questions.
 
 CONTEXT
 The user has already selected a domain (knowledge graph). You do NOT
@@ -316,6 +344,7 @@ def run_agent(
                     }
                 )
         else:
+            content = normalize_reply_content(content)
             result.success = True
             result.reply = content
             output_step = AgentStep(step_type="output", content=content[:500])

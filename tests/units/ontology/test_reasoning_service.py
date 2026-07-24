@@ -510,6 +510,38 @@ class TestMaterializeInferred:
         assert count == 2
         store.insert_triples.assert_called_once()
 
+    def test_calls_optimize_inferred_companion_when_available(self):
+        store = MagicMock()
+        store.insert_triples.return_value = 1
+        svc = ReasoningService(_domain_session(), triplestore_backend=store)
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple(
+                    "http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"
+                ),
+            ]
+        )
+        svc.materialize_inferred(result)
+        store.optimize_inferred_companion.assert_called_once_with(
+            store.insert_triples.call_args[0][0]
+        )
+
+    def test_skips_optimize_when_store_has_no_companion_hook(self):
+        store = MagicMock(spec=["insert_triples"])
+        store.insert_triples.return_value = 1
+        svc = ReasoningService(_domain_session(), triplestore_backend=store)
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple(
+                    "http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"
+                ),
+            ]
+        )
+        svc.materialize_inferred(result)
+        assert not hasattr(store, "optimize_inferred_companion") or (
+            not getattr(store, "optimize_inferred_companion", MagicMock()).called
+        )
+
     def test_skips_batch_subjects(self):
         store = MagicMock()
         store.insert_triples.return_value = 1

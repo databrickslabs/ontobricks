@@ -22,6 +22,47 @@ document.addEventListener('click', () => {
     document.querySelectorAll('.mapping-dropdown.show').forEach(d => d.classList.remove('show'));
 });
 
+/**
+ * Open the mappings discussion. Anchors to the whole mapping layer
+ * (mapping/'mapping'); each comment can optionally be tagged with one or
+ * more ontology classes/relationships via the compose-box tag picker.
+ */
+function openMappingDiscussion() {
+    if (!window.OntoComments) return;
+    const ont = (typeof MappingState !== 'undefined' && MappingState.loadedOntology)
+        ? MappingState.loadedOntology : {};
+    window.OntoComments.openForSelection(
+        'mapping', 'mapping', 'Mappings',
+        window.OntoComments.taggableFromOntology(ont)
+    );
+}
+
+/**
+ * Inject (or refresh) a contextual "Discuss" button into a mapping modal
+ * header so collaborators can open the domain discussion. ``selectionRef``
+ * (the targeted ontology class / property URI) only gates whether the button
+ * is shown — discussions are domain-wide, so it is not used as an anchor.
+ */
+function injectMappingDiscussButton(modalId, selectionRef) {
+    if (!window.OntoComments) return;
+    const modal = document.getElementById(modalId);
+    if (!modal || !selectionRef) return;
+    const header = modal.querySelector('.modal-header');
+    if (!header) return;
+    let btn = header.querySelector('.mapping-discuss-btn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-outline-primary btn-sm mapping-discuss-btn ms-auto me-2';
+        btn.title = 'Discuss';
+        btn.innerHTML = '<i class="bi bi-chat-dots"></i>';
+        const closeBtn = header.querySelector('.btn-close, [data-bs-dismiss="modal"]');
+        if (closeBtn) header.insertBefore(btn, closeBtn);
+        else header.appendChild(btn);
+    }
+    btn.onclick = () => window.OntoComments.openForSelection();
+}
+
 // ==========================================================================
 // SQL WIZARD BASE CLASS (Metadata-based)
 // Creates a reusable wizard using domain metadata tables

@@ -17,6 +17,37 @@ Authentication
    :undoc-members:
    :show-inheritance:
 
+Lakebase (shared access layer)
+-------------------------------
+
+Technical access layer for Lakebase (Postgres), shared by the registry
+store and the graph triple store — two independent databases.
+
+.. automodule:: back.core.databricks.lakebase.LakebaseAuth
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.core.databricks.lakebase.LakebaseConnectionPool
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.core.databricks.lakebase.grants
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.core.databricks.lakebase.psycopg_gate
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: back.core.databricks.lakebase.constants
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Client (Facade)
 ---------------
 
@@ -36,7 +67,23 @@ SQL Warehouse
 Unity Catalog
 -------------
 
-.. automodule:: back.core.databricks.UnityCatalog
+.. automodule:: back.core.databricks.uc.UnityCatalog
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+UC Identifiers
+--------------
+
+.. automodule:: back.core.databricks.uc.identifiers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+UC Domain I/O
+-------------
+
+.. automodule:: back.core.databricks.uc.UCDomainIO
    :members:
    :undoc-members:
    :show-inheritance:
@@ -44,7 +91,7 @@ Unity Catalog
 Volume File Service
 -------------------
 
-.. automodule:: back.core.databricks.VolumeFileService
+.. automodule:: back.core.databricks.uc.VolumeFileService
    :members:
    :undoc-members:
    :show-inheritance:
@@ -68,15 +115,8 @@ Dashboard Service
 Metadata Service
 ----------------
 
-.. automodule:: back.core.databricks.MetadataService
+.. automodule:: back.core.databricks.uc.MetadataService
    :members:
    :undoc-members:
    :show-inheritance:
 
-UC Project I/O
---------------
-
-.. automodule:: back.core.databricks.UCProjectIO
-   :members:
-   :undoc-members:
-   :show-inheritance:

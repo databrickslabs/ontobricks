@@ -82,34 +82,53 @@
 
 /* Resize Handle (vertical divider) */
 .detail-panel-resize-handle {
-    width: 8px;
+    position: relative;
+    width: 11px;
     cursor: col-resize;
-    background: #e9ecef;
+    background: transparent;
     display: none;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: background-color 0.15s;
-    border-left: 1px solid #dee2e6;
-    border-right: 1px solid #dee2e6;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
-.detail-panel-resize-handle:hover,
-.detail-panel-resize-handle.active {
-    background: #dee2e6;
+/* Full-height hairline divider — gives the border clean top & bottom ends */
+.detail-panel-resize-handle::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+    background: #e2e8f0;
+    transition: width 0.15s ease, background-color 0.15s ease;
 }
 
+.detail-panel-resize-handle:hover::before,
+.detail-panel-resize-handle.active::before {
+    width: 2px;
+    background: var(--bs-primary, #0d6efd);
+}
+
+/* Centered grip pill with rounded ends */
 .detail-panel-resize-handle .resize-bar {
-    width: 4px;
-    height: 40px;
-    background: #adb5bd;
-    border-radius: 2px;
-    transition: background-color 0.15s;
+    position: relative;
+    width: 5px;
+    height: 46px;
+    background: #cbd5e1;
+    border-radius: 999px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.15);
+    transition: background-color 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
 }
 
 .detail-panel-resize-handle:hover .resize-bar,
 .detail-panel-resize-handle.active .resize-bar {
-    background: #6c757d;
+    background: var(--bs-primary, #0d6efd);
+    height: 64px;
+    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.35);
 }
 
 /* Show resize handle when panel is open */
@@ -129,7 +148,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-left: 1px solid #dee2e6;
     order: 999;  /* Always position last (rightmost) in flex container */
     flex-shrink: 0;
 }
@@ -156,7 +174,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.6rem 0.75rem;
-    background: #f8f9fa;
+    background: #ffffff;
     border-bottom: 1px solid #dee2e6;
     flex-shrink: 0;
 }
@@ -256,7 +274,7 @@
     justify-content: space-between;
     gap: 0.5rem;
     padding: 0.6rem 0.75rem;
-    background: #f8f9fa;
+    background: #ffffff;
     border-top: 1px solid #dee2e6;
     flex-shrink: 0;
 }

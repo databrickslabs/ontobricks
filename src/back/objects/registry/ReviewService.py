@@ -39,6 +39,7 @@ from back.core.errors import (
 from back.core.logging import get_logger
 from back.objects.registry.RegistryService import RegistryCfg, RegistryService
 from back.objects.registry.PermissionService import (
+    ASSIGNABLE_ROLES,
     ROLE_ADMIN,
     ROLE_NONE,
     ROLE_VIEWER,
@@ -151,7 +152,11 @@ class ReviewService:
             # Newest activity first; versions never reviewed (no activity)
             # sort to the bottom.
             tasks.sort(key=lambda t: t["last_activity"] or "", reverse=True)
-            return {"success": True, "tasks": tasks}
+            return {
+                "success": True,
+                "tasks": tasks,
+                "assigned_tasks": ReviewService._assigned_tasks(svc, email),
+            }
         except OntoBricksError:
             raise
         except Exception as exc:  # noqa: BLE001
@@ -212,7 +217,7 @@ class ReviewService:
                         ""
                         if last_build
                         else "This version has never been built. "
-                        "Run a Digital Twin build first."
+                        "Run a Knowledge Graph build first."
                     ),
                     "can_approve": (
                         status == STATUS_IN_REVIEW and is_member and not already
@@ -226,7 +231,8 @@ class ReviewService:
                         and (quorum_met or is_admin)
                     ),
                     "can_reopen": (
-                        status == STATUS_PUBLISHED and user_role == ROLE_ADMIN
+                        status in (STATUS_IN_REVIEW, STATUS_PUBLISHED)
+                        and is_admin
                     ),
                 },
             }
@@ -237,6 +243,91 @@ class ReviewService:
             raise InfrastructureError(
                 "Failed to load review detail", detail=str(exc)
             ) from exc
+
+    @staticmethod
+    def review_team(
+        request,
+        session_mgr: SessionManager,
+        settings,
+        folder: str,
+    ) -> Dict[str, Any]:
+        """Domain access list — principals and their role on *folder*.
+
+        Read-only summary surfaced on the Validation page so reviewers can
+        see who can view / edit / build the domain.
+
+        Uses the **same source as the Registry → Teams matrix**: rows come
+        from the Databricks App principals (``list_app_principals``) and the
+        role from the per-domain registry permissions
+        (``list_domain_entries``). A principal appears here only if it is a
+        known app principal *and* has an assignable role on this domain —
+        i.e. exactly the "filled cells" of the domain's column in the Teams
+        matrix. This avoids surfacing orphan ``.domain_permissions.json``
+        entries (principals no longer in the App ACL) that the Teams page
+        does not show. Members are returned most-privileged first.
+        """
+        _ = request  # identity is not needed; the list is the same for any member
+        if not folder:
+            raise ValidationError("domain is required")
+        try:
+            from back.core.helpers import get_databricks_host_and_token
+
+            domain = get_domain(session_mgr)
+            host, token = get_databricks_host_and_token(domain, settings)
+            registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+            app_name = settings.ontobricks_app_name
+            app_principals = permission_service.list_app_principals(
+                host, token, app_name
+            )
+            entries = permission_service.list_domain_entries(
+                host, token, registry_cfg, folder
+            )
+        except OntoBricksError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("ReviewService.review_team failed")
+            raise InfrastructureError(
+                "Failed to load domain access list", detail=str(exc)
+            ) from exc
+
+        # Role lookup keyed by the stored principal string (mirrors the
+        # Teams matrix cell mapping).
+        roles = {
+            e.get("principal", ""): e.get("role", "")
+            for e in entries
+            if e.get("principal")
+        }
+
+        members: List[Dict[str, Any]] = []
+        for u in app_principals.get("users", []):
+            email = u.get("email") or ""
+            role = roles.get(email, "")
+            if email and role in ASSIGNABLE_ROLES:
+                members.append(
+                    {
+                        "principal": email,
+                        "principal_type": "user",
+                        "display_name": u.get("display_name") or email,
+                        "role": role,
+                    }
+                )
+        for g in app_principals.get("groups", []):
+            name = g.get("display_name") or g.get("id") or ""
+            role = roles.get(name, "")
+            if name and role in ASSIGNABLE_ROLES:
+                members.append(
+                    {
+                        "principal": name,
+                        "principal_type": "group",
+                        "display_name": name,
+                        "role": role,
+                    }
+                )
+
+        members.sort(
+            key=lambda m: (-role_level(m["role"]), m["display_name"].lower())
+        )
+        return {"success": True, "domain": folder, "members": members}
 
     @staticmethod
     def submit(
@@ -263,7 +354,7 @@ class ReviewService:
         if not last_build:
             raise ValidationError(
                 "Cannot submit for review: this version has never been "
-                "built. Run a Digital Twin build first."
+                "built. Run a Knowledge Graph build first."
             )
 
         ReviewService._set_status(
@@ -438,13 +529,15 @@ class ReviewService:
         user_role: str,
         user_domain_role: str,
     ) -> Dict[str, Any]:
-        """Reopen a PUBLISHED version for editing (admin only)."""
+        """Send an IN-REVIEW or PUBLISHED version back to DRAFT (admin only)."""
         svc, info = ReviewService._load(session_mgr, settings, folder, version)
         status = (info.get("status") or STATUS_DRAFT).upper()
-        if user_role != ROLE_ADMIN:
+        if not ReviewService._is_admin(user_role, user_domain_role):
             raise AuthorizationError("Only an administrator can reopen")
-        if status != STATUS_PUBLISHED:
-            raise ConflictError(f"Version is {status}, expected PUBLISHED")
+        if status not in (STATUS_IN_REVIEW, STATUS_PUBLISHED):
+            raise ConflictError(
+                f"Version is {status}, expected IN-REVIEW or PUBLISHED"
+            )
 
         ReviewService._set_status(
             svc, session_mgr, folder, version, STATUS_DRAFT
@@ -454,7 +547,7 @@ class ReviewService:
             version,
             ReviewService._email(request),
             ACTION_REOPENED,
-            from_status=STATUS_PUBLISHED,
+            from_status=status,
             to_status=STATUS_DRAFT,
             comment=comment,
         )
@@ -558,6 +651,26 @@ class ReviewService:
         transition, including publishing regardless of the sign-off quorum.
         """
         return user_role == ROLE_ADMIN or user_domain_role == ROLE_ADMIN
+
+    @staticmethod
+    def _assigned_tasks(svc, email: str) -> List[Dict[str, Any]]:
+        """Open / in-progress collaborative tasks assigned to *email*.
+
+        Best-effort: the worklist must still render review actions even if
+        the tasks backend is mid-migration or unavailable.
+        """
+        if not email:
+            return []
+        try:
+            rows = svc.list_tasks_for_assignee(email)
+            return [
+                r
+                for r in rows
+                if (r.get("status") or "").lower() in ("open", "in_progress")
+            ]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("_assigned_tasks(%s) failed: %s", email, exc)
+            return []
 
     @staticmethod
     def _group_events(

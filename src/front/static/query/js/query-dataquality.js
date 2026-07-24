@@ -1,6 +1,6 @@
 /**
  * OntoBricks — query-dataquality.js
- * SHACL-driven Data Quality execution module for the Digital Twin menu.
+ * SHACL-driven Data Quality execution module for the Knowledge Graph menu.
  */
 window.DQExecModule = {
     results: [],
@@ -256,7 +256,7 @@ window.DQExecModule = {
             showNotification(
                 backend === 'view'
                     ? 'Delta VIEW is not configured. Set it up in Domain Settings and build first.'
-                    : 'Graph DB is not available. Build the Digital Twin first.',
+                    : 'Graph DB is not available. Build the Knowledge Graph first.',
                 'warning'
             );
             return;
@@ -466,7 +466,7 @@ window.DQExecModule = {
             const tr = document.createElement('tr');
             tr.innerHTML = vals.map(v => `<td class="small">${this._escHtml(String(v))}</td>`).join('')
                 + '<td class="small text-center">'
-                + '<a href="#" class="text-primary dq-kg-link" title="Search in Knowledge Graph">'
+                + '<a href="#" class="text-primary dq-kg-link" title="Search in Graph Viewer">'
                 + '<i class="bi bi-diagram-3"></i></a></td>';
             tr.querySelector('.dq-kg-link').addEventListener('click', (e) => {
                 e.preventDefault();

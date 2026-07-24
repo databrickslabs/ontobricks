@@ -67,6 +67,11 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
+When your workspace blocks Personal Access Token generation, leave
+``DATABRICKS_TOKEN`` empty and authenticate with the Databricks CLI instead
+(``databricks auth login``). The app reads ``~/.databrickscfg`` automatically;
+set ``DATABRICKS_CONFIG_PROFILE`` to select a non-default profile.
+
 ### 3. Start the Development Server
 
 ```bash

@@ -82,7 +82,7 @@
     justify-content: space-between;
     padding: 0.55rem 0.75rem;
     border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-    background: var(--bs-light, #f8f9fa);
+    background: #ffffff;
     flex-shrink: 0;
     border-radius: 12px 12px 0 0;
     cursor: grab;
@@ -222,7 +222,7 @@
 }
 
 .bot-msg .assistant-msg-body {
-    background: var(--bs-light, #f8f9fa);
+    background: #ffffff;
     color: var(--bs-body-color, #212529);
     border: 1px solid var(--bs-border-color, #dee2e6);
     border-bottom-left-radius: 4px;

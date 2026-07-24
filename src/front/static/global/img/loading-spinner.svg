@@ -3,6 +3,10 @@
 
   <!-- Rotating node ring -->
   <g class="ob-spinner-ring">
+    <!-- SMIL rotation so the file self-animates when used as <img> or CSS background-image -->
+    <animateTransform attributeName="transform" attributeType="XML"
+                      type="rotate" from="0 40 40" to="360 40 40"
+                      dur="2.5s" repeatCount="indefinite"/>
     <!-- Connection lines (octagonal ring) -->
     <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
       <line x1="40" y1="10" x2="61" y2="19"/>

@@ -116,7 +116,7 @@
 }
 
 .br-suggest-item:hover {
-    background-color: var(--bs-tertiary-bg, #f8f9fa);
+    background-color: #ffffff;
     border-color: var(--bs-primary, #0d6efd);
 }
 

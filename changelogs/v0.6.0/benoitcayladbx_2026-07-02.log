@@ -1,0 +1,913 @@
+# 2026-07-02 — benoitcayladbx — v0.6.0
+
+## Edit-lock refactor + failed-switch hardening + dead session-data removal
+
+### Context
+
+Follow-up to the code review of the "close-before-open" edit-lock change. The
+review approved (a) consolidating the duplicated holder-release logic, (b)
+de-duplicating the edit-lock DELETE SQL, (c) moving the load-from-uc lock
+orchestration out of the route into `EditLockService`, (d) hardening the failed
+cross-domain switch so a released lock is not orphaned, and (e) removing dead
+session-data. All changes are behaviour-preserving except (d), which closes a
+correctness gap, and (e), which drops an unused field.
+
+### Changes
+
+1. `src/back/objects/registry/EditLockService.py`
+   - `on_domain_loaded` now reuses `release_prev` for its previous-version
+     release instead of an inline `store.release_edit_lock` try/except — the
+     holder-scoped release lives in one place (Extract/Reuse).
+   - Added `release_prev_on_switch(...)`: encapsulates the case-insensitive
+     domain-switch detection and the pre-load release, returning whether this
+     was a cross-domain switch. Moves that decision out of the route.
+   - Added `reacquire(...)`: best-effort restore of a specific
+     `(folder, version)` lock, used when a cross-domain switch's load fails
+     after the previous lock was already freed. Never raises.
+2. `src/api/routers/internal/domain.py`
+   - `load_domain_from_uc` thinned to delegate to
+     `EditLockService.release_prev_on_switch` (pre-load) and `on_domain_loaded`
+     (post-load).
+   - Failed-switch hardening: if the load raises *or* returns a failure
+     envelope after a cross-domain release, the previous lock is re-acquired via
+     `EditLockService.reacquire` so a failed switch never orphans the user's
+     lock on the domain they came from.
+3. `src/back/objects/registry/store/lakebase/store.py`
+   - Extracted `_delete_edit_lock(cur, sch, folder, version, holder_email=None)`
+     shared by `release_edit_lock` (holder-scoped) and `force_release_edit_lock`
+     (unconditional) — removes the duplicated DELETE … USING SQL.
+4. `src/back/objects/session/DomainSession.py`
+   - Removed the dead `triplestore.source_versions` init entry (no property,
+     reader, or writer referenced it anywhere in `src/`); tidied the
+     `triplestore` property docstring.
+
+### Tests
+
+- `tests/units/registry/test_edit_lock_service.py`: added coverage for
+  `release_prev`, `release_prev_on_switch` (switch + same-domain defer, case
+  insensitive), `reacquire`, and `on_domain_loaded`'s deferred version-switch
+  release.
+- `tests/units/api/test_edit_lock_endpoints.py`: added failed-switch
+  re-acquire tests (failure envelope + raised exception); made the existing
+  "no lock block on failure" test's empty-prev intent explicit.
+
+### Modified files
+
+- `src/back/objects/registry/EditLockService.py`
+- `src/api/routers/internal/domain.py`
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/session/DomainSession.py`
+- `tests/units/registry/test_edit_lock_service.py`
+- `tests/units/api/test_edit_lock_endpoints.py`
+
+### Test result
+
+- `uv run pytest -q -m "not scenario"` → **2957 passed, 275 skipped, 5
+  deselected** in ~28s.
+- `uv run pytest tests/e2e/scenarios --collect-only -q` → 5 scenario tests
+  collected (no import regressions).
+- Lint clean on all changed files.
+
+### Notes / deferred
+
+- `triplestore.build_last_update`, `is_active_version`, and `precision_score`
+  were reviewed but **kept**: `build_last_update` is written by the dtwin build
+  route and read by the build pipeline; `is_active_version`/`precision_score`
+  are cached values whose "compute on read" would change behaviour / recompute
+  pitfalls on every read (out of scope for a behaviour-preserving pass).
+
+
+## Edit-lock lease — auto-expire abandoned locks (renew-only, no unload-release)
+
+### Context
+
+The single-editor DRAFT lock had **no auto-expiry**: a crashed browser or a tab
+closed without hitting **Close** held the lock forever, recoverable only by an
+admin force-unlock (Settings › Locks) or take-over. Requested: a lease so
+abandoned locks free themselves. The earlier heartbeat model was removed
+precisely because it *released on unload*, and a multi-page app unloads on every
+navigation — so the lock got stolen mid-session. This adds a **renew-only
+lease**: the lock is never released on unload; it only lapses when the holder
+stops renewing for a full TTL, at which point the next opener silently reclaims
+it. Reuses the long-dormant `heartbeat_at` column as the lease clock (no
+migration). Config: `ONTOBRICKS_EDIT_LOCK_TTL_S` (seconds, default `600`; `0`
+disables the lease → prior hold-until-close behaviour).
+
+### Changes
+
+1. `src/back/objects/registry/store/lakebase/store.py`
+   - `acquire_edit_lock(..., ttl_seconds=0)`: `ON CONFLICT` now also grants when
+     the current lease is **stale** (`ttl > 0 AND now() - heartbeat_at >
+     make_interval(secs => ttl)`). Bumps `heartbeat_at = now()` on every grant;
+     resets `acquired_at` only when the holder actually changes (a same-holder
+     refresh keeps the original session start via a `CASE`).
+   - New `renew_edit_lock(folder, version, *, holder_email)` → `UPDATE
+     heartbeat_at = now()` iff the caller still holds it; `False` = lease lost.
+   - `get_edit_lock(..., ttl_seconds=0)` / `_get_edit_lock_row(...)` compute an
+     `is_stale` flag server-side and return `heartbeat_at`.
+   - `list_all_edit_locks(ttl_seconds=0)` adds `heartbeat_at` + `is_stale` for
+     the admin Locks panel.
+2. `src/back/objects/registry/EditLockService.py`
+   - New `renew(...)` → `{success, renewed}` (DRAFT-gated, holder-scoped).
+   - `_ttl_seconds()` reads `ONTOBRICKS_EDIT_LOCK_TTL_S` (default 600, `0`
+     disables); threaded into every `acquire_edit_lock` / `get_edit_lock` /
+     `list_all_edit_locks` call.
+   - `blocking_holder` now treats a **stale** lease as *not blocking*, so the
+     `PermissionMiddleware` edit gate never locks a new editor out on an
+     abandoned lock.
+   - Status/acquire payloads carry `lease_ttl_s` (client renew-cadence hint).
+3. `src/api/routers/internal/domain.py`
+   - New `POST /domain/edit-lock/renew` → `EditLockService.renew(...)`. (No
+     middleware change: it inherits the same treatment as `/edit-lock/acquire`
+     and is not status-gated, so it never trips the edit-lock 403 gate.)
+4. `src/front/static/global/js/edit-lock.js`
+   - While `mode == "edit"` and `lease_ttl_s > 0`, a keep-alive timer pings
+     `/domain/edit-lock/renew` every ~TTL/3 (and on tab re-focus). Never
+     releases on unload — the timer just dies and the lease lapses naturally.
+   - On a lost lease (`renewed === false`) it flips to read-only and shows a
+     new **"your editing session expired — read-only, saving disabled"** banner
+     with a **Reload** button. Transient network/backend blips are ignored (the
+     next tick retries).
+
+### Docs
+
+- `docs/user-guide.md`, `docs/architecture.md`, `docs/features.md`: rewrote the
+  single-editor sections from "release-based, no TTL" to the renew-only lease
+  (auto-expiry, background renew, `ONTOBRICKS_EDIT_LOCK_TTL_S`, expired banner,
+  stale-lease handling in the gate + admin panel).
+
+### Tests
+
+- `tests/units/registry/test_edit_lock_store.py`: TTL reclaim clause + params,
+  `renew_edit_lock` (holder / non-holder), `get_edit_lock` `is_stale` calc +
+  stale passthrough, updated `list_all` params to the TTL pair.
+- `tests/units/registry/test_edit_lock_service.py`: `renew` (renewed / lost /
+  non-DRAFT no-op), `status` exposes `lease_ttl_s` + forwards `ttl_seconds`,
+  `blocking_holder` ignores a stale lease.
+- `tests/units/api/test_edit_lock_endpoints.py`: `/domain/edit-lock/renew`
+  delegation.
+
+### Modified files
+
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/registry/EditLockService.py`
+- `src/api/routers/internal/domain.py`
+- `src/front/static/global/js/edit-lock.js`
+- `tests/units/registry/test_edit_lock_store.py`
+- `tests/units/registry/test_edit_lock_service.py`
+- `tests/units/api/test_edit_lock_endpoints.py`
+- `docs/user-guide.md`, `docs/architecture.md`, `docs/features.md`
+
+### Test result
+
+- Edit-lock suites (`test_edit_lock_store` + `_service` + `_endpoints`) →
+  **57 passed**.
+- Full `uv run pytest -q -m "not scenario"` → **2967 passed, 275 skipped, 5
+  deselected** in ~28s. Lint clean on all changed files.
+- No schema migration: `heartbeat_at` already exists live and in `schema.sql`
+  (retained from the original heartbeat model).
+
+
+## Refactor — group the edit-lock service into a `lockmgt` subpackage
+
+### Context
+
+Follow-up housekeeping: gather the lock-specific application code into a
+dedicated subpackage instead of a lone module beside the other registry
+services. Only `EditLockService` is a standalone lock module and is cleanly
+movable. The lock's *persistence* (`acquire_edit_lock` / `renew_edit_lock` /
+… on `LakebaseRegistryStore`) stays with the store — extracting it would split
+a class across files (forbidden by `.cursor/07`); the HTTP routes, `schema.sql`
+DDL, and the `edit-lock.js` static asset likewise stay in their layers. This is
+a pure **Move Module** refactor — behaviour unchanged.
+
+Refactoring applied: *Move Module* (Fowler) + package re-export via
+`__init__.py` per `.cursor/07 §__init__.py Conventions` ("import from the
+package").
+
+### Changes
+
+1. `src/back/objects/registry/lockmgt/` (new subpackage)
+   - `EditLockService.py` — moved here from
+     `src/back/objects/registry/EditLockService.py` (`git mv`, content
+     unchanged; its imports were already absolute).
+   - `__init__.py` — re-exports `EditLockService` + the `MODE_EDIT` /
+     `MODE_VIEW` / `MODE_NONE` constants.
+2. Import sites repointed to `from back.objects.registry.lockmgt import
+   EditLockService`:
+   - `src/api/routers/internal/domain.py` (7), `settings.py` (2), `home.py`,
+     `src/shared/fastapi/main.py`.
+3. Tests repointed to the new module path
+   (`back.objects.registry.lockmgt.EditLockService`):
+   - `tests/units/registry/test_edit_lock_service.py`,
+     `tests/units/api/test_edit_lock_endpoints.py`.
+4. `docs/sphinx/api/app.objects.registry.rst` — `automodule` path updated to
+   `back.objects.registry.lockmgt.EditLockService`.
+
+### Modified files
+
+- `src/back/objects/registry/lockmgt/__init__.py` (new)
+- `src/back/objects/registry/lockmgt/EditLockService.py` (moved)
+- `src/api/routers/internal/domain.py`
+- `src/api/routers/internal/settings.py`
+- `src/api/routers/internal/home.py`
+- `src/shared/fastapi/main.py`
+- `tests/units/registry/test_edit_lock_service.py`
+- `tests/units/api/test_edit_lock_endpoints.py`
+- `docs/sphinx/api/app.objects.registry.rst`
+
+### Test result
+
+- Lock + permission-middleware suites → **310 passed**.
+- Full `uv run pytest -q -m "not scenario"` → **2967 passed, 275 skipped, 5
+  deselected**. Lint clean; no behavioural change.
+
+
+## Feature — lease countdown tooltip on the navbar domain badge
+
+### Context
+
+With the renew-only lease in place, the remaining lease time was invisible.
+Added a hover tooltip on the navbar domain badge that shows — only while this
+browser is the editor — a live countdown of the lease (time until expiry if the
+tab goes idle). Frontend-only; reuses the Bootstrap `Tooltip` already used
+elsewhere (e.g. `permissions.js`).
+
+### Changes
+
+1. `src/front/static/global/js/edit-lock.js`
+   - Track `leaseTtlS` + `lastRenewAt`; `startRenew` records the lease start and
+     `doRenew` resets `lastRenewAt` on each confirmed renew (`renewed === true`).
+   - `setupLeaseTooltip()` attaches a Bootstrap tooltip to `#currentDomainName`
+     (the navbar domain badge) with a dynamic title; it is created only in the
+     `mode === "edit"` branch (i.e. only while editing) and only when a lease is
+     configured. On `shown.bs.tooltip` a 1s timer refreshes the tooltip content
+     (`setContent`) so the `M:SS` countdown ticks live; cleared on hide.
+   - `teardownLeaseTooltip()` disposes the tooltip + timer and is called from
+     `onLeaseLost` (editing ended → tooltip removed).
+   - Graceful no-op when Bootstrap's `Tooltip` is unavailable.
+
+### Docs
+
+- `docs/user-guide.md`: single-editor section notes the hover countdown on the
+  navbar domain name.
+
+### Modified files
+
+- `src/front/static/global/js/edit-lock.js`
+- `docs/user-guide.md`
+
+### Test result
+
+- Frontend-only (no Python touched). `node --check` clean; JS lint clean.
+- `uv run pytest -q -m "not scenario"` → **2967 passed, 275 skipped, 5
+  deselected** (unchanged; re-run for the post-change routine).
+
+
+## Docs — fold the renew-only lease + lockmgt reorg into the release notes
+
+### Context
+
+After committing + deploying the renew-only edit-lock lease, the release notes
+and one README bullet still described the superseded **release-based (no TTL)**
+model. Refreshed `releases/ReleaseNotes_V0.6.0.md` to the shipped state and
+fixed the stale README wording (`docs/user-guide.md`, `architecture.md`,
+`features.md` were already updated in the feature commit). Docs-only.
+
+### Changes
+
+1. `releases/ReleaseNotes_V0.6.0.md`
+   - Header: bumped "updated" date to 2026-07-02; refreshed the test-status
+     line to the current `-m "not scenario"` result (2967 passed / 275 skipped
+     / 5 deselected, 0 failed) and noted the nightly-e2e auto-skip removed the
+     old event-loop pollution failures.
+   - Summary: reworked the 2026-07-01 paragraph (Settings › Locks,
+     close-before-open, scenario campaign) and added a 2026-07-02 paragraph for
+     the renew-only lease (auto-expiry, background renew, `ONTOBRICKS_EDIT_LOCK_TTL_S`,
+     countdown tooltip, expired banner, `lockmgt` subpackage).
+   - §10 rewritten from "release-based, no timeout" to the renew-only lease:
+     TTL/`heartbeat_at` reclaim, background renew + expiry UX, countdown tooltip,
+     admin Settings › Locks panel, stale-lease-is-free in `PermissionMiddleware`,
+     `lockmgt` code-organisation note.
+   - Upgrade Notes: corrected the `domain_edit_locks` note (owner-provisioned by
+     `bootstrap-lakebase-perms.sh` — the app SP lacks `REFERENCES` for the lazy
+     self-heal) and noted the lease needs no migration (reuses `heartbeat_at`).
+   - Changes-summary table: repointed `EditLockService.py` →
+     `registry/lockmgt/EditLockService.py`; added rows for the renew-only lease
+     + tooltip, the admin Locks panel, the `lockmgt` refactor, the live scenario
+     campaign, and the `uv.lock` public-CDN re-pin.
+2. `README.md`
+   - Single-editor concurrency bullet: "release-based (no timeout)" → renew-only
+     lease (background renew, countdown tooltip, `ONTOBRICKS_EDIT_LOCK_TTL_S`
+     auto-release), and noted the Settings › Locks panel now shows staleness.
+
+### Modified files
+
+- `releases/ReleaseNotes_V0.6.0.md`
+- `README.md`
+
+### Test result
+
+- Docs-only (no code touched). `uv run pytest -q -m "not scenario"` →
+  **2967 passed, 275 skipped, 5 deselected, 0 failed** in ~27s.
+
+
+## Feature — configurable edit-lock lease TTL in Settings › Global
+
+### Context
+
+The DRAFT single-editor lease TTL was only settable via the
+`ONTOBRICKS_EDIT_LOCK_TTL_S` env var (default 600s = 10 min), which requires a
+redeploy to change. Requested: expose it as a runtime, admin-editable setting in
+**Settings › Global**, defaulting to 10 min. Reuses the existing global-config
+(`GlobalConfigService`) + `registry_cache_ttl` UI pattern. Precedence is now
+**Settings › Global** value → `ONTOBRICKS_EDIT_LOCK_TTL_S` env → built-in
+default (600s). `0` still disables the lease (hold-until-close).
+
+### Changes
+
+1. `src/back/objects/session/GlobalConfigService.py`
+   - Added `get_edit_lock_ttl_s(...)` (returns the stored seconds or `None` when
+     unset — deliberately **absent from `_empty()`** so an unconfigured / failed
+     load yields the sentinel and the caller falls through to env/default) and
+     `set_edit_lock_ttl_s(...)` (persists `edit_lock_ttl_s`, clamps `>= 0`).
+2. `src/back/objects/registry/lockmgt/EditLockService.py`
+   - `_ttl_seconds(session_mgr=None, settings=None)` now consults
+     `GlobalConfigService.get_edit_lock_ttl_s` first (when session context is
+     supplied), then env, then default. Global-config lookup is wrapped in
+     try/except → falls back on any error.
+   - Threaded the resolved `ttl_s` through `status` / `acquire` /
+     `on_domain_loaded` / `reacquire` / `blocking_holder` / `list_all` and into
+     `_shape` / `_none` (new optional `ttl_s` param) so the store calls and the
+     client `lease_ttl_s` hint use one resolved value. Refreshed the module
+     docstring's lease paragraph.
+3. `src/back/objects/domain/SettingsService.py`
+   - Added `get_edit_lock_ttl_result` (returns the effective TTL via
+     `EditLockService._ttl_seconds`) and `save_edit_lock_ttl_result`
+     (admin-gated, persists globally).
+4. `src/api/routers/internal/settings.py`
+   - Added `GET /settings/edit-lock-ttl` and `POST /settings/save-edit-lock-ttl`
+     (mirrors the registry-cache-TTL pair).
+5. `src/front/templates/settings.html`
+   - New **Edit Lock Lease (minutes)** field in the Global section (admin-only
+     badge, `min=0`, default 10) with help text explaining auto-renew + the
+     `0 = disable` semantics.
+6. `src/front/static/config/js/settings.js`
+   - `loadEditLockTtl()` (seconds → minutes on load) wired into init; a save
+     block (minutes → seconds, `mins * 60`) added to the global Save handler.
+7. `src/front/templates/partials/settings/_settings_locks.html`
+   - Replaced the stale "There is no timeout" copy with the lease description
+     pointing at the new Settings › Global control.
+
+### Tests
+
+- `tests/units/registry/test_edit_lock_service.py`: added `_ttl_seconds`
+  resolution tests — global-config wins over env, env fallback when unset, `0`
+  from global disables, and built-in default when no session context.
+
+### Modified files
+
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/registry/lockmgt/EditLockService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `src/front/templates/partials/settings/_settings_locks.html`
+- `tests/units/registry/test_edit_lock_service.py`
+
+### Test result
+
+- `uv run pytest -q -m "not scenario"` → **2971 passed, 275 skipped, 5
+  deselected** in ~22s. Lint clean on all changed files. No schema migration
+  (setting lives in the existing global-config blob).
+
+
+## Feature — activity-based lease renew + "about to be disconnected" warning modal
+
+### Context
+
+The DRAFT edit lease auto-renewed as long as the tab stayed **open**, regardless
+of whether the user was actually doing anything: the client fired a blind
+`setInterval` renew every ~TTL/3. So an editor who walked away (but left the tab
+open) held the lock indefinitely and kept every other user read-only — the lease
+only ever lapsed on a crashed/closed tab, never on a genuinely idle-but-open one.
+Requested: tie renewal to real **activity** so an idle editor's lease lapses and
+the next opener can reclaim it, and — before that happens — pop a **warning**
+telling the user they are about to be disconnected from the project, with a
+chance to stay. Frontend-only (plus doc/help-text touch-ups); no API or store
+change.
+
+### Changes
+
+1. `src/front/static/global/js/edit-lock.js`
+   - Renewal is now **activity-gated**: `mousemove` / `mousedown` / `keydown` /
+     `wheel` / `touchstart` / `scroll` (capture phase) and tab re-focus stamp
+     `lastActivityAt`. The keep-alive tick (`onRenewTick`, every ~TTL/3) only
+     pings `/domain/edit-lock/renew` when the user has been active within the
+     last renew interval — otherwise the lease ages and lapses for the next
+     opener (matching the server-side reclaim).
+   - New 1s **idle watcher** (`onIdleTick`) drives a warning **modal** built on
+     the fly (`buildIdleModal`, static backdrop, Bootstrap `Modal` with a
+     `notify()` fallback): when the remaining lease drops below `warnLeadMs`
+     (≤60s, ≥10s, ≤TTL/3) it shows *"Still editing? …you will be disconnected
+     from the project (read-only)"* with a live `M:SS` countdown and a **Keep
+     editing** button. Acting (or clicking Keep editing) dismisses it and renews
+     immediately; ignoring it until the countdown hits 0 flips to read-only and
+     shows the existing "session expired" banner.
+   - `remainingSeconds()` now derives from a shared `leaseRemainingMs()`; the
+     navbar-badge tooltip copy updated to "renews while you work / released if
+     you stay inactive". `stopRenew()` tears down the new timers, activity
+     listeners, and the modal.
+2. `src/back/objects/registry/lockmgt/EditLockService.py`
+   - Module docstring lease paragraph updated: renews **while the editor is
+     active**, and an idle editor (client stops renewing, warns first) is now an
+     explicit cause of lease lapse alongside crash / closed tab.
+3. `src/front/templates/partials/settings/_settings_locks.html`
+   - Admin Locks help text notes a lock left by an **inactive** editor (warned
+     first) is auto-reclaimed on lease lapse, alongside crashed/closed tabs.
+
+### Modified files
+
+- `src/front/static/global/js/edit-lock.js`
+- `src/back/objects/registry/lockmgt/EditLockService.py`
+- `src/front/templates/partials/settings/_settings_locks.html`
+
+### Test result
+
+- Frontend-behaviour change (no test-covered Python logic touched — only a
+  docstring). `node --check src/front/static/global/js/edit-lock.js` → clean; JS
+  lint clean.
+- `uv run pytest -q -m "not scenario"` → **2971 passed, 275 skipped, 5
+  deselected** in ~27s (unchanged; re-run for the post-change routine).
+
+
+## Fix — idle-timeout edit-lock was silently re-granted on the next navigation
+
+### Context
+
+Follow-up to the activity-based lease change: after the inactivity lease lapsed
+the browser correctly went read-only, **but the lock row was never released** —
+the user stayed the recorded holder. Since this is a multi-page app, any
+reload / menu navigation re-ran `initEditLock` → `GET /domain/edit-lock`, whose
+non-forcing acquire hands a free/own lock straight back to the loader (a stale
+lease is still granted to its owner). Net effect: the timeout was undone by the
+next click — edit mode came back automatically, defeating the whole point. Fix:
+on an **inactivity** timeout, actually release the lock server-side and remember
+(per version) that this browser gave editing up, staying read-only across
+reloads until the user **explicitly resumes**.
+
+### Changes
+
+1. `src/front/static/global/js/edit-lock.js`
+   - New `expireByIdle()` (called from the idle watcher instead of `onLeaseLost`
+     directly): `POST /domain/edit-lock/release` (frees the lock immediately for
+     other users) + a per-version **sticky flag** in `sessionStorage`
+     (`ob:editLockExpired = "folder\u0000version"`), then the usual read-only +
+     expired-banner teardown.
+   - `initEditLock` now honours the sticky flag: when the status check re-grants
+     `mode == "edit"` for the *same* version we timed out on, it re-releases the
+     lock and stays read-only (expired banner) instead of resuming editing. A
+     `view` result (someone else took it) or `none` clears the flag.
+   - Expired banner button relabelled **Reload → "Resume editing"**; it now
+     clears the sticky flag before reloading, so an explicit resume is the only
+     path that re-acquires the still-free lock. A lease lost to a take-over /
+     stale reclaim still flips to read-only via `onLeaseLost` (no sticky — it is
+     already gone).
+2. `src/back/objects/registry/lockmgt/EditLockService.py`
+   - `status(...)` now returns the loaded `folder` / `version` alongside the
+     lock block so the client can scope the sticky "expired" state to the exact
+     version (prevents a timeout on domain A from suppressing edit on domain B).
+
+### Modified files
+
+- `src/front/static/global/js/edit-lock.js`
+- `src/back/objects/registry/lockmgt/EditLockService.py`
+
+### Test result
+
+- `node --check src/front/static/global/js/edit-lock.js` → clean; JS lint clean.
+- `uv run pytest -q -m "not scenario"` → **2971 passed, 275 skipped, 5
+  deselected** in ~21s (status-shape tests use key access, unaffected by the new
+  `folder` / `version` keys).
+
+
+## Fix — allow comments & task creation in read-only / view mode
+
+### Context
+
+In any read-only mode (`read-only-locked` from the single-editor lock,
+`role-viewer`, or `read-only-version`) the discussion offcanvas was half-broken:
+the "Comment" / "New task" buttons stayed clickable but the comment textarea and
+the task title / assignee / due-date fields were greyed out and unusable — so
+you could open the forms but not fill them in. This is wrong: comments and tasks
+are **collaboration, not domain editing**. Their `/comments` + `/tasks`
+endpoints are neither domain-role- nor lifecycle-status- nor edit-lock-gated
+server-side (confirmed in `PermissionMiddleware`: `/comments` is not in
+`_DOMAIN_SCOPED_PREFIXES`, not `_STATUS_GATE_*`, so viewers and locked-out users
+already pass the backend). The block was purely the frontend `permissions.css`
+generic input/textarea/select gate catching the offcanvas fields.
+
+### Changes
+
+1. `src/front/static/global/js/comments-panel.js`
+   - Tagged the discussion-offcanvas fields with a `data-collab` marker: the
+     comment compose textarea, the reply textarea, and the task form's title
+     input, assignee `<select>` and due-date input.
+2. `src/front/static/global/css/permissions.css`
+   - Added `:not([data-collab])` to the three generic read-only form-field
+     selectors (input / textarea / select), mirroring the existing
+     `textarea[data-rm-comment]` review-box exemption, so `data-collab` controls
+     stay interactive under all three read-only body classes. Documented the new
+     exemption in the selector's explanatory comment.
+
+### Modified files
+
+- `src/front/static/global/js/comments-panel.js`
+- `src/front/static/global/css/permissions.css`
+
+### Test result
+
+- `node --check src/front/static/global/js/comments-panel.js` → clean.
+- `uv run pytest -q -m "not scenario"` → **2971 passed, 275 skipped, 5
+  deselected** in ~26s (the discussion-panel asset contract test still passes —
+  its token assertions are unaffected by the added `data-collab` attributes).
+
+## Move the "Current Domain" KPI band from Home to Domain → Information
+
+### Context
+
+The Home page led with a "Current Domain" card (domain name header + a six-tile
+KPI / health band: Entities, Relationships, Mappings, Quality, Status, Version)
+plus Settings / About quick links. The band is really *domain* context, so it
+belongs on Domain → Information. Per request, the band moves to Information while
+the Settings and About buttons stay on the Home page.
+
+### Changes
+
+1. `src/front/templates/home.html`
+   - Removed the `#sessionPanel` "Current Domain" card (header + KPI band). Kept
+     the Settings / About `quick-link-sm` buttons (now in a right-aligned row)
+     and the `#domainStatus` element used by the New Domain flow.
+2. `src/front/templates/partials/domain/_domain_information.html`
+   - Added the KPI band as a `domain-panel` (`#domainKpiPanel`) at the top of the
+     section, reusing the same tile ids (`kpiEntities` … `kpiVersion`).
+3. `src/front/static/home/js/home.js`
+   - Removed the KPI logic (`loadHomeStatus`, `renderKpis`, `setKpiValue`,
+     `renderQualityKpi`, `renderStatusKpi`, `renderVersionKpi`, `statusBadge`)
+     and its `DOMContentLoaded` call; updated the file header comment.
+4. `src/front/static/domain/js/domain-information.js`
+   - Ported the KPI population into a self-contained IIFE (no new globals) that
+     fetches `/domain/info` + `/session-status` and fills the tiles on load,
+     guarded by the presence of `#domainKpiPanel`.
+5. `src/front/static/global/css/components.css`
+   - Added the reusable `.ob-kpi-band` responsive grid (moved from home.css and
+     renamed from `.home-kpi-band`) next to the shared `.ob-kpi-tile` rules.
+6. `src/front/static/home/css/home.css`
+   - Removed the now-unused `.home-kpi-band` rules.
+7. `tests/units/api/test_ui_rendering.py`
+   - Replaced the Home `test_domain_panel` / `test_kpi_band` asserts with
+     `test_kpi_band_moved_off_home` (Home no longer has `#sessionPanel` /
+     `#homeDomainName` / `#kpiEntities`) and added a `test_kpi_band` on the
+     Domain page asserting `#domainKpiPanel` + the six tiles.
+8. `tests/e2e/navigation/test_navigation_flows.py`
+   - Replaced `test_domain_panel_visible` with `test_quick_links_visible`
+     (Settings / About links still on Home).
+
+### Modified files
+
+- `src/front/templates/home.html`
+- `src/front/templates/partials/domain/_domain_information.html`
+- `src/front/static/home/js/home.js`
+- `src/front/static/domain/js/domain-information.js`
+- `src/front/static/global/css/components.css`
+- `src/front/static/home/css/home.css`
+- `tests/units/api/test_ui_rendering.py`
+- `tests/e2e/navigation/test_navigation_flows.py`
+
+### Test result
+
+- `node --check` on both edited JS files → clean.
+- `uv run pytest tests/units/api/test_ui_rendering.py -q` → **117 passed** in ~2s.
+
+## Fix: Settings → Locks showed a stale snapshot on re-entry
+
+### Context
+
+Opening Settings → Locks a second time (switch away and back, or return later)
+kept showing the lock list from the *first* visit — you had to hit the Refresh
+button to see the real current locks. The `sidebarSectionChanged` handler only
+called `loadLocks()` on the first visit, guarded by a one-shot `locksLoaded`
+flag; on re-entry the guard short-circuited, so the SPA-retained table was never
+re-fetched. The Refresh button "worked" only because it reset `locksLoaded`.
+
+### Changes
+
+1. `src/front/static/config/js/settings-locks.js`
+   - Removed the one-shot `locksLoaded` guard so `loadLocks()` runs every time
+     the Locks section is (re-)opened — the table now always reflects the
+     current locks. Simplified the Refresh and post-release handlers (no flag to
+     reset) and dropped the now-dead `locksLoaded = true` in `loadLocks`. Updated
+     the file header comment to describe the re-fetch-on-open behaviour.
+
+### Modified files
+
+- `src/front/static/config/js/settings-locks.js`
+
+### Test result
+
+- `node --check src/front/static/config/js/settings-locks.js` → clean.
+- `uv run pytest -q -m "not scenario"` → **2971 passed, 275 skipped** (no test
+  references the Locks tab JS; behaviour is client-side lazy-load timing).
+
+## Home page: drop Settings / About links, lift My Tasks above All Domains
+
+### Context
+
+Follow-up to moving the KPI band off Home. The Settings / About quick links are
+redundant (both are reachable from the navbar), and the review worklist is more
+useful up top than buried below the domain gateway.
+
+### Changes
+
+1. `src/front/templates/home.html`
+   - Removed the Settings / About `quick-link-sm` row.
+   - Reordered so the My Tasks section (`#homeTasksSection`) renders above the
+     All Domains gateway. Kept `#domainStatus` (used by the New Domain flow).
+2. `tests/units/api/test_ui_rendering.py`
+   - Replaced `test_quick_links` with `test_no_quick_links` (no `/settings` or
+     `/about` `quick-link-sm` on Home) and added `test_my_tasks_before_domains`
+     (My Tasks precedes the domain gateway in source order).
+3. `tests/e2e/navigation/test_navigation_flows.py`
+   - Replaced `test_quick_links_visible` with `test_all_domains_gateway_visible`
+     (gateway present, no quick links).
+
+### Modified files
+
+- `src/front/templates/home.html`
+- `tests/units/api/test_ui_rendering.py`
+- `tests/e2e/navigation/test_navigation_flows.py`
+
+### Test result
+
+- `uv run pytest tests/units/api/test_ui_rendering.py -q` → **118 passed** in ~2s.
+
+## Review pass: KPI band fetch dedup + docs/API verification
+
+### Context
+
+Code-review / refactor pass over the Home → Information KPI-band move and the
+Locks re-fetch fix. Reviewed changed files against `src/.coding_rules.md`,
+checked for duplication and dead code, verified the API surface and docs are
+current, and re-ran the full suite.
+
+### Findings & changes
+
+1. `src/front/static/domain/js/domain-information.js` (refactor)
+   - The ported KPI loader fetched `/domain/info` with a raw `fetch`, but the
+     file's main version-status loader already pulls `/domain/info` via
+     `fetchOnce`. Switched the KPI loader to `fetchOnce('/domain/info')` +
+     `fetchOnce('/session-status')` so the page makes a single `/domain/info`
+     round-trip (`.cursor/06 performance`). No behaviour change.
+2. Duplication / dead code — none introduced: the KPI helpers were *moved* from
+   `home.js` into a self-contained IIFE (not duplicated); no dangling references
+   to the removed `loadHomeStatus` / `renderKpis` / `home-kpi-band` /
+   `#sessionPanel` / `#homeDomainName` remain (grep-verified across the repo).
+3. API check — no endpoints changed this session. Verified the endpoints the
+   touched frontend calls (`/domain/info`, `/session-status`, `/settings/locks`)
+   and the edit-lock TTL routes exist and match the docs (`GET
+   /settings/edit-lock-ttl`, `POST /settings/save-edit-lock-ttl` in
+   `settings.py` ↔ `docs/api.md`).
+4. Docs — `features.md` / `architecture.md` / `user-guide.md` already describe
+   the renew-only lease and admin Locks accurately; no doc describes the Home
+   dashboard layout, so moving the KPI band to Domain → Information needs no doc
+   rewrite. The KPI 1-column report was an asset-cache artifact (`asset_version`
+   is fixed at server startup); a restart/redeploy serves the new
+   `.ob-kpi-band` grid and renders the six tiles in one row.
+
+### Modified files
+
+- `src/front/static/domain/js/domain-information.js`
+
+### Test result
+
+- `node --check src/front/static/domain/js/domain-information.js` → clean.
+- `uv run pytest -q -m "not scenario"` → **2972 passed, 275 skipped, 5
+  deselected** in ~28s.
+
+## Fix: OWL generator silently accepted token-truncated output (scenario 1)
+
+### Context
+
+Live scenario 1 intermittently timed out ("Wizard did not produce an ontology
+within 420s") with **0 classes**. Root cause (from `logs/ontobricks.log`): the
+generator's final Turtle answer hit the output-token cap, so `OntologyParser`
+logged *"Content appeared truncated"* and `parse_rdf_flexible` failed for every
+RDF syntax (turtle/xml/n3/nt/json-ld) → empty ontology. `agent_owl_generator`
+called the endpoint with a fixed `max_tokens=4096` and, in the text-answer
+branch, accepted the content **unconditionally** — it logged `finish_reason` but
+never acted on `finish_reason == "length"`. A CRM/energy guideline (5 classes +
+relationships + labels/comments), especially after a pitfall-fix round re-emits
+the whole ontology, sits right at the 4096 boundary — hence the intermittency.
+
+This is an LLM-agent change → handled under the AI-feature lifecycle gate
+(`.cursor/12`), hotfix/regression tier: SPEC failure-mode + regression dataset +
+unit coverage.
+
+### Changes
+
+1. `src/agents/agent_owl_generator/engine.py`
+   - Added `_GEN_MAX_TOKENS = 8192` (the documented endpoint output cap, matching
+     `agent_auto_icon_assign._ABSOLUTE_MAX_TOKENS`) and used it at both
+     `call_serving_endpoint` sites (was `4096`).
+   - Added a **truncation guard** in the text-answer branch: when
+     `finish_reason == "length"`, the cut-off Turtle is no longer accepted — the
+     agent is asked to re-emit the complete ontology concisely (within
+     `MAX_ITERATIONS`), or the run fails with an explicit "output truncated"
+     error instead of landing a silent empty ontology.
+2. `tests/units/agents/test_agent_owl_generator_truncation.py` (new)
+   - Hermetic guard coverage (patched `call_serving_endpoint`): truncated→complete
+     recovers; a truncated answer is never accepted verbatim; persistent
+     truncation fails loudly.
+3. `tests/eval/datasets/agent_owl_generator/regression.jsonl` (new)
+   - The failing CRM/energy guideline captured as the regression case.
+4. `.planning/agents/agent_owl_generator/SPEC.md`
+   - Documented the truncation failure mode + mitigation; recorded the `8192`
+     token budget in the identity table.
+
+### Modified files
+
+- `src/agents/agent_owl_generator/engine.py`
+- `tests/units/agents/test_agent_owl_generator_truncation.py` (new)
+- `tests/eval/datasets/agent_owl_generator/regression.jsonl` (new)
+- `.planning/agents/agent_owl_generator/SPEC.md`
+
+### Test result
+
+- `uv run pytest tests/units/agents/test_agent_owl_generator_truncation.py -q`
+  → **3 passed**.
+- Live re-validation (restart local app to load the new engine, then Ontology →
+  Generate with the CRM/energy guideline / scenario 1) — pending.
+
+## OWL generator: over-generation (class-explosion) guard
+
+### Context
+
+After the `8192` truncation fix, scenario 1 got *past* generation but failed at
+**auto-map**: `Auto-Map produced no entity SQL within 600s`. Root cause was not
+the mapper — it was genuinely working (`Chunk 9/22 done: +45 entities`) — but
+the generator over-decomposed the ~5-entity CRM/energy guideline into **110
+`owl:Class` declarations** (one class per column/value: `VatAmount`,
+`MeterReading`, `Payment`, `Call`, …). The auto-mapper chunks ~5 classes/chunk
+with cool-downs, so 110 classes → ~22 chunks → ~18 min, well past the scenario
+`AUTOMAP_TIMEOUT`. The healthy baseline is ~10 classes / 4 chunks. The prompt
+was the culprit: `GENERIC_GUIDELINES` authorised "30–60 classes" and the model
+blew past even that.
+
+This is an LLM-agent change → AI-feature lifecycle gate (`.cursor/12`),
+hotfix/regression tier: prompt tightening + a deterministic, unit-testable
+guard + SPEC failure-mode + regression dataset.
+
+### Changes
+
+1. `src/agents/agent_owl_generator/engine.py`
+   - Prompt: replaced the `GENERIC_GUIDELINES` "Size limits per iteration:
+     30–60 classes" with "prefer the smallest set that covers the input
+     (typically 8–25), one class per real-world entity, **never a class per
+     column or attribute value** (those are datatype properties), hard limit
+     40, consolidate rather than add".
+   - Guard: added `_DEFAULT_MAX_CLASSES = 40`, `_MAX_CONSOLIDATE_ROUNDS = 2`,
+     and `_count_owl_classes()` (regex over `a`/`rdf:type owl:Class`). In the
+     text-answer branch, when the accepted Turtle exceeds `max_classes` the
+     agent is asked (bounded by the round cap) to consolidate to the core
+     entities before accepting; on exhaustion it accepts the best available
+     ontology (no infinite loop). Overridable via `options["max_classes"]`
+     (`<=0` disables).
+2. `tests/units/agents/test_agent_owl_generator_class_cap.py` (new)
+   - Hermetic guard coverage (patched `call_serving_endpoint`): count helper;
+     over-cap→consolidated recovers; under-cap accepted directly; guard
+     disabled via `max_classes=0`; persistent over-cap accepts best after the
+     bounded rounds.
+3. `tests/eval/datasets/agent_owl_generator/regression.jsonl`
+   - Added `regression-crm-energy-overgeneration-002` (same CRM guideline,
+     `max_classes: 40` constraint).
+4. `.planning/agents/agent_owl_generator/SPEC.md`
+   - Added the "Over-generation / class explosion" failure mode + mitigation
+     and recorded `max_classes = 40` in the identity table.
+
+### Modified files
+
+- `src/agents/agent_owl_generator/engine.py`
+- `tests/units/agents/test_agent_owl_generator_class_cap.py` (new)
+- `tests/eval/datasets/agent_owl_generator/regression.jsonl`
+- `.planning/agents/agent_owl_generator/SPEC.md`
+
+### Test result
+
+- `uv run pytest tests/units/agents -q --no-cov` → **149 passed**
+  (10 in the two owl-generator guard suites).
+- Live re-validation (restart local app, re-run the scenario campaign) —
+  pending.
+
+---
+
+## Security: mitigate NLTK path-traversal (Dependabot #58 / GHSA-p4gq-832x-fm9v)
+
+### Context
+
+Dependabot alert #58 (CVE-2026-54293) flags a URL-encoded path traversal in
+`nltk.data.load()`/`find()` for nltk<=3.9.4: the unsafe-path regex runs before
+`url2pathname()` decodes `%xx`, so `%2f`/`%2e%2e` bypass the check (decode-after-
+check). The fix only exists in nltk 3.10.0, which is **not yet on PyPI** (upstream
+latest and the Databricks proxy both top out at 3.9.4), so a version pin is
+currently unsatisfiable. We therefore made the flaw unreachable in-code as
+defense-in-depth until the patched release is available.
+
+### Changes
+
+1. `src/back/core/external/pitfalls/utils.py`
+   - Added `_assert_safe_nltk_resource()` and call it from `ensure_nltk_resource()`
+     before `nltk.data.find()`. Rejects percent-encoding (`%`), traversal (`..`)
+     and absolute/UNC paths, blocking the exact attack shapes. No behavior change:
+     all call sites pass hardcoded resource names (`corpora/wordnet`,
+     `sentiment/vader_lexicon`).
+2. `pyproject.toml`
+   - Kept `nltk>=3.9.4` (3.10.0 unavailable) and updated the security note /
+     restored the TODO to bump to `nltk>=3.10.0` once it lands on PyPI.
+
+### Modified files
+
+- `src/back/core/external/pitfalls/utils.py`
+- `pyproject.toml`
+
+### Test result
+
+- `uv run pytest -q -m "not scenario"` → **2982 passed, 275 skipped, 5 deselected**.
+- `uv lock --check` → lockfile consistent (nltk resolves to 3.9.4).
+
+## Fix — center the coverage gauges inside their cards (Domain → Data Sources)
+
+### Context
+
+On Domain → Data Sources the two metadata-coverage gauges (Table Descriptions /
+Column Descriptions) rendered left-aligned inside their cards. Chart.js sets the
+`<canvas>` to `display: block`, which defeats the Bootstrap `text-center` on the
+card body (a block element with a fixed width stays left-aligned). Centered the
+canvas explicitly.
+
+### Changes
+
+1. `src/front/templates/partials/domain/_domain_metadata.html`
+   - Added a `dm-gauge` class to the `#gaugeTableDesc` and `#gaugeColumnDesc`
+     canvases.
+2. `src/front/static/domain/css/domain-metadata.css`
+   - New `.dm-gauge { display: block; margin-inline: auto; }` rule so the fixed-
+     width gauge canvas centers within the card body.
+
+### Modified files
+
+- `src/front/templates/partials/domain/_domain_metadata.html`
+- `src/front/static/domain/css/domain-metadata.css`
+
+### Test result
+
+- CSS/HTML-only change (no Python/JS logic). `uv run pytest -q -m "not scenario"`
+  re-run for the post-change routine — see below.
+
+## Fix — frozen "Still editing?" idle-warning modal (stuck static backdrop)
+
+### Context
+
+After a long idle wait the DRAFT edit-lock **"Still editing?"** warning modal
+popped but then looked **frozen** — the whole page was blocked behind the grey
+overlay and only a full reload recovered it. Root cause is a Bootstrap
+show/hide race in `edit-lock.js`: the idle modal is built with the `fade` class
+**and** `data-bs-backdrop: static` / `data-bs-keyboard: false` (blocking
+backdrop, no close button). The capture-phase activity listeners
+(`mousemove`, `keydown`, …) call `markActivity → hideIdleWarning →
+idleModal.hide()` the instant the user moves the mouse after the warning
+appears. If that first move lands during the modal's ~300 ms fade-in
+transition, Bootstrap 5's `hide()` is a no-op (`_isTransitioning` guard) — but
+the code has already set `warnShown = false`, so the idle watcher's self-heal
+branch (`else if (warnShown) hideIdleWarning()`) is gated off and never retries.
+The modal + its static backdrop stay on screen with nothing able to dismiss
+them, so the page reads as frozen.
+
+### Changes
+
+1. `src/front/static/global/js/edit-lock.js`
+   - `buildIdleModal()` now creates the modal element **without** the `fade`
+     class (`el.className = 'modal'`). With no transition, Bootstrap's
+     show/hide are synchronous, so a hide triggered by the activity listener the
+     moment the warning pops can no longer no-op mid-transition and strand the
+     static backdrop. Added an explaining comment.
+
+### Modified files
+
+- `src/front/static/global/js/edit-lock.js`
+
+### Test result
+
+- `node --check src/front/static/global/js/edit-lock.js` → clean.
+- `uv run pytest -q -m "not scenario"` → **2982 passed, 275 skipped, 5
+  deselected, 0 failed** in ~24s (frontend-behaviour fix; no Python touched).

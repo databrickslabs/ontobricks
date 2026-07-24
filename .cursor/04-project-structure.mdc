@@ -49,7 +49,7 @@ back/objects/
 ├── domain/           <- Session-scoped UC/metadata/layout operations
 ├── ontology/         <- Ontology domain class
 ├── mapping/          <- Mapping domain class
-└── digitaltwin/      <- Digital Twin domain class
+└── digitaltwin/      <- Knowledge Graph domain class
 ```
 
 ### Backend Core Infrastructure (`src/back/core/`)
@@ -61,8 +61,7 @@ back/core/
 ├── helpers/          <- Cross-cutting utilities (DatabricksHelpers, SQLHelpers, URIHelpers)
 ├── logging/          <- LogManager, setup_logging(), get_logger()
 ├── task_manager/     <- Async in-memory task tracking
-├── triplestore/      <- Triple store backends (Delta views in UC)
-├── graphdb/          <- Pluggable graph DB engine abstraction (Lakebase Postgres, …)
+├── graphdb/          <- Triple store / graph DB abstraction (Lakebase Postgres, Delta UC, view)
 ├── databricks/       <- Typed facades for Databricks API surfaces
 ├── graphql/          <- Strawberry GraphQL schema builder
 ├── w3c/              <- W3C standard parsers/generators (OWL, RDFS, R2RML, SPARQL, SHACL)

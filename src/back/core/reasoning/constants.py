@@ -6,7 +6,7 @@ used across the reasoning engines live here as a single source of truth.
 
 import re
 
-from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL  # noqa: F401
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # OWL RL reasoner constants

@@ -1,18 +1,25 @@
 // =====================================================
 // VERSION STATUS CHECK
 //
-// On every page load we ask the backend whether the loaded domain is
-// the active version. If it is not, we:
+// On every page load we ask the backend for the loaded version's
+// lifecycle status. Design editing is allowed only while the status is
+// DRAFT — regardless of whether the loaded version is the latest one.
+// An older DRAFT version is fully editable; an IN-REVIEW / PUBLISHED
+// version is read-only for design changes. When the version is not
+// editable we:
 //   1. annotate the navbar role pill (rendered by ``permissions.js``)
-//      with an "older version, read-only" note via
-//      ``window.OB.annotateRoleNavBadge``,
-//   2. add ``read-only-version`` to <body> — every gate in
-//      permissions.css (form fields, write buttons, OntoViz controls,
-//      …) keys off ``:is(.read-only-version, .role-viewer)``, so we
-//      no longer need a per-button JS sweep,
+//      with a "read-only" note via ``window.OB.annotateRoleNavBadge``,
+//   2. add ``read-only-version`` to <body> — every design-editing gate
+//      in permissions.css (form fields, write buttons, OntoViz
+//      controls, …) keys off ``:is(.read-only-version, .role-viewer)``,
+//      so we no longer need a per-button JS sweep,
 //   3. install the shared capture-phase contextmenu blocker for
-//      D3/Canvas design surfaces (defined once in ``permissions.js``
-//      and reused here for older-version readers).
+//      D3/Canvas design surfaces (defined once in ``permissions.js``).
+//
+// KG Build/sync and reasoning materialise are data-refresh ops (they
+// re-materialise triples using the frozen design) and are NOT gated on
+// the lifecycle status — they remain usable on PUBLISHED / IN-REVIEW
+// versions, still guarded by the builder role.
 //
 // Domain-role gating (viewer vs editor vs builder) is also done
 // declaratively now — viewers get ``body.role-viewer`` from
@@ -20,6 +27,10 @@
 // required.
 // =====================================================
 
+// Global "editable" proxy used by every design-surface gate. It now means
+// "the loaded version is editable" (i.e. DRAFT), not "is the latest
+// version". Defaults to true so the UI stays editable until the async
+// check runs.
 window.isActiveVersion = true;
 // Lifecycle status of the loaded version. Editing is only allowed while
 // the status is DRAFT; IN-REVIEW / PUBLISHED versions are read-only.
@@ -54,30 +65,27 @@ async function checkVersionStatus() {
     try {
         const data = await fetchOnce('/domain/version-status');
         if (data.success) {
-            window.isActiveVersion = data.is_active;
             window.versionStatus = data.status || 'DRAFT';
+            // Editability is driven solely by the lifecycle status: only a
+            // DRAFT version is editable, regardless of whether it is the
+            // latest version. Older DRAFT versions are fully editable.
+            // ``isActiveVersion`` is kept as the global "editable" proxy that
+            // every design-surface gate keys off — it now means "editable",
+            // not "is latest".
+            const editable = window.versionStatus === 'DRAFT';
+            window.isActiveVersion = editable;
             renderVersionStatusBadges(window.versionStatus);
 
-            const lockedByStatus = window.versionStatus !== 'DRAFT';
-            const readOnly = !data.is_active || lockedByStatus;
-
-            if (lockedByStatus) {
-                document.body.classList.add('read-only-status');
-            }
-
-            if (readOnly) {
-                // Reuse the existing read-only gating (every selector in
-                // permissions.css / ontoviz.css keys off
-                // ``read-only-version``) so a locked status disables the
-                // same write surfaces with no per-rule duplication.
+            if (!editable) {
+                // ``read-only-version`` is the generic gate every selector
+                // in permissions.css / ontoviz.css keys off, disabling all
+                // design-editing surfaces with no duplication.
                 document.body.classList.add('read-only-version');
                 if (window.OB && typeof window.OB.annotateRoleNavBadge === 'function') {
-                    const msg = lockedByStatus
-                        ? 'This version is ' + window.versionStatus
-                          + ' (read-only). Set it back to DRAFT to make changes.'
-                        : 'You are viewing an older version of this domain. '
-                          + 'Load the latest version to make changes.';
-                    window.OB.annotateRoleNavBadge(msg);
+                    window.OB.annotateRoleNavBadge(
+                        'This version is ' + window.versionStatus +
+                        ' (read-only). Set it back to DRAFT to make changes.'
+                    );
                 }
                 if (window.OB && typeof window.OB.installReadOnlyContextMenuBlocker === 'function') {
                     window.OB.installReadOnlyContextMenuBlocker();

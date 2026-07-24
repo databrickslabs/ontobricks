@@ -1,6 +1,7 @@
 """R2RML mapping generator."""
 
 from typing import Dict, Any
+from urllib.parse import quote, urlsplit, urlunsplit
 from rdflib import Graph, Namespace, Literal, URIRef, BNode
 from rdflib.namespace import RDF, RDFS, XSD
 import re
@@ -10,13 +11,18 @@ from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
 
+# Characters safe to leave unencoded in IRI path/fragment segments.
+# Spaces and other illegal IRI chars are percent-encoded by _safe_uri.
+_IRI_SAFE = "/:@-._~!$&'()*+,;=%"
+
 
 class R2RMLGenerator:
     """Generate R2RML mappings from configuration."""
 
     def __init__(self, base_uri: str = DEFAULT_BASE_URI):
         """Initialize the R2RML generator."""
-        self.base_uri = base_uri.rstrip("/").rstrip("#") + "/"
+        normalized = (base_uri or DEFAULT_BASE_URI).rstrip("/").rstrip("#") + "/"
+        self.base_uri = self._safe_uri(normalized)
         self.rr = Namespace("http://www.w3.org/ns/r2rml#")
         self.ont = Namespace(self.base_uri)
 
@@ -231,7 +237,7 @@ class R2RMLGenerator:
         map_name = self._sanitize_name(class_label or table or f"Entity_{idx}")
 
         # Create TriplesMap
-        triples_map = URIRef(f"{self.base_uri}TriplesMap_{map_name}")
+        triples_map = self._uriref(f"{self.base_uri}TriplesMap_{map_name}")
         g.add((triples_map, RDF.type, self.rr.TriplesMap))
 
         # Add comment for clarity
@@ -239,7 +245,7 @@ class R2RMLGenerator:
         g.add((triples_map, RDFS.comment, Literal(comment)))
 
         # Logical Table - using SQL query or table name
-        logical_table = BNode()
+        logical_table = BNode(f"lt_{map_name}")
         g.add((triples_map, self.rr.logicalTable, logical_table))
 
         if sql_query:
@@ -256,56 +262,57 @@ class R2RMLGenerator:
             )
 
         # Subject Map
-        subject_map = BNode()
+        subject_map = BNode(f"sm_{map_name}")
         g.add((triples_map, self.rr.subjectMap, subject_map))
 
-        # Template for subject URI - ALWAYS use taxonomy base URI
-        class_name = (
-            self._extract_local_name(class_uri) if class_uri else (class_label or table)
-        )
-        class_name = self._sanitize_name(class_name)
+        # Template for subject URI - ALWAYS use taxonomy base URI.
+        # Shared with relationship mapping so subject/object URIs match.
+        class_name = self._entity_uri_name(class_uri, class_label, table)
+        # Column references inside rr:template must also be quoted when the
+        # column name is not a plain SQL identifier.
+        id_col_ref = self._quote_column(id_column)
 
         g.add(
             (
                 subject_map,
                 self.rr.template,
-                Literal(f"{self.base_uri}{class_name}/{{{id_column}}}"),
+                Literal(f"{self.base_uri}{class_name}/{{{id_col_ref}}}"),
             )
         )
 
         # Add class if specified
         if class_uri:
             if class_uri.startswith("http://") or class_uri.startswith("https://"):
-                g.add((subject_map, self.rr["class"], URIRef(class_uri)))
+                g.add((subject_map, self.rr["class"], self._uriref(class_uri)))
             else:
                 g.add(
                     (
                         subject_map,
                         self.rr["class"],
-                        URIRef(f"{self.base_uri}{class_uri}"),
+                        self._uriref(f"{self.base_uri}{class_uri}"),
                     )
                 )
 
         # Add label column mapping if specified
         if label_column:
-            pom = BNode()
+            pom = BNode(f"pom_{map_name}_label")
             g.add((triples_map, self.rr.predicateObjectMap, pom))
             g.add((pom, self.rr.predicate, RDFS.label))
 
-            obj_map = BNode()
+            obj_map = BNode(f"om_{map_name}_label")
             g.add((pom, self.rr.objectMap, obj_map))
-            g.add((obj_map, self.rr.column, Literal(label_column)))
+            g.add((obj_map, self.rr.column, Literal(self._quote_column(label_column))))
 
         # Ontology property-URI lookup for this class
         ont_props = (data_prop_uri_lookup or {}).get(class_uri, {})
 
         # Add attribute mappings (DatatypeProperty mappings)
         if attribute_mappings:
-            for attr_name, column_name in attribute_mappings.items():
+            for attr_name, column_name in sorted(attribute_mappings.items()):
                 if not column_name:
                     continue
 
-                pom = BNode()
+                pom = BNode(f"pom_{map_name}_{self._sanitize_name(attr_name)}")
                 g.add((triples_map, self.rr.predicateObjectMap, pom))
 
                 # Prefer the ontology property URI when it matches the
@@ -315,16 +322,16 @@ class R2RMLGenerator:
                 # the current base to avoid mixed-prefix predicates.
                 ont_uri = ont_props.get(attr_name.lower())
                 if ont_uri and ont_uri.startswith(self.base_uri):
-                    attr_uri = URIRef(ont_uri)
+                    attr_uri = self._uriref(ont_uri)
                 else:
-                    attr_uri = URIRef(
+                    attr_uri = self._uriref(
                         f"{self.base_uri}{self._sanitize_name(attr_name)}"
                     )
                 g.add((pom, self.rr.predicate, attr_uri))
 
-                obj_map = BNode()
+                obj_map = BNode(f"om_{map_name}_{self._sanitize_name(attr_name)}")
                 g.add((pom, self.rr.objectMap, obj_map))
-                g.add((obj_map, self.rr.column, Literal(column_name)))
+                g.add((obj_map, self.rr.column, Literal(self._quote_column(column_name))))
                 g.add((obj_map, self.rr.datatype, XSD.string))  # Default to string
 
     def _add_relationship_mapping(
@@ -430,7 +437,7 @@ class R2RMLGenerator:
         map_name = f"Rel_{prop_name}_{idx}"
 
         # Create TriplesMap for the relationship
-        triples_map = URIRef(f"{self.base_uri}TriplesMap_{map_name}")
+        triples_map = self._uriref(f"{self.base_uri}TriplesMap_{map_name}")
         g.add((triples_map, RDF.type, self.rr.TriplesMap))
 
         # Add comment for clarity
@@ -447,7 +454,7 @@ class R2RMLGenerator:
         )
 
         # Logical Table - using SQL query if provided
-        logical_table = BNode()
+        logical_table = BNode(f"lt_{map_name}")
         g.add((triples_map, self.rr.logicalTable, logical_table))
 
         if sql_query:
@@ -470,7 +477,7 @@ class R2RMLGenerator:
                     )
 
         # Subject Map - references the source entity
-        subject_map = BNode()
+        subject_map = BNode(f"sm_{map_name}")
         g.add((triples_map, self.rr.subjectMap, subject_map))
 
         source_class_name = self._resolve_class_name(
@@ -486,12 +493,12 @@ class R2RMLGenerator:
             (
                 subject_map,
                 self.rr.template,
-                Literal(f"{self.base_uri}{source_class_name}/{{{source_column}}}"),
+                Literal(f"{self.base_uri}{source_class_name}/{{{self._quote_column(source_column)}}}"),
             )
         )
 
         # Predicate Object Map
-        pom = BNode()
+        pom = BNode(f"pom_{map_name}")
         g.add((triples_map, self.rr.predicateObjectMap, pom))
 
         # Predicate Map - the relationship property.
@@ -499,21 +506,29 @@ class R2RMLGenerator:
         # base-URI change), rebuild it from the current base_uri.
         if property_uri.startswith("http://") or property_uri.startswith("https://"):
             if property_uri.startswith(self.base_uri):
-                g.add((pom, self.rr.predicate, URIRef(property_uri)))
+                g.add((pom, self.rr.predicate, self._uriref(property_uri)))
             else:
                 local = self._extract_local_name(property_uri)
                 g.add(
                     (
                         pom,
                         self.rr.predicate,
-                        URIRef(f"{self.base_uri}{self._sanitize_name(local)}"),
+                        self._uriref(
+                            f"{self.base_uri}{self._sanitize_name(local)}"
+                        ),
                     )
                 )
         else:
-            g.add((pom, self.rr.predicate, URIRef(f"{self.base_uri}{property_uri}")))
+            g.add(
+                (
+                    pom,
+                    self.rr.predicate,
+                    self._uriref(f"{self.base_uri}{property_uri}"),
+                )
+            )
 
         # Object Map - reference to target entity
-        obj_map = BNode()
+        obj_map = BNode(f"om_{map_name}")
         g.add((pom, self.rr.objectMap, obj_map))
 
         target_class_name = self._resolve_class_name(
@@ -529,7 +544,7 @@ class R2RMLGenerator:
             (
                 obj_map,
                 self.rr.template,
-                Literal(f"{self.base_uri}{target_class_name}/{{{target_column}}}"),
+                Literal(f"{self.base_uri}{target_class_name}/{{{self._quote_column(target_column)}}}"),
             )
         )
 
@@ -563,6 +578,20 @@ class R2RMLGenerator:
             result = entity_lookup.get(table)
         return result or {}
 
+    def _entity_uri_name(self, class_uri: str, class_label: str, table: str) -> str:
+        """Compute the class-name segment of an entity's subject URI template.
+
+        Single source of truth shared by ``_add_entity_mapping`` and
+        ``_resolve_class_name`` so that relationship subject/object URIs land in
+        the *exact* same namespace as the entity TriplesMap subject URIs
+        (issue #48). Mirrors: local name of the class URI, else the class
+        label, else the table name.
+        """
+        name = (
+            self._extract_local_name(class_uri) if class_uri else (class_label or table)
+        )
+        return self._sanitize_name(name)
+
     def _resolve_class_name(
         self,
         class_from_entity: str,
@@ -571,24 +600,34 @@ class R2RMLGenerator:
         entity: Dict,
         table: str,
     ) -> str:
-        """Resolve the actual entity class name for a URI template.
+        """Resolve the entity class name used in a relationship URI template.
 
-        Returns the real entity name (e.g. 'Customer', 'Contract') by trying
-        multiple sources. Never returns generic placeholders like 'Source' or 'Target'.
+        Returns the real entity name (e.g. 'Customer', 'Contract'). Never
+        returns generic placeholders like 'Source' or 'Target'.
 
         Priority:
-        1. Entity's ontology_class_label (from matched entity mapping — most reliable)
-        2. Extract local name from resolved class URI (entity lookup or config)
-        3. Class label from relationship config
-        4. Extract local name from class_uri directly
-        5. Table name
+        1. Matched entity mapping — mirror ``_add_entity_mapping`` *exactly*
+           (local name of the entity's ontology_class URI, else its label,
+           else its table) so relationship triples share the entity namespace.
+        2. No entity matched — extract local name from the resolved class URI.
+        3. Class label from the relationship config.
+        4. Extract local name from class_uri directly.
+        5. Table name.
         """
-        # Priority 1: Entity's own label (e.g. "Customer") — most reliable
-        entity_label = entity.get("ontology_class_label", "")
-        if entity_label:
-            return self._sanitize_name(entity_label)
+        # Priority 1: a matched entity — reproduce its subject-URI class name
+        # byte-for-byte. This is the fix for issue #48: previously the entity
+        # label was preferred here, but entities derive the URI from the class
+        # URI's local name, so labels that differ from the local name produced
+        # mismatched (unlinked) namespaces.
+        if entity:
+            return self._entity_uri_name(
+                entity.get("ontology_class", ""),
+                entity.get("ontology_class_label", ""),
+                entity.get("table") or entity.get("table_name", ""),
+            )
 
-        # Priority 2: Extract from resolved class URI (from entity lookup + config fallback)
+        # No entity matched — resolve from the relationship config / ontology.
+        # Priority 2: Extract from resolved class URI (config fallback)
         if class_from_entity:
             name = self._extract_local_name(class_from_entity)
             if name:
@@ -623,12 +662,53 @@ class R2RMLGenerator:
         )
         return "UnknownEntity"
 
+    def _quote_column(self, col: str) -> str:
+        """Return the column name always double-quoted per R2RML spec §7.4.
+
+        Double-quoting every column name is unconditionally safe and avoids
+        edge cases with reserved words, digit-leading names, or any future
+        column naming convention.
+
+        Already-quoted names (surrounded by double-quotes) are returned as-is.
+        Empty strings are returned unchanged.
+        """
+        if not col:
+            return col
+        if col.startswith('"') and col.endswith('"'):
+            return col
+        inner = col.replace('"', '""')  # escape any embedded double-quotes
+        return f'"{inner}"'
+
     def _sanitize_name(self, name: str) -> str:
         """Sanitize a name for use in URIs."""
         if name is None:
             return "unknown"
         sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", str(name))
         return sanitized or "unknown"
+
+    @staticmethod
+    def _safe_uri(uri: str) -> str:
+        """Percent-encode characters illegal in IRIs (e.g. spaces).
+
+        Ontology / domain names with spaces previously produced base URIs
+        and class IRIs that RDFLib refuses to serialize as Turtle.
+        """
+        if not uri:
+            return uri
+        parts = urlsplit(str(uri).strip())
+        return urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                quote(parts.path, safe=_IRI_SAFE),
+                parts.query,
+                quote(parts.fragment, safe=_IRI_SAFE),
+            )
+        )
+
+    def _uriref(self, uri: str) -> URIRef:
+        """Build a URIRef from a possibly dirty config URI."""
+        return URIRef(self._safe_uri(uri))
 
     def _extract_local_name(self, uri: str) -> str:
         """Extract the local name from a URI."""

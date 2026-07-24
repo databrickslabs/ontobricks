@@ -1,4 +1,4 @@
-"""Data-transfer objects for the digital twin domain."""
+"""Data-transfer objects for the knowledge graph domain."""
 
 from __future__ import annotations
 

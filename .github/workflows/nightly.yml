@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -76,7 +76,7 @@ jobs:
     # External tier — only on schedule, never on PR. Requires repository secrets.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -108,7 +108,7 @@ jobs:
     needs: [property, e2e, external-smoke]
     if: failure()
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Create or update tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

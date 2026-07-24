@@ -15,6 +15,17 @@ class TaskStatus(str, Enum):
 
 
 @dataclass
+class TaskLogEntry:
+    """One line in the live activity log surfaced to the UI."""
+
+    message: str
+    at: str
+
+    def to_dict(self) -> Dict[str, str]:
+        return asdict(self)
+
+
+@dataclass
 class TaskStep:
     """A step within a task."""
 
@@ -47,6 +58,7 @@ class Task:
     completed_at: Optional[str] = None
     steps: List[TaskStep] = field(default_factory=list)
     current_step: int = 0
+    log_entries: List[TaskLogEntry] = field(default_factory=list)
 
     def duration_seconds(self) -> Optional[float]:
         """Wall-clock duration in seconds.
@@ -95,4 +107,5 @@ class Task:
             "duration_seconds": self.duration_seconds(),
             "steps": [s.to_dict() for s in self.steps],
             "current_step": self.current_step,
+            "log_entries": [e.to_dict() for e in self.log_entries],
         }

@@ -72,7 +72,6 @@ def get_empty_domain() -> Dict[str, Any]:
             },
             "triplestore": {
                 "stats": {},
-                "source_versions": {},
             },
             "current_version": "1",
             "domain_folder": "",
@@ -102,6 +101,11 @@ def get_empty_domain() -> Dict[str, Any]:
         },
         "assignment": {"entities": [], "relationships": []},
         "design_layout": {"current_view": "default", "views": {}, "map": {}},
+        # Buffered ontology/mapping change-audit events (who/what/when).
+        # Appended as edits happen; flushed to the registry on save-to-uc.
+        # Kept out of _config_snapshot() and export_for_save() so it never
+        # affects change detection nor leaks into the persisted domain JSON.
+        "change_log": [],
         "settings": {
             "databricks": {
                 "host": "",
@@ -581,6 +585,49 @@ class DomainSession:
             ),
         )
 
+    def record_change(
+        self,
+        action: str,
+        *,
+        entity_type: str = "",
+        entity_ref: str = "",
+        summary: str = "",
+        source: str = "user",
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Buffer a fine-grained ontology/mapping change-audit event.
+
+        Events accumulate in the session (surviving across requests via the
+        session file) and are flushed to the registry as one batch when the
+        domain version is saved to Unity Catalog. Captures the real edit time
+        in ``ts`` so the trail reflects *when* each change happened, not the
+        (later) save time. ``source`` is ``"agent"`` for AI-assistant edits.
+
+        Callers must still call :meth:`save` to persist the buffer.
+        """
+        log = self._data.setdefault("change_log", [])
+        log.append(
+            {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "action": action,
+                "entity_type": entity_type or "",
+                "entity_ref": entity_ref or "",
+                "summary": summary or "",
+                "source": source or "user",
+                "meta": meta or {},
+            }
+        )
+
+    def drain_change_log(self) -> list:
+        """Return the buffered change events and clear the buffer.
+
+        Called at save-to-registry time to flush the audit batch. The
+        cleared buffer is persisted by the subsequent :meth:`save`.
+        """
+        log = list(self._data.get("change_log", []) or [])
+        self._data["change_log"] = []
+        return log
+
     def save(self):
         """Save project data to session.
 
@@ -720,6 +767,10 @@ class DomainSession:
             }
         )
         self.clear_generated_content()
+        self.record_change(
+            "ontology_reset", entity_type="ontology",
+            summary="Ontology, mappings and layout reset",
+        )
         self.save()
 
     def clear_uc_metadata(self):
@@ -869,7 +920,7 @@ class DomainSession:
 
     @property
     def last_build(self) -> str:
-        """ISO timestamp of the last successful Digital Twin build."""
+        """ISO timestamp of the last successful Knowledge Graph build."""
         return self._data["domain"].get("last_build", "")
 
     @last_build.setter
@@ -1060,7 +1111,7 @@ class DomainSession:
 
     @property
     def triplestore(self) -> Dict[str, Any]:
-        """Get the triplestore configuration node (stats, source_versions)."""
+        """Get the triplestore configuration node (build stats/timestamps)."""
         return self._data["domain"].get("triplestore", {})
 
     @property
@@ -1224,7 +1275,7 @@ class DomainSession:
             try:
                 from back.core.w3c.r2rml.R2RMLGenerator import R2RMLGenerator
 
-                base_uri = self.ontology.get("base_uri", DEFAULT_BASE_URI)
+                base_uri = self.ontology.get("base_uri") or DEFAULT_BASE_URI
                 generator = R2RMLGenerator(base_uri)
                 r2rml_content = generator.generate_mapping(
                     self.assignment, self.ontology
@@ -1281,6 +1332,7 @@ class DomainSession:
         ontology_export = {
             "name": self._data["ontology"].get("name", ""),
             "base_uri": self._data["ontology"].get("base_uri", ""),
+            "base_uri_auto": self._data["ontology"].get("base_uri_auto", False),
             "description": self._data["ontology"].get("description", ""),
             "classes": self._data["ontology"].get("classes", []),
             "properties": self._data["ontology"].get("properties", []),
