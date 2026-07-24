@@ -883,16 +883,16 @@ class DigitalTwin:
 
     @staticmethod
     def resolve_graph_engine(domain: Any, settings: Any) -> str:
-        """Return the globally configured graph DB engine.
+        """Return the graph DB engine resolved from the per-domain backend choice.
 
-        Currently always resolves to ``"lakebase"`` — the only registered
-        engine.  Future engines plug in via ``back/core/graphdb/<engine>/``
-        and update :class:`back.core.graphdb.GraphDBFactory`.
+        The selection lives in ``DomainSession.info['graph_backend']`` (Domain
+        Information -> Knowledge Graph tab) and maps to a concrete engine
+        (``lakebase`` or ``neo4j``) via
+        :class:`back.core.graphdb.GraphDBFactory`.
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        raw = GraphDBFactory._resolve_graph_engine(domain, settings) or "lakebase"
-        return raw if raw == "lakebase" else "lakebase"
+        return GraphDBFactory._resolve_graph_engine(domain, settings) or "lakebase"
 
     async def fetch_digital_twin_existence(self, settings) -> Dict[str, Any]:
         """Live checks for SQL view, snapshot table, and graph artefacts.

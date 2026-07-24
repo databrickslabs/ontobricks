@@ -61,7 +61,7 @@ OntoBricks maintains **two complementary storage layers**:
 | **Triple Store** | Delta views in Unity Catalog (SQL Warehouse) | Governance, lineage, SPARQL source-of-truth |
 | **Graph DB** | Lakebase Postgres (flat triple table or UNION view) | Fast in-process graph traversal, reasoning, cohort writes |
 
-The Graph DB engine is selected under **Settings → Graph DB** and is always `lakebase` in the default bundle.
+The Graph DB engine is selected **per domain** under **Domain → Information → Knowledge Graph** (defaults to `lakebase`). Engine *connection* settings remain workspace-global under **Settings → Back end**.
 
 ---
 

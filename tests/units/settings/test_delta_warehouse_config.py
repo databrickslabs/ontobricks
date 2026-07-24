@@ -133,15 +133,12 @@ class TestDeltaDatabricksCredentials:
 
 
 class TestSettingsServiceDeltaWarehouse:
-    def test_get_triple_store_backend_includes_delta_warehouse(self):
+    def test_get_delta_warehouse_result_includes_warehouse_and_location(self):
         domain = MagicMock()
         with patch.object(
             SettingsService, "_resolve_context", return_value=(domain, "h", "t", REGISTRY_CFG)
         ), patch(
             "back.objects.domain.SettingsService.global_config_service.load"
-        ), patch(
-            "back.objects.domain.SettingsService.global_config_service.get_triple_store_backend",
-            return_value="databricks",
         ), patch(
             "back.objects.domain.SettingsService.global_config_service.get_delta_warehouse_id",
             return_value="wh-delta",
@@ -152,7 +149,7 @@ class TestSettingsServiceDeltaWarehouse:
             "back.objects.domain.SettingsService.resolve_delta_warehouse_id",
             return_value="wh-delta",
         ):
-            result = SettingsService.get_triple_store_backend_result(
+            result = SettingsService.get_delta_warehouse_result(
                 MagicMock(), MagicMock()
             )
         assert result["delta_warehouse_id"] == "wh-delta"
@@ -208,43 +205,3 @@ class TestSettingsServiceDeltaWarehouse:
         mock_set.assert_called_once_with("h", "t", REGISTRY_CFG, "wh-delta")
         mock_mirror.assert_called_once()
         assert mock_mirror.call_args.kwargs.get("delta_warehouse_id") == "wh-delta"
-
-    def test_set_triple_store_backend_persists_delta_warehouse(self):
-        domain = MagicMock()
-        session_mgr = MagicMock()
-        with patch.object(
-            SettingsService, "_resolve_context", return_value=(domain, "h", "t", REGISTRY_CFG)
-        ), patch.object(SettingsService, "require_admin_error"), patch(
-            "back.objects.domain.SettingsService.global_config_service.set_triple_store_backend",
-            return_value=(True, "ok"),
-        ), patch(
-            "back.objects.domain.SettingsService.global_config_service.get_triple_store_backend",
-            return_value="databricks",
-        ), patch(
-            "back.objects.domain.SettingsService.global_config_service.get_delta_warehouse_id",
-            return_value="wh-delta",
-        ), patch(
-            "back.objects.domain.SettingsService.global_config_service.set_delta_warehouse_id",
-            return_value=(True, "ok"),
-        ) as mock_set_delta, patch.object(
-            SettingsService, "_mirror_graph_engine_to_domain_registry"
-        ) as mock_mirror, patch(
-            "back.objects.domain.SettingsService.resolve_delta_warehouse_id",
-            return_value="wh-delta",
-        ):
-            result = SettingsService.set_triple_store_backend_result(
-                "databricks",
-                "a@b.com",
-                "tok",
-                session_mgr,
-                MagicMock(),
-                delta_warehouse_id="wh-delta",
-                persist_delta_warehouse=True,
-            )
-        assert result["delta_warehouse_id"] == "wh-delta"
-        mock_set_delta.assert_called_once_with("h", "t", REGISTRY_CFG, "wh-delta")
-        mock_mirror.assert_called_once_with(
-            session_mgr,
-            triple_store_backend="databricks",
-            delta_warehouse_id="wh-delta",
-        )

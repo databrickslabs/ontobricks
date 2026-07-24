@@ -789,7 +789,7 @@ before closing* (**Save & Close** / **Close without saving** / **Cancel**), then
 edit lock and returns you to the Home page. Once you close, the next person can open the
 domain in edit mode.
 
-**Switching version** — the **Switch** button (between **Save** and **Close**) opens a popup
+**Switching version** — the **Versions** button (between **Save** and **Close**) opens a popup
 listing every version of the currently open domain, with the current one flagged. Pick the
 current version to **reload** it from the Registry (discarding in-session edits) or another
 version to **switch** to it. On a **DRAFT** version, a *"Save my changes before switching"*
@@ -886,7 +886,7 @@ Three related ideas:
 
 ### Domain Save/Load
 
-Domains are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the **Save** button (in the domain sub-navigation) and the **Load Domain** option in the top menu to persist and restore your work; the **Switch** button reloads the current domain or loads another of its versions from the Registry, and the **Close** button releases the edit lock and returns you to the Home page.
+Domains are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the **Save** button (in the domain sub-navigation) and the **Load Domain** option in the top menu to persist and restore your work; the **Versions** button reloads the current domain or loads another of its versions from the Registry, and the **Close** button releases the edit lock and returns you to the Home page.
 
 ### Best Practices for Version Control
 
@@ -1151,7 +1151,7 @@ See the [MCP Server documentation](mcp.md) for full details including local usag
 - Lakebase Postgres is the source of truth for the graph engine — verify the App is bound to the Lakebase instance (`PGHOST` / `PGDATABASE` env vars set by the Apps runtime)
 - If the Lakebase instance was paused or scaled to zero, the connection layer retries on `SQLSTATE 57P03`. Wait a few seconds and re-trigger the build.
 - Re-run the Knowledge Graph sync — the build is idempotent (`INSERT … ON CONFLICT DO NOTHING`)
-- For `managed_synced` mode, check the Lakeflow synced-table status under **Settings → Graph DB**
+- For `managed_synced` mode, check the Lakeflow synced-table status under **Settings → Back end**
 
 ### Design Changes Not Saving
 
@@ -1369,7 +1369,7 @@ If all checks pass:
 
 > **Note**: If the triple store table already exists, you can choose to **drop and recreate** it or append to the existing data.
 
-> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the active Graph DB engine (Lakebase Postgres today). The Graph DB engine is selectable in **Settings → Graph DB**.
+> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the domain's Graph DB engine (Lakebase Postgres, Databricks Delta, or Neo4j). The backend is chosen **per domain** under **Domain → Information → Knowledge Graph** (engine *connection* settings live under **Settings → Back end**).
 
 ---
 

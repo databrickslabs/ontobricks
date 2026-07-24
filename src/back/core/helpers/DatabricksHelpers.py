@@ -121,7 +121,7 @@ class DatabricksHelpers:
 
         Resolution order:
 
-        1. **Global config** ``delta_warehouse_id`` (Settings → Triple store → Delta)
+        1. **Global config** ``delta_warehouse_id`` (Settings → Back end → Delta)
         2. Fallback to :meth:`resolve_warehouse_id` (global warehouse)
         """
         from back.objects.session import global_config_service

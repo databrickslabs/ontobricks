@@ -100,3 +100,189 @@ The PR#47 merge changed `_renderEngineUi` to actively remove `d-none` from `dtLa
 
 ### Test results
 No unit tests cover CSS layout; visual fix verified via code inspection.
+
+---
+
+## Per-domain graph backend selection (moved out of global Settings)
+
+### Context
+
+The graph backend (Lakebase / Delta / Neo4j) was an instance-wide global setting chosen in
+Settings → Triple Store → Back End. Moved the *selection* to a mandatory per-domain choice in
+Domain → Information → Knowledge Graph, exposed as a single unified dropdown. The backend
+selector was removed from admin Settings. Engine *connection* config (Neo4j Bolt creds, Lakebase
+schema/sync, Delta SQL warehouse) stays workspace-global — only the selection moved.
+
+### Changes
+
+1. **src/back/core/graphdb/GraphDBFactory.py** — Added the unified per-domain vocabulary
+   (`GRAPH_BACKENDS`, `DEFAULT_GRAPH_BACKEND`, `normalize_graph_backend`) and `_resolve_graph_backend`.
+   Rewrote `_resolve_triple_store_backend` / `_resolve_graph_engine` to read
+   `DomainSession.info['graph_backend']` and map it (`lakebase`→lakebase, `databricks`→delta,
+   `neo4j`→lakebase+neo4j). `_resolve_graph_engine_config` now only reads global connection config;
+   removed the `domain.settings['registry']` selection mirror.
+
+2. **src/back/objects/session/DomainSession.py** — Seeded `info['graph_backend'] = "lakebase"` in the
+   empty-domain template.
+
+3. **src/back/objects/domain/Domain.py** — `save_domain_info` persists a validated `graph_backend`;
+   `get_domain_info` / `get_domain_template_data` expose it; added `_coerce_graph_backend` validator
+   (defaults to `lakebase`).
+
+4. **src/back/objects/digitaltwin/DigitalTwin.py** — `resolve_graph_engine` now returns the resolved
+   per-domain engine (no longer collapses everything to `lakebase`).
+
+5. **src/back/objects/session/GlobalConfigService.py** — Removed `get/set_graph_engine`,
+   `get/set_triple_store_backend`, `ALLOWED_GRAPH_ENGINES`, `ALLOWED_TRIPLE_STORE_BACKENDS`, and the
+   `graph_engine` / `triple_store_backend` keys from `_empty()`. Kept `graph_engine_config`.
+
+6. **src/back/objects/domain/SettingsService.py** — Removed `get/set_graph_engine_result` and
+   `set_triple_store_backend_result`; replaced `get_triple_store_backend_result` with
+   `get_delta_warehouse_result` (drops backend/allowed fields, keeps Delta warehouse + registry info);
+   dropped `graph_engine` from `build_registry_get_payload`; simplified
+   `_mirror_graph_engine_to_domain_registry` to connection-only (config + delta_warehouse_id).
+
+7. **src/api/routers/internal/settings.py** — Removed GET/POST `/graph-engine` and
+   `/triple-store-backend` selection endpoints; added GET `/delta-warehouse`.
+
+8. **src/shared/fastapi/main.py** — Updated the permission-middleware read-only exception list
+   (`/settings/graph-engine` → `/settings/delta-warehouse`).
+
+9. **src/front/routes/home.py** — Settings page no longer resolves a global `graph_engine`.
+
+10. **src/front/templates/partials/domain/_domain_information.html** — Added the mandatory
+    `#domainGraphBackend` dropdown to the Knowledge Graph tab with a rebuild warning.
+
+11. **src/front/static/domain/js/domain.js** — Added `graph_backend` to the `saveDomainInfo` payload.
+
+12. **src/front/static/domain/js/domain-information.js** — Loads/refreshes the backend dropdown.
+
+13. **src/front/templates/settings.html** — Removed the backend radio cards + legacy engine select;
+    replaced with an info banner pointing to the per-domain choice.
+
+14. **src/front/static/config/js/settings.js** — Removed selection helpers/wiring; renamed
+    `loadTripleStoreBackend` → `loadDeltaWarehouseState` (GET `/settings/delta-warehouse`);
+    `saveGraphDbSettings` now persists only connection config + Delta warehouse.
+
+15. **tests** — Updated `test_triple_store_backend_config.py`, `test_graph_engine_config.py`,
+    `test_delta_warehouse_config.py`, `test_permission_middleware.py` for the new per-domain design.
+
+### Modified files
+
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/objects/session/DomainSession.py`
+- `src/back/objects/domain/Domain.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/shared/fastapi/main.py`
+- `src/front/routes/home.py`
+- `src/front/templates/partials/domain/_domain_information.html`
+- `src/front/templates/settings.html`
+- `src/front/static/domain/js/domain.js`
+- `src/front/static/domain/js/domain-information.js`
+- `src/front/static/config/js/settings.js`
+- `tests/units/graphdb/delta/test_triple_store_backend_config.py`
+- `tests/units/settings/test_graph_engine_config.py`
+- `tests/units/settings/test_delta_warehouse_config.py`
+- `tests/units/auth/test_permission_middleware.py`
+
+### Test results
+
+`uv run pytest -q -m "not scenario"` → **3243 passed, 309 skipped, 1 pre-existing failure**
+(`test_graphql_schema.py::test_schema_content_shape`, confirmed failing on a clean tree before these
+changes — unrelated to this work).
+
+
+## Rename navbar Switch button to Versions
+
+Context: User-facing navbar label for the domain version switcher was "Switch";
+rename it to "Versions" for clearer intent.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Changed domainSwitch navbar_action label from "Switch" to "Versions".
+
+2. docs/user-guide.md
+   Updated user-guide references from **Switch** to **Versions** button.
+
+Modified files:
+- src/front/config/menu_config.json
+- docs/user-guide.md
+
+Tests: `uv run pytest -q -m "not scenario"` → 3243 passed, 309 skipped, 1 pre-existing failure (`test_graphql_schema.py::test_schema_content_shape`, unrelated).
+
+
+## Remove the "Back End" settings page
+
+Context: With graph-backend *selection* now living per-domain (Domain → Information →
+Knowledge Graph), the Settings → Triple store → "Back End" sub-page held only an
+informational banner and no longer served a purpose. Removed it entirely; the shared
+engine *connection* config still lives under the Lakebase / Delta / Neo4j sidebar sections.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Removed the entire `#ts-global-section` block (header, `backendSectionBanner`
+   spinner, and the `graphDbTabContent` info banner).
+
+2. src/front/config/menu_config.json
+   Removed the `ts-global` / "Back End" item from the Triple store sidebar group.
+
+3. src/front/static/config/js/settings.js
+   Dropped the `setBackendTabLoading` helper and its calls; removed `ts-global` from
+   the `sidebarSectionChanged` lazy-load guard (now scoped to lakebase/delta); the
+   Delta warehouse preload runs without the removed banner wrapper.
+
+4. src/front/static/global/css/config.css
+   Removed the dead `#ts-global-section.active` selector, the `.ob-backend-card*`
+   selection-card styles, and the unused `.settings-graph-engine-select` rule.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/config/menu_config.json
+- src/front/static/config/js/settings.js
+- src/front/static/global/css/config.css
+
+Tests: `uv run pytest -q -m "not scenario" tests/units/settings/` → 134 passed. `node --check settings.js` → OK.
+
+
+## Rename Settings sidebar section Triple store → Back end
+
+Context: User-facing Settings menu group label was "Triple store"; rename it to
+"Back end" and align docs / health messages that cite that UI path.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Changed settings-triplestore group title from "Triple store" to "Back end".
+
+2. docs/user-guide.md, docs/lakebase-graphdb.md, docs/graphdb-integration.md, README.md
+   Updated Settings → Triple Store path references to Settings → Back end.
+
+3. src/shared/fastapi/health.py, src/back/core/helpers/DatabricksHelpers.py,
+   src/api/routers/internal/settings.py, src/api/routers/internal/dtwin.py,
+   src/front/static/config/js/settings.js
+   Updated user/help strings that pointed at the old Settings section name.
+
+4. tests/integration/neo4j_smoke_test.md, docs/pr47-neo4j-demo/*
+   Aligned smoke/demo navigation paths with the new section label.
+
+Modified files:
+- src/front/config/menu_config.json
+- docs/user-guide.md
+- docs/lakebase-graphdb.md
+- docs/graphdb-integration.md
+- README.md
+- src/shared/fastapi/health.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/api/routers/internal/settings.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/config/js/settings.js
+- tests/integration/neo4j_smoke_test.md
+- docs/pr47-neo4j-demo/secret-configuration.md
+- docs/pr47-neo4j-demo/README.md
+
+Tests: `uv run pytest -q -m "not scenario"` → 3243 passed, 309 skipped, 1 pre-existing failure (`test_graphql_schema.py::test_schema_content_shape`, unrelated).

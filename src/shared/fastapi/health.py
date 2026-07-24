@@ -1273,7 +1273,7 @@ def _check_delta_warehouse(settings: Settings) -> Tuple[str, str]:
         return (
             _OK,
             f"Delta backend not selected (current backend: {backend}) — skipped. "
-            "Switch to Delta in Settings → Triple store → Back End to enable.",
+            "Switch to Delta in Settings → Back end → Delta to enable.",
         )
     if not delta_warehouse_id:
         return (
@@ -1553,7 +1553,7 @@ def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any
             "title": "Delta Triple Store",
             "description": (
                 "Checks for the Delta (Unity Catalog) triple-store backend. "
-                "When Delta is selected in Settings → Triple store → Back End, OntoBricks "
+                "When Delta is selected in Settings → Back end → Delta, OntoBricks "
                 "stores triples as VIEW + Delta TABLE pairs inside the registry UC schema. "
                 "A dedicated SQL warehouse can be configured in Settings → Delta → SQL Warehouse "
                 "for Delta graph queries (falls back to the global warehouse if unset). "

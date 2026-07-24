@@ -16,7 +16,7 @@ Manual procedure to validate the Neo4j graph DB engine end-to-end against a live
 ## Step 1 — Switch the engine
 
 1. Open the deployed app: https://ontobricks-050-7474653167307611.aws.databricksapps.com
-2. Navigate to **Settings → Triple store → Global**.
+2. Navigate to **Settings → Back end → Neo4j**.
 3. Confirm the **Graph DB Engine** dropdown lists both `Lakebase (Postgres)` and `Neo4j (Bolt)`.
 4. Select **Neo4j (Bolt)** and click **Save** at the top.
 5. **Expected:** save succeeds, banner says *"All settings saved"*.
@@ -24,7 +24,7 @@ Manual procedure to validate the Neo4j graph DB engine end-to-end against a live
 
 ## Step 2 — Configure the connection
 
-1. In the left menu, click **Triple store → Neo4j**.
+1. In the left menu, click **Back end → Neo4j**.
 2. Fill the form:
    - **Bolt URI:** `neo4j+s://b4810af7.databases.neo4j.io`
    - **Database:** `neo4j`

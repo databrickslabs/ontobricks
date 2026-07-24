@@ -1,28 +1,56 @@
-"""Tests for triple_store_backend global config."""
+"""Tests for the per-domain graph backend resolution."""
 
 from unittest.mock import MagicMock, patch
 
 from back.core.helpers import effective_graph_query_table
-from back.objects.session.GlobalConfigService import GlobalConfigService
+from back.core.graphdb.GraphDBFactory import (
+    GRAPH_BACKENDS,
+    GraphDBFactory,
+    normalize_graph_backend,
+)
 
 REGISTRY = {"catalog": "c", "schema": "s", "volume": "v"}
 
 
-class TestTripleStoreBackendConfig:
+class TestGraphBackendVocabulary:
     def test_allowed_backends(self):
-        assert "databricks" in GlobalConfigService.ALLOWED_TRIPLE_STORE_BACKENDS
-        assert "lakebase" in GlobalConfigService.ALLOWED_TRIPLE_STORE_BACKENDS
+        assert set(GRAPH_BACKENDS) == {"lakebase", "databricks", "neo4j"}
 
-    def test_default_is_lakebase(self):
-        gcs = GlobalConfigService()
-        empty = gcs._empty()
-        assert empty.get("triple_store_backend") == "lakebase"
+    def test_normalize_defaults_to_lakebase(self):
+        assert normalize_graph_backend(None) == "lakebase"
+        assert normalize_graph_backend("") == "lakebase"
+        assert normalize_graph_backend("unknown") == "lakebase"
 
-    def test_set_invalid_rejected(self):
-        gcs = GlobalConfigService()
-        ok, msg = gcs.set_triple_store_backend("", "", REGISTRY, "neo4j")
-        assert not ok
-        assert "Unknown" in msg
+    def test_normalize_case_insensitive(self):
+        assert normalize_graph_backend("  NEO4J ") == "neo4j"
+        assert normalize_graph_backend("Databricks") == "databricks"
+
+
+class TestPerDomainResolution:
+    def _domain(self, backend):
+        d = MagicMock()
+        d.info = {"graph_backend": backend}
+        return d
+
+    def test_lakebase_maps_to_lakebase(self):
+        d = self._domain("lakebase")
+        assert GraphDBFactory._resolve_triple_store_backend(d) == "lakebase"
+        assert GraphDBFactory._resolve_graph_engine(d) == "lakebase"
+
+    def test_databricks_maps_to_delta_backend(self):
+        d = self._domain("databricks")
+        assert GraphDBFactory._resolve_triple_store_backend(d) == "databricks"
+
+    def test_neo4j_maps_to_neo4j_engine(self):
+        d = self._domain("neo4j")
+        assert GraphDBFactory._resolve_triple_store_backend(d) == "lakebase"
+        assert GraphDBFactory._resolve_graph_engine(d) == "neo4j"
+
+    def test_missing_defaults_to_lakebase(self):
+        d = MagicMock()
+        d.info = {}
+        assert GraphDBFactory._resolve_triple_store_backend(d) == "lakebase"
+        assert GraphDBFactory._resolve_graph_engine(d) == "lakebase"
 
 
 class TestEffectiveGraphQueryTable:

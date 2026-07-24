@@ -168,6 +168,9 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "status": self._s.info.get("status", "DRAFT"),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "graph_backend": self._coerce_graph_backend(
+                self._s.info.get("graph_backend")
+            ),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -284,6 +287,12 @@ class Domain:
                         self._s.info.get("review_quorum", 1),
                     )
                 ),
+                "graph_backend": self._coerce_graph_backend(
+                    data.get(
+                        "graph_backend",
+                        self._s.info.get("graph_backend"),
+                    )
+                ),
             }
         )
 
@@ -317,6 +326,9 @@ class Domain:
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "graph_backend": self._coerce_graph_backend(
+                self._s.info.get("graph_backend")
+            ),
         }
 
     @staticmethod
@@ -326,6 +338,13 @@ class Domain:
             return max(1, int(raw))
         except (TypeError, ValueError):
             return 1
+
+    @staticmethod
+    def _coerce_graph_backend(raw: Any) -> str:
+        """Normalise the per-domain graph backend (default ``lakebase``)."""
+        from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+
+        return normalize_graph_backend(raw if isinstance(raw, str) else None)
 
     @staticmethod
     def _sanitize_base_uri(uri: str) -> str:
@@ -403,6 +422,9 @@ class Domain:
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "graph_backend": self._coerce_graph_backend(
+                self._s.info.get("graph_backend")
+            ),
             "delta": delta,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,

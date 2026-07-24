@@ -32,7 +32,7 @@ on 2026-06-12 using a real PFAS research-paper ontology.
 
 ## What was tested live
 
-- ✅ Settings → Triple store → Global engine swap to Neo4j
+- ✅ Settings → Back end → Neo4j engine swap
 - ✅ Settings → Neo4j config form (URI / database / basic-auth / encrypted)
 - ✅ Domain → Documents PDF upload → Ontology → Generate (AI)
 - ✅ Ontology Designer (with auto-generated icons)
@@ -55,7 +55,7 @@ export NEO4J_USER=neo4j
 export NEO4J_PASS=<password>
 make deploy            # to a fevm-* workspace with --extra neo4j
 # then in the deployed app:
-# Settings → Triple Store → Global → Neo4j (Bolt) → fill creds → Save
+# Settings → Back end → Neo4j (Bolt) → fill creds → Save
 # Domain → Build  (writes triples via Bolt)
 # Verify: tests/integration/neo4j_e2e_smoke.py  — 9 / 9 assertions
 ```

@@ -27,39 +27,29 @@ def _mock_context():
 
 
 # ---------------------------------------------------------------
-#  GlobalConfigService – graph_engine
+#  GlobalConfigService – graph_engine selection removed
+#
+#  The graph backend *selection* (formerly the global ``graph_engine`` /
+#  ``triple_store_backend`` keys + get/set helpers) moved to a mandatory
+#  per-domain choice — see tests/units/graphdb/delta/
+#  test_triple_store_backend_config.py. Only the engine *connection* config
+#  (``graph_engine_config``) remains workspace-global and is covered below.
 # ---------------------------------------------------------------
 
 
-class TestGlobalConfigGraphEngine:
+class TestGraphEngineSelectionRemovedFromGlobal:
 
-    def test_empty_defaults_contain_graph_engine(self):
+    def test_empty_defaults_have_no_selection_keys(self):
         empty = GlobalConfigService._empty()
-        assert "graph_engine" in empty
-        assert empty["graph_engine"] == "lakebase"
+        assert "graph_engine" not in empty
+        assert "triple_store_backend" not in empty
 
-    def test_get_graph_engine_default(self):
+    def test_no_global_selection_helpers(self):
         svc = GlobalConfigService()
-        with patch.object(svc, "load", return_value=GlobalConfigService._empty()):
-            engine = svc.get_graph_engine("h", "t", REGISTRY_CFG)
-        assert engine == "lakebase"
-
-    def test_get_graph_engine_falls_back_on_unknown(self):
-        svc = GlobalConfigService()
-        data = GlobalConfigService._empty()
-        data["graph_engine"] = "unknown_engine"
-        with patch.object(svc, "load", return_value=data):
-            engine = svc.get_graph_engine("h", "t", REGISTRY_CFG)
-        assert engine == "lakebase"
-
-    def test_set_graph_engine_lakebase_valid(self):
-        svc = GlobalConfigService()
-        with patch.object(svc, "_save", return_value=(True, "ok")) as mock_save:
-            ok, msg = svc.set_graph_engine("h", "t", REGISTRY_CFG, "lakebase")
-        assert ok
-        mock_save.assert_called_once_with(
-            "h", "t", REGISTRY_CFG, {"graph_engine": "lakebase"}
-        )
+        assert not hasattr(svc, "get_graph_engine")
+        assert not hasattr(svc, "set_graph_engine")
+        assert not hasattr(svc, "get_triple_store_backend")
+        assert not hasattr(svc, "set_triple_store_backend")
 
     def test_set_graph_engine_config_rejects_bad_schema(self):
         svc = GlobalConfigService()
@@ -68,26 +58,6 @@ class TestGlobalConfigGraphEngine:
         )
         assert not ok
         assert "schema" in msg.lower() or "invalid" in msg.lower()
-
-    def test_set_graph_engine_invalid_rejected(self):
-        svc = GlobalConfigService()
-        ok, msg = svc.set_graph_engine("h", "t", REGISTRY_CFG, "neo4j")
-        assert not ok
-        assert "Unknown graph engine" in msg
-
-    def test_set_graph_engine_empty_rejected(self):
-        svc = GlobalConfigService()
-        ok, msg = svc.set_graph_engine("h", "t", REGISTRY_CFG, "")
-        assert not ok
-
-    def test_set_graph_engine_normalises_case(self):
-        svc = GlobalConfigService()
-        with patch.object(svc, "_save", return_value=(True, "ok")) as mock_save:
-            ok, _ = svc.set_graph_engine("h", "t", REGISTRY_CFG, "  LAKEBASE  ")
-        assert ok
-        mock_save.assert_called_once_with(
-            "h", "t", REGISTRY_CFG, {"graph_engine": "lakebase"}
-        )
 
 
 # ---------------------------------------------------------------
@@ -264,73 +234,6 @@ class TestGlobalConfigGraphEngineConfig:
 
 
 # ---------------------------------------------------------------
-#  SettingsService – graph engine orchestration
-# ---------------------------------------------------------------
-
-
-class TestSettingsServiceGraphEngine:
-
-    def test_get_graph_engine_result(self):
-        session_mgr, settings = _mock_context()
-
-        with (
-            patch.object(
-                SettingsService,
-                "_resolve_context",
-                return_value=(MagicMock(), "h", "t", REGISTRY_CFG),
-            ),
-            patch.object(_svc_module, "global_config_service") as gcs,
-        ):
-            gcs.get_graph_engine.return_value = "lakebase"
-            gcs.ALLOWED_GRAPH_ENGINES = ("lakebase",)
-            result = SettingsService.get_graph_engine_result(session_mgr, settings)
-
-        assert result["success"]
-        assert result["graph_engine"] == "lakebase"
-        assert "lakebase" in result["allowed_engines"]
-
-    def test_set_graph_engine_result_success(self):
-        session_mgr, settings = _mock_context()
-
-        with (
-            patch.object(
-                SettingsService,
-                "_resolve_context",
-                return_value=(MagicMock(), "h", "t", REGISTRY_CFG),
-            ),
-            patch.object(SettingsService, "require_admin_error"),
-            patch.object(SettingsService, "_mirror_graph_engine_to_domain_registry"),
-            patch.object(_svc_module, "global_config_service") as gcs,
-        ):
-            gcs.set_graph_engine.return_value = (True, "ok")
-            gcs.get_graph_engine.return_value = "lakebase"
-            result = SettingsService.set_graph_engine_result(
-                "lakebase", "", "", session_mgr, settings
-            )
-
-        assert result["success"]
-        assert result["graph_engine"] == "lakebase"
-
-    def test_set_graph_engine_result_validation_error(self):
-        session_mgr, settings = _mock_context()
-
-        with (
-            patch.object(
-                SettingsService,
-                "_resolve_context",
-                return_value=(MagicMock(), "h", "t", REGISTRY_CFG),
-            ),
-            patch.object(SettingsService, "require_admin_error"),
-            patch.object(_svc_module, "global_config_service") as gcs,
-        ):
-            gcs.set_graph_engine.return_value = (False, "Unknown graph engine 'neo4j'")
-            with pytest.raises(ValidationError, match="Unknown graph engine"):
-                SettingsService.set_graph_engine_result(
-                    "neo4j", "", "", session_mgr, settings
-                )
-
-
-# ---------------------------------------------------------------
 #  SettingsService – graph engine config orchestration
 # ---------------------------------------------------------------
 
@@ -423,7 +326,7 @@ class TestSettingsServiceGraphEngineConfig:
 
 class TestSettingsServiceRegistryPayloadGraphEngine:
 
-    def test_build_registry_get_payload_includes_graph_engine(self):
+    def test_build_registry_get_payload_includes_graph_engine_config(self):
         session_mgr, settings = _mock_context()
         rcfg = MagicMock()
         rcfg.is_configured = True
@@ -451,15 +354,15 @@ class TestSettingsServiceRegistryPayloadGraphEngine:
             patch.object(SettingsService, "_lakebase_runtime_info", return_value={}),
             patch.object(_svc_module, "global_config_service") as gcs,
         ):
-            gcs.get_graph_engine.return_value = "lakebase"
             gcs.get_graph_engine_config.return_value = {"schema": "ontobricks_graph"}
             payload = SettingsService.build_registry_get_payload(session_mgr, settings)
 
         assert payload["success"]
-        assert payload["graph_engine"] == "lakebase"
+        # Backend selection moved per-domain — no graph_engine field here.
+        assert "graph_engine" not in payload
         assert payload["graph_engine_config"] == {"schema": "ontobricks_graph"}
 
-    def test_build_registry_get_payload_defaults_graph_when_not_configured(self):
+    def test_build_registry_get_payload_defaults_config_when_not_configured(self):
         session_mgr, settings = _mock_context()
         rcfg = MagicMock()
         rcfg.is_configured = False
@@ -478,7 +381,7 @@ class TestSettingsServiceRegistryPayloadGraphEngine:
         ):
             payload = SettingsService.build_registry_get_payload(session_mgr, settings)
 
-        assert payload["graph_engine"] == "lakebase"
+        assert "graph_engine" not in payload
         assert payload["graph_engine_config"] == {}
 
 

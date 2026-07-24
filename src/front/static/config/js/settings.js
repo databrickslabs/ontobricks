@@ -27,40 +27,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function escapeHtmlSettings(str) { return escapeHtml(str); }
 
-    function getTripleStoreBackendValue() {
-        const checked = document.querySelector('input[name="triple_store_backend"]:checked');
-        return checked ? checked.value : 'lakebase';
-    }
-
-    // Returns true when the user chose the Neo4j card.
-    // Neo4j is a graph_engine, not a triple_store_backend — the card is a
-    // convenience shortcut: it maps to triple_store_backend=lakebase + graph_engine=neo4j.
-    function isNeo4jCardSelected() {
-        return getTripleStoreBackendValue() === 'neo4j';
-    }
-
-    function setTripleStoreBackendValue(value) {
-        const radios = document.querySelectorAll('input[name="triple_store_backend"]');
-        if (!radios.length) return;
-        let matched = false;
-        radios.forEach(function (radio) {
-            const on = radio.value === value;
-            radio.checked = on;
-            if (on) matched = true;
-        });
-        if (!matched) radios[0].checked = true;
-    }
-
-    // Select the Neo4j card when the server reports graph_engine=neo4j.
-    function applyNeo4jCardFromEngine(graphEngine) {
-        if (graphEngine === 'neo4j') {
-            setTripleStoreBackendValue('neo4j');
-        }
-    }
-
-    function hasTripleStoreBackendPicker() {
-        return document.querySelector('input[name="triple_store_backend"]') != null;
-    }
+    // The graph backend *selection* moved to a mandatory per-domain choice
+    // (Domain Information -> Knowledge Graph tab). The Settings Graph DB pages
+    // now only configure the engine *connections* (Lakebase / Neo4j / Delta).
 
     loadCurrentConfig();
     loadBaseUri();
@@ -69,21 +38,15 @@ document.addEventListener('DOMContentLoaded', function () {
     loadRegistryCacheTtl();
     loadEditLockTtl();
     loadNavbarLogo();
-    // Preload ONLY the triple-store backend value — that is all the Back End
-    // sub-page shows, so its spinner clears after a single GET. Everything else
-    // (graph engine config, Lakebase/Delta cascade) is deferred to the first
-    // visit of those sections / to Save (sidebarSectionChanged, saveGraphDbSettings).
-    setBackendTabLoading(true);
-    loadTripleStoreBackend()
+    // Preload the Delta warehouse selection + registry location so the Delta
+    // panel reflects the saved SQL warehouse. Everything else (graph engine
+    // config, Lakebase/Delta cascade) is deferred to the first visit of those
+    // sections / to Save (sidebarSectionChanged, saveGraphDbSettings).
+    loadDeltaWarehouseState()
         .then(() => { graphDbLoaded = true; })
-        .catch((e) => console.log('Graph DB preload failed', e))
-        .finally(() => { setBackendTabLoading(false); });
+        .catch((e) => console.log('Graph DB preload failed', e));
 
-    // Align Lakebase sub-panel visibility with the server-rendered engine
-    // selector before any async fetch runs — fixes the "Lakebase flashes
-    // before Neo4j" flicker flagged by Benoit in the PR #47 review (the
-    // select itself is already correct from Jinja's `selected` attribute,
-    // but applyGraphDbEnginePanels otherwise waits for the lazy-load).
+    // Ensure the Lakebase / Delta configuration panels are visible on load.
     applyGraphDbEnginePanels();
 
     // =====================================================================
@@ -1037,8 +1000,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const msgEl = document.getElementById('lakebaseGraphHealthMessage');
         const dl = document.getElementById('lakebaseGraphHealthDl');
         const btn = document.getElementById('btnRefreshLakebaseGraphHealth');
-        const engSel = document.getElementById('graphEngineSelect');
-        if (!msgEl || !dl || engSel?.value !== 'lakebase') return;
+        if (!msgEl || !dl) return;
 
         if (btn) btn.disabled = true;
         dl.innerHTML = '';
@@ -1086,16 +1048,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Spinner scoped to the Back End section only (fast, light load).
-    // Cards are static markup — keep them visible while the saved value loads.
-    function setBackendTabLoading(loading) {
-        const beBanner = document.getElementById('backendSectionBanner');
-        if (beBanner) {
-            beBanner.classList.toggle('d-none', !loading);
-            beBanner.classList.toggle('d-flex', loading);
-        }
-    }
-
     // Spinner scoped to the Lakebase + Delta sections (deferred heavy load).
     function setGraphDbHeavyLoading(loading) {
         const lkBanner = document.getElementById('lakebaseSectionBanner');
@@ -1124,60 +1076,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 : '(not configured — set Registry catalog & schema)');
     }
 
-    // Back End sub-page load: fetch ONLY the triple-store backend value — that
-    // is all the Back End panel displays. Single GET, so its spinner clears
-    // fast. The graph engine config and the Lakebase/Delta remote cascade are
-    // deferred (see loadGraphEngineConfig / loadGraphDbHeavyFromServer).
-    async function loadTripleStoreBackend() {
-        if (!hasTripleStoreBackendPicker()) return;
+    // Delta panel load: fetch the saved Delta SQL-warehouse selection + registry
+    // location. Single GET, so its spinner clears fast. The graph engine config
+    // and the Lakebase/Delta remote cascade are deferred (see
+    // loadGraphEngineConfig / loadGraphDbHeavyFromServer).
+    async function loadDeltaWarehouseState() {
         try {
-            const [tsResp, engResp] = await Promise.all([
-                fetch('/settings/triple-store-backend', { credentials: 'same-origin' }),
-                fetch('/settings/graph-engine', { credentials: 'same-origin' }),
-            ]);
-            const tsData  = tsResp.ok  ? await tsResp.json()  : {};
-            const engData = engResp.ok ? await engResp.json() : {};
-
-            const rawTs = tsData.triple_store_backend;
-            if (tsData.success && rawTs) {
-                const allowedTs = Array.isArray(tsData.allowed_backends) ? tsData.allowed_backends : [];
-                setTripleStoreBackendValue(
-                    (allowedTs.length === 0 || allowedTs.indexOf(rawTs) >= 0) ? rawTs : 'lakebase'
-                );
-            }
-            // When Lakebase is the triple-store and the graph engine is Neo4j,
-            // select the dedicated Neo4j card instead.
-            if (engData.success && engData.graph_engine === 'neo4j') {
-                applyNeo4jCardFromEngine('neo4j');
-            }
-
-            currentDeltaWarehouseId = tsData.delta_warehouse_id || '';
-            effectiveDeltaWarehouseId = tsData.effective_delta_warehouse_id || '';
-            applyDeltaRegistryLocation(tsData);
+            const resp = await fetch('/settings/delta-warehouse', { credentials: 'same-origin' });
+            const data = resp.ok ? await resp.json() : {};
+            currentDeltaWarehouseId = data.delta_warehouse_id || '';
+            effectiveDeltaWarehouseId = data.effective_delta_warehouse_id || '';
+            applyDeltaRegistryLocation(data);
         } catch (e) {
-            console.log('Triple store backend load failed', e);
+            console.log('Delta warehouse state load failed', e);
         }
     }
 
-    // Graph engine + JSON config load. Needed by a Lakebase global Save (the
+    // Graph engine JSON config load. Needed by a Lakebase global Save (the
     // config textarea) and as a prerequisite for the heavy cascade. Local-only
     // form mirroring runs here so saved values are pre-selected.
     async function loadGraphEngineConfig() {
-        const sel = document.getElementById('graphEngineSelect');
         const ta  = document.getElementById('graphEngineConfig');
         try {
-            const [engResp, cfgResp] = await Promise.all([
-                fetch('/settings/graph-engine', { credentials: 'same-origin' }),
-                ta ? fetch('/settings/graph-engine-config', { credentials: 'same-origin' }) : Promise.resolve(null),
-            ]);
-            const engData = engResp.ok ? await engResp.json() : {};
+            const cfgResp = ta
+                ? await fetch('/settings/graph-engine-config', { credentials: 'same-origin' })
+                : null;
             const cfgData = cfgResp && cfgResp.ok ? await cfgResp.json() : {};
             if (ta && cfgData.success) {
                 ta.value = JSON.stringify(cfgData.graph_engine_config || {}, null, 2);
-            }
-            if (sel) {
-                const rawEng = engData.graph_engine;
-                if (engData.success && rawEng) sel.value = rawEng;
             }
             applyLakebaseFormFromConfigTextarea();
             prefillLakebaseConnectionFromConfig();
@@ -1571,22 +1497,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.getElementById('btnLoadDeltaObjects')?.addEventListener('click', loadDeltaObjects);
-
-    document.querySelectorAll('input[name="triple_store_backend"]').forEach(function (radio) {
-        radio.addEventListener('change', async function () {
-            // Backend choice is persisted via Save on Back End; do not hide Lakebase/Delta nav items.
-            if (this.value === 'lakebase') {
-                applyLakebaseFormFromConfigTextarea();
-                await loadLakebaseProjects();
-                prefillLakebaseConnectionFromConfig();
-                await loadLakebaseGraphHealth();
-            } else if (this.value === 'neo4j') {
-                // Neo4j card selected — pre-fill the Neo4j section if the heavy load has already run.
-                applyNeo4jAuthMethodVisibility();
-                prefillNeo4jConnectionFromConfig();
-            }
-        });
-    });
 
     // cascading project → branch → database → schema
     document.getElementById('btnLoadLakebaseProjects')?.addEventListener('click', () => loadLakebaseProjects());
@@ -2588,78 +2498,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
     _initSchemaToggle();
 
-    /** Persist graph engine and JSON config (used by global Save). */
+    /** Persist the graph engine *connection* JSON config + Delta warehouse
+     *  selection (used by global Save). The backend *selection* is per-domain
+     *  now (Domain Information -> Knowledge Graph tab), so nothing is chosen
+     *  here — only the Lakebase / Neo4j / Delta connection settings. */
     async function saveGraphDbSettings(errors) {
-        const sel = document.getElementById('graphEngineSelect');
         const ta = document.getElementById('graphEngineConfig');
         const errDiv = document.getElementById('graphEngineConfigError');
-        if (!hasTripleStoreBackendPicker()) return;
-
         if (errDiv) errDiv.style.display = 'none';
 
         try {
-            const deltaSelect = document.getElementById('deltaWarehouseSelect');
-            const selectedCard = getTripleStoreBackendValue();
-            // Neo4j card is a UI shortcut: triple_store_backend stays 'lakebase'
-            // but graph_engine becomes 'neo4j'. Translate before posting.
-            const neo4jCard = selectedCard === 'neo4j';
-            const tsValue = neo4jCard ? 'lakebase' : selectedCard;
-            const tsBody = { triple_store_backend: tsValue };
-            // The Delta warehouse dropdown is only populated by the heavy load.
-            // Read the live select only once that has run; otherwise fall back to
-            // the saved id so a Save from the Back End tab can't blank it out.
-            if (deltaSelect && graphDbHeavyLoaded) {
-                tsBody.delta_warehouse_id = deltaSelect.value || '';
-            } else if (currentDeltaWarehouseId) {
-                tsBody.delta_warehouse_id = currentDeltaWarehouseId;
-            }
-            const tsResp = await fetch('/settings/triple-store-backend', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify(tsBody),
-            });
-            const tsResult = await tsResp.json();
-            if (!tsResult.success) {
-                errors.push('Triple store backend: ' + (tsResult.message || 'Unknown error'));
-                return;
-            }
-            if (tsResult.delta_warehouse_id != null) {
-                currentDeltaWarehouseId = tsResult.delta_warehouse_id || '';
-            }
-            // Only re-list warehouses when the heavy load already ran (i.e. the
-            // dropdown is live/visible); otherwise skip the remote call to keep
-            // Save fast — the saved id is preserved regardless.
-            if (deltaSelect && graphDbHeavyLoaded) {
-                await loadDeltaWarehouseSelect(currentDeltaWarehouseId);
-            } else if (!deltaSelect) {
-                setDeltaWarehouseStatus();
-            }
+            // Persist the Delta SQL-warehouse selection via its dedicated endpoint.
+            await saveDeltaWarehouseSelection(errors);
 
-            // When Delta is selected (and not Neo4j), no graph_engine to save.
-            if (tsValue !== 'lakebase' || (!sel && !neo4jCard) || (!ta && !neo4jCard)) {
+            if (!ta) {
                 applyGraphDbEnginePanels();
                 return;
             }
 
-            // Determine which graph engine to persist: neo4j card → 'neo4j',
-            // otherwise read the (legacy) graphEngineSelect dropdown.
-            const engineToSave = neo4jCard ? 'neo4j' : (sel ? sel.value : 'lakebase');
-            const resp = await fetch('/settings/graph-engine', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ graph_engine: engineToSave }),
-            });
-            const result = await resp.json();
-            if (!result.success) {
-                errors.push('Graph DB engine: ' + (result.message || 'Unknown error'));
-                return;
-            }
-
-            if (engineToSave === 'lakebase' && !neo4jCard) {
+            // Only fold the connection panels back into the textarea when the
+            // heavy load actually ran (the fields are populated); otherwise save
+            // the server-loaded textarea as-is so an untouched Save cannot blank
+            // out stored connection config.
+            if (graphDbHeavyLoaded) {
                 mergeLakebasePanelIntoConfigTextarea();
-            } else if (engineToSave === 'neo4j') {
                 mergeNeo4jPanelIntoConfigTextarea();
             }
 
@@ -2696,29 +2558,28 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             ta.value = JSON.stringify(cfgJson.graph_engine_config || parsed, null, 2);
             applyGraphDbEnginePanels();
-            if (sel.value === 'lakebase') loadLakebaseGraphHealth();
+            if (graphDbHeavyLoaded) loadLakebaseGraphHealth();
         } catch (e) {
             errors.push('Graph DB: ' + e.message);
         }
     }
 
     // =====================================================================
-    //  TRIPLE STORE SECTIONS – lazy-load on first visit to ts-global or lakebase
+    //  TRIPLE STORE SECTIONS – lazy-load on first visit to lakebase or delta
     // =====================================================================
 
     document.addEventListener('sidebarSectionChanged', async (e) => {
         const s = e.detail?.section;
-        if (s !== 'ts-global' && s !== 'lakebase' && s !== 'delta') return;
+        if (s !== 'lakebase' && s !== 'delta') return;
 
-        // Ensure the triple-store backend value is present (covers a deep-link
+        // Ensure the Delta warehouse state is present (covers a deep-link
         // race where the section activates before the page-load preload resolves).
         if (!graphDbLoaded) {
-            setBackendTabLoading(true);
             try {
-                await loadTripleStoreBackend();
+                await loadDeltaWarehouseState();
                 graphDbLoaded = true;
-            } finally {
-                setBackendTabLoading(false);
+            } catch (e) {
+                console.log('Delta warehouse state load failed', e);
             }
         }
 
@@ -2747,7 +2608,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // ── Neo4j engine config — form ↔ textarea ───────────────────────────────
     //
     // Mirrors the Lakebase merge/toggle pattern. When the active engine is
-    // "neo4j" (Settings > Triple store > Global dropdown), this function
+    // "neo4j" (Settings > Back end > Neo4j), this function
     // reads the Neo4j config form fields from #neo4j-section and serialises
     // them into the shared #graphEngineConfig textarea, which the existing
     // save flow then POSTs to /settings/graph-engine-config.
@@ -2952,19 +2813,18 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // 4. Graph DB engine + JSON config (same tab; top Save only)
+        // 4. Graph DB connection config + Delta warehouse (same tab; top Save only)
         if (!graphDbLoaded) {
             try {
-                await loadTripleStoreBackend();
+                await loadDeltaWarehouseState();
                 graphDbLoaded = true;
             } catch (e) {
                 console.log('Graph DB refresh before save failed', e);
             }
         }
-        // A Lakebase save persists the graph engine JSON config; make sure it is
-        // loaded first so the merge/save cannot blank out the saved config.
-        const tsValueForSave = getTripleStoreBackendValue();
-        if (tsValueForSave === 'lakebase' && !graphEngineConfigLoaded) {
+        // Ensure the graph engine JSON config is loaded first so the merge/save
+        // cannot blank out the saved connection config.
+        if (!graphEngineConfigLoaded) {
             try {
                 await loadGraphEngineConfig();
             } catch (e) {

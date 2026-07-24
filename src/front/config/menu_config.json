@@ -123,7 +123,7 @@
                     "element_id": "menuSaveDomain"
                 },
                 {
-                    "label": "Switch",
+                    "label": "Versions",
                     "icon": "bi-arrow-repeat",
                     "action": "domainSwitch",
                     "element_id": "menuSwitchDomain"
@@ -516,16 +516,9 @@
                 },
                 {
                     "id": "settings-triplestore",
-                    "title": "Triple store",
+                    "title": "Back end",
                     "icon": "bi-diagram-3",
                     "items": [
-                        {
-                            "id": "ts-global",
-                            "label": "Back End",
-                            "icon": "bi-sliders",
-                            "default": false,
-                            "requires": null
-                        },
                         {
                             "id": "lakebase",
                             "label": "Lakebase",

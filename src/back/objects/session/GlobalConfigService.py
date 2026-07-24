@@ -281,61 +281,10 @@ class GlobalConfigService:
         """Persist the navbar logo as a ``data:`` URL (empty string clears it)."""
         return self._save(host, token, registry_cfg, {"navbar_logo": data_url or ""})
 
-    ALLOWED_GRAPH_ENGINES = ("lakebase", "neo4j")
-    ALLOWED_TRIPLE_STORE_BACKENDS = ("lakebase", "databricks")
-
-    def get_graph_engine(
-        self, host: str, token: str, registry_cfg: Dict[str, str]
-    ) -> str:
-        """Return the globally configured graph DB engine name.
-
-        Currently always resolves to ``"lakebase"``.  Extra engines plug
-        in by adding their key to :data:`ALLOWED_GRAPH_ENGINES` and
-        registering a backend class under
-        :class:`back.core.graphdb.GraphDBFactory`.
-        """
-        val = self.get(host, token, registry_cfg, "graph_engine", "lakebase")
-        return val if val in self.ALLOWED_GRAPH_ENGINES else "lakebase"
-
-    def set_graph_engine(
-        self,
-        host: str,
-        token: str,
-        registry_cfg: Dict[str, str],
-        engine: str,
-    ) -> Tuple[bool, str]:
-        """Persist a new graph DB engine selection in the global config file."""
-        engine = (engine or "").strip().lower()
-        if engine not in self.ALLOWED_GRAPH_ENGINES:
-            return (
-                False,
-                f"Unknown graph engine '{engine}'. Allowed: {', '.join(self.ALLOWED_GRAPH_ENGINES)}",
-            )
-        return self._save(host, token, registry_cfg, {"graph_engine": engine})
-
-    def get_triple_store_backend(
-        self, host: str, token: str, registry_cfg: Dict[str, str]
-    ) -> str:
-        """Return the instance triple-store backend (``lakebase`` or ``databricks``)."""
-        val = self.get(host, token, registry_cfg, "triple_store_backend", "lakebase")
-        return val if val in self.ALLOWED_TRIPLE_STORE_BACKENDS else "lakebase"
-
-    def set_triple_store_backend(
-        self,
-        host: str,
-        token: str,
-        registry_cfg: Dict[str, str],
-        backend: str,
-    ) -> Tuple[bool, str]:
-        """Persist triple-store backend selection in global config."""
-        backend = (backend or "").strip().lower()
-        if backend not in self.ALLOWED_TRIPLE_STORE_BACKENDS:
-            return (
-                False,
-                "Unknown triple store backend "
-                f"'{backend}'. Allowed: {', '.join(self.ALLOWED_TRIPLE_STORE_BACKENDS)}",
-            )
-        return self._save(host, token, registry_cfg, {"triple_store_backend": backend})
+    # NOTE: The graph *backend selection* (formerly the global ``graph_engine`` /
+    # ``triple_store_backend`` keys) moved to a mandatory per-domain choice —
+    # see ``DomainSession.info['graph_backend']`` and ``GraphDBFactory``. Only
+    # the engine *connection* config below remains workspace-global.
 
     def get_graph_engine_config(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -430,9 +379,7 @@ class GlobalConfigService:
             "navbar_logo": "",
             "use_cloud_fetch": True,
             "registry_cache_ttl": 300,
-            "graph_engine": "lakebase",
             "graph_engine_config": {},
-            "triple_store_backend": "lakebase",
         }
 
 

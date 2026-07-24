@@ -69,6 +69,8 @@ def get_empty_domain() -> Dict[str, Any]:
                 "mcp_enabled": False,
                 "status": "DRAFT",
                 "review_quorum": 1,
+                # Mandatory per-domain graph backend: lakebase | databricks | neo4j.
+                "graph_backend": "lakebase",
             },
             "triplestore": {
                 "stats": {},

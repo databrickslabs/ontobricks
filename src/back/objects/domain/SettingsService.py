@@ -94,34 +94,26 @@ class SettingsService:
     def _mirror_graph_engine_to_domain_registry(
         session_mgr: SessionManager,
         *,
-        engine: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
-        triple_store_backend: Optional[str] = None,
         delta_warehouse_id: Optional[str] = None,
     ) -> None:
-        """Copy graph DB settings into ``domain.settings['registry']`` (best-effort).
+        """Copy graph DB *connection* settings into ``domain.settings['registry']``.
 
         Authoritative persistence is :class:`GlobalConfigService` via
         :meth:`RegistryStore.save_global_config` (Volume ``.global_config.json``
         or Lakebase ``global_config`` JSONB). Mirroring keeps the domain JSON
         export aligned with the catalog/schema/volume block for operators.
+
+        The backend *selection* is no longer mirrored — it now lives per-domain
+        in ``DomainSession.info['graph_backend']``.
         """
-        if (
-            engine is None
-            and config is None
-            and triple_store_backend is None
-            and delta_warehouse_id is None
-        ):
+        if config is None and delta_warehouse_id is None:
             return
         try:
             domain = get_domain(session_mgr)
             reg = domain.settings.setdefault("registry", {})
-            if engine is not None:
-                reg["graph_engine"] = engine
             if config is not None:
                 reg["graph_engine_config"] = dict(config)
-            if triple_store_backend is not None:
-                reg["triple_store_backend"] = triple_store_backend
             if delta_warehouse_id is not None:
                 reg["delta_warehouse_id"] = delta_warehouse_id
             domain.save()
@@ -584,7 +576,6 @@ class SettingsService:
             except Exception:
                 logger.debug("Could not check registry marker")
 
-        graph_engine = "lakebase"
         graph_engine_config: Dict[str, Any] = {}
         delta_warehouse_id = ""
         if rcfg.is_configured:
@@ -593,9 +584,6 @@ class SettingsService:
                     session_mgr, settings
                 )
                 global_config_service.load(host, token, registry_cfg)
-                graph_engine = global_config_service.get_graph_engine(
-                    host, token, registry_cfg
-                )
                 graph_engine_config = global_config_service.get_graph_engine_config(
                     host, token, registry_cfg
                 )
@@ -604,7 +592,7 @@ class SettingsService:
                 )
             except Exception:
                 logger.debug(
-                    "Could not load graph engine for registry GET payload",
+                    "Could not load graph engine config for registry GET payload",
                     exc_info=True,
                 )
 
@@ -614,7 +602,6 @@ class SettingsService:
             "configured": initialized,
             "registry_locked": SettingsService.is_registry_locked(settings),
             "lakebase": SettingsService._lakebase_runtime_info(rcfg),
-            "graph_engine": graph_engine,
             "graph_engine_config": graph_engine_config,
             "delta_warehouse_id": delta_warehouse_id,
         }
@@ -1435,69 +1422,31 @@ class SettingsService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def get_graph_engine_result(
+    def get_delta_warehouse_result(
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        # Bypass per-process TTL so the Settings Graph DB tab reflects the store
-        # immediately after save (multi-worker and cross-tab).
-        global_config_service.load(host, token, registry_cfg, force=True)
-        engine = global_config_service.get_graph_engine(host, token, registry_cfg)
-        allowed = list(global_config_service.ALLOWED_GRAPH_ENGINES)
-        return {"success": True, "graph_engine": engine, "allowed_engines": allowed}
+        """Return the Delta SQL-warehouse selection + registry location.
 
-    @staticmethod
-    def set_graph_engine_result(
-        engine: str,
-        email: str,
-        user_token: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
-
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        ok, msg = global_config_service.set_graph_engine(
-            host, token, registry_cfg, engine
-        )
-        if not ok:
-            raise ValidationError(msg)
-        persisted = global_config_service.get_graph_engine(host, token, registry_cfg)
-        SettingsService._mirror_graph_engine_to_domain_registry(
-            session_mgr, engine=persisted
-        )
-        return {"success": True, "graph_engine": persisted}
-
-    @staticmethod
-    def get_triple_store_backend_result(
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
+        Backend *selection* moved per-domain; this endpoint now only surfaces
+        the workspace-global Delta connection config (which SQL warehouse
+        materializes Delta triples) plus the registry catalog/schema used by the
+        Settings Delta panel.
+        """
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         global_config_service.load(host, token, registry_cfg, force=True)
-        backend = global_config_service.get_triple_store_backend(
-            host, token, registry_cfg
-        )
         domain = get_domain(session_mgr)
         delta_wid = global_config_service.get_delta_warehouse_id(
             host, token, registry_cfg
         )
-        allowed = list(global_config_service.ALLOWED_TRIPLE_STORE_BACKENDS)
         reg = registry_cfg if isinstance(registry_cfg, dict) else {}
         catalog = (reg.get("catalog") or "").strip()
         schema = (reg.get("schema") or "").strip()
         storage_location = f"{catalog}.{schema}" if catalog and schema else ""
         return {
             "success": True,
-            "triple_store_backend": backend,
-            "allowed_backends": allowed,
             "delta_warehouse_id": delta_wid,
             "effective_delta_warehouse_id": resolve_delta_warehouse_id(
                 domain, settings
@@ -1506,54 +1455,6 @@ class SettingsService:
             "registry_schema": schema,
             "storage_location": storage_location,
             "registry_configured": bool(storage_location),
-        }
-
-    @staticmethod
-    def set_triple_store_backend_result(
-        backend: str,
-        email: str,
-        user_token: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-        *,
-        delta_warehouse_id: Optional[str] = None,
-        persist_delta_warehouse: bool = False,
-    ) -> Dict[str, Any]:
-        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
-        domain, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        ok, msg = global_config_service.set_triple_store_backend(
-            host, token, registry_cfg, backend
-        )
-        if not ok:
-            raise ValidationError(msg)
-        persisted = global_config_service.get_triple_store_backend(
-            host, token, registry_cfg
-        )
-        persisted_delta = global_config_service.get_delta_warehouse_id(
-            host, token, registry_cfg
-        )
-        if persist_delta_warehouse:
-            wid = (delta_warehouse_id or "").strip()
-            ok, msg = global_config_service.set_delta_warehouse_id(
-                host, token, registry_cfg, wid
-            )
-            if not ok:
-                raise ValidationError(msg)
-            persisted_delta = wid
-        SettingsService._mirror_graph_engine_to_domain_registry(
-            session_mgr,
-            triple_store_backend=persisted,
-            delta_warehouse_id=persisted_delta if persist_delta_warehouse else None,
-        )
-        return {
-            "success": True,
-            "triple_store_backend": persisted,
-            "delta_warehouse_id": persisted_delta,
-            "effective_delta_warehouse_id": resolve_delta_warehouse_id(
-                domain, settings
-            ),
         }
 
     @staticmethod

@@ -1288,7 +1288,7 @@ async def start_databricks_triplestore_build(
     if GraphDBFactory._resolve_triple_store_backend(domain, settings) != "databricks":
         raise ValidationError(
             "Databricks triple-store build is only available when "
-            "triple_store_backend is 'databricks' (Settings → Triple store)."
+            "triple_store_backend is 'databricks' (Settings → Back end)."
         )
 
     view_table = effective_view_table(domain)

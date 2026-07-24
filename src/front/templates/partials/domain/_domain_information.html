@@ -186,6 +186,29 @@
                     <!-- ======== Triple Store Tab ======== -->
                     <div class="tab-pane fade" id="panel-triplestore" role="tabpanel" aria-labelledby="tab-triplestore">
 
+                        <!-- Graph Backend selection (mandatory, per-domain) -->
+                        <div class="mb-4">
+                            <label for="domainGraphBackend" class="form-label fw-semibold">
+                                <i class="bi bi-hdd-network me-1"></i> Graph Backend <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select domain-editable" id="domainGraphBackend"
+                                    data-saved-value="{{ domain.graph_backend or 'lakebase' }}">
+                                <option value="lakebase" {% if (domain.graph_backend or 'lakebase') == 'lakebase' %}selected{% endif %}>Lakebase (Postgres)</option>
+                                <option value="databricks" {% if domain.graph_backend == 'databricks' %}selected{% endif %}>Databricks (Delta)</option>
+                                <option value="neo4j" {% if domain.graph_backend == 'neo4j' %}selected{% endif %}>Neo4j</option>
+                            </select>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>Storage engine used to build and query this
+                                domain's Knowledge Graph. Connection settings (Neo4j Bolt, Lakebase schema) are
+                                configured under <a href="/settings">Settings</a>.
+                            </small>
+                            <div class="alert alert-warning border small mt-2 py-2 mb-0">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Changing the backend requires rebuilding the Knowledge Graph — existing graph
+                                artifacts in the previous backend are not migrated.
+                            </div>
+                        </div>
+
                         <!-- Dual Knowledge Graph explanation -->
                         <div class="alert alert-light border mb-4">
                             <h6 class="alert-heading mb-2"><i class="bi bi-lightning-charge me-1"></i> Dual Knowledge Graph</h6>

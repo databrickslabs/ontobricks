@@ -38,7 +38,7 @@ The app does not need a redeploy after binding — the platform re-injects `NEO4
 
 ### 3. Verify
 
-Open the OntoBricks app: **Settings → Triple store → Neo4j**. The **Password** field shows a green badge **From Apps secret** and the input is disabled. Save the engine config — any persisted clear-text `password` in `global_config` is stripped server-side at save time.
+Open the OntoBricks app: **Settings → Back end → Neo4j**. The **Password** field shows a green badge **From Apps secret** and the input is disabled. Save the engine config — any persisted clear-text `password` in `global_config` is stripped server-side at save time.
 
 ## Local development
 
