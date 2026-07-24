@@ -32,6 +32,13 @@ document.addEventListener('DOMContentLoaded', function () {
         return checked ? checked.value : 'lakebase';
     }
 
+    // Returns true when the user chose the Neo4j card.
+    // Neo4j is a graph_engine, not a triple_store_backend — the card is a
+    // convenience shortcut: it maps to triple_store_backend=lakebase + graph_engine=neo4j.
+    function isNeo4jCardSelected() {
+        return getTripleStoreBackendValue() === 'neo4j';
+    }
+
     function setTripleStoreBackendValue(value) {
         const radios = document.querySelectorAll('input[name="triple_store_backend"]');
         if (!radios.length) return;
@@ -42,6 +49,13 @@ document.addEventListener('DOMContentLoaded', function () {
             if (on) matched = true;
         });
         if (!matched) radios[0].checked = true;
+    }
+
+    // Select the Neo4j card when the server reports graph_engine=neo4j.
+    function applyNeo4jCardFromEngine(graphEngine) {
+        if (graphEngine === 'neo4j') {
+            setTripleStoreBackendValue('neo4j');
+        }
     }
 
     function hasTripleStoreBackendPicker() {
@@ -1117,8 +1131,13 @@ document.addEventListener('DOMContentLoaded', function () {
     async function loadTripleStoreBackend() {
         if (!hasTripleStoreBackendPicker()) return;
         try {
-            const resp = await fetch('/settings/triple-store-backend', { credentials: 'same-origin' });
-            const tsData = resp.ok ? await resp.json() : {};
+            const [tsResp, engResp] = await Promise.all([
+                fetch('/settings/triple-store-backend', { credentials: 'same-origin' }),
+                fetch('/settings/graph-engine', { credentials: 'same-origin' }),
+            ]);
+            const tsData  = tsResp.ok  ? await tsResp.json()  : {};
+            const engData = engResp.ok ? await engResp.json() : {};
+
             const rawTs = tsData.triple_store_backend;
             if (tsData.success && rawTs) {
                 const allowedTs = Array.isArray(tsData.allowed_backends) ? tsData.allowed_backends : [];
@@ -1126,6 +1145,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     (allowedTs.length === 0 || allowedTs.indexOf(rawTs) >= 0) ? rawTs : 'lakebase'
                 );
             }
+            // When Lakebase is the triple-store and the graph engine is Neo4j,
+            // select the dedicated Neo4j card instead.
+            if (engData.success && engData.graph_engine === 'neo4j') {
+                applyNeo4jCardFromEngine('neo4j');
+            }
+
             currentDeltaWarehouseId = tsData.delta_warehouse_id || '';
             effectiveDeltaWarehouseId = tsData.effective_delta_warehouse_id || '';
             applyDeltaRegistryLocation(tsData);
@@ -1555,6 +1580,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 await loadLakebaseProjects();
                 prefillLakebaseConnectionFromConfig();
                 await loadLakebaseGraphHealth();
+            } else if (this.value === 'neo4j') {
+                // Neo4j card selected — pre-fill the Neo4j section if the heavy load has already run.
+                applyNeo4jAuthMethodVisibility();
+                prefillNeo4jConnectionFromConfig();
             }
         });
     });
@@ -2570,7 +2599,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             const deltaSelect = document.getElementById('deltaWarehouseSelect');
-            const tsValue = getTripleStoreBackendValue();
+            const selectedCard = getTripleStoreBackendValue();
+            // Neo4j card is a UI shortcut: triple_store_backend stays 'lakebase'
+            // but graph_engine becomes 'neo4j'. Translate before posting.
+            const neo4jCard = selectedCard === 'neo4j';
+            const tsValue = neo4jCard ? 'lakebase' : selectedCard;
             const tsBody = { triple_store_backend: tsValue };
             // The Delta warehouse dropdown is only populated by the heavy load.
             // Read the live select only once that has run; otherwise fall back to
@@ -2603,16 +2636,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 setDeltaWarehouseStatus();
             }
 
-            if (tsValue !== 'lakebase' || !sel || !ta) {
+            // When Delta is selected (and not Neo4j), no graph_engine to save.
+            if (tsValue !== 'lakebase' || (!sel && !neo4jCard) || (!ta && !neo4jCard)) {
                 applyGraphDbEnginePanels();
                 return;
             }
 
+            // Determine which graph engine to persist: neo4j card → 'neo4j',
+            // otherwise read the (legacy) graphEngineSelect dropdown.
+            const engineToSave = neo4jCard ? 'neo4j' : (sel ? sel.value : 'lakebase');
             const resp = await fetch('/settings/graph-engine', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ graph_engine: sel.value }),
+                body: JSON.stringify({ graph_engine: engineToSave }),
             });
             const result = await resp.json();
             if (!result.success) {
@@ -2620,9 +2657,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            if (sel.value === 'lakebase') {
+            if (engineToSave === 'lakebase' && !neo4jCard) {
                 mergeLakebasePanelIntoConfigTextarea();
-            } else if (sel.value === 'neo4j') {
+            } else if (engineToSave === 'neo4j') {
                 mergeNeo4jPanelIntoConfigTextarea();
             }
 

@@ -109,7 +109,7 @@
                                 </span>
                             </div>
                             <div class="row g-3 ob-backend-card-grid" role="radiogroup" aria-labelledby="tripleStoreBackendLabel">
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <label class="ob-backend-card h-100" for="tripleStoreBackendLakebase">
                                         <input type="radio" class="form-check-input ob-backend-card-radio"
                                                name="triple_store_backend" id="tripleStoreBackendLakebase"
@@ -121,7 +121,7 @@
                                         </span>
                                     </label>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <label class="ob-backend-card h-100" for="tripleStoreBackendDatabricks">
                                         <input type="radio" class="form-check-input ob-backend-card-radio"
                                                name="triple_store_backend" id="tripleStoreBackendDatabricks"
@@ -133,11 +133,24 @@
                                         </span>
                                     </label>
                                 </div>
+                                <div class="col-md-4">
+                                    <label class="ob-backend-card h-100" for="tripleStoreBackendNeo4j">
+                                        <input type="radio" class="form-check-input ob-backend-card-radio"
+                                               name="triple_store_backend" id="tripleStoreBackendNeo4j"
+                                               value="neo4j" autocomplete="off"
+                                               {% if graph_engine == "neo4j" %}checked{% endif %}>
+                                        <span class="ob-backend-card-icon"><i class="bi bi-bezier2" aria-hidden="true"></i></span>
+                                        <span class="ob-backend-card-text">
+                                            <span class="ob-backend-card-title">Neo4j</span>
+                                            <span class="ob-backend-card-tagline">Native graph database over Bolt — stores and queries triples directly in Neo4j Aura or self-hosted.</span>
+                                        </span>
+                                    </label>
+                                </div>
                             </div>
                             <small class="text-muted d-block mt-3">
                                 Selects where triples are stored and how the Knowledge Graph is built.
-                                <strong>Save</strong> at the top persists the choice. Lakebase and Delta
-                                settings pages stay available regardless of this selection.
+                                <strong>Save</strong> at the top persists the choice. Lakebase, Delta, and
+                                Neo4j settings pages stay available regardless of this selection.
                             </small>
                         </div>
                         <div class="mb-4 d-none" id="legacyGraphEngineRow">
