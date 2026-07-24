@@ -194,6 +194,7 @@
 /* lakebase-section: becomes flex when d-none is removed */
 .dt-arch-lakebase-section:not(.d-none) {
     display: flex !important;
+    flex-wrap: wrap;
     align-items: stretch;
     flex: 2;
     gap: 0;
