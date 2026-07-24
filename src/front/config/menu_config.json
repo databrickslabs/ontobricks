@@ -539,6 +539,13 @@
                             "icon": "bi-layers",
                             "default": false,
                             "requires": null
+                        },
+                        {
+                            "id": "neo4j",
+                            "label": "Neo4j",
+                            "icon": "bi-bezier2",
+                            "default": false,
+                            "requires": null
                         }
                     ]
                 },

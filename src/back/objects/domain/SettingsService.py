@@ -17,6 +17,7 @@ from back.core.errors import (
 from shared.config.constants import HTTP_USER_AGENT
 from shared.config.settings import Settings
 from back.core.databricks import is_databricks_app
+from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.core.helpers import (
     get_databricks_client,
     get_databricks_host_and_token,
@@ -1675,6 +1676,15 @@ class SettingsService:
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
+        if is_neo4j_password_from_secret() and isinstance(config, dict) and config.get("password"):
+            # Never persist a clear-text password when the Apps secret is
+            # in place — the env var wins at runtime and this would only
+            # leak a redundant credential into global_config.
+            logger.info(
+                "Stripping engine_config['password'] before persist — "
+                "NEO4J_PASSWORD env var is the source of truth"
+            )
+            config = {k: v for k, v in config.items() if k != "password"}
         ok, msg = global_config_service.set_graph_engine_config(
             host, token, registry_cfg, config
         )
@@ -1840,6 +1850,140 @@ class SettingsService:
                 f"Registry database: {registry_db!r}."
             )
         return out
+
+    @staticmethod
+    def graph_engine_neo4j_test_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Probe Neo4j Bolt connectivity using the persisted ``engine_config``.
+
+        Wires the previously-placeholder "Test connection" button on Settings →
+        Triple store → Neo4j. Reads the persisted config, instantiates
+        :class:`Neo4jConnection` (this resolves auth — env var first, then
+        engine_config fallback), and calls the official driver's
+        ``verify_connectivity()`` (a lightweight Bolt handshake — no Cypher
+        is executed, no data is touched).
+
+        Returns one of:
+
+        - ``{"success": True, "ok": True, "uri": ..., "database": ...,
+           "latency_ms": ..., "credentials_source": "env var" | "engine_config"}``
+        - ``{"success": True, "ok": False, "error": ..., "category": ...}``
+          for clean error states (auth failure, DNS unresolvable, bad config) —
+          surfaces a friendly UI message without 5xx-ing the route.
+        """
+        import time as _time
+
+        from back.core.graphdb.neo4j.Neo4jConnection import (
+            NEO4J_PASSWORD_ENV,
+            Neo4jConnection,
+            is_neo4j_password_from_secret,
+        )
+
+        try:
+            _, host, token, registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            global_config_service.load(host, token, registry_cfg, force=True)
+            gcfg = global_config_service.get_graph_engine_config(
+                host, token, registry_cfg
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("graph_engine_neo4j_test context failed: %s", exc)
+            raise InfrastructureError(
+                "Could not load graph engine config", detail=str(exc)
+            ) from exc
+
+        if not isinstance(gcfg, dict):
+            return {
+                "success": True,
+                "ok": False,
+                "error": "engine_config is empty — fill in URI/Username and Save first.",
+                "category": "config",
+            }
+
+        uri = str(gcfg.get("uri") or "").strip()
+        if not uri:
+            return {
+                "success": True,
+                "ok": False,
+                "error": "engine_config['uri'] is missing — set the Bolt URI in Settings → Neo4j.",
+                "category": "config",
+            }
+
+        try:
+            conn = Neo4jConnection(
+                uri=uri,
+                database=str(gcfg.get("database") or "neo4j").strip() or "neo4j",
+                auth_method=str(gcfg.get("auth_method") or "basic").strip() or "basic",
+                engine_config=gcfg,
+                encrypted=bool(gcfg.get("encrypted", True)),
+            )
+        except ValidationError as exc:
+            return {"success": True, "ok": False, "error": str(exc), "category": "config"}
+        except ImportError as exc:
+            return {
+                "success": True,
+                "ok": False,
+                "error": str(exc),
+                "category": "driver-missing",
+            }
+
+        t0 = _time.monotonic()
+        cypher_rows = None
+        try:
+            driver = conn.get_driver()
+            driver.verify_connectivity()
+            # Round-trip a trivial Cypher through the same ``_run`` path the
+            # real query stack uses — exercises session creation, Cypher
+            # execution, and the INFO log line (Benoit's PR #47 review #2).
+            cypher_rows = conn.run("RETURN 1 AS probe")
+        except InfrastructureError as exc:
+            return {
+                "success": True,
+                "ok": False,
+                "error": str(exc),
+                "category": "auth",
+            }
+        except ValidationError as exc:
+            return {
+                "success": True,
+                "ok": False,
+                "error": str(exc),
+                "category": "config",
+            }
+        except Exception as exc:  # noqa: BLE001 — bolt errors don't share a base class
+            return {
+                "success": True,
+                "ok": False,
+                "error": "%s: %s" % (type(exc).__name__, exc),
+                "category": "connectivity",
+            }
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        latency_ms = round((_time.monotonic() - t0) * 1000.0, 1)
+
+        return {
+            "success": True,
+            "ok": True,
+            "uri": uri,
+            "database": conn.database,
+            "latency_ms": latency_ms,
+            "cypher_probe": (
+                {"rows": len(cypher_rows or []), "echo": (cypher_rows[0] if cypher_rows else None)}
+                if cypher_rows is not None
+                else None
+            ),
+            "credentials_source": (
+                "env var (%s — Databricks Apps secret)" % NEO4J_PASSWORD_ENV
+                if is_neo4j_password_from_secret()
+                else "engine_config (local-dev fallback)"
+            ),
+        }
 
     @staticmethod
     def graph_engine_uc_catalogs_result(

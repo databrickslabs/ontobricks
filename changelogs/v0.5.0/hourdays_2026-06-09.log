@@ -1,0 +1,59 @@
+# 2026-06-09 — Neo4j graph DB engine
+
+**Author:** Hugues Journeau (@hourdays)
+**Branch:** `feature/neo4j-graphdb-skeleton` → PR #47 (target: `develop`)
+**Version:** v0.5.0
+
+## Context
+
+Adds **Neo4j (Bolt / Cypher)** as a selectable graph DB engine alongside Lakebase Postgres, following `docs/graphdb-integration.md`. Cleanly opt-in: existing Lakebase deployments are unaffected; users activate Neo4j by selecting it from **Settings → Triple store → Global**.
+
+This implementation realises the v0.6 roadmap slot ahead of the August 2026 target, building on Benoit's v0.5 `GraphDBBackend` abstraction and the `_starter_kit/` template.
+
+## Changes
+
+1. **`src/back/core/graphdb/neo4j/__init__.py`** — new package init with `NEO4J_AVAILABLE` guarded import.
+2. **`src/back/core/graphdb/neo4j/Neo4jStore.py`** — full `GraphDBBackend` implementation:
+    - Capability flags: `supports_cypher=True`, `supports_graph_model=False` (flat triple model in v1), `query_dialect="cypher"`.
+    - Connection management: lazy `neo4j.GraphDatabase.driver(...)`, session-per-query via `_run`.
+    - Auth: `basic` (username/password) implemented; `databricks_secret` validated but resolution deferred to a follow-up PR.
+    - CRUD: `create_table` (SPO unique constraint), `drop_table` (constraint + nodes), `insert_triples` (`UNWIND` + `MERGE`, batched), `delete_triples`, `query_triples`, `count_triples`, `table_exists` (via `SHOW CONSTRAINTS`), `get_status`.
+    - `execute_query` raises `NotImplementedError` by design — no raw Cypher entry point. Preserves the C2 safeguard ("l'entrée se fait par l'ontologie", Benoit 20/05).
+    - All 16 named-query methods (`get_aggregate_stats`, `get_type_distribution`, `get_predicate_distribution`, `find_subjects_by_type`, `resolve_subject_by_id`, `get_entity_metadata`, `get_triples_for_subjects`, `get_predicates_for_type`, `paginated_triples`, `paginated_count`, `bfs_traversal`, `find_seed_subjects`, `find_subjects_by_patterns`, `expand_entity_neighbors`, `transitive_closure`, `symmetric_expand`, `shortest_path`, `delete_cohort_triples`) implemented in native Cypher with parameterised queries.
+3. **`src/back/core/graphdb/GraphDBFactory.py`** — `_create_neo4j` dispatch + `NEO4J_AVAILABLE` guarded import + class-level availability flag.
+4. **`src/back/objects/session/GlobalConfigService.py`** — `ALLOWED_GRAPH_ENGINES = ("lakebase", "neo4j")`.
+5. **`src/back/core/reasoning/SWRLFlatCypherTranslator.py`** — new translator class scaffolded with the same public interface as `SWRLSQLTranslator`. **Methods return `None` and log a warning** — full SWRL → Cypher translation is its own follow-up PR. Reasoning on Neo4j therefore reports zero violations / inferences (graceful no-op) rather than crashing.
+6. **`src/front/config/menu_config.json`** — new "Neo4j" item under TRIPLE STORE group.
+7. **`src/front/templates/settings.html`**:
+    - `<option value="neo4j">Neo4j (Bolt)</option>` in `#graphEngineSelect`.
+    - New `#neo4j-section` with config form: URI, database, auth method, credentials, encrypted toggle.
+8. **`pyproject.toml`** — `[project.optional-dependencies] neo4j = ["neo4j>=5.0"]`.
+9. **`tests/units/graphdb/test_neo4j_store.py`** — new test module (driver-mocked) covering capability flags, construction validation, schema sanitisation, CRUD Cypher emission, factory dispatch, and reasoning translator wiring.
+
+## Files modified / added
+
+- `src/back/core/graphdb/neo4j/__init__.py` (new)
+- `src/back/core/graphdb/neo4j/Neo4jStore.py` (new, ~580 lines)
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/core/reasoning/SWRLFlatCypherTranslator.py` (new)
+- `src/front/config/menu_config.json`
+- `src/front/templates/settings.html`
+- `pyproject.toml`
+- `tests/units/graphdb/__init__.py` (new)
+- `tests/units/graphdb/test_neo4j_store.py` (new)
+
+## Known limitations (deliberate)
+
+- **Reasoning on Neo4j is a no-op** until the dedicated SWRLFlatCypherTranslator translation PR lands. UI surfaces zero violations / zero inferences cleanly.
+- **`auth_method=databricks_secret`** is validated but unresolved — basic auth is the only live-tested path.
+- **`paginated_triples` SQL conditions** are not translated to Cypher — the unfiltered page is returned and the call is logged. Filtered access should switch to `find_subjects_by_type` / `find_seed_subjects`.
+- **`settings.js` save handlers** for the Neo4j section are not in this commit — `engine_config` can currently be persisted via API; UI wiring follows in the next commit on this branch.
+- **Build page** (`_query_sync.html` / `_domain_validation.html`) — engine-aware "Graph DB (…)" labels for Neo4j follow in the next commit on this branch.
+
+## Test result
+
+- Static syntax check on all new files: OK.
+- Unit tests pass when `neo4j>=5.0` is installed; skip cleanly when not.
+- Live smoke test against the Ryan-provisioned Aura (`neo4j+s://b4810af7.databases.neo4j.io`) — pending after the next commit (settings.js wiring + Build page labels).
+- `make test` — to be re-run before marking the PR ready-for-review.

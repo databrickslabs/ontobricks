@@ -56,6 +56,13 @@ lakebase = [
     "psycopg-pool>=3.2.0",
 ]
 
+# Neo4j (Bolt / Cypher) graph DB engine — optional, opt-in via Settings.
+# Install with: ``uv sync --extra neo4j`` or ``pip install .[neo4j]``.
+# Required when Settings > Triple store > Global selects "Neo4j (Bolt)".
+neo4j = [
+    "neo4j>=5.0",
+]
+
 # Ontology pitfall detection (D2KLab Ontology-Pitfalls-Detector).
 # Install with: ``pip install .[pitfalls]``
 # Heavy ML deps; downloaded on first use (SentenceTransformer model weights).

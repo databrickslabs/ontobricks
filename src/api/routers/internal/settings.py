@@ -945,6 +945,22 @@ async def get_graph_engine_lakebase_health(
         return config_service.graph_engine_lakebase_health_result(session_mgr, settings)
 
 
+@router.post("/graph-engine/neo4j-test")
+async def post_graph_engine_neo4j_test(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Probe Neo4j Bolt connectivity via ``driver.verify_connectivity()``.
+
+    Wires the Settings → Triple store → Neo4j "Test connection" button.
+    Uses the persisted ``engine_config`` (URI + username + encrypted) and the
+    ``NEO4J_PASSWORD`` env var injected by the bound Apps secret resource.
+    No Cypher is run — this is a Bolt protocol handshake only.
+    """
+    with map_route_errors("graph engine Neo4j connection test", logger):
+        return config_service.graph_engine_neo4j_test_result(session_mgr, settings)
+
+
 @router.get("/graph-engine/uc-catalogs")
 async def get_graph_engine_uc_catalogs(
     session_mgr: SessionManager = Depends(get_session_manager),

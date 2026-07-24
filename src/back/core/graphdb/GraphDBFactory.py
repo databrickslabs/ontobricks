@@ -27,6 +27,7 @@ class GraphDBFactory:
     """Construct graph DB backend instances from domain session configuration."""
 
     LAKEBASE_AVAILABLE = False
+    NEO4J_AVAILABLE = False
 
     def create(
         self,
@@ -60,11 +61,52 @@ class GraphDBFactory:
         if engine == "lakebase":
             return self._create_lakebase(domain, settings, engine_config=engine_config)
 
+        if engine == "neo4j":
+            return self._create_neo4j(domain, settings, engine_config=engine_config)
+
         if engine == "delta":
             return self._create_delta(domain, settings)
 
         logger.warning("Unknown graph DB engine: %s", engine)
         return None
+
+    def _create_neo4j(
+        self,
+        domain: Any,
+        settings: Optional[Any] = None,
+        *,
+        engine_config: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Any]:
+        """Instantiate :class:`Neo4jStore` against the configured Bolt endpoint.
+
+        Reads ``uri``, ``database``, ``auth_method`` and credentials from
+        ``engine_config``. See :class:`back.core.graphdb.neo4j.Neo4jStore`
+        for the recognised keys.
+        """
+        try:
+            from back.core.graphdb.neo4j import NEO4J_AVAILABLE
+            from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+            from shared.config.constants import DEFAULT_GRAPH_NAME
+        except ImportError as e:
+            logger.warning("Neo4j graph engine requires the 'neo4j' driver: %s", e)
+            return None
+
+        if not NEO4J_AVAILABLE:
+            logger.warning("Neo4j graph backend unavailable (neo4j driver not installed)")
+            return None
+
+        cfg = engine_config or {}
+        base_name = (domain.info or {}).get("name", DEFAULT_GRAPH_NAME)
+        version = getattr(domain, "current_version", "1") or "1"
+        db_name = "%s_V%s" % (base_name, version)
+        try:
+            return Neo4jStore(db_name=db_name, engine_config=cfg)
+        except (ValueError, NotImplementedError) as exc:
+            logger.warning("Neo4jStore configuration error: %s", exc)
+            return None
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Failed to create Neo4jStore: %s", e)
+            return None
 
     def _create_auto(
         self, domain: Any, settings: Optional[Any] = None
@@ -471,3 +513,10 @@ try:
     GraphDBFactory.LAKEBASE_AVAILABLE = bool(_LB_AVAIL)
 except ImportError:
     logger.debug("Lakebase graph backends not available (optional dependency)")
+
+try:
+    from back.core.graphdb.neo4j import NEO4J_AVAILABLE as _NEO4J_AVAIL  # noqa: F401
+
+    GraphDBFactory.NEO4J_AVAILABLE = bool(_NEO4J_AVAIL)
+except ImportError:
+    logger.debug("Neo4j graph backend not available (optional dependency)")

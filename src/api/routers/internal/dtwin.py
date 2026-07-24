@@ -2305,6 +2305,7 @@ async def dtwin_graphql_schema(
     domain.
     """
     from back.core.graphql import build_schema_for_domain
+    from back.fastapi.graphql_routes import _diagnose_empty_ontology
     from strawberry.printer import print_schema
 
     domain = get_domain(session_mgr)
@@ -2317,10 +2318,25 @@ async def dtwin_graphql_schema(
     properties_list = ontology.get("properties", []) or []
     base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
 
-    if not classes:
-        raise ValidationError(
-            "Ontology is empty — add at least one class to generate a GraphQL schema."
-        )
+    # Friendly fallback: when the ontology is too thin to back a GraphQL
+    # schema, return a 200 with ``sdl=null`` + a typed ``reason``. The UI
+    # branches on ``ready`` to render an in-context hint instead of a
+    # blunt "HTTP 400" toast.
+    diag = _diagnose_empty_ontology(classes, properties_list)
+    if diag is not None:
+        reason, message = diag
+        return {
+            "success": True,
+            "ready": False,
+            "domain": display_name,
+            "sdl": None,
+            "reason": reason,
+            "message": message,
+            "stats": {
+                "classes": len(classes),
+                "properties": len(properties_list),
+            },
+        }
 
     result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
     if not result:
@@ -2330,6 +2346,7 @@ async def dtwin_graphql_schema(
     schema, _metadata = result
     return {
         "success": True,
+        "ready": True,
         "domain": display_name,
         "sdl": print_schema(schema),
     }

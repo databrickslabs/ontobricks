@@ -123,7 +123,27 @@ const GraphQLPlayground = (() => {
             );
             if (!schemaResp.ok) {
                 const errData = await schemaResp.json().catch(() => ({}));
-                throw new Error(errData.detail || `HTTP ${schemaResp.status}`);
+                throw new Error(errData.detail || errData.message || `HTTP ${schemaResp.status}`);
+            }
+            // New v0.7 friendly fallback: 200 with ready:false when the
+            // ontology is too thin to back a schema (no classes, no
+            // properties). Show an in-context hint instead of a toast.
+            const schemaData = await schemaResp.clone().json().catch(() => ({}));
+            if (schemaData && schemaData.ready === false) {
+                _hideAll();
+                const msg = _el('graphqlErrorMsg');
+                if (msg) {
+                    const stats = schemaData.stats || {};
+                    msg.innerHTML =
+                        '<strong>GraphQL not ready</strong> — ' +
+                        (schemaData.message || 'ontology missing classes or properties.') +
+                        '<br><small class="text-muted">Ontology has ' +
+                        (stats.classes || 0) + ' class(es), ' +
+                        (stats.properties || 0) + ' propert(ies). ' +
+                        'Reason: <code>' + (schemaData.reason || 'unknown') + '</code></small>';
+                }
+                _show('graphqlError');
+                return;
             }
         } catch (err) {
             _hideAll();

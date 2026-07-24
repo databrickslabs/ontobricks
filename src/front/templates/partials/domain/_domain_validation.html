@@ -263,15 +263,17 @@
                     <div id="psDtViewReason" class="text-danger dt-arch-reason" style="display:none;"></div>
                 </div>
 
-                <!-- Lakebase section: arrow + Sync + arrow + Graph DB -->
+                <!-- Engine-specific bridge + Graph DB. The middle bridge differs by
+                     engine: Lakebase Sync (persistent UC-synced table) vs Neo4j Bolt
+                     writer (transient Cypher UNWIND/MERGE at build time). -->
                 <div id="psDtLakebaseDetails" class="d-none dt-arch-lakebase-section">
 
-                    <!-- Arrow: Triple Store → Sync -->
+                    <!-- Arrow: Triple Store → Bridge -->
                     <div class="dt-arch-connector">
                         <i class="bi bi-arrow-right"></i>
                     </div>
 
-                    <!-- Card 2: UC Sync Object -->
+                    <!-- Card 2a: UC Sync Object (Lakebase) -->
                     <div class="dt-arch-node" id="psDtLakebaseSyncedUcRow">
                         <div class="dt-arch-header">
                             <i class="bi bi-arrow-repeat fs-4 dt-arch-icon-sync-lg flex-shrink-0"></i>
@@ -281,12 +283,22 @@
                         <code class="dt-arch-name" id="psDtLakebaseSyncedUc">—</code>
                     </div>
 
-                    <!-- Arrow: Sync → Graph DB -->
+                    <!-- Card 2b: Bolt writer (Neo4j) — hidden by default; JS shows it -->
+                    <div class="dt-arch-node d-none" id="psDtNeo4jBoltCard">
+                        <div class="dt-arch-header">
+                            <i class="bi bi-lightning-charge-fill fs-4 dt-arch-icon-sync-lg flex-shrink-0" style="color:#018BFF;"></i>
+                            <span class="dt-arch-title">Bolt</span>
+                            <span class="dt-arch-badge"><span class="badge bg-info bg-opacity-10 text-info border border-info" style="font-size:.65rem;"><i class="bi bi-broadcast me-1"></i>UNWIND · MERGE</span></span>
+                        </div>
+                        <code class="dt-arch-name">Cypher write at build time</code>
+                    </div>
+
+                    <!-- Arrow: Bridge → Graph DB -->
                     <div class="dt-arch-connector">
                         <i class="bi bi-arrow-right"></i>
                     </div>
 
-                    <!-- Card 3: Graph DB (Lakebase) -->
+                    <!-- Card 3: Graph DB (engine-aware) -->
                     <div class="dt-arch-node" id="psDtGraphCard">
                         <div class="dt-arch-header">
                             <img src="/static/global/img/lakebase-icon.svg" class="dt-arch-icon-lakebase-img flex-shrink-0" alt="Lakebase">

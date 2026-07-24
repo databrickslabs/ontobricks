@@ -162,17 +162,59 @@ function _applyBuildGraphEngineUi(dtExist) {
     if (fnLk) fnLk.classList.remove('d-none');
 
     var title = document.getElementById('dtGraphBackendTitle');
+    var labels = { 'lakebase': 'Graph DB (Lakebase)', 'neo4j': 'Graph DB (Neo4j)' };
     if (title) {
-        title.textContent = eng === 'lakebase' ? 'Graph DB (Lakebase)' : 'Graph DB Knowledge Graph';
+        title.textContent = labels[eng] || 'Graph DB Digital Twin';
     }
+    // Toggle the post-Triple-Store cards (Sync + Graph DB) based on engine.
+    // The `dtLakebaseDetails` container wraps both the Sync card and the
+    // Graph DB card. On Lakebase, both show. On Neo4j, the Sync card is
+    // hidden (no UC-synced table on the Neo4j path) but the Graph DB card
+    // remains visible with engine-aware label and metadata.
+    function _renderEngineUi(activeEng) {
+        var container = document.getElementById('dtLakebaseDetails');
+        var titleEl   = document.getElementById('dtGraphBackendTitle');
+        var lkIcon    = document.querySelector('#dtGraphCard .dt-arch-icon-lakebase-img');
+        var syncRow   = document.getElementById('dtLakebaseSyncedUcRow');
+        var boltRow   = document.getElementById('dtNeo4jBoltCard');
+        var lkBuild   = document.getElementById('dtLakebaseBuildNote');
+        var graphFn   = document.getElementById('dtLakebaseFullName');
+        if (container) container.classList.remove('d-none');
+        if (titleEl)   titleEl.textContent = labels[activeEng] || ('Graph DB (' + activeEng + ')');
+        if (activeEng === 'neo4j') {
+            // Show the Bolt writer card, hide the Lakebase Sync card + build note + icon
+            if (syncRow) syncRow.classList.add('d-none');
+            if (boltRow) boltRow.classList.remove('d-none');
+            if (lkBuild) lkBuild.classList.add('d-none');
+            if (lkIcon) lkIcon.classList.add('d-none');
+            if (graphFn) graphFn.textContent = (cfg.graph_name || 'Knowledge Graph');
+        } else {
+            if (syncRow) syncRow.classList.remove('d-none');
+            if (boltRow) boltRow.classList.add('d-none');
+            if (lkBuild) lkBuild.classList.remove('d-none');
+            if (lkIcon) lkIcon.classList.remove('d-none');
+        }
+    }
+    _renderEngineUi(eng);
+    // `dt.graph_engine` can be stale even after a build: it reflects the
+    // engine recorded on the domain at build-time, not necessarily the
+    // active global engine. Reconcile against /settings/graph-engine.
+    fetch('/settings/graph-engine', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+            var globalEng = data && data.graph_engine;
+            if (!globalEng || globalEng === cfg.graph_engine) return;
+            cfg.graph_engine = globalEng;
+            window.__TRIPLESTORE_CONFIG = cfg;
+            _renderEngineUi(globalEng);
+        })
+        .catch(function () { /* leave fallback in place */ });
     var sub = document.getElementById('dtGraphStorageSubtitle');
     var primaryRow = document.getElementById('dtGraphPrimaryRow');
     if (sub) sub.classList.add('d-none');
     if (primaryRow) primaryRow.classList.add('d-none');
     var regRow = document.getElementById('dtRegistryArchiveRow');
     if (regRow) regRow.classList.add('d-none');
-    var lkDetails = document.getElementById('dtLakebaseDetails');
-    if (lkDetails) lkDetails.classList.toggle('d-none', eng !== 'lakebase');
 
     if (eng === 'lakebase') {
         var lkDb  = document.getElementById('dtLakebaseDatabase');

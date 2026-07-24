@@ -65,6 +65,13 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch((e) => console.log('Graph DB preload failed', e))
         .finally(() => { setBackendTabLoading(false); });
 
+    // Align Lakebase sub-panel visibility with the server-rendered engine
+    // selector before any async fetch runs — fixes the "Lakebase flashes
+    // before Neo4j" flicker flagged by Benoit in the PR #47 review (the
+    // select itself is already correct from Jinja's `selected` attribute,
+    // but applyGraphDbEnginePanels otherwise waits for the lazy-load).
+    applyGraphDbEnginePanels();
+
     // =====================================================================
     //  DATABRICKS TAB
     // =====================================================================
@@ -2615,6 +2622,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (sel.value === 'lakebase') {
                 mergeLakebasePanelIntoConfigTextarea();
+            } else if (sel.value === 'neo4j') {
+                mergeNeo4jPanelIntoConfigTextarea();
             }
 
             let parsed;
@@ -2697,6 +2706,140 @@ document.addEventListener('DOMContentLoaded', function () {
     // =====================================================================
     //  GLOBAL SAVE BUTTON – warehouse, global prefs, CloudFetch, Graph DB
     // =====================================================================
+
+    // ── Neo4j engine config — form ↔ textarea ───────────────────────────────
+    //
+    // Mirrors the Lakebase merge/toggle pattern. When the active engine is
+    // "neo4j" (Settings > Triple store > Global dropdown), this function
+    // reads the Neo4j config form fields from #neo4j-section and serialises
+    // them into the shared #graphEngineConfig textarea, which the existing
+    // save flow then POSTs to /settings/graph-engine-config.
+    function mergeNeo4jPanelIntoConfigTextarea() {
+        const ta = document.getElementById('graphEngineConfig');
+        if (!ta) return;
+        let o = {};
+        try { o = JSON.parse(ta.value || '{}'); } catch (_) { o = {}; }
+        if (typeof o !== 'object' || Array.isArray(o)) o = {};
+
+        const uri        = (document.getElementById('neo4jUri')?.value || '').trim();
+        const database   = (document.getElementById('neo4jDatabase')?.value || '').trim();
+        const authMethod = (document.getElementById('neo4jAuthMethod')?.value || 'basic').trim();
+        const encrypted  = !!document.getElementById('neo4jEncrypted')?.checked;
+
+        if (uri) o.uri = uri; else delete o.uri;
+        o.database    = database || 'neo4j';
+        o.auth_method = authMethod;
+        o.encrypted   = encrypted;
+
+        if (authMethod === 'basic') {
+            const user = (document.getElementById('neo4jUsername')?.value || '').trim();
+            const pwdEl = document.getElementById('neo4jPassword');
+            // When the password input is disabled (Apps secret is in place),
+            // never serialise the field — the server-side env var is the
+            // source of truth and the backend strips persisted passwords.
+            const pwd  = (pwdEl && !pwdEl.disabled) ? (pwdEl.value || '') : '';
+            if (user) o.username = user; else delete o.username;
+            if (pwd)  o.password = pwd;  else delete o.password;
+            delete o.secret_scope;
+            delete o.secret_key;
+        } else if (authMethod === 'databricks_secret') {
+            const scope = (document.getElementById('neo4jSecretScope')?.value || '').trim();
+            const key   = (document.getElementById('neo4jSecretKey')?.value || '').trim();
+            if (scope) o.secret_scope = scope; else delete o.secret_scope;
+            if (key)   o.secret_key   = key;   else delete o.secret_key;
+            delete o.username;
+            delete o.password;
+        }
+        ta.value = JSON.stringify(o, null, 2);
+    }
+
+    // Auth-method visibility toggle
+    function applyNeo4jAuthMethodVisibility() {
+        const sel = document.getElementById('neo4jAuthMethod');
+        if (!sel) return;
+        const basicFields  = document.querySelectorAll('.neo4j-auth-basic');
+        const secretFields = document.querySelectorAll('.neo4j-auth-databricks-secret');
+        const isBasic  = sel.value === 'basic';
+        const isSecret = sel.value === 'databricks_secret';
+        basicFields.forEach(el => el.classList.toggle('d-none', !isBasic));
+        secretFields.forEach(el => el.classList.toggle('d-none', !isSecret));
+    }
+
+    // Wire up Neo4j form field listeners — keep the textarea in sync as the
+    // user edits the panel, so the save flow always serialises fresh values.
+    [
+        'neo4jUri', 'neo4jDatabase', 'neo4jAuthMethod',
+        'neo4jUsername', 'neo4jPassword',
+        'neo4jSecretScope', 'neo4jSecretKey',
+        'neo4jEncrypted',
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input',  mergeNeo4jPanelIntoConfigTextarea);
+        el.addEventListener('change', mergeNeo4jPanelIntoConfigTextarea);
+    });
+    document.getElementById('neo4jAuthMethod')?.addEventListener('change', applyNeo4jAuthMethodVisibility);
+    // Initial render — apply auth-method visibility on page load.
+    applyNeo4jAuthMethodVisibility();
+
+    // Test-connection button — POSTs to /settings/graph-engine/neo4j-test which
+    // runs a Bolt protocol handshake (driver.verify_connectivity()) using the
+    // persisted engine_config + NEO4J_PASSWORD env var. No Cypher is executed.
+    document.getElementById('btnTestNeo4jConnection')?.addEventListener('click', async function () {
+        const btn = this;
+        const result = document.getElementById('neo4jTestResult');
+        if (!result) return;
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing…';
+        result.className = 'alert alert-info mt-3 small';
+        result.classList.remove('d-none');
+        result.textContent = 'Sending Bolt handshake…';
+        try {
+            // Save the current panel state first so the test uses the values
+            // currently in the form, not just what was persisted.
+            mergeNeo4jPanelIntoConfigTextarea();
+            const ta = document.getElementById('graphEngineConfig');
+            let parsed = {};
+            try { parsed = JSON.parse(ta?.value || '{}'); } catch (_) { parsed = {}; }
+            await fetch('/settings/graph-engine-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ graph_engine_config: parsed }),
+            });
+            const resp = await fetch('/settings/graph-engine/neo4j-test', {
+                method: 'POST',
+                credentials: 'same-origin',
+            });
+            const j = await resp.json();
+            if (j.ok) {
+                result.className = 'alert alert-success mt-3 small';
+                const probe = j.cypher_probe
+                    ? ' · <code>RETURN 1 AS probe</code> echoed ' +
+                      j.cypher_probe.rows + ' row(s) — Cypher path live.'
+                    : '';
+                result.innerHTML =
+                    '<i class="bi bi-check-circle me-1"></i>' +
+                    '<strong>Connected</strong> to <code>' + j.uri + '</code> ' +
+                    '(database <code>' + j.database + '</code>) in ' + j.latency_ms + ' ms · ' +
+                    'credentials from <em>' + j.credentials_source + '</em>.' + probe;
+            } else {
+                result.className = 'alert alert-danger mt-3 small';
+                const cat = j.category ? ' <span class="badge bg-danger-subtle text-danger-emphasis border ms-1">' + j.category + '</span>' : '';
+                result.innerHTML =
+                    '<i class="bi bi-x-circle me-1"></i>' +
+                    '<strong>Test failed</strong>' + cat + ': ' +
+                    (j.error || j.message || 'Unknown error');
+            }
+        } catch (e) {
+            result.className = 'alert alert-danger mt-3 small';
+            result.textContent = 'Test failed: ' + (e.message || e);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    });
 
     document.querySelectorAll('.btn-save-settings').forEach(saveBtn => saveBtn.addEventListener('click', async function () {
         const btn = this;
