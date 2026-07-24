@@ -84,3 +84,19 @@ legacy dropdown. Added a third card for Neo4j at parity with the other two backe
 ### Test results
 
 `uv run pytest -q -m "not scenario"` (settings + contract) → 161 passed, 2 pre-existing failures.
+
+---
+
+## Build page layout fix (Lakebase)
+
+### Context
+The PR#47 merge changed `_renderEngineUi` to actively remove `d-none` from `dtLakebaseBuildNote` for Lakebase engine. The build note element carries Bootstrap's `w-100` class (intended to push it below the architecture cards). However, `.dt-arch-lakebase-section` was a flex container without `flex-wrap`, so the 100%-wide note could not wrap and instead squashed the Triple Store → Sync → Graph DB card row.
+
+### Changes
+1. `src/front/static/query/css/query-sync.css` — Added `flex-wrap: wrap` to `.dt-arch-lakebase-section:not(.d-none)` so the `w-100` build note wraps below the three arch cards as intended.
+
+### Modified files
+- `src/front/static/query/css/query-sync.css`
+
+### Test results
+No unit tests cover CSS layout; visual fix verified via code inspection.
