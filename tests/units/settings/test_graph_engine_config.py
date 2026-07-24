@@ -127,13 +127,19 @@ class TestGlobalConfigGraphEngineConfig:
         assert "graph_engine_config" in empty
         assert empty["graph_engine_config"] == {}
 
-    def test_get_graph_engine_config_returns_dict(self):
+    def test_get_graph_engine_config_returns_nested(self):
         svc = GlobalConfigService()
         data = GlobalConfigService._empty()
-        data["graph_engine_config"] = {"host": "neo4j.local", "port": 7687}
+        data["graph_engine_config"] = {
+            "uri": "bolt://neo4j.local",
+            "database": "analytics",
+            "schema": "ontobricks_graph",
+        }
         with patch.object(svc, "load", return_value=data):
             cfg = svc.get_graph_engine_config("h", "t", REGISTRY_CFG)
-        assert cfg == {"host": "neo4j.local", "port": 7687}
+        assert cfg["lakebase"]["database"] == "analytics"
+        assert cfg["lakebase"]["schema"] == "ontobricks_graph"
+        assert cfg["neo4j"]["uri"] == "bolt://neo4j.local"
 
     def test_get_graph_engine_config_returns_empty_when_missing(self):
         svc = GlobalConfigService()
@@ -141,7 +147,7 @@ class TestGlobalConfigGraphEngineConfig:
         del data["graph_engine_config"]
         with patch.object(svc, "load", return_value=data):
             cfg = svc.get_graph_engine_config("h", "t", REGISTRY_CFG)
-        assert cfg == {}
+        assert cfg == {"lakebase": {}, "neo4j": {}, "lakehouse": {}}
 
     def test_get_graph_engine_config_returns_empty_when_not_a_dict(self):
         svc = GlobalConfigService()
@@ -149,17 +155,20 @@ class TestGlobalConfigGraphEngineConfig:
         data["graph_engine_config"] = "not-a-dict"
         with patch.object(svc, "load", return_value=data):
             cfg = svc.get_graph_engine_config("h", "t", REGISTRY_CFG)
-        assert cfg == {}
+        assert cfg == {"lakebase": {}, "neo4j": {}, "lakehouse": {}}
 
     def test_set_graph_engine_config_valid(self):
         svc = GlobalConfigService()
-        config = {"host": "localhost", "port": 7687}
+        config = {"uri": "bolt://localhost", "username": "neo4j"}
         with patch.object(svc, "_save", return_value=(True, "ok")) as mock_save:
             ok, msg = svc.set_graph_engine_config("h", "t", REGISTRY_CFG, config)
         assert ok
-        mock_save.assert_called_once_with(
-            "h", "t", REGISTRY_CFG, {"graph_engine_config": config}
-        )
+        saved = mock_save.call_args[0][3]["graph_engine_config"]
+        assert saved == {
+            "lakebase": {},
+            "neo4j": {"uri": "bolt://localhost", "username": "neo4j"},
+            "lakehouse": {},
+        }
 
     def test_set_graph_engine_config_empty_dict_valid(self):
         svc = GlobalConfigService()
@@ -167,7 +176,16 @@ class TestGlobalConfigGraphEngineConfig:
             ok, msg = svc.set_graph_engine_config("h", "t", REGISTRY_CFG, {})
         assert ok
         mock_save.assert_called_once_with(
-            "h", "t", REGISTRY_CFG, {"graph_engine_config": {}}
+            "h",
+            "t",
+            REGISTRY_CFG,
+            {
+                "graph_engine_config": {
+                    "lakebase": {},
+                    "neo4j": {},
+                    "lakehouse": {},
+                }
+            },
         )
 
     def test_set_graph_engine_config_lakebase_database_and_schema(self):
@@ -176,9 +194,23 @@ class TestGlobalConfigGraphEngineConfig:
         with patch.object(svc, "_save", return_value=(True, "ok")) as mock_save:
             ok, msg = svc.set_graph_engine_config("h", "t", REGISTRY_CFG, cfg)
         assert ok
-        mock_save.assert_called_once_with(
-            "h", "t", REGISTRY_CFG, {"graph_engine_config": cfg}
-        )
+        saved = mock_save.call_args[0][3]["graph_engine_config"]
+        assert saved["lakebase"] == {
+            "database": "analytics",
+            "schema": "ontobricks_graph",
+        }
+        assert saved["neo4j"] == {}
+        assert saved["lakehouse"] == {}
+
+    def test_set_graph_engine_config_stores_lakehouse_warehouse_only(self):
+        svc = GlobalConfigService()
+        cfg = {"lakehouse": {"warehouse_id": "wh-42"}}
+        with patch.object(svc, "_save", return_value=(True, "ok")) as mock_save:
+            ok, msg = svc.set_graph_engine_config("h", "t", REGISTRY_CFG, cfg)
+        assert ok
+        updates = mock_save.call_args[0][3]
+        assert "delta_warehouse_id" not in updates
+        assert updates["graph_engine_config"]["lakehouse"]["warehouse_id"] == "wh-42"
 
     def test_set_graph_engine_config_rejects_non_dict(self):
         svc = GlobalConfigService()
@@ -204,9 +236,11 @@ class TestGlobalConfigGraphEngineConfig:
         with patch.object(svc, "_save", return_value=(True, "ok")) as mock_save:
             ok, _ = svc.set_graph_engine_config("h", "t", REGISTRY_CFG, cfg)
         assert ok
-        mock_save.assert_called_once_with(
-            "h", "t", REGISTRY_CFG, {"graph_engine_config": cfg}
-        )
+        saved = mock_save.call_args[0][3]["graph_engine_config"]
+        assert saved["lakebase"]["sync_mode"] == "managed_synced"
+        assert saved["lakebase"]["sync_uc_catalog"] == "main"
+        assert saved["neo4j"] == {}
+        assert saved["lakehouse"] == {}
 
     def test_set_graph_engine_config_rejects_bad_sync_mode(self):
         svc = GlobalConfigService()
@@ -242,7 +276,11 @@ class TestSettingsServiceGraphEngineConfig:
 
     def test_get_graph_engine_config_result(self):
         session_mgr, settings = _mock_context()
-        expected_cfg = {"host": "remote.db", "port": 7687}
+        expected_cfg = {
+            "lakebase": {},
+            "neo4j": {"uri": "bolt://remote.db"},
+            "lakehouse": {},
+        }
 
         with (
             patch.object(
@@ -277,11 +315,20 @@ class TestSettingsServiceGraphEngineConfig:
             )
 
         assert result["success"]
-        assert result["graph_engine_config"] == {}
+        assert result["graph_engine_config"] == {
+            "lakebase": {},
+            "neo4j": {},
+            "lakehouse": {},
+        }
 
     def test_set_graph_engine_config_result_success(self):
         session_mgr, settings = _mock_context()
-        cfg = {"host": "localhost", "port": 7687}
+        cfg = {"uri": "bolt://localhost", "username": "neo4j"}
+        nested = {
+            "lakebase": {},
+            "neo4j": {"uri": "bolt://localhost", "username": "neo4j"},
+            "lakehouse": {},
+        }
 
         with (
             patch.object(
@@ -294,13 +341,15 @@ class TestSettingsServiceGraphEngineConfig:
             patch.object(_svc_module, "global_config_service") as gcs,
         ):
             gcs.set_graph_engine_config.return_value = (True, "ok")
-            gcs.get_graph_engine_config.return_value = cfg
+            gcs.get_graph_engine_config.return_value = nested
             result = SettingsService.set_graph_engine_config_result(
                 cfg, "", "", session_mgr, settings
             )
 
         assert result["success"]
-        assert result["graph_engine_config"] == cfg
+        assert result["graph_engine_config"] == nested
+        saved = gcs.set_graph_engine_config.call_args[0][3]
+        assert saved == nested
 
     def test_set_graph_engine_config_result_validation_error(self):
         session_mgr, settings = _mock_context()

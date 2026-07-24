@@ -1317,6 +1317,8 @@ class DomainSession:
         version = self._data["domain"].get("current_version", "1")
 
         # Export info from project.info (without version - version is at versions level)
+        from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+
         info_export = {
             "name": self._data["domain"]["info"].get("name", "NewDomain"),
             "description": self._data["domain"]["info"].get("description", ""),
@@ -1326,6 +1328,9 @@ class DomainSession:
             "status": self._data["domain"]["info"].get("status", "DRAFT"),
             "review_quorum": max(
                 1, int(self._data["domain"]["info"].get("review_quorum") or 1)
+            ),
+            "graph_backend": normalize_graph_backend(
+                self._data["domain"]["info"].get("graph_backend")
             ),
             "last_update": self._data["domain"].get("last_update", ""),
             "last_build": self._data["domain"].get("last_build", ""),
@@ -1417,6 +1422,8 @@ class DomainSession:
 
         # Import info into domain.info
         if "info" in data:
+            from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+
             info = data["info"]
             self._data["domain"]["info"]["name"] = info.get("name", "NewDomain")
             self._data["domain"]["info"]["description"] = info.get("description", "")
@@ -1426,6 +1433,9 @@ class DomainSession:
             self._data["domain"]["info"]["status"] = info.get("status", "DRAFT")
             self._data["domain"]["info"]["review_quorum"] = max(
                 1, int(info.get("review_quorum") or 1)
+            )
+            self._data["domain"]["info"]["graph_backend"] = normalize_graph_backend(
+                info.get("graph_backend")
             )
             self._data["domain"]["last_update"] = info.get("last_update", "")
             self._data["domain"]["last_build"] = info.get("last_build", "")

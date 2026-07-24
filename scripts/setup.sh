@@ -39,7 +39,8 @@ echo "Activating virtual environment..."
 source .venv/bin/activate
 echo ""
 
-# Install dependencies (including optional lakebase and pitfalls extras for local dev)
+# Install dependencies (including lakebase and pitfalls extras for local dev;
+# neo4j is a core dependency in pyproject.toml)
 echo "Installing dependencies..."
 uv sync --frozen --extra lakebase --extra pitfalls
 echo ""

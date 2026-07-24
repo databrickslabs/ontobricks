@@ -18,20 +18,22 @@ REGISTRY_CFG = {"catalog": "cat", "schema": "sch", "volume": "vol"}
 
 
 class TestGlobalConfigDeltaWarehouse:
-    def test_empty_defaults_contain_delta_warehouse_id(self):
+    def test_empty_defaults_have_no_top_level_delta_warehouse(self):
         empty = GlobalConfigService._empty()
-        assert empty.get("delta_warehouse_id") == ""
+        assert "delta_warehouse_id" not in empty
 
-    def test_get_and_set_delta_warehouse_id(self):
+    def test_get_and_set_delta_warehouse_id_uses_lakehouse_bucket(self):
         svc = GlobalConfigService()
         with patch.object(svc, "load", return_value=GlobalConfigService._empty()):
             assert svc.get_delta_warehouse_id("h", "t", REGISTRY_CFG) == ""
-        with patch.object(svc, "_save", return_value=(True, "ok")) as mock_save:
+        with patch.object(svc, "load", return_value=GlobalConfigService._empty()), patch.object(
+            svc, "_save", return_value=(True, "ok")
+        ) as mock_save:
             ok, _ = svc.set_delta_warehouse_id("h", "t", REGISTRY_CFG, "wh-delta")
         assert ok
-        mock_save.assert_called_once_with(
-            "h", "t", REGISTRY_CFG, {"delta_warehouse_id": "wh-delta"}
-        )
+        updates = mock_save.call_args[0][3]
+        assert "delta_warehouse_id" not in updates
+        assert updates["graph_engine_config"]["lakehouse"]["warehouse_id"] == "wh-delta"
 
 
 class TestResolveDeltaWarehouseId:

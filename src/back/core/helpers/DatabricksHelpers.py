@@ -117,11 +117,11 @@ class DatabricksHelpers:
 
     @staticmethod
     def resolve_delta_warehouse_id(domain, settings) -> str:
-        """Resolve the SQL Warehouse for Delta triple-store graph queries.
+        """Resolve the SQL Warehouse for Lakehouse (Delta) graph queries.
 
         Resolution order:
 
-        1. **Global config** ``delta_warehouse_id`` (Settings → Back end → Delta)
+        1. ``graph_engine_config.lakehouse.warehouse_id`` (Settings → Back end → Lakehouse)
         2. Fallback to :meth:`resolve_warehouse_id` (global warehouse)
         """
         from back.objects.session import global_config_service
@@ -137,7 +137,7 @@ class DatabricksHelpers:
                 if wid:
                     return wid
             except Exception as exc:
-                logger.debug("Could not read global delta warehouse config: %s", exc)
+                logger.debug("Could not read lakehouse warehouse from engine config: %s", exc)
 
         return DatabricksHelpers.resolve_warehouse_id(domain, settings)
 

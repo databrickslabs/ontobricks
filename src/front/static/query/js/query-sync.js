@@ -141,19 +141,50 @@ function _applyReadiness(data) {
     }
 }
 
+/** Compact badge spinner used while Build-page artefact probes are in flight. */
+function _archSpinnerBadge(label) {
+    return '<span class="badge bg-light text-muted border" style="font-size:.65rem;" role="status">' +
+        '<span class="spinner-border spinner-border-sm me-1" style="width:.65rem;height:.65rem;border-width:.12em;" aria-hidden="true"></span>' +
+        _escHtml(label || 'Loading') + '</span>';
+}
+
+/** Compact name-line spinner for unresolved Triple Store / Sync / Graph DB FQNs. */
+function _archSpinnerName() {
+    return '<span class="spinner-border spinner-border-sm text-muted" role="status" aria-label="Loading" ' +
+        'style="width:.7rem;height:.7rem;border-width:.12em;"></span>';
+}
+
 /**
- * Apply DT-existence data obtained from the consolidated endpoint.
- * Mirrors _loadDtExistence() rendering without the separate fetch.
+ * Toggle inline retrieval spinners on the Lakebase architecture cards.
+ * Used before the live ``/dtwin/sync/dt-existence`` probe so badges/names do
+ * not flash "Unable to check" / "—" while the probe is still running.
  */
+function _setArchRetrievalLoading(on) {
+    if (!on) return;
+    var badgeIds = ['dtExistView', 'dtLakebaseSyncedUcExists', 'dtLakebaseTableExists'];
+    for (var i = 0; i < badgeIds.length; i++) {
+        var el = document.getElementById(badgeIds[i]);
+        if (el) el.innerHTML = _archSpinnerBadge('Loading');
+    }
+    var nameIds = ['dtViewName', 'dtLakebaseSyncedUc', 'dtLakebaseFullName'];
+    for (var j = 0; j < nameIds.length; j++) {
+        var nameEl = document.getElementById(nameIds[j]);
+        if (!nameEl) continue;
+        var cur = (nameEl.textContent || '').trim();
+        if (!cur || cur === '—' || cur === 'N/A' || cur === 'Not configured' || nameEl.querySelector('.spinner-border')) {
+            nameEl.innerHTML = _archSpinnerName();
+        }
+    }
+}
+
 /**
- * Build page: labels and options depend on global Graph DB engine.
- * Currently only Lakebase is supported; the function keeps a generic
- * shape so future engines can be added without touching call sites.
+ * Build page: labels and options depend on the per-domain Graph DB engine.
  */
 function _applyBuildGraphEngineUi(dtExist) {
     var dt = dtExist || {};
     var cfg = window.__TRIPLESTORE_CONFIG || {};
     var eng = dt.graph_engine || cfg.graph_engine || 'lakebase';
+    var pending = dt.pending === true;
     cfg.graph_engine = eng;
     window.__TRIPLESTORE_CONFIG = cfg;
 
@@ -196,19 +227,6 @@ function _applyBuildGraphEngineUi(dtExist) {
         }
     }
     _renderEngineUi(eng);
-    // `dt.graph_engine` can be stale even after a build: it reflects the
-    // engine recorded on the domain at build-time, not necessarily the
-    // active global engine. Reconcile against /settings/graph-engine.
-    fetch('/settings/graph-engine', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (data) {
-            var globalEng = data && data.graph_engine;
-            if (!globalEng || globalEng === cfg.graph_engine) return;
-            cfg.graph_engine = globalEng;
-            window.__TRIPLESTORE_CONFIG = cfg;
-            _renderEngineUi(globalEng);
-        })
-        .catch(function () { /* leave fallback in place */ });
     var sub = document.getElementById('dtGraphStorageSubtitle');
     var primaryRow = document.getElementById('dtGraphPrimaryRow');
     if (sub) sub.classList.add('d-none');
@@ -220,18 +238,27 @@ function _applyBuildGraphEngineUi(dtExist) {
         var lkDb  = document.getElementById('dtLakebaseDatabase');
         var lkSch = document.getElementById('dtLakebaseSchema');
         var lkTbl = document.getElementById('dtLakebaseTable');
-        var lkUcRow = document.getElementById('dtLakebaseSyncedUcRow');
         var lkUc    = document.getElementById('dtLakebaseSyncedUc');
         if (lkDb)  lkDb.textContent  = dt.lakebase_database || '—';
         if (lkSch) lkSch.textContent = dt.lakebase_schema   || '—';
         if (lkTbl) lkTbl.textContent = dt.lakebase_table    || '—';
         var lkFullName = document.getElementById('dtLakebaseFullName');
+        var db = dt.lakebase_database || '', sch = dt.lakebase_schema || '', tbl = dt.lakebase_table || '';
+        var fullName = '';
+        if (db && sch && tbl) fullName = db + '.' + sch + '.' + tbl;
+        else if (sch && tbl) fullName = sch + '.' + tbl;
+        else fullName = db || sch || tbl || '';
         if (lkFullName) {
-            var db = dt.lakebase_database || '', sch = dt.lakebase_schema || '', tbl = dt.lakebase_table || '';
-            lkFullName.textContent = (db && sch && tbl) ? db + '.' + sch + '.' + tbl : (db || sch || tbl || '—');
+            if (fullName) lkFullName.textContent = fullName;
+            else if (pending) lkFullName.innerHTML = _archSpinnerName();
+            else lkFullName.textContent = '—';
         }
         var hasUcName = !!(dt.lakebase_synced_uc);
-        if (lkUc) lkUc.textContent = dt.lakebase_synced_uc || '—';
+        if (lkUc) {
+            if (hasUcName) lkUc.textContent = dt.lakebase_synced_uc;
+            else if (pending) lkUc.innerHTML = _archSpinnerName();
+            else lkUc.textContent = '—';
+        }
 
         // existence badges for table and UC sync
         var tblExistsEl = document.getElementById('dtLakebaseTableExists');
@@ -240,8 +267,9 @@ function _applyBuildGraphEngineUi(dtExist) {
                 tblExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
             } else if (dt.lakebase_table_exists === false) {
                 tblExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+            } else if (pending) {
+                tblExistsEl.innerHTML = _archSpinnerBadge('Loading');
             } else {
-                // null/undefined → live probe could not reach Lakebase
                 tblExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
                 var sp = tblExistsEl.querySelector('span');
                 if (sp) sp.title = dt.lakebase_check_error
@@ -255,8 +283,9 @@ function _applyBuildGraphEngineUi(dtExist) {
                 ucExistsEl.innerHTML = '<span class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.65rem;"><i class="bi bi-check-circle-fill me-1"></i>Exists</span>';
             } else if (dt.lakebase_synced_uc_exists === false) {
                 ucExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
+            } else if (pending) {
+                ucExistsEl.innerHTML = _archSpinnerBadge('Loading');
             } else if (hasUcName) {
-                // name is configured but existence probe didn't return yet / failed
                 ucExistsEl.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;" title="Could not verify whether the UC sync table exists."><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
             } else {
                 ucExistsEl.innerHTML = '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.65rem;"><i class="bi bi-dash-circle me-1"></i>Not found</span>';
@@ -291,12 +320,25 @@ function _applyDtExistence(data) {
         return '<span class="badge bg-secondary bg-opacity-10 text-secondary border" ' + s + '><i class="bi bi-dash-circle me-1"></i>' + (unknownText || 'N/A') + '</span>';
     }
 
+    var pending = data && data.pending === true;
     var viewEl = document.getElementById('dtExistView');
     if (viewEl) {
-        viewEl.innerHTML = _badge(data.view_exists, 'Exists', 'Not found', 'Not configured');
-        if (data.view_check_error) viewEl.title = data.view_check_error;
-        else if (data.view_table) viewEl.title = 'Queried: ' + data.view_table;
-        else viewEl.title = '';
+        if (pending || (data.view_exists == null && !data.view_check_error && data.view_table)) {
+            viewEl.innerHTML = _archSpinnerBadge('Loading');
+            viewEl.title = '';
+        } else {
+            viewEl.innerHTML = _badge(data.view_exists, 'Exists', 'Not found', 'Not configured');
+            if (data.view_check_error) viewEl.title = data.view_check_error;
+            else if (data.view_table) viewEl.title = 'Queried: ' + data.view_table;
+            else viewEl.title = '';
+        }
+    }
+
+    var viewNameEl = document.getElementById('dtViewName');
+    if (viewNameEl) {
+        if (data.view_table) viewNameEl.textContent = data.view_table;
+        else if (pending) viewNameEl.innerHTML = _archSpinnerName();
+        else viewNameEl.textContent = 'Not configured';
     }
 
     var zcCard = document.getElementById('dtZeroCopyCard');
@@ -1506,6 +1548,7 @@ function _escHtml(str) {
  * next to each Knowledge Graph line.
  */
 async function _loadDtExistence() {
+    _setArchRetrievalLoading(true);
     try {
         var resp = await fetch('/dtwin/sync/dt-existence', { credentials: 'same-origin' });
         var data = await resp.json();
@@ -1513,6 +1556,19 @@ async function _loadDtExistence() {
         _applyDtExistence(data);
     } catch (e) {
         console.warn('[Sync] Could not load DT existence flags', e);
+        // Clear spinners so the cards never stay stuck in Loading.
+        _applyBuildGraphEngineUi({
+            pending: false,
+            lakebase_table_exists: null,
+            lakebase_synced_uc_exists: null,
+            lakebase_check_error: String(e && e.message ? e.message : e),
+            graph_engine: (window.__TRIPLESTORE_CONFIG || {}).graph_engine || 'lakebase',
+        });
+        _applyDtExistence({
+            pending: false,
+            view_exists: null,
+            view_check_error: 'Could not refresh artefact status',
+        });
     }
 }
 

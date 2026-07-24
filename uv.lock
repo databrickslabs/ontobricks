@@ -3503,6 +3503,7 @@ dependencies = [
     { name = "itsdangerous" },
     { name = "jinja2" },
     { name = "mlflow" },
+    { name = "neo4j" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi-proxy.dev.databricks.com/simple" }, marker = "python_full_version < '3.11'" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi-proxy.dev.databricks.com/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "owlrl" },
@@ -3523,9 +3524,6 @@ dependencies = [
 lakebase = [
     { name = "psycopg", extra = ["binary"] },
     { name = "psycopg-pool" },
-]
-neo4j = [
-    { name = "neo4j" },
 ]
 pitfalls = [
     { name = "nltk" },
@@ -3576,7 +3574,7 @@ requires-dist = [
     { name = "itsdangerous", specifier = ">=2.1.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "mlflow", specifier = ">=3.11.1" },
-    { name = "neo4j", marker = "extra == 'neo4j'", specifier = ">=5.0" },
+    { name = "neo4j", specifier = ">=5.0" },
     { name = "networkx", specifier = ">=3.0" },
     { name = "nltk", marker = "extra == 'pitfalls'", specifier = ">=3.9.4" },
     { name = "owlrl", specifier = ">=7.0.0" },
@@ -3597,7 +3595,7 @@ requires-dist = [
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.315.7" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
 ]
-provides-extras = ["lakebase", "neo4j", "pitfalls"]
+provides-extras = ["lakebase", "pitfalls"]
 
 [package.metadata.requires-dev]
 dev = [

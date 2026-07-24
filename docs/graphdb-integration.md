@@ -13,9 +13,14 @@ under **Settings → Back end**.
 
 | Engine | Storage | Notes |
 |--------|---------|--------|
-| ``lakebase`` (default) | Flat triple tables on **Lakebase Postgres** | Uses the App-bound Postgres instance (``PGHOST`` / ``PGDATABASE``…). Configure JSON ``graph_engine_config`` with optional ``database`` (Postgres DB name on that instance) and ``schema`` (default ``ontobricks_graph``), and ``mode`` (``app_managed`` or ``managed_synced``). SQL-only (no Cypher); reasoning uses the existing SQL translators. |
-| ``databricks`` (Delta) | Unity Catalog Delta triple tables | Governed UC tables; no separate graph database to provision. |
-| ``neo4j`` | Native graph over Bolt | Neo4j Aura or self-hosted; connection config in ``graph_engine_config``. |
+| ``lakebase`` (default) | Flat triple tables on **Lakebase Postgres** | Uses the App-bound Postgres instance (``PGHOST`` / ``PGDATABASE``…). Configure ``graph_engine_config.lakebase`` with optional ``database`` (Postgres DB name on that instance) and ``schema`` (default ``ontobricks_graph``), and ``sync_mode`` (``app_managed`` or ``managed_synced``). SQL-only (no Cypher); reasoning uses the existing SQL translators. |
+| ``databricks`` (Delta) | Unity Catalog Delta triple tables | Configure ``graph_engine_config.lakehouse.warehouse_id``. |
+| ``neo4j`` | Native graph over Bolt | Neo4j Aura or self-hosted; connection config in ``graph_engine_config.neo4j`` (``uri``, ``database``, credentials). |
+
+Each backend's connection settings are stored in **separate** buckets under
+``graph_engine_config`` (``lakebase`` / ``neo4j`` / ``lakehouse``) so an admin can
+configure all backends independently without shared keys. Flat legacy blobs are
+migrated on read and rewritten nested on the next Save.
 
 ``GraphDBFactory.create(engine=...)`` is the single decision point: only the selected engine is instantiated. The capability flags on ``GraphDBBackend`` (``supports_cypher``, ``is_cypher_backend``, ``query_dialect``) are kept as architectural seams so a future Cypher / Gremlin engine can be added without rewiring reasoning.
 
@@ -254,7 +259,7 @@ Edit `src/front/templates/partials/domain/_domain_information.html` — add an
 ```html
 <select class="form-select domain-editable" id="domainGraphBackend" ...>
     <option value="lakebase">Lakebase (Postgres)</option>
-    <option value="databricks">Databricks (Delta)</option>
+    <option value="databricks">Lakehouse</option>
     <option value="neo4j">Neo4j</option>
     <option value="kuzu">KuzuDB</option>        <!-- NEW -->
 </select>

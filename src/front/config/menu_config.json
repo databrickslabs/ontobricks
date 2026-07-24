@@ -528,7 +528,7 @@
                         },
                         {
                             "id": "delta",
-                            "label": "Delta",
+                            "label": "Lakehouse",
                             "icon": "bi-layers",
                             "default": false,
                             "requires": null

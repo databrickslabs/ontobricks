@@ -291,9 +291,12 @@ async def start_triplestore_sync(
     # (common in the deployed App where the mirror write never fires).
     try:
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.graphdb.engine_config import lakebase_section
 
         _engine = GraphDBFactory._resolve_graph_engine(domain, settings, force=True) or ""
-        _ecfg = GraphDBFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
+        _ecfg = lakebase_section(
+            GraphDBFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
+        )
     except Exception as _exc:  # noqa: BLE001
         logger.debug("Engine config resolution failed, defaulting to non-synced: %s", _exc)
         _engine = ""

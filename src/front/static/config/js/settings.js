@@ -39,12 +39,14 @@ document.addEventListener('DOMContentLoaded', function () {
     loadEditLockTtl();
     loadNavbarLogo();
     // Preload the Delta warehouse selection + registry location so the Delta
-    // panel reflects the saved SQL warehouse. Everything else (graph engine
-    // config, Lakebase/Delta cascade) is deferred to the first visit of those
-    // sections / to Save (sidebarSectionChanged, saveGraphDbSettings).
+    // panel reflects the saved SQL warehouse. Also preload graph_engine_config
+    // so Neo4j / Lakebase connection forms hydrate from the registry before
+    // the first Save (avoids wiping typed Neo4j URI/user on save-time load).
     loadDeltaWarehouseState()
         .then(() => { graphDbLoaded = true; })
         .catch((e) => console.log('Graph DB preload failed', e));
+    loadGraphEngineConfig()
+        .catch((e) => console.log('Graph engine config preload failed', e));
 
     // Ensure the Lakebase / Delta configuration panels are visible on load.
     applyGraphDbEnginePanels();
@@ -178,7 +180,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (savedId) {
             const name = resolveDeltaWarehouseDisplayName(savedId);
             effectiveEl.textContent =
-                'Current SQL Warehouse used for Delta queries: ' + name;
+                'Current SQL Warehouse used for Lakehouse queries: ' + name;
             return;
         }
 
@@ -186,7 +188,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (fallbackId) {
             const name = resolveDeltaWarehouseDisplayName(fallbackId);
             effectiveEl.textContent =
-                'Current SQL Warehouse used for Delta queries: ' + name
+                'Current SQL Warehouse used for Lakehouse queries: ' + name
                 + ' (same as global warehouse)';
             return;
         }
@@ -272,15 +274,15 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             const result = await resp.json();
             if (!resp.ok || !result.success) {
-                const msg = result.message || result.detail || 'Failed to save Delta warehouse';
-                if (errors) errors.push('Delta warehouse: ' + msg);
+                const msg = result.message || result.detail || 'Failed to save Lakehouse warehouse';
+                if (errors) errors.push('Lakehouse warehouse: ' + msg);
                 return false;
             }
             currentDeltaWarehouseId = result.delta_warehouse_id || '';
             setDeltaWarehouseStatus();
             return true;
         } catch (e) {
-            if (errors) errors.push('Delta warehouse: ' + e.message);
+            if (errors) errors.push('Lakehouse warehouse: ' + e.message);
             return false;
         }
     }
@@ -296,8 +298,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (ok) {
             showNotification(
                 currentDeltaWarehouseId
-                    ? 'Delta SQL Warehouse saved to registry'
-                    : 'Delta warehouse cleared — using global warehouse',
+                    ? 'Lakehouse SQL Warehouse saved to registry'
+                    : 'Lakehouse warehouse cleared — using global warehouse',
                 'success',
                 2500
             );
@@ -823,17 +825,104 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── merge / apply ─────────────────────────────────────────────────────────
 
+    /** Keys that belong exclusively to the Neo4j Settings panel (legacy flat). */
+    const _NEO4J_FLAT_KEYS = new Set([
+        'uri', 'auth_method', 'encrypted', 'username', 'password',
+        'secret_scope', 'secret_key', 'neo4j_database',
+    ]);
+
+    /**
+     * Normalise ``#graphEngineConfig`` JSON to ``{lakebase:{}, neo4j:{}}``.
+     * Migrates legacy flat blobs so Lakebase and Neo4j never share keys.
+     */
+    function normalizeEngineConfigRoot(raw) {
+        let o = raw;
+        if (typeof o !== 'object' || o === null || Array.isArray(o)) o = {};
+        if (o.lakebase || o.neo4j || o.lakehouse) {
+            const lakebase = (typeof o.lakebase === 'object' && o.lakebase && !Array.isArray(o.lakebase))
+                ? Object.assign({}, o.lakebase) : {};
+            const neo4j = (typeof o.neo4j === 'object' && o.neo4j && !Array.isArray(o.neo4j))
+                ? Object.assign({}, o.neo4j) : {};
+            const lakehouse = (typeof o.lakehouse === 'object' && o.lakehouse && !Array.isArray(o.lakehouse))
+                ? Object.assign({}, o.lakehouse) : {};
+            if (neo4j.neo4j_database && !neo4j.database) {
+                neo4j.database = neo4j.neo4j_database;
+            }
+            delete neo4j.neo4j_database;
+            if (o.warehouse_id && !lakehouse.warehouse_id) {
+                lakehouse.warehouse_id = o.warehouse_id;
+            }
+            return { lakebase: lakebase, neo4j: neo4j, lakehouse: lakehouse };
+        }
+        const lakebase = {};
+        const neo4j = {};
+        const lakehouse = {};
+        Object.keys(o).forEach(function (k) {
+            if (k === 'lakebase' || k === 'neo4j' || k === 'lakehouse' || k === 'database') return;
+            if (k === 'warehouse_id') {
+                if (o[k]) lakehouse.warehouse_id = o[k];
+                return;
+            }
+            if (k === 'neo4j_database') {
+                if (o[k]) neo4j.database = o[k];
+                return;
+            }
+            if (_NEO4J_FLAT_KEYS.has(k)) {
+                neo4j[k] = o[k];
+                return;
+            }
+            lakebase[k] = o[k];
+        });
+        const db = String(o.database || '').trim();
+        const hasNeo = !!(o.uri || o.neo4j_database);
+        if (db) {
+            if (hasNeo && db.toLowerCase() === 'neo4j') {
+                if (!neo4j.database) neo4j.database = db;
+            } else {
+                lakebase.database = db;
+            }
+        }
+        return { lakebase: lakebase, neo4j: neo4j, lakehouse: lakehouse };
+    }
+
+    function readEngineConfigRoot() {
+        const ta = document.getElementById('graphEngineConfig');
+        let raw = {};
+        try { raw = JSON.parse(ta?.value || '{}'); } catch (_) { raw = {}; }
+        return normalizeEngineConfigRoot(raw);
+    }
+
+    function writeEngineConfigRoot(root) {
+        const ta = document.getElementById('graphEngineConfig');
+        if (!ta) return;
+        const normalized = normalizeEngineConfigRoot(root || {});
+        ta.value = JSON.stringify({
+            lakebase: normalized.lakebase || {},
+            neo4j: normalized.neo4j || {},
+            lakehouse: normalized.lakehouse || {},
+        }, null, 2);
+    }
+
+    /** Merge Lakehouse warehouse picker into ``graph_engine_config.lakehouse``. */
+    function mergeLakehousePanelIntoConfigTextarea() {
+        if (!document.getElementById('graphEngineConfig')) return;
+        const root = readEngineConfigRoot();
+        const sel = document.getElementById('deltaWarehouseSelect');
+        const lh = root.lakehouse || {};
+        lh.warehouse_id = (sel ? sel.value : '') || currentDeltaWarehouseId || '';
+        root.lakehouse = lh;
+        writeEngineConfigRoot(root);
+    }
+
     /** Merge Lakebase form fields + optional managed-sync options into the JSON textarea. */
     function mergeLakebasePanelIntoConfigTextarea() {
-        const ta         = document.getElementById('graphEngineConfig');
         const dbSel      = document.getElementById('lakebaseGraphDb');
         const projSel    = document.getElementById('lakebaseProject');
         const branchSel  = document.getElementById('lakebaseBranch');
         const syncModeEl = document.getElementById('lakebaseSyncMode');
-        if (!ta || !dbSel) return;
-        let o = {};
-        try { o = JSON.parse(ta.value || '{}'); } catch (_) { o = {}; }
-        if (typeof o !== 'object' || Array.isArray(o)) o = {};
+        if (!dbSel) return;
+        const root = readEngineConfigRoot();
+        const o = root.lakebase || {};
 
         o.database          = dbSel.value || '';
         o.schema            = _getCurrentSchemaValue();
@@ -862,7 +951,8 @@ document.addEventListener('DOMContentLoaded', function () {
             delete o.sync_uc_catalog;
             delete o.sync_uc_schema;
         }
-        ta.value = JSON.stringify(o, null, 2);
+        root.lakebase = o;
+        writeEngineConfigRoot(root);
     }
 
     function toggleLakebaseManagedSyncPanel() {
@@ -892,8 +982,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let cfgCat = '';
         try {
-            const o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}');
-            cfgCat = o.sync_uc_catalog || '';
+            cfgCat = (readEngineConfigRoot().lakebase || {}).sync_uc_catalog || '';
         } catch (_) {}
 
         try {
@@ -954,8 +1043,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * workspace cascade can't list/match them (stale or unreachable project).
      */
     function prefillLakebaseConnectionFromConfig() {
-        let o = {};
-        try { o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}'); } catch (_) {}
+        const o = (readEngineConfigRoot().lakebase || {});
         // Connection tab — all 4 cascading selects
         _ensureSelectedOption(document.getElementById('lakebaseProject'),    o.lakebase_project || '');
         _ensureSelectedOption(document.getElementById('lakebaseBranch'),     o.lakebase_branch  || '');
@@ -968,11 +1056,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function applyLakebaseFormFromConfigTextarea() {
-        const ta         = document.getElementById('graphEngineConfig');
         const syncModeEl = document.getElementById('lakebaseSyncMode');
-        if (!ta) return;
-        let o = {};
-        try { o = JSON.parse(ta.value || '{}'); } catch (_) {}
+        if (!document.getElementById('graphEngineConfig')) return;
+        const o = (readEngineConfigRoot().lakebase || {});
 
         if (syncModeEl) syncModeEl.value = (o.sync_mode === 'managed_synced') ? 'managed_synced' : 'app_managed';
 
@@ -994,6 +1080,49 @@ document.addEventListener('DOMContentLoaded', function () {
 
         toggleLakebaseManagedSyncPanel();
         updateLakebaseSyncModeHelp();
+    }
+
+    /** Toggle Neo4j basic vs Databricks-secret auth field groups. */
+    function applyNeo4jAuthMethodVisibility() {
+        const sel = document.getElementById('neo4jAuthMethod');
+        if (!sel) return;
+        const basicFields  = document.querySelectorAll('.neo4j-auth-basic');
+        const secretFields = document.querySelectorAll('.neo4j-auth-databricks-secret');
+        const isBasic  = sel.value === 'basic';
+        const isSecret = sel.value === 'databricks_secret';
+        basicFields.forEach(el => el.classList.toggle('d-none', !isBasic));
+        secretFields.forEach(el => el.classList.toggle('d-none', !isSecret));
+    }
+
+    /**
+     * Hydrate the Neo4j Settings form from ``#graphEngineConfig.neo4j``.
+     * Called after every config load so URI / user / database survive a refresh.
+     */
+    function applyNeo4jFormFromConfigTextarea() {
+        if (!document.getElementById('graphEngineConfig')) return;
+        const o = (readEngineConfigRoot().neo4j || {});
+
+        function _set(id, val) {
+            const el = document.getElementById(id);
+            if (el) el.value = val == null ? '' : String(val);
+        }
+
+        _set('neo4jUri', o.uri || '');
+        _set('neo4jDatabase', o.database || o.neo4j_database || 'neo4j');
+        _set('neo4jAuthMethod', o.auth_method || 'basic');
+        _set('neo4jUsername', o.username || '');
+        // Restore persisted password for local-dev basic auth. When the Apps
+        // secret resource is bound the input is disabled and must stay empty
+        // (env var is the source of truth; backend strips clear-text passwords).
+        const pwdEl = document.getElementById('neo4jPassword');
+        if (pwdEl && !pwdEl.disabled) {
+            pwdEl.value = o.password != null ? String(o.password) : '';
+        }
+        _set('neo4jSecretScope', o.secret_scope || '');
+        _set('neo4jSecretKey', o.secret_key || '');
+        const enc = document.getElementById('neo4jEncrypted');
+        if (enc) enc.checked = o.encrypted !== false;
+        applyNeo4jAuthMethodVisibility();
     }
 
     async function loadLakebaseGraphHealth() {
@@ -1103,9 +1232,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 : null;
             const cfgData = cfgResp && cfgResp.ok ? await cfgResp.json() : {};
             if (ta && cfgData.success) {
-                ta.value = JSON.stringify(cfgData.graph_engine_config || {}, null, 2);
+                writeEngineConfigRoot(
+                    normalizeEngineConfigRoot(cfgData.graph_engine_config || {})
+                );
+                const lhWid = (readEngineConfigRoot().lakehouse || {}).warehouse_id || '';
+                if (lhWid) currentDeltaWarehouseId = lhWid;
             }
             applyLakebaseFormFromConfigTextarea();
+            applyNeo4jFormFromConfigTextarea();
             prefillLakebaseConnectionFromConfig();
             graphEngineConfigLoaded = true;
         } catch (e) {
@@ -2516,18 +2650,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            // Only fold the connection panels back into the textarea when the
-            // heavy load actually ran (the fields are populated); otherwise save
-            // the server-loaded textarea as-is so an untouched Save cannot blank
-            // out stored connection config.
+            // Fold connection panels into the textarea before POST. Always merge
+            // Neo4j (form is hydrated by loadGraphEngineConfig). Lakebase panel
+            // merge stays gated on the heavy load so empty Lakebase pickers
+            // cannot blank project/branch/schema on a Neo4j-only Save.
+            mergeNeo4jPanelIntoConfigTextarea();
+            mergeLakehousePanelIntoConfigTextarea();
             if (graphDbHeavyLoaded) {
                 mergeLakebasePanelIntoConfigTextarea();
-                mergeNeo4jPanelIntoConfigTextarea();
             }
 
             let parsed;
             try {
-                parsed = JSON.parse(ta.value || '{}');
+                parsed = normalizeEngineConfigRoot(JSON.parse(ta.value || '{}'));
             } catch (parseErr) {
                 errors.push('Graph DB config: invalid JSON (' + parseErr.message + ')');
                 if (errDiv) {
@@ -2536,14 +2671,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 return;
             }
-            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-                errors.push('Graph DB config: must be a JSON object');
-                if (errDiv) {
-                    errDiv.textContent = 'Configuration must be a JSON object (not an array or primitive)';
-                    errDiv.style.display = 'block';
-                }
-                return;
-            }
+            writeEngineConfigRoot(parsed);
 
             const cfgResp = await fetch('/settings/graph-engine-config', {
                 method: 'POST',
@@ -2556,7 +2684,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 errors.push('Graph DB config: ' + (cfgJson.message || 'Unknown error'));
                 return;
             }
-            ta.value = JSON.stringify(cfgJson.graph_engine_config || parsed, null, 2);
+            writeEngineConfigRoot(cfgJson.graph_engine_config || parsed);
+            applyLakebaseFormFromConfigTextarea();
+            applyNeo4jFormFromConfigTextarea();
             applyGraphDbEnginePanels();
             if (graphDbHeavyLoaded) loadLakebaseGraphHealth();
         } catch (e) {
@@ -2570,7 +2700,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('sidebarSectionChanged', async (e) => {
         const s = e.detail?.section;
-        if (s !== 'lakebase' && s !== 'delta') return;
+        if (s !== 'lakebase' && s !== 'delta' && s !== 'neo4j') return;
+
+        // Neo4j only needs the registry graph_engine_config (URI / user / …).
+        if (s === 'neo4j') {
+            if (!graphEngineConfigLoaded) {
+                const banner = document.getElementById('neo4jSectionBanner');
+                if (banner) {
+                    banner.classList.remove('d-none');
+                    banner.classList.add('d-flex');
+                }
+                try {
+                    await loadGraphEngineConfig();
+                } finally {
+                    if (banner) {
+                        banner.classList.add('d-none');
+                        banner.classList.remove('d-flex');
+                    }
+                }
+            } else {
+                applyNeo4jFormFromConfigTextarea();
+            }
+            return;
+        }
 
         // Ensure the Delta warehouse state is present (covers a deep-link
         // race where the section activates before the page-load preload resolves).
@@ -2610,14 +2762,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // Mirrors the Lakebase merge/toggle pattern. When the active engine is
     // "neo4j" (Settings > Back end > Neo4j), this function
     // reads the Neo4j config form fields from #neo4j-section and serialises
-    // them into the shared #graphEngineConfig textarea, which the existing
-    // save flow then POSTs to /settings/graph-engine-config.
+    // them into graph_engine_config.neo4j (fully separate from lakebase).
     function mergeNeo4jPanelIntoConfigTextarea() {
-        const ta = document.getElementById('graphEngineConfig');
-        if (!ta) return;
-        let o = {};
-        try { o = JSON.parse(ta.value || '{}'); } catch (_) { o = {}; }
-        if (typeof o !== 'object' || Array.isArray(o)) o = {};
+        if (!document.getElementById('graphEngineConfig')) return;
+        const root = readEngineConfigRoot();
+        const o = root.neo4j || {};
 
         const uri        = (document.getElementById('neo4jUri')?.value || '').trim();
         const database   = (document.getElementById('neo4jDatabase')?.value || '').trim();
@@ -2625,7 +2774,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const encrypted  = !!document.getElementById('neo4jEncrypted')?.checked;
 
         if (uri) o.uri = uri; else delete o.uri;
-        o.database    = database || 'neo4j';
+        o.database = database || 'neo4j';
+        delete o.neo4j_database;
         o.auth_method = authMethod;
         o.encrypted   = encrypted;
 
@@ -2635,9 +2785,20 @@ document.addEventListener('DOMContentLoaded', function () {
             // When the password input is disabled (Apps secret is in place),
             // never serialise the field — the server-side env var is the
             // source of truth and the backend strips persisted passwords.
-            const pwd  = (pwdEl && !pwdEl.disabled) ? (pwdEl.value || '') : '';
             if (user) o.username = user; else delete o.username;
-            if (pwd)  o.password = pwd;  else delete o.password;
+            if (pwdEl && !pwdEl.disabled) {
+                const pwd = pwdEl.value || '';
+                if (pwd) {
+                    o.password = pwd;
+                }
+                // Blank field: keep the previously persisted password in ``o``
+                // (already parsed from the textarea). Deleting it here would
+                // wipe credentials every time the page reloads with an empty
+                // input before the hydrate runs, or when the user Saves other
+                // Neo4j fields without retyping the password.
+            } else {
+                delete o.password;
+            }
             delete o.secret_scope;
             delete o.secret_key;
         } else if (authMethod === 'databricks_secret') {
@@ -2648,20 +2809,12 @@ document.addEventListener('DOMContentLoaded', function () {
             delete o.username;
             delete o.password;
         }
-        ta.value = JSON.stringify(o, null, 2);
+        root.neo4j = o;
+        writeEngineConfigRoot(root);
     }
 
-    // Auth-method visibility toggle
-    function applyNeo4jAuthMethodVisibility() {
-        const sel = document.getElementById('neo4jAuthMethod');
-        if (!sel) return;
-        const basicFields  = document.querySelectorAll('.neo4j-auth-basic');
-        const secretFields = document.querySelectorAll('.neo4j-auth-databricks-secret');
-        const isBasic  = sel.value === 'basic';
-        const isSecret = sel.value === 'databricks_secret';
-        basicFields.forEach(el => el.classList.toggle('d-none', !isBasic));
-        secretFields.forEach(el => el.classList.toggle('d-none', !isSecret));
-    }
+    // Auth-method visibility is handled by applyNeo4jAuthMethodVisibility()
+    // (defined with the Lakebase/Neo4j form hydrators above).
 
     // Wire up Neo4j form field listeners — keep the textarea in sync as the
     // user edits the panel, so the save flow always serialises fresh values.
@@ -2699,7 +2852,8 @@ document.addEventListener('DOMContentLoaded', function () {
             mergeNeo4jPanelIntoConfigTextarea();
             const ta = document.getElementById('graphEngineConfig');
             let parsed = {};
-            try { parsed = JSON.parse(ta?.value || '{}'); } catch (_) { parsed = {}; }
+            try { parsed = normalizeEngineConfigRoot(JSON.parse(ta?.value || '{}')); } catch (_) { parsed = { lakebase: {}, neo4j: {} }; }
+            writeEngineConfigRoot(parsed);
             await fetch('/settings/graph-engine-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

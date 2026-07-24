@@ -87,7 +87,7 @@
                 <div class="content-section">
                     <div class="section-header mb-4">
                         <div>
-                            <h4 class="mb-1"><i class="bi bi-layers me-2"></i>Delta</h4>
+                            <h4 class="mb-1"><i class="bi bi-layers me-2"></i>Lakehouse</h4>
                             <p class="text-muted mb-0 small">
                                 Unity Catalog Delta tables for the triple store — no separate graph database to provision
                             </p>
@@ -96,7 +96,7 @@
 
                     <div id="deltaSectionBanner" class="alert alert-light border d-none align-items-center justify-content-center gap-2 py-3 mb-3" role="status" aria-live="polite">
                         <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
-                        <span class="small text-muted">Loading Delta configuration…</span>
+                        <span class="small text-muted">Loading Lakehouse configuration…</span>
                     </div>
 
                     <div id="deltaGraphPanel" style="display:none;">
@@ -141,13 +141,13 @@
                                         <i class="bi bi-info-circle me-1"></i>How it works
                                     </h6>
                                     <p class="mb-2">
-                                        With <strong>Delta</strong> selected as the triple-store backend, OntoBricks stores triples
+                                        With <strong>Lakehouse</strong> selected as the graph backend, OntoBricks stores triples
                                         directly in governed Delta tables in Unity Catalog. The
                                         <strong>Registry catalog and schema</strong> (Settings → Registry) define
                                         where all triple-store objects live for every domain.
                                     </p>
                                     <p class="mb-0">
-                                        Pick a dedicated SQL Warehouse on the <strong>SQL Warehouse</strong> tab for Delta graph
+                                        Pick a dedicated SQL Warehouse on the <strong>SQL Warehouse</strong> tab for Lakehouse graph
                                         queries and builds. When unset, the global warehouse from
                                         <strong>Settings → Databricks</strong> is used. After mapping is ready, run
                                         <strong>Knowledge Graph → Build</strong> to create the R2RML VIEW and materialize the
@@ -159,8 +159,8 @@
                             <!-- ── TAB 2 · SQL Warehouse ── -->
                             <div class="tab-pane fade" id="dtpane-warehouse" role="tabpanel" aria-labelledby="dttab-warehouse">
                                 <p class="small text-muted mb-3">
-                                    Used only when <strong>Delta</strong> is the triple-store backend — graph queries,
-                                    health probes, and Delta builds run against this warehouse. Click <strong>Apply</strong>
+                                    Used only when <strong>Lakehouse</strong> is the graph backend — graph queries,
+                                    health probes, and Lakehouse builds run against this warehouse. Click <strong>Apply</strong>
                                     to persist the selection in the registry.
                                 </p>
                                 <label for="deltaWarehouseSelect" class="form-label small fw-semibold mb-1">Warehouse</label>
@@ -702,8 +702,9 @@
                                     Managed by the <code>neo4j-password</code> Databricks Apps secret resource. See
                                     <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
                                     {% else %}
-                                    For production deployments, configure the <code>neo4j-password</code> secret resource in
-                                    <strong>Apps → Resources</strong>. See
+                                    Stored in registry <code>graph_engine_config</code> for local development.
+                                    For production, bind the <code>neo4j-password</code> secret resource in
+                                    <strong>Apps → Resources</strong> instead — see
                                     <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
                                     {% endif %}
                                 </div>
@@ -963,7 +964,7 @@
     </div>
 </div>
 
-<!-- Shared drop-object confirmation modal (used by both Lakebase and Delta sections) -->
+<!-- Shared drop-object confirmation modal (used by both Lakebase and Lakehouse sections) -->
 <div class="modal fade" id="lkDropConfirmModal" tabindex="-1" aria-labelledby="lkDropConfirmModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">

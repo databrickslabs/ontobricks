@@ -1369,7 +1369,7 @@ If all checks pass:
 
 > **Note**: If the triple store table already exists, you can choose to **drop and recreate** it or append to the existing data.
 
-> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the domain's Graph DB engine (Lakebase Postgres, Databricks Delta, or Neo4j). The backend is chosen **per domain** under **Domain → Information → Knowledge Graph** (engine *connection* settings live under **Settings → Back end**).
+> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the domain's Graph DB engine (Lakebase Postgres, Lakehouse, or Neo4j). The backend is chosen **per domain** under **Domain → Information → Knowledge Graph** (engine *connection* settings live under **Settings → Back end**).
 
 ---
 

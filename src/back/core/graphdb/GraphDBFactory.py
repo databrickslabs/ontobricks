@@ -74,11 +74,17 @@ class GraphDBFactory:
         if engine_config is None:
             engine_config = {}
 
+        from back.core.graphdb.engine_config import lakebase_section, neo4j_section
+
         if engine == "lakebase":
-            return self._create_lakebase(domain, settings, engine_config=engine_config)
+            return self._create_lakebase(
+                domain, settings, engine_config=lakebase_section(engine_config)
+            )
 
         if engine == "neo4j":
-            return self._create_neo4j(domain, settings, engine_config=engine_config)
+            return self._create_neo4j(
+                domain, settings, engine_config=neo4j_section(engine_config)
+            )
 
         if engine == "delta":
             return self._create_delta(domain, settings)
@@ -292,6 +298,9 @@ class GraphDBFactory:
         """Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance."""
         try:
             from back.core.graphdb.lakebase import LAKEBASE_AVAILABLE
+            from back.core.graphdb.lakebase.LakebaseBase import (
+                resolve_postgres_database_override,
+            )
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
                 LakebaseFlatStore,
                 SYNC_MODE_APP,
@@ -312,7 +321,7 @@ class GraphDBFactory:
 
         cfg = engine_config or {}
         schema_raw = (cfg.get("schema") or "").strip()
-        database_override = str(cfg.get("database") or "").strip()
+        database_override = resolve_postgres_database_override(cfg)
         sync_mode = str(cfg.get("sync_mode") or SYNC_MODE_APP).strip() or SYNC_MODE_APP
         if sync_mode not in (SYNC_MODE_APP, SYNC_MODE_MANAGED):
             logger.warning(

@@ -755,31 +755,85 @@ class DigitalTwin:
     def pending_dt_existence(self, settings) -> Dict[str, Any]:
         """Cheap, non-blocking existence skeleton for the first page paint.
 
-        Resolves only artefact *names* (from config, no network round-trip) and
+        Resolves artefact *names* from config (no network round-trip) and
         leaves every existence flag as ``None`` with ``pending=True``. The Build
         page renders this instantly, then confirms the live Lakebase/UC state via
         a non-blocking follow-up to ``/dtwin/sync/dt-existence``. This keeps the
         cold SQL-warehouse / Lakebase wake-up entirely off the request path.
         """
-        from back.core.helpers import effective_graph_name, effective_view_table
+        from back.core.helpers import (
+            effective_graph_name,
+            effective_graph_query_table,
+            effective_view_table,
+        )
 
         domain = self._domain
-        return {
+        graph_engine = DigitalTwin.resolve_graph_engine(domain, settings)
+        view_table = effective_view_table(domain)
+        graph_name = effective_graph_query_table(domain, settings)
+
+        result: Dict[str, Any] = {
             "view_exists": None,
-            "graph_engine": DigitalTwin.resolve_graph_engine(domain, settings),
+            "graph_engine": graph_engine,
             "graph_has_data": None,
             "lakebase_table_exists": None,
             "lakebase_synced_uc_exists": None,
             "lakebase_check_error": None,
-            "view_table": effective_view_table(domain),
-            "graph_name": effective_graph_name(domain),
+            "view_table": view_table,
+            "graph_name": graph_name or effective_graph_name(domain),
             "graph_display": "",
             "last_update": domain.last_update or None,
             "last_built": domain.last_build or None,
             "view_check_error": None,
             "triple_count": 0,
             "pending": True,
+            "lakebase_database": "",
+            "lakebase_schema": "",
+            "lakebase_table": "",
+            "lakebase_synced_uc": "",
         }
+
+        # Resolve Lakebase artefact names from engine config only — no probes.
+        if graph_engine == "lakebase":
+            try:
+                from back.core.graphdb import GraphDBFactory
+                from back.core.graphdb.engine_config import lakebase_section
+                from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+                from back.core.graphdb.lakebase.LakebaseFlatStore import (
+                    resolve_lakebase_graph_schema,
+                    resolve_sync_uc_fallback_catalog,
+                )
+                from back.core.graphdb.lakebase._companion_ddl import synced_phy
+
+                engine_config = lakebase_section(
+                    GraphDBFactory._resolve_graph_engine_config(domain, settings) or {}
+                )
+                sync_mode = (
+                    str(engine_config.get("sync_mode") or "app_managed").strip()
+                    or "app_managed"
+                )
+                schema_raw = str(engine_config.get("schema") or "").strip()
+                lk_schema = resolve_lakebase_graph_schema(domain, settings, schema_raw)
+                lk_table = (
+                    LakebaseBase.physical_table_id(graph_name) if graph_name else ""
+                )
+                result["lakebase_schema"] = lk_schema
+                result["lakebase_table"] = lk_table
+                # Database display needs a live connection; leave blank while pending.
+                if sync_mode == "managed_synced" and lk_schema and graph_name:
+                    catalog = str(engine_config.get("sync_uc_catalog") or "").strip()
+                    if not catalog:
+                        catalog = resolve_sync_uc_fallback_catalog(domain, settings)
+                    if catalog:
+                        result["lakebase_synced_uc"] = (
+                            f"{catalog}.{lk_schema}.{synced_phy(graph_name)}"
+                        )
+            except Exception as exc:  # noqa: BLE001 — keep skeleton best-effort
+                logger.debug(
+                    "pending_dt_existence: lakebase name resolution failed: %s", exc
+                )
+
+        return result
 
     # ------------------------------------------------------------------
     # Schedule sync (instance method)
@@ -945,15 +999,16 @@ class DigitalTwin:
         lk_synced_uc_cfg = ""
         try:
             from back.core.graphdb import GraphDBFactory
+            from back.core.graphdb.engine_config import lakebase_section
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
                 resolve_sync_uc_fallback_catalog,
                 resolve_lakebase_graph_schema,
             )
             from back.core.graphdb.lakebase._companion_ddl import synced_phy
 
-            engine_config = GraphDBFactory._resolve_graph_engine_config(
-                domain, settings
-            ) or {}
+            engine_config = lakebase_section(
+                GraphDBFactory._resolve_graph_engine_config(domain, settings) or {}
+            )
             lk_sync_mode = str(engine_config.get("sync_mode") or "app_managed").strip() or "app_managed"
 
             # Populate schema/table from config so the card shows values even without Postgres

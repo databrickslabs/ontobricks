@@ -194,7 +194,7 @@
                             <select class="form-select domain-editable" id="domainGraphBackend"
                                     data-saved-value="{{ domain.graph_backend or 'lakebase' }}">
                                 <option value="lakebase" {% if (domain.graph_backend or 'lakebase') == 'lakebase' %}selected{% endif %}>Lakebase (Postgres)</option>
-                                <option value="databricks" {% if domain.graph_backend == 'databricks' %}selected{% endif %}>Databricks (Delta)</option>
+                                <option value="databricks" {% if domain.graph_backend == 'databricks' %}selected{% endif %}>Lakehouse</option>
                                 <option value="neo4j" {% if domain.graph_backend == 'neo4j' %}selected{% endif %}>Neo4j</option>
                             </select>
                             <small class="text-muted">

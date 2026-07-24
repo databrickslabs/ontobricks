@@ -42,6 +42,33 @@ DEFAULT_DATABASE = "neo4j"
 DEFAULT_AUTH_METHOD = "basic"
 SUPPORTED_AUTH_METHODS = ("basic", "databricks_secret")
 
+# Legacy namespaced key from when Neo4j / Lakebase shared a flat config blob.
+# Nested ``graph_engine_config.neo4j.database`` is preferred; this alias is
+# still read for older saves.
+NEO4J_DATABASE_KEY = "neo4j_database"
+
+
+def resolve_neo4j_database(cfg: Optional[Dict[str, Any]]) -> str:
+    """Return the Neo4j Bolt database name from a Neo4j (or legacy flat) config.
+
+    Preference order: ``neo4j_database`` (legacy) → ``database`` → ``neo4j``.
+    When given a nested ``graph_engine_config`` root, the Neo4j section is
+    extracted first.
+    """
+    data = cfg if isinstance(cfg, dict) else {}
+    if isinstance(data.get("neo4j"), dict) or isinstance(data.get("lakebase"), dict):
+        from back.core.graphdb.engine_config import neo4j_section
+
+        data = neo4j_section(data)
+    named = str(data.get(NEO4J_DATABASE_KEY) or "").strip()
+    if named:
+        return named
+    legacy = str(data.get("database") or "").strip()
+    if legacy:
+        return legacy
+    return DEFAULT_DATABASE
+
+
 # Env var fed by a Databricks Apps secret resource bound in app.yaml as
 # ``valueFrom: neo4j-password``. When set, the persisted engine_config
 # password is ignored (and stripped at save-time) — see

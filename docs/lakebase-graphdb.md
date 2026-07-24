@@ -208,7 +208,19 @@ Go to **Settings → Graph DB → Engine Configuration** and enter a JSON object
 
 The engine selector should show `lakebase`. If it shows empty, reload the page.
 
-### 4.2 — All `graph_engine_config` keys
+### 4.2 — All `graph_engine_config.lakebase` keys
+
+``graph_engine_config`` is nested per backend::
+
+    {
+      "lakebase":  { ... keys below ... },
+      "neo4j":     { "uri": "...", "database": "neo4j", ... },
+      "lakehouse": { "warehouse_id": "..." }
+    }
+
+Flat legacy blobs are still accepted and rewritten to this shape on Save.
+Lakehouse SQL calls resolve ``lakehouse.warehouse_id`` (then fall back to the
+global warehouse).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

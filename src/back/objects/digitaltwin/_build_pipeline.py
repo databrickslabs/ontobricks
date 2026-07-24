@@ -261,9 +261,14 @@ class _BuildPipeline:
             engine = GraphDBFactory._resolve_graph_engine(
                 self.domain, self.settings, force=True
             )
-            cfg = GraphDBFactory._resolve_graph_engine_config(
-                self.domain, self.settings, force=True
-            ) or {}
+            from back.core.graphdb.engine_config import lakebase_section
+
+            cfg = lakebase_section(
+                GraphDBFactory._resolve_graph_engine_config(
+                    self.domain, self.settings, force=True
+                )
+                or {}
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "[DT-BUILD %s] could not resolve lakebase mode — defaulting to "

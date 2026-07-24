@@ -44,6 +44,7 @@ from back.core.graphdb.neo4j.Neo4jConnection import (
     SUPPORTED_AUTH_METHODS,
     _normalise_cypher_for_log,  # noqa: F401  — re-exported for legacy callers/tests
     is_neo4j_password_from_secret,
+    resolve_neo4j_database,
 )
 from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
 from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps, sanitise_label
@@ -120,7 +121,7 @@ class Neo4jStore(GraphDBBackend):
                 "Neo4jStore: engine_config['uri'] is required "
                 "(e.g. 'neo4j+s://<aura-id>.databases.neo4j.io')"
             )
-        database = str(cfg.get("database") or DEFAULT_DATABASE).strip() or DEFAULT_DATABASE
+        database = resolve_neo4j_database(cfg)
         auth_method = str(cfg.get("auth_method") or DEFAULT_AUTH_METHOD).strip()
         if auth_method not in SUPPORTED_AUTH_METHODS:
             raise ValueError(

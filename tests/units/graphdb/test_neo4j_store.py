@@ -146,7 +146,8 @@ class TestCRUDCypher:
         cypher = s._run.call_args.args[0]
         assert "CREATE CONSTRAINT" in cypher
         assert "triple_dom_V1_spo" in cypher
-        assert "(:Triple:dom_V1)" in cypher.replace(" ", "")  # whitespace-tolerant
+        # Neo4j 5+ rejects multi-label CREATE CONSTRAINT; single backtick label.
+        assert "(t:`dom_V1`)" in cypher
         assert "(t.subject, t.predicate, t.object) IS UNIQUE" in cypher
 
     def test_drop_table_drops_constraint_and_nodes(self):
@@ -225,7 +226,7 @@ class TestNamedQueriesEmitCypher:
         assert stats["total"] == 100
         assert stats["distinct_subjects"] == 30
         cypher = s._run.call_args.args[0]
-        assert "MATCH (t:Triple:dom_V1)" in cypher
+        assert "MATCH (t:`dom_V1`)" in cypher
         assert "count(t) AS total" in cypher
 
     def test_find_subjects_by_type_paginates(self):
@@ -426,8 +427,15 @@ class TestCypherLogging:
         # NOTE: `get_logger` (back.core.logging.LogManager) rewrites the
         # ``back.`` prefix → ``ontobricks.`` so the real logger name is
         # ``ontobricks.core.graphdb.neo4j.Neo4jConnection``.
-        with caplog.at_level(logging.INFO, logger="ontobricks.core.graphdb.neo4j.Neo4jConnection"):
+        # LogManager.setup() sets propagate=False on the ontobricks tree, so
+        # attach caplog's handler directly (same pattern as TaskManager tests).
+        target = logging.getLogger("ontobricks.core.graphdb.neo4j.Neo4jConnection")
+        target.addHandler(caplog.handler)
+        target.setLevel(logging.INFO)
+        try:
             rows = s._run("MATCH (t:`X`) WHERE t.subject = $s RETURN t", s="ex:a")
+        finally:
+            target.removeHandler(caplog.handler)
 
         assert len(rows) == 2
         info_records = [r for r in caplog.records if r.levelname == "INFO"]

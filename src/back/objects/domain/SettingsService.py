@@ -105,17 +105,29 @@ class SettingsService:
         export aligned with the catalog/schema/volume block for operators.
 
         The backend *selection* is no longer mirrored — it now lives per-domain
-        in ``DomainSession.info['graph_backend']``.
+        in ``DomainSession.info['graph_backend']``. Lakehouse warehouse lives in
+        ``graph_engine_config.lakehouse.warehouse_id`` only.
         """
         if config is None and delta_warehouse_id is None:
             return
         try:
+            from back.core.graphdb.engine_config import normalize_graph_engine_config
+
             domain = get_domain(session_mgr)
             reg = domain.settings.setdefault("registry", {})
             if config is not None:
-                reg["graph_engine_config"] = dict(config)
+                reg["graph_engine_config"] = normalize_graph_engine_config(config)
             if delta_warehouse_id is not None:
-                reg["delta_warehouse_id"] = delta_warehouse_id
+                gec = normalize_graph_engine_config(
+                    reg.get("graph_engine_config")
+                    if isinstance(reg.get("graph_engine_config"), dict)
+                    else {}
+                )
+                lh = dict(gec.get("lakehouse") or {})
+                lh["warehouse_id"] = (delta_warehouse_id or "").strip()
+                gec["lakehouse"] = lh
+                reg["graph_engine_config"] = gec
+            reg.pop("delta_warehouse_id", None)
             domain.save()
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -1545,21 +1557,27 @@ class SettingsService:
         """
         import os as _os
 
+        from back.core.graphdb.engine_config import normalize_graph_engine_config
+
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         global_config_service.load(host, token, registry_cfg, force=True)
-        cfg = dict(global_config_service.get_graph_engine_config(host, token, registry_cfg))
+        cfg = normalize_graph_engine_config(
+            global_config_service.get_graph_engine_config(host, token, registry_cfg)
+        )
+        lb = dict(cfg.get("lakebase") or {})
 
         _env_project = _os.environ.get("LAKEBASE_PROJECT", "")
         _env_branch = _os.environ.get("LAKEBASE_BRANCH", "")
         _env_db = _os.environ.get("PGDATABASE", "") or _os.environ.get("LAKEBASE_DATABASE", "")
-        if not cfg.get("lakebase_project") and _env_project:
-            cfg["lakebase_project"] = _env_project
-        if not cfg.get("lakebase_branch") and _env_branch:
-            cfg["lakebase_branch"] = _env_branch
-        if not cfg.get("database") and _env_db:
-            cfg["database"] = _env_db
+        if not lb.get("lakebase_project") and _env_project:
+            lb["lakebase_project"] = _env_project
+        if not lb.get("lakebase_branch") and _env_branch:
+            lb["lakebase_branch"] = _env_branch
+        if not lb.get("database") and _env_db:
+            lb["database"] = _env_db
+        cfg["lakebase"] = lb
 
         return {"success": True, "graph_engine_config": cfg}
 
@@ -1577,15 +1595,23 @@ class SettingsService:
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
-        if is_neo4j_password_from_secret() and isinstance(config, dict) and config.get("password"):
-            # Never persist a clear-text password when the Apps secret is
-            # in place — the env var wins at runtime and this would only
-            # leak a redundant credential into global_config.
-            logger.info(
-                "Stripping engine_config['password'] before persist — "
-                "NEO4J_PASSWORD env var is the source of truth"
-            )
-            config = {k: v for k, v in config.items() if k != "password"}
+        from back.core.graphdb.engine_config import normalize_graph_engine_config
+
+        if not isinstance(config, dict):
+            raise ValidationError("graph_engine_config must be a JSON object")
+        config = normalize_graph_engine_config(config)
+        if is_neo4j_password_from_secret():
+            neo = dict(config.get("neo4j") or {})
+            if neo.get("password"):
+                # Never persist a clear-text password when the Apps secret is
+                # in place — the env var wins at runtime and this would only
+                # leak a redundant credential into global_config.
+                logger.info(
+                    "Stripping neo4j['password'] before persist — "
+                    "NEO4J_PASSWORD env var is the source of truth"
+                )
+                neo.pop("password", None)
+                config = {**config, "neo4j": neo}
         ok, msg = global_config_service.set_graph_engine_config(
             host, token, registry_cfg, config
         )
@@ -1606,15 +1632,17 @@ class SettingsService:
     ) -> Dict[str, Any]:
         """Probe Lakebase Postgres for the configured graph schema (read-only).
 
-        Uses ``graph_engine_config.database`` (optional) and ``schema`` from
-        registry global config.
+        Uses ``graph_engine_config.lakebase.database`` (optional) and ``schema``
+        from registry global config.
         """
         import os
 
         from back.core.databricks import get_lakebase_auth
         from back.core.databricks.lakebase import BranchLakebaseAuth
+        from back.core.graphdb.engine_config import lakebase_section
         from back.core.graphdb.lakebase.LakebaseBase import (
             default_schema,
+            resolve_postgres_database_override,
             validate_graph_schema,
         )
 
@@ -1624,8 +1652,10 @@ class SettingsService:
                 session_mgr, settings
             )
             global_config_service.load(host, token, registry_cfg, force=True)
-            gcfg = global_config_service.get_graph_engine_config(
-                host, token, registry_cfg
+            gcfg = lakebase_section(
+                global_config_service.get_graph_engine_config(
+                    host, token, registry_cfg
+                )
             )
         except Exception as exc:
             logger.warning("graph_engine_lakebase_health context failed: %s", exc)
@@ -1637,7 +1667,7 @@ class SettingsService:
         schema_raw = ""
         branch_path = ""
         if isinstance(gcfg, dict):
-            db_override = (gcfg.get("database") or "").strip()
+            db_override = resolve_postgres_database_override(gcfg)
             schema_raw = (gcfg.get("schema") or "").strip()
             branch_path = (gcfg.get("lakebase_branch") or "").strip()
 
@@ -1776,10 +1806,12 @@ class SettingsService:
         """
         import time as _time
 
+        from back.core.graphdb.engine_config import neo4j_section
         from back.core.graphdb.neo4j.Neo4jConnection import (
             NEO4J_PASSWORD_ENV,
             Neo4jConnection,
             is_neo4j_password_from_secret,
+            resolve_neo4j_database,
         )
 
         try:
@@ -1787,8 +1819,10 @@ class SettingsService:
                 session_mgr, settings
             )
             global_config_service.load(host, token, registry_cfg, force=True)
-            gcfg = global_config_service.get_graph_engine_config(
-                host, token, registry_cfg
+            gcfg = neo4j_section(
+                global_config_service.get_graph_engine_config(
+                    host, token, registry_cfg
+                )
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("graph_engine_neo4j_test context failed: %s", exc)
@@ -1796,7 +1830,7 @@ class SettingsService:
                 "Could not load graph engine config", detail=str(exc)
             ) from exc
 
-        if not isinstance(gcfg, dict):
+        if not isinstance(gcfg, dict) or not gcfg:
             return {
                 "success": True,
                 "ok": False,
@@ -1816,7 +1850,7 @@ class SettingsService:
         try:
             conn = Neo4jConnection(
                 uri=uri,
-                database=str(gcfg.get("database") or "neo4j").strip() or "neo4j",
+                database=resolve_neo4j_database(gcfg),
                 auth_method=str(gcfg.get("auth_method") or "basic").strip() or "basic",
                 engine_config=gcfg,
                 encrypted=bool(gcfg.get("encrypted", True)),
@@ -2179,7 +2213,9 @@ class SettingsService:
         saved_cfg = global_config_service.get_graph_engine_config(
             host, token, registry_cfg
         )
-        saved_cfg = dict(saved_cfg) if isinstance(saved_cfg, dict) else {}
+        from back.core.graphdb.engine_config import lakebase_section
+
+        saved_cfg = lakebase_section(saved_cfg)
         sync_mode = (saved_cfg.get("sync_mode") or "app_managed").strip()
         uc_catalog = ""
         if bool(params.get("grant_uc_catalog")) and sync_mode == "managed_synced":
@@ -2222,15 +2258,19 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Any,
     ) -> str:
-        """Return the ``database`` field from the saved graph engine config.
+        """Return the Lakebase ``database`` field from the saved graph engine config.
 
         Returns ``""`` on any failure so callers fall back gracefully.
         """
         try:
+            from back.core.graphdb.engine_config import lakebase_section
+
             domain = get_domain(session_mgr)
             host, token = get_databricks_host_and_token(domain, settings)
             registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
-            ge = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            ge = lakebase_section(
+                global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            )
             return (ge.get("database") or "").strip()
         except Exception:  # noqa: BLE001
             return ""
@@ -2263,10 +2303,14 @@ class SettingsService:
 
         # Load saved config to fill gaps not supplied by the form.
         try:
+            from back.core.graphdb.engine_config import lakebase_section
+
             domain = get_domain(session_mgr)
             host, token = get_databricks_host_and_token(domain, settings)
             registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
-            ge = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            ge = lakebase_section(
+                global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            )
             if not branch_path:
                 branch_path = (ge.get("lakebase_branch") or "").strip()
             if not database:
@@ -2498,10 +2542,14 @@ class SettingsService:
         import concurrent.futures
 
         try:
+            from back.core.graphdb.engine_config import lakebase_section
+
             _, host, token, registry_cfg = SettingsService._resolve_context(
                 session_mgr, settings
             )
-            gcfg = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            gcfg = lakebase_section(
+                global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            )
             sync_mode = gcfg.get("sync_mode", "app_managed")
 
             # ── Resolve UC catalog / schema ───────────────────────────────

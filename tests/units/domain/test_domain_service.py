@@ -143,6 +143,17 @@ class TestSaveDomainInfo:
         assert domain.info["review_quorum"] == 3
         assert result["review_quorum"] == 3
 
+    def test_save_graph_backend(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"graph_backend": "neo4j"})
+        assert domain.info["graph_backend"] == "neo4j"
+        assert result["graph_backend"] == "neo4j"
+
+    def test_save_graph_backend_normalized(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info({"graph_backend": "  NEO4J "})
+        assert domain.info["graph_backend"] == "neo4j"
+
     def test_review_quorum_clamped_to_minimum_one(self):
         domain = _mock_domain()
         Domain(domain).save_domain_info({"review_quorum": 0})
