@@ -1,0 +1,51 @@
+## Merge PR#47 — Neo4j backend into develop
+
+### Context
+
+PR#47 (`feature/neo4j-graphdb-skeleton`, author: hourdays / Hugues Journeau) adds Neo4j (Bolt / Cypher)
+as a fully-functional third graph DB engine alongside Lakebase and Delta. Merged into `develop`
+with develop-takes-priority conflict resolution. Version: 0.7.0.
+
+### Changes
+
+1. **scripts/deploy.config.sh** — Kept develop's default app name (`ontobricks-060`); dropped PR's
+   demo-instance override (`ontobricks-070`).
+
+2. **src/back/core/graphdb/GraphDBFactory.py** — Added `neo4j` engine dispatch beside `delta`;
+   added `_create_neo4j()` constructor; kept all develop helpers (`_create_auto`, `_resolve_*`,
+   `_create_delta_view`).
+
+3. **src/back/core/graphdb/neo4j/Neo4jReadOps.py** — Fixed stale import:
+   `back.core.triplestore.constants` → `back.core.graphdb.constants` (module moved when develop
+   folded TripleStore into GraphDB).
+
+4. **src/back/objects/session/GlobalConfigService.py** — `ALLOWED_GRAPH_ENGINES` now includes
+   `"neo4j"`; `ALLOWED_TRIPLE_STORE_BACKENDS` (`lakebase`, `databricks`) preserved from develop.
+
+5. **src/front/config/menu_config.json** — Both `delta` and `neo4j` entries kept under TRIPLE
+   STORE section (Delta from develop, Neo4j from PR).
+
+6. **src/front/fastapi/dependencies.py** — Used develop's `GraphDBFactory._resolve_graph_engine`
+   path; removed the lakebase-only coercion (`_raw if _raw == "lakebase" else "lakebase"`) so
+   neo4j (and future engines) pass through correctly.
+
+7. **src/front/static/query/js/query-sync.js** — Adopted PR's `labels` map (`neo4j` →
+   `Graph DB (Neo4j)`) over develop's hardcoded ternary.
+
+### Modified files
+
+- `scripts/deploy.config.sh`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/core/graphdb/neo4j/Neo4jReadOps.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/front/config/menu_config.json`
+- `src/front/fastapi/dependencies.py`
+- `src/front/static/query/js/query-sync.js`
+- Plus all PR#47 net-new files (Neo4jStore, Neo4jConnection, Neo4jWriteOps, Neo4jReadOps,
+  SWRLFlatCypherTranslator, settings routes, templates, tests, docs)
+
+### Test results
+
+`uv run pytest -q -m "not scenario"` → **3248 passed, 309 skipped, 2 pre-existing failures**
+(both failures confirmed pre-existing on PR branch before merge; not introduced by conflict
+resolution).
