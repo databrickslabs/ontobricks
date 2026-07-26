@@ -175,3 +175,123 @@ Modified files:
 - docs/code_organization.md
 
 Tests: uv run pytest -q -m "not scenario" → 3308 passed, 275 skipped, 5 deselected in 24.99s
+
+## Registry navbar icon opens Browse/Bridges modal
+
+Context: Registry is no longer a full page with a left sidebar and dropdown
+menu. The navbar now shows a large archive icon only; click opens a modal
+with Create a New Domain plus Browse and Bridges tabs. Load Domain was
+removed from this entry point.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Marked Registry as `navbar_modal`; cleared dropdown actions/groups.
+2. `src/front/templates/base.html`
+   Icon-only Registry toggle; includes modal + registry CSS/JS globally.
+3. `src/front/templates/partials/layout/registry_modal.html` (new)
+   Modal with Create a New Domain, Browse and Bridges tabs.
+4. `src/front/static/global/js/registry-modal.js` +
+   `src/front/static/global/css/registry-modal.css` (new)
+   Open/close wiring, tab → load events, `?open=registry` deep link.
+5. `src/front/routes/registry.py`
+   `GET /registry/` redirects to `/?open=registry`.
+6. `src/front/templates/registry.html`
+   Deleted — page replaced by the modal.
+7. `src/front/templates/partials/registry/_registry_domains.html`
+   Removed New Domain / Load Domain from the Browse toolbar.
+8. `src/front/templates/settings.html`
+   Dropped duplicate `registry.js` include (now global).
+9. Docs, domain Versions hint, UI/E2E tests updated accordingly.
+10. `docs/superpowers/specs/2026-07-26-registry-modal-design.md`
+    Design note for the modal entry point.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/templates/partials/layout/registry_modal.html
+- src/front/static/global/js/registry-modal.js
+- src/front/static/global/css/registry-modal.css
+- src/front/routes/registry.py
+- src/front/templates/registry.html (deleted)
+- src/front/templates/partials/registry/_registry_domains.html
+- src/front/templates/settings.html
+- src/front/templates/partials/domain/_domain_versions.html
+- docs/code_organization.md
+- docs/data-access.md
+- docs/development.md
+- docs/superpowers/specs/2026-07-26-registry-modal-design.md
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/registry/test_registry_flows.py
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 23.37s
+
+## Fix Registry modal viewport size
+
+Context: The Registry popup needs a stable, spacious layout independent of
+its content. It now occupies 80% of the viewport width and height, with the
+modal body scrolling when its Browse or Bridges content overflows.
+
+Changes:
+
+1. `src/front/static/global/css/registry-modal.css`
+   Set the desktop dialog/content to 80vw × 80vh, constrained overflow to
+   the body, and retained a near-full-screen mobile fallback.
+
+Modified files:
+- src/front/static/global/css/registry-modal.css
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 21.23s
+
+## Use connected-nodes Registry icon
+
+Context: The Registry navbar entry now uses a connected-nodes symbol, which
+better communicates domains and cross-domain bridges than an archive box.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Changed the Registry navbar icon from `bi-archive` to `bi-diagram-3`.
+
+Modified files:
+- src/front/config/menu_config.json
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 20.61s
+
+## Center Registry modal in viewport
+
+Context: Bootstrap's dialog margin calculation did not guarantee that the
+fixed-size Registry popup stayed visually centered in the browser viewport.
+
+Changes:
+
+1. `src/front/static/global/css/registry-modal.css`
+   Made the visible modal a flex centering container and retained an exact
+   80vw × 80vh desktop dialog with a responsive mobile fallback.
+
+Modified files:
+- src/front/static/global/css/registry-modal.css
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 20.77s
+
+## Fix Bridges canvas height in Registry modal
+
+Context: After moving Bridges into the Registry modal, the graph canvas
+stayed invisible even when bridges existed. Layout CSS still targeted the
+old `#bridges-section` sidebar parent, so `#bridgesGraph` got zero height
+and the SVG (`height: 100%`) rendered as empty.
+
+Changes:
+
+1. `src/front/static/global/css/registry-modal.css`
+   Flex-sized the modal body / Bridges tab so the graph container receives
+   a real viewport (min-height 280px).
+2. `src/front/static/registry/js/registry.js`
+   Re-render the D3 graph when switching to Graph view or re-entering the
+   Bridges tab after a prior zero-size draw.
+
+Modified files:
+- src/front/static/global/css/registry-modal.css
+- src/front/static/registry/js/registry.js
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 20.93s

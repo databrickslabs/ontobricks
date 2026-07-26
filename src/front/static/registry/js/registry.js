@@ -931,7 +931,18 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('bridgesViewToggle')?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-view]');
         if (!btn) return;
-        _applyBridgesView(btn.dataset.view);
+        const view = btn.dataset.view;
+        _applyBridgesView(view);
+        // Re-render after layout so the canvas gets real dimensions (critical
+        // inside the Registry modal where the graph pane is flex-sized).
+        if (view === 'graph' && bridgesData) {
+            const graphModel = _buildGraphModel(bridgesData);
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    _renderBridgesGraph(graphModel);
+                });
+            });
+        }
     });
 
     // --- Bridges load triggers ---
@@ -950,8 +961,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if (section === 'domains' && registryConfigured) {
             loadRegistryDomains();
         }
-        if (section === 'bridges' && !bridgesLoaded) {
-            loadRegistryBridges();
+        if (section === 'bridges') {
+            if (!bridgesLoaded) {
+                loadRegistryBridges();
+            } else if (bridgesData && _getBridgesView() === 'graph') {
+                // Modal tab may have been hidden when first rendered; re-measure.
+                const graphModel = _buildGraphModel(bridgesData);
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        _renderBridgesGraph(graphModel);
+                    });
+                });
+            }
         }
     });
 

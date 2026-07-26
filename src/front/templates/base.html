@@ -21,6 +21,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/sidebar-layout.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/emoji-picker.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/help-modal.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/registry-modal.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/review-modals.css') }}?v={{ asset_version }}">
     <!-- permissions.css must load LAST so its !important gates win over
          any per-component rule that might set display/pointer-events on
@@ -47,6 +49,8 @@
     <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script defer src="{{ url_for('static', filename='global/js/help-modal.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/help-docs.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/registry-modal.js') }}?v={{ asset_version }}"></script>
     
     {% block extra_css %}{% endblock %}
 </head>
@@ -74,6 +78,14 @@
                     {% if menu.id == 'domain' %}
                     <li class="nav-item ob-nav-path-sep" aria-hidden="true">›</li>
                     {% endif %}
+                    {% if menu.navbar_modal|default(false) and menu.id == 'registry' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="registryModalToggle"
+                           title="{{ menu.label }}" aria-label="Open {{ menu.label }}">
+                            <i class="bi {{ menu.icon }}"></i>
+                        </a>
+                    </li>
+                    {% else %}
                     <li class="nav-item dropdown">
                         {% if menu.id == 'domain' %}
                         {# Domain shown as a plain link in L1 — navigation is in the L2 subnav #}
@@ -104,6 +116,7 @@
                         </ul>
                         {% endif %}
                     </li>
+                    {% endif %}
                     {% endif %}
                     {% endfor %}
                 </ul>
@@ -402,6 +415,9 @@
 
     <!-- Help Center Modal -->
     {% include "partials/layout/help_modal.html" %}
+
+    <!-- Registry Modal (Browse + Bridges) -->
+    {% include "partials/layout/registry_modal.html" %}
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

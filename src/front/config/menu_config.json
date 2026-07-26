@@ -8,47 +8,14 @@
         {
             "id": "registry",
             "label": "Registry",
-            "icon": "bi-archive",
-            "route": "/registry/",
+            "icon": "bi-diagram-3",
+            "route": "/?open=registry",
             "requires_domain_saved": false,
+            "navbar_hidden": false,
+            "navbar_modal": true,
             "status_indicator": null,
-            "navbar_actions": [
-                {
-                    "label": "New Domain",
-                    "icon": "bi-file-earmark-plus",
-                    "action": "domainNew",
-                    "element_id": null
-                },
-                {
-                    "label": "Load Domain",
-                    "icon": "bi-cloud-download",
-                    "action": "domainLoad",
-                    "element_id": null
-                }
-            ],
-            "groups": [
-                {
-                    "id": "registry-domains",
-                    "title": "Domains",
-                    "icon": "bi-folder2-open",
-                    "items": [
-                        {
-                            "id": "domains",
-                            "label": "Browse",
-                            "icon": "bi-search",
-                            "default": true,
-                            "requires": null
-                        },
-                        {
-                            "id": "bridges",
-                            "label": "Bridges",
-                            "icon": "bi-signpost-split",
-                            "default": false,
-                            "requires": null
-                        }
-                    ]
-                }
-            ]
+            "navbar_actions": [],
+            "groups": []
         },
 
         {

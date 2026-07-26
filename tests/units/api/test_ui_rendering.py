@@ -272,16 +272,24 @@ class TestSettingsPage:
         assert _find(_tags(html), id_="lakebaseSyncMode") is not None
         assert _find(_tags(html), id_="lakebaseManagedSyncPanel") is not None
 
-    def test_registry_pane_moved_to_registry_page(self, client):
-        html = _html(client, "/registry/")
+    def test_registry_modal_on_home(self, client):
+        html = _html(client, "/")
+        assert _find(_tags(html), id_="registryModal") is not None
         assert _find(_tags(html), id_="registryDomainsSection") is not None
+        assert _find(_tags(html), id_="registryModalToggle") is not None
+        assert 'id="registryDropdown"' not in html
+
+    def test_registry_legacy_url_redirects(self, client):
+        resp = client.get("/registry/", follow_redirects=False)
+        assert resp.status_code in (301, 302, 307, 308)
+        assert "open=registry" in (resp.headers.get("location") or "")
 
     def test_teams_on_settings_admin_page(self, client):
         settings_html = _html(client, "/settings")
-        registry_html = _html(client, "/registry/")
+        home_html = _html(client, "/")
         assert _find(_tags(settings_html), id_="teamsMatrixContainer") is not None
         assert 'id="teams-section"' in settings_html
-        assert 'id="teams-section"' not in registry_html
+        assert 'teamsMatrixContainer' not in home_html
 
     def test_schedule_on_settings_page(self, client):
         html = _html(client, "/settings")
