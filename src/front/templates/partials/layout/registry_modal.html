@@ -15,7 +15,7 @@
                 </div>
             </div>
             <div class="modal-body pt-2">
-                <ul class="nav nav-tabs ob-tabs mb-3" id="registryModalTabs" role="tablist">
+                <ul class="nav nav-tabs ob-tabs" id="registryModalTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="registry-tab-browse" data-bs-toggle="tab"
                                 data-bs-target="#registry-pane-browse" type="button" role="tab"
@@ -33,7 +33,7 @@
                         </button>
                     </li>
                 </ul>
-                <div class="tab-content" id="registryModalTabContent">
+                <div class="tab-content ob-tab-content" id="registryModalTabContent">
                     <div class="tab-pane fade show active" id="registry-pane-browse" role="tabpanel"
                          aria-labelledby="registry-tab-browse">
                         {% include "partials/registry/_registry_domains.html" %}

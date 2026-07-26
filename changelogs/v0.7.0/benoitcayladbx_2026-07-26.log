@@ -295,3 +295,46 @@ Modified files:
 - src/front/static/registry/js/registry.js
 
 Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 20.93s
+
+## Hide Domain navbar entry when unloaded
+
+Context: With no domain in session the L1 "Domain" label/icon is useless
+noise. It is now hidden (with the › separator) until a domain is loaded.
+
+Changes:
+
+1. `src/front/templates/base.html`
+   Domain L1 item and path separator start as `d-none` with stable ids.
+2. `src/front/static/global/js/navbar.js`
+   `updateDomainMenuVisibility` toggles those elements with the domain
+   session state.
+3. `tests/units/api/test_ui_rendering.py`
+   Asserts Domain L1 ships hidden by default.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- tests/units/api/test_ui_rendering.py
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected
+
+## Complete Registry modal tab outline
+
+Context: The Registry modal rendered the tab header border without the
+matching right, bottom, and left borders around its content. The tab strip
+and content now form one continuous bordered unit.
+
+Changes:
+
+1. `src/front/templates/partials/layout/registry_modal.html`
+   Applied the shared bordered tab-content style and removed the spacing
+   utility that separated the content from its tab strip.
+2. `tests/units/api/test_ui_rendering.py`
+   Added regression coverage for the bordered content class and flush tab
+   layout.
+
+Modified files:
+- src/front/templates/partials/layout/registry_modal.html
+- tests/units/api/test_ui_rendering.py
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 22.15s

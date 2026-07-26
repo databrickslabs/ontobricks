@@ -130,9 +130,12 @@ class TestBaseTemplate:
         assert "review-modals.css" in html
 
     def test_navbar_has_domain_l1_link(self, client):
-        """Domain is now a plain link on L1 (no dropdown) — check for the L1 anchor."""
+        """Domain L1 link exists in the DOM (hidden until a domain is loaded)."""
         html = _html(client, "/")
         assert _find(_tags(html), id_="domainL1Link") is not None
+        assert _find(_tags(html), id_="domainL1NavItem") is not None
+        nav = _find(_tags(html), id_="domainL1NavItem")
+        assert "d-none" in (nav.get("class") or "")
 
     def test_subnav_has_domain_dropdown(self, client):
         """Domain dropdown is in the L2 subnav."""
@@ -274,9 +277,14 @@ class TestSettingsPage:
 
     def test_registry_modal_on_home(self, client):
         html = _html(client, "/")
-        assert _find(_tags(html), id_="registryModal") is not None
-        assert _find(_tags(html), id_="registryDomainsSection") is not None
-        assert _find(_tags(html), id_="registryModalToggle") is not None
+        tags = _tags(html)
+        assert _find(tags, id_="registryModal") is not None
+        assert _find(tags, id_="registryDomainsSection") is not None
+        assert _find(tags, id_="registryModalToggle") is not None
+        tabs = _find(tags, id_="registryModalTabs")
+        assert tabs is not None
+        assert "mb-3" not in _class_tokens(tabs.get("class", ""))
+        assert _find(tags, id_="registryModalTabContent", class_="ob-tab-content") is not None
         assert 'id="registryDropdown"' not in html
 
     def test_registry_legacy_url_redirects(self, client):

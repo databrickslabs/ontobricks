@@ -76,7 +76,7 @@
                     {% for menu in menu_config.menus %}
                     {% if not menu.navbar_hidden|default(false) %}
                     {% if menu.id == 'domain' %}
-                    <li class="nav-item ob-nav-path-sep" aria-hidden="true">›</li>
+                    <li class="nav-item ob-nav-path-sep d-none" id="domainL1PathSep" aria-hidden="true">›</li>
                     {% endif %}
                     {% if menu.navbar_modal|default(false) and menu.id == 'registry' %}
                     <li class="nav-item">
@@ -85,14 +85,15 @@
                             <i class="bi {{ menu.icon }}"></i>
                         </a>
                     </li>
-                    {% else %}
-                    <li class="nav-item dropdown">
-                        {% if menu.id == 'domain' %}
+                    {% elif menu.id == 'domain' %}
+                    <li class="nav-item d-none" id="domainL1NavItem">
                         {# Domain shown as a plain link in L1 — navigation is in the L2 subnav #}
                         <a class="nav-link" href="{{ menu.route }}" id="domainL1Link">
                             <i class="bi {{ menu.icon }}"></i> <span id="currentDomainName">{{ menu.label }}</span>
                         </a>
-                        {% else %}
+                    </li>
+                    {% else %}
+                    <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle{% if menu.requires_domain_saved %} nav-requires-domain{% endif %}" href="#" id="{{ menu.id }}Dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi {{ menu.icon }}"></i> <span>{{ menu.label }}</span>
                         </a>
@@ -114,7 +115,6 @@
                             {% endif %}
                             {% endfor %}
                         </ul>
-                        {% endif %}
                     </li>
                     {% endif %}
                     {% endif %}

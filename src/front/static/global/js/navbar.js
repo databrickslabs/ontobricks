@@ -321,8 +321,8 @@ function enableMenusAfterSave() {
 }
 
 /**
- * Update domain dropdown menu visibility based on domain state
- * Note: All menu items are now always visible
+ * Update domain L1 entry + L2 subnav visibility based on domain state.
+ * When nothing is loaded, hide the Domain navbar item entirely.
  */
 function updateDomainMenuVisibility(hasDomain) {
     // Show/hide L2 subnav
@@ -334,7 +334,11 @@ function updateDomainMenuVisibility(hasDomain) {
         }
     }
 
-    // Disable/enable the L1 Domain link and highlight when a domain is loaded
+    const domainNav = document.getElementById('domainL1NavItem');
+    const domainSep = document.getElementById('domainL1PathSep');
+    if (domainNav) domainNav.classList.toggle('d-none', !hasDomain);
+    if (domainSep) domainSep.classList.toggle('d-none', !hasDomain);
+
     const domainL1 = document.getElementById('domainL1Link');
     if (domainL1) {
         if (hasDomain) {
