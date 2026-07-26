@@ -617,7 +617,7 @@ def test_review_team_filters_non_assignable_roles():
 
 def test_review_team_excludes_entries_without_app_principal():
     """Orphan .domain_permissions.json entries (no App ACL row) are hidden,
-    matching the Registry → Teams matrix."""
+    matching the Settings → Admin → Teams matrix."""
     users = [{"email": "known@a.com", "display_name": "Known"}]
     entries = [
         {"principal": "known@a.com", "role": ROLE_EDITOR},

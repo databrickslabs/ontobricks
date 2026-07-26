@@ -830,11 +830,12 @@ so viewers know exactly who to ask to close the domain.
 For a guided, business-user-oriented review on top of the raw lifecycle, OntoBricks adds a
 review workflow that collects reviewer sign-offs and keeps a durable audit trail.
 
-- **Registry → My Tasks** — a cross-domain worklist of the versions that need *you*. Each row
-  shows the domain, version, status, sign-off progress, and the action available to you:
-  **Submit for review** (builders/admins, on a built DRAFT), **Review & sign off** (any
-  domain member, on an IN-REVIEW version), or **Publish** (builders/admins, once the quorum
-  is met). "Review & sign off" loads the domain and opens its Validation workspace.
+- **Home → My Tasks** — a cross-domain worklist of the versions that need *you* (shown on
+  the home page when you have pending items). Each row shows the domain, version, status,
+  sign-off progress, and the action available to you: **Submit for review** (builders/admins,
+  on a built DRAFT), **Review & sign off** (any domain member, on an IN-REVIEW version), or
+  **Publish** (builders/admins, once the quorum is met). "Review & sign off" loads the domain
+  and opens its Validation workspace.
 - **Domain → Validation** — the per-version review workspace:
   - **Consistency checks** — a soft readiness summary (ontology valid, mapping complete,
     warehouse configured, Knowledge Graph built) with shortcuts to the Cockpit and Pitfalls.

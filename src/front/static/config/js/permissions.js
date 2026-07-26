@@ -4,7 +4,7 @@
  *
  * Read-only view of the Databricks App principals.  Management of
  * who can use the app happens in the Databricks UI.  Per-domain roles
- * (Viewer / Editor / Builder) live in Registry → Teams.
+ * (Viewer / Editor / Builder) live in Settings → Admin → Teams.
  */
 document.addEventListener('DOMContentLoaded', function () {
 

@@ -61,7 +61,7 @@ async def access_denied_page(request: Request):
     - ``app`` (default) — user has no Databricks App permission; point them
       at their Databricks admin.
     - ``domain`` — user is signed in but lacks a team entry on the current
-      domain; point them at the OntoBricks admin (Registry → Teams).
+      domain; point them at the OntoBricks admin (Settings → Admin → Teams).
     - ``bootstrap`` — first-deploy chicken-and-egg: the app's service
       principal cannot read its own ACL yet.  Instruct the deployer to run
       ``scripts/bootstrap-app-permissions.sh`` (or ``make bootstrap-perms``).

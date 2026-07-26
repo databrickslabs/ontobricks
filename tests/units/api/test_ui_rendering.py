@@ -276,13 +276,27 @@ class TestSettingsPage:
         html = _html(client, "/registry/")
         assert _find(_tags(html), id_="registryDomainsSection") is not None
 
-    def test_schedule_on_registry_page(self, client):
-        html = _html(client, "/registry/")
-        assert _find(_tags(html), id_="schedulesTableContainer") is not None
+    def test_teams_on_settings_admin_page(self, client):
+        settings_html = _html(client, "/settings")
+        registry_html = _html(client, "/registry/")
+        assert _find(_tags(settings_html), id_="teamsMatrixContainer") is not None
+        assert 'id="teams-section"' in settings_html
+        assert 'id="teams-section"' not in registry_html
 
-    def test_api_on_registry_page(self, client):
-        html = _html(client, "/registry/")
+    def test_schedule_on_settings_page(self, client):
+        html = _html(client, "/settings")
+        assert _find(_tags(html), id_="schedulesTableContainer") is not None
+        assert 'id="schedule-section"' in html
+
+    def test_build_analytics_on_settings_page(self, client):
+        html = _html(client, "/settings")
+        assert _find(_tags(html), id_="buildAnalyticsDomain") is not None
+        assert 'id="build-analytics-section"' in html
+
+    def test_api_on_settings_page(self, client):
+        html = _html(client, "/settings")
         assert _find(_tags(html), id_="apiEndpointCards") is not None
+        assert 'id="api-section"' in html
 
     def test_body_has_page_id_settings(self, client):
         """<body data-page="settings"> must be set so the lifecycle gate's

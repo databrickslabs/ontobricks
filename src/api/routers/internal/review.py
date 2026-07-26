@@ -1,7 +1,7 @@
 """
 Internal API -- Ontology review / validation workflow endpoints.
 
-Backs the Registry "My Tasks" worklist and the Domain "Validation"
+Backs the Home "My Tasks" worklist and the Domain "Validation"
 workspace. Orchestrates the review workflow (submit / sign-off /
 publish / reopen) on top of the version lifecycle, persisting every
 decision to the ``domain_review_events`` audit log.

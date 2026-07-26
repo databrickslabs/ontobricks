@@ -712,7 +712,7 @@ async def list_app_permissions(
     """Return the Databricks App principals (users + groups).
 
     Read-only mirror of the App's ACL.  Used by Settings → Permissions
-    and as the row source for Registry → Teams.
+    and as the row source for Settings → Admin → Teams.
     """
     return config_service.list_app_principals_result(session_mgr, settings)
 
@@ -809,7 +809,7 @@ async def delete_domain_permission(
 
 
 # ===========================================
-# Teams (Registry → Teams matrix)
+# Teams (Settings → Admin → Teams matrix)
 # ===========================================
 
 

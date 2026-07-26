@@ -28,20 +28,6 @@
             ],
             "groups": [
                 {
-                    "id": "registry-review",
-                    "title": "Review",
-                    "icon": "bi-inbox",
-                    "items": [
-                        {
-                            "id": "my-tasks",
-                            "label": "My Tasks",
-                            "icon": "bi-inbox",
-                            "default": false,
-                            "requires": null
-                        }
-                    ]
-                },
-                {
                     "id": "registry-domains",
                     "title": "Domains",
                     "icon": "bi-folder2-open",
@@ -57,49 +43,6 @@
                             "id": "bridges",
                             "label": "Bridges",
                             "icon": "bi-signpost-split",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
-                            "id": "teams",
-                            "label": "Teams",
-                            "icon": "bi-people",
-                            "default": false,
-                            "requires": null,
-                            "admin_only": true
-                        }
-                    ]
-                },
-                {
-                    "id": "registry-automation",
-                    "title": "Automation",
-                    "icon": "bi-clock-history",
-                    "items": [
-                        {
-                            "id": "schedule",
-                            "label": "Scheduler",
-                            "icon": "bi-clock-history",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
-                            "id": "build-analytics",
-                            "label": "Build Analytics",
-                            "icon": "bi-bar-chart",
-                            "default": false,
-                            "requires": null
-                        }
-                    ]
-                },
-                {
-                    "id": "registry-developer",
-                    "title": "Developer",
-                    "icon": "bi-code-square",
-                    "items": [
-                        {
-                            "id": "api",
-                            "label": "API",
-                            "icon": "bi-braces",
                             "default": false,
                             "requires": null
                         }
@@ -556,6 +499,14 @@
                             "admin_only": true
                         },
                         {
+                            "id": "teams",
+                            "label": "Teams",
+                            "icon": "bi-people",
+                            "default": false,
+                            "requires": null,
+                            "admin_only": true
+                        },
+                        {
                             "id": "locks",
                             "label": "Locks",
                             "icon": "bi-lock",
@@ -578,6 +529,41 @@
                             "default": false,
                             "requires": null,
                             "admin_only": true
+                        }
+                    ]
+                },
+                {
+                    "id": "settings-automation",
+                    "title": "Automation",
+                    "icon": "bi-clock-history",
+                    "items": [
+                        {
+                            "id": "schedule",
+                            "label": "Scheduler",
+                            "icon": "bi-clock-history",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "build-analytics",
+                            "label": "Build Analytics",
+                            "icon": "bi-bar-chart",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "settings-developer",
+                    "title": "Developer",
+                    "icon": "bi-code-square",
+                    "items": [
+                        {
+                            "id": "api",
+                            "label": "API",
+                            "icon": "bi-braces",
+                            "default": false,
+                            "requires": null
                         }
                     ]
                 }

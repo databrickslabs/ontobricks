@@ -3174,7 +3174,7 @@ class SettingsService:
         """Return the Databricks App principals (users + groups).
 
         Used by Settings → Permissions (read-only view) and as the row
-        source for the Registry → Teams matrix picker.
+        source for the Settings → Admin → Teams matrix picker.
         """
         _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
         app_name = settings.ontobricks_app_name
@@ -3310,7 +3310,7 @@ class SettingsService:
         return {"success": ok, "message": msg}
 
     # ------------------------------------------------------------------
-    # Teams matrix (Registry → Teams)
+    # Teams matrix (Settings → Admin → Teams)
     # ------------------------------------------------------------------
 
     @staticmethod

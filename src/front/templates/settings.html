@@ -5,6 +5,8 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry-teams.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -877,7 +879,7 @@
                             <strong>Databricks &rarr; App permissions</strong>. This list
                             mirrors the principals that currently have a permission on the
                             OntoBricks app. To grant per-domain roles (Viewer / Editor /
-                            Builder), use <strong>Registry &rarr; Teams</strong>.
+                            Builder), use <strong>Settings &rarr; Admin &rarr; Teams</strong>.
                         </div>
                     </div>
 
@@ -896,6 +898,11 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- ==================== TEAMS SECTION (admin only) ==================== -->
+            <div id="teams-section" class="sidebar-section">
+                {% include "partials/settings/_settings_teams.html" %}
             </div>
 
             <!-- ==================== LOCKS SECTION (admin only) ==================== -->
@@ -960,6 +967,21 @@
             </div>
             {% endif %}
 
+            <!-- ==================== AUTOMATION: SCHEDULER ==================== -->
+            <div id="schedule-section" class="sidebar-section">
+                {% include "partials/settings/_settings_schedule.html" %}
+            </div>
+
+            <!-- ==================== AUTOMATION: BUILD ANALYTICS ==================== -->
+            <div id="build-analytics-section" class="sidebar-section">
+                {% include "partials/settings/_settings_build_analytics.html" %}
+            </div>
+
+            <!-- ==================== API SECTION (Developer) ==================== -->
+            <div id="api-section" class="sidebar-section">
+                {% include "partials/settings/_settings_api.html" %}
+            </div>
+
         </div>
     </div>
 </div>
@@ -984,9 +1006,13 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='config/js/settings.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/schedule.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/build-analytics.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 {% if user_role == 'admin' %}
 <script src="{{ url_for('static', filename='config/js/permissions.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-locks.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='registry/js/registry-teams.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-health.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-logs.js') }}?v={{ asset_version }}"></script>

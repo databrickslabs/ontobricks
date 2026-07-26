@@ -98,7 +98,7 @@ and the engine that ultimately runs (column **Engine**).
 | UI Feature | Page / JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
 | Browse / open / create / save domain | `templates/registry.html`, `templates/domain.html` | `GET/POST /api/v1/domain/...`, `/registry/...`, `/domain/...` | REST | Python services (`DomainService`, `RegistryService`); files on UC Volumes |
-| Schedule (background actions) | `registry-schedule.html` | `/registry/schedule/*` | REST | Python `BuildScheduler` + Databricks Jobs SDK |
+| Schedule (background actions) | `settings` (Automation → Scheduler) | `/settings/schedules`, `/settings/cohort-schedules` | REST | Python `BuildScheduler` + Databricks Jobs SDK |
 | Cockpit / readiness | `domain-validation` | `GET /api/v1/domain/design-status` | REST | Python aggregator over OWL / R2RML / metadata |
 | Data Sources (UC tables preview) | `domain-metadata` | Internal REST → `databricks-sql-connector` | REST → Spark SQL | **Spark SQL** on UC tables (sample queries) |
 | Versions | `domain-versions` | `/api/v1/domain/versions` | REST | UC Volume listing |

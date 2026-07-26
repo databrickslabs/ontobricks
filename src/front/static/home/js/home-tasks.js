@@ -2,8 +2,8 @@
  * Home → My Tasks
  *
  * Compact review worklist surfaced on the home page, just below the
- * Current Domain panel. Mirrors Registry → My Tasks but only reveals
- * itself when the current user actually has pending review tasks.
+ * Current Domain panel. Only reveals itself when the current user
+ * actually has pending review tasks.
  *
  * Data source: GET /review/my-tasks (see ReviewService.my_tasks).
  */
