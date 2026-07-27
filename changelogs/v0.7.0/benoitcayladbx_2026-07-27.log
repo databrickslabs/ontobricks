@@ -1,3 +1,59 @@
+## fix(api): SQL identifier validation, bridge_depth le=1, test coverage, cleanup
+
+**Context:** Final code-review fixes for the MCP node-context feature. Addresses 6 findings: SQL injection guards on `fullName` and `key_column`, bridge `target_table` identifier validation, `bridge_depth` constrained to `le=1` for this version, a new `follow_bridges` unit test, `response_model_exclude_none=True` on the domain classes endpoint, and minor cleanup (module-level `_RDF_TYPE` constant, test rename).
+
+**Changes:**
+1. `src/api/routers/digitaltwin.py` — Added `import re`, module-level `_SAFE_SQL_IDENT`, `_SAFE_COL_IDENT`, and `_RDF_TYPE` constants.
+2. `src/api/routers/digitaltwin.py` — Added regex validation of `fullName` and `key_column` before any SQL is constructed in `dt_nodes_context`; returns HTTP 200 with `success=False` on invalid identifiers.
+3. `src/api/routers/digitaltwin.py` — Added regex validation of `target_table` inside the bridge traversal block; logs warning and `continue`s (skips the entry) on invalid identifiers.
+4. `src/api/routers/digitaltwin.py` — Changed `bridge_depth` query param from `le=5` to `le=1` to hard-cap at depth 1 for this version.
+5. `src/api/routers/digitaltwin.py` — Replaced inline `rdf_type = "http://..."` string in bridge traversal with `_RDF_TYPE` constant.
+6. `src/api/routers/domains.py` — Added `response_model_exclude_none=True` to the `GET /domain/classes` decorator.
+7. `tests/units/api/test_node_context_endpoint.py` — Added `test_follow_bridges_returns_entities` using mocked `resolve_domain`, `get_graphdb`, and `effective_graph_query_table`; asserts `bridges[0]["entities"]` is populated.
+8. `tests/units/api/test_domain_classes_endpoint.py` — Renamed `test_filters_empty_actions` → `test_empty_actions_class_has_null_dataset_and_no_bridges`.
+
+**Modified files:**
+- `src/api/routers/digitaltwin.py`
+- `src/api/routers/domains.py`
+- `tests/units/api/test_node_context_endpoint.py`
+- `tests/units/api/test_domain_classes_endpoint.py`
+
+**Test result:** 8/8 targeted tests pass; full suite 3320 passed, 275 skipped, 0 failures.
+
+---
+
+## test(mcp): register get_entity_context in marquee tool schema assertions
+
+**Context:** Task 6 (final) of the MCP node-context feature. Adds `get_entity_context` to the `expected` set in `test_expected_core_tools_registered`, completing the public MCP contract assertion for all tools introduced in this feature branch.
+
+**Changes:**
+1. `tests/mcp/integration/test_tool_schemas.py` — Added `"get_entity_context"` to the `expected` set in `test_expected_core_tools_registered`.
+
+**Modified files:**
+- `tests/mcp/integration/test_tool_schemas.py`
+
+**Test result:** 5/5 MCP schema tests pass; full suite 3319 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(mcp): add get_entity_context tool with dataset rows + bridge traversal
+
+**Context:** Task 5 of the MCP node-context feature. Adds the `get_entity_context` MCP tool that calls the `GET /api/v1/digitaltwin/nodes/context` endpoint (Task 3) to return complete context for an entity node including linked dataset rows and/or cross-domain bridge entities.
+
+**Changes:**
+1. `src/mcp-server/server/app.py` — Added `API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"` path constant after `API_V1_DOMAIN_CLASSES`.
+2. `src/mcp-server/server/app.py` — Added `_format_node_context_response(data: dict) -> str` module-level helper after `_format_class_context_block`; formats node context JSON as LLM-friendly text with entity header, dataset rows, and bridge info.
+3. `src/mcp-server/server/app.py` — Added `get_entity_context` `@mcp.tool()` inside `create_mcp_server()` after `query_graphql`; takes `entity_uri`, `fetch_dataset_rows`, `dataset_row_limit`, `follow_bridges` parameters; guards for missing domain selection.
+4. `tests/mcp/integration/test_more_smoke_tools.py` — Added `TestGetEntityContext` class with 2 smoke tests: metadata-only and no-domain-selected guard.
+
+**Modified files:**
+- `src/mcp-server/server/app.py`
+- `tests/mcp/integration/test_more_smoke_tools.py`
+
+**Test result:** 9/9 MCP smoke tests pass; full suite 3319 passed, 275 skipped, 0 failures.
+
+---
+
 ## fix(mcp): reuse client in select_domain cache fetch; strengthen context test
 
 **Context:** Two small polish fixes for Task 4's implementation. Fix 1 eliminates a redundant nested `_client()` context manager inside `select_domain` — the cache fetch now reuses the already-open `client` from the outer block. Fix 2 adds a concrete assertion in `test_describe_entity_includes_context_block`: when `[Context` appears in the output, it must contain the expected dataset or bridge text.

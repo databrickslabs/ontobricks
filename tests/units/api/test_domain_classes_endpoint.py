@@ -47,7 +47,7 @@ class TestDomainClassesEndpoint:
         assert customer["dataset"]["key_column"] == "id"
         assert len(customer["bridges"]) == 1
 
-    def test_filters_empty_actions(self, client):
+    def test_empty_actions_class_has_null_dataset_and_no_bridges(self, client):
         mock_domain = MagicMock()
         mock_domain.get_classes.return_value = _MOCK_CLASSES
 

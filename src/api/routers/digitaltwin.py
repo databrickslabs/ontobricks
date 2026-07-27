@@ -16,6 +16,7 @@ targets a specific version; when omitted, the latest version is used.
 Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
 
+import re
 import time
 
 from fastapi import APIRouter, Depends, Query
@@ -45,6 +46,10 @@ _extract_local_id = DigitalTwin.extract_local_id
 _expand_uri_aliases = DigitalTwin.expand_uri_aliases
 
 logger = get_logger(__name__)
+
+_SAFE_SQL_IDENT = re.compile(r'^[A-Za-z0-9_.]+$')
+_SAFE_COL_IDENT = re.compile(r'^[A-Za-z0-9_]+$')
+_RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
 router = APIRouter()
 
@@ -1647,7 +1652,12 @@ async def dt_nodes_context(
     fetch_dataset_rows: bool = Query(False, description="Fetch rows from the linked UC table/view"),
     dataset_row_limit: int = Query(5, ge=1, le=20, description="Max rows to return (1–20)"),
     follow_bridges: bool = Query(False, description="Traverse bridge target domains"),
-    bridge_depth: int = Query(1, ge=1, le=5, description="Bridge traversal depth (fixed at 1 for this version)"),
+    bridge_depth: int = Query(
+        1,
+        ge=1,
+        le=1,
+        description="Bridge traversal depth (only depth=1 supported in this version)",
+    ),
     registry_catalog: Optional[str] = Query(None),
     registry_schema: Optional[str] = Query(None),
     registry_volume: Optional[str] = Query(None),
@@ -1686,7 +1696,22 @@ async def dt_nodes_context(
     # --- Dataset ---
     dataset_out: Optional[NodeContextDataset] = None
     if raw_dataset and raw_dataset.get("fullName"):
+        full_name = raw_dataset.get("fullName", "")
+        if not full_name or not _SAFE_SQL_IDENT.match(full_name):
+            return NodeContextResponse(
+                success=False,
+                entity_uri=entity_uri,
+                message=f"Invalid dataset fullName in class config: {full_name!r}",
+            )
+
         key_col = raw_dataset.get("key_column")
+        if key_col and not _SAFE_COL_IDENT.match(key_col):
+            return NodeContextResponse(
+                success=False,
+                entity_uri=entity_uri,
+                message=f"Invalid key_column in class config: {key_col!r}",
+            )
+
         rows = None
         key_col_missing = None
 
@@ -1716,7 +1741,6 @@ async def dt_nodes_context(
         )
 
     # --- Bridges ---
-    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
     bridges_out: List[NodeContextBridge] = []
     for b in raw_bridges:
         target_domain = b.get("target_domain") or b.get("target_project", "")
@@ -1743,12 +1767,18 @@ async def dt_nodes_context(
                 if target_store:
                     target_table = effective_graph_query_table(target_dom, settings, store=target_store)
                     if target_table:
+                        if not _SAFE_SQL_IDENT.match(target_table):
+                            logger.warning(
+                                "nodes/context: invalid target_table %r for bridge %s — skipping",
+                                target_table, target_class_name,
+                            )
+                            continue
                         esc_type = sql_escape(target_class_name).lower()
                         esc_id = sql_escape(local_id).lower()
                         seed_where = (
                             f" WHERE subject IN ("
                             f"SELECT subject FROM {target_table} "
-                            f"WHERE predicate = '{rdf_type}' "
+                            f"WHERE predicate = '{_RDF_TYPE}' "
                             f"AND (LOWER(object) LIKE '%#{esc_type}' "
                             f"OR LOWER(object) LIKE '%/{esc_type}'))"
                             f" AND (LOWER(subject) LIKE '%/{esc_id}%' "

@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 from shared.fastapi.main import app
+from api.routers.digitaltwin import _RDF_TYPE
 
 
 @pytest.fixture
@@ -83,6 +84,52 @@ class TestNodeContextEndpoint:
         assert body["success"] is True
         assert body.get("dataset") is None
         assert body.get("bridges") == [] or body.get("bridges") is None
+
+    def test_follow_bridges_returns_entities(self, client):
+        """follow_bridges=True traverses bridge domain and populates entities."""
+        mock_domain = self._mock_domain()
+        mock_target_dom = MagicMock()
+        mock_target_store = MagicMock()
+        mock_target_store.bfs_traversal.return_value = [
+            {
+                "subject": "http://x/Account/1",
+                "predicate": _RDF_TYPE,
+                "object": "https://example.com/Contract",
+            }
+        ]
+
+        resolve_calls = []
+
+        def _resolve_side_effect(*args, **kwargs):
+            resolve_calls.append(args)
+            return mock_domain if len(resolve_calls) == 1 else mock_target_dom
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            side_effect=_resolve_side_effect,
+        ), patch(
+            "api.routers.digitaltwin.get_graphdb",
+            return_value=mock_target_store,
+        ), patch(
+            "api.routers.digitaltwin.effective_graph_query_table",
+            return_value="catalog.schema.graph",
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                    "follow_bridges": "true",
+                },
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        bridges = body.get("bridges", [])
+        assert len(bridges) == 1
+        assert bridges[0]["entities"] is not None
+        assert len(bridges[0]["entities"]) > 0
 
     def test_dataset_rows_skipped_when_key_column_missing(self, client):
         classes_no_key = [

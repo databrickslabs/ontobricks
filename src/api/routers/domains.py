@@ -454,6 +454,7 @@ async def get_domain_design_status(
 @router.get(
     "/domain/classes",
     response_model=ClassActionsResponse,
+    response_model_exclude_none=True,
     summary="List class Actions (dataset + bridges)",
     description="Return per-class dataset and bridge metadata for all classes "
     "in the domain's published ontology. Only non-empty values are included.",
