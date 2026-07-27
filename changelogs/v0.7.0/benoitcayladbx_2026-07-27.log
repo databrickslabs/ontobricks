@@ -616,3 +616,42 @@ Modified files:
 Tests:
 - uv run pytest -q tests/units/api/test_node_context_endpoint.py tests/mcp/integration/test_dataset_context_tools.py tests/units/mcp/test_node_context_formatting.py tests/units/front/test_query_dataset_description.py → 25 passed
 - uv run pytest -q -m "not scenario" → 3352 passed, 275 skipped, 5 deselected, 23 warnings in 22.64s
+
+---
+
+## Restrict new domain names to CamelCase alphanumeric
+
+Context: Creating a new domain accepted spaces and special characters in the
+name (New Domain dialog only checked non-empty). That diverged from the Domain
+Information page rule and produced awkward registry folder / URI slugs. New
+domains now allow CamelCase alphanumeric names only (letters and digits).
+
+Changes:
+
+1. src/back/objects/session/DomainSession.py
+   Added `is_valid_domain_name` (`^[A-Z][a-zA-Z0-9]*$`).
+2. src/back/objects/session/__init__.py
+   Exported `is_valid_domain_name`.
+3. src/back/objects/domain/Domain.py
+   Reject invalid names when saving info / UC for unregistered (new) domains.
+4. src/front/static/global/js/utils.js
+   New Domain dialog live-strips non-alnum, enforces CamelCase, and blocks
+   create until the name is valid; helper hint updated.
+5. tests/units/session/test_domain_name_validation.py
+   Parametrized unit tests for `is_valid_domain_name`.
+6. tests/units/front/test_new_domain_name_validation.py
+   Source contract for the New Domain dialog validation.
+7. tests/units/domain/test_domain_service.py
+   Coverage for new-domain accept/reject paths in `save_domain_info`.
+
+Modified files:
+- src/back/objects/session/DomainSession.py
+- src/back/objects/session/__init__.py
+- src/back/objects/domain/Domain.py
+- src/front/static/global/js/utils.js
+- tests/units/session/test_domain_name_validation.py
+- tests/units/front/test_new_domain_name_validation.py
+- tests/units/domain/test_domain_service.py
+- releasereq/TODO.md
+
+Tests: uv run pytest -q -m "not scenario" → 3370 passed, 275 skipped, 5 deselected in 21.76s

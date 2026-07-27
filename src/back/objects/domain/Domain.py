@@ -47,7 +47,7 @@ from back.core.logging import get_logger
 from back.objects.registry import RegistryService
 from back.objects.registry.registry_cache import invalidate_registry_cache
 from back.objects.registry.version_lifecycle import is_editable
-from back.objects.session import sanitize_domain_folder
+from back.objects.session import is_valid_domain_name, sanitize_domain_folder
 from back.core.task_manager import get_task_manager
 from back.objects.domain._metadata_tasks import (
     run_metadata_load_task,
@@ -266,7 +266,20 @@ class Domain:
         Returns:
             dict: Updated project info
         """
-        domain_name = data.get("name", self._s.info.get("name", "NewDomain"))
+        if "name" in data:
+            domain_name = (data.get("name") or "").strip()
+            # New domains (not yet registered) must use CamelCase alphanumeric
+            # names — no spaces or special characters.
+            if not (self._s.domain_folder or "") and not is_valid_domain_name(
+                domain_name
+            ):
+                raise ValidationError(
+                    "Domain name must be CamelCase alphanumeric only "
+                    "(letters and digits, no spaces or special characters), "
+                    "e.g. MyOntologyDomain",
+                )
+        else:
+            domain_name = self._s.info.get("name", "NewDomain")
 
         self._s.info.update(
             {
@@ -800,8 +813,15 @@ class Domain:
             if not c.is_configured:
                 raise ValidationError("Registry not configured. Go to Settings.")
 
-            folder = sanitize_domain_folder(self._s.info.get("name", "untitled_domain"))
+            raw_name = self._s.info.get("name", "untitled_domain")
+            folder = sanitize_domain_folder(raw_name)
             is_new_domain = not self._s.domain_folder
+            if is_new_domain and not is_valid_domain_name((raw_name or "").strip()):
+                raise ValidationError(
+                    "Domain name must be CamelCase alphanumeric only "
+                    "(letters and digits, no spaces or special characters), "
+                    "e.g. MyOntologyDomain",
+                )
             if is_new_domain and svc.domain_exists(folder):
                 raise ConflictError(
                     f'A domain named "{folder}" already exists in the registry. Please choose a different name.',

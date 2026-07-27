@@ -49,6 +49,16 @@ def _split_axioms_expressions(items: list) -> tuple:
     return axioms, expressions
 
 
+# CamelCase alphanumeric — letters/digits only, must start with an uppercase
+# letter. Used when creating a new domain (no spaces or special characters).
+_DOMAIN_NAME_RE = re.compile(r"^[A-Z][a-zA-Z0-9]*$")
+
+
+def is_valid_domain_name(name: str) -> bool:
+    """Return True if *name* is CamelCase alphanumeric (no spaces/special chars)."""
+    return bool(name and _DOMAIN_NAME_RE.fullmatch(name))
+
+
 def sanitize_domain_folder(name: str) -> str:
     """Turn a domain name into a safe folder name (lowercase, underscores)."""
     name = name.strip().lower().replace(" ", "_").replace("-", "_")

@@ -88,6 +88,22 @@ class TestSaveDomainInfo:
         assert result["name"] == "New Name"
         domain.save.assert_called_once()
 
+    def test_new_domain_rejects_spaces_and_special_chars(self):
+        """Unregistered domains must use CamelCase alphanumeric names only."""
+        domain = _mock_domain()
+        domain.domain_folder = ""
+        with pytest.raises(ValidationError, match="CamelCase alphanumeric"):
+            Domain(domain).save_domain_info({"name": "My Domain"})
+        with pytest.raises(ValidationError, match="CamelCase alphanumeric"):
+            Domain(domain).save_domain_info({"name": "WRFM - Shell"})
+        with pytest.raises(ValidationError, match="CamelCase alphanumeric"):
+            Domain(domain).save_domain_info({"name": "acme"})
+
+    def test_new_domain_accepts_camelcase_alphanumeric(self):
+        domain = _mock_domain()
+        domain.domain_folder = ""
+        result = Domain(domain).save_domain_info({"name": "PatientCare360"})
+        assert result["name"] == "PatientCare360"
     def test_save_base_uri(self):
         domain = _mock_domain()
         Domain(domain).save_domain_info({"base_uri": "http://new.org#"})
