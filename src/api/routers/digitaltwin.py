@@ -1647,6 +1647,7 @@ async def dt_nodes_context(
     fetch_dataset_rows: bool = Query(False, description="Fetch rows from the linked UC table/view"),
     dataset_row_limit: int = Query(5, ge=1, le=20, description="Max rows to return (1–20)"),
     follow_bridges: bool = Query(False, description="Traverse bridge target domains"),
+    bridge_depth: int = Query(1, ge=1, le=5, description="Bridge traversal depth (fixed at 1 for this version)"),
     registry_catalog: Optional[str] = Query(None),
     registry_schema: Optional[str] = Query(None),
     registry_volume: Optional[str] = Query(None),
@@ -1715,6 +1716,7 @@ async def dt_nodes_context(
         )
 
     # --- Bridges ---
+    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
     bridges_out: List[NodeContextBridge] = []
     for b in raw_bridges:
         target_domain = b.get("target_domain") or b.get("target_project", "")
@@ -1722,7 +1724,14 @@ async def dt_nodes_context(
         target_class_uri = b.get("target_class_uri", "")
         label = b.get("label", "")
 
-        entities = None
+        bridge_entry = NodeContextBridge(
+            target_domain=target_domain,
+            target_class_name=target_class_name,
+            target_class_uri=target_class_uri,
+            label=label,
+            entities=None,
+        )
+
         if follow_bridges and target_domain and target_class_name:
             try:
                 target_dom = DigitalTwin.resolve_domain(
@@ -1734,7 +1743,6 @@ async def dt_nodes_context(
                 if target_store:
                     target_table = effective_graph_query_table(target_dom, settings, store=target_store)
                     if target_table:
-                        rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
                         esc_type = sql_escape(target_class_name).lower()
                         esc_id = sql_escape(local_id).lower()
                         seed_where = (
@@ -1755,21 +1763,21 @@ async def dt_nodes_context(
                              "object": r.get("object", "")}
                             for r in (rows_bridge or [])
                         ]
+                        bridge_entry = NodeContextBridge(
+                            target_domain=target_domain,
+                            target_class_name=target_class_name,
+                            target_class_uri=target_class_uri,
+                            label=label,
+                            entities=entities,
+                        )
+                bridges_out.append(bridge_entry)
             except Exception as exc:
                 logger.warning(
-                    "nodes/context: bridge traversal to %s/%s failed: %s",
+                    "nodes/context: bridge traversal to %s/%s failed — skipping: %s",
                     target_domain, target_class_name, exc,
                 )
-
-        bridges_out.append(
-            NodeContextBridge(
-                target_domain=target_domain,
-                target_class_name=target_class_name,
-                target_class_uri=target_class_uri,
-                label=label,
-                entities=entities,
-            )
-        )
+        else:
+            bridges_out.append(bridge_entry)
 
     logger.info(
         "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d",

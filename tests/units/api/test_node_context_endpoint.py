@@ -32,9 +32,6 @@ _CLASSES_WITH_ACTIONS = [
 ]
 
 
-RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-
-
 class TestNodeContextEndpoint:
     def _mock_domain(self):
         mock_domain = MagicMock()
