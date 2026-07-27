@@ -87,6 +87,45 @@ class TestNodeContextEndpoint:
         assert body.get("dataset") is None
         assert body.get("bridges") == [] or body.get("bridges") is None
 
+    def test_hash_class_uri_matches_path_based_entity(self, client):
+        """Instance URIs .../ClassName/id must match ontology class ...#ClassName."""
+        classes = [
+            {
+                "name": "Meter",
+                "uri": "https://databricks-ontology.com/Cust360Auto#Meter",
+                "dataset": {
+                    "catalog": "main",
+                    "schema": "iot",
+                    "asset": "meters",
+                    "type": "TABLE",
+                    "fullName": "main.iot.meters",
+                    "key_column": "meter_id",
+                    "description": "Smart meter master.",
+                },
+                "bridges": [],
+            }
+        ]
+        mock_domain = MagicMock()
+        mock_domain.get_classes.return_value = classes
+
+        with patch("api.routers.digitaltwin.DigitalTwin.resolve_domain", return_value=mock_domain):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": (
+                        "https://databricks-ontology.com/Cust360Auto/Meter/MTR0000049"
+                    ),
+                    "domain_name": "Cust360Auto",
+                },
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["class_name"] == "Meter"
+        assert body["dataset"]["fullName"] == "main.iot.meters"
+        assert body["dataset"]["description"] == "Smart meter master."
+
     def test_follow_bridges_returns_entities(self, client):
         """follow_bridges=True traverses bridge domain and populates entities."""
         mock_domain = self._mock_domain()
@@ -162,3 +201,37 @@ class TestNodeContextEndpoint:
         body = resp.json()
         assert body["dataset"].get("key_column_missing") is True
         assert "rows" not in body["dataset"]
+
+    def test_dataset_row_fetch_passes_domain_and_settings_to_client(self, client):
+        mock_domain = self._mock_domain()
+        mock_client = MagicMock()
+        mock_client.execute_query.return_value = [{"id": "CUST001", "name": "Ada"}]
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            return_value=mock_domain,
+        ), patch(
+            "api.routers.digitaltwin.get_databricks_client",
+            return_value=mock_client,
+        ) as mock_get_client, patch(
+            "api.routers.digitaltwin.run_blocking",
+            side_effect=lambda fn, *a, **kw: fn(*a, **kw),
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                    "fetch_dataset_rows": "true",
+                    "dataset_row_limit": "10",
+                },
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["dataset"]["rows"] == [{"id": "CUST001", "name": "Ada"}]
+        mock_get_client.assert_called_once()
+        args = mock_get_client.call_args[0]
+        assert args[0] is mock_domain
+        assert len(args) == 2

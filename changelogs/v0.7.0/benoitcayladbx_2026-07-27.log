@@ -445,3 +445,140 @@ Modified files:
 Tests:
 - uv run pytest -q tests/units/mcp/test_node_context_formatting.py tests/units/api/test_node_context_endpoint.py → 9 passed
 - uv run pytest -q -m "not scenario" → 3338 passed, 275 skipped, 5 deselected, 23 warnings in 23.53s
+
+## Graph Explorer dataset preview box
+
+Context: Graph Explorer Details needed a Dashboard-style Dataset section with
+metadata and a Preview rows action capped at 10 UC rows via existing
+``/nodes/context``.
+
+Changes:
+
+1. src/front/static/query/js/query-dashboard.js
+   Added ``openDatasetPreviewModal`` that loads up to 10 rows from
+   ``/api/v1/digitaltwin/nodes/context``.
+2. src/front/static/query/js/query-entity-details.js
+   Dataset section shows Description + Preview rows (disabled without key).
+3. src/front/static/query/js/query-sigmagraph.js
+   Added matching Dataset section after Dashboard in Sigma Details.
+4. tests/units/front/test_query_dataset_description.py
+   Contracts for both Details surfaces and the 10-row preview fetch.
+5. docs/superpowers/specs/2026-07-27-graph-explorer-dataset-preview-design.md
+   Design for the preview box.
+6. docs/superpowers/plans/2026-07-27-graph-explorer-dataset-preview.md
+   Implementation plan.
+
+Modified files:
+- src/front/static/query/js/query-dashboard.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query.js
+- tests/units/front/test_query_dataset_description.py
+- docs/superpowers/specs/2026-07-27-graph-explorer-dataset-preview-design.md
+- docs/superpowers/plans/2026-07-27-graph-explorer-dataset-preview.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_query_dataset_description.py → 4 passed
+- uv run pytest -q -m "not scenario" → 3340 passed, 275 skipped, 5 deselected, 23 warnings in 26.22s
+
+## Fix nodes/context class match for path-based URIs
+
+Context: Graph Explorer Dataset Preview showed "No linked dataset" because
+``/nodes/context`` only matched ``entity_uri.startswith(class_uri + "/")``.
+Cust360Auto instances are ``.../Meter/id`` while class URIs are
+``...#Meter``, so the class (and dataset) never resolved.
+
+Changes:
+
+1. src/api/routers/digitaltwin.py
+   Added ``_match_ontology_class`` with URI-prefix then local-name/path
+   segment fallback; log when no class matches.
+2. tests/units/api/test_node_context_endpoint.py
+   Regression for hash class URI + path-based entity URI.
+3. src/front/static/query/js/query-dashboard.js
+   Clearer modal message when the class URI cannot be resolved.
+
+Modified files:
+- src/api/routers/digitaltwin.py
+- tests/units/api/test_node_context_endpoint.py
+- src/front/static/query/js/query-dashboard.js
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/api/test_node_context_endpoint.py → 6 passed
+- uv run pytest -q -m "not scenario" → 3341 passed, 275 skipped, 5 deselected, 23 warnings in 22.69s
+
+## Fix dataset preview Databricks client call
+
+Context: Preview showed "No matching rows" even after class matching worked.
+Server logs showed the real failure: ``get_databricks_client(settings)`` was
+missing the required ``domain`` argument; the exception was swallowed and the
+UI treated missing rows as an empty result.
+
+Changes:
+
+1. src/api/routers/digitaltwin.py
+   Call ``get_databricks_client(domain, settings)``; surface fetch errors via
+   response ``message``; treat missing client as an explicit error.
+2. src/front/static/query/js/query-dashboard.js
+   Show fetch failure message instead of false "No matching rows".
+3. tests/units/api/test_node_context_endpoint.py
+   Regression asserting domain+settings are passed to the client.
+4. tests/units/front/test_query_dataset_description.py
+   Contract for failed-row messaging.
+
+Modified files:
+- src/api/routers/digitaltwin.py
+- src/front/static/query/js/query-dashboard.js
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/front/test_query_dataset_description.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/api/test_node_context_endpoint.py → 7 passed
+- uv run pytest -q -m "not scenario" → 3342 passed, 275 skipped, 5 deselected, 23 warnings in 22.07s
+
+## Fix dataset preview SQL method name
+
+Context: After correcting the Databricks client constructor args, preview failed
+with ``'DatabricksClient' object has no attribute 'execute'``. The client API
+is ``execute_query``.
+
+Changes:
+
+1. src/api/routers/digitaltwin.py
+   Use ``client_db.execute_query`` for dataset row preview.
+2. tests/units/api/test_node_context_endpoint.py
+   Mock ``execute_query`` instead of ``execute``.
+
+Modified files:
+- src/api/routers/digitaltwin.py
+- tests/units/api/test_node_context_endpoint.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/api/test_node_context_endpoint.py → 7 passed
+- uv run pytest -q -m "not scenario" → 3342 passed, 275 skipped, 5 deselected, 23 warnings in 21.27s
+
+## Graph Explorer context-menu Dataset preview
+
+Context: Right-click on a node with a linked dataset should open the same
+preview modal as Details → Preview rows, mirroring View Dashboard.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Resolve dataset in node meta; add Dataset preview context-menu item and
+   handler calling ``openDatasetPreviewModal``.
+2. tests/units/front/test_query_dataset_description.py
+   Contract for the context-menu Dataset preview action.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_query_dataset_description.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_query_dataset_description.py → 5 passed
+- uv run pytest -q -m "not scenario" → 3343 passed, 275 skipped, 5 deselected, 23 warnings in 23.06s

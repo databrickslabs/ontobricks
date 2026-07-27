@@ -1,5 +1,6 @@
 /**
  * OntoBricks - query-dashboard.js
+ * Dashboard embed modal + external dataset row preview modal.
  * Dashboard modal: URL building with parameters and iframe embedding.
  * Extracted from query.js per code_instructions.txt
  */
@@ -170,6 +171,149 @@ function openDashboardModal(dashboardUrl, entityType, entityId) {
     });
     
     modal.show();
+}
+
+/**
+ * Open a modal that previews up to 10 UC rows for the entity's linked dataset.
+ * Uses GET /api/v1/digitaltwin/nodes/context with fetch_dataset_rows=true.
+ *
+ * @param {string} entityUri - Full entity URI
+ * @param {string} entityType - Ontology class / type label
+ * @param {string} [entityId] - Local entity id (badge only)
+ */
+function openDatasetPreviewModal(entityUri, entityType, entityId) {
+    const existingModal = document.getElementById('datasetPreviewModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const safeType = escapeHtml(entityType || 'Entity');
+    const safeId = entityId ? escapeHtml(String(entityId)) : '';
+    const modalHtml = `
+        <div class="modal fade" id="datasetPreviewModal" tabindex="-1" aria-labelledby="datasetPreviewModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white py-2">
+                        <h5 class="modal-title" id="datasetPreviewModalLabel">
+                            <i class="bi bi-table me-2"></i>
+                            ${safeType} Dataset
+                            ${safeId ? `<span class="badge bg-info ms-2">${safeId}</span>` : ''}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="datasetPreviewModalBody">
+                        <div class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+                            Loading dataset rows…
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <small class="text-muted me-auto">Showing up to 10 rows</small>
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalElement = document.getElementById('datasetPreviewModal');
+    const modal = new bootstrap.Modal(modalElement, {
+        backdrop: true,
+        keyboard: true
+    });
+    modalElement.addEventListener('hidden.bs.modal', function () {
+        modalElement.remove();
+    });
+    modal.show();
+
+    _loadDatasetPreviewRows(entityUri).then(function (html) {
+        const body = document.getElementById('datasetPreviewModalBody');
+        if (body) body.innerHTML = html;
+    });
+}
+
+async function _loadDatasetPreviewRows(entityUri) {
+    if (!entityUri) {
+        return '<div class="alert alert-warning mb-0">Missing entity URI.</div>';
+    }
+    try {
+        const params = new URLSearchParams({
+            entity_uri: entityUri,
+            fetch_dataset_rows: 'true',
+            dataset_row_limit: '10',
+        });
+        const resp = await fetch(
+            `/api/v1/digitaltwin/nodes/context?${params.toString()}`,
+            { credentials: 'same-origin' }
+        );
+        if (!resp.ok) {
+            return `<div class="alert alert-danger mb-0">Failed to load dataset preview (${resp.status}).</div>`;
+        }
+        const data = await resp.json();
+        if (!data.success) {
+            return `<div class="alert alert-warning mb-0">${escapeHtml(data.message || 'Could not retrieve dataset context.')}</div>`;
+        }
+        const dataset = data.dataset;
+        if (!dataset) {
+            if (!data.class_name) {
+                return '<div class="alert alert-warning mb-0">Could not resolve the ontology class for this entity URI.</div>';
+            }
+            return '<div class="alert alert-info mb-0">No linked dataset for this entity type.</div>';
+        }
+        if (dataset.key_column_missing) {
+            return '<div class="alert alert-warning mb-0">Key column is not configured on this dataset — row preview is unavailable.</div>';
+        }
+
+        const metaParts = [];
+        if (dataset.fullName) {
+            metaParts.push(`<div class="mb-1"><span class="text-muted">Table</span> <code>${escapeHtml(dataset.fullName)}</code></div>`);
+        }
+        if (dataset.key_column) {
+            metaParts.push(`<div class="mb-1"><span class="text-muted">Key</span> <code>${escapeHtml(dataset.key_column)}</code></div>`);
+        }
+        if (dataset.description) {
+            metaParts.push(`<div class="mb-2"><span class="text-muted">Description</span> ${escapeHtml(dataset.description)}</div>`);
+        }
+
+        const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
+        if (rows.length === 0) {
+            if (data.message) {
+                return metaParts.join('') +
+                    `<div class="alert alert-warning mb-0">Failed to load rows: ${escapeHtml(data.message)}</div>`;
+            }
+            return metaParts.join('') +
+                '<div class="alert alert-info mb-0">No matching rows for this entity.</div>';
+        }
+
+        const columns = [];
+        const seen = new Set();
+        rows.forEach(function (row) {
+            Object.keys(row || {}).forEach(function (col) {
+                if (!seen.has(col)) {
+                    seen.add(col);
+                    columns.push(col);
+                }
+            });
+        });
+
+        let table = '<div class="table-responsive"><table class="table table-sm table-striped table-bordered mb-0">';
+        table += '<thead class="table-light"><tr>' +
+            columns.map(function (c) { return `<th>${escapeHtml(c)}</th>`; }).join('') +
+            '</tr></thead><tbody>';
+        rows.forEach(function (row) {
+            table += '<tr>' + columns.map(function (c) {
+                const val = row[c];
+                const text = (val === null || val === undefined) ? '' : String(val);
+                return `<td>${escapeHtml(text)}</td>`;
+            }).join('') + '</tr>';
+        });
+        table += '</tbody></table></div>';
+        return metaParts.join('') + table;
+    } catch (err) {
+        console.error('[Dataset] Preview failed:', err);
+        return '<div class="alert alert-danger mb-0">Failed to load dataset preview.</div>';
+    }
 }
 
 function findAttributeValue(attributesMap, columnName) {

@@ -1397,6 +1397,34 @@ var SigmaGraph = (function () {
             html += _sec('bi bi-speedometer2', 'Dashboard', dashBody, true);
         }
 
+        var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
+        if (dataset && (dataset.fullName || dataset.asset)) {
+            var dsFullName = dataset.fullName
+                || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
+            var hasKeyCol = Boolean(dataset.key_column);
+            var dsBody = '<div class="entity-detail-item"><span class="detail-key">Table</span>' +
+                '<span class="detail-value"><code>' + esc(dsFullName) + '</code></span></div>';
+            if (dataset.key_column) {
+                dsBody += '<div class="entity-detail-item"><span class="detail-key">Key</span>' +
+                    '<span class="detail-value"><code>' + esc(dataset.key_column) + '</code></span></div>';
+            }
+            if (dataset.description) {
+                dsBody += '<div class="entity-detail-item"><span class="detail-key">Description</span>' +
+                    '<span class="detail-value">' + esc(dataset.description) + '</span></div>';
+            }
+            if (hasKeyCol) {
+                dsBody += '<div class="entity-detail-item"><button type="button" onclick="openDatasetPreviewModal(\'' +
+                    esc(entity.id) + '\', \'' + esc(ontologyTypeName) + '\', \'' + esc(actualIdValue || '') +
+                    '\')" class="btn btn-sm btn-outline-info w-100" title="Preview up to 10 matching rows">' +
+                    '<i class="bi bi-table me-1"></i>Preview rows</button></div>';
+            } else {
+                dsBody += '<div class="entity-detail-item"><button type="button" disabled ' +
+                    'class="btn btn-sm btn-outline-info w-100" title="Key column is not configured — preview unavailable">' +
+                    '<i class="bi bi-table me-1"></i>Preview rows</button></div>';
+            }
+            html += _sec('bi bi-table', 'Dataset', dsBody, true);
+        }
+
         var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
         if (bridges.length > 0) {
             var bridgeBody = '';
@@ -2085,9 +2113,9 @@ var SigmaGraph = (function () {
     // Context menu + Find popup
     // -----------------------------------------------------------
     function _resolveNodeMeta(nodeId) {
-        if (!_graph) return { bridges: [], dashboardUrl: null, dashboardParams: {}, entity: {}, actualIdValue: '' };
+        if (!_graph) return { bridges: [], dashboardUrl: null, dashboardParams: {}, dataset: null, entity: {}, actualIdValue: '' };
         var attrs = _graph.getNodeAttributes(nodeId);
-        if (attrs._isGroup || attrs._isClusterNode) return { bridges: [], dashboardUrl: null, dashboardParams: {}, entity: {}, actualIdValue: '' };
+        if (attrs._isGroup || attrs._isClusterNode) return { bridges: [], dashboardUrl: null, dashboardParams: {}, dataset: null, entity: {}, actualIdValue: '' };
         var entity = attrs._data || {};
 
         var entityMapping = null;
@@ -2117,8 +2145,9 @@ var SigmaGraph = (function () {
         var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
         var dashboardUrl = (entityMapping && entityMapping.dashboard) || (classInfo && classInfo.dashboard) || null;
         var dashboardParams = (entityMapping && entityMapping.dashboardParams) || (classInfo && classInfo.dashboardParams) || {};
+        var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
 
-        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
+        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
     }
 
     function _showNodeContextMenu(nodeId, mouseEvent) {
@@ -2158,6 +2187,16 @@ var SigmaGraph = (function () {
             items += '<div class="ctx-header">Dashboard</div>';
             items += '<div class="ctx-item" data-sg-node-action="dashboard" data-url="' + esc(dashUrl) + '" data-class="' + esc(className) + '" data-id="' + esc(meta.actualIdValue || '') + '">' +
                 '<i class="bi bi-speedometer2"></i> View Dashboard</div>';
+        }
+
+        var dataset = meta.dataset;
+        if (dataset && (dataset.fullName || dataset.asset) && meta.entity && meta.entity.id) {
+            var dsClassName = (meta.classInfo && (meta.classInfo.label || meta.classInfo.name)) || (meta.entityMapping && meta.entityMapping.className) || '';
+            if (items) items += '<div class="ctx-divider"></div>';
+            items += '<div class="ctx-header">Dataset</div>';
+            items += '<div class="ctx-item" data-sg-node-action="dataset-preview" data-uri="' + esc(meta.entity.id) +
+                '" data-class="' + esc(dsClassName) + '" data-id="' + esc(meta.actualIdValue || '') + '">' +
+                '<i class="bi bi-table"></i> Dataset preview</div>';
         }
 
         if (meta.bridges.length > 0) {
@@ -3368,6 +3407,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 var cls = nodeItem.getAttribute('data-class');
                 var id = nodeItem.getAttribute('data-id');
                 if (url && typeof openDashboardModal === 'function') openDashboardModal(url, cls, id);
+            } else if (action === 'dataset-preview') {
+                var dsUri = nodeItem.getAttribute('data-uri');
+                var dsCls = nodeItem.getAttribute('data-class');
+                var dsId = nodeItem.getAttribute('data-id');
+                if (dsUri && typeof openDatasetPreviewModal === 'function') {
+                    openDatasetPreviewModal(dsUri, dsCls, dsId);
+                } else if (typeof showNotification === 'function') {
+                    showNotification('Dataset preview is unavailable.', 'warning');
+                }
             } else if (action === 'bridge') {
                 var url = nodeItem.getAttribute('data-url');
                 if (url) {

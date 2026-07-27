@@ -33,6 +33,7 @@ from back.core.helpers import (
     get_triplestore_sql_credentials,
     get_databricks_client,
     sql_escape,
+    extract_local_name,
     effective_view_table,
     effective_graph_name,
     effective_graph_query_table,
@@ -1633,6 +1634,41 @@ async def dt_cohort_materialize(
 # ---------------------------------------------------------------------------
 
 
+def _match_ontology_class(entity_uri: str, classes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Resolve an entity instance URI to its ontology class definition.
+
+    Prefers exact class-URI prefix match (``classUri/instance``), then falls
+    back to matching the class local name / display name as a path or hash
+    segment. Needed because R2RML often mints path-based instance URIs while
+    OWL classes use ``base#ClassName``.
+    """
+    if not entity_uri or not classes:
+        return None
+
+    for cls in classes:
+        cls_uri = (cls.get("uri") or "").rstrip("/")
+        if not cls_uri:
+            continue
+        if entity_uri.startswith(cls_uri + "/") or entity_uri.startswith(cls_uri + "#"):
+            return cls
+
+    for cls in classes:
+        tokens = {
+            t for t in (
+                extract_local_name(cls.get("uri") or ""),
+                (cls.get("name") or "").strip(),
+            ) if t
+        }
+        for token in tokens:
+            if (
+                f"/{token}/" in entity_uri
+                or f"#{token}/" in entity_uri
+                or f"#{token}_" in entity_uri
+            ):
+                return cls
+    return None
+
+
 @router.get(
     "/nodes/context",
     response_model=NodeContextResponse,
@@ -1674,16 +1710,15 @@ async def dt_nodes_context(
     )
     dname = domain.domain_folder or (domain.info or {}).get("name", "")
 
-    # Resolve class by matching entity URI type prefix
+    # Resolve class by URI prefix, then by local class name in the entity URI
     raw_classes = domain.get_classes() or []
-    matched_cls = None
-    for cls in raw_classes:
-        cls_uri = cls.get("uri", "")
-        if cls_uri and entity_uri.startswith(cls_uri.rstrip("/") + "/"):
-            matched_cls = cls
-            break
+    matched_cls = _match_ontology_class(entity_uri, raw_classes)
 
     if matched_cls is None:
+        logger.info(
+            "nodes/context: no class match for entity=%s domain=%s classes=%d",
+            local_id, dname, len(raw_classes),
+        )
         return NodeContextResponse(
             success=True,
             entity_uri=entity_uri,
@@ -1693,6 +1728,7 @@ async def dt_nodes_context(
     class_name = matched_cls.get("name", "")
     raw_dataset = matched_cls.get("dataset") or None
     raw_bridges = matched_cls.get("bridges") or []
+    fetch_error: Optional[str] = None
 
     # --- Dataset ---
     dataset_out: Optional[NodeContextDataset] = None
@@ -1721,15 +1757,21 @@ async def dt_nodes_context(
                 key_col_missing = True
             else:
                 try:
-                    client_db = get_databricks_client(settings)
-                    sql = (
-                        f"SELECT * FROM {raw_dataset['fullName']} "
-                        f"WHERE {key_col} = '{sql_escape(local_id)}' "
-                        f"LIMIT {dataset_row_limit}"
-                    )
-                    result = await run_blocking(client_db.execute, sql)
-                    rows = result if isinstance(result, list) else []
+                    client_db = get_databricks_client(domain, settings)
+                    if client_db is None:
+                        fetch_error = "Databricks client is not configured"
+                        rows = []
+                    else:
+                        sql = (
+                            f"SELECT * FROM {raw_dataset['fullName']} "
+                            f"WHERE {key_col} = '{sql_escape(local_id)}' "
+                            f"LIMIT {dataset_row_limit}"
+                        )
+                        result = await run_blocking(client_db.execute_query, sql)
+                        rows = result if isinstance(result, list) else []
                 except Exception as exc:
+                    fetch_error = str(exc)
+                    rows = []
                     logger.warning(
                         "nodes/context: dataset row fetch failed for %s: %s", entity_uri, exc
                     )
@@ -1823,4 +1865,5 @@ async def dt_nodes_context(
         class_name=class_name,
         dataset=dataset_out,
         bridges=bridges_out or None,
+        message=fetch_error,
     )

@@ -413,11 +413,19 @@ async function showEntityDetails(entity) {
         `;
     }
 
-    // Linked external dataset
+    // Linked external dataset (Dashboard-style box + preview)
     const dataset = entityMapping?.dataset || classInfo?.dataset || null;
     if (dataset && (dataset.fullName || dataset.asset)) {
         const fullName = dataset.fullName
             || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
+        const hasKey = Boolean(dataset.key_column);
+        const previewDisabled = hasKey ? '' : 'disabled';
+        const previewTitle = hasKey
+            ? 'Preview up to 10 matching rows'
+            : 'Key column is not configured — preview unavailable';
+        const previewOnClick = hasKey
+            ? `openDatasetPreviewModal('${escapeHtml(entity.id)}', '${escapeHtml(ontologyTypeName)}', '${escapeHtml(actualIdValue || '')}')`
+            : '';
         html += `
             <div class="entity-detail-section">
                 <h6><i class="bi bi-table"></i> Dataset</h6>
@@ -432,9 +440,16 @@ async function showEntityDetails(entity) {
                 </div>` : ''}
                 ${dataset.description ? `
                 <div class="entity-detail-item">
-                    <span class="detail-key">Purpose</span>
+                    <span class="detail-key">Description</span>
                     <span class="detail-value">${escapeHtml(dataset.description)}</span>
                 </div>` : ''}
+                <div class="entity-detail-item">
+                    <button type="button" onclick="${previewOnClick}"
+                            class="btn btn-sm btn-outline-info w-100" ${previewDisabled}
+                            title="${escapeHtml(previewTitle)}">
+                        <i class="bi bi-table me-1"></i>Preview rows
+                    </button>
+                </div>
             </div>
         `;
     }

@@ -7,7 +7,7 @@
  *   query-execute.js        – Query execution, results grid, filtering, grouping
  *   query-d3graph.js        – D3.js graph build, render, visual filters, resize
  *   query-entity-details.js – Entity/relationship detail panel, mapping lookup
- *   query-dashboard.js      – Dashboard modal (URL builder, iframe)
+ *   query-dashboard.js      – Dashboard modal + dataset row preview modal
  *   query-sync.js           – Triple store sync, readiness checks
  *   query-sigmagraph.js     – Sigma.js graph viewer
  *   query-quality.js        – Quality checks
