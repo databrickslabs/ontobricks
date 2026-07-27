@@ -59,7 +59,7 @@ class UnityCatalog:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SHOW SCHEMAS IN {catalog}")
+                    cur.execute(f"SHOW SCHEMAS IN `{catalog}`")
                     return [row[0] for row in cur.fetchall()]
         except Exception as exc:
             logger.exception("Error fetching schemas: %s", exc)
@@ -75,7 +75,7 @@ class UnityCatalog:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SHOW TABLES IN {catalog}.{schema}")
+                    cur.execute(f"SHOW TABLES IN `{catalog}`.{schema}")
                     return [row[1] for row in cur.fetchall()]
         except Exception as exc:
             logger.exception("Error fetching tables: %s", exc)
@@ -94,7 +94,7 @@ class UnityCatalog:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"DESCRIBE {catalog}.{schema}.{table}")
+                    cur.execute(f"DESCRIBE `{catalog}`.{schema}.{table}")
                     columns = []
                     for row in cur.fetchall():
                         columns.append(
@@ -116,7 +116,7 @@ class UnityCatalog:
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
                     query = (
-                        f"SELECT comment FROM {catalog}.information_schema.tables "
+                        f"SELECT comment FROM `{catalog}`.information_schema.tables "
                         f"WHERE table_catalog = '{catalog}' "
                         f"AND table_schema = '{schema}' "
                         f"AND table_name = '{table}'"
@@ -135,7 +135,7 @@ class UnityCatalog:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SHOW VOLUMES IN {catalog}.{schema}")
+                    cur.execute(f"SHOW VOLUMES IN `{catalog}`.{schema}")
                     return [row[1] for row in cur.fetchall()]
         except Exception as exc:
             logger.exception("Error fetching volumes: %s", exc)

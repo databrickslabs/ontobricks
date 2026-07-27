@@ -6,6 +6,7 @@ repeated queries reuse existing TCP/TLS sessions.
 """
 
 import queue
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -96,7 +97,91 @@ class SQLWarehouse:
                 self._pool.put_nowait(conn)
             except queue.Full:
                 self._close_quietly(conn)
+    @staticmethod
+    def _quote_hyphenated_uc_identifiers(query: str) -> str:
+        """
+        Databricks SQL requires identifiers with hyphens to be backticked.
 
+        Example:
+            arc-dbx-uc-cdp.causal_analytics.table_name
+
+        becomes:
+            `arc-dbx-uc-cdp`.causal_analytics.table_name
+
+        This only modifies SQL outside string literals and outside existing
+        backtick identifiers, so URI strings and already-quoted identifiers
+        are not touched.
+        """
+        if not isinstance(query, str) or "-" not in query:
+            return query
+
+        # Matches unquoted identifier parts containing hyphen only when used
+        # like a SQL multipart identifier before a dot.
+        pattern = re.compile(
+            r"(?<![`A-Za-z0-9_])"
+            r"([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)+)"
+            r"(?=\.)"
+        )
+
+        output = []
+        chunk = []
+
+        in_single_quote = False
+        in_double_quote = False
+        in_backtick = False
+        i = 0
+
+        def flush_chunk():
+            if chunk:
+                text = "".join(chunk)
+                output.append(pattern.sub(r"`\1`", text))
+                chunk.clear()
+
+        while i < len(query):
+            ch = query[i]
+
+            if ch == "'" and not in_double_quote and not in_backtick:
+                if not in_single_quote:
+                    flush_chunk()
+                    output.append(ch)
+                    in_single_quote = True
+                else:
+                    output.append(ch)
+                    in_single_quote = False
+                i += 1
+                continue
+
+            if ch == '"' and not in_single_quote and not in_backtick:
+                if not in_double_quote:
+                    flush_chunk()
+                    output.append(ch)
+                    in_double_quote = True
+                else:
+                    output.append(ch)
+                    in_double_quote = False
+                i += 1
+                continue
+
+            if ch == "`" and not in_single_quote and not in_double_quote:
+                if not in_backtick:
+                    flush_chunk()
+                    output.append(ch)
+                    in_backtick = True
+                else:
+                    output.append(ch)
+                    in_backtick = False
+                i += 1
+                continue
+
+            if in_single_quote or in_double_quote or in_backtick:
+                output.append(ch)
+            else:
+                chunk.append(ch)
+
+            i += 1
+
+        flush_chunk()
+        return "".join(output)
     @staticmethod
     def _close_quietly(pc: _PooledConnection) -> None:
         try:
@@ -138,6 +223,7 @@ class SQLWarehouse:
         try:
             with self._borrow() as conn:
                 with conn.cursor() as cur:
+                    query = self._quote_hyphenated_uc_identifiers(query)
                     cur.execute(query)
                     columns = [desc[0] for desc in cur.description]
                     return [dict(zip(columns, row)) for row in cur.fetchall()]
@@ -165,6 +251,7 @@ class SQLWarehouse:
         try:
             with self._borrow() as conn:
                 with conn.cursor() as cur:
+                    query = self._quote_hyphenated_uc_identifiers(query)
                     cur.execute(query)
                     columns = [desc[0] for desc in cur.description]
                     while True:
@@ -183,6 +270,7 @@ class SQLWarehouse:
         try:
             with self._borrow() as conn:
                 with conn.cursor() as cur:
+                    statement = self._quote_hyphenated_uc_identifiers(statement)
                     cur.execute(statement)
                 # UC DDL must be committed before control-plane APIs (e.g. synced
                 # database tables) can resolve catalog.schema in the metastore.
