@@ -952,6 +952,20 @@ function renderSharedEntityDataset(viewOnly = false) {
             ? '<span class="badge bg-info text-dark">View</span>'
             : '<span class="badge bg-secondary">Table</span>';
         const fullName = ds.fullName || `${ds.catalog}.${ds.schema}.${ds.asset}`;
+        const keyColHtml = !viewOnly
+            ? `<div class="mt-2">
+                 <label class="form-label form-label-sm mb-1" style="font-size:0.8rem;">
+                   Key column <small class="text-muted">(used to match node ID)</small>
+                 </label>
+                 <input type="text" class="form-control form-control-sm"
+                   id="datasetKeyColumnInput"
+                   value="${escapeHtml(ds.key_column || '')}"
+                   placeholder="e.g. id"
+                   oninput="onDatasetKeyColumnChange(this.value)">
+               </div>`
+            : (ds.key_column
+                ? `<div class="mt-1"><small class="text-muted">Key: <code>${escapeHtml(ds.key_column)}</code></small></div>`
+                : '');
         container.innerHTML = `
             <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-table text-primary"></i>
@@ -961,10 +975,17 @@ function renderSharedEntityDataset(viewOnly = false) {
                 </div>
                 ${!viewOnly ? `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSharedEntityDataset()" title="Remove dataset"><i class="bi bi-x"></i></button>` : ''}
             </div>
+            ${keyColHtml}
         `;
     } else {
         container.innerHTML = '<small class="text-muted">No dataset assigned</small>';
     }
+}
+
+function onDatasetKeyColumnChange(value) {
+    if (!sharedPanelDataset) return;
+    sharedPanelDataset.key_column = value.trim() || null;
+    markPanelDirty();
 }
 
 /**
@@ -1164,7 +1185,8 @@ function _datasetSelectAsset(asset) {
         schema: _datasetSelSchema,
         asset: asset.name,
         type: (asset.table_type || '').toUpperCase() === 'VIEW' ? 'VIEW' : 'TABLE',
-        fullName: asset.full_name || `${_datasetSelCatalog}.${_datasetSelSchema}.${asset.name}`
+        fullName: asset.full_name || `${_datasetSelCatalog}.${_datasetSelSchema}.${asset.name}`,
+        key_column: null,
     };
     markPanelDirty();
     renderSharedEntityDataset(false);
