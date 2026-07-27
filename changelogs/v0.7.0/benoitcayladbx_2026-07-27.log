@@ -259,3 +259,189 @@
 - `src/front/static/ontology/js/ontology-shared-panels.js`
 
 **Test result:** No automated tests cover JS UI in this repo. Manual inspection confirms balanced braces, correct template literals, and that `key_column` flows through the existing save payload (`dataset: sharedPanelDataset || undefined`) without additional changes.
+
+## Ontology dataset key-column dropdown
+
+Context: Ontology entities linked to external Unity Catalog datasets required
+users to type a key column manually, allowing invalid column names. Replaced
+the free-text control with an asynchronously populated dropdown. Reviewed
+behavior: empty `columns` responses must not be cached and the disabled
+“No columns found” state must offer Retry, because the backend can degrade UC
+errors to an empty successful response.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Replaced the free-text key-column control with an asynchronously populated,
+   cached dropdown with loading, empty (retryable), missing-key, failure, and
+   retry states; empty column lists are not cached.
+2. tests/units/front/test_ontology_dataset_key_dropdown.py
+   Added regression contracts for dropdown rendering, API usage, caching,
+   empty-list non-caching + retry, stale-response protection, DOM option
+   building, and dirty-state persistence.
+3. docs/superpowers/specs/2026-07-27-ontology-dataset-key-column-dropdown-design.md
+   Documented the approved design, including empty-response non-caching and
+   retryable “No columns found”.
+4. docs/superpowers/plans/2026-07-27-ontology-dataset-key-column-dropdown.md
+   Documented the implementation plan.
+5. changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+   Recorded this change with verified test summaries.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_dataset_key_dropdown.py
+- docs/superpowers/specs/2026-07-27-ontology-dataset-key-column-dropdown-design.md
+- docs/superpowers/plans/2026-07-27-ontology-dataset-key-column-dropdown.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_ontology_dataset_key_dropdown.py → 7 passed, 1 warning in 0.15s
+- uv run pytest -q -m "not scenario" → 3327 passed, 275 skipped, 5 deselected, 23 warnings in 23.63s
+- Browser verification → 6 UC columns loaded; selection persisted; dataset
+  change cleared the key; empty result exposed Retry and re-fetched.
+
+## External dataset description
+
+Context: Class-linked external Unity Catalog datasets needed an editable
+purpose description, defaulted from the UC table/view comment on first link,
+and surfaced to MCP agents plus Graph Explorer.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Added Description textarea; first selection defaults from asset.comment;
+   switching datasets preserves the existing description.
+2. src/api/routers/digitaltwin.py
+   Exposed optional dataset.description on NodeContextDataset /nodes/context.
+3. src/mcp-server/server/app.py
+   Included Purpose lines in describe_entity and get_entity_context formatters.
+4. src/front/static/query/js/query-loaders.js
+   Retained class dataset objects in ontology/entity mapping loaders.
+5. src/front/static/query/js/query-entity-details.js
+   Rendered Dataset section with table, key, and purpose in Graph Explorer.
+6. tests/units/front/test_ontology_dataset_description.py
+   Added ontology UI selection/defaulting contracts.
+7. tests/units/front/test_query_dataset_description.py
+   Added Graph Explorer loader/details contracts.
+8. tests/units/api/test_node_context_endpoint.py
+   Asserted description round-trip on node context.
+9. tests/units/mcp/test_node_context_formatting.py
+   Added MCP Purpose formatting contracts.
+10. docs/superpowers/specs/2026-07-27-external-dataset-description-design.md
+    Documented the approved design.
+11. docs/superpowers/plans/2026-07-27-external-dataset-description.md
+    Documented the implementation plan.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/api/routers/digitaltwin.py
+- src/mcp-server/server/app.py
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-entity-details.js
+- tests/units/front/test_ontology_dataset_description.py
+- tests/units/front/test_query_dataset_description.py
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/mcp/test_node_context_formatting.py
+- docs/superpowers/specs/2026-07-27-external-dataset-description-design.md
+- docs/superpowers/plans/2026-07-27-external-dataset-description.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_ontology_dataset_description.py tests/units/front/test_query_dataset_description.py tests/units/api/test_node_context_endpoint.py tests/units/mcp/test_node_context_formatting.py → 12 passed
+- uv run pytest -q -m "not scenario" → 3334 passed, 275 skipped, 5 deselected, 23 warnings in 29.47s
+
+## Dataset description UC fill button
+
+Context: Authors needed a one-click way to refill the dataset purpose text
+from the linked Unity Catalog table/view comment without reselecting the asset.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Added a right-aligned cloud-download button next to Description that loads
+   the UC table comment via /settings/uc-assets and updates the textarea.
+2. tests/units/front/test_ontology_dataset_description.py
+   Added a contract for the right-aligned UC metadata button and fetch path.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_dataset_description.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_ontology_dataset_description.py → 4 passed
+- uv run pytest -q -m "not scenario" → 3335 passed, 275 skipped, 5 deselected, 23 warnings in 21.88s
+
+## Dataset description from Data Sources
+
+Context: The Description fill button must use the domain Data Sources
+table/view description (`/domain/metadata`), not a live Unity Catalog assets
+lookup.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Rewired the fill button to load comment/description from Data Sources and
+   match the linked dataset by full name / asset name.
+2. tests/units/front/test_ontology_dataset_description.py
+   Updated the contract to assert `/domain/metadata` usage.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_dataset_description.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_ontology_dataset_description.py → 4 passed
+- uv run pytest -q -m "not scenario" → 3335 passed, 275 skipped, 5 deselected, 23 warnings in 21.30s
+
+## Fix Data Sources table details save
+
+Context: Editing a table description in Data Sources and clicking Save Changes
+only updated the in-memory cache. ``saveMetadataChanges`` (POST
+``/domain/metadata/save``) was never wired, so descriptions were lost on reload
+and the ontology Description fill button had nothing useful to read.
+
+Changes:
+
+1. src/front/static/domain/js/domain-metadata.js
+   Made modal Save Changes persist immediately via ``await saveMetadataChanges``.
+2. tests/units/front/test_domain_metadata_save.py
+   Added a regression contract that table-details save posts metadata.
+
+Modified files:
+- src/front/static/domain/js/domain-metadata.js
+- tests/units/front/test_domain_metadata_save.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_domain_metadata_save.py → 1 passed
+- uv run pytest -q -m "not scenario" → 3336 passed, 275 skipped, 5 deselected, 23 warnings in 25.61s
+
+## MCP surfaces external dataset description
+
+Context: Ensure agents see the ontology-authored external dataset Description
+via MCP (not only Graph Explorer / REST). Formatters already read
+``dataset.description``; rename the LLM label to ``Description:``, expose it
+from ``list_entity_types``, and cover with behavioral tests.
+
+Changes:
+
+1. src/mcp-server/server/app.py
+   Emit ``Description:`` in describe_entity / get_entity_context formatters;
+   include Dataset + Description under list_entity_types; document in tool
+   docstrings.
+2. tests/units/mcp/test_node_context_formatting.py
+   Behavioral tests that formatters include (and omit blank) descriptions.
+3. docs/superpowers/specs/2026-07-27-external-dataset-description-design.md
+   Spec wording updated from Purpose to Description / list_entity_types.
+
+Modified files:
+- src/mcp-server/server/app.py
+- tests/units/mcp/test_node_context_formatting.py
+- docs/superpowers/specs/2026-07-27-external-dataset-description-design.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/mcp/test_node_context_formatting.py tests/units/api/test_node_context_endpoint.py → 9 passed
+- uv run pytest -q -m "not scenario" → 3338 passed, 275 skipped, 5 deselected, 23 warnings in 23.53s

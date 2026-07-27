@@ -413,6 +413,32 @@ async function showEntityDetails(entity) {
         `;
     }
 
+    // Linked external dataset
+    const dataset = entityMapping?.dataset || classInfo?.dataset || null;
+    if (dataset && (dataset.fullName || dataset.asset)) {
+        const fullName = dataset.fullName
+            || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-table"></i> Dataset</h6>
+                <div class="entity-detail-item">
+                    <span class="detail-key">Table</span>
+                    <span class="detail-value"><code>${escapeHtml(fullName)}</code></span>
+                </div>
+                ${dataset.key_column ? `
+                <div class="entity-detail-item">
+                    <span class="detail-key">Key</span>
+                    <span class="detail-value"><code>${escapeHtml(dataset.key_column)}</code></span>
+                </div>` : ''}
+                ${dataset.description ? `
+                <div class="entity-detail-item">
+                    <span class="detail-key">Purpose</span>
+                    <span class="detail-value">${escapeHtml(dataset.description)}</span>
+                </div>` : ''}
+            </div>
+        `;
+    }
+
     // Cross-domain bridges
     const bridges = entityMapping?.bridges || classInfo?.bridges || [];
     if (bridges.length > 0) {

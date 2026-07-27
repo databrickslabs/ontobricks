@@ -20,6 +20,7 @@ _CLASSES_WITH_ACTIONS = [
         "dataset": {
             "catalog": "main", "schema": "crm", "asset": "customers",
             "type": "TABLE", "fullName": "main.crm.customers", "key_column": "id",
+            "description": "Customer master records.",
         },
         "bridges": [
             {
@@ -58,6 +59,7 @@ class TestNodeContextEndpoint:
         assert body["entity_local_id"] == "CUST001"
         assert body["class_name"] == "Customer"
         assert body["dataset"]["fullName"] == "main.crm.customers"
+        assert body["dataset"]["description"] == "Customer master records."
         assert "rows" not in body["dataset"]
         assert body["bridges"][0]["target_domain"] == "Finance"
         assert "entities" not in body["bridges"][0]

@@ -186,6 +186,7 @@ class NodeContextDataset(BaseModel):
     fullName: str
     key_column: Optional[str] = None
     key_column_missing: Optional[bool] = None
+    description: Optional[str] = None
     rows: Optional[List[Dict[str, Any]]] = None
 
 
@@ -1737,6 +1738,7 @@ async def dt_nodes_context(
             fullName=raw_dataset["fullName"],
             key_column=key_col,
             key_column_missing=key_col_missing,
+            description=(raw_dataset.get("description") or "").strip() or None,
             rows=rows,
         )
 

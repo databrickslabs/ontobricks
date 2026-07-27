@@ -181,6 +181,9 @@ def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
             )
         else:
             lines.append(f"  Dataset: {dataset['fullName']}  (key_column not configured)")
+        purpose = (dataset.get("description") or "").strip()
+        if purpose:
+            lines.append(f"  Description: {purpose}")
 
     if bridges:
         lines.append("  Bridges:")
@@ -216,6 +219,9 @@ def _format_node_context_response(data: dict) -> str:
         key_col = dataset.get("key_column")
         if key_col:
             lines.append(f"  Key: {key_col} = '{local_id}'")
+        purpose = (dataset.get("description") or "").strip()
+        if purpose:
+            lines.append(f"  Description: {purpose}")
         if dataset.get("key_column_missing"):
             lines.append("  ⚠ key_column not configured — row fetch skipped")
         rows = dataset.get("rows")
@@ -1038,6 +1044,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         in the triple store together with instance counts, plus overall
         statistics (total triples, distinct subjects, etc.).
 
+        When a type has a linked external dataset in the ontology, also
+        includes the dataset full name and Description.
+
         A domain must be selected first via ``select_domain``.
         """
         if not _selected_domain["name"]:
@@ -1080,6 +1089,13 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                 name = _label_or_local(uri)
                 lines.append(f"  • {name}  ({count:,} instances)")
                 lines.append(f"    URI: {uri}")
+                actions = _class_actions.get(uri) or {}
+                dataset = actions.get("dataset") or {}
+                if dataset.get("fullName"):
+                    lines.append(f"    Dataset: {dataset['fullName']}")
+                    desc = (dataset.get("description") or "").strip()
+                    if desc:
+                        lines.append(f"    Description: {desc}")
             lines.append("")
 
         top_predicates = data.get("top_predicates", [])
@@ -1116,6 +1132,8 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
           - All attributes (e.g. email, phone, city …)
           - All relationships to other entities, including inferred ones
           - Related entities discovered at each traversal depth
+          - Linked external dataset name, key column, and description when
+            configured on the ontology class
 
         Use this as the PRIMARY tool for any question about a specific
         entity. Do NOT rely on ``query_graphql`` alone — it may miss
@@ -1330,6 +1348,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         Requires a domain to be selected first via select_domain.
         The class must have dataset / bridges configured in the ontology.
         Use the entity URI from describe_entity output.
+
+        When a dataset is linked, the response includes its full name, key
+        column, and ontology-authored Description (from the class dataset
+        ``description`` field).
 
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
