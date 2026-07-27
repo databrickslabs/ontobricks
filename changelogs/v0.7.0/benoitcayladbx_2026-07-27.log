@@ -1,3 +1,44 @@
+## feat(kg-ui): show the active backend in the "Graph ready" badge
+
+**Context:** Follow-up to the graph-readiness indicator — the "Graph ready" badge now also shows which triple-store backend the graph runs on (Lakehouse / Neo4j / Lakebase).
+
+**Changes:**
+1. `src/front/static/query/js/query-sync.js` — Added `_kgBackendLabel()` deriving a friendly label from the injected `triplestore-config` (`triple_store_backend`/`graph_engine`: databricks or delta -> "Lakehouse", neo4j -> "Neo4j", else "Lakebase"). The ready badge appends `· <backend>` and the tooltip names the backend.
+
+**Modified files:**
+- `src/front/static/query/js/query-sync.js`
+
+**Test result:** UI-only change; full backend suite green (3320 passed, 275 skipped).
+
+---
+
+## feat(kg-ui): add graph-readiness indicator to all Knowledge Graph sub-pages
+
+**Context:** The Knowledge Graph sub-pages (Overview, Analytics, Graph Explorer, Query, Chat, Data Quality, Inference, Cohorts) gave no at-a-glance signal of whether the graph had actually been built. Added a small status indicator next to each sub-page title: a green "Graph ready" badge when the graph is built, a "Building…" badge while a build/sync task runs, or a "Graph not built" message with a "Go to Build" button that jumps to the Build sub-page.
+
+**Changes:**
+1. `src/front/templates/partials/dtwin/_kg_status_indicator.html` (new) — Reusable inline `[data-kg-status]` container, dropped inside each sub-page `<h4>`; populated by JS.
+2. `src/front/templates/partials/dtwin/_query_insights.html`, `_query_analytics.html`, `_query_sigmagraph.html`, `_query_graphql.html`, `_query_chat.html`, `_query_dataquality.html`, `_query_reasoning.html`, `_query_cohorts.html` — Included the indicator partial inside each title `<h4>`.
+3. `src/front/static/query/js/query-sync.js` — Added `updateKgReadyIndicators()` (building / ready / not-built states from the shared `tripleStoreHasData` + `syncIsRunning` status) called at the end of `updateDataMenus()`, plus a one-time delegated click handler that routes any `.kg-go-build-btn` to the Build sub-page (`[data-section="sync"]`).
+4. `src/front/static/query/css/query-sync.css` — Minor styling for the badge, in-badge spinner, and Go-to-Build button.
+
+**Modified files:**
+- `src/front/templates/partials/dtwin/_kg_status_indicator.html` (new)
+- `src/front/templates/partials/dtwin/_query_insights.html`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/templates/partials/dtwin/_query_graphql.html`
+- `src/front/templates/partials/dtwin/_query_chat.html`
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/static/query/css/query-sync.css`
+
+**Test result:** UI-only change (no automated JS coverage); full backend suite run below to confirm no regressions.
+
+---
+
 ## fix(mapping-ui): wire Designer "Unmap all" via addEventListener for reliable confirm popup
 
 **Context:** Follow-up to the "Unmap all" work below. The Designer button was wired with an inline `onclick="confirmResetMappings()"`, which reintroduced the inline-handler pattern the team deliberately dropped in v0.2.0 (in favor of id-based `addEventListener`). Switched it to the same robust wiring as the Information button so the confirmation dialog (`showConfirmDialog`) fires reliably before any mappings are cleared.

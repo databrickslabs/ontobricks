@@ -611,6 +611,70 @@ function updateDataMenus() {
             }
         }
     });
+
+    updateKgReadyIndicators();
+}
+
+/**
+ * Populate every Knowledge Graph readiness indicator (the `[data-kg-status]`
+ * spans injected next to each sub-page title via `_kg_status_indicator.html`).
+ *
+ * Three states, driven by the shared triple-store status:
+ *   - building  -> a "Building…" badge while a sync/build task is running;
+ *   - ready     -> a green "Graph ready" badge once the graph has data;
+ *   - not built -> a message + a "Go to Build" button that jumps to the
+ *                  Build sub-page.
+ */
+/**
+ * Friendly label for the triple-store backend / graph engine in use, from the
+ * injected triplestore-config: "Lakehouse" (Delta), "Neo4j", or "Lakebase".
+ */
+function _kgBackendLabel() {
+    var cfg = window.__TRIPLESTORE_CONFIG || {};
+    var backend = String(cfg.triple_store_backend || 'lakebase').toLowerCase();
+    var engine = String(cfg.graph_engine || 'lakebase').toLowerCase();
+    if (backend === 'databricks' || engine === 'delta') return 'Lakehouse';
+    if (engine === 'neo4j') return 'Neo4j';
+    return 'Lakebase';
+}
+
+function updateKgReadyIndicators() {
+    var els = document.querySelectorAll('[data-kg-status]');
+    if (!els.length) return;
+
+    var backend = _kgBackendLabel();
+    var html;
+    if (syncIsRunning) {
+        html = '<span class="badge bg-warning-subtle text-warning border border-warning fw-normal">'
+            + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Building…</span>';
+    } else if (tripleStoreHasData) {
+        html = '<span class="badge bg-success bg-opacity-10 text-success border border-success fw-normal" '
+            + 'title="The Knowledge Graph is built and ready to use (backend: ' + backend + ').">'
+            + '<i class="bi bi-check-circle-fill me-1"></i>Graph ready'
+            + '<span class="opacity-75 ms-1">· ' + backend + '</span></span>';
+    } else {
+        html = '<span class="kg-not-built d-inline-flex align-items-center gap-2">'
+            + '<span class="badge bg-secondary-subtle text-secondary border fw-normal">'
+            + '<i class="bi bi-slash-circle me-1"></i>Graph not built</span>'
+            + '<button type="button" class="btn btn-sm btn-primary py-0 px-2 kg-go-build-btn">'
+            + '<i class="bi bi-arrow-repeat me-1"></i>Go to Build</button>'
+            + '</span>';
+    }
+
+    els.forEach(function(el) { el.innerHTML = html; });
+}
+
+// One-time delegated handler: any "Go to Build" button jumps to the Build
+// sub-page by triggering its sidebar nav link (data-section="sync").
+if (!window.__kgGoBuildWired) {
+    window.__kgGoBuildWired = true;
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest && e.target.closest('.kg-go-build-btn');
+        if (!btn) return;
+        e.preventDefault();
+        var link = document.querySelector('[data-section="sync"]');
+        if (link) link.click();
+    });
 }
 
 /**
