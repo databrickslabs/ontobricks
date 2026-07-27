@@ -445,6 +445,59 @@ function showConfirmDialog(options = {}) {
 }
 
 /**
+ * Show a simple informational modal with a single dismiss button.
+ * @param {object} options - { title, message, okText, okClass, icon }
+ * @returns {Promise<void>} resolves once the dialog is dismissed
+ */
+function showInfoDialog(options = {}) {
+    return new Promise((resolve) => {
+        const {
+            title = 'Information',
+            message = '',
+            okText = 'OK',
+            okClass = 'btn-primary',
+            icon = 'info-circle'
+        } = options;
+
+        const modalId = 'infoDialog_' + Date.now();
+        const modalHtml = `
+            <div class="modal fade" id="${modalId}" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-${icon} me-2"></i>${title}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-0">${message}</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn ${okClass}" id="${modalId}_ok">
+                                ${okText}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modalEl = document.getElementById(modalId);
+        const modal = new bootstrap.Modal(modalEl);
+
+        document.getElementById(`${modalId}_ok`).addEventListener('click', () => modal.hide());
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            setTimeout(() => modalEl.remove(), 100);
+            resolve();
+        });
+
+        modal.show();
+    });
+}
+
+/**
  * Show a delete confirmation dialog (red themed)
  * @param {string} itemName - Name of item being deleted
  * @param {string} itemType - Type of item (e.g., 'entity', 'relationship')
@@ -838,6 +891,7 @@ window.showNotification = showNotification;
 window.NotificationCenter = NotificationCenter;
 window.DocumentPreview = DocumentPreview;
 window.showConfirmDialog = showConfirmDialog;
+window.showInfoDialog = showInfoDialog;
 window.showDeleteConfirm = showDeleteConfirm;
 window.apiRequest = apiRequest;
 window.escapeHtml = escapeHtml;

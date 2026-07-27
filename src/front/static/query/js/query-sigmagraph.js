@@ -1637,9 +1637,9 @@ var SigmaGraph = (function () {
             if (nodes.length > 0) {
                 var types = {};
                 nodes.forEach(function (n) { var t = n.type || 'Unknown'; types[t] = (types[t] || 0) + 1; });
-                var html = '<option value="">All types</option>';
+                var html = '<option value="">All</option>';
                 Object.keys(types).sort().forEach(function (t) {
-                    html += '<option value="' + _esc(t) + '">' + _esc(t) + ' (' + types[t] + ')</option>';
+                    html += '<option value="' + _esc(t) + '">' + _iconForType(t) + ' ' + _esc(t) + '</option>';
                 });
                 sel.innerHTML = html;
                 return;
@@ -1655,21 +1655,21 @@ var SigmaGraph = (function () {
                 _cachedStats = stats.entity_types;
                 _renderStatsDropdown(sel, _cachedStats);
             } else {
-                sel.innerHTML = '<option value="">All types</option>';
+                sel.innerHTML = '<option value="">All</option>';
             }
         } catch (err) {
             console.warn('[SigmaGraph] Failed to load stats for entity types:', err);
-            sel.innerHTML = '<option value="">All types</option>';
+            sel.innerHTML = '<option value="">All</option>';
         }
     }
 
     function _renderStatsDropdown(sel, entityTypes) {
-        var html = '<option value="">All types</option>';
+        var html = '<option value="">All</option>';
         entityTypes.forEach(function (et) {
             var uri = et.uri || '';
             var shortName = uri.indexOf('#') >= 0 ? uri.split('#').pop() :
                             uri.indexOf('/') >= 0 ? uri.split('/').pop() : uri;
-            html += '<option value="' + _esc(uri) + '">' + _esc(shortName) + ' (' + et.count + ')</option>';
+            html += '<option value="' + _esc(uri) + '">' + _iconForType(uri) + ' ' + _esc(shortName) + '</option>';
         });
         sel.innerHTML = html;
     }
@@ -1868,7 +1868,11 @@ var SigmaGraph = (function () {
 
             var seeds = data.seeds || [];
             if (seeds.length === 0) {
-                if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'No entities found.'; }
+                var noResultMsg = data.message || 'No entities found matching the filter criteria.';
+                if (info && text) { info.classList.remove('d-none'); text.textContent = noResultMsg; }
+                if (typeof showInfoDialog === 'function') {
+                    showInfoDialog({ title: 'No results', message: noResultMsg, icon: 'search' });
+                }
                 return;
             }
 
@@ -3332,6 +3336,17 @@ document.addEventListener('DOMContentLoaded', function () {
             SigmaGraph[m]();
         }
     });
+
+    // Populate the Filter tab's Entity dropdown whenever that tab is opened
+    // (directly clicking the tab does not go through _switchToTab).
+    var _sgFilterTabBtn = document.getElementById('sgTabFilter');
+    if (_sgFilterTabBtn) {
+        _sgFilterTabBtn.addEventListener('shown.bs.tab', function () {
+            if (typeof SigmaGraph !== 'undefined' && typeof SigmaGraph.populateFilterEntityTypes === 'function') {
+                SigmaGraph.populateFilterEntityTypes();
+            }
+        });
+    }
 
     document.addEventListener('click', function (e) {
         var nodeItem = e.target.closest('[data-sg-node-action]');

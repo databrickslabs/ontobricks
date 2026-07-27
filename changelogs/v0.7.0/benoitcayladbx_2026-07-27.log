@@ -1,3 +1,49 @@
+## feat(kg-ui): modal popup for empty Filter-tab search results
+
+**Context:** In the Graph Explorer Filter tab, a search that matched nothing only updated a small inline info line ("No entities found matching the filter criteria."), which was easy to miss. The message is now surfaced via a centered modal popup.
+
+**Changes:**
+1. `src/front/static/global/js/utils.js` — Added reusable `showInfoDialog({ title, message, okText, okClass, icon })` helper (single OK button, auto-cleanup on dismiss) and exported it on `window`.
+2. `src/front/static/query/js/query-sigmagraph.js` — In `_executeGraphSearch`, the empty-seeds branch now also calls `showInfoDialog({ title: 'No results', icon: 'search' })` (guarded by a `typeof` check) while still updating the inline info text as a fallback.
+
+**Modified files:**
+- `src/front/static/global/js/utils.js`
+- `src/front/static/query/js/query-sigmagraph.js`
+
+**Test result:** No automated tests cover this JS UI. Lint clean on both files; full suite unchanged (see below).
+
+---
+
+## feat(kg-ui): show entity icon (not count) in Filter tab Entity dropdown
+
+**Context:** Follow-up — the Filter tab Entity dropdown options showed a trailing instance count `(N)`. Replaced the count with the entity's icon before the name for quicker visual scanning.
+
+**Changes:**
+1. `src/front/static/query/js/query-sigmagraph.js` — In `_populateFilterEntityTypes` (graph-active branch) and `_renderStatsDropdown`, option text is now `<icon> <name>` (via `_iconForType`) instead of `<name> (<count>)`.
+
+**Modified files:**
+- `src/front/static/query/js/query-sigmagraph.js`
+
+**Test result:** UI-only change; full backend suite green (3320 passed, 275 skipped).
+
+---
+
+## feat(kg-ui): add Entity dropdown to Graph Explorer Filter tab
+
+**Context:** The Graph Explorer Filter tab had no way to scope a search to a single entity type. The JS (`_executeGraphSearch`, `_populateFilterEntityTypes`, `clearGraphFilter`) already referenced a `sgFilterEntityType` control, but the `<select>` was never added to the template. Added the missing dropdown (default "All") and ensured it populates whenever the Filter tab opens.
+
+**Changes:**
+1. `src/front/templates/partials/dtwin/_query_sigmagraph.html` — Added an "Entity" `<select id="sgFilterEntityType">` at the top of the Filter tab with a default `All` option; the existing search flow already sends its value as `entity_type` to restrict the search.
+2. `src/front/static/query/js/query-sigmagraph.js` — Relabeled the populated default option from "All types" to "All" (4 spots in `_populateFilterEntityTypes` / `_renderStatsDropdown`); added a `shown.bs.tab` listener on `#sgTabFilter` so directly clicking the Filter tab also populates the dropdown (previously only `_switchToTab` paths did).
+
+**Modified files:**
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/static/query/js/query-sigmagraph.js`
+
+**Test result:** UI-only change; full backend suite green (3320 passed, 275 skipped).
+
+---
+
 ## feat(kg-ui): show the active backend in the "Graph ready" badge
 
 **Context:** Follow-up to the graph-readiness indicator — the "Graph ready" badge now also shows which triple-store backend the graph runs on (Lakehouse / Neo4j / Lakebase).
