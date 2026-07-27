@@ -494,8 +494,8 @@ async def get_domain_classes(
             ClassActionsItem(
                 name=cls.get("name", ""),
                 uri=cls.get("uri", ""),
-                dataset=dataset if dataset else None,
-                bridges=bridges if bridges else [],
+                dataset=dataset,
+                bridges=bridges,
             )
         )
 
