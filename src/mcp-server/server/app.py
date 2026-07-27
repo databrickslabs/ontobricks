@@ -63,6 +63,7 @@ API_V1_DT_REGISTRY = "/api/v1/digitaltwin/registry"
 API_V1_DT_STATUS = "/api/v1/digitaltwin/status"
 API_V1_DT_STATS = "/api/v1/digitaltwin/stats"
 API_V1_DT_TRIPLES_FIND = "/api/v1/digitaltwin/triples/find"
+API_V1_DOMAIN_CLASSES = "/api/v1/domain/classes"
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
@@ -160,6 +161,39 @@ def _format_entity_block(
     return "\n".join(lines)
 
 
+def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
+    """Append a [Context] block for a node's class Actions metadata."""
+    dataset = cls_actions.get("dataset")
+    bridges = cls_actions.get("bridges") or []
+    if not dataset and not bridges:
+        return ""
+
+    lines: list[str] = []
+    lines.append(f"  [Context — class: {cls_actions.get('name', '')}]")
+
+    if dataset and dataset.get("fullName"):
+        key_col = dataset.get("key_column")
+        if key_col:
+            lines.append(f"  Dataset: {dataset['fullName']}  (key: {key_col} = '{local_id}')")
+            lines.append(
+                "    → call get_entity_context(fetch_dataset_rows=True) to retrieve rows"
+            )
+        else:
+            lines.append(f"  Dataset: {dataset['fullName']}  (key_column not configured)")
+
+    if bridges:
+        lines.append("  Bridges:")
+        for b in bridges:
+            target = f"{b.get('target_domain', '')} / {b.get('target_class_name', '')}"
+            label = f"  \"{b['label']}\"" if b.get("label") else ""
+            lines.append(f"    → {target}{label}")
+        lines.append(
+            "    → call get_entity_context(follow_bridges=True) to load cross-domain data"
+        )
+
+    return "\n".join(lines)
+
+
 def _merge_uri_aliases(by_subject: dict[str, list[dict]]) -> dict[str, list[dict]]:
     """Merge triples from URI aliases into a single entity.
 
@@ -188,7 +222,11 @@ def _merge_uri_aliases(by_subject: dict[str, list[dict]]) -> dict[str, list[dict
     return merged
 
 
-def _format_find_response(data: dict, label_or_local: "Callable[[str], str] | None" = None) -> str:
+def _format_find_response(
+    data: dict,
+    label_or_local: "Callable[[str], str] | None" = None,
+    class_actions: "dict | None" = None,
+) -> str:
     """Convert a /triples/find JSON response into a full-text description."""
     if not data.get("success"):
         return data.get("message", "Search failed.")
@@ -232,7 +270,18 @@ def _format_find_response(data: dict, label_or_local: "Callable[[str], str] | No
 
     parts.append("── Matching Entities ──")
     for uri in seed_uris:
-        parts.append(_format_entity_block(uri, by_subject.get(uri, []), label_or_local))
+        block = _format_entity_block(uri, by_subject.get(uri, []), label_or_local)
+        parts.append(block)
+        # Append class Actions context if available
+        if class_actions:
+            triples_for_uri = by_subject.get(uri, [])
+            type_uris = [t["object"] for t in triples_for_uri if t["predicate"] == RDF_TYPE]
+            for type_uri in type_uris:
+                if type_uri in class_actions:
+                    ctx = _format_class_context_block(_local_name(uri), class_actions[type_uri])
+                    if ctx:
+                        parts.append(ctx)
+                    break
         parts.append("")
 
     if related_uris:
@@ -567,6 +616,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
     _selected_domain: dict = {"name": None}
     _ontology_labels: dict[str, str] = {}   # uri/name (lower) → display label
+    _class_actions: dict[str, dict] = {}    # class URI → {"dataset": {...}, "bridges": [...]}
     _registry: dict = {
         "catalog": "",
         "schema": "",
@@ -895,6 +945,28 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             # previous eager POST hit the legacy UC handler (wrong
             # contract) and only added a wasted round trip.
             _ontology_labels.clear()
+            _class_actions.clear()
+            # Fetch class Actions for the selected domain
+            try:
+                async with _client() as client:
+                    cls_data = await _get(
+                        client,
+                        API_V1_DOMAIN_CLASSES,
+                        params={**_registry_params(), "domain_name": domain_name},
+                    )
+                for cls in cls_data.get("classes", []):
+                    uri = cls.get("uri", "")
+                    if uri:
+                        _class_actions[uri] = {
+                            "name": cls.get("name", ""),
+                            "dataset": cls.get("dataset") or None,
+                            "bridges": cls.get("bridges") or [],
+                        }
+                logger.info(
+                    "select_domain: loaded class Actions for %d classes", len(_class_actions)
+                )
+            except Exception as exc:
+                logger.warning("select_domain: could not load class Actions: %s", exc)
 
         has_data = data.get("has_data", False)
         count = data.get("count", 0)
@@ -1044,7 +1116,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         async with _client() as client:
             data = await _get(client, API_V1_DT_TRIPLES_FIND, params=params)
 
-        return _format_find_response(data, _label_or_local)
+        return _format_find_response(data, _label_or_local, class_actions=_class_actions)
 
     @mcp.tool()
     async def get_status() -> str:
