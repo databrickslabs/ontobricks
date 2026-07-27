@@ -862,44 +862,6 @@
             </div>
 
             {% if user_role == 'admin' %}
-            <!-- ==================== PERMISSIONS SECTION (admin only) ==================== -->
-            <div id="permissions-section" class="sidebar-section">
-                <div class="content-section">
-                    <div class="section-header d-flex justify-content-between align-items-center mb-4">
-                        <div>
-                            <h4 class="mb-1"><i class="bi bi-shield-lock me-2"></i>Permissions</h4>
-                            <p class="text-muted mb-0 small">Manage application principals and access control</p>
-                        </div>
-                    </div>
-
-                    <div class="alert alert-info small d-flex align-items-start mb-3" role="alert">
-                        <i class="bi bi-info-circle me-2 mt-1"></i>
-                        <div>
-                            App-level access is managed in
-                            <strong>Databricks &rarr; App permissions</strong>. This list
-                            mirrors the principals that currently have a permission on the
-                            OntoBricks app. To grant per-domain roles (Viewer / Editor /
-                            Builder), use <strong>Settings &rarr; Admin &rarr; Teams</strong>.
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0"><i class="bi bi-people me-1"></i> App Principals</h6>
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshPermissions" title="Refresh">
-                                <i class="bi bi-arrow-clockwise"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div id="permissionsTableContainer">
-                        <div class="text-center text-muted small py-4">
-                            <span class="spinner-border spinner-border-sm me-1"></span> Loading app principals...
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ==================== TEAMS SECTION (admin only) ==================== -->
             <div id="teams-section" class="sidebar-section">
                 {% include "partials/settings/_settings_teams.html" %}
@@ -1010,7 +972,6 @@
 <script src="{{ url_for('static', filename='config/js/build-analytics.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 {% if user_role == 'admin' %}
-<script src="{{ url_for('static', filename='config/js/permissions.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-locks.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='registry/js/registry-teams.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-health.js') }}?v={{ asset_version }}"></script>

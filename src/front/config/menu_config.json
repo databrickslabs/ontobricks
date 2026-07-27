@@ -458,14 +458,6 @@
                     "icon": "bi-shield-lock",
                     "items": [
                         {
-                            "id": "permissions",
-                            "label": "Permissions",
-                            "icon": "bi-shield-lock",
-                            "default": false,
-                            "requires": null,
-                            "admin_only": true
-                        },
-                        {
                             "id": "teams",
                             "label": "Teams",
                             "icon": "bi-people",

@@ -143,12 +143,12 @@ storage.
 | **Data Quality** (SHACL execution) | `query-dataquality.js` | `POST /dtwin/dataquality/start`, `POST /dtwin/dataquality/execute` | REST | `SHACLService` translates shapes to **SQL** SELECTs that find violations |
 | **Inference (Reasoning)** | `query-reasoning.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** SWRL rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine` |
 
-### 4.5 Settings / Permissions / Help
+### 4.5 Settings / Teams / Help
 
 | UI Feature | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|
 | Settings (warehouse, profile) | `/settings/*` | REST | Python config service |
-| Permissions | `/permissions/*` | REST | `PermissionService` (in-memory + UC Volume manifest) |
+| Teams (domain roles) | `/settings/teams` | REST | `PermissionService` + App ACL principals |
 | Help / docs modal | static templates | n/a | n/a |
 
 ---

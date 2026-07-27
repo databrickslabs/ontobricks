@@ -251,12 +251,12 @@ All four layers must be satisfied before the application is fully functional. Th
 ║                                                                                         ║
 ║  Role     Source                          Access                                         ║
 ║  ──────── ─────────────────────────────── ──────────────────────────────────────────── ║
-║  Admin    CAN_MANAGE on Databricks App    Full access + manage permission list           ║
+║  Admin    CAN_MANAGE on Databricks App    Full access + manage Teams matrix              ║
 ║  Editor   domain_permissions table        Full read + write on all features              ║
 ║  Viewer   domain_permissions table        Read-only (no create / edit / delete)          ║
 ║  (none)   not in list                     Access Denied — redirected to error page       ║
 ║                                                                                         ║
-║  ► Settings → Permissions (only visible to Admins)                                      ║
+║  ► Settings → Admin → Teams (only visible to Admins)                                    ║
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
