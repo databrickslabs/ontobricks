@@ -1,0 +1,68 @@
+## feat(mcp): class-actions cache + describe_entity [Context] enrichment
+
+**Context:** Task 4 of the MCP node-context feature. Wires the `GET /api/v1/domain/classes` endpoint (Task 2) into the MCP server: populates a `_class_actions` closure cache on `select_domain`, then enriches `describe_entity` output with a `[Context]` block showing the entity's linked dataset and bridge metadata.
+
+**Changes:**
+1. `src/mcp-server/server/app.py` — Added `API_V1_DOMAIN_CLASSES` path constant.
+2. `src/mcp-server/server/app.py` — Added `_class_actions: dict[str, dict] = {}` closure variable inside `create_mcp_server()`.
+3. `src/mcp-server/server/app.py` — In `select_domain`: clears and repopulates `_class_actions` from the domain classes API (non-fatal on error).
+4. `src/mcp-server/server/app.py` — Added `_format_class_context_block` module-level helper.
+5. `src/mcp-server/server/app.py` — Extended `_format_find_response` with optional `class_actions` param; appends context block for each seed entity whose class is in the cache.
+6. `src/mcp-server/server/app.py` — Updated `describe_entity` call to pass `class_actions=_class_actions`.
+7. `tests/mcp/integration/test_more_smoke_tools.py` — Added `test_describe_entity_includes_context_block` to `TestDescribeEntity`.
+
+**Modified files:**
+- `src/mcp-server/server/app.py`
+- `tests/mcp/integration/test_more_smoke_tools.py`
+
+**Test result:** 7/7 MCP smoke tests pass; full suite 3317 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(api): add GET /api/v1/digitaltwin/nodes/context endpoint
+
+**Context:** Task 3 of the MCP node-context feature. Adds the REST endpoint that resolves an entity URI to its ontology class and returns linked dataset metadata (with optional row retrieval) and bridge definitions (with optional cross-domain traversal).
+
+**Changes:**
+1. `src/api/routers/digitaltwin.py` — Added `NodeContextDataset`, `NodeContextBridge`, `NodeContextResponse` Pydantic models in the response-models section.
+2. `src/api/routers/digitaltwin.py` — Added `dt_nodes_context` route handler for `GET /nodes/context`; resolves class by URI prefix, returns dataset metadata and bridges; caps dataset rows at 1–20; skips row fetch when `key_column` missing; swallows per-bridge traversal errors with a warning.
+3. `tests/units/api/test_node_context_endpoint.py` — Created unit tests (TDD, 4 cases): `test_metadata_only_by_default`, `test_missing_entity_uri_returns_422`, `test_unknown_class_returns_empty_context`, `test_dataset_rows_skipped_when_key_column_missing`.
+
+**Modified files:**
+- `src/api/routers/digitaltwin.py`
+- `tests/units/api/test_node_context_endpoint.py` (new)
+
+**Test result:** 4/4 new tests pass; full suite 3316 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(api): add GET /api/v1/domain/classes for class Actions metadata
+
+**Context:** Task 2 of the MCP node-context feature. Adds a lightweight endpoint that returns per-class dataset and bridge metadata from the domain's published ontology, preserving `key_column` in the dataset dict as set by Task 1's UI work.
+
+**Changes:**
+1. `src/api/routers/domains.py` — Added `ClassActionsItem` and `ClassActionsResponse` Pydantic models in the response-models section (after `VersionsResponse`).
+2. `src/api/routers/domains.py` — Added `get_domain_classes` route handler for `GET /domain/classes`; uses `DigitalTwin.resolve_domain` + `domain.get_classes()` following existing patterns; passes `dataset` (including `key_column`) through as-is.
+3. `tests/units/api/test_domain_classes_endpoint.py` — Created unit tests (TDD): `test_returns_classes_with_actions`, `test_filters_empty_actions`, `test_missing_domain_name_uses_session`.
+
+**Modified files:**
+- `src/api/routers/domains.py`
+- `tests/units/api/test_domain_classes_endpoint.py` (new)
+
+**Test result:** 3/3 new tests pass; full suite 3312 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(ontology-ui): add key_column field to Dataset panel
+
+**Context:** The Dataset section of the ontology class Actions panel needed a "Key column" input so users can specify which UC table column maps to the node ID. This is Task 1 of the MCP node-context feature (key_column flows through to Task 2's backend round-trip).
+
+**Changes:**
+1. `src/front/static/ontology/js/ontology-shared-panels.js` — Added `key_column: null` to `sharedPanelDataset` object in `_datasetSelectAsset` (line ~1188).
+2. `src/front/static/ontology/js/ontology-shared-panels.js` — Replaced `renderSharedEntityDataset` body to render a `<input id="datasetKeyColumnInput">` below the asset display when not in view-only mode; shows read-only `<code>` snippet in view-only mode.
+3. `src/front/static/ontology/js/ontology-shared-panels.js` — Added `onDatasetKeyColumnChange(value)` handler immediately after `renderSharedEntityDataset`.
+
+**Modified files:**
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+
+**Test result:** No automated tests cover JS UI in this repo. Manual inspection confirms balanced braces, correct template literals, and that `key_column` flows through the existing save payload (`dataset: sharedPanelDataset || undefined`) without additional changes.
