@@ -64,6 +64,7 @@ API_V1_DT_STATUS = "/api/v1/digitaltwin/status"
 API_V1_DT_STATS = "/api/v1/digitaltwin/stats"
 API_V1_DT_TRIPLES_FIND = "/api/v1/digitaltwin/triples/find"
 API_V1_DOMAIN_CLASSES = "/api/v1/domain/classes"
+API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
@@ -190,6 +191,53 @@ def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
         lines.append(
             "    → call get_entity_context(follow_bridges=True) to load cross-domain data"
         )
+
+    return "\n".join(lines)
+
+
+def _format_node_context_response(data: dict) -> str:
+    """Format the /nodes/context JSON response as LLM-friendly text."""
+    if not data.get("success"):
+        return data.get("message", "Could not retrieve node context.")
+
+    entity_uri = data.get("entity_uri", "")
+    local_id = data.get("entity_local_id", "") or _local_name(entity_uri)
+    class_name = data.get("class_name", "Unknown")
+
+    lines: list[str] = [
+        f"Node Context — {local_id}  ({class_name})",
+        f"URI: {entity_uri}",
+        "",
+    ]
+
+    dataset = data.get("dataset")
+    if dataset:
+        lines.append(f"Dataset: {dataset.get('fullName', '')}")
+        key_col = dataset.get("key_column")
+        if key_col:
+            lines.append(f"  Key: {key_col} = '{local_id}'")
+        if dataset.get("key_column_missing"):
+            lines.append("  ⚠ key_column not configured — row fetch skipped")
+        rows = dataset.get("rows")
+        if rows:
+            lines.append(f"  Rows ({len(rows)}):")
+            for row in rows:
+                lines.append("    " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
+        lines.append("")
+
+    bridges = data.get("bridges") or []
+    if bridges:
+        lines.append("Cross-domain Bridges:")
+        for b in bridges:
+            target = f"{b.get('target_domain', '')} / {b.get('target_class_name', '')}"
+            label = f"  \"{b['label']}\"" if b.get("label") else ""
+            lines.append(f"  → {target}{label}")
+            entities = b.get("entities")
+            if entities:
+                lines.append(f"    Entities ({len(entities)}):")
+                for e in entities:
+                    lines.append(f"      • {_local_name(e.get('uri', ''))}  {e.get('predicate', '')} → {e.get('object', '')}")
+        lines.append("")
 
     return "\n".join(lines)
 
@@ -1268,6 +1316,46 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             return f"Error executing GraphQL query: {exc}"
 
         return _format_graphql_response(data, domain_name)
+
+    @mcp.tool()
+    async def get_entity_context(
+        entity_uri: str,
+        fetch_dataset_rows: bool = False,
+        dataset_row_limit: int = 5,
+        follow_bridges: bool = False,
+    ) -> str:
+        """Return complete context for an entity node: linked dataset rows
+        and/or cross-domain bridge entities.
+
+        Requires a domain to be selected first via select_domain.
+        The class must have dataset / bridges configured in the ontology.
+        Use the entity URI from describe_entity output.
+
+        Args:
+            entity_uri: Full URI of the entity (e.g. from describe_entity).
+            fetch_dataset_rows: If true, query the linked UC table/view for rows.
+            dataset_row_limit: Max rows to return (1–20, default 5).
+            follow_bridges: If true, load entities from bridge target domains.
+        """
+        if not _selected_domain["name"]:
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
+
+        params = _domain_params(
+            {
+                "entity_uri": entity_uri,
+                "fetch_dataset_rows": str(fetch_dataset_rows).lower(),
+                "dataset_row_limit": min(max(dataset_row_limit, 1), 20),
+                "follow_bridges": str(follow_bridges).lower(),
+            }
+        )
+
+        async with _client() as client:
+            data = await _get(client, API_V1_DT_NODE_CONTEXT, params=params)
+
+        return _format_node_context_response(data)
 
     # ── Resources ─────────────────────────────────────────────────────
 

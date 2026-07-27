@@ -345,3 +345,57 @@ class TestDescribeEntity:
             from fastmcp.exceptions import ToolError
             if not isinstance(exc, ToolError):
                 raise
+
+
+@pytest.mark.mcp
+@pytest.mark.asyncio
+class TestGetEntityContext:
+    async def test_get_entity_context_metadata_only(self, patched_mcp):
+        patched_mcp.add_default_registry()
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/digitaltwin/status",
+            json={"success": True, "has_data": True, "count": 10,
+                  "graph_name": "g", "view_table": "t"},
+        )
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/digitaltwin/nodes/context",
+            json={
+                "success": True,
+                "entity_uri": "http://x/Customer/CUST001",
+                "entity_local_id": "CUST001",
+                "class_name": "Customer",
+                "dataset": {"fullName": "main.crm.customers", "key_column": "id"},
+                "bridges": [{"target_domain": "Finance", "target_class_name": "Contract",
+                              "target_class_uri": "http://y/Contract", "label": "Owns"}],
+            },
+        )
+
+        try:
+            await patched_mcp.call("select_domain", domain_name="sales")
+        except Exception:
+            pass
+
+        try:
+            result = await patched_mcp.call(
+                "get_entity_context",
+                entity_uri="http://x/Customer/CUST001",
+            )
+            text = _text(result)
+            assert text, "get_entity_context returned empty"
+            assert "CUST001" in text or "Customer" in text
+        except Exception as exc:
+            from fastmcp.exceptions import ToolError
+            if not isinstance(exc, ToolError):
+                raise
+
+    async def test_get_entity_context_no_domain_selected(self, patched_mcp):
+        patched_mcp.add_default_registry()
+        # No select_domain called → tool must return guidance text
+        result = await patched_mcp.call(
+            "get_entity_context",
+            entity_uri="http://x/Customer/CUST001",
+        )
+        text = _text(result)
+        assert "select_domain" in text.lower() or "no domain" in text.lower()
