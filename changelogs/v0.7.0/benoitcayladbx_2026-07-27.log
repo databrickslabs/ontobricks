@@ -655,3 +655,28 @@ Modified files:
 - releasereq/TODO.md
 
 Tests: uv run pytest -q -m "not scenario" → 3370 passed, 275 skipped, 5 deselected in 21.76s
+
+---
+
+## feat(registry): Backend column in Browse domain list
+
+Context: Registry → Browse domain table showed Name / URI / Description / Versions but not which graph backend each domain uses. Surface `graph_backend` from the latest version info as a Backend column immediately after URI.
+
+Changes:
+
+1. `src/back/objects/registry/store/base.py`
+   Add optional `graph_backend` field to `DomainSummary`.
+2. `src/back/objects/registry/store/lakebase/store.py`
+   `list_domains_with_metadata` returns normalized `graph_backend` from the latest version `info` (default lakebase).
+3. `src/front/static/registry/js/registry.js`
+   Add Backend column after URI (Lakebase / Lakehouse / Neo4j badges); expand version-panel colspan to 6.
+4. `tests/units/front/test_registry_backend_column.py`
+   Front contract: Backend header sits between URI and Description; reads `d.graph_backend`.
+
+Modified files:
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_registry_backend_column.py
+
+Tests: uv run pytest -q -m "not scenario" → 3371 passed, 275 skipped, 5 deselected in 28.46s

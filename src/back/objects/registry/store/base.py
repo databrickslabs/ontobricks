@@ -44,6 +44,7 @@ class DomainSummary(TypedDict, total=False):
     name: str
     base_uri: str
     description: str
+    graph_backend: str       # lakebase | databricks | neo4j (from latest version info)
     review_quorum: int       # per-domain sign-off quorum (>= 1)
     versions: List[Dict[str, Any]]
 
