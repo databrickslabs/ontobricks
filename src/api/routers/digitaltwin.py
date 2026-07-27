@@ -177,6 +177,31 @@ class FindResponse(BaseModel):
     message: Optional[str] = None
 
 
+class NodeContextDataset(BaseModel):
+    fullName: str
+    key_column: Optional[str] = None
+    key_column_missing: Optional[bool] = None
+    rows: Optional[List[Dict[str, Any]]] = None
+
+
+class NodeContextBridge(BaseModel):
+    target_domain: str
+    target_class_name: str
+    target_class_uri: str = ""
+    label: str = ""
+    entities: Optional[List[Dict[str, Any]]] = None
+
+
+class NodeContextResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    dataset: Optional[NodeContextDataset] = None
+    bridges: Optional[List[NodeContextBridge]] = None
+    message: Optional[str] = None
+
+
 class DataQualityRequest(BaseModel):
     category: Optional[str] = Field(
         None, description="Filter shapes by category (e.g. 'cardinality', 'value')"
@@ -1594,4 +1619,168 @@ async def dt_cohort_materialize(
         uc_table=result.get("uc_table"),
         materialize_graph_error=result.get("materialize_graph_error"),
         materialize_uc_error=result.get("materialize_uc_error"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /nodes/context
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/nodes/context",
+    response_model=NodeContextResponse,
+    response_model_exclude_none=True,
+    summary="Complete node context (dataset + bridges)",
+    description="Resolve the ontology class for an entity URI and return linked "
+    "dataset metadata (with optional row retrieval) and bridge definitions "
+    "(with optional cross-domain entity traversal).",
+)
+async def dt_nodes_context(
+    entity_uri: str = Query(..., description="Full URI of the entity node"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry",
+    ),
+    domain_version: Optional[str] = Query(None),
+    fetch_dataset_rows: bool = Query(False, description="Fetch rows from the linked UC table/view"),
+    dataset_row_limit: int = Query(5, ge=1, le=20, description="Max rows to return (1–20)"),
+    follow_bridges: bool = Query(False, description="Traverse bridge target domains"),
+    registry_catalog: Optional[str] = Query(None),
+    registry_schema: Optional[str] = Query(None),
+    registry_volume: Optional[str] = Query(None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    local_id = _extract_local_id(entity_uri)
+
+    domain = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume,
+        domain_version, read_only=True,
+    )
+    dname = domain.domain_folder or (domain.info or {}).get("name", "")
+
+    # Resolve class by matching entity URI type prefix
+    raw_classes = domain.get_classes() or []
+    matched_cls = None
+    for cls in raw_classes:
+        cls_uri = cls.get("uri", "")
+        if cls_uri and entity_uri.startswith(cls_uri.rstrip("/") + "/"):
+            matched_cls = cls
+            break
+
+    if matched_cls is None:
+        return NodeContextResponse(
+            success=True,
+            entity_uri=entity_uri,
+            entity_local_id=local_id,
+        )
+
+    class_name = matched_cls.get("name", "")
+    raw_dataset = matched_cls.get("dataset") or None
+    raw_bridges = matched_cls.get("bridges") or []
+
+    # --- Dataset ---
+    dataset_out: Optional[NodeContextDataset] = None
+    if raw_dataset and raw_dataset.get("fullName"):
+        key_col = raw_dataset.get("key_column")
+        rows = None
+        key_col_missing = None
+
+        if fetch_dataset_rows:
+            if not key_col:
+                key_col_missing = True
+            else:
+                try:
+                    client_db = get_databricks_client(settings)
+                    sql = (
+                        f"SELECT * FROM {raw_dataset['fullName']} "
+                        f"WHERE {key_col} = '{sql_escape(local_id)}' "
+                        f"LIMIT {dataset_row_limit}"
+                    )
+                    result = await run_blocking(client_db.execute, sql)
+                    rows = result if isinstance(result, list) else []
+                except Exception as exc:
+                    logger.warning(
+                        "nodes/context: dataset row fetch failed for %s: %s", entity_uri, exc
+                    )
+
+        dataset_out = NodeContextDataset(
+            fullName=raw_dataset["fullName"],
+            key_column=key_col,
+            key_column_missing=key_col_missing,
+            rows=rows,
+        )
+
+    # --- Bridges ---
+    bridges_out: List[NodeContextBridge] = []
+    for b in raw_bridges:
+        target_domain = b.get("target_domain") or b.get("target_project", "")
+        target_class_name = b.get("target_class_name", "")
+        target_class_uri = b.get("target_class_uri", "")
+        label = b.get("label", "")
+
+        entities = None
+        if follow_bridges and target_domain and target_class_name:
+            try:
+                target_dom = DigitalTwin.resolve_domain(
+                    target_domain, session_mgr, settings,
+                    registry_catalog, registry_schema, registry_volume,
+                    read_only=True,
+                )
+                target_store = get_graphdb(target_dom, settings)
+                if target_store:
+                    target_table = effective_graph_query_table(target_dom, settings, store=target_store)
+                    if target_table:
+                        rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                        esc_type = sql_escape(target_class_name).lower()
+                        esc_id = sql_escape(local_id).lower()
+                        seed_where = (
+                            f" WHERE subject IN ("
+                            f"SELECT subject FROM {target_table} "
+                            f"WHERE predicate = '{rdf_type}' "
+                            f"AND (LOWER(object) LIKE '%#{esc_type}' "
+                            f"OR LOWER(object) LIKE '%/{esc_type}'))"
+                            f" AND (LOWER(subject) LIKE '%/{esc_id}%' "
+                            f"OR LOWER(subject) LIKE '%#{esc_id}%')"
+                        )
+                        rows_bridge = target_store.bfs_traversal(
+                            target_table, seed_where, depth=1,
+                            search=local_id, entity_type=target_class_name,
+                        )
+                        entities = [
+                            {"uri": r.get("subject", ""), "predicate": r.get("predicate", ""),
+                             "object": r.get("object", "")}
+                            for r in (rows_bridge or [])
+                        ]
+            except Exception as exc:
+                logger.warning(
+                    "nodes/context: bridge traversal to %s/%s failed: %s",
+                    target_domain, target_class_name, exc,
+                )
+
+        bridges_out.append(
+            NodeContextBridge(
+                target_domain=target_domain,
+                target_class_name=target_class_name,
+                target_class_uri=target_class_uri,
+                label=label,
+                entities=entities,
+            )
+        )
+
+    logger.info(
+        "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d",
+        local_id, class_name, dname, bool(dataset_out), len(bridges_out),
+    )
+
+    return NodeContextResponse(
+        success=True,
+        entity_uri=entity_uri,
+        entity_local_id=local_id,
+        class_name=class_name,
+        dataset=dataset_out,
+        bridges=bridges_out or None,
     )
