@@ -1,3 +1,37 @@
+## fix(mapping-ui): wire Designer "Unmap all" via addEventListener for reliable confirm popup
+
+**Context:** Follow-up to the "Unmap all" work below. The Designer button was wired with an inline `onclick="confirmResetMappings()"`, which reintroduced the inline-handler pattern the team deliberately dropped in v0.2.0 (in favor of id-based `addEventListener`). Switched it to the same robust wiring as the Information button so the confirmation dialog (`showConfirmDialog`) fires reliably before any mappings are cleared.
+
+**Changes:**
+1. `src/front/templates/partials/mapping/_mapping_design.html` — Removed the inline `onclick="confirmResetMappings()"` from `#resetMappingsDesignBtn` (kept the id).
+2. `src/front/static/global/js/mapping-information.js` — `_initMappingInformationButtons()` now wires both `#resetMappingsBtn` and `#resetMappingsDesignBtn` to `confirmResetMappings()` via `addEventListener` with the existing `obResetWired` de-dup guard.
+
+**Modified files:**
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/static/global/js/mapping-information.js`
+
+**Test result:** UI-only change (no automated JS coverage); full backend suite green (3320 passed, 275 skipped).
+
+---
+
+## feat(mapping-ui): rename Reset to "Unmap all" and add it to the Designer page
+
+**Context:** The mapping "Reset" button (which deletes all entity and relationship mappings) was only available on Mapping/Information and its label was unclear. Renamed it to "Unmap all" and added the same action to the Mapping/Designer page toolbar so users can unmap everything without leaving the visual designer.
+
+**Changes:**
+1. `src/front/templates/partials/mapping/_mapping_information.html` — Renamed the `#resetMappingsBtn` label from "Reset" to "Unmap all" and added a descriptive `title`.
+2. `src/front/templates/partials/mapping/_mapping_design.html` — Added an "Unmap all" button (`#resetMappingsDesignBtn`, `btn-outline-danger`) to the designer header toolbar, wired to the existing `confirmResetMappings()` handler.
+3. `src/front/static/global/js/mapping-information.js` — `resetAllMappings()` now targets whichever button is rendered (`resetMappingsBtn` or `resetMappingsDesignBtn`) for its spinner and guards the `finally` reset; updated the confirm dialog title/button text to "Unmap all".
+
+**Modified files:**
+- `src/front/templates/partials/mapping/_mapping_information.html`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/static/global/js/mapping-information.js`
+
+**Test result:** UI-only change (no automated JS coverage in this repo); backend suite run below to confirm no regressions.
+
+---
+
 ## fix(api): SQL identifier validation, bridge_depth le=1, test coverage, cleanup
 
 **Context:** Final code-review fixes for the MCP node-context feature. Addresses 6 findings: SQL injection guards on `fullName` and `key_column`, bridge `target_table` identifier validation, `bridge_depth` constrained to `le=1` for this version, a new `follow_bridges` unit test, `response_model_exclude_none=True` on the domain classes endpoint, and minor cleanup (module-level `_RDF_TYPE` constant, test rename).
