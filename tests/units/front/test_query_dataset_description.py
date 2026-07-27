@@ -51,3 +51,32 @@ def test_dataset_preview_modal_fetches_ten_rows():
     assert "'10'" in js or '"10"' in js
     assert "key_column_missing" in js
     assert "Failed to load rows" in js
+
+
+def test_dataset_preview_modal_has_loading_empty_and_error_states():
+    js = DASHBOARD_JS.read_text(encoding="utf-8")
+    assert "Loading dataset rows" in js
+    assert "No linked dataset for this entity type." in js
+    assert "No matching rows for this entity." in js
+    assert "Could not resolve the ontology class" in js
+    assert "Key column is not configured" in js
+    assert "Failed to load dataset preview" in js
+
+
+def test_dataset_preview_renders_union_of_row_columns_safely():
+    js = DASHBOARD_JS.read_text(encoding="utf-8")
+    assert "const columns = []" in js
+    assert "const seen = new Set()" in js
+    assert "Object.keys(row || {})" in js
+    assert "escapeHtml(c)" in js
+    assert "escapeHtml(text)" in js
+
+
+def test_context_menu_forwards_entity_uri_class_and_id_to_preview():
+    js = SIGMA_JS.read_text(encoding="utf-8")
+    assert 'data-sg-node-action="dataset-preview"' in js
+    assert 'data-uri="' in js
+    assert "meta.entity.id" in js
+    assert "data-class" in js
+    assert "data-id" in js
+    assert "openDatasetPreviewModal(dsUri, dsCls, dsId)" in js

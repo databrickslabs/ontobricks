@@ -59,13 +59,21 @@ Reuse existing `NodeContextDataset` — no backend changes required.
 
 ## Testing
 
-Static/unit contracts:
+The addon is covered across its three boundaries:
 
-- Details (both surfaces) render Dataset section + Preview rows when dataset
-  attached
-- Preview modal helper calls `/api/v1/digitaltwin/nodes/context` with
-  `fetch_dataset_rows=true` and `dataset_row_limit=10`
-- Disabled preview path when key column missing
+- **API behavior:** class resolution, dataset metadata and description,
+  exact key-filter SQL with `LIMIT 10`, returned rows, empty rows, missing
+  key columns, and Databricks query failures.
+- **MCP integration:** invoke real FastMCP tools against an
+  `httpx.MockTransport`; verify `select_domain` caches the complete dataset,
+  `list_entity_types` and `describe_entity` expose its description, and
+  `get_entity_context` forwards row-fetch parameters and formats rows.
+- **Graph Explorer contracts:** both Details surfaces and the node
+  right-click menu invoke the shared modal; the request remains capped at 10;
+  loading, missing-key, empty-result, and query-error states remain present.
+
+All tests run without a live Databricks workspace. Live UC validation remains
+opt-in because it depends on workspace credentials and mutable external data.
 
 ## Out of scope
 

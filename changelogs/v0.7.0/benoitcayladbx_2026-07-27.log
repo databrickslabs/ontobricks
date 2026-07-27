@@ -582,3 +582,37 @@ Modified files:
 Tests:
 - uv run pytest -q tests/units/front/test_query_dataset_description.py → 5 passed
 - uv run pytest -q -m "not scenario" → 3343 passed, 275 skipped, 5 deselected, 23 warnings in 23.06s
+
+## Strengthen external dataset addon tests
+
+Context: The dataset addon needed behavioral coverage across its API, Graph
+Explorer, and MCP boundaries. Previous MCP smoke tests tolerated backend route
+errors and frontend tests only checked a minimal set of source strings.
+
+Changes:
+
+1. tests/units/api/test_node_context_endpoint.py
+   Added exact SQL/key/limit, query failure, and limit-validation tests.
+2. tests/mcp/integration/test_dataset_context_tools.py
+   Added FastMCP integration tests proving select-domain cache propagation,
+   dataset descriptions in list/describe tools, and row-fetch formatting and
+   request parameters in get_entity_context.
+3. tests/units/front/test_query_dataset_description.py
+   Added contracts for modal states, safe row/column rendering, and right-click
+   context-menu argument forwarding.
+4. docs/superpowers/specs/2026-07-27-graph-explorer-dataset-preview-design.md
+   Documented the API, MCP, and Graph Explorer test matrix.
+5. docs/superpowers/plans/2026-07-27-graph-explorer-dataset-preview.md
+   Added the behavioral coverage implementation task.
+
+Modified files:
+- tests/units/api/test_node_context_endpoint.py
+- tests/mcp/integration/test_dataset_context_tools.py
+- tests/units/front/test_query_dataset_description.py
+- docs/superpowers/specs/2026-07-27-graph-explorer-dataset-preview-design.md
+- docs/superpowers/plans/2026-07-27-graph-explorer-dataset-preview.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/api/test_node_context_endpoint.py tests/mcp/integration/test_dataset_context_tools.py tests/units/mcp/test_node_context_formatting.py tests/units/front/test_query_dataset_description.py → 25 passed
+- uv run pytest -q -m "not scenario" → 3352 passed, 275 skipped, 5 deselected, 23 warnings in 22.64s

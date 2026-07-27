@@ -235,3 +235,78 @@ class TestNodeContextEndpoint:
         args = mock_get_client.call_args[0]
         assert args[0] is mock_domain
         assert len(args) == 2
+
+    def test_dataset_row_fetch_uses_key_filter_and_requested_limit(self, client):
+        mock_domain = self._mock_domain()
+        mock_client = MagicMock()
+        mock_client.execute_query.return_value = []
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            return_value=mock_domain,
+        ), patch(
+            "api.routers.digitaltwin.get_databricks_client",
+            return_value=mock_client,
+        ), patch(
+            "api.routers.digitaltwin.run_blocking",
+            side_effect=lambda fn, *a, **kw: fn(*a, **kw),
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                    "fetch_dataset_rows": "true",
+                    "dataset_row_limit": "10",
+                },
+            )
+
+        assert resp.status_code == 200
+        mock_client.execute_query.assert_called_once_with(
+            "SELECT * FROM main.crm.customers "
+            "WHERE id = 'CUST001' LIMIT 10"
+        )
+        assert resp.json()["dataset"]["rows"] == []
+
+    def test_dataset_row_fetch_surfaces_query_failure(self, client):
+        mock_domain = self._mock_domain()
+        mock_client = MagicMock()
+        mock_client.execute_query.side_effect = RuntimeError("warehouse unavailable")
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            return_value=mock_domain,
+        ), patch(
+            "api.routers.digitaltwin.get_databricks_client",
+            return_value=mock_client,
+        ), patch(
+            "api.routers.digitaltwin.run_blocking",
+            side_effect=lambda fn, *a, **kw: fn(*a, **kw),
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                    "fetch_dataset_rows": "true",
+                    "dataset_row_limit": "10",
+                },
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["dataset"]["rows"] == []
+        assert body["message"] == "warehouse unavailable"
+
+    def test_dataset_row_limit_over_twenty_is_rejected(self, client):
+        resp = client.get(
+            "/api/v1/digitaltwin/nodes/context",
+            params={
+                "entity_uri": "https://example.com/Customer/CUST001",
+                "fetch_dataset_rows": "true",
+                "dataset_row_limit": "21",
+            },
+        )
+
+        assert resp.status_code == 422
