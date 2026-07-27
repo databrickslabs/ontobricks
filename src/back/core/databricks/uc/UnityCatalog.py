@@ -131,6 +131,54 @@ class UnityCatalog:
             logger.exception("Error listing tables and views: %s", exc)
             return []
 
+    def list_functions(self, catalog: str, schema: str) -> List[Dict[str, Any]]:
+        """Return user-defined functions in *catalog*.*schema* via the UC REST API.
+
+        No warehouse required. Returns an empty list on error.
+
+        Each dict has ``name``, ``full_name``, ``comment``, ``input_params``
+        (parameter names in declaration order), ``param_count`` and
+        ``returns_table`` (True for table-valued functions).
+        """
+        if not self._auth.host or not self._auth.has_valid_auth():
+            return []
+        try:
+            host = self._auth.host.rstrip("/")
+            headers = self._auth.get_auth_headers()
+            url = f"{host}/api/2.1/unity-catalog/functions"
+            params = {"catalog_name": catalog, "schema_name": schema}
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            raw = response.json().get("functions", []) or []
+            functions: List[Dict[str, Any]] = []
+            for fn in raw:
+                name = (fn.get("name") or "").strip()
+                if not name:
+                    continue
+                raw_params = (fn.get("input_params") or {}).get("parameters") or []
+                input_params = [
+                    str(p.get("name", "") or "").strip()
+                    for p in raw_params
+                    if str(p.get("name", "") or "").strip()
+                ]
+                functions.append(
+                    {
+                        "name": name,
+                        "full_name": (
+                            fn.get("full_name") or f"{catalog}.{schema}.{name}"
+                        ).strip(),
+                        "comment": fn.get("comment", "") or "",
+                        "input_params": input_params,
+                        "param_count": len(input_params),
+                        "returns_table": str(fn.get("data_type", "") or "").upper()
+                        == "TABLE_TYPE",
+                    }
+                )
+            return functions
+        except Exception as exc:
+            logger.exception("Error listing functions: %s", exc)
+            return []
+
     def probe_schema_has_tables(self, catalog: str, schema: str) -> int:
         """Return the number of tables in *catalog*.*schema* via information_schema.
 

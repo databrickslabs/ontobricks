@@ -316,6 +316,124 @@ async function _loadDatasetPreviewRows(entityUri) {
     }
 }
 
+/**
+ * Open a modal that runs a Unity Catalog function action on the entity.
+ * Uses POST /api/v1/digitaltwin/nodes/action; the function receives the
+ * entity ID as its single argument.
+ *
+ * @param {string} entityUri - Full entity URI
+ * @param {string} actionFullName - Fully qualified UC function name
+ * @param {string} [label] - Display label for the action
+ */
+function openEntityActionModal(entityUri, actionFullName, label) {
+    const existingModal = document.getElementById('entityActionResultModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const safeLabel = escapeHtml(label || actionFullName || 'Action');
+    const safeFullName = escapeHtml(actionFullName || '');
+    const modalHtml = `
+        <div class="modal fade" id="entityActionResultModal" tabindex="-1" aria-labelledby="entityActionResultModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white py-2">
+                        <h5 class="modal-title" id="entityActionResultModalLabel">
+                            <i class="bi bi-lightning-charge me-2"></i>${safeLabel}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="entityActionResultModalBody">
+                        <div class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+                            Running action…
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <small class="text-muted me-auto"><code>${safeFullName}</code></small>
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalElement = document.getElementById('entityActionResultModal');
+    const modal = new bootstrap.Modal(modalElement, { backdrop: true, keyboard: true });
+    modalElement.addEventListener('hidden.bs.modal', function () {
+        modalElement.remove();
+    });
+    modal.show();
+
+    _runEntityAction(entityUri, actionFullName).then(function (html) {
+        const body = document.getElementById('entityActionResultModalBody');
+        if (body) body.innerHTML = html;
+    });
+}
+
+async function _runEntityAction(entityUri, actionFullName) {
+    if (!entityUri || !actionFullName) {
+        return '<div class="alert alert-warning mb-0">Missing entity URI or action name.</div>';
+    }
+    try {
+        const resp = await fetch('/api/v1/digitaltwin/nodes/action', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_uri: entityUri, action_full_name: actionFullName }),
+        });
+        if (!resp.ok) {
+            return `<div class="alert alert-danger mb-0">Action failed (${resp.status}).</div>`;
+        }
+        const data = await resp.json();
+        if (!data.success) {
+            return `<div class="alert alert-danger mb-0">${escapeHtml(data.message || 'The action could not be executed.')}</div>`;
+        }
+
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        const header = '<div class="alert alert-success py-2 mb-3"><i class="bi bi-check-circle me-1"></i>Action completed.</div>';
+        if (rows.length === 0) {
+            return header + '<div class="alert alert-info mb-0">No result returned.</div>';
+        }
+
+        // Scalar functions come back as a single {result: ...} row.
+        if (rows.length === 1 && Object.keys(rows[0] || {}).length === 1) {
+            const only = Object.values(rows[0])[0];
+            const text = (only === null || only === undefined) ? '' : String(only);
+            return header + `<div class="p-3 border rounded bg-light"><code>${escapeHtml(text)}</code></div>`;
+        }
+
+        const columns = [];
+        const seen = new Set();
+        rows.forEach(function (row) {
+            Object.keys(row || {}).forEach(function (col) {
+                if (!seen.has(col)) {
+                    seen.add(col);
+                    columns.push(col);
+                }
+            });
+        });
+
+        let table = '<div class="table-responsive"><table class="table table-sm table-striped table-bordered mb-0">';
+        table += '<thead class="table-light"><tr>' +
+            columns.map(function (c) { return `<th>${escapeHtml(c)}</th>`; }).join('') +
+            '</tr></thead><tbody>';
+        rows.forEach(function (row) {
+            table += '<tr>' + columns.map(function (c) {
+                const val = row[c];
+                const text = (val === null || val === undefined) ? '' : String(val);
+                return `<td>${escapeHtml(text)}</td>`;
+            }).join('') + '</tr>';
+        });
+        table += '</tbody></table></div>';
+        return header + table;
+    } catch (err) {
+        console.error('[Action] Invocation failed:', err);
+        return '<div class="alert alert-danger mb-0">Failed to run the action.</div>';
+    }
+}
+
 function findAttributeValue(attributesMap, columnName) {
     if (!attributesMap || !columnName) return null;
     

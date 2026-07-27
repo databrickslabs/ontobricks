@@ -680,3 +680,131 @@ Modified files:
 - tests/units/front/test_registry_backend_column.py
 
 Tests: uv run pytest -q -m "not scenario" → 3371 passed, 275 skipped, 5 deselected in 28.46s
+
+---
+
+## chore(settings): remove Admin Permissions page
+
+Context: Settings → Admin → Permissions was a read-only mirror of Databricks App principals; domain roles already live in Teams. Remove the redundant page and keep Teams / Lakebase Permissions / APIs.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Drop Admin → Permissions sidebar item.
+2. `src/front/templates/settings.html`
+   Remove `#permissions-section` markup and `permissions.js` include.
+3. `src/front/static/config/js/permissions.js`
+   Delete unused page script.
+4. `src/api/routers/internal/settings.py` / `SettingsService.py`
+   Docstrings now point at Teams only (API kept).
+5. `docs/{get-started,deployment,data-access,development}.md`
+   Point admins at Teams / Databricks App permissions.
+6. `tests/units/front/test_settings_permissions_removed.py`
+   Contract: menu + template no longer expose Permissions page.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- src/front/static/config/js/permissions.js (deleted)
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+- docs/get-started.md
+- docs/deployment.md
+- docs/data-access.md
+- docs/development.md
+- tests/units/settings/test_settings_domain_permissions.py
+- tests/units/front/test_settings_permissions_removed.py
+
+Tests: uv run pytest -q -m "not scenario" → 3374 passed, 275 skipped, 5 deselected in 25.22s
+
+---
+
+## feat(ontology): Class Actions — Unity Catalog functions on ontology classes
+
+Context: classes could link one external UC dataset but had no way to expose
+*behaviour*. Add a multi-entry Actions section to the Ontology External tab
+where each action binds a Unity Catalog function plus a description. Actions
+round-trip through OWL, are surfaced by the MCP server, and are invokable from
+the Graph Explorer. Contract enforced everywhere: the bound function must accept
+exactly one parameter — the ID of the entity being acted on.
+
+Changes:
+
+1. `src/back/core/databricks/uc/UnityCatalog.py`
+   New `list_functions(catalog, schema)` over `GET /api/2.1/unity-catalog/functions`,
+   returning `param_count` / `input_params` / `returns_table` per function.
+2. `src/back/core/databricks/DatabricksClient.py`
+   `list_functions` passthrough alongside the other UC methods.
+3. `src/back/objects/domain/SettingsService.py`
+   `fetch_uc_functions` service wrapper (mirrors `fetch_uc_assets`).
+4. `src/api/routers/internal/settings.py`
+   New `GET /settings/uc-functions?catalog=&schema=` for the picker.
+5. `src/back/objects/ontology/Ontology.py`
+   `build_class_from_data` threads an `actions` list (defaults to `[]`).
+6. `src/back/core/w3c/owl/OntologyGenerator.py` / `OntologyParser.py`
+   Serialize/parse `ontobricks:actions` as a JSON literal on the class.
+7. `src/api/routers/domains.py`
+   `ClassActionsItem.actions` exposed on `GET /domain/classes`.
+8. `src/api/routers/digitaltwin.py`
+   `NodeContextAction` + `actions` on `/nodes/context`; new
+   `POST /nodes/action` that resolves the class, enforces the class `actions`
+   allow-list, validates the identifier, and runs the function off-thread
+   (`SELECT * FROM fn('id')` for table-valued, `SELECT fn('id') AS result` else).
+9. `src/mcp-server/server/app.py`
+   `_class_actions` cache carries `actions`; `Actions:` blocks in the class and
+   node context formatters and in `list_entity_types`; new
+   `invoke_entity_action(entity_uri, action)` tool posting to `/nodes/action`.
+10. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Actions box in the External tab with a catalog → schema → function picker;
+   functions whose param count is not 1 are disabled with a hint; inline
+   description editing; `actions` wired into save + hydration.
+11. `src/front/static/query/js/query-loaders.js`
+   Class/mapping info retains `actions`.
+12. `src/front/static/query/js/query-entity-details.js` / `query-sigmagraph.js`
+   Actions section in both details panels, context-menu group
+   (`data-sg-node-action="action-invoke"`) and dispatch branch.
+13. `src/front/static/query/js/query-dashboard.js`
+   `openEntityActionModal` / `_runEntityAction`: POSTs the action and renders a
+   scalar result or a rows table with escaped output.
+14. Tests: new `tests/units/api/test_node_action_endpoint.py`,
+   `tests/units/mcp/test_node_action_formatting.py`,
+   `tests/units/front/test_class_actions_ui.py`; extended UC listing, OWL
+   round-trip, `build_class_from_data`, `/domain/classes`, `/nodes/context`, and
+   MCP integration suites.
+15. Docs: one-parameter contract and Graph Explorer behaviour in
+   `docs/user-guide.md`; the two new endpoints in `docs/api.md`; the two MCP
+   tools in `docs/mcp.md`.
+
+Note: the AI-feature eval gate does not apply — `invoke_entity_action` wraps a
+Unity Catalog function, not an LLM agent.
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/back/objects/ontology/Ontology.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/api/routers/domains.py
+- src/api/routers/digitaltwin.py
+- src/mcp-server/server/app.py
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-dashboard.js
+- tests/units/api/test_node_action_endpoint.py (new)
+- tests/units/mcp/test_node_action_formatting.py (new)
+- tests/units/front/test_class_actions_ui.py (new)
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/api/test_domain_classes_endpoint.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/ontology/test_ontology_service.py
+- tests/mcp/integration/test_dataset_context_tools.py
+- docs/user-guide.md
+- docs/api.md
+- docs/mcp.md
+
+Tests: uv run pytest -q -m "not scenario" → 3412 passed, 275 skipped, 5 deselected in 31.55s

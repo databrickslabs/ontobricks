@@ -1425,6 +1425,26 @@ var SigmaGraph = (function () {
             html += _sec('bi bi-table', 'Dataset', dsBody, true);
         }
 
+        // Unity Catalog function actions — each takes the entity ID as its only argument
+        var nodeActions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
+        if (nodeActions.length > 0) {
+            var actionBody = '';
+            nodeActions.forEach(function (action) {
+                var actFullName = action.fullName
+                    || [action.catalog, action.schema, action.function].filter(Boolean).join('.');
+                if (!actFullName) return;
+                var actLabel = action.function || actFullName;
+                var actTitle = action.description || ('Run ' + actFullName);
+                actionBody += '<div class="entity-detail-item"><button type="button" onclick="openEntityActionModal(\'' +
+                    esc(entity.id) + '\', \'' + esc(actFullName) + '\', \'' + esc(actLabel) +
+                    '\')" class="btn btn-sm btn-outline-primary w-100" title="' + esc(actTitle) + '">' +
+                    '<i class="bi bi-lightning-charge me-1"></i>' + esc(actLabel) + '</button></div>';
+            });
+            if (actionBody) {
+                html += _sec('bi bi-lightning-charge', 'Actions (' + nodeActions.length + ')', actionBody, true);
+            }
+        }
+
         var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
         if (bridges.length > 0) {
             var bridgeBody = '';
@@ -2113,9 +2133,9 @@ var SigmaGraph = (function () {
     // Context menu + Find popup
     // -----------------------------------------------------------
     function _resolveNodeMeta(nodeId) {
-        if (!_graph) return { bridges: [], dashboardUrl: null, dashboardParams: {}, dataset: null, entity: {}, actualIdValue: '' };
+        if (!_graph) return { bridges: [], dashboardUrl: null, dashboardParams: {}, dataset: null, actions: [], entity: {}, actualIdValue: '' };
         var attrs = _graph.getNodeAttributes(nodeId);
-        if (attrs._isGroup || attrs._isClusterNode) return { bridges: [], dashboardUrl: null, dashboardParams: {}, dataset: null, entity: {}, actualIdValue: '' };
+        if (attrs._isGroup || attrs._isClusterNode) return { bridges: [], dashboardUrl: null, dashboardParams: {}, dataset: null, actions: [], entity: {}, actualIdValue: '' };
         var entity = attrs._data || {};
 
         var entityMapping = null;
@@ -2146,8 +2166,9 @@ var SigmaGraph = (function () {
         var dashboardUrl = (entityMapping && entityMapping.dashboard) || (classInfo && classInfo.dashboard) || null;
         var dashboardParams = (entityMapping && entityMapping.dashboardParams) || (classInfo && classInfo.dashboardParams) || {};
         var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
+        var actions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
 
-        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
+        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
     }
 
     function _showNodeContextMenu(nodeId, mouseEvent) {
@@ -2197,6 +2218,24 @@ var SigmaGraph = (function () {
             items += '<div class="ctx-item" data-sg-node-action="dataset-preview" data-uri="' + esc(meta.entity.id) +
                 '" data-class="' + esc(dsClassName) + '" data-id="' + esc(meta.actualIdValue || '') + '">' +
                 '<i class="bi bi-table"></i> Dataset preview</div>';
+        }
+
+        var ctxActions = meta.actions || [];
+        if (ctxActions.length > 0 && meta.entity && meta.entity.id) {
+            var actionItems = '';
+            ctxActions.forEach(function (action) {
+                var actFullName = action.fullName
+                    || [action.catalog, action.schema, action.function].filter(Boolean).join('.');
+                if (!actFullName) return;
+                var actLabel = action.function || actFullName;
+                actionItems += '<div class="ctx-item" data-sg-node-action="action-invoke" data-uri="' + esc(meta.entity.id) +
+                    '" data-action="' + esc(actFullName) + '" data-label="' + esc(actLabel) + '">' +
+                    '<i class="bi bi-lightning-charge"></i> ' + esc(actLabel) + '</div>';
+            });
+            if (actionItems) {
+                if (items) items += '<div class="ctx-divider"></div>';
+                items += '<div class="ctx-header">Actions</div>' + actionItems;
+            }
         }
 
         if (meta.bridges.length > 0) {
@@ -3415,6 +3454,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     openDatasetPreviewModal(dsUri, dsCls, dsId);
                 } else if (typeof showNotification === 'function') {
                     showNotification('Dataset preview is unavailable.', 'warning');
+                }
+            } else if (action === 'action-invoke') {
+                var actUri = nodeItem.getAttribute('data-uri');
+                var actName = nodeItem.getAttribute('data-action');
+                var actLbl = nodeItem.getAttribute('data-label');
+                if (actUri && actName && typeof openEntityActionModal === 'function') {
+                    openEntityActionModal(actUri, actName, actLbl);
+                } else if (typeof showNotification === 'function') {
+                    showNotification('Action execution is unavailable.', 'warning');
                 }
             } else if (action === 'bridge') {
                 var url = nodeItem.getAttribute('data-url');

@@ -199,6 +199,18 @@ class NodeContextBridge(BaseModel):
     entities: Optional[List[Dict[str, Any]]] = None
 
 
+class NodeContextAction(BaseModel):
+    """A Unity Catalog function bound to the node's ontology class.
+
+    The function takes exactly one parameter: the ID of the entity to act on.
+    """
+
+    fullName: str
+    function: str = ""
+    description: Optional[str] = None
+    returns_table: bool = False
+
+
 class NodeContextResponse(BaseModel):
     success: bool
     entity_uri: str = ""
@@ -206,6 +218,30 @@ class NodeContextResponse(BaseModel):
     class_name: Optional[str] = None
     dataset: Optional[NodeContextDataset] = None
     bridges: Optional[List[NodeContextBridge]] = None
+    actions: Optional[List[NodeContextAction]] = None
+    message: Optional[str] = None
+
+
+class NodeActionRequest(BaseModel):
+    entity_uri: str = Field(..., description="Instance URI of the node to act on")
+    action_full_name: str = Field(
+        ..., description="Fully qualified UC function name (catalog.schema.function)"
+    )
+    domain_name: Optional[str] = Field(None, description="Domain name in the registry")
+    domain_version: Optional[str] = Field(None, description="Domain version to load")
+    registry_catalog: Optional[str] = None
+    registry_schema: Optional[str] = None
+    registry_volume: Optional[str] = None
+
+
+class NodeActionResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    action: Optional[str] = None
+    returns_table: bool = False
+    rows: Optional[List[Dict[str, Any]]] = None
     message: Optional[str] = None
 
 
@@ -1669,6 +1705,35 @@ def _match_ontology_class(entity_uri: str, classes: List[Dict[str, Any]]) -> Opt
     return None
 
 
+def _class_action_entries(cls: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Return the class's UC function actions, keeping only usable entries.
+
+    Each action binds a Unity Catalog function that takes exactly one
+    parameter: the ID of the entity being acted on. Entries without a
+    syntactically valid ``fullName`` are dropped rather than raising, so a
+    single bad entry never breaks the whole node context.
+    """
+    entries: List[Dict[str, Any]] = []
+    for action in cls.get("actions") or []:
+        if not isinstance(action, dict):
+            continue
+        full_name = str(action.get("fullName") or "").strip()
+        if not full_name or not _SAFE_SQL_IDENT.match(full_name):
+            logger.warning("Skipping action with invalid fullName: %r", full_name)
+            continue
+        entries.append(
+            {
+                "fullName": full_name,
+                "function": str(
+                    action.get("function") or extract_local_name(full_name) or ""
+                ),
+                "description": (str(action.get("description") or "").strip() or None),
+                "returns_table": bool(action.get("returns_table")),
+            }
+        )
+    return entries
+
+
 @router.get(
     "/nodes/context",
     response_model=NodeContextResponse,
@@ -1728,6 +1793,7 @@ async def dt_nodes_context(
     class_name = matched_cls.get("name", "")
     raw_dataset = matched_cls.get("dataset") or None
     raw_bridges = matched_cls.get("bridges") or []
+    actions_out = [NodeContextAction(**a) for a in _class_action_entries(matched_cls)]
     fetch_error: Optional[str] = None
 
     # --- Dataset ---
@@ -1854,8 +1920,9 @@ async def dt_nodes_context(
             bridges_out.append(bridge_entry)
 
     logger.info(
-        "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d",
+        "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d actions=%d",
         local_id, class_name, dname, bool(dataset_out), len(bridges_out),
+        len(actions_out),
     )
 
     return NodeContextResponse(
@@ -1865,5 +1932,121 @@ async def dt_nodes_context(
         class_name=class_name,
         dataset=dataset_out,
         bridges=bridges_out or None,
+        actions=actions_out or None,
         message=fetch_error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /nodes/action
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/nodes/action",
+    response_model=NodeActionResponse,
+    response_model_exclude_none=True,
+    summary="Invoke a Unity Catalog function action on a node",
+    description="Run one of the ontology class's configured Unity Catalog "
+    "function actions against a node. The function receives exactly one "
+    "argument: the entity's local ID. Only functions declared on the resolved "
+    "class may be invoked.",
+)
+async def dt_nodes_action(
+    payload: NodeActionRequest,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    entity_uri = payload.entity_uri
+    local_id = _extract_local_id(entity_uri)
+
+    domain = DigitalTwin.resolve_domain(
+        payload.domain_name, session_mgr, settings,
+        payload.registry_catalog, payload.registry_schema, payload.registry_volume,
+        payload.domain_version, read_only=True,
+    )
+    dname = domain.domain_folder or (domain.info or {}).get("name", "")
+
+    raw_classes = domain.get_classes() or []
+    matched_cls = _match_ontology_class(entity_uri, raw_classes)
+    if matched_cls is None:
+        return NodeActionResponse(
+            success=False,
+            entity_uri=entity_uri,
+            entity_local_id=local_id,
+            message="No ontology class matches this entity URI",
+        )
+
+    class_name = matched_cls.get("name", "")
+
+    # Allow-list: only functions declared on the resolved class may run. This
+    # is what keeps the endpoint from becoming an arbitrary SQL executor.
+    requested = payload.action_full_name.strip()
+    action = next(
+        (a for a in _class_action_entries(matched_cls) if a["fullName"] == requested),
+        None,
+    )
+    if action is None:
+        logger.warning(
+            "nodes/action: %r is not declared on class %s — rejected",
+            requested, class_name,
+        )
+        return NodeActionResponse(
+            success=False,
+            entity_uri=entity_uri,
+            entity_local_id=local_id,
+            class_name=class_name,
+            message=f"Action {requested!r} is not configured on class {class_name!r}",
+        )
+
+    full_name = action["fullName"]
+    returns_table = action["returns_table"]
+
+    try:
+        client_db = get_databricks_client(domain, settings)
+        if client_db is None:
+            return NodeActionResponse(
+                success=False,
+                entity_uri=entity_uri,
+                entity_local_id=local_id,
+                class_name=class_name,
+                action=full_name,
+                message="Databricks client is not configured",
+            )
+        arg = f"'{sql_escape(local_id)}'"
+        sql = (
+            f"SELECT * FROM {full_name}({arg})"
+            if returns_table
+            else f"SELECT {full_name}({arg}) AS result"
+        )
+        result = await run_blocking(client_db.execute_query, sql)
+        rows = result if isinstance(result, list) else []
+    except Exception as exc:
+        logger.warning(
+            "nodes/action: %s failed for %s: %s", full_name, entity_uri, exc
+        )
+        return NodeActionResponse(
+            success=False,
+            entity_uri=entity_uri,
+            entity_local_id=local_id,
+            class_name=class_name,
+            action=full_name,
+            returns_table=returns_table,
+            rows=[],
+            message=str(exc),
+        )
+
+    logger.info(
+        "nodes/action: entity=%s class=%s domain=%s action=%s rows=%d",
+        local_id, class_name, dname, full_name, len(rows),
+    )
+
+    return NodeActionResponse(
+        success=True,
+        entity_uri=entity_uri,
+        entity_local_id=local_id,
+        class_name=class_name,
+        action=full_name,
+        returns_table=returns_table,
+        rows=rows,
     )

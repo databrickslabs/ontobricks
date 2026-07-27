@@ -223,6 +223,19 @@ async def get_uc_assets(
     return await config_service.fetch_uc_assets(catalog, schema, session_mgr, settings)
 
 
+@router.get("/uc-functions")
+async def get_uc_functions(
+    catalog: str,
+    schema: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Unity Catalog functions in a schema (with parameter metadata)."""
+    return await config_service.fetch_uc_functions(
+        catalog, schema, session_mgr, settings
+    )
+
+
 # ===========================================
 # Domain Registry
 # ===========================================
@@ -711,8 +724,8 @@ async def list_app_permissions(
 ):
     """Return the Databricks App principals (users + groups).
 
-    Read-only mirror of the App's ACL.  Used by Settings → Permissions
-    and as the row source for Settings → Admin → Teams.
+    Read-only mirror of the App's ACL. Used as the row source for
+    Settings → Admin → Teams.
     """
     return config_service.list_app_principals_result(session_mgr, settings)
 

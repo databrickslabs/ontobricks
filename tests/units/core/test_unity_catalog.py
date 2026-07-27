@@ -116,6 +116,63 @@ class TestGetTables:
         assert uc.get_tables("cat", "sch") == []
 
 
+class TestListFunctions:
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_returns_functions_with_param_metadata(self, mock_get, auth_with_warehouse):
+        mock_get.return_value = Mock(
+            raise_for_status=Mock(),
+            json=Mock(
+                return_value={
+                    "functions": [
+                        {
+                            "name": "recompute_risk",
+                            "full_name": "main.ops.recompute_risk",
+                            "comment": "Recompute the risk score",
+                            "data_type": "STRING",
+                            "input_params": {"parameters": [{"name": "entity_id"}]},
+                        },
+                        {
+                            "name": "risk_history",
+                            "data_type": "TABLE_TYPE",
+                            "input_params": {
+                                "parameters": [{"name": "entity_id"}, {"name": "days"}]
+                            },
+                        },
+                    ]
+                }
+            ),
+        )
+        uc = UnityCatalog(auth_with_warehouse)
+        out = uc.list_functions("main", "ops")
+
+        assert out == [
+            {
+                "name": "recompute_risk",
+                "full_name": "main.ops.recompute_risk",
+                "comment": "Recompute the risk score",
+                "input_params": ["entity_id"],
+                "param_count": 1,
+                "returns_table": False,
+            },
+            {
+                "name": "risk_history",
+                "full_name": "main.ops.risk_history",
+                "comment": "",
+                "input_params": ["entity_id", "days"],
+                "param_count": 2,
+                "returns_table": True,
+            },
+        ]
+        _, kwargs = mock_get.call_args
+        assert kwargs["params"] == {"catalog_name": "main", "schema_name": "ops"}
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_returns_empty_list_on_error(self, mock_get, auth_with_warehouse):
+        mock_get.side_effect = RuntimeError("boom")
+        uc = UnityCatalog(auth_with_warehouse)
+        assert uc.list_functions("main", "ops") == []
+
+
 class TestGetTableColumns:
     @patch("databricks.sql.connect")
     def test_returns_list_of_dicts(self, mock_connect, auth_with_warehouse):

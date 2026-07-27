@@ -65,6 +65,7 @@ API_V1_DT_STATS = "/api/v1/digitaltwin/stats"
 API_V1_DT_TRIPLES_FIND = "/api/v1/digitaltwin/triples/find"
 API_V1_DOMAIN_CLASSES = "/api/v1/domain/classes"
 API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"
+API_V1_DT_NODE_ACTION = "/api/v1/digitaltwin/nodes/action"
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
@@ -166,7 +167,8 @@ def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
     """Append a [Context] block for a node's class Actions metadata."""
     dataset = cls_actions.get("dataset")
     bridges = cls_actions.get("bridges") or []
-    if not dataset and not bridges:
+    actions = cls_actions.get("actions") or []
+    if not dataset and not bridges and not actions:
         return ""
 
     lines: list[str] = []
@@ -193,6 +195,14 @@ def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
             lines.append(f"    → {target}{label}")
         lines.append(
             "    → call get_entity_context(follow_bridges=True) to load cross-domain data"
+        )
+
+    if actions:
+        lines.append("  Actions:")
+        for a in actions:
+            lines.append(f"    → {a.get('fullName', '')}: {a.get('description', '')}")
+        lines.append(
+            "    → call invoke_entity_action(entity_uri, action) to run one"
         )
 
     return "\n".join(lines)
@@ -245,6 +255,42 @@ def _format_node_context_response(data: dict) -> str:
                     lines.append(f"      • {_local_name(e.get('uri', ''))}  {e.get('predicate', '')} → {e.get('object', '')}")
         lines.append("")
 
+    actions = data.get("actions") or []
+    if actions:
+        lines.append("Actions (Unity Catalog functions):")
+        for a in actions:
+            lines.append(f"  → {a.get('fullName', '')}")
+            desc = (a.get("description") or "").strip()
+            if desc:
+                lines.append(f"    Description: {desc}")
+        lines.append(
+            f"  → call invoke_entity_action(entity_uri, action) with the entity's ID ('{local_id}')"
+        )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _format_node_action_response(data: dict) -> str:
+    """Format the /nodes/action JSON response as LLM-friendly text."""
+    if not data.get("success"):
+        return data.get("message", "Could not invoke the action.")
+
+    local_id = data.get("entity_local_id", "")
+    lines: list[str] = [
+        f"Action: {data.get('action', '')}",
+        f"Entity: {local_id}  ({data.get('class_name', 'Unknown')})",
+        "",
+    ]
+
+    rows = data.get("rows") or []
+    if not rows:
+        lines.append("Completed — no result rows returned.")
+        return "\n".join(lines)
+
+    lines.append(f"Result ({len(rows)} row{'s' if len(rows) != 1 else ''}):")
+    for row in rows:
+        lines.append("  " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
     return "\n".join(lines)
 
 
@@ -1014,6 +1060,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                             "name": cls.get("name", ""),
                             "dataset": cls.get("dataset") or None,
                             "bridges": cls.get("bridges") or [],
+                            "actions": cls.get("actions") or [],
                         }
                 logger.info(
                     "select_domain: loaded class Actions for %d classes", len(_class_actions)
@@ -1096,6 +1143,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                     desc = (dataset.get("description") or "").strip()
                     if desc:
                         lines.append(f"    Description: {desc}")
+                for fn_action in actions.get("actions") or []:
+                    fn_desc = (fn_action.get("description") or "").strip()
+                    suffix = f" — {fn_desc}" if fn_desc else ""
+                    lines.append(f"    Action: {fn_action.get('fullName', '')}{suffix}")
             lines.append("")
 
         top_predicates = data.get("top_predicates", [])
@@ -1378,6 +1429,36 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             data = await _get(client, API_V1_DT_NODE_CONTEXT, params=params)
 
         return _format_node_context_response(data)
+
+    @mcp.tool()
+    async def invoke_entity_action(entity_uri: str, action: str) -> str:
+        """Run a Unity Catalog function action configured on an entity's class.
+
+        Requires a domain to be selected first via select_domain. Discover the
+        available actions with get_entity_context or describe_entity — only
+        functions declared on the entity's ontology class can be invoked.
+
+        The function is called with exactly one argument: the entity's local ID,
+        derived server-side from *entity_uri*.
+
+        Args:
+            entity_uri: Full URI of the entity (e.g. from describe_entity).
+            action: Fully qualified function name (catalog.schema.function).
+        """
+        if not _selected_domain["name"]:
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
+
+        body: dict = {"entity_uri": entity_uri, "action_full_name": action}
+        body.update(_registry_params())
+        body["domain_name"] = _selected_domain["name"]
+
+        async with _client() as client:
+            data = await _post(client, API_V1_DT_NODE_ACTION, json=body)
+
+        return _format_node_action_response(data)
 
     # ── Resources ─────────────────────────────────────────────────────
 

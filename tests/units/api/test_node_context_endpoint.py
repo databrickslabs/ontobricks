@@ -30,6 +30,16 @@ _CLASSES_WITH_ACTIONS = [
                 "label": "Owns contracts",
             }
         ],
+        "actions": [
+            {
+                "catalog": "main",
+                "schema": "ops",
+                "function": "recompute_risk",
+                "fullName": "main.ops.recompute_risk",
+                "description": "Recompute the customer risk score",
+                "returns_table": False,
+            }
+        ],
     },
 ]
 
@@ -63,6 +73,54 @@ class TestNodeContextEndpoint:
         assert "rows" not in body["dataset"]
         assert body["bridges"][0]["target_domain"] == "Finance"
         assert "entities" not in body["bridges"][0]
+
+    def test_actions_metadata_is_returned(self, client):
+        """Class actions are surfaced as metadata (no execution here)."""
+        mock_domain = self._mock_domain()
+
+        with patch("api.routers.digitaltwin.DigitalTwin.resolve_domain", return_value=mock_domain):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                },
+            )
+
+        assert resp.status_code == 200
+        actions = resp.json()["actions"]
+        assert len(actions) == 1
+        assert actions[0]["fullName"] == "main.ops.recompute_risk"
+        assert actions[0]["function"] == "recompute_risk"
+        assert actions[0]["description"] == "Recompute the customer risk score"
+        assert actions[0]["returns_table"] is False
+
+    def test_actions_with_invalid_full_name_are_dropped(self, client):
+        classes = [
+            {
+                "name": "Customer",
+                "uri": "https://example.com/Customer",
+                "actions": [
+                    {"fullName": "main.ops.bad;DROP TABLE x", "description": "nope"},
+                    {"fullName": "main.ops.ok", "description": "fine"},
+                ],
+            }
+        ]
+        mock_domain = MagicMock()
+        mock_domain.get_classes.return_value = classes
+
+        with patch("api.routers.digitaltwin.DigitalTwin.resolve_domain", return_value=mock_domain):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                },
+            )
+
+        assert resp.status_code == 200
+        actions = resp.json()["actions"]
+        assert [a["fullName"] for a in actions] == ["main.ops.ok"]
 
     def test_missing_entity_uri_returns_422(self, client):
         resp = client.get(

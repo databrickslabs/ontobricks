@@ -471,6 +471,32 @@ class SettingsService:
             raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
 
     @staticmethod
+    async def fetch_uc_functions(
+        catalog: str,
+        schema: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        log_label: str = "Get UC functions",
+    ) -> Dict[str, Any]:
+        """List user-defined functions in *catalog*.*schema*.
+
+        Used by the ontology *Actions* picker. Callers only bind functions
+        taking exactly one parameter (the entity ID), so ``param_count`` is
+        surfaced for client-side filtering.
+        """
+        try:
+            client = get_databricks_client(get_domain(session_mgr), settings)
+            if not client:
+                raise ValidationError("Databricks not configured")
+            functions = await run_blocking(client.list_functions, catalog, schema)
+            return {"success": True, "functions": functions}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("%s failed: %s", log_label, e)
+            raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
+
+    @staticmethod
     async def check_lakebase_permissions(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
@@ -3173,8 +3199,7 @@ class SettingsService:
     ) -> Dict[str, Any]:
         """Return the Databricks App principals (users + groups).
 
-        Used by Settings → Permissions (read-only view) and as the row
-        source for the Settings → Admin → Teams matrix picker.
+        Used as the row source for the Settings → Admin → Teams matrix picker.
         """
         _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
         app_name = settings.ontobricks_app_name

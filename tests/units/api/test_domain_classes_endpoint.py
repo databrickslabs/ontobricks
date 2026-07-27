@@ -20,12 +20,16 @@ _MOCK_CLASSES = [
                     "type": "TABLE", "fullName": "main.crm.customers", "key_column": "id"},
         "bridges": [{"target_domain": "Finance", "target_class_name": "Contract",
                      "target_class_uri": "https://example.com/Contract", "label": "Owns"}],
+        "actions": [{"catalog": "main", "schema": "ops", "function": "recompute_risk",
+                     "fullName": "main.ops.recompute_risk",
+                     "description": "Recompute the risk score", "returns_table": False}],
     },
     {
         "name": "Order",
         "uri": "https://example.com/Order",
         "dataset": None,
         "bridges": [],
+        "actions": [],
     },
 ]
 
@@ -46,6 +50,8 @@ class TestDomainClassesEndpoint:
         customer = next(c for c in classes if c["name"] == "Customer")
         assert customer["dataset"]["key_column"] == "id"
         assert len(customer["bridges"]) == 1
+        assert customer["actions"][0]["fullName"] == "main.ops.recompute_risk"
+        assert customer["actions"][0]["description"] == "Recompute the risk score"
 
     def test_empty_actions_class_has_null_dataset_and_no_bridges(self, client):
         mock_domain = MagicMock()
@@ -56,9 +62,10 @@ class TestDomainClassesEndpoint:
 
         body = resp.json()
         order = next(c for c in body["classes"] if c["name"] == "Order")
-        # Order has no dataset and no bridges — they should be absent or null/empty
+        # Order has no dataset, bridges or actions — absent or null/empty
         assert not order.get("dataset")
         assert not order.get("bridges")
+        assert not order.get("actions")
 
     def test_missing_domain_name_uses_session(self, client):
         mock_domain = MagicMock()

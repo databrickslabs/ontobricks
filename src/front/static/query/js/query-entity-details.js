@@ -454,6 +454,34 @@ async function showEntityDetails(entity) {
         `;
     }
 
+    // Unity Catalog function actions (each takes the entity ID as its only argument)
+    const actions = entityMapping?.actions || classInfo?.actions || [];
+    if (actions.length > 0) {
+        const buttons = actions.map(action => {
+            const fullName = action.fullName
+                || [action.catalog, action.schema, action.function].filter(Boolean).join('.');
+            if (!fullName) return '';
+            const label = action.function || fullName;
+            const title = action.description || `Run ${fullName}`;
+            return `
+                <div class="entity-detail-item">
+                    <button type="button"
+                            onclick="openEntityActionModal('${escapeHtml(entity.id)}', '${escapeHtml(fullName)}', '${escapeHtml(label)}')"
+                            class="btn btn-sm btn-outline-primary w-100"
+                            title="${escapeHtml(title)}">
+                        <i class="bi bi-lightning-charge me-1"></i>${escapeHtml(label)}
+                    </button>
+                </div>
+            `;
+        }).join('');
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-lightning-charge"></i> Actions</h6>
+                ${buttons}
+            </div>
+        `;
+    }
+
     // Cross-domain bridges
     const bridges = entityMapping?.bridges || classInfo?.bridges || [];
     if (bridges.length > 0) {

@@ -147,6 +147,7 @@ async function loadOntologyClasses() {
                     dashboardParams: cls.dashboardParams || {},
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
+                    actions: cls.actions || [],
                     description: cls.description || cls.comment || '',
                     dataProperties: cls.dataProperties || []
                 };
@@ -227,6 +228,7 @@ async function loadEntityMappings() {
                     dashboardParams: classInfo?.dashboardParams || {},
                     bridges: classInfo?.bridges || [],
                     dataset: classInfo?.dataset || null,
+                    actions: classInfo?.actions || [],
                     emoji: classInfo?.emoji || '📦',
                     description: classInfo?.description || '',
                     dataProperties: classInfo?.dataProperties || []

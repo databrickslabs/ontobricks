@@ -119,6 +119,30 @@ class TestBuildClassFromData:
         cls = Ontology.build_class_from_data({"name": "Customer"}, existing)
         assert cls["dataset"] == dataset
 
+    def test_actions_field(self):
+        actions = [
+            {
+                "catalog": "main",
+                "schema": "ops",
+                "function": "recompute_risk",
+                "fullName": "main.ops.recompute_risk",
+                "description": "Recompute the risk score",
+                "returns_table": False,
+            }
+        ]
+        cls = Ontology.build_class_from_data({"name": "Customer", "actions": actions})
+        assert cls["actions"] == actions
+
+    def test_actions_defaults_empty(self):
+        cls = Ontology.build_class_from_data({"name": "Customer"})
+        assert cls["actions"] == []
+
+    def test_actions_preserved_from_existing(self):
+        actions = [{"fullName": "main.ops.f", "description": "d"}]
+        existing = {"name": "Customer", "actions": actions}
+        cls = Ontology.build_class_from_data({"name": "Customer"}, existing)
+        assert cls["actions"] == actions
+
 
 class TestBuildPropertyFromData:
     def test_new_property(self):
