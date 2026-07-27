@@ -54,8 +54,7 @@ Package                                     Responsibility
 ``back.fastapi``                            GraphQL routes and domain HTTP helpers
 ``api``                                     External REST v1 + Knowledge Graph (mounted at ``/api``)
 ``back.core.databricks``                    Typed facades for Databricks SDK & SQL
-``back.core.triplestore``                   Abstract base + Delta view backend
-``back.core.graphdb``                       Pluggable Graph DB engines (Lakebase Postgres, …)
+``back.core.graphdb``                       ``GraphDBBackend`` base + per-domain engines (Lakebase Postgres, Unity Catalog Delta, Neo4j)
 ``back.core.w3c``                           OWL, RDFS, R2RML, SPARQL, SHACL services
 ``back.core.reasoning``                     OWL 2 RL inference + SWRL engine
 ``back.core.graphql``                       Strawberry GraphQL schema from ontology

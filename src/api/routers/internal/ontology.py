@@ -2100,12 +2100,10 @@ async def get_pitfalls_taxonomy():
     svc = PitfallsService()
     taxonomy = svc.get_taxonomy()
     if not taxonomy:
-        return {
-            "success": False,
-            "error": "Pitfall detection dependencies not installed. Run: pip install .[pitfalls]",
-            "taxonomy": [],
-            "available_patterns": [],
-        }
+        raise InfrastructureError(
+            "Pitfall detection unavailable",
+            detail="Pitfall detection dependencies not installed. Run: pip install .[pitfalls]",
+        )
     return {
         "success": True,
         "taxonomy": taxonomy,
@@ -2209,8 +2207,7 @@ async def get_pitfalls_results(task_id: str):
     tm = get_task_manager()
     task = tm.get_task(task_id)
     if not task:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail=f"Task {task_id!r} not found")
+        raise NotFoundError(f"Task {task_id!r} not found")
 
     return {
         "task_id": task_id,

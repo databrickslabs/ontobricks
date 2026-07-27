@@ -50,12 +50,12 @@ RST summaries; see the architecture guide for the full design document.
    api/app.core.external.pitfalls
    api/app.core.graphdb
    api/app.core.graphdb.lakebase
+   api/app.core.graphdb.neo4j
    api/app.core.graphql
    api/app.core.industry
    api/app.core.reasoning
    api/app.objects
    api/app.core.sqlwizard
-   api/app.core.triplestore
    api/app.core.w3c
    api/app.frontend
    api/app.config

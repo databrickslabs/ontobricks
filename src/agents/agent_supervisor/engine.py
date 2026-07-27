@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from agents.agent_supervisor.complexity import ComplexityReport, assess
+from agents.tracing import trace_agent
 from back.core.agents.AgentClient import get_agent_client
 from back.core.logging import get_logger
 
@@ -78,6 +79,7 @@ class SupervisorEngine:
         return report.recommended_engine, report
 
     @staticmethod
+    @trace_agent("supervisor:run")
     def run(
         *,
         task: str,

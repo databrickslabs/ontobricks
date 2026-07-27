@@ -17,6 +17,7 @@ import requests
 
 from back.core.logging import get_logger
 from agents.llm_utils import call_llm_with_retry
+from agents.tracing import trace_llm
 
 logger = get_logger(__name__)
 
@@ -59,6 +60,7 @@ class AgentStep:
 # =====================================================
 
 
+@trace_llm("agent:llm")
 def call_serving_endpoint(
     host: str,
     token: str,

@@ -22,7 +22,7 @@ Under the hood, SPARQL translates ontology mappings into Spark SQL — users nev
 | **FastAPI Application** | Routes → Domain Objects → Core layered architecture with GlobalConfigService, PermissionService, and BuildScheduler |
 | **LLM Agents** | MLflow-traced agentic loops for ontology generation, auto-mapping, icon mapping, and conversational assistance |
 | **Reasoning Engine** | OWL 2 RL deductive closure, SWRL rules (compiled to SQL), graph reasoning, and constraint validation |
-| **Triple Store Backends** | Delta-backed view in Unity Catalog plus a pluggable Graph DB engine (currently Lakebase Postgres) via the `GraphDBFactory` pattern, with BFS, shortest path, and transitive closure built in |
+| **Triple Store Backends** | Delta-backed view in Unity Catalog plus a per-domain pluggable Graph DB engine (Lakebase Postgres, Unity Catalog Delta, or Neo4j) via the `GraphDBFactory` pattern, with BFS, shortest path, and transitive closure built in |
 | **Databricks Platform** | Unity Catalog (metadata & governance), SQL Warehouse (query execution), UC Volumes (shared storage) |
 
 ---
@@ -171,7 +171,7 @@ LIMIT 100
 
 ### 5. Query Processing Pipeline (inspired by SANSA)
 
-**What it is**: OntoBricks translates ontology mappings into SQL queries to extract triples from Databricks tables and materialize them into a Delta view in Unity Catalog and into the configured Graph DB engine (Lakebase Postgres).
+**What it is**: OntoBricks translates ontology mappings into SQL queries to extract triples from Databricks tables and materialize them into a Delta view in Unity Catalog and into the domain's configured Graph DB engine (Lakebase Postgres, Unity Catalog Delta, or Neo4j).
 
 **How OntoBricks implements this** (inspired by the [SANSA Stack](https://github.com/SANSA-Stack)):
 
@@ -590,7 +590,7 @@ Long-running operations use the **TaskManager** pattern (`src/back/core/task_man
 
 | Task Type | Triggered By | Description |
 |-----------|-------------|-------------|
-| `triplestore_sync` | Knowledge Graph → Build | Generates and writes triples to Delta and the configured Graph DB engine (Lakebase) |
+| `triplestore_sync` | Knowledge Graph → Build | Generates and writes triples to Delta and the domain's configured Graph DB engine (Lakebase, Delta, or Neo4j) |
 | `quality_checks` | Knowledge Graph → Quality | Runs all quality checks sequentially with per-check progress |
 | `auto_assign` | Mapping → Auto-Map | Batch-maps entities and relationships via LLM; splits large jobs into chunks of `AUTO_ASSIGN_CHUNK_SIZE` with cooldown between chunks to avoid rate limits |
 **How it works:**
@@ -789,31 +789,43 @@ OntoBricks separates two concerns:
 1. **Triple Store** — the persistent, governance-controlled view of the triples in **Unity Catalog Delta** (`triplestore_<domain>_V<n>`). Always present, never optional.
 2. **Graph DB** — the queryable graph engine used by the Knowledge Graph, reasoning, and BFS / shortest-path helpers. Pluggable via the `GraphDBFactory` abstraction.
 
+The active Graph DB engine is chosen **per domain** via `graph_backend`
+(`lakebase` | `databricks` | `neo4j`), set under **Domain → Information →
+Knowledge Graph**; connection settings live under **Settings → Back end**.
+
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
 | **Delta Triple Store** | `view` | Databricks Delta view via SQL Warehouse | Spark SQL | Yes (R2RML output) |
 | **Lakebase Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the Delta view |
+| **Databricks Graph DB** | `graph` (engine `databricks`) | Delta flat-triple store on the SQL Warehouse (Unity Catalog) | Spark SQL | Mirror of the Delta view |
+| **Neo4j Graph DB** | `graph` (engine `neo4j`) | Bolt-connected Neo4j (Aura / self-hosted); flat-triple nodes per store | Cypher | Mirror of the Delta view |
 
 ### Backend Abstraction
 
-Both the Delta and Lakebase paths implement the single `GraphDBBackend` base (`src/back/core/graphdb/GraphDBBackend.py`) — `DeltaFlatStore` and `LakebaseFlatStore` respectively. The base exposes the same surface for:
+The Delta, Lakebase, and Neo4j paths each implement the single `GraphDBBackend` base (`src/back/core/graphdb/GraphDBBackend.py`) — `DeltaFlatStore`, `LakebaseFlatStore`, and `Neo4jStore` respectively. The base exposes the same surface for:
 
 - Table lifecycle: `create_table`, `drop_table`, `table_exists`
 - Triple operations: `insert_triples`, `query_triples`, `count_triples`
 - Named queries: `get_aggregate_stats`, `find_subjects_by_type`, `bfs_traversal`, …
 
-The single `GraphDBFactory` returns the configured engine (Delta view store, Lakebase, or the raw read-only `view` store). Capability flags on `GraphDBBackend` (`supports_cypher`, `is_cypher_backend`, `query_dialect`) are kept as architectural seams so future engines (Neo4j, Memgraph, Gremlin, …) can be added without rewiring the reasoning layer.
+The single `GraphDBFactory` returns the per-domain engine — Delta (`databricks`), Lakebase Postgres (`lakebase`), Neo4j (`neo4j`), or the raw read-only `view` store. Capability flags on `GraphDBBackend` (`supports_cypher`, `is_cypher_backend`, `query_dialect`) let SQL and Cypher engines coexist: SQL engines inherit the recursive-CTE named-query defaults, while `Neo4jStore` reports `supports_cypher = True`. Additional engines (Memgraph, Gremlin, …) can be added without rewiring the reasoning layer.
 
 ### Lakebase Graph DB Architecture
 
-Lakebase Postgres is the only currently shipped Graph DB engine. The implementation lives in `src/back/core/graphdb/lakebase/` (`LakebaseFlatStore`, `LakebaseBase`, `SyncedTableManager`).
+Lakebase Postgres is one of three shipped Graph DB engines (alongside the Delta/`databricks` store and Neo4j). The implementation lives in `src/back/core/graphdb/lakebase/` (`LakebaseFlatStore`, `LakebaseBase`, `SyncedTableManager`).
 
 **Storage model** — one flat `(subject, predicate, object)` table per domain version inside a configurable Postgres schema (default `ontobricks_graph`) on the App-bound Lakebase database. Connection comes from the same OAuth/M2M credential the registry hybrid backend uses.
 
-**Two write modes**, selected per domain in **Settings → Graph DB**:
+**Two write modes** (Lakebase only), configured under **Settings → Back end → Lakebase**:
 
 - `app_managed` (default) — the FastAPI app streams warehouse rows in `fetchmany` batches and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING`.
 - `managed_synced` — Databricks Lakeflow keeps a Postgres synced table (`g_<dom>_v<n>_sync`) in lock-step with the R2RML Delta view. The app only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`); a writable companion table (`g_<dom>_v<n>__app`) absorbs reasoning / cohort writes; readers see both via a UNION view (`g_<dom>_v<n>`). See `docs/graphdb-integration.md §9` for the full architecture.
+
+### Neo4j Graph DB Architecture
+
+Neo4j is a Cypher-native engine for domains whose `graph_backend` is `neo4j`. The implementation lives in `src/back/core/graphdb/neo4j/` and is split into a thin `Neo4jStore` façade over three services: `Neo4jConnection` (Bolt driver lifecycle + auth), `Neo4jWriteOps` (schema constraints and `UNWIND`/`MERGE` bulk writes), and `Neo4jReadOps` (statistics, entity lookup, KG-filter primitives, and reasoning helpers). Triples are stored as `(:<store_label> {subject, predicate, object})` nodes, one label per logical store so Neo4j 5+ single-label `CREATE CONSTRAINT` applies.
+
+Connection settings are configured under **Settings → Back end → Neo4j**. The Bolt password is resolved from the `NEO4J_PASSWORD` env var (a Databricks Apps secret resource) in the deployed app, falling back to the persisted `engine_config` only in local development; there is no raw-Cypher entry point (`execute_query` raises `NotImplementedError`) — all writes enter through `insert_triples` after ontology validation in the build pipeline. `neo4j>=5` ships as a core dependency (`pyproject.toml`).
 
 **Adding a new engine** — copy `src/back/core/graphdb/_starter_kit/ExampleStore.py`, implement the `GraphDBBackend` contract, register the engine key in `GraphDBFactory`, and add it to `ALLOWED_GRAPH_ENGINES`. Pure-SQL engines inherit the named-query defaults from `GraphDBBackend`; non-SQL engines (Cypher / Gremlin / SPARQL stores) override the relevant methods and may flip `supports_cypher` to re-enable the corresponding reasoning paths.
 
@@ -903,7 +915,7 @@ Where atoms are class assertions (`Person(?x)`) or property assertions (`worksIn
 - **Violation detection**: Finds instances where the antecedent holds but the consequent does not (generates `NOT EXISTS` subqueries)
 - **Materialization**: Inserts inferred consequent triples into the store (generates `INSERT` statements)
 
-**Backend dispatch**: All currently shipped backends are SQL — `DeltaFlatStore` (Spark SQL on the SQL Warehouse) and `LakebaseFlatStore` (Postgres SQL). The engine therefore always uses `SWRLSQLTranslator`. The capability flags (`supports_cypher`, `query_dialect`) on `GraphDBBackend` reserve the slot for a future Cypher / Gremlin engine; the matching translator can be plugged in without touching `SWRLEngine`.
+**Backend dispatch**: The two SQL backends — `DeltaFlatStore` (Spark SQL on the SQL Warehouse) and `LakebaseFlatStore` (Postgres SQL) — use `SWRLSQLTranslator`. The `Neo4jStore` engine reports `supports_cypher = True` and returns a `SWRLFlatCypherTranslator`, but that translator is currently scaffolded — full SWRL → Cypher reasoning lands in a follow-up; on Neo4j the SWRL materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphDBBackend` let the correct translator be selected per engine without touching `SWRLEngine`.
 
 **URI resolution**: The engine builds a lowercase-name → URI map from the ontology, normalizing property URIs to the data namespace used by R2RML so that SWRL atom names match the predicates stored in the triple store.
 
@@ -922,7 +934,7 @@ Graph reasoning leverages **OWL property characteristics** to perform structural
 - **Delta** & **Lakebase**: SQL `NOT EXISTS` anti-join
 
 **Shortest path**:
-- Currently SQL-only via BFS-bounded recursive CTE on the active graph engine. A native `SHORTEST` implementation can be re-enabled by a future Cypher / Gremlin engine through `GraphDBBackend`.
+- SQL engines (Delta, Lakebase) use a BFS-bounded recursive CTE. The Cypher-capable Neo4j engine can back this with a native `SHORTEST` path once its Cypher query translation is completed (currently scaffolded).
 
 ### Phase 4: Constraint Checking
 
@@ -940,8 +952,8 @@ Validates instance data in the triple store against formal ontology constraints:
 | Require labels | Global rule | Every typed entity has an `rdfs:label` |
 
 **Execution**:
-- On Cypher-capable engines (none currently shipped): constraint checks would run as Cypher queries via `ReasoningService`. On the SQL-based engines that ship today the constraint phase short-circuits with a `skipped` reason.
-- On **Delta**: Quality checks run as SQL queries via the Knowledge Graph quality pipeline
+- On the Cypher-capable **Neo4j** engine: constraint checks will run as Cypher queries via `ReasoningService` once the Cypher translation layer is completed (currently scaffolded, so the constraint phase short-circuits with a `skipped` reason).
+- On **Delta** & **Lakebase**: Quality checks run as SQL queries via the Knowledge Graph quality pipeline
 
 ### Reasoning Data Model
 
@@ -1467,7 +1479,7 @@ See [API Documentation](api.md) for complete endpoint reference.
 5. **Custom Visualizations**: Extend Sigma.js graph viewer in query template
 6. **Authentication Providers**: Add new auth methods in `DatabricksClient`
 7. **OntoViz Extensions**: Add new entity/relationship types, custom rendering
-8. **Graph DB Engines**: Implement `GraphDBBackend` in `src/back/core/graphdb/` (Lakebase Postgres and Unity Catalog Delta ship today; the `_starter_kit/ExampleStore.py` template plus `GraphDBFactory` make it straightforward to add Neo4j, Memgraph, or other engines).
+8. **Graph DB Engines**: Implement `GraphDBBackend` in `src/back/core/graphdb/` (Lakebase Postgres, Unity Catalog Delta, and Neo4j ship today; the `_starter_kit/ExampleStore.py` template plus `GraphDBFactory` make it straightforward to add Memgraph, Gremlin, or other engines).
 9. **Theming**: Modify OntoViz CSS variables for custom themes
 10. **SWRL Built-ins**: Extend the SWRL engine (`src/back/core/reasoning/SWRLEngine.py`) with additional built-in atoms beyond class and property assertions (e.g., math, string, comparison built-ins)
 11. **Reasoning Profiles**: Add new reasoning profiles beyond OWL 2 RL (e.g., OWL 2 EL) by implementing alternative reasoner classes in `src/back/core/reasoning/`

@@ -1,8 +1,9 @@
 ``back.core.graphdb.lakebase`` — Lakebase Postgres graph engine
 ===============================================================
 
-Flat triple tables on the App-bound Lakebase Postgres instance.
-Configured globally under **Settings → Graph DB** when ``engine=lakebase``.
+Flat triple tables on the App-bound Lakebase Postgres instance. Used when a
+domain's ``graph_backend`` is ``lakebase``; connection knobs live under
+**Settings → Back end → Lakebase**.
 
 Package
 -------

@@ -709,7 +709,7 @@ Some application-wide constants are not controlled by environment variables. The
 | Constant | Default | Description |
 |----------|---------|-------------|
 | `APP_NAME` | `"OntoBricks"` | Application display name |
-| `APP_VERSION` | `"0.9.0"` | Current version string |
+| `APP_VERSION` | *(read from `pyproject.toml`)* | Current version string, resolved at runtime by `_read_version()` |
 | `ONTOBRICKS_NS` | `http://ontobricks.com/schema#` | RDF namespace for OntoBricks extensions |
 | `DEFAULT_BASE_URI` | `http://ontobricks.com/ontology#` | Default ontology base URI |
 | `LLM_DEFAULT_MAX_TOKENS` | `4096` | Default max tokens for LLM generation |

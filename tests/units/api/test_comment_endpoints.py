@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 _comments = importlib.import_module("api.routers.internal.comments")
+_helpers = importlib.import_module("api.routers.internal._helpers")
 
 
 def _request(body=None, *, user_role="admin"):
@@ -25,7 +26,7 @@ def _request(body=None, *, user_role="admin"):
 async def test_list_comments_forwards_roles():
     with (
         patch.object(
-            _comments.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="viewer",
         ),
         patch.object(
@@ -51,7 +52,7 @@ async def test_add_comment_forwards_body_fields():
     }
     with (
         patch.object(
-            _comments.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="editor",
         ),
         patch.object(
@@ -73,7 +74,7 @@ async def test_add_comment_forwards_body_fields():
 async def test_resolve_comment_forwards_flag():
     with (
         patch.object(
-            _comments.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="editor",
         ),
         patch.object(
@@ -93,7 +94,7 @@ async def test_resolve_comment_forwards_flag():
 async def test_resolve_comment_defaults_resolved_true():
     with (
         patch.object(
-            _comments.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="editor",
         ),
         patch.object(
@@ -111,7 +112,7 @@ async def test_resolve_comment_defaults_resolved_true():
 async def test_list_tasks_delegates():
     with (
         patch.object(
-            _comments.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="viewer",
         ),
         patch.object(
@@ -130,7 +131,7 @@ async def test_list_tasks_delegates():
 async def test_list_assignees_delegates_per_domain():
     with (
         patch.object(
-            _comments.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="viewer",
         ),
         patch.object(
@@ -155,7 +156,7 @@ async def test_create_task_forwards_fields():
     }
     with (
         patch.object(
-            _comments.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="editor",
         ),
         patch.object(
@@ -176,7 +177,7 @@ async def test_create_task_forwards_fields():
 async def test_update_task_status_forwards_fields():
     with (
         patch.object(
-            _comments.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="viewer",
         ),
         patch.object(

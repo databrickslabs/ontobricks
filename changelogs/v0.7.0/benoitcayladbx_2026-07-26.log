@@ -338,3 +338,70 @@ Modified files:
 - tests/units/api/test_ui_rendering.py
 
 Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 22.15s
+
+## Code review follow-up: tracing, route dedup, error handling, docs
+
+Context: Global code review on develop (v0.7.0) flagged missing LLM-level
+MLflow tracing on the shared `call_serving_endpoint` path, duplicated
+`_roles`/`_body` helpers across comments and review routers, error-envelope
+violations in pitfalls routes, stale architecture/Sphinx docs (Neo4j still
+described as future, broken `triplestore` toctree entry, wrong `APP_VERSION`),
+and test patches pointing at removed module-level imports after the helper
+extraction.
+
+Changes:
+
+1. `src/agents/engine_base.py`
+   Applied `@trace_llm("agent:llm")` to `call_serving_endpoint` so every
+   function-based engine emits an LLM span (complies with
+   `.cursor/12-ai-feature-lifecycle.mdc`).
+2. `src/agents/agent_supervisor/engine.py`
+   Applied `@trace_agent("supervisor:run")` to the top-level routing entry.
+3. `src/api/routers/internal/_helpers.py`
+   Extracted shared `resolve_roles` and `read_json_body` helpers (Pull Up
+   Method per Fowler).
+4. `src/api/routers/internal/comments.py` +
+   `src/api/routers/internal/review.py`
+   Dropped duplicated local helpers; import from `_helpers`.
+5. `src/api/routers/internal/ontology.py`
+   Pitfalls taxonomy now raises `InfrastructureError` instead of a
+   `{"success": False}` envelope; pitfalls results raises `NotFoundError`
+   instead of bare `HTTPException` (complies with `.cursor/05 §Error Handling`).
+6. `src/agents/agent_ontology_assistant/responses_agent.py`
+   Upgraded `_call_llm` failure logging to `logger.exception` (traceback
+   preserved; streaming contract unchanged).
+7. `docs/sphinx/index.rst` + `docs/sphinx/api/app.core.graphdb.neo4j.rst` (new)
+   Removed broken `app.core.triplestore` toctree entry; added Neo4j API page.
+8. `docs/sphinx/api/app.core.graphdb.rst` +
+   `docs/sphinx/api/app.core.graphdb.lakebase.rst` +
+   `docs/sphinx/overview/architecture.rst`
+   Document Neo4j as a shipped backend; rename Settings → Back end.
+9. `docs/architecture.md`
+   Rewrote graph-backend sections: per-domain selection, Neo4j architecture
+   subsection, corrected reasoning dispatch claims.
+10. `docs/get-started.md` + `docs/deployment.md`
+    Fix `APP_VERSION` staleness; add Neo4j / graph-backend deployment note.
+11. `tests/units/api/test_comment_endpoints.py` +
+    `tests/units/api/test_review_endpoints.py`
+    Patch `SettingsService` on `_helpers` after the extraction.
+
+Modified files:
+- src/agents/engine_base.py
+- src/agents/agent_supervisor/engine.py
+- src/agents/agent_ontology_assistant/responses_agent.py
+- src/api/routers/internal/_helpers.py
+- src/api/routers/internal/comments.py
+- src/api/routers/internal/review.py
+- src/api/routers/internal/ontology.py
+- docs/sphinx/index.rst
+- docs/sphinx/api/app.core.graphdb.rst
+- docs/sphinx/api/app.core.graphdb.lakebase.rst
+- docs/sphinx/api/app.core.graphdb.neo4j.rst
+- docs/sphinx/overview/architecture.rst
+- docs/architecture.md
+- docs/get-started.md
+- docs/deployment.md
+- tests/units/api/test_comment_endpoints.py
+- tests/units/api/test_review_endpoints.py
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 21.11s
