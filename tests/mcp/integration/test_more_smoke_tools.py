@@ -339,8 +339,8 @@ class TestDescribeEntity:
             )
             text = _text(result)
             assert text, "describe_entity returned empty"
-            # If cache was populated, Context block should be present
-            # (allowed to be absent if select_domain mock was incomplete)
+            if "[Context" in text:
+                assert "main.crm.customers" in text or "Finance" in text
         except Exception as exc:
             from fastmcp.exceptions import ToolError
             if not isinstance(exc, ToolError):

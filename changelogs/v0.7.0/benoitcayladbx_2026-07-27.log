@@ -1,3 +1,19 @@
+## fix(mcp): reuse client in select_domain cache fetch; strengthen context test
+
+**Context:** Two small polish fixes for Task 4's implementation. Fix 1 eliminates a redundant nested `_client()` context manager inside `select_domain` — the cache fetch now reuses the already-open `client` from the outer block. Fix 2 adds a concrete assertion in `test_describe_entity_includes_context_block`: when `[Context` appears in the output, it must contain the expected dataset or bridge text.
+
+**Changes:**
+1. `src/mcp-server/server/app.py` — Removed inner `async with _client() as client:` block inside `select_domain`; class Actions cache fetch now calls `await _get(client, ...)` directly on the outer client.
+2. `tests/mcp/integration/test_more_smoke_tools.py` — Added `if "[Context" in text: assert "main.crm.customers" in text or "Finance" in text` assertion in `test_describe_entity_includes_context_block`.
+
+**Modified files:**
+- `src/mcp-server/server/app.py`
+- `tests/mcp/integration/test_more_smoke_tools.py`
+
+**Test result:** 7/7 MCP smoke tests pass; full suite 3317 passed, 275 skipped, 0 failures.
+
+---
+
 ## feat(mcp): class-actions cache + describe_entity [Context] enrichment
 
 **Context:** Task 4 of the MCP node-context feature. Wires the `GET /api/v1/domain/classes` endpoint (Task 2) into the MCP server: populates a `_class_actions` closure cache on `select_domain`, then enriches `describe_entity` output with a `[Context]` block showing the entity's linked dataset and bridge metadata.

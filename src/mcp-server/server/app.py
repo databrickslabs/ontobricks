@@ -946,14 +946,13 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             # contract) and only added a wasted round trip.
             _ontology_labels.clear()
             _class_actions.clear()
-            # Fetch class Actions for the selected domain
+            # Fetch class Actions for the selected domain — reuse the same client
             try:
-                async with _client() as client:
-                    cls_data = await _get(
-                        client,
-                        API_V1_DOMAIN_CLASSES,
-                        params={**_registry_params(), "domain_name": domain_name},
-                    )
+                cls_data = await _get(
+                    client,
+                    API_V1_DOMAIN_CLASSES,
+                    params={**_registry_params(), "domain_name": domain_name},
+                )
                 for cls in cls_data.get("classes", []):
                     uri = cls.get("uri", "")
                     if uri:
