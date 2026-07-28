@@ -73,6 +73,17 @@ class TestSQLHelpers:
         with pytest.raises(ValidationError):
             SQLHelpers.validate_table_name("   ")
 
+    def test_validate_uc_identifier_accepts_hyphen(self):
+        assert SQLHelpers.validate_uc_identifier("my-catalog", role="catalog") == "my-catalog"
+
+    def test_validate_uc_identifier_rejects_injection(self):
+        from back.core.errors import ValidationError
+        with pytest.raises(ValidationError, match="Invalid UC catalog"):
+            SQLHelpers.validate_uc_identifier("cat; DROP", role="catalog")
+
+    def test_quote_uc_fqn(self):
+        assert SQLHelpers.quote_uc_fqn("main", "default", "tbl") == "`main`.`default`.`tbl`"
+
     def test_effective_view_table_from_domain(self):
         class FakeDomain:
             delta = {"catalog": "cat", "schema": "sch"}
