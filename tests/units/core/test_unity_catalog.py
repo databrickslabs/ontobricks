@@ -117,30 +117,22 @@ class TestGetTables:
 
 
 class TestListFunctions:
-    @patch.object(_unity_catalog_mod.requests, "get")
-    def test_returns_functions_with_param_metadata(self, mock_get, auth_with_warehouse):
-        mock_get.return_value = Mock(
-            raise_for_status=Mock(),
-            json=Mock(
-                return_value={
-                    "functions": [
-                        {
-                            "name": "recompute_risk",
-                            "full_name": "main.ops.recompute_risk",
-                            "comment": "Recompute the risk score",
-                            "data_type": "STRING",
-                            "input_params": {"parameters": [{"name": "entity_id"}]},
-                        },
-                        {
-                            "name": "risk_history",
-                            "data_type": "TABLE_TYPE",
-                            "input_params": {
-                                "parameters": [{"name": "entity_id"}, {"name": "days"}]
-                            },
-                        },
-                    ]
-                }
-            ),
+    @patch("databricks.sql.connect")
+    def test_returns_functions_with_param_metadata(
+        self, mock_connect, auth_with_warehouse
+    ):
+        mock_cursor = _make_sql_mocks(
+            mock_connect,
+            fetchall=[
+                [
+                    "recompute_risk",
+                    "STRING",
+                    "Recompute the risk score",
+                    "entity_id",
+                ],
+                ["risk_history", "TABLE_TYPE", None, "days,entity_id"],
+                ["no_args", "STRING", "", ""],
+            ],
         )
         uc = UnityCatalog(auth_with_warehouse)
         out = uc.list_functions("main", "ops")
@@ -158,19 +150,35 @@ class TestListFunctions:
                 "name": "risk_history",
                 "full_name": "main.ops.risk_history",
                 "comment": "",
-                "input_params": ["entity_id", "days"],
+                "input_params": ["days", "entity_id"],
                 "param_count": 2,
                 "returns_table": True,
             },
+            {
+                "name": "no_args",
+                "full_name": "main.ops.no_args",
+                "comment": "",
+                "input_params": [],
+                "param_count": 0,
+                "returns_table": False,
+            },
         ]
-        _, kwargs = mock_get.call_args
-        assert kwargs["params"] == {"catalog_name": "main", "schema_name": "ops"}
+        call_sql, call_params = mock_cursor.execute.call_args[0]
+        # Parameter listing must come from information_schema: the REST
+        # /functions collection endpoint does not populate input_params.
+        assert "`main`.information_schema.routines" in call_sql
+        assert "`main`.information_schema.parameters" in call_sql
+        assert "p.parameter_mode   = 'IN'" in call_sql
+        assert call_params == ("ops",)
 
-    @patch.object(_unity_catalog_mod.requests, "get")
-    def test_returns_empty_list_on_error(self, mock_get, auth_with_warehouse):
-        mock_get.side_effect = RuntimeError("boom")
+    @patch("databricks.sql.connect", side_effect=RuntimeError("boom"))
+    def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):
         uc = UnityCatalog(auth_with_warehouse)
         assert uc.list_functions("main", "ops") == []
+
+    def test_rejects_invalid_schema_identifier(self, auth_with_warehouse):
+        uc = UnityCatalog(auth_with_warehouse)
+        assert uc.list_functions("main", "ops; DROP TABLE x") == []
 
 
 class TestGetTableColumns:
