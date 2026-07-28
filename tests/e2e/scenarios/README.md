@@ -1,7 +1,9 @@
 # Scenario campaign (live E2E integration)
 
 These suites are a **single, ordered journey** over one durable domain
-(`test_scenario_1`) against a **running** OntoBricks app. Unlike the unit/mcp
+(named `TestScenario1`, registry folder `testscenario1`) against a **running**
+OntoBricks app. Domain names must be CamelCase alphanumeric; the folder is the
+sanitized lowercase form and is what appears in REST paths. Unlike the unit/mcp
 suites they are stateful, order-dependent, billable (warehouse + LLM), and
 mutate the registry the app reads — so they are **opt-in** (`-m scenario`,
 gated by `ONTOBRICKS_SCENARIO_LIVE=1`) and excluded from routine/agent runs.
