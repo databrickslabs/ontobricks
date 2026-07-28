@@ -679,7 +679,8 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | All pages | Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Registry, Domain, Knowledge Graph), Ontology/Mapping links under Domain dropdown, Settings link, warehouse status, task tracker |
 | Home `/` | Hero section, domain panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About) |
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
-| Registry `/registry/` | Registry domains section, schedules table, API endpoint cards |
+| Registry modal (`/?open=registry`) | Navbar archive icon → Browse + Bridges modal |
+| Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Build Analytics); Developer → API |
 | Ontology `/ontology` | Sidebar section groups: Ontology Editor (Information, Import, Generate, Model, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms), W3C Standards (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar with 6 section links (Information, Designer, Manual, Auto-Map, R2RML, Spark SQL), mapping-core.js |
 | Domain `/domain` | Sidebar with 6 section links (Information, Metadata, Documents, Validation, OWL, R2RML), section divs |
@@ -985,37 +986,30 @@ These endpoints are admin-only.
    [Service Principal Setup](#service-principal-setup)).
 3. A Registry is configured in OntoBricks (Settings → Registry tab).
 
-#### Adding a User or Group
+#### Adding a User or Group (domain roles)
 
 1. Open OntoBricks and click the **gear icon** (⚙) in the navbar to go
    to Settings.
-2. Select the **Permissions** tab.
-3. Click the **Add** button.
-4. In the modal:
-   - Select **User** or **Group**.
-   - Search and select from the dropdown. The list shows users and groups
-     that have permissions on the Databricks App (CAN_USE or CAN_MANAGE).
-   - Choose a role: **Viewer**, **Editor**, or **Builder**.
-5. Click **Add**. The entry is immediately saved to the Registry.
+2. Open **Admin → Teams**.
+3. Assign **Viewer**, **Editor**, or **Builder** roles per domain in the
+   matrix. Principals listed there come from Databricks App permissions
+   (`CAN_USE` / `CAN_MANAGE`).
+4. Click **Save**. Changes are written to the Registry.
 
-#### Changing a Role
+#### Changing or clearing a role
 
-In the Permissions tab, use the **role dropdown** next to any entry to
-switch between Viewer and Editor. Changes are saved automatically.
-
-#### Removing a User or Group
-
-Click the **trash icon** next to the entry and confirm the deletion.
+In the Teams matrix, use the role dropdown for a principal/domain cell.
+Clear a role to revoke domain access. Save when done.
 
 #### Important Notes
 
-- The permission list only controls users who are **not** admins.
-  Users with `CAN_MANAGE` always have full admin access regardless of
-  whether they appear in the list.
-- The user/group picker only shows principals that already have
-  permissions on the Databricks App (CAN_USE or CAN_MANAGE). To add
-  someone who doesn't appear in the list, first grant them `CAN_USE`
-  on the Databricks App.
+- App-level access is managed only in **Databricks → Apps → Permissions**.
+  OntoBricks no longer has a separate Settings → Permissions page.
+- Users with `CAN_MANAGE` always have full admin access regardless of
+  domain-role assignments.
+- The Teams matrix only shows principals that already have permissions
+  on the Databricks App. To add someone who doesn't appear, first grant
+  them `CAN_USE` on the Databricks App.
 
 ---
 
@@ -1067,7 +1061,7 @@ permission system is **completely disabled**:
 
 - Every user gets `role = admin`.
 - All pages and features are accessible.
-- The Settings page and Permissions tab work normally.
+- The Settings page and Admin → Teams matrix work normally.
 - No Databricks App permissions or `.permissions.json` are checked.
 
 This allows local development and testing without any permission setup.
@@ -1081,7 +1075,7 @@ to **admin users only**. This includes:
 
 - The General tab (Databricks connection, SQL Warehouse).
 - The Registry tab (Unity Catalog Volume configuration).
-- The Permissions tab (user/group role management).
+- The Admin → Teams matrix (per-domain role management).
 - The About tab.
 
 Non-admin users:
@@ -1128,9 +1122,7 @@ user has no access to any part of the application.
 |----------|--------|------|-------------|
 | `/settings/permissions/me` | GET | Bypassed | Returns the current user's email, role, and `is_app_admin` flag. Used by the UI to show/hide admin elements. |
 | `/settings/permissions/diag` | GET | Bypassed | Diagnostic: returns SDK auth details, CAN_MANAGE principals, cache state. |
-| `/settings/permissions` | GET | Admin | Lists all permission entries. |
-| `/settings/permissions` | POST | Admin | Adds or updates a permission entry. Body: `{ principal, principal_type, display_name, role }`. |
-| `/settings/permissions/{principal}` | DELETE | Admin | Removes a permission entry. |
+| `/settings/permissions` | GET | Admin | Lists Databricks App principals (users + groups). Used by Teams. |
 | `/settings/permissions/principals` | GET | Admin | Lists users and groups from the Databricks App permissions for the add-user picker. |
 
 ---
@@ -1145,7 +1137,7 @@ To reduce API calls, the permission system caches several results:
 | Permission file | 5 minutes | Contents of `.permissions.json`. Forced refresh on add/update/delete operations. |
 | App principals | 10 minutes | Users/groups from the Databricks App permissions API. Cleared before loading the add-user picker. |
 
-Permission changes made through the Settings UI take effect immediately
+Permission changes made through Settings → Admin → Teams take effect immediately
 because the relevant caches are invalidated. Changes made externally
 (e.g., granting `CAN_MANAGE` in the Databricks UI) are picked up on the
 next page load since the admin cache is always cleared before checking.

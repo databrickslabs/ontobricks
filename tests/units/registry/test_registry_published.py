@@ -76,3 +76,43 @@ def test_set_version_status_delegates_to_store():
     assert ok, msg
     _, data, _ = svc.read_version("demo", "1")
     assert data["info"]["status"] == "IN-REVIEW"
+
+
+def test_load_published_domain_data_cached_serves_from_cache():
+    from back.objects.registry.registry_cache import invalidate_registry_cache
+
+    invalidate_registry_cache()
+    svc = _svc()
+    _write(svc, "demo", "1", "PUBLISHED")
+
+    ok, _data, ver, err = svc.load_published_domain_data_cached("demo")
+    assert ok and ver == "1" and err == ""
+
+    # Directly mutate the store without going through the service (so no
+    # cache invalidation) — the cached result must still be served.
+    svc._store.write_version(
+        "demo", "2", {"info": {"name": "demo", "status": "PUBLISHED"}}
+    )
+    ok2, _d2, ver2, _e2 = svc.load_published_domain_data_cached("demo")
+    assert ver2 == "1"  # cache hit, not the new v2
+
+    # A version write *through the service* invalidates the cache.
+    svc.write_version("demo", "3", {"info": {"name": "demo", "status": "PUBLISHED"}})
+    ok3, _d3, ver3, _e3 = svc.load_published_domain_data_cached("demo")
+    assert ver3 == "3"
+    invalidate_registry_cache()
+
+
+def test_list_mcp_domains_filters_published_via_metadata():
+    from back.objects.registry.registry_cache import invalidate_registry_cache
+
+    invalidate_registry_cache()
+    svc = _svc()
+    _write(svc, "pub", "1", "PUBLISHED")
+    _write(svc, "draft_only", "1", "DRAFT")
+
+    ok, items, _ = svc.list_mcp_domains()
+    assert ok
+    names = {d["name"] for d in items}
+    assert names == {"pub"}
+    invalidate_registry_cache()

@@ -417,9 +417,27 @@ class Mapping:
                 mapping_run_log=merged_mapping_run_log or None,
             )
 
+            # Distinguish two failure modes in the completion message:
+            #   (a) chunk-level agent failures (LLM call raised / returned
+            #       agent_result.error) — captured in ``chunk_errors``.
+            #   (b) per-item "no mapping generated" — the agent ran
+            #       cleanly but couldn't (or chose not to) emit a mapping
+            #       for some ontology entries. Common when the source
+            #       table has no columns matching the concept.
+            # The original message conflated both into "(2 chunks had
+            # errors)" which read as a bug. Split them so reviewers can
+            # tell environmental issues apart from "expected — nothing
+            # in the data to map onto".
+            unmapped_items = total_items - e_count - r_count
             message = f"Completed: {e_count} entities, {r_count} relationships mapped"
+            tail_parts = []
             if chunk_errors:
-                message += f" ({len(chunk_errors)} chunk(s) had errors)"
+                tail_parts.append(f"{len(chunk_errors)} chunk(s) errored")
+            no_mapping_items = max(unmapped_items - 0, 0)  # explicit; clarity
+            if no_mapping_items > 0:
+                tail_parts.append(f"{no_mapping_items} item(s) without a generated mapping")
+            if tail_parts:
+                message += " (" + ", ".join(tail_parts) + ")"
 
             tm.complete_task(
                 task.id,
@@ -429,6 +447,8 @@ class Mapping:
                         "total": total_items,
                         "success": e_count + r_count,
                         "failed": total_items - e_count - r_count,
+                        "chunk_errors_count": len(chunk_errors),
+                        "chunk_errors": chunk_errors,  # NEW — exposed for UI/debug
                     },
                     "entity_mappings": all_entity_mappings,
                     "relationship_mappings": all_relationship_mappings,

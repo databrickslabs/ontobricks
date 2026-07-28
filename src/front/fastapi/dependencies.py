@@ -162,7 +162,7 @@ def triplestore_page_context(domain_session, settings=None) -> dict:
         or "lakebase"
     )
     _raw = GraphDBFactory._resolve_graph_engine(domain_session, settings) or "lakebase"
-    graph_engine = _raw if _raw == "lakebase" else "lakebase"
+    graph_engine = _raw
 
     return {
         "view_table": effective_view_table(domain_session),

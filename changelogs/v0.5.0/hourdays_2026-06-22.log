@@ -1,0 +1,92 @@
+## Move Neo4j Bolt password to a Databricks Apps secret resource
+
+**Context:** Benoit's PR #47 review on 2026-06-18 flagged that the Neo4j password was being persisted in clear inside `global_config.graph_engine_config` — a blocker for any customer deployment. Switching to a Databricks Apps **secret resource** declared in `app.yaml` and injected as the `NEO4J_PASSWORD` env var at runtime; the persisted JSON `password` is stripped at save-time, so no clear-text credential ever lands in the database. Local development keeps the existing `engine_config.password` fallback (guarded by `DATABRICKS_APP_PORT` to detect the deployed environment).
+
+**Changes:**
+1. `src/back/core/graphdb/neo4j/Neo4jStore.py` — `_resolve_auth()` now reads `NEO4J_PASSWORD` env var first (logged as source); in the deployed app (`DATABRICKS_APP_PORT` set) the env var becomes mandatory and a missing variable raises `InfrastructureError` with a clear remediation pointer. Local-dev path unchanged (`engine_config.password`). New module-level helper `is_neo4j_password_from_secret()` exposes the credential source to other layers. Switched `ValueError` → `ValidationError` on the user-input validation branches (aligned with `back.core.errors` hierarchy from `src/.coding_rules.md §4`). Constant `NEO4J_PASSWORD_ENV` added.
+2. `app.yaml.template` — declared the `neo4j-password` resource (`secret: permission: READ`) and the `NEO4J_PASSWORD` env var with `valueFrom: neo4j-password`. The resource is **Unbound** by default; the admin binds it via the Apps UI to a workspace secret (scope/key) before activating the Neo4j engine.
+3. `src/back/objects/domain/SettingsService.py` — `set_graph_engine_config_result()` strips `password` from the incoming `engine_config` dict whenever `NEO4J_PASSWORD` is set in the environment. Defence-in-depth: even if the UI sends a password, the persisted JSON never contains it.
+4. `src/front/routes/home.py` — settings page context now exposes `neo4j_password_from_secret` so the Jinja template can render the credential-source badge.
+5. `src/front/templates/settings.html` — Neo4j settings form: password label gains a dynamic badge (`From Apps secret` green / `Local-dev fallback` yellow) and the input is `disabled` with a `••••••••` placeholder when the secret is bound. Help text below points to the new docs page.
+6. `src/front/static/config/js/settings.js` — `mergeNeo4jPanelIntoConfigTextarea()` never serialises the password field when the input is disabled (Apps secret in place), preventing stale clear-text values from being re-sent on save.
+7. `docs/pr47-neo4j-demo/secret-configuration.md` (new) — step-by-step admin guide: `databricks secrets put-secret` → bind the `neo4j-password` resource → verify in Settings UI → troubleshooting table.
+8. `tests/units/graphdb/test_neo4j_store.py` — new `TestPasswordSourcing` class with 7 unit tests covering helper behaviour and every branch of `_resolve_auth` (env-var-wins, local-dev fallback, prod refusal, missing creds, missing username).
+
+**Modified files:**
+- `src/back/core/graphdb/neo4j/Neo4jStore.py`
+- `app.yaml.template`
+- `src/back/objects/domain/SettingsService.py`
+- `src/front/routes/home.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `docs/pr47-neo4j-demo/secret-configuration.md` (new)
+- `tests/units/graphdb/test_neo4j_store.py`
+
+**Test result:** `python3 -m py_compile` on every changed `.py` — OK. `node --check` on `settings.js` — OK. Jinja2 lex of `settings.html` — OK. Inline logic test of the 8 `_resolve_auth` + helper paths via stubs — all assertions pass. Full `pytest tests/units/graphdb/test_neo4j_store.py::TestPasswordSourcing` deferred (uv environment offline locally; will run in CI).
+
+## Log the executed Cypher at INFO (PR #47 review – Benoit 2026-06-18)
+
+**Context:** Benoit's PR #47 review asked that every Cypher statement run by the Neo4j backend be visible in the Databricks app logs at INFO level — without leaking secrets — so operators can correlate UI actions (filters, builds, GraphQL resolvers) with the backend query. Bolt-bound parameters are kept at DEBUG only (they don't carry credentials — auth lives on the driver, not the session — but they may carry URIs/literals from the build pipeline that don't belong in default INFO logs). Single-line, whitespace-flattened, truncation-marked snippets so logs stay grep-friendly.
+
+**Changes:**
+1. `src/back/core/graphdb/neo4j/Neo4jStore.py` — `_run()` now emits one INFO log line per call: `"Cypher (<n> rows, <ms> ms): <flattened cypher>"`. Bound `params` go to DEBUG. Added module-level helper `_normalise_cypher_for_log()` that collapses runs of whitespace to single spaces and truncates beyond `_CYPHER_LOG_MAX` (1500 chars) with a `"… (truncated)"` marker — caps log line size without dropping context. New imports: `re`, `time`.
+2. `tests/units/graphdb/test_neo4j_store.py` — new `TestCypherLogging` class with 3 unit tests: whitespace flattening, long-cypher truncation, and end-to-end verification that `_run` emits the expected INFO line with row count, duration, flattened cypher, and **no leakage of bound parameter values** into INFO logs.
+
+**Modified files:**
+- `src/back/core/graphdb/neo4j/Neo4jStore.py`
+- `tests/units/graphdb/test_neo4j_store.py`
+
+**Test result:** `python3 -m py_compile` — OK. Inline run of `_run` against a fake driver confirmed: 1 INFO line emitted, row count + duration + flattened multi-line cypher present, bound `$s = 'ex:value'` param **absent** from the INFO log. Truncation + whitespace-flattening helpers verified. Full pytest suite deferred to CI (uv offline locally).
+
+## Fix Settings page engine-selector flash (PR #47 review – Benoit 2026-06-18)
+
+**Context:** Benoit's review caught a UX flicker on the Settings page: the *Triple store > Global > Graph DB Engine* selector painted `Lakebase` (the first `<option>`) for a fraction of a second on every page load before the lazy JS fetch on `/settings/graph-engine` came back and replaced the value with `Neo4j`. Fix is to resolve the persisted engine **server-side** during the page render and emit the correct `selected` attribute on the right `<option>` so the first paint already matches the persisted state. Also align the Lakebase sub-panel visibility (`applyGraphDbEnginePanels()`) before the lazy fetch so its display state doesn't flicker either.
+
+**Changes:**
+1. `src/front/routes/home.py` — settings page route now depends on `Settings` and calls `SettingsService.get_graph_engine_result(session_mgr, settings)` to resolve the persisted engine before rendering. Failure is non-fatal: a warning is logged and the template falls back to `"lakebase"` (matches the previous behaviour, so no regression in degraded mode).
+2. `src/front/templates/settings.html` — `<option value="lakebase">` / `<option value="neo4j">` gain a `{% if graph_engine == "<name>" %}selected{% endif %}` clause; the `<select>` also carries a `data-server-rendered-engine="{{ graph_engine|default('lakebase') }}"` attribute for future JS reconciliation if needed.
+3. `src/front/static/config/js/settings.js` — the `DOMContentLoaded` init block now calls `applyGraphDbEnginePanels()` once at start so the Lakebase sub-panel's visibility matches the server-rendered engine selector before any async fetch runs.
+
+**Modified files:**
+- `src/front/routes/home.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+**Test result:** `python3 -m py_compile` on `home.py` — OK. `node --check` on `settings.js` — OK. Jinja2 `env.lex` on `settings.html` — 347 tokens parsed cleanly, both `{% if graph_engine == "..." %}selected{% endif %}` markers present, `data-server-rendered-engine` attribute present. Functional verification (no flash) deferred to the deployed-app smoke test (#73).
+
+## Split Neo4jStore.py into 4 cohesive modules (PR #47 review – Benoit 2026-06-18)
+
+**Context:** Benoit's review flagged that `Neo4jStore.py` had grown to 1028 LoC mixing four orthogonal concerns: driver/auth lifecycle, schema, bulk writes, and read queries. Per the project's Fowler-vocabulary convention (`src/.coding_rules.md §9`) this is **Large Class → Extract Class**. The split produces three new services held by a thin Store façade; the public ``Neo4jStore`` API is unchanged so the factory and all callers continue to work.
+
+**Fowler refactorings applied:**
+1. **Extract Class** — driver lifecycle, auth resolution, and the single ``run()`` execution path become :class:`Neo4jConnection` (`Neo4jConnection.py`). Owns ``_resolve_auth``, ``_is_deployed_app``, ``get_driver``, ``close``, ``run``, and the Cypher-logging helpers (``_normalise_cypher_for_log``, ``_CYPHER_LOG_MAX``, ``_WHITESPACE_RE``). The ``NEO4J_PASSWORD_ENV`` constant and the ``is_neo4j_password_from_secret`` module helper live here too.
+2. **Extract Class** — schema + bulk writes become :class:`Neo4jWriteOps` (`Neo4jWriteOps.py`). Owns ``create_table``, ``drop_table``, ``insert_triples``, ``delete_triples``, ``optimize_table``, ``delete_cohort_triples``. Module-level helper ``sanitise_label`` (used by every op to derive the Cypher node label from a table name).
+3. **Extract Class** — read queries become :class:`Neo4jReadOps` (`Neo4jReadOps.py`). Owns the 16+ named-query methods: statistics (``get_aggregate_stats``, ``get_type_distribution``, ``get_predicate_distribution``), entity lookup (``find_subjects_by_type``, ``resolve_subject_by_id``, ``get_entity_metadata``, ``get_triples_for_subjects``, ``get_predicates_for_type``), pagination (``paginated_triples``, ``paginated_count``), the KG-filter primitives Benoit asked about (``bfs_traversal``, ``find_seed_subjects``, ``find_subjects_by_patterns``, ``expand_entity_neighbors``), and the reasoning helpers (``transitive_closure``, ``symmetric_expand``, ``shortest_path``).
+4. **Façade pattern** — ``Neo4jStore`` becomes a thin composition holding the three services and exposing the unchanged ``GraphDBBackend`` interface. Every method is a one-line delegator. Back-compat: keeps ``_run`` (passthrough to ``Neo4jConnection.run``), ``_resolve_auth`` (delegate), ``_is_deployed_app`` (staticmethod delegate), and a ``_driver`` property whose setter writes through to ``self._connection._driver`` (preserves tests that swap in a fake driver).
+
+**Public API preservation:**
+- All ``Neo4jStore(...)`` constructor signatures unchanged.
+- All ``TripleStoreBackend`` / ``GraphDBBackend`` methods unchanged.
+- ``__init__.py`` re-exports both the legacy symbols (``Neo4jStore``, ``is_neo4j_password_from_secret``) AND the new types (``Neo4jConnection``, ``Neo4jWriteOps``, ``Neo4jReadOps``) so external callers can pick either entry point.
+- ``Neo4jStore`` itself re-exports ``_normalise_cypher_for_log`` and the auth constants for the legacy import path.
+
+**Test updates:**
+- `tests/units/graphdb/test_neo4j_store.py` — helper ``_store(...)`` now mocks ``s._connection.run`` (the new execution layer) and aliases ``s._run`` to the same mock so existing assertions on ``s._run.call_args`` keep working unchanged. No assertion in any existing test class needed a logic change.
+- `TestCypherLogging::test_run_emits_info_log_with_cypher_and_metrics` — updated the ``caplog.at_level(logger=...)`` name from ``back.core.graphdb.neo4j.Neo4jStore`` to ``ontobricks.core.graphdb.neo4j.Neo4jConnection`` (correct post-split + accounts for ``get_logger``'s ``back.`` → ``ontobricks.`` prefix rewrite).
+
+**Modified files:**
+- `src/back/core/graphdb/neo4j/Neo4jStore.py` (was 1028 LoC → 435 LoC, all delegators)
+- `src/back/core/graphdb/neo4j/__init__.py` (re-exports the four new types + legacy symbols)
+- `src/back/core/graphdb/neo4j/Neo4jConnection.py` (new — 227 LoC)
+- `src/back/core/graphdb/neo4j/Neo4jWriteOps.py` (new — 156 LoC)
+- `src/back/core/graphdb/neo4j/Neo4jReadOps.py` (new — 614 LoC)
+- `tests/units/graphdb/test_neo4j_store.py` (mock target updated to `s._connection.run`; logger name corrected)
+
+**File-size verification (per `src/.coding_rules.md §12` expectation that each file stays < 800 LoC):**
+- `Neo4jStore.py`        435 LoC ✓
+- `Neo4jConnection.py`   227 LoC ✓
+- `Neo4jWriteOps.py`     156 LoC ✓
+- `Neo4jReadOps.py`      614 LoC ✓
+- All four files single-class, name-matches-PascalCase.
+
+**Test result:** `python3 -m py_compile` on every new/changed `.py` — OK. Inline equivalence harness (mocking `s._connection.run` + replaying each existing test class' call pattern) — all 18 assertions pass: construction errors, capability flags, sanitisation, every CRUD method (create/drop/insert/empty/count/exists/status/execute_query refusal), every named query reachable through the façade (`get_aggregate_stats`, `find_subjects_by_type`), all three `TestPasswordSourcing` env-var paths via the back-compat `_resolve_auth` delegate, `TestCypherLogging` end-to-end (fake driver → INFO log captured from the correct logger, no param leak, no truncation, whitespace flattening). Full `pytest` deferred to CI (uv environment offline locally).

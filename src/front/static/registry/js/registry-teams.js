@@ -1,5 +1,5 @@
 /**
- * Registry → Teams
+ * Settings → Admin → Teams
  *
  * Matrix UI that assigns per-domain roles to Databricks App principals.
  * Rows = users/groups, columns = domains, cells = role dropdown.

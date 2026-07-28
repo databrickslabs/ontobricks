@@ -552,10 +552,46 @@ function updateDtwinCard(data) {
         }
     }
 
-    // Graph DB card — Lakebase details
+    // Graph DB card — render engine-aware title and architecture.
+    //
+    // `dt.graph_engine` is the engine recorded on the domain at build time and
+    // can be stale relative to the active global engine. Reconcile unconditionally
+    // against `/settings/graph-engine`.
     var eng = dt.graph_engine || 'lakebase';
-    var titleGraph = document.getElementById('psDtGraphBackendTitle');
-    if (titleGraph) titleGraph.textContent = 'Graph DB (Lakebase)';
+    var engineLabels = {
+        'lakebase': 'Graph DB (Lakebase)',
+        'neo4j':    'Graph DB (Neo4j)'
+    };
+
+    function _psRenderEngineUi(activeEng) {
+        var container = document.getElementById('psDtLakebaseDetails');
+        var titleEl   = document.getElementById('psDtGraphBackendTitle');
+        var lkIcon    = document.querySelector('#psDtGraphCard .dt-arch-icon-lakebase-img');
+        var syncRow   = document.getElementById('psDtLakebaseSyncedUcRow');
+        var boltRow   = document.getElementById('psDtNeo4jBoltCard');
+        var graphFn   = document.getElementById('psDtLakebaseFullName');
+        if (container) container.classList.remove('d-none');
+        if (titleEl)   titleEl.textContent = engineLabels[activeEng] || ('Graph DB (' + activeEng + ')');
+        if (activeEng === 'neo4j') {
+            if (syncRow) syncRow.classList.add('d-none');
+            if (boltRow) boltRow.classList.remove('d-none');
+            if (lkIcon)  lkIcon.classList.add('d-none');
+            if (graphFn) graphFn.textContent = (dt.graph_name || 'Knowledge Graph');
+        } else {
+            if (syncRow) syncRow.classList.remove('d-none');
+            if (boltRow) boltRow.classList.add('d-none');
+            if (lkIcon)  lkIcon.classList.remove('d-none');
+        }
+    }
+    _psRenderEngineUi(eng);
+    fetch('/settings/graph-engine', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+            var globalEng = data && data.graph_engine;
+            if (!globalEng || globalEng === eng) return;
+            _psRenderEngineUi(globalEng);
+        })
+        .catch(function () { /* leave fallback in place */ });
 
     var graphCard = document.getElementById('psDtGraphCard');
     if (graphCard) {
@@ -563,9 +599,6 @@ function updateDtwinCard(data) {
         if (dt.lakebase_table_exists === true) graphCard.classList.add('border-success');
         else if (dt.lakebase_table_exists === false) graphCard.classList.add('border-danger');
     }
-
-    var lkDetails = document.getElementById('psDtLakebaseDetails');
-    if (lkDetails) lkDetails.classList.toggle('d-none', eng !== 'lakebase');
 
     if (eng === 'lakebase') {
         var psDb  = document.getElementById('psDtLakebaseDatabase');

@@ -178,12 +178,12 @@ Open your browser to: **http://localhost:8000**
 
 When running as a Databricks App, OntoBricks enforces role-based access control:
 
-- **Admin**: Users with **CAN_MANAGE** on the Databricks App. They can manage the permission list in **Settings → Permissions**.
+- **Admin**: Users with **CAN_MANAGE** on the Databricks App. They can manage per-domain roles in **Settings → Admin → Teams**.
 - **Editor**: Full read/write access to all features.
 - **Viewer**: Read-only access.
 - **No role**: Blocked from accessing the app entirely.
 
-> **First-time setup**: When no permissions are configured yet, only users with **CAN_MANAGE** on the Databricks App have access. Everyone else is blocked. Add users via **Settings -> Permissions** to grant them access.
+> **First-time setup**: When no permissions are configured yet, only users with **CAN_MANAGE** on the Databricks App have access. Everyone else is blocked. Grant app access in **Databricks → Apps → Permissions**, then assign domain roles via **Settings → Admin → Teams**.
 
 To manage permissions, you must:
 1. Have **CAN_MANAGE** set on the app in the Databricks UI (Compute → Apps → ontobricks → Permissions)
@@ -709,7 +709,7 @@ Some application-wide constants are not controlled by environment variables. The
 | Constant | Default | Description |
 |----------|---------|-------------|
 | `APP_NAME` | `"OntoBricks"` | Application display name |
-| `APP_VERSION` | `"0.9.0"` | Current version string |
+| `APP_VERSION` | *(read from `pyproject.toml`)* | Current version string, resolved at runtime by `_read_version()` |
 | `ONTOBRICKS_NS` | `http://ontobricks.com/schema#` | RDF namespace for OntoBricks extensions |
 | `DEFAULT_BASE_URI` | `http://ontobricks.com/ontology#` | Default ontology base URI |
 | `LLM_DEFAULT_MAX_TOKENS` | `4096` | Default max tokens for LLM generation |

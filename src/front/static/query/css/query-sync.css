@@ -7,6 +7,24 @@
     position: relative;
 }
 
+/* Knowledge Graph readiness indicator (next to each sub-page title) */
+.kg-status-indicator .badge {
+    font-size: 0.7rem;
+    vertical-align: middle;
+}
+
+.kg-status-indicator .kg-status-spinner {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-width: 0.12em;
+    vertical-align: -0.05rem;
+}
+
+.kg-status-indicator .kg-go-build-btn {
+    font-size: 0.72rem;
+    line-height: 1.4;
+}
+
 #syncLoadingOverlay.sync-loading-overlay {
     position: absolute;
     top: 0;

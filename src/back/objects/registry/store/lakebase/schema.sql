@@ -244,7 +244,7 @@ CREATE INDEX IF NOT EXISTS idx_graph_analytics_runs_domain_version
 -- ('' on pure sign-off / comment rows). The grain is the tuple
 -- (domain_id, version); many rows per tuple are expected — together
 -- they form the full validation history surfaced in the Domain
--- Validation page and the Registry "My Tasks" worklist.
+-- Validation page and the Home "My Tasks" worklist.
 -- ----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS domain_review_events (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),

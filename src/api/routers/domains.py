@@ -122,6 +122,21 @@ class VersionsResponse(BaseModel):
     message: Optional[str] = None
 
 
+class ClassActionsItem(BaseModel):
+    name: str
+    uri: str
+    dataset: Optional[dict] = None
+    bridges: List[dict] = Field(default_factory=list)
+    actions: List[dict] = Field(default_factory=list)
+
+
+class ClassActionsResponse(BaseModel):
+    success: bool
+    domain_name: Optional[str] = None
+    classes: List[ClassActionsItem] = Field(default_factory=list)
+    message: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # GET /domains
 # ---------------------------------------------------------------------------
@@ -220,10 +235,11 @@ async def list_domain_versions(
     latest = versions_sorted[0]
 
     def _status_for(version: str) -> str:
-        ok, data, _ = svc.read_version(domain_name, version)
-        if not ok:
-            return "DRAFT"
-        return (data.get("info", {}).get("status") or "DRAFT").upper()
+        # Cheap single-column status lookup instead of loading the full
+        # version document (ontology + assignment + layout + metadata)
+        # just to read one field.
+        status = svc.get_version_status(domain_name, version)
+        return (status or "DRAFT").upper()
 
     versions = []
     for v in versions_sorted:
@@ -429,6 +445,69 @@ async def get_domain_design_status(
         assignment=assignment_status,
         build_ready=build_ready,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /domain/classes
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/domain/classes",
+    response_model=ClassActionsResponse,
+    response_model_exclude_none=True,
+    summary="List class Actions (dataset + bridges + UC function actions)",
+    description="Return per-class dataset, bridge and Unity Catalog function "
+    "action metadata for all classes in the domain's published ontology. "
+    "Only non-empty values are included.",
+)
+async def get_domain_classes(
+    domain_name: Optional[str] = Query(
+        None,
+        description="Domain name in the registry (uses current session domain if omitted)",
+    ),
+    domain_version: Optional[str] = Query(
+        None,
+        description="Domain version to load (uses latest version if omitted)",
+    ),
+    registry_catalog: Optional[str] = Query(None, description="Override registry catalog"),
+    registry_schema: Optional[str] = Query(None, description="Override registry schema"),
+    registry_volume: Optional[str] = Query(None, description="Override registry volume"),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        domain_name,
+        session_mgr,
+        settings,
+        registry_catalog,
+        registry_schema,
+        registry_volume,
+        domain_version,
+    )
+    _raw_dname = domain.domain_folder or (domain.info or {}).get("name", "")
+    dname = _raw_dname if isinstance(_raw_dname, str) else ""
+    raw_classes = domain.get_classes() or []
+
+    items: List[ClassActionsItem] = []
+    for cls in raw_classes:
+        dataset = cls.get("dataset") or None
+        bridges = cls.get("bridges") or []
+        actions = cls.get("actions") or []
+        items.append(
+            ClassActionsItem(
+                name=cls.get("name", ""),
+                uri=cls.get("uri", ""),
+                dataset=dataset,
+                bridges=bridges,
+                actions=actions,
+            )
+        )
+
+    logger.info(
+        "API: domain/classes for '%s' — %d classes", dname, len(items)
+    )
+    return ClassActionsResponse(success=True, domain_name=dname, classes=items)
 
 
 # ---------------------------------------------------------------------------

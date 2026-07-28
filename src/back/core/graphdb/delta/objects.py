@@ -1,4 +1,4 @@
-"""List and group Unity Catalog triple-store objects (Settings → Delta)."""
+"""List and group Unity Catalog triple-store objects (Settings → Lakehouse)."""
 
 from __future__ import annotations
 

@@ -42,6 +42,8 @@ topic covered by one of the listed domains, the LLM selects it automatically.
 | `get_design_status` | Design pipeline readiness (ontology, metadata, assignment, build_ready) for a domain |
 | `list_entity_types` | Returns a human-readable overview of the selected domain's graph viewer: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
 | `describe_entity` | Searches for an entity by name/type and returns a **full-text description** — identity, attributes, relationships, and related entities discovered hop-by-hop (BFS traversal) |
+| `get_entity_context` | Returns a node's external context: linked Unity Catalog dataset (optionally with rows), cross-domain bridges, and the Unity Catalog function **actions** configured on its class |
+| `invoke_entity_action` | Runs one of the class's Unity Catalog function actions on an entity. The function is called with exactly one argument: the entity's ID. Only functions declared on the entity's ontology class can be invoked |
 | `get_status` | Compact diagnostic: domain name, view table, graph name, data availability, triple count |
 | `get_graphql_schema` | Returns the auto-generated GraphQL schema (SDL) for the selected domain — shows types, fields, and relationships |
 | `query_graphql` | Executes a GraphQL query against the selected domain's graph viewer with structured, nested results |

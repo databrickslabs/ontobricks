@@ -292,11 +292,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
+            const backendLabels = {
+                lakebase: 'Lakebase',
+                databricks: 'Lakehouse',
+                neo4j: 'Neo4j',
+            };
             let html = '<div class="table-responsive registry-domain-table-wrapper">' +
                 '<table class="table table-sm table-hover align-middle mb-0 registry-domain-table">' +
                 '<thead><tr>' +
-                    '<th class="ps-3" style="width:20%;">Name</th>' +
-                    '<th style="width:30%;">URI</th>' +
+                    '<th class="ps-3" style="width:18%;">Name</th>' +
+                    '<th style="width:26%;">URI</th>' +
+                    '<th style="width:8rem;">Backend</th>' +
                     '<th>Description</th>' +
                     '<th class="text-center" style="width:5rem;">Versions</th>' +
                     '<th class="text-end pe-3" style="width:3rem;"></th>' +
@@ -309,6 +315,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const uri = d.base_uri
                     ? '<span class="font-monospace small">' + escapeHtml(d.base_uri) + '</span>'
                     : '<span class="fst-italic text-muted">—</span>';
+                const backendKey = (d.graph_backend || 'lakebase').toLowerCase();
+                const backend = '<span class="badge bg-light text-dark border">' +
+                    escapeHtml(backendLabels[backendKey] || backendKey) + '</span>';
                 const versions = d.versions || [];
                 const vCount = versions.length;
                 const hasVersions = vCount > 0;
@@ -338,13 +347,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         nameLabel +
                     '</td>' +
                     '<td class="text-muted text-truncate">' + uri + '</td>' +
+                    '<td class="text-nowrap">' + backend + '</td>' +
                     '<td class="text-muted text-truncate">' + desc + '</td>' +
                     '<td class="text-center">' + versionsBadge + '</td>' +
                     '<td class="text-end pe-3">' + deleteBtn + '</td>' +
                 '</tr>';
                 if (hasVersions) {
                     html += '<tr id="' + rowId + '" class="registry-version-panel" style="display:none;">' +
-                        '<td colspan="5" class="px-0 py-0">' +
+                        '<td colspan="6" class="px-0 py-0">' +
                         '<div class="registry-version-list">';
                     d.versions.forEach(v => {
                         const ver = typeof v === 'object' ? v.version : v;
@@ -931,7 +941,18 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('bridgesViewToggle')?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-view]');
         if (!btn) return;
-        _applyBridgesView(btn.dataset.view);
+        const view = btn.dataset.view;
+        _applyBridgesView(view);
+        // Re-render after layout so the canvas gets real dimensions (critical
+        // inside the Registry modal where the graph pane is flex-sized).
+        if (view === 'graph' && bridgesData) {
+            const graphModel = _buildGraphModel(bridgesData);
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    _renderBridgesGraph(graphModel);
+                });
+            });
+        }
     });
 
     // --- Bridges load triggers ---
@@ -950,8 +971,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if (section === 'domains' && registryConfigured) {
             loadRegistryDomains();
         }
-        if (section === 'bridges' && !bridgesLoaded) {
-            loadRegistryBridges();
+        if (section === 'bridges') {
+            if (!bridgesLoaded) {
+                loadRegistryBridges();
+            } else if (bridgesData && _getBridgesView() === 'graph') {
+                // Modal tab may have been hidden when first rendered; re-measure.
+                const graphModel = _buildGraphModel(bridgesData);
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        _renderBridgesGraph(graphModel);
+                    });
+                });
+            }
         }
     });
 

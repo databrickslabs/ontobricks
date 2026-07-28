@@ -279,6 +279,15 @@ class OntologyParser:
                     pass
                 break
 
+            # Get linked Unity Catalog function actions from OntoBricks property
+            actions = []
+            for act in self.graph.objects(cls, ONTOBRICKS_NS.actions):
+                try:
+                    actions = json.loads(str(act))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                break
+
             # Get parent class (subClassOf)
             parent = None
             for parent_cls in self.graph.objects(cls, RDFS.subClassOf):
@@ -309,6 +318,7 @@ class OntologyParser:
                     "dashboardParams": dashboard_params,
                     "bridges": bridges,
                     "dataset": dataset,
+                    "actions": actions,
                     "dataProperties": data_properties,
                 }
             )

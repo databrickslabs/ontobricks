@@ -1,5 +1,5 @@
 /*
- * Registry → Build Analytics.
+ * Settings → Automation → Build Analytics.
  *
  * Renders the per-domain Knowledge Graph build-run trace stored in the
  * registry ``build_runs`` table: summary cards plus a full runs table
@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const runsContainer = document.getElementById('buildAnalyticsRunsContainer');
     const refreshBtn = document.getElementById('btnRefreshBuildAnalytics');
 
-    // The page only renders these elements on the Registry view.
+    // The page only renders these elements on the Settings Automation view.
     if (!domainSel || !runsContainer) return;
 
     function fmtDuration(seconds) {

@@ -61,7 +61,7 @@ def settings_health_summary(
     settings: Optional[Any] = None,
     registry_cfg: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Payload for Settings → Delta triple-store health card."""
+    """Payload for Settings → Lakehouse triple-store health card."""
     from back.core.graphdb.delta import _table_naming
     from back.core.graphdb.delta.DeltaBase import create_databricks_client
 

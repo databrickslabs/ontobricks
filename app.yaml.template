@@ -19,12 +19,16 @@
 # (defined in `pyproject.toml`'s optional `[project.optional-dependencies]
 # lakebase = [...]`) so the Lakebase Postgres backend works in the
 # deployed app even when the `database` resource is not yet bound.
-# This is what powers the runtime backend toggle in
-# **Settings → Registry Location**: the admin can switch
-# Volume ↔ Lakebase without redeploying. On a Volume-only deployment
-# the extra costs ~10MB of unused wheels but the app continues to
-# run normally — the Lakebase code paths are guarded by
-# `LakebaseAuth.is_available` and never reached.
+#
+# `--extra neo4j` installs the official `neo4j` Python driver
+# (Bolt / Cypher) so the Neo4j graph DB engine works when an admin
+# selects it in **Settings → Triple store → Global**. Same rationale
+# as Lakebase: the extra costs ~5MB of unused wheels on
+# Volume/Lakebase-only deployments but Neo4j code paths are guarded
+# by `NEO4J_AVAILABLE` and never reached.
+#
+# Both extras together power the runtime backend toggle:
+# the admin can switch Volume / Lakebase / Neo4j without redeploying.
 #
 # Databricks Apps sets DATABRICKS_APP_PORT automatically.
 # MCP endpoint is exposed at /mcp (Streamable HTTP transport).
@@ -42,6 +46,8 @@ command:
   - "--no-dev"
   - "--extra"
   - "lakebase"
+  - "--extra"
+  - "neo4j"
   - "python"
   - "run.py"
 
@@ -109,6 +115,17 @@ env:
   # MLflow — ensure traces are persisted to the workspace tracking server.
   - name: MLFLOW_TRACKING_URI
     value: "${APP_MLFLOW_TRACKING_URI}"
+  # ── Neo4j (optional) ──────────────────────────────────────────
+  # Password sourced from a Databricks Apps secret resource (see
+  # `resources:` below). The `neo4j-password` resource is unbound by
+  # default; the admin binds it to a workspace secret (scope/key) in
+  # the Apps UI before selecting the Neo4j engine. When the resource
+  # is unbound, NEO4J_PASSWORD stays unset and the deployed app refuses
+  # to instantiate Neo4jStore with a clear instruction in the logs.
+  # Local dev keeps the legacy fallback to engine_config['password'].
+  # See docs/v0.6-neo4j-demo/secret-configuration.md.
+  - name: NEO4J_PASSWORD
+    valueFrom: neo4j-password
 
 # User authorization scopes — declares which Databricks APIs the app is
 # allowed to access on behalf of the logged-in user via the
@@ -135,3 +152,7 @@ resources:
     description: "Unity Catalog Volume for the OntoBricks domain registry"
     volume:
       permission: CAN_READ_WRITE
+  - name: neo4j-password
+    description: "Databricks Apps secret holding the Neo4j Bolt password. Unbound by default; bind it to a workspace secret (scope/key) in the Apps UI before activating the Neo4j engine. See docs/v0.6-neo4j-demo/secret-configuration.md."
+    secret:
+      permission: READ

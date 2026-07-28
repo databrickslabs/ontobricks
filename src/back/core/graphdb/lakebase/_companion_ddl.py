@@ -92,6 +92,89 @@ def wrap_triple_view_sql_for_lakeflow(spark_sql: str) -> str:
     )
 
 
+def _table_bare_name(table_ref: str) -> str:
+    return table_ref.split(".")[-1].strip('"')
+
+
+def _table_exists(cur: Any, bare_name: str) -> bool:
+    cur.execute(
+        """
+        SELECT 1
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = %s
+          AND n.nspname = ANY(current_schemas(false))
+          AND c.relkind = 'r'
+        LIMIT 1
+        """,
+        (bare_name,),
+    )
+    return cur.fetchone() is not None
+
+
+def _has_object_hash_column(cur: Any, bare_name: str) -> bool:
+    cur.execute(
+        """
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(false))
+          AND table_name = %s
+          AND column_name = 'object_hash'
+        LIMIT 1
+        """,
+        (bare_name,),
+    )
+    return cur.fetchone() is not None
+
+
+def upgrade_legacy_triple_table_to_object_hash(cur: Any, table_ref: str) -> None:
+    """Migrate pre-0.6.2 triple tables that still key on full ``object`` text.
+
+    ``CREATE TABLE IF NOT EXISTS`` leaves legacy companions in place; without
+    this step ``ensure_graph_indexes`` fails with ``column "object_hash" does
+    not exist`` when (re)building managed_synced graphs.
+    """
+    bare = _table_bare_name(table_ref)
+    if not _table_exists(cur, bare) or _has_object_hash_column(cur, bare):
+        return
+
+    ensure_pgcrypto(cur)
+
+    for sfx, _ in _TRIPLE_TABLE_INDEXES:
+        cur.execute(f"DROP INDEX IF EXISTS {_idx_name(bare, sfx)}")
+
+    cur.execute(
+        f"ALTER TABLE {table_ref} "
+        "ADD COLUMN IF NOT EXISTS object_hash BYTEA GENERATED ALWAYS AS "
+        "(digest(coalesce(object, ''), 'sha256')) STORED"
+    )
+    cur.execute(f"ALTER TABLE {table_ref} ADD COLUMN IF NOT EXISTS datatype TEXT")
+    cur.execute(f"ALTER TABLE {table_ref} ADD COLUMN IF NOT EXISTS lang TEXT")
+
+    cur.execute(
+        f"""
+        DO $$ DECLARE pk_name text;
+        BEGIN
+          SELECT c.conname INTO pk_name
+          FROM pg_constraint c
+          JOIN pg_class t ON t.oid = c.conrelid
+          JOIN pg_namespace n ON n.oid = t.relnamespace
+          WHERE c.contype = 'p'
+            AND t.relname = {bare!r}
+            AND n.nspname = ANY(current_schemas(false))
+          LIMIT 1;
+          IF pk_name IS NOT NULL THEN
+            EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', {bare!r}, pk_name);
+          END IF;
+        END $$;
+        """
+    )
+    cur.execute(
+        f"ALTER TABLE {table_ref} "
+        "ADD PRIMARY KEY (subject, predicate, object_hash)"
+    )
+
+
 def ensure_graph_indexes(cur: Any, table_ref: str) -> None:
     """Create standard graph lookup indexes on *table_ref* if absent.
 
@@ -115,6 +198,7 @@ def _create_triple_table(cur: Any, schema: str, table: str) -> None:
         )
         """
     )
+    upgrade_legacy_triple_table_to_object_hash(cur, table)
     ensure_graph_indexes(cur, table)
 
 

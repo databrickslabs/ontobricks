@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from back.core.errors import ValidationError
 
 _review = importlib.import_module("api.routers.internal.review")
+_helpers = importlib.import_module("api.routers.internal._helpers")
 
 
 def _request(body=None, *, user_role="admin"):
@@ -41,7 +42,7 @@ async def test_my_tasks_delegates():
 async def test_detail_resolves_target_domain_role():
     with (
         patch.object(
-            _review.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="viewer",
         ) as resolve,
         patch.object(
@@ -81,7 +82,7 @@ async def test_submit_forwards_comment_and_roles():
     body = {"comment": "ready to go"}
     with (
         patch.object(
-            _review.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="builder",
         ),
         patch.object(
@@ -114,7 +115,7 @@ async def test_signoff_forwards_decision():
     body = {"decision": "approve", "comment": "lgtm"}
     with (
         patch.object(
-            _review.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="viewer",
         ),
         patch.object(
@@ -134,7 +135,7 @@ async def test_signoff_forwards_decision():
 async def test_publish_delegates():
     with (
         patch.object(
-            _review.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="builder",
         ),
         patch.object(
@@ -154,7 +155,7 @@ async def test_publish_delegates():
 async def test_reopen_delegates():
     with (
         patch.object(
-            _review.SettingsService, "resolve_domain_role",
+            _helpers.SettingsService, "resolve_domain_role",
             return_value="admin",
         ) as resolve,
         patch.object(

@@ -274,6 +274,7 @@ async function saveDomainInfo() {
     const versionEl = document.getElementById('domainVersionSelect');
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
+    const graphBackendEl = document.getElementById('domainGraphBackend');
 
     if (!nameEl || !descEl || !authorEl) {
         showNotification('Form fields not found', 'error');
@@ -299,6 +300,7 @@ async function saveDomainInfo() {
         base_uri_auto: _baseUriAutoMode,
         llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
         review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : 1,
+        graph_backend: graphBackendEl ? graphBackendEl.value : 'lakebase',
     };
     
     try {

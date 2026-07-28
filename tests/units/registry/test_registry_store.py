@@ -82,7 +82,28 @@ class _InMemoryStore(RegistryStore):
 
     def list_domains_with_metadata(self) -> Tuple[bool, List[DomainSummary], str]:
         ok, folders, msg = self.list_domain_folders()
-        return ok, [{"name": f, "versions": []} for f in folders], msg
+        result: List[DomainSummary] = []
+        for f in folders:
+            versions = []
+            description = ""
+            for (vf, vv), data in self._versions.items():
+                if vf != f:
+                    continue
+                info = data.get("info", {}) or {}
+                description = description or info.get("description", "")
+                versions.append(
+                    {"version": vv, "status": info.get("status", "DRAFT")}
+                )
+            result.append(
+                {"name": f, "description": description, "versions": versions}
+            )
+        return ok, result, msg
+
+    def get_version_status(self, folder: str, version: str):
+        data = self._versions.get((folder, version))
+        if data is None:
+            return None
+        return (data.get("info", {}) or {}).get("status")
 
     def domain_exists(self, folder: str) -> bool:
         return any(f == folder for (f, _) in self._versions.keys())

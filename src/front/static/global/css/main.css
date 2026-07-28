@@ -491,6 +491,29 @@ body {
     align-self: stretch;
 }
 
+/* Resume Editing button — L2 subnav, left of Save, when the edit lease expired */
+.ob-subnav-resume-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-right: 0.4rem;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.8rem;
+    color: #664d03;
+    background-color: #fff3cd;
+    border: 1px solid #ffe69c;
+    border-radius: 0.3rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.ob-subnav-resume-btn:hover {
+    background-color: #ffc107;
+    color: #664d03;
+    border-color: #ffda6a;
+}
+
 /* Save Domain button — right-aligned in the L2 subnav */
 .ob-subnav-save-btn {
     display: inline-flex;

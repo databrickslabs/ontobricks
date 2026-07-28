@@ -827,22 +827,27 @@ class LakebaseRegistryStore(RegistryStore):
             for v in version_rows:
                 by_domain.setdefault(str(v["domain_id"]), []).append(v)
 
+            from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+
             result: List[DomainSummary] = []
             for d in domain_rows:
                 versions = by_domain.get(str(d["id"]), [])
                 description = d["description"] or ""
                 base_uri = d["base_uri"] or ""
+                graph_backend = normalize_graph_backend(None)
                 if versions:
                     latest = versions[0]
                     info = latest["info"] or {}
                     description = description or info.get("description", "")
                     ont = latest["ontology"] or {}
                     base_uri = base_uri or ont.get("base_uri", "")
+                    graph_backend = normalize_graph_backend(info.get("graph_backend"))
                 result.append(
                     {
                         "name": d["folder"],
                         "base_uri": base_uri,
                         "description": description,
+                        "graph_backend": graph_backend,
                         "review_quorum": max(1, int(d.get("review_quorum") or 1)),
                         "versions": [
                             {

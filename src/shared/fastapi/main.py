@@ -159,9 +159,10 @@ _PERM_ADMIN_ONLY_EXCEPTIONS = {
     "/settings/registry": {"GET"},
     "/settings/registry/domains": {"GET"},
     "/settings/registry/bridges": {"GET"},
-    # Graph DB engine is global; non-admins need read access so the Settings UI
-    # (and tab refresh) match persisted state. Writes remain POST + admin-only.
-    "/settings/graph-engine": {"GET"},
+    # Graph DB engine *connection* config is global; non-admins need read access
+    # so the Settings UI (and tab refresh) match persisted state. Writes remain
+    # POST + admin-only. The backend *selection* moved per-domain.
+    "/settings/delta-warehouse": {"GET"},
     "/settings/graph-engine-config": {"GET"},
     "/settings/graph-engine/lakebase-health": {"GET"},
     "/settings/graph-engine/uc-catalogs": {"GET"},

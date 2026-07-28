@@ -21,6 +21,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/sidebar-layout.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/emoji-picker.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/help-modal.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/registry-modal.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/review-modals.css') }}?v={{ asset_version }}">
     <!-- permissions.css must load LAST so its !important gates win over
          any per-component rule that might set display/pointer-events on
@@ -47,6 +49,8 @@
     <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script defer src="{{ url_for('static', filename='global/js/help-modal.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/help-docs.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/registry-modal.js') }}?v={{ asset_version }}"></script>
     
     {% block extra_css %}{% endblock %}
 </head>
@@ -72,15 +76,24 @@
                     {% for menu in menu_config.menus %}
                     {% if not menu.navbar_hidden|default(false) %}
                     {% if menu.id == 'domain' %}
-                    <li class="nav-item ob-nav-path-sep" aria-hidden="true">›</li>
+                    <li class="nav-item ob-nav-path-sep d-none" id="domainL1PathSep" aria-hidden="true">›</li>
                     {% endif %}
-                    <li class="nav-item dropdown">
-                        {% if menu.id == 'domain' %}
+                    {% if menu.navbar_modal|default(false) and menu.id == 'registry' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="registryModalToggle"
+                           title="{{ menu.label }}" aria-label="Open {{ menu.label }}">
+                            <i class="bi {{ menu.icon }}"></i>
+                        </a>
+                    </li>
+                    {% elif menu.id == 'domain' %}
+                    <li class="nav-item d-none" id="domainL1NavItem">
                         {# Domain shown as a plain link in L1 — navigation is in the L2 subnav #}
                         <a class="nav-link" href="{{ menu.route }}" id="domainL1Link">
                             <i class="bi {{ menu.icon }}"></i> <span id="currentDomainName">{{ menu.label }}</span>
                         </a>
-                        {% else %}
+                    </li>
+                    {% else %}
+                    <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle{% if menu.requires_domain_saved %} nav-requires-domain{% endif %}" href="#" id="{{ menu.id }}Dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi {{ menu.icon }}"></i> <span>{{ menu.label }}</span>
                         </a>
@@ -102,8 +115,8 @@
                             {% endif %}
                             {% endfor %}
                         </ul>
-                        {% endif %}
                     </li>
+                    {% endif %}
                     {% endif %}
                     {% endfor %}
                 </ul>
@@ -402,6 +415,9 @@
 
     <!-- Help Center Modal -->
     {% include "partials/layout/help_modal.html" %}
+
+    <!-- Registry Modal (Browse + Bridges) -->
+    {% include "partials/layout/registry_modal.html" %}
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

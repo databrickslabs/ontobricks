@@ -35,6 +35,9 @@ dependencies = [
     # PreBufferMetadata API, but pin to silence the advisory.
     "pyarrow>=23.0.1",
     "rdflib>=7.6.0",
+    # Neo4j Bolt driver — core dep so Settings → Back end → Neo4j works without
+    # an optional extra (``uv sync`` without ``--extra neo4j`` used to strip it).
+    "neo4j>=5.0",
     "python-dotenv>=1.2.2",
     "requests>=2.33.0",
     # strawberry-graphql>=0.315.7: MaxAliasesLimiter fragment-spread bypass

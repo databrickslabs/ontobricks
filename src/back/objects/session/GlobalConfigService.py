@@ -154,8 +154,12 @@ class GlobalConfigService:
     def get_delta_warehouse_id(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> str:
-        """Return the Delta triple-store SQL Warehouse ID (or empty string)."""
-        return self.get(host, token, registry_cfg, "delta_warehouse_id")
+        """Return the Lakehouse SQL warehouse id from ``graph_engine_config.lakehouse``."""
+        from back.core.graphdb.engine_config import resolve_lakehouse_warehouse_id
+
+        return resolve_lakehouse_warehouse_id(
+            self.get_graph_engine_config(host, token, registry_cfg)
+        )
 
     def get_default_base_uri(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -246,18 +250,6 @@ class GlobalConfigService:
         """Persist a new SQL Warehouse ID in the global config file."""
         return self._save(host, token, registry_cfg, {"warehouse_id": warehouse_id})
 
-    def set_delta_warehouse_id(
-        self,
-        host: str,
-        token: str,
-        registry_cfg: Dict[str, str],
-        warehouse_id: str,
-    ) -> Tuple[bool, str]:
-        """Persist the SQL Warehouse used for Delta triple-store queries."""
-        return self._save(
-            host, token, registry_cfg, {"delta_warehouse_id": warehouse_id}
-        )
-
     def set_default_base_uri(
         self,
         host: str,
@@ -298,69 +290,24 @@ class GlobalConfigService:
         """Persist the navbar logo as a ``data:`` URL (empty string clears it)."""
         return self._save(host, token, registry_cfg, {"navbar_logo": data_url or ""})
 
-    ALLOWED_GRAPH_ENGINES = ("lakebase",)
-    ALLOWED_TRIPLE_STORE_BACKENDS = ("lakebase", "databricks")
-
-    def get_graph_engine(
-        self, host: str, token: str, registry_cfg: Dict[str, str]
-    ) -> str:
-        """Return the globally configured graph DB engine name.
-
-        Currently always resolves to ``"lakebase"``.  Extra engines plug
-        in by adding their key to :data:`ALLOWED_GRAPH_ENGINES` and
-        registering a backend class under
-        :class:`back.core.graphdb.GraphDBFactory`.
-        """
-        val = self.get(host, token, registry_cfg, "graph_engine", "lakebase")
-        return val if val in self.ALLOWED_GRAPH_ENGINES else "lakebase"
-
-    def set_graph_engine(
-        self,
-        host: str,
-        token: str,
-        registry_cfg: Dict[str, str],
-        engine: str,
-    ) -> Tuple[bool, str]:
-        """Persist a new graph DB engine selection in the global config file."""
-        engine = (engine or "").strip().lower()
-        if engine not in self.ALLOWED_GRAPH_ENGINES:
-            return (
-                False,
-                f"Unknown graph engine '{engine}'. Allowed: {', '.join(self.ALLOWED_GRAPH_ENGINES)}",
-            )
-        return self._save(host, token, registry_cfg, {"graph_engine": engine})
-
-    def get_triple_store_backend(
-        self, host: str, token: str, registry_cfg: Dict[str, str]
-    ) -> str:
-        """Return the instance triple-store backend (``lakebase`` or ``databricks``)."""
-        val = self.get(host, token, registry_cfg, "triple_store_backend", "lakebase")
-        return val if val in self.ALLOWED_TRIPLE_STORE_BACKENDS else "lakebase"
-
-    def set_triple_store_backend(
-        self,
-        host: str,
-        token: str,
-        registry_cfg: Dict[str, str],
-        backend: str,
-    ) -> Tuple[bool, str]:
-        """Persist triple-store backend selection in global config."""
-        backend = (backend or "").strip().lower()
-        if backend not in self.ALLOWED_TRIPLE_STORE_BACKENDS:
-            return (
-                False,
-                "Unknown triple store backend "
-                f"'{backend}'. Allowed: {', '.join(self.ALLOWED_TRIPLE_STORE_BACKENDS)}",
-            )
-        return self._save(host, token, registry_cfg, {"triple_store_backend": backend})
+    # NOTE: The graph *backend selection* (formerly the global ``graph_engine`` /
+    # ``triple_store_backend`` keys) moved to a mandatory per-domain choice —
+    # see ``DomainSession.info['graph_backend']`` and ``GraphDBFactory``. Only
+    # the engine *connection* config below remains workspace-global.
 
     def get_graph_engine_config(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> Dict[str, Any]:
-        """Return the engine-specific configuration dict (free-form JSON)."""
+        """Return per-backend config ``{lakebase, neo4j, lakehouse}``.
+
+        Flat legacy blobs are normalised on read so callers always see the
+        nested shape.
+        """
+        from back.core.graphdb.engine_config import normalize_graph_engine_config
+
         data = self.load(host, token, registry_cfg)
         cfg = data.get("graph_engine_config")
-        return cfg if isinstance(cfg, dict) else {}
+        return normalize_graph_engine_config(cfg if isinstance(cfg, dict) else {})
 
     def set_graph_engine_config(
         self,
@@ -369,15 +316,48 @@ class GlobalConfigService:
         registry_cfg: Dict[str, str],
         config: Dict[str, Any],
     ) -> Tuple[bool, str]:
-        """Persist the engine-specific configuration dict."""
+        """Persist per-backend engine config (nested ``lakebase`` / ``neo4j`` / ``lakehouse``).
+
+        Accepts either the nested shape or a legacy flat blob; always stores
+        the nested form.
+        """
         if not isinstance(config, dict):
             return False, "graph_engine_config must be a JSON object"
+        from back.core.graphdb.engine_config import normalize_graph_engine_config
         from back.core.graphdb.lakebase.LakebaseBase import validate_engine_config_keys
 
-        ok_keys, msg_keys = validate_engine_config_keys(config)
+        nested = normalize_graph_engine_config(config)
+        ok_keys, msg_keys = validate_engine_config_keys(nested.get("lakebase") or {})
         if not ok_keys:
             return False, msg_keys
-        return self._save(host, token, registry_cfg, {"graph_engine_config": config})
+        return self._save(host, token, registry_cfg, {"graph_engine_config": nested})
+
+    def set_delta_warehouse_id(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        warehouse_id: str,
+    ) -> Tuple[bool, str]:
+        """Persist the Lakehouse SQL warehouse under ``graph_engine_config.lakehouse``."""
+        from back.core.graphdb.engine_config import normalize_graph_engine_config
+
+        wid = (warehouse_id or "").strip()
+        data = self.load(host, token, registry_cfg)
+        nested = normalize_graph_engine_config(
+            data.get("graph_engine_config")
+            if isinstance(data.get("graph_engine_config"), dict)
+            else {}
+        )
+        lh = dict(nested.get("lakehouse") or {})
+        lh["warehouse_id"] = wid
+        nested["lakehouse"] = lh
+        return self._save(
+            host,
+            token,
+            registry_cfg,
+            {"graph_engine_config": nested},
+        )
 
     def get_registry_cache_ttl(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -505,7 +485,6 @@ class GlobalConfigService:
         return {
             "version": 1,
             "warehouse_id": "",
-            "delta_warehouse_id": "",
             "default_base_uri": "",
             "default_emoji": "",
             "navbar_logo": "",
@@ -514,9 +493,7 @@ class GlobalConfigService:
             # 0 = unset → env var / built-in default from back.core.query_limits.
             "graph_query_timeout_s": 0,
             "graph_chat_result_cap": 0,
-            "graph_engine": "lakebase",
             "graph_engine_config": {},
-            "triple_store_backend": "lakebase",
         }
 
 

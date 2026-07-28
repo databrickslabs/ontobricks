@@ -1,0 +1,116 @@
+## fix(uc): read action function parameters from information_schema
+
+Context: while building the Customer 360 demo functions, the action picker
+showed every Unity Catalog function as ineligible. Root cause: the UC REST
+collection endpoint `GET /api/2.1/unity-catalog/functions` returns each function
+*without* `input_params` — that field is only populated when fetching a single
+function by name. `list_functions` therefore reported `param_count: 0` for
+everything, and since the picker only enables single-parameter functions, no
+action could ever be bound. Verified against a live workspace before and after.
+
+Changes:
+
+1. `src/back/core/databricks/uc/UnityCatalog.py`
+   `list_functions` now queries `<catalog>.information_schema.routines` joined
+   to `.parameters` (filtered on `parameter_mode = 'IN'`, which excludes the
+   `RETURNS TABLE` result columns) in a single statement, returning real
+   parameter names, counts and `returns_table`. The schema is validated and the
+   catalog quoted; the schema is bound as a query parameter.
+2. `tests/units/core/test_unity_catalog.py`
+   Rework `TestListFunctions` for the SQL path: parameter parsing, the
+   zero-parameter case, the information_schema query shape, and rejection of an
+   invalid schema identifier.
+3. `data/customer/uc_functions_actions.sql` (gitignored, demo asset)
+   Four ready-to-bind Customer 360 actions: `customer_churn_risk` (scalar),
+   `customer_360_snapshot`, `customer_recent_activity` and
+   `meter_consumption_trend` (table-valued). All take exactly one parameter.
+
+Note: this trades the REST call for a warehouse round trip. That costs nothing
+in practice — the picker's catalog/schema cascade already goes through
+`get_catalogs()`, which requires a warehouse.
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- tests/units/core/test_unity_catalog.py
+- data/customer/uc_functions_actions.sql (new, gitignored)
+
+Tests: uv run pytest -q -m "not scenario" → 3413 passed, 275 skipped, 5 deselected in 23.52s
+
+---
+
+## demo(cust360): Python-language Unity Catalog action functions
+
+Context: the Customer 360 demo only had SQL actions. Added Python ones to show
+that `LANGUAGE PYTHON` functions bind as class actions with no OntoBricks
+change, and to document the sandbox constraint — a UC Python UDF has no Spark
+session and cannot read tables, so anything needing data must be a SQL function
+that delegates its logic to Python.
+
+Changes (all in `data/customer/uc_functions_actions.sql`, gitignored demo asset,
+deployed to both `benoit_cayla.customer` and `benoit_cayla.customer_large`):
+
+1. `customer_export_token(p_customer_id)` — `LANGUAGE PYTHON` scalar. Pure
+   computation on the ID: masked ID plus a deterministic SHA-256 pseudonym for
+   GDPR / clean-room export. Bindable to Customer.
+2. `customer_health_narrative(...)` — `LANGUAGE PYTHON` scalar helper with six
+   parameters, so the picker correctly refuses it as an action. Holds the
+   weighted health scoring, the narrative and the recommended next step.
+3. `customer_health_report(p_customer_id)` — SQL action that gathers contract,
+   invoice, claim and call counters and passes them to (2). Demonstrates the
+   Python-logic-over-real-data pattern. Bindable to Customer.
+4. `customer_retention_plan(p_customer_id)` — `LANGUAGE PYTHON` UDTF
+   (`RETURNS TABLE` + `HANDLER`), emitting a four-step retention play with
+   deterministic per-step offer codes. Bindable to Customer.
+
+Verified on a live warehouse: `information_schema` reports Python functions
+with the same shape as SQL ones (`param_count = 1`, `data_type` `STRING` /
+`TABLE_TYPE`), so `list_functions` and the action picker need no change. Two
+sandbox behaviours worth remembering: module-level imports are not visible
+inside UDTF handler methods (import inside `eval`), and the no-contract case
+must short-circuit rather than fall through the scoring.
+
+Modified files:
+- data/customer/uc_functions_actions.sql (gitignored, demo asset)
+
+Tests: uv run pytest -q -m "not scenario" → 3413 passed, 275 skipped, 5 deselected in 22.18s
+
+---
+
+## fix(digitaltwin): strip the class segment from entity local IDs
+
+Context: invoking a class action from the Graph Explorer returned a result, but
+the wrong one — `customer_churn_risk` reported "LOW risk, 0 overdue invoices"
+for a customer that actually has 7 overdue invoices. Root cause: R2RML mints
+entity subjects as `{base_uri}{Class}/{id}` and `base_uri` ends in `#`, so a
+node URI is `...Cust360Auto#Customer/CUST0000017`. `extract_local_id` delegated
+to `extract_local_name`, which splits on `#` first and returned the whole
+fragment `Customer/CUST0000017`. That string was passed as the UC function
+argument, matched no rows, and the function dutifully computed a score over an
+empty set — a silent wrong answer rather than an error.
+
+The same helper feeds `/nodes/context`, so the MCP dataset path was filtering
+`WHERE meter_id = 'Meter/MTR0000220'` and returning zero rows. The Graph
+Explorer's own dataset preview was unaffected because it passes the mapped ID
+column value from the node attributes rather than deriving it from the URI.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   `extract_local_id` now takes the trailing segment after the last `/` inside
+   the fragment. Class URIs (`{base}#Customer`, no slash) are unchanged, as are
+   path-style and plain-fragment URIs. `extract_local_name` is left alone —
+   it is the class-name helper and must keep its current semantics.
+2. `tests/back/core/digitaltwin/test_digitaltwin_units.py`
+   Two regression tests: the `#Class/id` node-URI form resolves to the bare id,
+   and a `#Class` URI is returned unchanged.
+
+Verified against the live workspace after the fix: `CUST0000017` →
+"HIGH risk (score 100/100) — 7 overdue invoice(s) worth 2526.43, 2 open
+claim(s) (2 escalated)", `CUST0000094` → "LOW risk (score 12/100)". Dataset rows
+for `MTR0000220` now return the 3 expected readings instead of none.
+
+Modified files:
+- src/back/objects/digitaltwin/DigitalTwin.py
+- tests/back/core/digitaltwin/test_digitaltwin_units.py
+
+Tests: uv run pytest -q -m "not scenario" → 3415 passed, 275 skipped, 5 deselected in 23.27s

@@ -6,12 +6,21 @@ registration in the factory and global config, and a ready-to-use starter kit.
 
 ---
 
-OntoBricks currently ships with one **runtime** graph engine, selectable under **Settings → Graph DB**
-(admin). The list is intentionally kept short — the abstraction is what matters here.
+OntoBricks ships three **runtime** graph engines. The backend is chosen **per domain** under
+**Domain → Information → Knowledge Graph** (mandatory; defaults to ``lakebase``) — the selection is
+stored in ``DomainSession.info['graph_backend']``. Engine *connection* config stays workspace-global
+under **Settings → Back end**.
 
 | Engine | Storage | Notes |
 |--------|---------|--------|
-| ``lakebase`` (default and only built-in) | Flat triple tables on **Lakebase Postgres** | Uses the App-bound Postgres instance (``PGHOST`` / ``PGDATABASE``…). Configure JSON ``graph_engine_config`` with optional ``database`` (Postgres DB name on that instance) and ``schema`` (default ``ontobricks_graph``), and ``mode`` (``app_managed`` or ``managed_synced``). SQL-only (no Cypher); reasoning uses the existing SQL translators. |
+| ``lakebase`` (default) | Flat triple tables on **Lakebase Postgres** | Uses the App-bound Postgres instance (``PGHOST`` / ``PGDATABASE``…). Configure ``graph_engine_config.lakebase`` with optional ``database`` (Postgres DB name on that instance) and ``schema`` (default ``ontobricks_graph``), and ``sync_mode`` (``app_managed`` or ``managed_synced``). SQL-only (no Cypher); reasoning uses the existing SQL translators. |
+| ``databricks`` (Delta) | Unity Catalog Delta triple tables | Configure ``graph_engine_config.lakehouse.warehouse_id``. |
+| ``neo4j`` | Native graph over Bolt | Neo4j Aura or self-hosted; connection config in ``graph_engine_config.neo4j`` (``uri``, ``database``, credentials). |
+
+Each backend's connection settings are stored in **separate** buckets under
+``graph_engine_config`` (``lakebase`` / ``neo4j`` / ``lakehouse``) so an admin can
+configure all backends independently without shared keys. Flat legacy blobs are
+migrated on read and rewritten nested on the next Save.
 
 ``GraphDBFactory.create(engine=...)`` is the single decision point: only the selected engine is instantiated. The capability flags on ``GraphDBBackend`` (``supports_cypher``, ``is_cypher_backend``, ``query_dialect``) are kept as architectural seams so a future Cypher / Gremlin engine can be added without rewiring reasoning.
 
@@ -25,8 +34,8 @@ OntoBricks stores all graph viewer data through a single abstraction:
 |-------|---------|---------|
 | **Graph DB** | `back.core.graphdb` | The single triple store / graph DB layer. Ships Lakebase Postgres and Unity Catalog Delta engines; pluggable for embedded/Cypher engines for traversal, reasoning, and analytics. |
 
-The single `GraphDBFactory` reads the configured engine name from
-`GlobalConfigService` and constructs the matching backend. Calling
+The single `GraphDBFactory` reads the **per-domain** backend choice from
+`DomainSession.info['graph_backend']` and constructs the matching backend. Calling
 `get_graphdb(domain, settings)` with no engine auto-resolves; passing
 `engine="view"` returns a raw read-only Delta store for health probes.
 
@@ -35,12 +44,13 @@ get_graphdb(domain, settings)          # engine=None → auto-resolve
     │
     └─ GraphDBFactory.create(engine=None)
            │
+           ├─ _resolve_graph_backend()         →  domain.info["graph_backend"]
+           │                                        "lakebase" | "databricks" | "neo4j"
            ├─ _resolve_triple_store_backend()  →  "lakebase" | "databricks"
-           ├─ _resolve_graph_engine()          →  GlobalConfigService.get_graph_engine()
-           │                                        returns e.g. "kuzu"
-           └─ GraphDBFactory.create(domain, settings, engine="kuzu")
+           ├─ _resolve_graph_engine()          →  "lakebase" | "neo4j"
+           └─ GraphDBFactory.create(domain, settings, engine="neo4j")
                   │
-                  └─ _create_kuzu(domain, settings)  →  KuzuStore(...)
+                  └─ _create_neo4j(domain, settings)  →  Neo4jStore(...)
 ```
 
 ### Key files
@@ -52,7 +62,7 @@ get_graphdb(domain, settings)          # engine=None → auto-resolve
 | `src/back/core/graphdb/constants.py` | Shared RDF constants (`RDF_TYPE`, `RDFS_LABEL`). |
 | `src/back/core/graphdb/delta/DeltaFlatStore.py` | Unity Catalog Delta engine (also the raw `view` store). |
 | `src/back/core/graphdb/__init__.py` | Package exports (`get_graphdb`, `GRAPHDB_AVAILABLE`). |
-| `src/back/objects/session/GlobalConfigService.py` | Persists the selected engine name in `.global_config.json`. |
+| `src/back/objects/session/GlobalConfigService.py` | Persists the engine *connection* config (`graph_engine_config`) in `.global_config.json`. The backend *selection* lives per-domain in `DomainSession.info['graph_backend']`. |
 
 ---
 
@@ -229,28 +239,35 @@ except ImportError:
     GraphDBFactory.KUZU_AVAILABLE = False
 ```
 
-### Step 5 — Register the engine name in `GlobalConfigService`
+### Step 5 — Register the engine in the per-domain backend vocabulary
 
-Edit `src/back/objects/session/GlobalConfigService.py`:
+The backend *selection* is per-domain. Add your engine to the unified
+vocabulary + mapping in `src/back/core/graphdb/GraphDBFactory.py`:
 
 ```python
-ALLOWED_GRAPH_ENGINES = ("lakebase", "kuzu")  # ← add here
+GRAPH_BACKENDS = ("lakebase", "databricks", "neo4j", "kuzu")  # ← add here
 ```
 
-That single change makes the engine selectable from the Settings UI and
-validates it on save.
+Then map it inside `_resolve_triple_store_backend` / `_resolve_graph_engine`
+so `graph_backend == "kuzu"` resolves to your engine.
 
-### Step 6 — Update the Settings UI dropdown
+### Step 6 — Add the option to the per-domain dropdown
 
-Edit `src/front/templates/settings.html` — add an `<option>` to the
-`#graphEngineSelect` dropdown:
+Edit `src/front/templates/partials/domain/_domain_information.html` — add an
+`<option>` to the `#domainGraphBackend` select in the Knowledge Graph tab:
 
 ```html
-<select class="form-select form-select-sm" id="graphEngineSelect" style="max-width:20rem;">
-    <option value="lakebase">Lakebase Postgres</option>
+<select class="form-select domain-editable" id="domainGraphBackend" ...>
+    <option value="lakebase">Lakebase (Postgres)</option>
+    <option value="databricks">Lakehouse</option>
+    <option value="neo4j">Neo4j</option>
     <option value="kuzu">KuzuDB</option>        <!-- NEW -->
 </select>
 ```
+
+If the engine needs global *connection* config, add its section to
+`src/front/templates/settings.html` (Settings → Back end) and persist it via
+`graph_engine_config`.
 
 ### Step 7 — Add the dependency
 
@@ -360,8 +377,8 @@ Use this checklist to track your progress:
 - [ ] Implement `<EngineName>Store(GraphDBBackend)` with all abstract methods
 - [ ] Override named query methods if your engine is non-SQL
 - [ ] Register engine in `GraphDBFactory.create()` + add `_create_<engine>()` method
-- [ ] Add engine name to `GlobalConfigService.ALLOWED_GRAPH_ENGINES`
-- [ ] Add `<option>` to `#graphEngineSelect` in `settings.html`
+- [ ] Add engine name to `GRAPH_BACKENDS` in `GraphDBFactory.py` + map it in the resolvers
+- [ ] Add `<option>` to `#domainGraphBackend` in `_domain_information.html`
 - [ ] Add optional dependency to `pyproject.toml`
 - [ ] Add tests in `tests/test_<engine>_store.py`
 - [ ] Update `docs/development.md` (dependency table)

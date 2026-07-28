@@ -86,6 +86,42 @@ class TestClassGeneration:
         parsed = {c["name"]: c for c in parser.get_classes()}
         assert parsed["Customer"]["dataset"] is None
 
+    def test_class_with_actions_roundtrip(self):
+        actions = [
+            {
+                "catalog": "main",
+                "schema": "ops",
+                "function": "recompute_risk",
+                "fullName": "main.ops.recompute_risk",
+                "description": "Recompute the customer risk score",
+                "returns_table": False,
+            },
+            {
+                "catalog": "main",
+                "schema": "ops",
+                "function": "risk_history",
+                "fullName": "main.ops.risk_history",
+                "description": "Risk score history",
+                "returns_table": True,
+            },
+        ]
+        classes = [{"name": "Customer", "label": "Customer", "actions": actions}]
+        gen = _make_generator(classes=classes)
+        owl = gen.generate()
+        assert "actions" in owl
+
+        parser = OntologyParser(owl_content=owl)
+        parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["actions"] == actions
+
+    def test_class_without_actions_has_empty_list(self):
+        classes = [{"name": "Customer", "label": "Customer"}]
+        gen = _make_generator(classes=classes)
+        owl = gen.generate()
+        parser = OntologyParser(owl_content=owl)
+        parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["actions"] == []
+
     def test_class_with_data_properties(self):
         classes = [
             {

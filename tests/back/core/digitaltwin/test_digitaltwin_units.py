@@ -71,6 +71,17 @@ class TestExtractLocalId:
         # If both present, hash wins (W3C URI standard convention).
         assert DigitalTwin.extract_local_id("http://x/a/b#tail") == "tail"
 
+    def test_class_segment_inside_fragment_is_stripped(self):
+        # R2RML mints entity subjects as `{base}{Class}/{id}` and `base` ends
+        # in `#`, so the fragment is `Customer/CUST0000017`. Only the id is
+        # the entity's local id.
+        uri = "https://databricks-ontology.com/Cust360Auto#Customer/CUST0000017"
+        assert DigitalTwin.extract_local_id(uri) == "CUST0000017"
+
+    def test_class_uri_without_slash_is_unchanged(self):
+        uri = "https://databricks-ontology.com/Cust360Auto#Customer"
+        assert DigitalTwin.extract_local_id(uri) == "Customer"
+
     def test_no_separator_returns_input_or_empty(self):
         # No `#` or `/` → returns input or empty string; either is reasonable.
         result = DigitalTwin.extract_local_id("plainstring")

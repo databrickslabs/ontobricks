@@ -255,6 +255,17 @@ targets:
                 branch: projects/${var.lakebase_project}/branches/${var.lakebase_branch}
                 database: projects/${var.lakebase_project}/branches/${var.lakebase_branch}/databases/${var.lakebase_database_resource_segment}
                 permission: "CAN_CONNECT_AND_CREATE"
+            # Neo4j Bolt password — bound to a workspace secret on deploy.
+            # Customer admins can switch to manual UI binding by removing
+            # this overlay (the resource declaration still lives in
+            # ``app.yaml.template``, unbound by default).
+            # See docs/pr47-neo4j-demo/secret-configuration.md.
+            - name: neo4j-password
+              description: "Databricks Apps secret holding the Neo4j Bolt password"
+              secret:
+                scope: ontobricks
+                key: neo4j-password
+                permission: READ
         mcp_ontobricks_app:
           resources:
             - name: postgres

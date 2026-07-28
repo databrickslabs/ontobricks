@@ -97,8 +97,8 @@ and the engine that ultimately runs (column **Engine**).
 
 | UI Feature | Page / JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
-| Browse / open / create / save domain | `templates/registry.html`, `templates/domain.html` | `GET/POST /api/v1/domain/...`, `/registry/...`, `/domain/...` | REST | Python services (`DomainService`, `RegistryService`); files on UC Volumes |
-| Schedule (background actions) | `registry-schedule.html` | `/registry/schedule/*` | REST | Python `BuildScheduler` + Databricks Jobs SDK |
+| Browse / open / create / save domain | Registry modal (`partials/layout/registry_modal.html`), `templates/domain.html` | `GET/POST /api/v1/domain/...`, `/settings/registry/...`, `/domain/...` | REST | Python services (`DomainService`, `RegistryService`); files on UC Volumes |
+| Schedule (background actions) | `settings` (Automation → Scheduler) | `/settings/schedules`, `/settings/cohort-schedules` | REST | Python `BuildScheduler` + Databricks Jobs SDK |
 | Cockpit / readiness | `domain-validation` | `GET /api/v1/domain/design-status` | REST | Python aggregator over OWL / R2RML / metadata |
 | Data Sources (UC tables preview) | `domain-metadata` | Internal REST → `databricks-sql-connector` | REST → Spark SQL | **Spark SQL** on UC tables (sample queries) |
 | Versions | `domain-versions` | `/api/v1/domain/versions` | REST | UC Volume listing |
@@ -143,12 +143,12 @@ storage.
 | **Data Quality** (SHACL execution) | `query-dataquality.js` | `POST /dtwin/dataquality/start`, `POST /dtwin/dataquality/execute` | REST | `SHACLService` translates shapes to **SQL** SELECTs that find violations |
 | **Inference (Reasoning)** | `query-reasoning.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** SWRL rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine` |
 
-### 4.5 Settings / Permissions / Help
+### 4.5 Settings / Teams / Help
 
 | UI Feature | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|
 | Settings (warehouse, profile) | `/settings/*` | REST | Python config service |
-| Permissions | `/permissions/*` | REST | `PermissionService` (in-memory + UC Volume manifest) |
+| Teams (domain roles) | `/settings/teams` | REST | `PermissionService` + App ACL principals |
 | Help / docs modal | static templates | n/a | n/a |
 
 ---

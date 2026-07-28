@@ -88,6 +88,22 @@ class TestSaveDomainInfo:
         assert result["name"] == "New Name"
         domain.save.assert_called_once()
 
+    def test_new_domain_rejects_spaces_and_special_chars(self):
+        """Unregistered domains must use CamelCase alphanumeric names only."""
+        domain = _mock_domain()
+        domain.domain_folder = ""
+        with pytest.raises(ValidationError, match="CamelCase alphanumeric"):
+            Domain(domain).save_domain_info({"name": "My Domain"})
+        with pytest.raises(ValidationError, match="CamelCase alphanumeric"):
+            Domain(domain).save_domain_info({"name": "WRFM - Shell"})
+        with pytest.raises(ValidationError, match="CamelCase alphanumeric"):
+            Domain(domain).save_domain_info({"name": "acme"})
+
+    def test_new_domain_accepts_camelcase_alphanumeric(self):
+        domain = _mock_domain()
+        domain.domain_folder = ""
+        result = Domain(domain).save_domain_info({"name": "PatientCare360"})
+        assert result["name"] == "PatientCare360"
     def test_save_base_uri(self):
         domain = _mock_domain()
         Domain(domain).save_domain_info({"base_uri": "http://new.org#"})
@@ -118,11 +134,41 @@ class TestSaveDomainInfo:
         )
         assert domain.ontology["base_uri"].endswith("/AcmeSales#")
 
+    def test_auto_base_uri_sanitizes_spaces_in_domain_name(self):
+        """Domain names with spaces must not produce illegal IRI paths."""
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"name": "WRFM - Shell"})
+        assert " " not in result["base_uri"]
+        assert result["base_uri"].endswith("/WRFM_-_Shell#")
+
+    def test_custom_base_uri_with_spaces_is_sanitized(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info(
+            {
+                "name": "WRFM",
+                "base_uri": "https://databricks-ontology.com/WRFM - Shell#",
+                "base_uri_auto": False,
+            }
+        )
+        assert " " not in domain.ontology["base_uri"]
+        assert "%20" in domain.ontology["base_uri"]
+
     def test_save_review_quorum(self):
         domain = _mock_domain()
         result = Domain(domain).save_domain_info({"review_quorum": 3})
         assert domain.info["review_quorum"] == 3
         assert result["review_quorum"] == 3
+
+    def test_save_graph_backend(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"graph_backend": "neo4j"})
+        assert domain.info["graph_backend"] == "neo4j"
+        assert result["graph_backend"] == "neo4j"
+
+    def test_save_graph_backend_normalized(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info({"graph_backend": "  NEO4J "})
+        assert domain.info["graph_backend"] == "neo4j"
 
     def test_review_quorum_clamped_to_minimum_one(self):
         domain = _mock_domain()

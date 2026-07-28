@@ -379,7 +379,9 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
 
         store = RegistryFactory.from_cfg(cfg)
         global_cfg = store.load_global_config()
-        engine_cfg = global_cfg.get("graph_engine_config") or {}
+        from back.core.graphdb.engine_config import lakebase_section
+
+        engine_cfg = lakebase_section(global_cfg.get("graph_engine_config") or {})
     except Exception as exc:  # noqa: BLE001
         return _WARNING, f"Could not load graph engine config: {exc}"
 
@@ -1037,7 +1039,9 @@ def _check_graphdb_tables(settings: Settings) -> Tuple[str, str]:
 
         store = RegistryFactory.from_cfg(cfg)
         global_cfg = store.load_global_config()
-        engine_cfg = global_cfg.get("graph_engine_config") or {}
+        from back.core.graphdb.engine_config import lakebase_section
+
+        engine_cfg = lakebase_section(global_cfg.get("graph_engine_config") or {})
     except Exception as exc:
         return _WARNING, f"Could not load graph engine config: {exc}"
 
@@ -1097,7 +1101,9 @@ def _check_graphdb_permissions(settings: Settings) -> Tuple[str, str]:
 
         store = RegistryFactory.from_cfg(cfg)
         global_cfg = store.load_global_config()
-        engine_cfg = global_cfg.get("graph_engine_config") or {}
+        from back.core.graphdb.engine_config import lakebase_section
+
+        engine_cfg = lakebase_section(global_cfg.get("graph_engine_config") or {})
     except Exception as exc:
         return _WARNING, f"Could not load graph engine config: {exc}"
 
@@ -1196,7 +1202,9 @@ def _check_graphdb_uc_catalog(settings: Settings) -> Tuple[str, str]:
 
         store = RegistryFactory.from_cfg(cfg)
         global_cfg = store.load_global_config()
-        engine_cfg = global_cfg.get("graph_engine_config") or {}
+        from back.core.graphdb.engine_config import lakebase_section
+
+        engine_cfg = lakebase_section(global_cfg.get("graph_engine_config") or {})
     except Exception as exc:
         return _WARNING, f"Could not load graph engine config: {exc}"
 
@@ -1257,29 +1265,32 @@ def _check_graphdb_uc_catalog(settings: Settings) -> Tuple[str, str]:
 
 
 def _check_delta_warehouse(settings: Settings) -> Tuple[str, str]:
-    """Check whether the Delta triple-store warehouse is configured and reachable."""
+    """Check whether the Lakehouse SQL warehouse is configured and reachable."""
     cfg = _resolve_registry_cfg(settings)
     try:
+        from back.core.graphdb.engine_config import resolve_lakehouse_warehouse_id
         from back.objects.registry.store import RegistryFactory
 
         store = RegistryFactory.from_cfg(cfg)
         global_cfg = store.load_global_config()
         backend = global_cfg.get("triple_store_backend", "lakebase")
-        delta_warehouse_id = (global_cfg.get("delta_warehouse_id") or "").strip()
+        delta_warehouse_id = resolve_lakehouse_warehouse_id(
+            global_cfg.get("graph_engine_config") or {}
+        )
     except Exception as exc:
-        return _WARNING, f"Could not read triple-store backend config: {exc}"
+        return _WARNING, f"Could not read Lakehouse warehouse config: {exc}"
 
     if backend != "databricks":
         return (
             _OK,
             f"Delta backend not selected (current backend: {backend}) — skipped. "
-            "Switch to Delta in Settings → Triple store → Back End to enable.",
+            "Switch to Lakehouse in Settings → Back end → Lakehouse to enable.",
         )
     if not delta_warehouse_id:
         return (
             _WARNING,
             "Delta backend is selected but no dedicated Delta warehouse is configured. "
-            "Set one in Settings → Delta → SQL Warehouse (falls back to the global warehouse).",
+            "Set one in Settings → Lakehouse → SQL Warehouse (falls back to the global warehouse).",
         )
 
     client = _build_health_client(settings)
@@ -1550,13 +1561,13 @@ def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any
     groups.append(
         {
             "id": "delta",
-            "title": "Delta Triple Store",
+            "title": "Lakehouse Triple Store",
             "description": (
-                "Checks for the Delta (Unity Catalog) triple-store backend. "
-                "When Delta is selected in Settings → Triple store → Back End, OntoBricks "
+                "Checks for the Lakehouse (Unity Catalog Delta) triple-store backend. "
+                "When Lakehouse is selected in Settings → Back end → Lakehouse, OntoBricks "
                 "stores triples as VIEW + Delta TABLE pairs inside the registry UC schema. "
-                "A dedicated SQL warehouse can be configured in Settings → Delta → SQL Warehouse "
-                "for Delta graph queries (falls back to the global warehouse if unset). "
+                "A dedicated SQL warehouse can be configured in Settings → Lakehouse → SQL Warehouse "
+                "for Lakehouse graph queries (falls back to the global warehouse if unset). "
                 "Lakebase Accelerated Sync (synced_tables API) is an optional feature that "
                 "enables Managed Sync mode: Lakeflow keeps a Postgres mirror of the Delta VIEW "
                 "up to date automatically, replacing the app-managed COPY loop. "

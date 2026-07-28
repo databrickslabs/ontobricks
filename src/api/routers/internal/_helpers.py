@@ -18,9 +18,31 @@ from shared.config.settings import Settings
 from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
 from back.core.helpers import make_volume_file_service
 from back.core.logging import get_logger
+from back.objects.domain import SettingsService
 from back.objects.session import SessionManager, get_domain
 
 logger = get_logger(__name__)
+
+
+def resolve_roles(request: Request, folder: str, settings: Settings):
+    """Resolve ``(app_role, domain_role)`` for *folder* against the target domain.
+
+    Shared by the comments and review routers, which both authorize against the
+    *target* domain (which may differ from the loaded session domain).
+    """
+    user_role = getattr(request.state, "user_role", "") or ""
+    domain_role = SettingsService.resolve_domain_role(
+        request, folder, settings, app_role=user_role
+    )
+    return user_role, domain_role
+
+
+async def read_json_body(request: Request) -> dict:
+    """Return the parsed JSON request body, or ``{}`` when absent/invalid."""
+    try:
+        return await request.json()
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 @contextmanager

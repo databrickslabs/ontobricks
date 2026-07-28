@@ -116,6 +116,71 @@ class TestGetTables:
         assert uc.get_tables("cat", "sch") == []
 
 
+class TestListFunctions:
+    @patch("databricks.sql.connect")
+    def test_returns_functions_with_param_metadata(
+        self, mock_connect, auth_with_warehouse
+    ):
+        mock_cursor = _make_sql_mocks(
+            mock_connect,
+            fetchall=[
+                [
+                    "recompute_risk",
+                    "STRING",
+                    "Recompute the risk score",
+                    "entity_id",
+                ],
+                ["risk_history", "TABLE_TYPE", None, "days,entity_id"],
+                ["no_args", "STRING", "", ""],
+            ],
+        )
+        uc = UnityCatalog(auth_with_warehouse)
+        out = uc.list_functions("main", "ops")
+
+        assert out == [
+            {
+                "name": "recompute_risk",
+                "full_name": "main.ops.recompute_risk",
+                "comment": "Recompute the risk score",
+                "input_params": ["entity_id"],
+                "param_count": 1,
+                "returns_table": False,
+            },
+            {
+                "name": "risk_history",
+                "full_name": "main.ops.risk_history",
+                "comment": "",
+                "input_params": ["days", "entity_id"],
+                "param_count": 2,
+                "returns_table": True,
+            },
+            {
+                "name": "no_args",
+                "full_name": "main.ops.no_args",
+                "comment": "",
+                "input_params": [],
+                "param_count": 0,
+                "returns_table": False,
+            },
+        ]
+        call_sql, call_params = mock_cursor.execute.call_args[0]
+        # Parameter listing must come from information_schema: the REST
+        # /functions collection endpoint does not populate input_params.
+        assert "`main`.information_schema.routines" in call_sql
+        assert "`main`.information_schema.parameters" in call_sql
+        assert "p.parameter_mode   = 'IN'" in call_sql
+        assert call_params == ("ops",)
+
+    @patch("databricks.sql.connect", side_effect=RuntimeError("boom"))
+    def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):
+        uc = UnityCatalog(auth_with_warehouse)
+        assert uc.list_functions("main", "ops") == []
+
+    def test_rejects_invalid_schema_identifier(self, auth_with_warehouse):
+        uc = UnityCatalog(auth_with_warehouse)
+        assert uc.list_functions("main", "ops; DROP TABLE x") == []
+
+
 class TestGetTableColumns:
     @patch("databricks.sql.connect")
     def test_returns_list_of_dicts(self, mock_connect, auth_with_warehouse):

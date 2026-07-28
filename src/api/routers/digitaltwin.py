@@ -16,6 +16,9 @@ targets a specific version; when omitted, the latest version is used.
 Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
 
+import re
+import time
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Dict, List, Optional
@@ -30,6 +33,7 @@ from back.core.helpers import (
     get_triplestore_sql_credentials,
     get_databricks_client,
     sql_escape,
+    extract_local_name,
     effective_view_table,
     effective_graph_name,
     effective_graph_query_table,
@@ -44,7 +48,19 @@ _expand_uri_aliases = DigitalTwin.expand_uri_aliases
 
 logger = get_logger(__name__)
 
+_SAFE_SQL_IDENT = re.compile(r'^[A-Za-z0-9_.]+$')
+_SAFE_COL_IDENT = re.compile(r'^[A-Za-z0-9_]+$')
+_RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+
 router = APIRouter()
+
+# Short-TTL, in-process cache for ``GET /stats`` results keyed by the graph
+# query table. Triple-store stats only change on a build, so a small TTL
+# removes the 3–4 full-table aggregate scans from repeated read-only tool
+# calls (e.g. an agent probing ``list_entity_types`` several times) while
+# staying fresh within a working session.
+_STATS_CACHE_TTL_SECONDS = 60
+_stats_cache: Dict[str, Dict[str, Any]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +180,68 @@ class FindResponse(BaseModel):
     limit: int = Field(1000, description="Page size used")
     offset: int = Field(0, description="Offset used")
     entity_count: int = 0
+    message: Optional[str] = None
+
+
+class NodeContextDataset(BaseModel):
+    fullName: str
+    key_column: Optional[str] = None
+    key_column_missing: Optional[bool] = None
+    description: Optional[str] = None
+    rows: Optional[List[Dict[str, Any]]] = None
+
+
+class NodeContextBridge(BaseModel):
+    target_domain: str
+    target_class_name: str
+    target_class_uri: str = ""
+    label: str = ""
+    entities: Optional[List[Dict[str, Any]]] = None
+
+
+class NodeContextAction(BaseModel):
+    """A Unity Catalog function bound to the node's ontology class.
+
+    The function takes exactly one parameter: the ID of the entity to act on.
+    """
+
+    fullName: str
+    function: str = ""
+    description: Optional[str] = None
+    returns_table: bool = False
+
+
+class NodeContextResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    dataset: Optional[NodeContextDataset] = None
+    bridges: Optional[List[NodeContextBridge]] = None
+    actions: Optional[List[NodeContextAction]] = None
+    message: Optional[str] = None
+
+
+class NodeActionRequest(BaseModel):
+    entity_uri: str = Field(..., description="Instance URI of the node to act on")
+    action_full_name: str = Field(
+        ..., description="Fully qualified UC function name (catalog.schema.function)"
+    )
+    domain_name: Optional[str] = Field(None, description="Domain name in the registry")
+    domain_version: Optional[str] = Field(None, description="Domain version to load")
+    registry_catalog: Optional[str] = None
+    registry_schema: Optional[str] = None
+    registry_volume: Optional[str] = None
+
+
+class NodeActionResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    action: Optional[str] = None
+    returns_table: bool = False
+    rows: Optional[List[Dict[str, Any]]] = None
     message: Optional[str] = None
 
 
@@ -294,6 +372,7 @@ async def dt_status(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
@@ -378,6 +457,7 @@ async def dt_stats(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     graph_name = effective_graph_name(domain)
 
@@ -390,25 +470,25 @@ async def dt_stats(
 
     query_table = effective_graph_query_table(domain, settings, store=store)
 
-    try:
+    cached = _stats_cache.get(query_table)
+    if cached and (time.monotonic() - cached["_ts"]) < _STATS_CACHE_TTL_SECONDS:
+        logger.info("dt_stats: cache hit for %s", query_table)
+        return cached["resp"]
+
+    def _compute_stats() -> StatsResponse:
         stats = store.get_aggregate_stats(query_table)
         total = stats["total"]
-        subj = stats["distinct_subjects"]
-        pred = stats["distinct_predicates"]
         type_cnt = stats["type_assertion_count"]
         lbl = stats["label_count"]
 
         entity_rows = store.get_type_distribution(query_table)
         pred_rows = store.get_predicate_distribution(query_table)
 
-        rel_cnt = max(total - type_cnt - lbl, 0)
-        inferred_cnt = store.get_inferred_triple_count(query_table)
-
         return StatsResponse(
             success=True,
             total_triples=total,
-            distinct_subjects=subj,
-            distinct_predicates=pred,
+            distinct_subjects=stats["distinct_subjects"],
+            distinct_predicates=stats["distinct_predicates"],
             entity_types=[
                 EntityTypeStat(uri=r["type_uri"], count=int(r["cnt"]))
                 for r in entity_rows
@@ -419,9 +499,22 @@ async def dt_stats(
             ],
             label_count=lbl,
             type_assertion_count=type_cnt,
-            relationship_count=rel_cnt,
-            inferred_triples=inferred_cnt,
+            relationship_count=max(total - type_cnt - lbl, 0),
+            inferred_triples=store.get_inferred_triple_count(query_table),
         )
+
+    try:
+        t0 = time.perf_counter()
+        # Run the (blocking) SQL off the event loop so a slow scan does not
+        # stall other concurrent MCP tool calls.
+        resp = await run_blocking(_compute_stats)
+        logger.info(
+            "dt_stats: computed for %s in %.0fms",
+            query_table,
+            (time.perf_counter() - t0) * 1000,
+        )
+        _stats_cache[query_table] = {"resp": resp, "_ts": time.monotonic()}
+        return resp
     except Exception as e:
         logger.exception("dt_stats failed: %s", e)
         raise InfrastructureError(
@@ -611,6 +704,7 @@ async def dt_triples_find(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     store = get_graphdb(domain, settings)
     if not store:
@@ -622,7 +716,7 @@ async def dt_triples_find(
 
     rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
-    try:
+    def _run_find() -> FindResponse:
         rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
 
         seed_conditions: list[str] = []
@@ -701,6 +795,22 @@ async def dt_triples_find(
             offset=offset,
             entity_count=len(all_entities),
         )
+
+    try:
+        t0 = time.perf_counter()
+        # BFS traversal + alias expansion + bulk triple fetch are all
+        # blocking SQL; run them off the event loop so a dense neighbourhood
+        # walk does not stall other concurrent MCP tool calls.
+        resp = await run_blocking(_run_find)
+        logger.info(
+            "dt_triples_find: search=%r type=%r depth=%d → %d triples in %.0fms",
+            search,
+            entity_type,
+            depth,
+            resp.total,
+            (time.perf_counter() - t0) * 1000,
+        )
+        return resp
     except Exception as e:
         logger.exception("dt_triples_find failed: %s", e)
         raise InfrastructureError("Triple search failed", detail=str(e)) from e
@@ -1552,4 +1662,391 @@ async def dt_cohort_materialize(
         uc_table=result.get("uc_table"),
         materialize_graph_error=result.get("materialize_graph_error"),
         materialize_uc_error=result.get("materialize_uc_error"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /nodes/context
+# ---------------------------------------------------------------------------
+
+
+def _match_ontology_class(entity_uri: str, classes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Resolve an entity instance URI to its ontology class definition.
+
+    Prefers exact class-URI prefix match (``classUri/instance``), then falls
+    back to matching the class local name / display name as a path or hash
+    segment. Needed because R2RML often mints path-based instance URIs while
+    OWL classes use ``base#ClassName``.
+    """
+    if not entity_uri or not classes:
+        return None
+
+    for cls in classes:
+        cls_uri = (cls.get("uri") or "").rstrip("/")
+        if not cls_uri:
+            continue
+        if entity_uri.startswith(cls_uri + "/") or entity_uri.startswith(cls_uri + "#"):
+            return cls
+
+    for cls in classes:
+        tokens = {
+            t for t in (
+                extract_local_name(cls.get("uri") or ""),
+                (cls.get("name") or "").strip(),
+            ) if t
+        }
+        for token in tokens:
+            if (
+                f"/{token}/" in entity_uri
+                or f"#{token}/" in entity_uri
+                or f"#{token}_" in entity_uri
+            ):
+                return cls
+    return None
+
+
+def _class_action_entries(cls: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Return the class's UC function actions, keeping only usable entries.
+
+    Each action binds a Unity Catalog function that takes exactly one
+    parameter: the ID of the entity being acted on. Entries without a
+    syntactically valid ``fullName`` are dropped rather than raising, so a
+    single bad entry never breaks the whole node context.
+    """
+    entries: List[Dict[str, Any]] = []
+    for action in cls.get("actions") or []:
+        if not isinstance(action, dict):
+            continue
+        full_name = str(action.get("fullName") or "").strip()
+        if not full_name or not _SAFE_SQL_IDENT.match(full_name):
+            logger.warning("Skipping action with invalid fullName: %r", full_name)
+            continue
+        entries.append(
+            {
+                "fullName": full_name,
+                "function": str(
+                    action.get("function") or extract_local_name(full_name) or ""
+                ),
+                "description": (str(action.get("description") or "").strip() or None),
+                "returns_table": bool(action.get("returns_table")),
+            }
+        )
+    return entries
+
+
+@router.get(
+    "/nodes/context",
+    response_model=NodeContextResponse,
+    response_model_exclude_none=True,
+    summary="Complete node context (dataset + bridges)",
+    description="Resolve the ontology class for an entity URI and return linked "
+    "dataset metadata (with optional row retrieval) and bridge definitions "
+    "(with optional cross-domain entity traversal).",
+)
+async def dt_nodes_context(
+    entity_uri: str = Query(..., description="Full URI of the entity node"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry",
+    ),
+    domain_version: Optional[str] = Query(None),
+    fetch_dataset_rows: bool = Query(False, description="Fetch rows from the linked UC table/view"),
+    dataset_row_limit: int = Query(5, ge=1, le=20, description="Max rows to return (1–20)"),
+    follow_bridges: bool = Query(False, description="Traverse bridge target domains"),
+    bridge_depth: int = Query(
+        1,
+        ge=1,
+        le=1,
+        description="Bridge traversal depth (only depth=1 supported in this version)",
+    ),
+    registry_catalog: Optional[str] = Query(None),
+    registry_schema: Optional[str] = Query(None),
+    registry_volume: Optional[str] = Query(None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    local_id = _extract_local_id(entity_uri)
+
+    domain = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume,
+        domain_version, read_only=True,
+    )
+    dname = domain.domain_folder or (domain.info or {}).get("name", "")
+
+    # Resolve class by URI prefix, then by local class name in the entity URI
+    raw_classes = domain.get_classes() or []
+    matched_cls = _match_ontology_class(entity_uri, raw_classes)
+
+    if matched_cls is None:
+        logger.info(
+            "nodes/context: no class match for entity=%s domain=%s classes=%d",
+            local_id, dname, len(raw_classes),
+        )
+        return NodeContextResponse(
+            success=True,
+            entity_uri=entity_uri,
+            entity_local_id=local_id,
+        )
+
+    class_name = matched_cls.get("name", "")
+    raw_dataset = matched_cls.get("dataset") or None
+    raw_bridges = matched_cls.get("bridges") or []
+    actions_out = [NodeContextAction(**a) for a in _class_action_entries(matched_cls)]
+    fetch_error: Optional[str] = None
+
+    # --- Dataset ---
+    dataset_out: Optional[NodeContextDataset] = None
+    if raw_dataset and raw_dataset.get("fullName"):
+        full_name = raw_dataset.get("fullName", "")
+        if not full_name or not _SAFE_SQL_IDENT.match(full_name):
+            return NodeContextResponse(
+                success=False,
+                entity_uri=entity_uri,
+                message=f"Invalid dataset fullName in class config: {full_name!r}",
+            )
+
+        key_col = raw_dataset.get("key_column")
+        if key_col and not _SAFE_COL_IDENT.match(key_col):
+            return NodeContextResponse(
+                success=False,
+                entity_uri=entity_uri,
+                message=f"Invalid key_column in class config: {key_col!r}",
+            )
+
+        rows = None
+        key_col_missing = None
+
+        if fetch_dataset_rows:
+            if not key_col:
+                key_col_missing = True
+            else:
+                try:
+                    client_db = get_databricks_client(domain, settings)
+                    if client_db is None:
+                        fetch_error = "Databricks client is not configured"
+                        rows = []
+                    else:
+                        sql = (
+                            f"SELECT * FROM {raw_dataset['fullName']} "
+                            f"WHERE {key_col} = '{sql_escape(local_id)}' "
+                            f"LIMIT {dataset_row_limit}"
+                        )
+                        result = await run_blocking(client_db.execute_query, sql)
+                        rows = result if isinstance(result, list) else []
+                except Exception as exc:
+                    fetch_error = str(exc)
+                    rows = []
+                    logger.warning(
+                        "nodes/context: dataset row fetch failed for %s: %s", entity_uri, exc
+                    )
+
+        dataset_out = NodeContextDataset(
+            fullName=raw_dataset["fullName"],
+            key_column=key_col,
+            key_column_missing=key_col_missing,
+            description=(raw_dataset.get("description") or "").strip() or None,
+            rows=rows,
+        )
+
+    # --- Bridges ---
+    bridges_out: List[NodeContextBridge] = []
+    for b in raw_bridges:
+        target_domain = b.get("target_domain") or b.get("target_project", "")
+        target_class_name = b.get("target_class_name", "")
+        target_class_uri = b.get("target_class_uri", "")
+        label = b.get("label", "")
+
+        bridge_entry = NodeContextBridge(
+            target_domain=target_domain,
+            target_class_name=target_class_name,
+            target_class_uri=target_class_uri,
+            label=label,
+            entities=None,
+        )
+
+        if follow_bridges and target_domain and target_class_name:
+            try:
+                target_dom = DigitalTwin.resolve_domain(
+                    target_domain, session_mgr, settings,
+                    registry_catalog, registry_schema, registry_volume,
+                    read_only=True,
+                )
+                target_store = get_graphdb(target_dom, settings)
+                if target_store:
+                    target_table = effective_graph_query_table(target_dom, settings, store=target_store)
+                    if target_table:
+                        if not _SAFE_SQL_IDENT.match(target_table):
+                            logger.warning(
+                                "nodes/context: invalid target_table %r for bridge %s — skipping",
+                                target_table, target_class_name,
+                            )
+                            continue
+                        esc_type = sql_escape(target_class_name).lower()
+                        esc_id = sql_escape(local_id).lower()
+                        seed_where = (
+                            f" WHERE subject IN ("
+                            f"SELECT subject FROM {target_table} "
+                            f"WHERE predicate = '{_RDF_TYPE}' "
+                            f"AND (LOWER(object) LIKE '%#{esc_type}' "
+                            f"OR LOWER(object) LIKE '%/{esc_type}'))"
+                            f" AND (LOWER(subject) LIKE '%/{esc_id}%' "
+                            f"OR LOWER(subject) LIKE '%#{esc_id}%')"
+                        )
+                        rows_bridge = target_store.bfs_traversal(
+                            target_table, seed_where, depth=1,
+                            search=local_id, entity_type=target_class_name,
+                        )
+                        entities = [
+                            {"uri": r.get("subject", ""), "predicate": r.get("predicate", ""),
+                             "object": r.get("object", "")}
+                            for r in (rows_bridge or [])
+                        ]
+                        bridge_entry = NodeContextBridge(
+                            target_domain=target_domain,
+                            target_class_name=target_class_name,
+                            target_class_uri=target_class_uri,
+                            label=label,
+                            entities=entities,
+                        )
+                bridges_out.append(bridge_entry)
+            except Exception as exc:
+                logger.warning(
+                    "nodes/context: bridge traversal to %s/%s failed — skipping: %s",
+                    target_domain, target_class_name, exc,
+                )
+        else:
+            bridges_out.append(bridge_entry)
+
+    logger.info(
+        "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d actions=%d",
+        local_id, class_name, dname, bool(dataset_out), len(bridges_out),
+        len(actions_out),
+    )
+
+    return NodeContextResponse(
+        success=True,
+        entity_uri=entity_uri,
+        entity_local_id=local_id,
+        class_name=class_name,
+        dataset=dataset_out,
+        bridges=bridges_out or None,
+        actions=actions_out or None,
+        message=fetch_error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /nodes/action
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/nodes/action",
+    response_model=NodeActionResponse,
+    response_model_exclude_none=True,
+    summary="Invoke a Unity Catalog function action on a node",
+    description="Run one of the ontology class's configured Unity Catalog "
+    "function actions against a node. The function receives exactly one "
+    "argument: the entity's local ID. Only functions declared on the resolved "
+    "class may be invoked.",
+)
+async def dt_nodes_action(
+    payload: NodeActionRequest,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    entity_uri = payload.entity_uri
+    local_id = _extract_local_id(entity_uri)
+
+    domain = DigitalTwin.resolve_domain(
+        payload.domain_name, session_mgr, settings,
+        payload.registry_catalog, payload.registry_schema, payload.registry_volume,
+        payload.domain_version, read_only=True,
+    )
+    dname = domain.domain_folder or (domain.info or {}).get("name", "")
+
+    raw_classes = domain.get_classes() or []
+    matched_cls = _match_ontology_class(entity_uri, raw_classes)
+    if matched_cls is None:
+        return NodeActionResponse(
+            success=False,
+            entity_uri=entity_uri,
+            entity_local_id=local_id,
+            message="No ontology class matches this entity URI",
+        )
+
+    class_name = matched_cls.get("name", "")
+
+    # Allow-list: only functions declared on the resolved class may run. This
+    # is what keeps the endpoint from becoming an arbitrary SQL executor.
+    requested = payload.action_full_name.strip()
+    action = next(
+        (a for a in _class_action_entries(matched_cls) if a["fullName"] == requested),
+        None,
+    )
+    if action is None:
+        logger.warning(
+            "nodes/action: %r is not declared on class %s — rejected",
+            requested, class_name,
+        )
+        return NodeActionResponse(
+            success=False,
+            entity_uri=entity_uri,
+            entity_local_id=local_id,
+            class_name=class_name,
+            message=f"Action {requested!r} is not configured on class {class_name!r}",
+        )
+
+    full_name = action["fullName"]
+    returns_table = action["returns_table"]
+
+    try:
+        client_db = get_databricks_client(domain, settings)
+        if client_db is None:
+            return NodeActionResponse(
+                success=False,
+                entity_uri=entity_uri,
+                entity_local_id=local_id,
+                class_name=class_name,
+                action=full_name,
+                message="Databricks client is not configured",
+            )
+        arg = f"'{sql_escape(local_id)}'"
+        sql = (
+            f"SELECT * FROM {full_name}({arg})"
+            if returns_table
+            else f"SELECT {full_name}({arg}) AS result"
+        )
+        result = await run_blocking(client_db.execute_query, sql)
+        rows = result if isinstance(result, list) else []
+    except Exception as exc:
+        logger.warning(
+            "nodes/action: %s failed for %s: %s", full_name, entity_uri, exc
+        )
+        return NodeActionResponse(
+            success=False,
+            entity_uri=entity_uri,
+            entity_local_id=local_id,
+            class_name=class_name,
+            action=full_name,
+            returns_table=returns_table,
+            rows=[],
+            message=str(exc),
+        )
+
+    logger.info(
+        "nodes/action: entity=%s class=%s domain=%s action=%s rows=%d",
+        local_id, class_name, dname, full_name, len(rows),
+    )
+
+    return NodeActionResponse(
+        success=True,
+        entity_uri=entity_uri,
+        entity_local_id=local_id,
+        class_name=class_name,
+        action=full_name,
+        returns_table=returns_table,
+        rows=rows,
     )

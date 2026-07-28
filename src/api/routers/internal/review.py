@@ -1,7 +1,7 @@
 """
 Internal API -- Ontology review / validation workflow endpoints.
 
-Backs the Registry "My Tasks" worklist and the Domain "Validation"
+Backs the Home "My Tasks" worklist and the Domain "Validation"
 workspace. Orchestrates the review workflow (submit / sign-off /
 publish / reopen) on top of the version lifecycle, persisting every
 decision to the ``domain_review_events`` audit log.
@@ -18,8 +18,11 @@ from shared.config.settings import get_settings, Settings
 from back.core.errors import ValidationError
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_session_manager
-from back.objects.domain import SettingsService
 from back.objects.registry.ReviewService import ReviewService
+from api.routers.internal._helpers import (
+    resolve_roles as _roles,
+    read_json_body as _body,
+)
 
 logger = get_logger(__name__)
 
@@ -174,22 +177,6 @@ async def reopen(
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
-
-
-def _roles(request: Request, folder: str, settings: Settings):
-    """Resolve (app_role, domain_role) for *folder* against the target domain."""
-    user_role = getattr(request.state, "user_role", "") or ""
-    domain_role = SettingsService.resolve_domain_role(
-        request, folder, settings, app_role=user_role
-    )
-    return user_role, domain_role
-
-
-async def _body(request: Request) -> dict:
-    try:
-        return await request.json()
-    except Exception:  # noqa: BLE001
-        return {}
 
 
 async def _comment(request: Request) -> str:

@@ -41,6 +41,7 @@ async def test_expected_core_tools_registered(mcp_client):
         "list_entity_types",
         "describe_entity",
         "get_status",
+        "get_entity_context",
     }
     missing = expected - tools
     assert not missing, f"missing MCP tools: {missing}"

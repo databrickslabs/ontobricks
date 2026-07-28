@@ -17,6 +17,7 @@ from back.core.errors import (
 from shared.config.constants import HTTP_USER_AGENT
 from shared.config.settings import Settings
 from back.core.databricks import is_databricks_app
+from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.core.helpers import (
     get_databricks_client,
     get_databricks_host_and_token,
@@ -93,36 +94,40 @@ class SettingsService:
     def _mirror_graph_engine_to_domain_registry(
         session_mgr: SessionManager,
         *,
-        engine: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
-        triple_store_backend: Optional[str] = None,
         delta_warehouse_id: Optional[str] = None,
     ) -> None:
-        """Copy graph DB settings into ``domain.settings['registry']`` (best-effort).
+        """Copy graph DB *connection* settings into ``domain.settings['registry']``.
 
         Authoritative persistence is :class:`GlobalConfigService` via
         :meth:`RegistryStore.save_global_config` (Volume ``.global_config.json``
         or Lakebase ``global_config`` JSONB). Mirroring keeps the domain JSON
         export aligned with the catalog/schema/volume block for operators.
+
+        The backend *selection* is no longer mirrored — it now lives per-domain
+        in ``DomainSession.info['graph_backend']``. Lakehouse warehouse lives in
+        ``graph_engine_config.lakehouse.warehouse_id`` only.
         """
-        if (
-            engine is None
-            and config is None
-            and triple_store_backend is None
-            and delta_warehouse_id is None
-        ):
+        if config is None and delta_warehouse_id is None:
             return
         try:
+            from back.core.graphdb.engine_config import normalize_graph_engine_config
+
             domain = get_domain(session_mgr)
             reg = domain.settings.setdefault("registry", {})
-            if engine is not None:
-                reg["graph_engine"] = engine
             if config is not None:
-                reg["graph_engine_config"] = dict(config)
-            if triple_store_backend is not None:
-                reg["triple_store_backend"] = triple_store_backend
+                reg["graph_engine_config"] = normalize_graph_engine_config(config)
             if delta_warehouse_id is not None:
-                reg["delta_warehouse_id"] = delta_warehouse_id
+                gec = normalize_graph_engine_config(
+                    reg.get("graph_engine_config")
+                    if isinstance(reg.get("graph_engine_config"), dict)
+                    else {}
+                )
+                lh = dict(gec.get("lakehouse") or {})
+                lh["warehouse_id"] = (delta_warehouse_id or "").strip()
+                gec["lakehouse"] = lh
+                reg["graph_engine_config"] = gec
+            reg.pop("delta_warehouse_id", None)
             domain.save()
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -466,6 +471,32 @@ class SettingsService:
             raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
 
     @staticmethod
+    async def fetch_uc_functions(
+        catalog: str,
+        schema: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        log_label: str = "Get UC functions",
+    ) -> Dict[str, Any]:
+        """List user-defined functions in *catalog*.*schema*.
+
+        Used by the ontology *Actions* picker. Callers only bind functions
+        taking exactly one parameter (the entity ID), so ``param_count`` is
+        surfaced for client-side filtering.
+        """
+        try:
+            client = get_databricks_client(get_domain(session_mgr), settings)
+            if not client:
+                raise ValidationError("Databricks not configured")
+            functions = await run_blocking(client.list_functions, catalog, schema)
+            return {"success": True, "functions": functions}
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("%s failed: %s", log_label, e)
+            raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
+
+    @staticmethod
     async def check_lakebase_permissions(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
@@ -583,7 +614,6 @@ class SettingsService:
             except Exception:
                 logger.debug("Could not check registry marker")
 
-        graph_engine = "lakebase"
         graph_engine_config: Dict[str, Any] = {}
         delta_warehouse_id = ""
         if rcfg.is_configured:
@@ -592,9 +622,6 @@ class SettingsService:
                     session_mgr, settings
                 )
                 global_config_service.load(host, token, registry_cfg)
-                graph_engine = global_config_service.get_graph_engine(
-                    host, token, registry_cfg
-                )
                 graph_engine_config = global_config_service.get_graph_engine_config(
                     host, token, registry_cfg
                 )
@@ -603,7 +630,7 @@ class SettingsService:
                 )
             except Exception:
                 logger.debug(
-                    "Could not load graph engine for registry GET payload",
+                    "Could not load graph engine config for registry GET payload",
                     exc_info=True,
                 )
 
@@ -613,7 +640,6 @@ class SettingsService:
             "configured": initialized,
             "registry_locked": SettingsService.is_registry_locked(settings),
             "lakebase": SettingsService._lakebase_runtime_info(rcfg),
-            "graph_engine": graph_engine,
             "graph_engine_config": graph_engine_config,
             "delta_warehouse_id": delta_warehouse_id,
         }
@@ -1492,69 +1518,31 @@ class SettingsService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def get_graph_engine_result(
+    def get_delta_warehouse_result(
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        # Bypass per-process TTL so the Settings Graph DB tab reflects the store
-        # immediately after save (multi-worker and cross-tab).
-        global_config_service.load(host, token, registry_cfg, force=True)
-        engine = global_config_service.get_graph_engine(host, token, registry_cfg)
-        allowed = list(global_config_service.ALLOWED_GRAPH_ENGINES)
-        return {"success": True, "graph_engine": engine, "allowed_engines": allowed}
+        """Return the Delta SQL-warehouse selection + registry location.
 
-    @staticmethod
-    def set_graph_engine_result(
-        engine: str,
-        email: str,
-        user_token: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
-
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        ok, msg = global_config_service.set_graph_engine(
-            host, token, registry_cfg, engine
-        )
-        if not ok:
-            raise ValidationError(msg)
-        persisted = global_config_service.get_graph_engine(host, token, registry_cfg)
-        SettingsService._mirror_graph_engine_to_domain_registry(
-            session_mgr, engine=persisted
-        )
-        return {"success": True, "graph_engine": persisted}
-
-    @staticmethod
-    def get_triple_store_backend_result(
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
+        Backend *selection* moved per-domain; this endpoint now only surfaces
+        the workspace-global Delta connection config (which SQL warehouse
+        materializes Delta triples) plus the registry catalog/schema used by the
+        Settings Delta panel.
+        """
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         global_config_service.load(host, token, registry_cfg, force=True)
-        backend = global_config_service.get_triple_store_backend(
-            host, token, registry_cfg
-        )
         domain = get_domain(session_mgr)
         delta_wid = global_config_service.get_delta_warehouse_id(
             host, token, registry_cfg
         )
-        allowed = list(global_config_service.ALLOWED_TRIPLE_STORE_BACKENDS)
         reg = registry_cfg if isinstance(registry_cfg, dict) else {}
         catalog = (reg.get("catalog") or "").strip()
         schema = (reg.get("schema") or "").strip()
         storage_location = f"{catalog}.{schema}" if catalog and schema else ""
         return {
             "success": True,
-            "triple_store_backend": backend,
-            "allowed_backends": allowed,
             "delta_warehouse_id": delta_wid,
             "effective_delta_warehouse_id": resolve_delta_warehouse_id(
                 domain, settings
@@ -1563,54 +1551,6 @@ class SettingsService:
             "registry_schema": schema,
             "storage_location": storage_location,
             "registry_configured": bool(storage_location),
-        }
-
-    @staticmethod
-    def set_triple_store_backend_result(
-        backend: str,
-        email: str,
-        user_token: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-        *,
-        delta_warehouse_id: Optional[str] = None,
-        persist_delta_warehouse: bool = False,
-    ) -> Dict[str, Any]:
-        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
-        domain, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        ok, msg = global_config_service.set_triple_store_backend(
-            host, token, registry_cfg, backend
-        )
-        if not ok:
-            raise ValidationError(msg)
-        persisted = global_config_service.get_triple_store_backend(
-            host, token, registry_cfg
-        )
-        persisted_delta = global_config_service.get_delta_warehouse_id(
-            host, token, registry_cfg
-        )
-        if persist_delta_warehouse:
-            wid = (delta_warehouse_id or "").strip()
-            ok, msg = global_config_service.set_delta_warehouse_id(
-                host, token, registry_cfg, wid
-            )
-            if not ok:
-                raise ValidationError(msg)
-            persisted_delta = wid
-        SettingsService._mirror_graph_engine_to_domain_registry(
-            session_mgr,
-            triple_store_backend=persisted,
-            delta_warehouse_id=persisted_delta if persist_delta_warehouse else None,
-        )
-        return {
-            "success": True,
-            "triple_store_backend": persisted,
-            "delta_warehouse_id": persisted_delta,
-            "effective_delta_warehouse_id": resolve_delta_warehouse_id(
-                domain, settings
-            ),
         }
 
     @staticmethod
@@ -1701,21 +1641,27 @@ class SettingsService:
         """
         import os as _os
 
+        from back.core.graphdb.engine_config import normalize_graph_engine_config
+
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         global_config_service.load(host, token, registry_cfg, force=True)
-        cfg = dict(global_config_service.get_graph_engine_config(host, token, registry_cfg))
+        cfg = normalize_graph_engine_config(
+            global_config_service.get_graph_engine_config(host, token, registry_cfg)
+        )
+        lb = dict(cfg.get("lakebase") or {})
 
         _env_project = _os.environ.get("LAKEBASE_PROJECT", "")
         _env_branch = _os.environ.get("LAKEBASE_BRANCH", "")
         _env_db = _os.environ.get("PGDATABASE", "") or _os.environ.get("LAKEBASE_DATABASE", "")
-        if not cfg.get("lakebase_project") and _env_project:
-            cfg["lakebase_project"] = _env_project
-        if not cfg.get("lakebase_branch") and _env_branch:
-            cfg["lakebase_branch"] = _env_branch
-        if not cfg.get("database") and _env_db:
-            cfg["database"] = _env_db
+        if not lb.get("lakebase_project") and _env_project:
+            lb["lakebase_project"] = _env_project
+        if not lb.get("lakebase_branch") and _env_branch:
+            lb["lakebase_branch"] = _env_branch
+        if not lb.get("database") and _env_db:
+            lb["database"] = _env_db
+        cfg["lakebase"] = lb
 
         return {"success": True, "graph_engine_config": cfg}
 
@@ -1733,6 +1679,23 @@ class SettingsService:
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
+        from back.core.graphdb.engine_config import normalize_graph_engine_config
+
+        if not isinstance(config, dict):
+            raise ValidationError("graph_engine_config must be a JSON object")
+        config = normalize_graph_engine_config(config)
+        if is_neo4j_password_from_secret():
+            neo = dict(config.get("neo4j") or {})
+            if neo.get("password"):
+                # Never persist a clear-text password when the Apps secret is
+                # in place — the env var wins at runtime and this would only
+                # leak a redundant credential into global_config.
+                logger.info(
+                    "Stripping neo4j['password'] before persist — "
+                    "NEO4J_PASSWORD env var is the source of truth"
+                )
+                neo.pop("password", None)
+                config = {**config, "neo4j": neo}
         ok, msg = global_config_service.set_graph_engine_config(
             host, token, registry_cfg, config
         )
@@ -1753,15 +1716,17 @@ class SettingsService:
     ) -> Dict[str, Any]:
         """Probe Lakebase Postgres for the configured graph schema (read-only).
 
-        Uses ``graph_engine_config.database`` (optional) and ``schema`` from
-        registry global config.
+        Uses ``graph_engine_config.lakebase.database`` (optional) and ``schema``
+        from registry global config.
         """
         import os
 
         from back.core.databricks import get_lakebase_auth
         from back.core.databricks.lakebase import BranchLakebaseAuth
+        from back.core.graphdb.engine_config import lakebase_section
         from back.core.graphdb.lakebase.LakebaseBase import (
             default_schema,
+            resolve_postgres_database_override,
             validate_graph_schema,
         )
 
@@ -1771,8 +1736,10 @@ class SettingsService:
                 session_mgr, settings
             )
             global_config_service.load(host, token, registry_cfg, force=True)
-            gcfg = global_config_service.get_graph_engine_config(
-                host, token, registry_cfg
+            gcfg = lakebase_section(
+                global_config_service.get_graph_engine_config(
+                    host, token, registry_cfg
+                )
             )
         except Exception as exc:
             logger.warning("graph_engine_lakebase_health context failed: %s", exc)
@@ -1784,7 +1751,7 @@ class SettingsService:
         schema_raw = ""
         branch_path = ""
         if isinstance(gcfg, dict):
-            db_override = (gcfg.get("database") or "").strip()
+            db_override = resolve_postgres_database_override(gcfg)
             schema_raw = (gcfg.get("schema") or "").strip()
             branch_path = (gcfg.get("lakebase_branch") or "").strip()
 
@@ -1898,6 +1865,144 @@ class SettingsService:
                 f"Registry database: {registry_db!r}."
             )
         return out
+
+    @staticmethod
+    def graph_engine_neo4j_test_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Probe Neo4j Bolt connectivity using the persisted ``engine_config``.
+
+        Wires the previously-placeholder "Test connection" button on Settings →
+        Triple store → Neo4j. Reads the persisted config, instantiates
+        :class:`Neo4jConnection` (this resolves auth — env var first, then
+        engine_config fallback), and calls the official driver's
+        ``verify_connectivity()`` (a lightweight Bolt handshake — no Cypher
+        is executed, no data is touched).
+
+        Returns one of:
+
+        - ``{"success": True, "ok": True, "uri": ..., "database": ...,
+           "latency_ms": ..., "credentials_source": "env var" | "engine_config"}``
+        - ``{"success": True, "ok": False, "error": ..., "category": ...}``
+          for clean error states (auth failure, DNS unresolvable, bad config) —
+          surfaces a friendly UI message without 5xx-ing the route.
+        """
+        import time as _time
+
+        from back.core.graphdb.engine_config import neo4j_section
+        from back.core.graphdb.neo4j.Neo4jConnection import (
+            NEO4J_PASSWORD_ENV,
+            Neo4jConnection,
+            is_neo4j_password_from_secret,
+            resolve_neo4j_database,
+        )
+
+        try:
+            _, host, token, registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            global_config_service.load(host, token, registry_cfg, force=True)
+            gcfg = neo4j_section(
+                global_config_service.get_graph_engine_config(
+                    host, token, registry_cfg
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("graph_engine_neo4j_test context failed: %s", exc)
+            raise InfrastructureError(
+                "Could not load graph engine config", detail=str(exc)
+            ) from exc
+
+        if not isinstance(gcfg, dict) or not gcfg:
+            return {
+                "success": True,
+                "ok": False,
+                "error": "engine_config is empty — fill in URI/Username and Save first.",
+                "category": "config",
+            }
+
+        uri = str(gcfg.get("uri") or "").strip()
+        if not uri:
+            return {
+                "success": True,
+                "ok": False,
+                "error": "engine_config['uri'] is missing — set the Bolt URI in Settings → Neo4j.",
+                "category": "config",
+            }
+
+        try:
+            conn = Neo4jConnection(
+                uri=uri,
+                database=resolve_neo4j_database(gcfg),
+                auth_method=str(gcfg.get("auth_method") or "basic").strip() or "basic",
+                engine_config=gcfg,
+                encrypted=bool(gcfg.get("encrypted", True)),
+            )
+        except ValidationError as exc:
+            return {"success": True, "ok": False, "error": str(exc), "category": "config"}
+        except ImportError as exc:
+            return {
+                "success": True,
+                "ok": False,
+                "error": str(exc),
+                "category": "driver-missing",
+            }
+
+        t0 = _time.monotonic()
+        cypher_rows = None
+        try:
+            driver = conn.get_driver()
+            driver.verify_connectivity()
+            # Round-trip a trivial Cypher through the same ``_run`` path the
+            # real query stack uses — exercises session creation, Cypher
+            # execution, and the INFO log line (Benoit's PR #47 review #2).
+            cypher_rows = conn.run("RETURN 1 AS probe")
+        except InfrastructureError as exc:
+            return {
+                "success": True,
+                "ok": False,
+                "error": str(exc),
+                "category": "auth",
+            }
+        except ValidationError as exc:
+            return {
+                "success": True,
+                "ok": False,
+                "error": str(exc),
+                "category": "config",
+            }
+        except Exception as exc:  # noqa: BLE001 — bolt errors don't share a base class
+            return {
+                "success": True,
+                "ok": False,
+                "error": "%s: %s" % (type(exc).__name__, exc),
+                "category": "connectivity",
+            }
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        latency_ms = round((_time.monotonic() - t0) * 1000.0, 1)
+
+        return {
+            "success": True,
+            "ok": True,
+            "uri": uri,
+            "database": conn.database,
+            "latency_ms": latency_ms,
+            "cypher_probe": (
+                {"rows": len(cypher_rows or []), "echo": (cypher_rows[0] if cypher_rows else None)}
+                if cypher_rows is not None
+                else None
+            ),
+            "credentials_source": (
+                "env var (%s — Databricks Apps secret)" % NEO4J_PASSWORD_ENV
+                if is_neo4j_password_from_secret()
+                else "engine_config (local-dev fallback)"
+            ),
+        }
 
     @staticmethod
     def graph_engine_uc_catalogs_result(
@@ -2192,7 +2297,9 @@ class SettingsService:
         saved_cfg = global_config_service.get_graph_engine_config(
             host, token, registry_cfg
         )
-        saved_cfg = dict(saved_cfg) if isinstance(saved_cfg, dict) else {}
+        from back.core.graphdb.engine_config import lakebase_section
+
+        saved_cfg = lakebase_section(saved_cfg)
         sync_mode = (saved_cfg.get("sync_mode") or "app_managed").strip()
         uc_catalog = ""
         if bool(params.get("grant_uc_catalog")) and sync_mode == "managed_synced":
@@ -2235,15 +2342,19 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Any,
     ) -> str:
-        """Return the ``database`` field from the saved graph engine config.
+        """Return the Lakebase ``database`` field from the saved graph engine config.
 
         Returns ``""`` on any failure so callers fall back gracefully.
         """
         try:
+            from back.core.graphdb.engine_config import lakebase_section
+
             domain = get_domain(session_mgr)
             host, token = get_databricks_host_and_token(domain, settings)
             registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
-            ge = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            ge = lakebase_section(
+                global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            )
             return (ge.get("database") or "").strip()
         except Exception:  # noqa: BLE001
             return ""
@@ -2276,10 +2387,14 @@ class SettingsService:
 
         # Load saved config to fill gaps not supplied by the form.
         try:
+            from back.core.graphdb.engine_config import lakebase_section
+
             domain = get_domain(session_mgr)
             host, token = get_databricks_host_and_token(domain, settings)
             registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
-            ge = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            ge = lakebase_section(
+                global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            )
             if not branch_path:
                 branch_path = (ge.get("lakebase_branch") or "").strip()
             if not database:
@@ -2511,10 +2626,14 @@ class SettingsService:
         import concurrent.futures
 
         try:
+            from back.core.graphdb.engine_config import lakebase_section
+
             _, host, token, registry_cfg = SettingsService._resolve_context(
                 session_mgr, settings
             )
-            gcfg = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            gcfg = lakebase_section(
+                global_config_service.get_graph_engine_config(host, token, registry_cfg)
+            )
             sync_mode = gcfg.get("sync_mode", "app_managed")
 
             # ── Resolve UC catalog / schema ───────────────────────────────
@@ -3138,8 +3257,7 @@ class SettingsService:
     ) -> Dict[str, Any]:
         """Return the Databricks App principals (users + groups).
 
-        Used by Settings → Permissions (read-only view) and as the row
-        source for the Registry → Teams matrix picker.
+        Used as the row source for the Settings → Admin → Teams matrix picker.
         """
         _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
         app_name = settings.ontobricks_app_name
@@ -3275,7 +3393,7 @@ class SettingsService:
         return {"success": ok, "message": msg}
 
     # ------------------------------------------------------------------
-    # Teams matrix (Registry → Teams)
+    # Teams matrix (Settings → Admin → Teams)
     # ------------------------------------------------------------------
 
     @staticmethod

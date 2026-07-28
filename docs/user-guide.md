@@ -239,6 +239,35 @@ When a dashboard has filter parameters (e.g., customer_id, meter_id), you can ma
 
 When viewing an entity in the Knowledge Graph visualization, the dashboard will be embedded with the correct parameter values.
 
+### Class Actions (Unity Catalog functions)
+
+Beyond the linked dataset, an entity type can expose **actions** — Unity Catalog
+functions that operate on a single entity and can be run from the Graph Explorer
+or from an MCP client.
+
+1. Go to **Ontology** → **Entities** and select an entity type
+2. Open the **External** tab and find the **Actions** section
+3. Click **Add** to open the function picker, then choose a catalog and schema
+4. Pick a function and type a **description** — the description is what the LLM
+   and the end user see, so make it explicit about what the action does
+5. Click **Save**
+
+> **One-parameter contract**: the selected Unity Catalog function must accept
+> **exactly one parameter — the ID of the entity to act on**. OntoBricks passes
+> the entity's local ID (extracted from its URI) automatically at invocation
+> time. Functions with a different number of parameters are shown greyed out in
+> the picker and cannot be selected.
+
+Table-valued functions (`RETURNS TABLE`) are executed as
+`SELECT * FROM fn('<id>')` and their rows are rendered as a table; scalar
+functions are executed as `SELECT fn('<id>') AS result` and their value is shown
+as a single result.
+
+In the Graph Explorer, actions appear both in the entity details panel and in
+the node right-click menu. Only functions declared on the entity's ontology
+class can be invoked — the server rejects anything else, so the ontology acts as
+the allow-list.
+
 ### Option C: AI-Powered Wizard
 
 Click **Generate** in the sidebar to generate an ontology automatically from your database schema using an LLM.
@@ -505,7 +534,7 @@ Right-click any entity node and pick **Expand neighbours (N hops)** to enrich th
 - The hop count follows the **Depth** slider in the right-pane filter panel (default `2`).
 - A small spinner appears in the top-right corner of the canvas while the request is running; the rest of the UI stays interactive.
 - Newly added entities are merged with the existing graph, briefly ringed with a highlight, and the camera zooms to frame them.
-- The same context menu still exposes the existing **View Dashboard** and **Bridges** entries when configured for the entity's class.
+- The same context menu still exposes the existing **View Dashboard**, **Dataset preview**, **Actions** and **Bridges** entries when configured for the entity's class.
 
 **Data Clusters:**
 
@@ -789,7 +818,7 @@ before closing* (**Save & Close** / **Close without saving** / **Cancel**), then
 edit lock and returns you to the Home page. Once you close, the next person can open the
 domain in edit mode.
 
-**Switching version** — the **Switch** button (between **Save** and **Close**) opens a popup
+**Switching version** — the **Versions** button (between **Save** and **Close**) opens a popup
 listing every version of the currently open domain, with the current one flagged. Pick the
 current version to **reload** it from the Registry (discarding in-session edits) or another
 version to **switch** to it. On a **DRAFT** version, a *"Save my changes before switching"*
@@ -830,11 +859,12 @@ so viewers know exactly who to ask to close the domain.
 For a guided, business-user-oriented review on top of the raw lifecycle, OntoBricks adds a
 review workflow that collects reviewer sign-offs and keeps a durable audit trail.
 
-- **Registry → My Tasks** — a cross-domain worklist of the versions that need *you*. Each row
-  shows the domain, version, status, sign-off progress, and the action available to you:
-  **Submit for review** (builders/admins, on a built DRAFT), **Review & sign off** (any
-  domain member, on an IN-REVIEW version), or **Publish** (builders/admins, once the quorum
-  is met). "Review & sign off" loads the domain and opens its Validation workspace.
+- **Home → My Tasks** — a cross-domain worklist of the versions that need *you* (shown on
+  the home page when you have pending items). Each row shows the domain, version, status,
+  sign-off progress, and the action available to you: **Submit for review** (builders/admins,
+  on a built DRAFT), **Review & sign off** (any domain member, on an IN-REVIEW version), or
+  **Publish** (builders/admins, once the quorum is met). "Review & sign off" loads the domain
+  and opens its Validation workspace.
 - **Domain → Validation** — the per-version review workspace:
   - **Consistency checks** — a soft readiness summary (ontology valid, mapping complete,
     warehouse configured, Knowledge Graph built) with shortcuts to the Cockpit and Pitfalls.
@@ -886,7 +916,7 @@ Three related ideas:
 
 ### Domain Save/Load
 
-Domains are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the **Save** button (in the domain sub-navigation) and the **Load Domain** option in the top menu to persist and restore your work; the **Switch** button reloads the current domain or loads another of its versions from the Registry, and the **Close** button releases the edit lock and returns you to the Home page.
+Domains are saved in a versioned JSON format and can be stored in Unity Catalog Volumes. Use the **Save** button (in the domain sub-navigation) and the **Load Domain** option in the top menu to persist and restore your work; the **Versions** button reloads the current domain or loads another of its versions from the Registry, and the **Close** button releases the edit lock and returns you to the Home page.
 
 ### Best Practices for Version Control
 
@@ -1016,6 +1046,8 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 | `get_design_status` | Ontology / metadata / assignment readiness for a domain |
 | `list_entity_types` | Overview of entity types, counts, and predicates |
 | `describe_entity` | Full-text description of an entity with BFS traversal |
+| `get_entity_context` | Linked dataset rows, cross-domain bridges, and class actions for a node |
+| `invoke_entity_action` | Run a Unity Catalog function action on an entity (entity ID passed as the single argument) |
 | `get_graphql_schema` | Auto-generated GraphQL schema (SDL) for the domain |
 | `query_graphql` | Execute a GraphQL query with structured results |
 | `get_status` | Triple store diagnostic (view, graph, count) |
@@ -1151,7 +1183,7 @@ See the [MCP Server documentation](mcp.md) for full details including local usag
 - Lakebase Postgres is the source of truth for the graph engine — verify the App is bound to the Lakebase instance (`PGHOST` / `PGDATABASE` env vars set by the Apps runtime)
 - If the Lakebase instance was paused or scaled to zero, the connection layer retries on `SQLSTATE 57P03`. Wait a few seconds and re-trigger the build.
 - Re-run the Knowledge Graph sync — the build is idempotent (`INSERT … ON CONFLICT DO NOTHING`)
-- For `managed_synced` mode, check the Lakeflow synced-table status under **Settings → Graph DB**
+- For `managed_synced` mode, check the Lakeflow synced-table status under **Settings → Back end**
 
 ### Design Changes Not Saving
 
@@ -1369,7 +1401,7 @@ If all checks pass:
 
 > **Note**: If the triple store table already exists, you can choose to **drop and recreate** it or append to the existing data.
 
-> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the active Graph DB engine (Lakebase Postgres today). The Graph DB engine is selectable in **Settings → Graph DB**.
+> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the domain's Graph DB engine (Lakebase Postgres, Lakehouse, or Neo4j). The backend is chosen **per domain** under **Domain → Information → Knowledge Graph** (engine *connection* settings live under **Settings → Back end**).
 
 ---
 

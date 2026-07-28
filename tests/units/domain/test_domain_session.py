@@ -301,6 +301,48 @@ class TestExportImport:
         assert export["info"]["name"] == "Export Test"
         assert "versions" in export
 
+    def test_export_includes_graph_backend(self, domain_session):
+        """Per-domain graph backend must survive UC export (Domain → Information)."""
+        domain_session.info["graph_backend"] = "neo4j"
+        export = domain_session.export_for_save()
+        assert export["info"]["graph_backend"] == "neo4j"
+
+    def test_import_restores_graph_backend(self, domain_session):
+        """Reloading a domain from UC must restore the saved graph backend."""
+        domain_data = {
+            "info": {
+                "name": "Imported",
+                "description": "Test import",
+                "graph_backend": "databricks",
+            },
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "ImpOntology",
+                        "base_uri": "http://imp.org#",
+                        "classes": [{"name": "Imp"}],
+                        "properties": [],
+                        "constraints": [],
+                        "swrl_rules": [],
+                        "axioms": [],
+                        "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                }
+            },
+        }
+        domain_session.import_from_file(domain_data)
+        assert domain_session.info["graph_backend"] == "databricks"
+
+    def test_graph_backend_round_trip(self, domain_session):
+        domain_session.info["name"] = "RoundTrip"
+        domain_session.info["graph_backend"] = "neo4j"
+        export = domain_session.export_for_save()
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.info["graph_backend"] == "neo4j"
+
     def test_import_from_file(self, domain_session):
         domain_data = {
             "info": {"name": "Imported", "description": "Test import"},

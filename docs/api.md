@@ -686,6 +686,37 @@ BFS-based entity search with depth control.
 - `entity_type` (query, optional): Filter by type
 - `depth` (query, optional): BFS depth (default: 2)
 
+#### `GET /api/v1/digitaltwin/nodes/context`
+
+Resolve the ontology class for an entity URI and return its external context:
+linked Unity Catalog dataset (optionally with rows), cross-domain bridges, and
+the Unity Catalog function actions declared on the class. Metadata only — no
+function is executed here.
+
+**Parameters:**
+- `entity_uri` (query): Full URI of the entity node
+- `domain_name` (query, optional): Domain name in the registry
+- `fetch_dataset_rows` (query, optional): Fetch rows from the linked table/view
+- `dataset_row_limit` (query, optional): Max rows to return, 1–20 (default: 5)
+- `follow_bridges` (query, optional): Traverse bridge target domains
+
+#### `POST /api/v1/digitaltwin/nodes/action`
+
+Invoke one of the class's Unity Catalog function actions on a node. The function
+receives **exactly one argument: the entity's local ID**, extracted from
+`entity_uri`.
+
+**Body:**
+- `entity_uri`: Instance URI of the node to act on
+- `action_full_name`: Fully qualified function name (`catalog.schema.function`)
+- `domain_name` / `domain_version` (optional): Registry domain and version
+
+Only functions declared in the resolved class's `actions` list may be invoked —
+the ontology is the allow-list. Requests for any other function are rejected
+with `success: false` and nothing is executed. Table-valued functions run as
+`SELECT * FROM fn('<id>')`; scalar functions run as
+`SELECT fn('<id>') AS result`.
+
 ---
 
 ## Example Usage

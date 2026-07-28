@@ -748,6 +748,37 @@ def test_wrap_triple_view_sql_for_lakeflow_adds_object_hash():
     assert wrapped.endswith("FROM (SELECT 's' AS subject, 'p' AS predicate, 'o' AS object) AS _ob_triples")
 
 
+def test_upgrade_legacy_triple_table_adds_object_hash_and_pk():
+    from back.core.graphdb.lakebase._companion_ddl import (
+        upgrade_legacy_triple_table_to_object_hash,
+    )
+
+    cur = MagicMock()
+    cur.fetchone.side_effect = [(1,), None]
+
+    upgrade_legacy_triple_table_to_object_hash(cur, "cust360auto_v5__app")
+
+    executed = " ".join(str(c[0][0]) for c in cur.execute.call_args_list)
+    assert "ADD COLUMN IF NOT EXISTS object_hash" in executed
+    assert "DROP CONSTRAINT" in executed
+    assert "ADD PRIMARY KEY (subject, predicate, object_hash)" in executed
+    assert "DROP INDEX IF EXISTS" in executed
+
+
+def test_create_triple_table_migrates_legacy_before_indexes():
+    from back.core.graphdb.lakebase._companion_ddl import _create_triple_table
+
+    cur = MagicMock()
+    cur.fetchone.side_effect = [(1,), None]
+
+    _create_triple_table(cur, "ontobricks_graph", "g_v1__app")
+
+    executed = [str(c[0][0]) for c in cur.execute.call_args_list]
+    assert any("CREATE TABLE IF NOT EXISTS g_v1__app" in s for s in executed)
+    assert any("ADD COLUMN IF NOT EXISTS object_hash" in s for s in executed)
+    assert any("CREATE INDEX IF NOT EXISTS" in s and "object_hash" in s for s in executed)
+
+
 def test_scheduled_view_sql_wraps_object_hash_for_managed_synced():
     from back.objects.registry.scheduler import _view_sql_for_graph_store
 

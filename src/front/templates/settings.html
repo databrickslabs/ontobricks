@@ -4,7 +4,9 @@
 {% block title %}Settings - OntoBricks{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry-teams.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -82,90 +84,12 @@
                 </div>
             </div>
 
-            <!-- ==================== TRIPLE STORE GLOBAL SECTION ==================== -->
-            <div id="ts-global-section" class="sidebar-section">
-                <div class="content-section">
-                    <div class="section-header d-flex justify-content-between align-items-center mb-4">
-                        <div>
-                            <h4 class="mb-1"><i class="bi bi-sliders me-2"></i>Triple store — Back End</h4>
-                            <p class="text-muted mb-0 small">Select the graph database engine used across all domains</p>
-                        </div>
-                        <button type="button" class="btn btn-primary btn-save-settings">
-                            <i class="bi bi-check-circle me-1"></i> Save
-                        </button>
-                    </div>
-
-                    <div id="backendSectionBanner" class="alert alert-light border d-none align-items-center justify-content-center gap-2 py-3 mb-3" role="status" aria-live="polite">
-                        <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
-                        <span class="small text-muted">Loading Back End configuration…</span>
-                    </div>
-
-                    <div id="graphDbTabContent">
-                        <div class="mb-4">
-                            <label for="tripleStoreBackendSelect" class="form-label fw-semibold mb-2">
-                                Triple store backend
-                                <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
-                                    <i class="bi bi-shield-lock me-1"></i>Admin only
-                                </span>
-                            </label>
-                            <select class="form-select form-select-sm" id="tripleStoreBackendSelect">
-                                <option value="lakebase">Lakebase (Postgres) + graph viewer sync</option>
-                                <option value="databricks">Delta (Unity Catalog TABLE)</option>
-                            </select>
-                            <small class="text-muted d-block mt-2">
-                                Selects where triples are stored and how the Knowledge Graph is built.
-                                <strong>Save</strong> at the top persists the choice. Lakebase and Delta
-                                settings pages stay available regardless of this selection.
-                            </small>
-                        </div>
-                        <div class="mb-4 d-none" id="legacyGraphEngineRow">
-                            <label for="graphEngineSelect" class="form-label fw-semibold mb-2">
-                                Graph DB engine
-                            </label>
-                            <select class="form-select form-select-sm settings-graph-engine-select" id="graphEngineSelect">
-                                <option value="lakebase">Lakebase (Postgres)</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-2">
-                            <label class="form-label fw-semibold mb-2">
-                                Graph read limits
-                                <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
-                                    <i class="bi bi-shield-lock me-1"></i>Admin only
-                                </span>
-                            </label>
-                            <div class="row g-3">
-                                <div class="col-12 col-lg-6">
-                                    <label for="graphQueryTimeoutS" class="form-label small fw-semibold mb-1">Statement timeout (seconds)</label>
-                                    <input type="number" min="0" step="5" class="form-control form-control-sm"
-                                           id="graphQueryTimeoutS" placeholder="60">
-                                    <div class="form-text small mt-1 mb-0 text-muted">
-                                        Max time a single graph read (e.g. a Graph Chat traversal) may run before the
-                                        database cancels it — applies to both Lakebase and the SQL warehouse. <code>0</code>
-                                        uses the built-in default. Prevents a broad query from freezing the app.
-                                    </div>
-                                </div>
-                                <div class="col-12 col-lg-6">
-                                    <label for="graphChatResultCap" class="form-label small fw-semibold mb-1">Graph Chat result cap (triples)</label>
-                                    <input type="number" min="0" step="100" class="form-control form-control-sm"
-                                           id="graphChatResultCap" placeholder="10000">
-                                    <div class="form-text small mt-1 mb-0 text-muted">
-                                        Hard ceiling on triples returned to the Graph Chat agent per query.
-                                        <code>0</code> uses the built-in default.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ==================== DELTA TRIPLE STORE SECTION ==================== -->
             <div id="delta-section" class="sidebar-section">
                 <div class="content-section">
                     <div class="section-header mb-4">
                         <div>
-                            <h4 class="mb-1"><i class="bi bi-layers me-2"></i>Delta</h4>
+                            <h4 class="mb-1"><i class="bi bi-layers me-2"></i>Lakehouse</h4>
                             <p class="text-muted mb-0 small">
                                 Unity Catalog Delta tables for the triple store — no separate graph database to provision
                             </p>
@@ -174,7 +98,7 @@
 
                     <div id="deltaSectionBanner" class="alert alert-light border d-none align-items-center justify-content-center gap-2 py-3 mb-3" role="status" aria-live="polite">
                         <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
-                        <span class="small text-muted">Loading Delta configuration…</span>
+                        <span class="small text-muted">Loading Lakehouse configuration…</span>
                     </div>
 
                     <div id="deltaGraphPanel" style="display:none;">
@@ -219,13 +143,13 @@
                                         <i class="bi bi-info-circle me-1"></i>How it works
                                     </h6>
                                     <p class="mb-2">
-                                        With <strong>Delta</strong> selected as the triple-store backend, OntoBricks stores triples
+                                        With <strong>Lakehouse</strong> selected as the graph backend, OntoBricks stores triples
                                         directly in governed Delta tables in Unity Catalog. The
                                         <strong>Registry catalog and schema</strong> (Settings → Registry) define
                                         where all triple-store objects live for every domain.
                                     </p>
                                     <p class="mb-0">
-                                        Pick a dedicated SQL Warehouse on the <strong>SQL Warehouse</strong> tab for Delta graph
+                                        Pick a dedicated SQL Warehouse on the <strong>SQL Warehouse</strong> tab for Lakehouse graph
                                         queries and builds. When unset, the global warehouse from
                                         <strong>Settings → Databricks</strong> is used. After mapping is ready, run
                                         <strong>Knowledge Graph → Build</strong> to create the R2RML VIEW and materialize the
@@ -237,8 +161,8 @@
                             <!-- ── TAB 2 · SQL Warehouse ── -->
                             <div class="tab-pane fade" id="dtpane-warehouse" role="tabpanel" aria-labelledby="dttab-warehouse">
                                 <p class="small text-muted mb-3">
-                                    Used only when <strong>Delta</strong> is the triple-store backend — graph queries,
-                                    health probes, and Delta builds run against this warehouse. Click <strong>Apply</strong>
+                                    Used only when <strong>Lakehouse</strong> is the graph backend — graph queries,
+                                    health probes, and Lakehouse builds run against this warehouse. Click <strong>Apply</strong>
                                     to persist the selection in the registry.
                                 </p>
                                 <label for="deltaWarehouseSelect" class="form-label small fw-semibold mb-1">Warehouse</label>
@@ -695,6 +619,125 @@
                 </div>
             </div>
 
+            <!-- ==================== NEO4J SECTION ==================== -->
+            <div id="neo4j-section" class="sidebar-section">
+                <div class="content-section">
+                    <div class="section-header d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="mb-1"><i class="bi bi-bezier2 me-2"></i>Neo4j</h4>
+                            <p class="text-muted mb-0 small">Configure the Neo4j (Bolt) connection — Aura or self-hosted</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary" id="btnTestNeo4jConnection">
+                                <i class="bi bi-plug me-1"></i> Test connection
+                            </button>
+                            <button type="button" class="btn btn-primary btn-save-settings">
+                                <i class="bi bi-check-circle me-1"></i> Save
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Loading banner -->
+                    <div id="neo4jSectionBanner" class="alert alert-light border d-none align-items-center justify-content-center gap-2 py-3 mb-3" role="status" aria-live="polite">
+                        <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                        <span class="text-muted small">Loading Neo4j settings…</span>
+                    </div>
+
+                    <!-- Architecture note (mirrors the Lakebase one) -->
+                    <div class="alert alert-info border-0 mb-3 small">
+                        <strong>Architecture note:</strong> when Neo4j is the active engine,
+                        OntoBricks writes triples via Bolt at build time using the configured
+                        credentials. All ontology validation runs upstream in the build pipeline
+                        (C2 safeguard) — no raw Cypher entry point is exposed to users.
+                    </div>
+
+                    <form id="neo4jConfigForm" autocomplete="off">
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label for="neo4jUri" class="form-label small fw-semibold mb-1">Bolt URI <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jUri"
+                                       placeholder="neo4j+s://&lt;aura-id&gt;.databases.neo4j.io" required>
+                                <div class="form-text small text-muted">
+                                    Aura uses <code>neo4j+s://</code> (TLS embedded). Self-hosted may use <code>bolt://</code> or <code>neo4j://</code>.
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="neo4jDatabase" class="form-label small fw-semibold mb-1">Database</label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jDatabase" placeholder="neo4j">
+                                <div class="form-text small text-muted">Default <code>neo4j</code>.</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="neo4jAuthMethod" class="form-label small fw-semibold mb-1">Auth method</label>
+                                <select class="form-select form-select-sm" id="neo4jAuthMethod">
+                                    <option value="basic" selected>Basic (username + password)</option>
+                                    <option value="databricks_secret">Databricks secret</option>
+                                </select>
+                            </div>
+
+                            <!-- Basic auth fields -->
+                            <div class="col-md-6 neo4j-auth-basic">
+                                <label for="neo4jUsername" class="form-label small fw-semibold mb-1">Username</label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jUsername" autocomplete="off">
+                            </div>
+                            <div class="col-md-6 neo4j-auth-basic">
+                                <label for="neo4jPassword" class="form-label small fw-semibold mb-1">
+                                    Password
+                                    {% if neo4j_password_from_secret %}
+                                    <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle ms-1"
+                                          title="The password is injected at runtime from the Databricks Apps secret resource `neo4j-password`. The field below is ignored.">
+                                        <i class="bi bi-shield-check me-1"></i>From Apps secret
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"
+                                          title="In production, bind the `neo4j-password` resource in the Apps UI to inject the password from a workspace secret. This input is a local-dev fallback and is persisted in clear in global_config.">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Local-dev fallback
+                                    </span>
+                                    {% endif %}
+                                </label>
+                                <input type="password" class="form-control form-control-sm" id="neo4jPassword"
+                                       autocomplete="new-password"
+                                       {% if neo4j_password_from_secret %}disabled placeholder="••••••••  (sourced from Apps secret)"{% endif %}>
+                                <div class="form-text small text-muted">
+                                    {% if neo4j_password_from_secret %}
+                                    Managed by the <code>neo4j-password</code> Databricks Apps secret resource. See
+                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
+                                    {% else %}
+                                    Stored in registry <code>graph_engine_config</code> for local development.
+                                    For production, bind the <code>neo4j-password</code> secret resource in
+                                    <strong>Apps → Resources</strong> instead — see
+                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Databricks-secret auth fields -->
+                            <div class="col-md-6 neo4j-auth-databricks-secret d-none">
+                                <label for="neo4jSecretScope" class="form-label small fw-semibold mb-1">Secret scope</label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jSecretScope">
+                            </div>
+                            <div class="col-md-6 neo4j-auth-databricks-secret d-none">
+                                <label for="neo4jSecretKey" class="form-label small fw-semibold mb-1">Secret key</label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jSecretKey">
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="neo4jEncrypted" checked>
+                                    <label class="form-check-label small" for="neo4jEncrypted">
+                                        Encrypted connection
+                                        <span class="text-muted">(ignored when the URI scheme is <code>neo4j+s://</code> or <code>bolt+s://</code> — TLS is already embedded)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="neo4jTestResult" class="alert d-none mt-3 small" role="status" aria-live="polite"></div>
+                    </form>
+                </div>
+            </div>
+
             <!-- ==================== GLOBAL SECTION ==================== -->
             <div id="global-section" class="sidebar-section">
                 <div class="content-section">
@@ -801,6 +844,36 @@
                         </small>
                     </div>
 
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            Graph read limits
+                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                            </span>
+                        </label>
+                        <div class="row g-3">
+                            <div class="col-12 col-lg-6">
+                                <label for="graphQueryTimeoutS" class="form-label small fw-semibold mb-1">Statement timeout (seconds)</label>
+                                <input type="number" min="0" step="5" class="form-control form-control-sm"
+                                       id="graphQueryTimeoutS" placeholder="60">
+                                <div class="form-text small mt-1 mb-0 text-muted">
+                                    Max time a single graph read (e.g. a Graph Chat traversal) may run before the
+                                    database cancels it &mdash; applies to both Lakebase and the SQL warehouse. <code>0</code>
+                                    uses the built-in default. Prevents a broad query from freezing the app.
+                                </div>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label for="graphChatResultCap" class="form-label small fw-semibold mb-1">Graph Chat result cap (triples)</label>
+                                <input type="number" min="0" step="100" class="form-control form-control-sm"
+                                       id="graphChatResultCap" placeholder="10000">
+                                <div class="form-text small mt-1 mb-0 text-muted">
+                                    Hard ceiling on triples returned to the Graph Chat agent per query.
+                                    <code>0</code> uses the built-in default.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <hr>
 
                     <div class="mb-0">
@@ -819,42 +892,9 @@
             </div>
 
             {% if user_role == 'admin' %}
-            <!-- ==================== PERMISSIONS SECTION (admin only) ==================== -->
-            <div id="permissions-section" class="sidebar-section">
-                <div class="content-section">
-                    <div class="section-header d-flex justify-content-between align-items-center mb-4">
-                        <div>
-                            <h4 class="mb-1"><i class="bi bi-shield-lock me-2"></i>Permissions</h4>
-                            <p class="text-muted mb-0 small">Manage application principals and access control</p>
-                        </div>
-                    </div>
-
-                    <div class="alert alert-info small d-flex align-items-start mb-3" role="alert">
-                        <i class="bi bi-info-circle me-2 mt-1"></i>
-                        <div>
-                            App-level access is managed in
-                            <strong>Databricks &rarr; App permissions</strong>. This list
-                            mirrors the principals that currently have a permission on the
-                            OntoBricks app. To grant per-domain roles (Viewer / Editor /
-                            Builder), use <strong>Registry &rarr; Teams</strong>.
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0"><i class="bi bi-people me-1"></i> App Principals</h6>
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshPermissions" title="Refresh">
-                                <i class="bi bi-arrow-clockwise"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div id="permissionsTableContainer">
-                        <div class="text-center text-muted small py-4">
-                            <span class="spinner-border spinner-border-sm me-1"></span> Loading app principals...
-                        </div>
-                    </div>
-                </div>
+            <!-- ==================== TEAMS SECTION (admin only) ==================== -->
+            <div id="teams-section" class="sidebar-section">
+                {% include "partials/settings/_settings_teams.html" %}
             </div>
 
             <!-- ==================== LOCKS SECTION (admin only) ==================== -->
@@ -919,11 +959,26 @@
             </div>
             {% endif %}
 
+            <!-- ==================== AUTOMATION: SCHEDULER ==================== -->
+            <div id="schedule-section" class="sidebar-section">
+                {% include "partials/settings/_settings_schedule.html" %}
+            </div>
+
+            <!-- ==================== AUTOMATION: BUILD ANALYTICS ==================== -->
+            <div id="build-analytics-section" class="sidebar-section">
+                {% include "partials/settings/_settings_build_analytics.html" %}
+            </div>
+
+            <!-- ==================== API SECTION (Developer) ==================== -->
+            <div id="api-section" class="sidebar-section">
+                {% include "partials/settings/_settings_api.html" %}
+            </div>
+
         </div>
     </div>
 </div>
 
-<!-- Shared drop-object confirmation modal (used by both Lakebase and Delta sections) -->
+<!-- Shared drop-object confirmation modal (used by both Lakebase and Lakehouse sections) -->
 <div class="modal fade" id="lkDropConfirmModal" tabindex="-1" aria-labelledby="lkDropConfirmModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -943,10 +998,12 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='config/js/settings.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/schedule.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/build-analytics.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 {% if user_role == 'admin' %}
-<script src="{{ url_for('static', filename='config/js/permissions.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-locks.js') }}?v={{ asset_version }}"></script>
-<script src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='registry/js/registry-teams.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-health.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-logs.js') }}?v={{ asset_version }}"></script>
 {% endif %}

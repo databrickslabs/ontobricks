@@ -563,6 +563,13 @@ class OntologyGenerator:
                 (class_uri, ONTOBRICKS_NS.dataset, Literal(json.dumps(dataset)))
             )
 
+        # Add linked Unity Catalog function actions as JSON string
+        actions = cls.get("actions", [])
+        if actions:
+            self.graph.add(
+                (class_uri, ONTOBRICKS_NS.actions, Literal(json.dumps(actions)))
+            )
+
         # Add parent class (subClassOf)
         parent = cls.get("parent", "").strip() if cls.get("parent") else ""
         if parent:

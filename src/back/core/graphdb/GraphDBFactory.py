@@ -22,11 +22,28 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Unified per-domain graph backend vocabulary.  A domain stores exactly one of
+# these in ``DomainSession.info['graph_backend']`` (mandatory).  Each value maps
+# to a ``triple_store_backend`` + ``graph_engine`` pair used internally by the
+# factory:
+#   ``lakebase``   -> triple_store_backend=lakebase,  graph_engine=lakebase
+#   ``databricks`` -> triple_store_backend=databricks (Delta)
+#   ``neo4j``      -> triple_store_backend=lakebase,  graph_engine=neo4j
+GRAPH_BACKENDS: Tuple[str, ...] = ("lakebase", "databricks", "neo4j")
+DEFAULT_GRAPH_BACKEND = "lakebase"
+
+
+def normalize_graph_backend(value: Optional[str]) -> str:
+    """Return a valid per-domain graph backend, defaulting to ``lakebase``."""
+    v = (value or "").strip().lower()
+    return v if v in GRAPH_BACKENDS else DEFAULT_GRAPH_BACKEND
+
 
 class GraphDBFactory:
     """Construct graph DB backend instances from domain session configuration."""
 
     LAKEBASE_AVAILABLE = False
+    NEO4J_AVAILABLE = False
 
     def create(
         self,
@@ -57,14 +74,61 @@ class GraphDBFactory:
         if engine_config is None:
             engine_config = {}
 
+        from back.core.graphdb.engine_config import lakebase_section, neo4j_section
+
         if engine == "lakebase":
-            return self._create_lakebase(domain, settings, engine_config=engine_config)
+            return self._create_lakebase(
+                domain, settings, engine_config=lakebase_section(engine_config)
+            )
+
+        if engine == "neo4j":
+            return self._create_neo4j(
+                domain, settings, engine_config=neo4j_section(engine_config)
+            )
 
         if engine == "delta":
             return self._create_delta(domain, settings)
 
         logger.warning("Unknown graph DB engine: %s", engine)
         return None
+
+    def _create_neo4j(
+        self,
+        domain: Any,
+        settings: Optional[Any] = None,
+        *,
+        engine_config: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Any]:
+        """Instantiate :class:`Neo4jStore` against the configured Bolt endpoint.
+
+        Reads ``uri``, ``database``, ``auth_method`` and credentials from
+        ``engine_config``. See :class:`back.core.graphdb.neo4j.Neo4jStore`
+        for the recognised keys.
+        """
+        try:
+            from back.core.graphdb.neo4j import NEO4J_AVAILABLE
+            from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+            from shared.config.constants import DEFAULT_GRAPH_NAME
+        except ImportError as e:
+            logger.warning("Neo4j graph engine requires the 'neo4j' driver: %s", e)
+            return None
+
+        if not NEO4J_AVAILABLE:
+            logger.warning("Neo4j graph backend unavailable (neo4j driver not installed)")
+            return None
+
+        cfg = engine_config or {}
+        base_name = (domain.info or {}).get("name", DEFAULT_GRAPH_NAME)
+        version = getattr(domain, "current_version", "1") or "1"
+        db_name = "%s_V%s" % (base_name, version)
+        try:
+            return Neo4jStore(db_name=db_name, engine_config=cfg)
+        except (ValueError, NotImplementedError) as exc:
+            logger.warning("Neo4jStore configuration error: %s", exc)
+            return None
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Failed to create Neo4jStore: %s", e)
+            return None
 
     def _create_auto(
         self, domain: Any, settings: Optional[Any] = None
@@ -123,89 +187,51 @@ class GraphDBFactory:
             return None
 
     @staticmethod
-    def _registry_graph_engine_mirror(domain: Any) -> Tuple[Optional[str], Dict[str, Any]]:
-        """Best-effort read of graph DB fields mirrored under ``domain.settings['registry']``.
+    def _resolve_graph_backend(domain: Any) -> str:
+        """Return the mandatory per-domain graph backend.
 
-        ``SettingsService`` copies the persisted engine choice here after a
-        successful admin save.  The mirror is checked as a fallback when
-        :meth:`GlobalConfigService.load` returns the empty template (e.g.
-        registry catalog/schema not yet wired into the dict passed to ``load``).
+        The choice lives in ``DomainSession.info['graph_backend']`` (set from the
+        Domain Information -> Knowledge Graph tab) and is versioned with the
+        domain.  Missing/invalid values default to ``lakebase`` so pre-existing
+        domains keep working.
         """
         try:
-            blob = getattr(domain, "settings", None)
-            if not isinstance(blob, dict):
-                return None, {}
-            reg = blob.get("registry")
-            if not isinstance(reg, dict):
-                return None, {}
-            from back.objects.session.GlobalConfigService import GlobalConfigService
-
-            allowed = GlobalConfigService.ALLOWED_GRAPH_ENGINES
-            raw_eng = (reg.get("graph_engine") or "").strip().lower()
-            eng = raw_eng if raw_eng in allowed else None
-            cfg_raw = reg.get("graph_engine_config")
-            cfg: Dict[str, Any] = dict(cfg_raw) if isinstance(cfg_raw, dict) else {}
-            return eng, cfg
+            info = getattr(domain, "info", None)
+            if isinstance(info, dict):
+                return normalize_graph_backend(info.get("graph_backend"))
         except Exception as exc:  # noqa: BLE001
-            logger.debug("Could not read registry graph_engine mirror: %s", exc)
-            return None, {}
+            logger.debug("Could not read per-domain graph_backend: %s", exc)
+        return DEFAULT_GRAPH_BACKEND
 
     @staticmethod
-    def _resolve_graph_engine(domain: Any, settings: Optional[Any], *, force: bool = False) -> Optional[str]:
-        """Read the configured graph engine from ``GlobalConfigService``.
+    def _resolve_graph_engine(
+        domain: Any, settings: Optional[Any] = None, *, force: bool = False
+    ) -> Optional[str]:
+        """Resolve the graph engine from the per-domain backend choice.
 
-        Falls back to the domain-level registry mirror when global resolution
-        is unavailable (e.g. registry not yet wired up).
-
-        Pass *force=True* to bypass the in-memory cache (required for build-time
-        calls to avoid a cold-start race where the cache holds ``_empty()``).
+        ``settings``/``force`` are accepted for call-site compatibility but no
+        longer consulted — the selection is purely per-domain now.
         """
-        gcs_val = GraphDBFactory._read_global_config(
-            domain,
-            settings,
-            lambda gcs, h, t, r: gcs.get_graph_engine(h, t, r),
-            force=force,
-        )
-        if gcs_val is not None:
-            return gcs_val
-        mirrored_eng, _ = GraphDBFactory._registry_graph_engine_mirror(domain)
-        return mirrored_eng
+        backend = GraphDBFactory._resolve_graph_backend(domain)
+        return "neo4j" if backend == "neo4j" else "lakebase"
 
     @staticmethod
     def _resolve_triple_store_backend(
         domain: Any, settings: Optional[Any] = None, *, force: bool = False
     ) -> str:
-        """Read ``triple_store_backend`` from global config (default ``lakebase``)."""
-        gcs_val = GraphDBFactory._read_global_config(
-            domain,
-            settings,
-            lambda gcs, h, t, r: gcs.get_triple_store_backend(h, t, r),
-            force=force,
-        )
-        if gcs_val:
-            return gcs_val
-        try:
-            from back.objects.session.GlobalConfigService import GlobalConfigService
-
-            blob = getattr(domain, "settings", None)
-            if isinstance(blob, dict):
-                reg = blob.get("registry")
-                if isinstance(reg, dict):
-                    raw = (reg.get("triple_store_backend") or "").strip().lower()
-                    if raw in GlobalConfigService.ALLOWED_TRIPLE_STORE_BACKENDS:
-                        return raw
-        except Exception:  # noqa: BLE001
-            pass
-        return "lakebase"
+        """Resolve the triple-store backend from the per-domain backend choice."""
+        backend = GraphDBFactory._resolve_graph_backend(domain)
+        return "databricks" if backend == "databricks" else "lakebase"
 
     @staticmethod
     def _resolve_graph_engine_config(
-        domain: Any, settings: Optional[Any], *, force: bool = False
+        domain: Any, settings: Optional[Any] = None, *, force: bool = False
     ) -> Optional[dict]:
-        """Read the engine-specific JSON config from ``GlobalConfigService``.
+        """Read the engine-specific connection JSON config from ``GlobalConfigService``.
 
-        Pass *force=True* to bypass the in-memory cache (required for build-time
-        calls to avoid a cold-start race where the cache holds ``_empty()``).
+        Engine *connection* configuration (Neo4j Bolt creds, Lakebase schema /
+        sync options) remains workspace-global — only the backend *selection*
+        moved per-domain.  Pass *force=True* to bypass the in-memory cache.
         """
         raw = GraphDBFactory._read_global_config(
             domain,
@@ -213,14 +239,7 @@ class GraphDBFactory:
             lambda gcs, h, t, r: gcs.get_graph_engine_config(h, t, r),
             force=force,
         )
-        gcs_cfg: Dict[str, Any] = raw if isinstance(raw, dict) else {}
-        _, mirrored_cfg = GraphDBFactory._registry_graph_engine_mirror(domain)
-
-        # Persisted global keys win on overlap; mirror fills gaps when load()
-        # returned the empty template or the config read failed.
-        if mirrored_cfg:
-            return {**mirrored_cfg, **gcs_cfg}
-        return gcs_cfg
+        return raw if isinstance(raw, dict) else {}
 
     # ------------------------------------------------------------------
     # Engine constructors
@@ -279,6 +298,9 @@ class GraphDBFactory:
         """Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance."""
         try:
             from back.core.graphdb.lakebase import LAKEBASE_AVAILABLE
+            from back.core.graphdb.lakebase.LakebaseBase import (
+                resolve_postgres_database_override,
+            )
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
                 LakebaseFlatStore,
                 SYNC_MODE_APP,
@@ -299,7 +321,7 @@ class GraphDBFactory:
 
         cfg = engine_config or {}
         schema_raw = (cfg.get("schema") or "").strip()
-        database_override = str(cfg.get("database") or "").strip()
+        database_override = resolve_postgres_database_override(cfg)
         sync_mode = str(cfg.get("sync_mode") or SYNC_MODE_APP).strip() or SYNC_MODE_APP
         if sync_mode not in (SYNC_MODE_APP, SYNC_MODE_MANAGED):
             logger.warning(
@@ -471,3 +493,10 @@ try:
     GraphDBFactory.LAKEBASE_AVAILABLE = bool(_LB_AVAIL)
 except ImportError:
     logger.debug("Lakebase graph backends not available (optional dependency)")
+
+try:
+    from back.core.graphdb.neo4j import NEO4J_AVAILABLE as _NEO4J_AVAIL  # noqa: F401
+
+    GraphDBFactory.NEO4J_AVAILABLE = bool(_NEO4J_AVAIL)
+except ImportError:
+    logger.debug("Neo4j graph backend not available (optional dependency)")

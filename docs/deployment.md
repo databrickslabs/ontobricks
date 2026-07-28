@@ -251,12 +251,12 @@ All four layers must be satisfied before the application is fully functional. Th
 ║                                                                                         ║
 ║  Role     Source                          Access                                         ║
 ║  ──────── ─────────────────────────────── ──────────────────────────────────────────── ║
-║  Admin    CAN_MANAGE on Databricks App    Full access + manage permission list           ║
+║  Admin    CAN_MANAGE on Databricks App    Full access + manage Teams matrix              ║
 ║  Editor   domain_permissions table        Full read + write on all features              ║
 ║  Viewer   domain_permissions table        Read-only (no create / edit / delete)          ║
 ║  (none)   not in list                     Access Denied — redirected to error page       ║
 ║                                                                                         ║
-║  ► Settings → Permissions (only visible to Admins)                                      ║
+║  ► Settings → Admin → Teams (only visible to Admins)                                    ║
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -331,11 +331,31 @@ PGUSER=you@example.com                   # Your Databricks email locally; SP id 
 
 # MLflow — persist agent traces to your workspace (recommended)
 MLFLOW_TRACKING_URI=databricks
+
+# Neo4j (only for domains whose graph backend is "neo4j")
+# NEO4J_PASSWORD=<bolt-password>          # in Apps, provide via a secret resource
 ```
 
 > `PGPASSWORD` is intentionally **not** in this list. `LakebaseAuth`
 > mints a short-lived JWT via `POST /api/2.0/postgres/credentials`
 > on every connection.
+
+#### Graph backend selection (Lakebase / Delta / Neo4j)
+
+The Graph DB engine is chosen **per domain** (`graph_backend`: `lakebase`,
+`databricks`, or `neo4j`) under **Domain → Information → Knowledge Graph**;
+connection knobs live under **Settings → Back end**. Lakebase and the Delta
+(`databricks`) engine need no extra credentials beyond the Databricks/Lakebase
+config above. The **Neo4j** engine (Aura or self-hosted, Bolt protocol)
+additionally needs its Bolt password:
+
+- **Local dev** — set `NEO4J_PASSWORD` in `.env`, or store the password in the
+  persisted `engine_config` via **Settings → Back end → Neo4j**.
+- **Databricks Apps** — provide `NEO4J_PASSWORD` through an app **secret
+  resource** (never the persisted `engine_config`). The deployed app refuses to
+  source the Bolt password from `engine_config` and requires the secret. Host,
+  port, database, and auth method are configured in **Settings → Back end →
+  Neo4j**.
 
 ### Run Locally
 

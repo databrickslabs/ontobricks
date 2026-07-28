@@ -104,6 +104,9 @@ class DatabricksClient:
     def list_tables_and_views(self, catalog, schema):
         return self.catalog.list_tables_and_views(catalog, schema)
 
+    def list_functions(self, catalog, schema):
+        return self.catalog.list_functions(catalog, schema)
+
     def probe_schema_has_tables(self, catalog, schema):
         return self.catalog.probe_schema_has_tables(catalog, schema)
 

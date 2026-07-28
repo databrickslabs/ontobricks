@@ -1,0 +1,407 @@
+## Remove Registry → My Tasks (duplicate of Home)
+
+Context: My Tasks already lives on the Home page. The Registry sidebar
+"Review → My Tasks" entry (and its dedicated section) was redundant and
+added navigational noise without unique behaviour.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Dropped the Registry `registry-review` group and its `my-tasks` item.
+2. `src/front/templates/registry.html`
+   Removed the my-tasks section include plus its CSS/JS assets.
+3. `src/front/static/registry/js/registry-my-tasks.js`
+   Deleted — unused after the Registry section removal (Home uses
+   `home-tasks.js`).
+4. `src/front/templates/partials/registry/_registry_my_tasks.html`
+   Deleted — Registry-only partial no longer referenced.
+5. `src/front/static/registry/css/registry-my-tasks.css`
+   Kept (still shared by Home); comment updated to reflect Home usage.
+6. `src/front/static/home/js/home-tasks.js`
+   Dropped the "mirrors Registry → My Tasks" comment.
+7. `src/api/routers/internal/review.py`
+   Docstring now points at Home My Tasks instead of Registry.
+8. `docs/user-guide.md` + `README.md` + `src/back/objects/registry/store/lakebase/schema.sql`
+   User-facing / comment references updated to Home → My Tasks.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/registry.html
+- src/front/static/registry/js/registry-my-tasks.js (deleted)
+- src/front/templates/partials/registry/_registry_my_tasks.html (deleted)
+- src/front/static/registry/css/registry-my-tasks.css
+- src/front/static/home/js/home-tasks.js
+- src/api/routers/internal/review.py
+- docs/user-guide.md
+- README.md
+- src/back/objects/registry/store/lakebase/schema.sql
+
+Tests: uv run pytest -q -m "not scenario" → 3306 passed, 275 skipped, 5 deselected in 21.97s
+
+## Move Registry → Developer/API to Settings
+
+Context: The interactive API explorer belonged under Settings with other
+developer tooling, not under Registry domain management. Moved the whole
+Developer sidebar group (API) from Registry into Settings.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Removed Registry `registry-developer` group; added Settings
+   `settings-developer` → API.
+2. `src/front/templates/registry.html`
+   Dropped api-section include and query-api CSS/JS assets.
+3. `src/front/templates/settings.html`
+   Added api-section plus query-api CSS/JS (available to all roles).
+4. `src/front/templates/partials/settings/_settings_api.html` (new)
+   Settings wrapper around the shared query-api partial.
+5. `src/front/templates/partials/registry/_registry_api.html`
+   Deleted — replaced by the Settings partial.
+6. `tests/units/api/test_ui_rendering.py`
+   Assert API endpoint cards live on `/settings`, not `/registry/`.
+7. `docs/development.md`
+   Smoke-check table updated for the new API location.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/registry.html
+- src/front/templates/settings.html
+- src/front/templates/partials/settings/_settings_api.html
+- src/front/templates/partials/registry/_registry_api.html (deleted)
+- tests/units/api/test_ui_rendering.py
+- docs/development.md
+
+Tests: uv run pytest -q -m "not scenario" → 3306 passed, 275 skipped, 5 deselected in 21.07s
+
+## Move Registry → Automation to Settings
+
+Context: Scheduler and Build Analytics sat under Registry even though
+their APIs already live under `/settings/*`. Moved the whole Automation
+sidebar group into Settings alongside Developer tooling.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Removed Registry `registry-automation`; added Settings
+   `settings-automation` (Scheduler, Build Analytics) before Developer.
+2. `src/front/templates/registry.html`
+   Dropped schedule / build-analytics sections and their JS assets.
+3. `src/front/templates/settings.html`
+   Hosts both automation sections; loads `schedule.js` and
+   `build-analytics.js` for all roles.
+4. `src/front/templates/partials/settings/_settings_schedule.html` (new)
+   Moved from registry partial; comment updated.
+5. `src/front/templates/partials/settings/_settings_build_analytics.html` (new)
+   Moved from registry partial; comment updated.
+6. `src/front/templates/partials/registry/_registry_schedule.html` +
+   `_registry_build_analytics.html`
+   Deleted after the move.
+7. `src/front/static/config/js/build-analytics.js`
+   Comment / guard wording now refer to Settings Automation.
+8. `tests/units/api/test_ui_rendering.py`
+   Assert schedule + build analytics live on `/settings`.
+9. `docs/development.md` + `docs/code_organization.md` + `docs/data-access.md`
+   Location references updated.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/registry.html
+- src/front/templates/settings.html
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/templates/partials/settings/_settings_build_analytics.html
+- src/front/templates/partials/registry/_registry_schedule.html (deleted)
+- src/front/templates/partials/registry/_registry_build_analytics.html (deleted)
+- src/front/static/config/js/build-analytics.js
+- tests/units/api/test_ui_rendering.py
+- docs/development.md
+- docs/code_organization.md
+- docs/data-access.md
+
+Tests: uv run pytest -q -m "not scenario" → 3307 passed, 275 skipped, 5 deselected in 21.21s
+
+## Move Registry Teams to Settings Admin
+
+Context: Per-domain team role assignments are an administrative concern.
+The Teams matrix was therefore moved from Registry into Settings → Admin,
+alongside app permissions and other administrator-only controls.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Moved the admin-only Teams item from Registry Domains to Settings Admin.
+2. `src/front/templates/registry.html`
+   Removed the Teams section and its page-specific assets from Registry.
+3. `src/front/templates/settings.html`
+   Added the admin-only Teams section and loaded its CSS/JavaScript assets.
+4. `src/front/templates/partials/settings/_settings_teams.html`
+   Added the Teams matrix partial in its new Settings location.
+5. `src/front/templates/partials/registry/_registry_teams.html`
+   Deleted the obsolete Registry partial.
+6. `src/front/static/registry/js/registry-teams.js` and
+   `src/front/static/registry/css/registry-teams.css`
+   Updated module comments for the new Settings → Admin location.
+7. `src/front/static/config/js/permissions.js`,
+   `src/front/static/domain/js/domain-review.js`,
+   `src/front/routes/home.py`, and `src/front/templates/access_denied.html`
+   Updated user guidance to Settings → Admin → Teams.
+8. `src/api/routers/internal/settings.py`,
+   `src/back/objects/domain/SettingsService.py`,
+   `src/back/objects/registry/ReviewService.py`, and
+   `tests/units/registry/test_review_service.py`
+   Updated internal documentation references without changing contracts.
+9. `tests/units/api/test_ui_rendering.py`
+   Added coverage proving Teams renders in Settings and not Registry.
+10. `docs/development.md` and `docs/code_organization.md`
+    Updated page ownership documentation.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/registry.html
+- src/front/templates/settings.html
+- src/front/templates/partials/settings/_settings_teams.html
+- src/front/templates/partials/registry/_registry_teams.html (deleted)
+- src/front/static/registry/js/registry-teams.js
+- src/front/static/registry/css/registry-teams.css
+- src/front/static/config/js/permissions.js
+- src/front/static/domain/js/domain-review.js
+- src/front/routes/home.py
+- src/front/templates/access_denied.html
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/registry/ReviewService.py
+- tests/units/registry/test_review_service.py
+- tests/units/api/test_ui_rendering.py
+- docs/development.md
+- docs/code_organization.md
+
+Tests: uv run pytest -q -m "not scenario" → 3308 passed, 275 skipped, 5 deselected in 24.99s
+
+## Registry navbar icon opens Browse/Bridges modal
+
+Context: Registry is no longer a full page with a left sidebar and dropdown
+menu. The navbar now shows a large archive icon only; click opens a modal
+with Create a New Domain plus Browse and Bridges tabs. Load Domain was
+removed from this entry point.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Marked Registry as `navbar_modal`; cleared dropdown actions/groups.
+2. `src/front/templates/base.html`
+   Icon-only Registry toggle; includes modal + registry CSS/JS globally.
+3. `src/front/templates/partials/layout/registry_modal.html` (new)
+   Modal with Create a New Domain, Browse and Bridges tabs.
+4. `src/front/static/global/js/registry-modal.js` +
+   `src/front/static/global/css/registry-modal.css` (new)
+   Open/close wiring, tab → load events, `?open=registry` deep link.
+5. `src/front/routes/registry.py`
+   `GET /registry/` redirects to `/?open=registry`.
+6. `src/front/templates/registry.html`
+   Deleted — page replaced by the modal.
+7. `src/front/templates/partials/registry/_registry_domains.html`
+   Removed New Domain / Load Domain from the Browse toolbar.
+8. `src/front/templates/settings.html`
+   Dropped duplicate `registry.js` include (now global).
+9. Docs, domain Versions hint, UI/E2E tests updated accordingly.
+10. `docs/superpowers/specs/2026-07-26-registry-modal-design.md`
+    Design note for the modal entry point.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/templates/partials/layout/registry_modal.html
+- src/front/static/global/js/registry-modal.js
+- src/front/static/global/css/registry-modal.css
+- src/front/routes/registry.py
+- src/front/templates/registry.html (deleted)
+- src/front/templates/partials/registry/_registry_domains.html
+- src/front/templates/settings.html
+- src/front/templates/partials/domain/_domain_versions.html
+- docs/code_organization.md
+- docs/data-access.md
+- docs/development.md
+- docs/superpowers/specs/2026-07-26-registry-modal-design.md
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/registry/test_registry_flows.py
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 23.37s
+
+## Fix Registry modal viewport size
+
+Context: The Registry popup needs a stable, spacious layout independent of
+its content. It now occupies 80% of the viewport width and height, with the
+modal body scrolling when its Browse or Bridges content overflows.
+
+Changes:
+
+1. `src/front/static/global/css/registry-modal.css`
+   Set the desktop dialog/content to 80vw × 80vh, constrained overflow to
+   the body, and retained a near-full-screen mobile fallback.
+
+Modified files:
+- src/front/static/global/css/registry-modal.css
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 21.23s
+
+## Use connected-nodes Registry icon
+
+Context: The Registry navbar entry now uses a connected-nodes symbol, which
+better communicates domains and cross-domain bridges than an archive box.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Changed the Registry navbar icon from `bi-archive` to `bi-diagram-3`.
+
+Modified files:
+- src/front/config/menu_config.json
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 20.61s
+
+## Center Registry modal in viewport
+
+Context: Bootstrap's dialog margin calculation did not guarantee that the
+fixed-size Registry popup stayed visually centered in the browser viewport.
+
+Changes:
+
+1. `src/front/static/global/css/registry-modal.css`
+   Made the visible modal a flex centering container and retained an exact
+   80vw × 80vh desktop dialog with a responsive mobile fallback.
+
+Modified files:
+- src/front/static/global/css/registry-modal.css
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 20.77s
+
+## Fix Bridges canvas height in Registry modal
+
+Context: After moving Bridges into the Registry modal, the graph canvas
+stayed invisible even when bridges existed. Layout CSS still targeted the
+old `#bridges-section` sidebar parent, so `#bridgesGraph` got zero height
+and the SVG (`height: 100%`) rendered as empty.
+
+Changes:
+
+1. `src/front/static/global/css/registry-modal.css`
+   Flex-sized the modal body / Bridges tab so the graph container receives
+   a real viewport (min-height 280px).
+2. `src/front/static/registry/js/registry.js`
+   Re-render the D3 graph when switching to Graph view or re-entering the
+   Bridges tab after a prior zero-size draw.
+
+Modified files:
+- src/front/static/global/css/registry-modal.css
+- src/front/static/registry/js/registry.js
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 20.93s
+
+## Hide Domain navbar entry when unloaded
+
+Context: With no domain in session the L1 "Domain" label/icon is useless
+noise. It is now hidden (with the › separator) until a domain is loaded.
+
+Changes:
+
+1. `src/front/templates/base.html`
+   Domain L1 item and path separator start as `d-none` with stable ids.
+2. `src/front/static/global/js/navbar.js`
+   `updateDomainMenuVisibility` toggles those elements with the domain
+   session state.
+3. `tests/units/api/test_ui_rendering.py`
+   Asserts Domain L1 ships hidden by default.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- tests/units/api/test_ui_rendering.py
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected
+
+## Complete Registry modal tab outline
+
+Context: The Registry modal rendered the tab header border without the
+matching right, bottom, and left borders around its content. The tab strip
+and content now form one continuous bordered unit.
+
+Changes:
+
+1. `src/front/templates/partials/layout/registry_modal.html`
+   Applied the shared bordered tab-content style and removed the spacing
+   utility that separated the content from its tab strip.
+2. `tests/units/api/test_ui_rendering.py`
+   Added regression coverage for the bordered content class and flush tab
+   layout.
+
+Modified files:
+- src/front/templates/partials/layout/registry_modal.html
+- tests/units/api/test_ui_rendering.py
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 22.15s
+
+## Code review follow-up: tracing, route dedup, error handling, docs
+
+Context: Global code review on develop (v0.7.0) flagged missing LLM-level
+MLflow tracing on the shared `call_serving_endpoint` path, duplicated
+`_roles`/`_body` helpers across comments and review routers, error-envelope
+violations in pitfalls routes, stale architecture/Sphinx docs (Neo4j still
+described as future, broken `triplestore` toctree entry, wrong `APP_VERSION`),
+and test patches pointing at removed module-level imports after the helper
+extraction.
+
+Changes:
+
+1. `src/agents/engine_base.py`
+   Applied `@trace_llm("agent:llm")` to `call_serving_endpoint` so every
+   function-based engine emits an LLM span (complies with
+   `.cursor/12-ai-feature-lifecycle.mdc`).
+2. `src/agents/agent_supervisor/engine.py`
+   Applied `@trace_agent("supervisor:run")` to the top-level routing entry.
+3. `src/api/routers/internal/_helpers.py`
+   Extracted shared `resolve_roles` and `read_json_body` helpers (Pull Up
+   Method per Fowler).
+4. `src/api/routers/internal/comments.py` +
+   `src/api/routers/internal/review.py`
+   Dropped duplicated local helpers; import from `_helpers`.
+5. `src/api/routers/internal/ontology.py`
+   Pitfalls taxonomy now raises `InfrastructureError` instead of a
+   `{"success": False}` envelope; pitfalls results raises `NotFoundError`
+   instead of bare `HTTPException` (complies with `.cursor/05 §Error Handling`).
+6. `src/agents/agent_ontology_assistant/responses_agent.py`
+   Upgraded `_call_llm` failure logging to `logger.exception` (traceback
+   preserved; streaming contract unchanged).
+7. `docs/sphinx/index.rst` + `docs/sphinx/api/app.core.graphdb.neo4j.rst` (new)
+   Removed broken `app.core.triplestore` toctree entry; added Neo4j API page.
+8. `docs/sphinx/api/app.core.graphdb.rst` +
+   `docs/sphinx/api/app.core.graphdb.lakebase.rst` +
+   `docs/sphinx/overview/architecture.rst`
+   Document Neo4j as a shipped backend; rename Settings → Back end.
+9. `docs/architecture.md`
+   Rewrote graph-backend sections: per-domain selection, Neo4j architecture
+   subsection, corrected reasoning dispatch claims.
+10. `docs/get-started.md` + `docs/deployment.md`
+    Fix `APP_VERSION` staleness; add Neo4j / graph-backend deployment note.
+11. `tests/units/api/test_comment_endpoints.py` +
+    `tests/units/api/test_review_endpoints.py`
+    Patch `SettingsService` on `_helpers` after the extraction.
+
+Modified files:
+- src/agents/engine_base.py
+- src/agents/agent_supervisor/engine.py
+- src/agents/agent_ontology_assistant/responses_agent.py
+- src/api/routers/internal/_helpers.py
+- src/api/routers/internal/comments.py
+- src/api/routers/internal/review.py
+- src/api/routers/internal/ontology.py
+- docs/sphinx/index.rst
+- docs/sphinx/api/app.core.graphdb.rst
+- docs/sphinx/api/app.core.graphdb.lakebase.rst
+- docs/sphinx/api/app.core.graphdb.neo4j.rst
+- docs/sphinx/overview/architecture.rst
+- docs/architecture.md
+- docs/get-started.md
+- docs/deployment.md
+- tests/units/api/test_comment_endpoints.py
+- tests/units/api/test_review_endpoints.py
+
+Tests: uv run pytest -q -m "not scenario" → 3309 passed, 275 skipped, 5 deselected in 21.11s

@@ -177,7 +177,7 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 | `/mapping/*` | `front/routes/mapping.py` | mapping templates | R2RML / table–ontology mapping UI |
 | `/dtwin/*` | `front/routes/dtwin.py` | dtwin templates | SPARQL, graph exploration, triple-store–backed "graph viewer" UI |
 | `/domain/*` | `front/routes/domain.py` | domain templates | Domain JSON in UC volumes, versioning, metadata, documents |
-| `/registry/*` | `front/routes/registry.py` | `registry.html`, fragments | Multi-domain registry browser, schedules, API endpoint reference |
+| `/registry/` | `front/routes/registry.py` | redirects to `/?open=registry` | Opens Registry modal (Browse + Bridges) on Home |
 | `/resolve` | `front/routes/resolve.py` | — (redirect) | Entity URI resolution — finds the owning domain and redirects to the graph viewer |
 | `/tasks/*` | `api/routers/internal/tasks.py` | — | Task list/detail JSON for long-running work |
 

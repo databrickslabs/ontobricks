@@ -245,13 +245,10 @@ class TestDomainVersions:
         svc.list_versions_sorted.return_value = ["3", "2", "1"]
 
         # Each version carries a lifecycle status; the endpoint reads it
-        # per version to annotate the response.
+        # per version (via a cheap single-column lookup) to annotate the
+        # response.
         statuses = {"3": "PUBLISHED", "2": "IN-REVIEW", "1": "DRAFT"}
-        svc.read_version.side_effect = lambda dom, ver: (
-            True,
-            {"info": {"status": statuses[ver]}},
-            "",
-        )
+        svc.get_version_status.side_effect = lambda dom, ver: statuses[ver]
         mock_svc_cls.return_value = svc
         response = client.get(
             f"/api/v1/domain/versions?domain_name=mydom{self._REG_QS}"

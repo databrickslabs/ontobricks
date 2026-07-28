@@ -223,7 +223,7 @@ class TestDeleteDomainPermission:
 
 
 class TestListAppPrincipals:
-    """Settings → Permissions is a read-only mirror of App principals."""
+    """GET /settings/permissions mirrors Databricks App principals."""
 
     def test_returns_users_and_groups(self):
         session_mgr, settings = _mock_context()

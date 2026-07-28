@@ -60,33 +60,40 @@ class TestGraphQLSchemaEndpoint:
     """The /dtwin/graphql/schema endpoint must be reachable and obey the contract.
 
     Empty-ontology behaviour is part of the contract: when there are zero
-    classes, the endpoint returns 400 with a `ValidationError` JSON body
-    (per `back/core/errors`). When there are classes, it returns 200 with
-    SDL. Both are valid contract outcomes — what's NOT acceptable is a 500
-    or a missing route.
+    classes (or no properties), the endpoint returns **200** with a readiness
+    JSON body ``{success, ready:false, sdl:null, reason, message, ...}`` so
+    the UI / MCP can render an in-context hint instead of a blunt HTTP 400.
+    When the ontology is ready, it returns 200 with ``ready:true`` and an
+    SDL string in ``sdl``. What's NOT acceptable is a 500 or a missing route.
     """
 
     def test_schema_endpoint_reachable(self, client):
-        """Either 200 (with classes) or 400 (empty ontology); never 5xx or 404."""
+        """Always 200 for the in-session schema probe; never 5xx or 404."""
         resp = client.get("/dtwin/graphql/schema")
-        assert resp.status_code in (200, 400), (
-            f"expected 200 (with classes) or 400 (empty ontology); got {resp.status_code}"
+        assert resp.status_code == 200, (
+            f"expected 200 (ready or not-ready JSON); got {resp.status_code}"
         )
 
     def test_schema_content_shape(self, client):
-        """200 → SDL string; 400 → JSON error body per OntoBricksError contract."""
+        """200 → readiness envelope; ``sdl`` is SDL when ready, null otherwise."""
         resp = client.get("/dtwin/graphql/schema")
-        if resp.status_code == 200:
-            body = resp.text
-            assert "type Query" in body or "type " in body or "schema {" in body, (
-                f"200 response from schema endpoint is not SDL-shaped: {body[:200]!r}"
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("success") is True, f"missing success=true: {data!r}"
+        assert "ready" in data and "sdl" in data and "domain" in data, (
+            f"200 response missing readiness envelope: {data!r}"
+        )
+        if data["ready"]:
+            sdl = data["sdl"] or ""
+            assert "type Query" in sdl or "type " in sdl or "schema {" in sdl, (
+                f"ready=true but sdl is not SDL-shaped: {sdl[:200]!r}"
             )
-        elif resp.status_code == 400:
-            data = resp.json()
-            # OntoBricksError -> ErrorResponse: {error, message, detail?, request_id?}
-            assert "error" in data and "message" in data, (
-                f"400 response missing OntoBricksError shape: {data!r}"
+        else:
+            assert data["sdl"] is None
+            assert data.get("reason") in ("no_classes", "no_properties"), (
+                f"ready=false missing typed reason: {data!r}"
             )
+            assert data.get("message"), f"ready=false missing message: {data!r}"
 
     def test_schema_endpoint_idempotent(self, client):
         r1 = client.get("/dtwin/graphql/schema")

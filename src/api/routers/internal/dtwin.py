@@ -291,9 +291,12 @@ async def start_triplestore_sync(
     # (common in the deployed App where the mirror write never fires).
     try:
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.graphdb.engine_config import lakebase_section
 
         _engine = GraphDBFactory._resolve_graph_engine(domain, settings, force=True) or ""
-        _ecfg = GraphDBFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
+        _ecfg = lakebase_section(
+            GraphDBFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
+        )
     except Exception as _exc:  # noqa: BLE001
         logger.debug("Engine config resolution failed, defaulting to non-synced: %s", _exc)
         _engine = ""
@@ -1288,7 +1291,7 @@ async def start_databricks_triplestore_build(
     if GraphDBFactory._resolve_triple_store_backend(domain, settings) != "databricks":
         raise ValidationError(
             "Databricks triple-store build is only available when "
-            "triple_store_backend is 'databricks' (Settings → Triple store)."
+            "triple_store_backend is 'databricks' (Settings → Back end)."
         )
 
     view_table = effective_view_table(domain)
@@ -2338,6 +2341,7 @@ async def dtwin_graphql_schema(
     domain.
     """
     from back.core.graphql import build_schema_for_domain
+    from back.fastapi.graphql_routes import _diagnose_empty_ontology
     from strawberry.printer import print_schema
 
     domain = get_domain(session_mgr)
@@ -2350,10 +2354,25 @@ async def dtwin_graphql_schema(
     properties_list = ontology.get("properties", []) or []
     base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
 
-    if not classes:
-        raise ValidationError(
-            "Ontology is empty — add at least one class to generate a GraphQL schema."
-        )
+    # Friendly fallback: when the ontology is too thin to back a GraphQL
+    # schema, return a 200 with ``sdl=null`` + a typed ``reason``. The UI
+    # branches on ``ready`` to render an in-context hint instead of a
+    # blunt "HTTP 400" toast.
+    diag = _diagnose_empty_ontology(classes, properties_list)
+    if diag is not None:
+        reason, message = diag
+        return {
+            "success": True,
+            "ready": False,
+            "domain": display_name,
+            "sdl": None,
+            "reason": reason,
+            "message": message,
+            "stats": {
+                "classes": len(classes),
+                "properties": len(properties_list),
+            },
+        }
 
     result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
     if not result:
@@ -2363,6 +2382,7 @@ async def dtwin_graphql_schema(
     schema, _metadata = result
     return {
         "success": True,
+        "ready": True,
         "domain": display_name,
         "sdl": print_schema(schema),
     }

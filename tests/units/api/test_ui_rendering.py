@@ -130,9 +130,12 @@ class TestBaseTemplate:
         assert "review-modals.css" in html
 
     def test_navbar_has_domain_l1_link(self, client):
-        """Domain is now a plain link on L1 (no dropdown) — check for the L1 anchor."""
+        """Domain L1 link exists in the DOM (hidden until a domain is loaded)."""
         html = _html(client, "/")
         assert _find(_tags(html), id_="domainL1Link") is not None
+        assert _find(_tags(html), id_="domainL1NavItem") is not None
+        nav = _find(_tags(html), id_="domainL1NavItem")
+        assert "d-none" in (nav.get("class") or "")
 
     def test_subnav_has_domain_dropdown(self, client):
         """Domain dropdown is in the L2 subnav."""
@@ -272,17 +275,44 @@ class TestSettingsPage:
         assert _find(_tags(html), id_="lakebaseSyncMode") is not None
         assert _find(_tags(html), id_="lakebaseManagedSyncPanel") is not None
 
-    def test_registry_pane_moved_to_registry_page(self, client):
-        html = _html(client, "/registry/")
-        assert _find(_tags(html), id_="registryDomainsSection") is not None
+    def test_registry_modal_on_home(self, client):
+        html = _html(client, "/")
+        tags = _tags(html)
+        assert _find(tags, id_="registryModal") is not None
+        assert _find(tags, id_="registryDomainsSection") is not None
+        assert _find(tags, id_="registryModalToggle") is not None
+        tabs = _find(tags, id_="registryModalTabs")
+        assert tabs is not None
+        assert "mb-3" not in _class_tokens(tabs.get("class", ""))
+        assert _find(tags, id_="registryModalTabContent", class_="ob-tab-content") is not None
+        assert 'id="registryDropdown"' not in html
 
-    def test_schedule_on_registry_page(self, client):
-        html = _html(client, "/registry/")
+    def test_registry_legacy_url_redirects(self, client):
+        resp = client.get("/registry/", follow_redirects=False)
+        assert resp.status_code in (301, 302, 307, 308)
+        assert "open=registry" in (resp.headers.get("location") or "")
+
+    def test_teams_on_settings_admin_page(self, client):
+        settings_html = _html(client, "/settings")
+        home_html = _html(client, "/")
+        assert _find(_tags(settings_html), id_="teamsMatrixContainer") is not None
+        assert 'id="teams-section"' in settings_html
+        assert 'teamsMatrixContainer' not in home_html
+
+    def test_schedule_on_settings_page(self, client):
+        html = _html(client, "/settings")
         assert _find(_tags(html), id_="schedulesTableContainer") is not None
+        assert 'id="schedule-section"' in html
 
-    def test_api_on_registry_page(self, client):
-        html = _html(client, "/registry/")
+    def test_build_analytics_on_settings_page(self, client):
+        html = _html(client, "/settings")
+        assert _find(_tags(html), id_="buildAnalyticsDomain") is not None
+        assert 'id="build-analytics-section"' in html
+
+    def test_api_on_settings_page(self, client):
+        html = _html(client, "/settings")
         assert _find(_tags(html), id_="apiEndpointCards") is not None
+        assert 'id="api-section"' in html
 
     def test_body_has_page_id_settings(self, client):
         """<body data-page="settings"> must be set so the lifecycle gate's

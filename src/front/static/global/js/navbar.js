@@ -321,8 +321,8 @@ function enableMenusAfterSave() {
 }
 
 /**
- * Update domain dropdown menu visibility based on domain state
- * Note: All menu items are now always visible
+ * Update domain L1 entry + L2 subnav visibility based on domain state.
+ * When nothing is loaded, hide the Domain navbar item entirely.
  */
 function updateDomainMenuVisibility(hasDomain) {
     // Show/hide L2 subnav
@@ -334,7 +334,11 @@ function updateDomainMenuVisibility(hasDomain) {
         }
     }
 
-    // Disable/enable the L1 Domain link and highlight when a domain is loaded
+    const domainNav = document.getElementById('domainL1NavItem');
+    const domainSep = document.getElementById('domainL1PathSep');
+    if (domainNav) domainNav.classList.toggle('d-none', !hasDomain);
+    if (domainSep) domainSep.classList.toggle('d-none', !hasDomain);
+
     const domainL1 = document.getElementById('domainL1Link');
     if (domainL1) {
         if (hasDomain) {
@@ -494,10 +498,11 @@ async function saveDomainInfoBeforeSave() {
     const quorumEl = document.getElementById('domainReviewQuorum');
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
+    const graphBackendEl = document.getElementById('domainGraphBackend');
     const versionEl = document.getElementById('domainVersionSelect');
 
     // If any form fields exist, save the domain info
-    if (nameEl || descEl || authorEl || baseUriEl || llmEndpointEl) {
+    if (nameEl || descEl || authorEl || baseUriEl || llmEndpointEl || graphBackendEl) {
         const domainInfoPayload = {
             name: nameEl ? nameEl.value.trim() : undefined,
             description: descEl ? descEl.value.trim() : undefined,
@@ -506,6 +511,7 @@ async function saveDomainInfoBeforeSave() {
             base_uri_auto: (typeof _baseUriAutoMode !== 'undefined') ? _baseUriAutoMode : undefined,
             llm_endpoint: llmEndpointEl ? llmEndpointEl.value : undefined,
             review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : undefined,
+            graph_backend: graphBackendEl ? graphBackendEl.value : undefined,
             version: versionEl ? versionEl.value : undefined,
         };
         

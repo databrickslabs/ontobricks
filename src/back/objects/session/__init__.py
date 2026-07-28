@@ -9,6 +9,7 @@ from .DomainSession import (
     DomainSession,
     get_domain,
     get_empty_domain,
+    is_valid_domain_name,
     sanitize_domain_folder,
 )
 from .GlobalConfigService import GlobalConfigService, global_config_service
@@ -21,6 +22,7 @@ __all__ = [
     "DomainSession",
     "get_domain",
     "get_empty_domain",
+    "is_valid_domain_name",
     "sanitize_domain_folder",
     "GlobalConfigService",
     "global_config_service",

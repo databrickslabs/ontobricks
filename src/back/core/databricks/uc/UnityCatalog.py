@@ -131,6 +131,68 @@ class UnityCatalog:
             logger.exception("Error listing tables and views: %s", exc)
             return []
 
+    def list_functions(self, catalog: str, schema: str) -> List[Dict[str, Any]]:
+        """Return user-defined functions in *catalog*.*schema* with their parameters.
+
+        Uses ``information_schema`` rather than the UC REST listing: the REST
+        ``/functions`` collection endpoint omits ``input_params`` (it is only
+        populated when fetching a single function by name), and callers need
+        the parameter count to tell which functions are bindable as class
+        actions. Returns an empty list on error.
+
+        Each dict has ``name``, ``full_name``, ``comment``, ``input_params``
+        (parameter names in declaration order), ``param_count`` and
+        ``returns_table`` (True for table-valued functions).
+        """
+        catalog_q = quote_uc_identifier(catalog, role="catalog")
+        try:
+            validate_uc_identifier(schema, role="schema")
+        except ValidationError:
+            logger.warning("list_functions: invalid schema %r", schema)
+            return []
+        # parameter_mode = 'IN' excludes the RETURNS TABLE result columns,
+        # which information_schema also reports as parameters.
+        query = f"""
+            SELECT r.routine_name, r.data_type, r.comment,
+                   CONCAT_WS(',', ARRAY_SORT(COLLECT_LIST(p.parameter_name))) AS params
+            FROM {catalog_q}.information_schema.routines r
+            LEFT JOIN {catalog_q}.information_schema.parameters p
+                   ON  p.specific_catalog = r.specific_catalog
+                   AND p.specific_schema  = r.specific_schema
+                   AND p.specific_name    = r.specific_name
+                   AND p.parameter_mode   = 'IN'
+            WHERE r.routine_schema = ?
+            GROUP BY r.routine_name, r.data_type, r.comment
+            ORDER BY r.routine_name
+        """
+        try:
+            params = self._auth.get_sql_connection_params()
+            with sql.connect(**params) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (schema,))
+                    rows = cur.fetchall()
+        except Exception as exc:
+            logger.exception("Error listing functions: %s", exc)
+            return []
+
+        functions: List[Dict[str, Any]] = []
+        for row in rows:
+            name = (row[0] or "").strip()
+            if not name:
+                continue
+            input_params = [p for p in (row[3] or "").split(",") if p]
+            functions.append(
+                {
+                    "name": name,
+                    "full_name": f"{catalog}.{schema}.{name}",
+                    "comment": row[2] or "",
+                    "input_params": input_params,
+                    "param_count": len(input_params),
+                    "returns_table": str(row[1] or "").upper() == "TABLE_TYPE",
+                }
+            )
+        return functions
+
     def probe_schema_has_tables(self, catalog: str, schema: str) -> int:
         """Return the number of tables in *catalog*.*schema* via information_schema.
 

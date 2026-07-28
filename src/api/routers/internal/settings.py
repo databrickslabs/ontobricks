@@ -223,6 +223,19 @@ async def get_uc_assets(
     return await config_service.fetch_uc_assets(catalog, schema, session_mgr, settings)
 
 
+@router.get("/uc-functions")
+async def get_uc_functions(
+    catalog: str,
+    schema: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Unity Catalog functions in a schema (with parameter metadata)."""
+    return await config_service.fetch_uc_functions(
+        catalog, schema, session_mgr, settings
+    )
+
+
 # ===========================================
 # Domain Registry
 # ===========================================
@@ -750,8 +763,8 @@ async def list_app_permissions(
 ):
     """Return the Databricks App principals (users + groups).
 
-    Read-only mirror of the App's ACL.  Used by Settings → Permissions
-    and as the row source for Registry → Teams.
+    Read-only mirror of the App's ACL. Used as the row source for
+    Settings → Admin → Teams.
     """
     return config_service.list_app_principals_result(session_mgr, settings)
 
@@ -848,7 +861,7 @@ async def delete_domain_permission(
 
 
 # ===========================================
-# Teams (Registry → Teams matrix)
+# Teams (Settings → Admin → Teams matrix)
 # ===========================================
 
 
@@ -883,62 +896,19 @@ async def teams_save_batch(
 # ===========================================
 
 
-@router.get("/graph-engine")
-async def get_graph_engine(
+# NOTE: The graph backend *selection* (formerly GET/POST /graph-engine and
+# GET/POST /triple-store-backend) moved to a mandatory per-domain choice — see
+# the Domain Information -> Knowledge Graph tab (POST /domain/info). Only the
+# Delta connection info (which SQL warehouse) remains a workspace-global read.
+
+
+@router.get("/delta-warehouse")
+async def get_delta_warehouse(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return the currently configured graph DB engine."""
-    return config_service.get_graph_engine_result(session_mgr, settings)
-
-
-@router.post("/graph-engine")
-async def set_graph_engine(
-    request: Request,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Set the graph DB engine (admin only, stored globally)."""
-    data = await request.json()
-    engine = data.get("graph_engine", "lakebase")
-    email, _display_name, user_token, _user_role, _user_domain_role = (
-        _settings_request_identity(request)
-    )
-    return config_service.set_graph_engine_result(
-        engine, email, user_token, session_mgr, settings
-    )
-
-
-@router.get("/triple-store-backend")
-async def get_triple_store_backend(
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Return the configured instance triple-store backend."""
-    return config_service.get_triple_store_backend_result(session_mgr, settings)
-
-
-@router.post("/triple-store-backend")
-async def set_triple_store_backend(
-    request: Request,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Set triple-store backend (``lakebase`` or ``databricks``), admin only."""
-    data = await request.json()
-    backend = data.get("triple_store_backend", "lakebase")
-    email, _display_name, user_token, _user_role, _user_domain_role = (
-        _settings_request_identity(request)
-    )
-    return config_service.set_triple_store_backend_result(
-        backend,
-        email,
-        user_token,
-        session_mgr,
-        settings,
-        delta_warehouse_id=data.get("delta_warehouse_id"),
-        persist_delta_warehouse="delta_warehouse_id" in data,
-    )
+    """Return the Delta SQL-warehouse selection + registry location."""
+    return config_service.get_delta_warehouse_result(session_mgr, settings)
 
 
 @router.get("/triple-store/databricks-health")
@@ -982,6 +952,22 @@ async def get_graph_engine_lakebase_health(
     """Probe Lakebase connectivity and graph schema (saved global config)."""
     with map_route_errors("graph engine Lakebase health", logger):
         return config_service.graph_engine_lakebase_health_result(session_mgr, settings)
+
+
+@router.post("/graph-engine/neo4j-test")
+async def post_graph_engine_neo4j_test(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Probe Neo4j Bolt connectivity via ``driver.verify_connectivity()``.
+
+    Wires the Settings → Back end → Neo4j "Test connection" button.
+    Uses the persisted ``engine_config`` (URI + username + encrypted) and the
+    ``NEO4J_PASSWORD`` env var injected by the bound Apps secret resource.
+    No Cypher is run — this is a Bolt protocol handshake only.
+    """
+    with map_route_errors("graph engine Neo4j connection test", logger):
+        return config_service.graph_engine_neo4j_test_result(session_mgr, settings)
 
 
 @router.get("/graph-engine/uc-catalogs")

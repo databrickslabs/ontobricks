@@ -312,6 +312,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (versionEl) {
             versionEl.addEventListener('change', refreshDtNamesFromForm);
         }
+        const graphBackendEl = document.getElementById('domainGraphBackend');
+        if (graphBackendEl) {
+            graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
+        }
 
         // Load LLM endpoints and version status in parallel
         const [, statusData, infoData] = await Promise.all([
@@ -339,6 +343,10 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
             if (infoData.info && infoData.info.llm_endpoint) {
                 setSelectedLlmEndpoint(infoData.info.llm_endpoint);
+            }
+            const graphBackendEl = document.getElementById('domainGraphBackend');
+            if (graphBackendEl && infoData.info && infoData.info.graph_backend) {
+                graphBackendEl.value = infoData.info.graph_backend;
             }
         }
 

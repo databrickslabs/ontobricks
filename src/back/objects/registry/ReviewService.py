@@ -256,7 +256,7 @@ class ReviewService:
         Read-only summary surfaced on the Validation page so reviewers can
         see who can view / edit / build the domain.
 
-        Uses the **same source as the Registry → Teams matrix**: rows come
+        Uses the **same source as the Settings → Admin → Teams matrix**: rows come
         from the Databricks App principals (``list_app_principals``) and the
         role from the per-domain registry permissions
         (``list_domain_entries``). A principal appears here only if it is a

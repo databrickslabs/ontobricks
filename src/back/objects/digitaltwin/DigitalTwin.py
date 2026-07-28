@@ -755,31 +755,85 @@ class DigitalTwin:
     def pending_dt_existence(self, settings) -> Dict[str, Any]:
         """Cheap, non-blocking existence skeleton for the first page paint.
 
-        Resolves only artefact *names* (from config, no network round-trip) and
+        Resolves artefact *names* from config (no network round-trip) and
         leaves every existence flag as ``None`` with ``pending=True``. The Build
         page renders this instantly, then confirms the live Lakebase/UC state via
         a non-blocking follow-up to ``/dtwin/sync/dt-existence``. This keeps the
         cold SQL-warehouse / Lakebase wake-up entirely off the request path.
         """
-        from back.core.helpers import effective_graph_name, effective_view_table
+        from back.core.helpers import (
+            effective_graph_name,
+            effective_graph_query_table,
+            effective_view_table,
+        )
 
         domain = self._domain
-        return {
+        graph_engine = DigitalTwin.resolve_graph_engine(domain, settings)
+        view_table = effective_view_table(domain)
+        graph_name = effective_graph_query_table(domain, settings)
+
+        result: Dict[str, Any] = {
             "view_exists": None,
-            "graph_engine": DigitalTwin.resolve_graph_engine(domain, settings),
+            "graph_engine": graph_engine,
             "graph_has_data": None,
             "lakebase_table_exists": None,
             "lakebase_synced_uc_exists": None,
             "lakebase_check_error": None,
-            "view_table": effective_view_table(domain),
-            "graph_name": effective_graph_name(domain),
+            "view_table": view_table,
+            "graph_name": graph_name or effective_graph_name(domain),
             "graph_display": "",
             "last_update": domain.last_update or None,
             "last_built": domain.last_build or None,
             "view_check_error": None,
             "triple_count": 0,
             "pending": True,
+            "lakebase_database": "",
+            "lakebase_schema": "",
+            "lakebase_table": "",
+            "lakebase_synced_uc": "",
         }
+
+        # Resolve Lakebase artefact names from engine config only — no probes.
+        if graph_engine == "lakebase":
+            try:
+                from back.core.graphdb import GraphDBFactory
+                from back.core.graphdb.engine_config import lakebase_section
+                from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+                from back.core.graphdb.lakebase.LakebaseFlatStore import (
+                    resolve_lakebase_graph_schema,
+                    resolve_sync_uc_fallback_catalog,
+                )
+                from back.core.graphdb.lakebase._companion_ddl import synced_phy
+
+                engine_config = lakebase_section(
+                    GraphDBFactory._resolve_graph_engine_config(domain, settings) or {}
+                )
+                sync_mode = (
+                    str(engine_config.get("sync_mode") or "app_managed").strip()
+                    or "app_managed"
+                )
+                schema_raw = str(engine_config.get("schema") or "").strip()
+                lk_schema = resolve_lakebase_graph_schema(domain, settings, schema_raw)
+                lk_table = (
+                    LakebaseBase.physical_table_id(graph_name) if graph_name else ""
+                )
+                result["lakebase_schema"] = lk_schema
+                result["lakebase_table"] = lk_table
+                # Database display needs a live connection; leave blank while pending.
+                if sync_mode == "managed_synced" and lk_schema and graph_name:
+                    catalog = str(engine_config.get("sync_uc_catalog") or "").strip()
+                    if not catalog:
+                        catalog = resolve_sync_uc_fallback_catalog(domain, settings)
+                    if catalog:
+                        result["lakebase_synced_uc"] = (
+                            f"{catalog}.{lk_schema}.{synced_phy(graph_name)}"
+                        )
+            except Exception as exc:  # noqa: BLE001 — keep skeleton best-effort
+                logger.debug(
+                    "pending_dt_existence: lakebase name resolution failed: %s", exc
+                )
+
+        return result
 
     # ------------------------------------------------------------------
     # Schedule sync (instance method)
@@ -883,16 +937,16 @@ class DigitalTwin:
 
     @staticmethod
     def resolve_graph_engine(domain: Any, settings: Any) -> str:
-        """Return the globally configured graph DB engine.
+        """Return the graph DB engine resolved from the per-domain backend choice.
 
-        Currently always resolves to ``"lakebase"`` — the only registered
-        engine.  Future engines plug in via ``back/core/graphdb/<engine>/``
-        and update :class:`back.core.graphdb.GraphDBFactory`.
+        The selection lives in ``DomainSession.info['graph_backend']`` (Domain
+        Information -> Knowledge Graph tab) and maps to a concrete engine
+        (``lakebase`` or ``neo4j``) via
+        :class:`back.core.graphdb.GraphDBFactory`.
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        raw = GraphDBFactory._resolve_graph_engine(domain, settings) or "lakebase"
-        return raw if raw == "lakebase" else "lakebase"
+        return GraphDBFactory._resolve_graph_engine(domain, settings) or "lakebase"
 
     async def fetch_digital_twin_existence(self, settings) -> Dict[str, Any]:
         """Live checks for SQL view, snapshot table, and graph artefacts.
@@ -945,15 +999,16 @@ class DigitalTwin:
         lk_synced_uc_cfg = ""
         try:
             from back.core.graphdb import GraphDBFactory
+            from back.core.graphdb.engine_config import lakebase_section
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
                 resolve_sync_uc_fallback_catalog,
                 resolve_lakebase_graph_schema,
             )
             from back.core.graphdb.lakebase._companion_ddl import synced_phy
 
-            engine_config = GraphDBFactory._resolve_graph_engine_config(
-                domain, settings
-            ) or {}
+            engine_config = lakebase_section(
+                GraphDBFactory._resolve_graph_engine_config(domain, settings) or {}
+            )
             lk_sync_mode = str(engine_config.get("sync_mode") or "app_managed").strip() or "app_managed"
 
             # Populate schema/table from config so the card shows values even without Postgres
@@ -3080,13 +3135,31 @@ class DigitalTwin:
         registry_schema=None,
         registry_volume=None,
         domain_version=None,
+        *,
+        read_only=False,
     ):
-        """Return the session to operate on; optionally load from registry by name/version."""
+        """Return the session to operate on; optionally load from registry by name/version.
+
+        ``read_only`` (default ``False``) tunes the resolve for read-only
+        query paths (status / stats / triples-find / GraphQL reads):
+
+        * the PUBLISHED document is served from a TTL cache
+          (:meth:`RegistryService.load_published_domain_data_cached`),
+          skipping the newest→oldest version scan;
+        * OWL/R2RML are **not** regenerated (read paths never consume
+          generated content); and
+        * the session is **not** persisted (``save()`` skipped).
+
+        Write/generation paths (build, ontology/R2RML export,
+        design-status) must keep the default ``read_only=False``.
+        """
         from back.objects.registry import RegistryCfg, RegistryService
 
         domain = get_domain(session_mgr)
         if not domain_name:
             return domain
+
+        t0 = time.perf_counter()
         reg = DigitalTwin.resolve_registry(
             session_mgr, settings, registry_catalog, registry_schema, registry_volume
         )
@@ -3108,19 +3181,39 @@ class DigitalTwin:
                     f"PUBLISHED; the API only serves PUBLISHED versions"
                 )
             version = domain_version
+        elif read_only:
+            ok, data, version, err = svc.load_published_domain_data_cached(domain_name)
+            if not ok:
+                raise NotFoundError(err)
         else:
             ok, data, version, err = svc.load_published_domain_data(domain_name)
             if not ok:
                 raise NotFoundError(err)
+        t_registry = time.perf_counter()
+
         domain.clear_generated_content()
         domain.import_from_file(data, version=version)
         domain.domain_folder = domain_name
-        domain.ensure_generated_content()
-        domain.save()
+        t_import = time.perf_counter()
+
+        t_gen = t_import
+        if not read_only:
+            domain.ensure_generated_content()
+            t_gen = time.perf_counter()
+            domain.save()
+        t_end = time.perf_counter()
+
         logger.info(
-            "DigitalTwin: loaded domain '%s' version %s from registry",
+            "DigitalTwin: loaded domain '%s' version %s from registry "
+            "[read_only=%s registry=%.0fms import=%.0fms gen=%.0fms save=%.0fms total=%.0fms]",
             domain_name,
             version,
+            read_only,
+            (t_registry - t0) * 1000,
+            (t_import - t_registry) * 1000,
+            (t_gen - t_import) * 1000,
+            (t_end - t_gen) * 1000,
+            (t_end - t0) * 1000,
         )
         return domain
 
@@ -3169,8 +3262,18 @@ class DigitalTwin:
 
     @staticmethod
     def extract_local_id(uri: str) -> str:
-        """Extract the local entity identifier from a URI."""
-        return extract_local_name(uri) or uri
+        """Extract the local entity identifier from a URI.
+
+        Entity subjects are minted by R2RML as ``{base_uri}{Class}/{id}``, and
+        ``base_uri`` normally ends in ``#``. The fragment is therefore
+        ``Class/id``, not the bare id, so the class segment is stripped here.
+        Class URIs such as ``{base}#Customer`` have no slash and are returned
+        unchanged.
+        """
+        local = extract_local_name(uri)
+        if "/" in local:
+            local = local.rsplit("/", 1)[-1]
+        return local or uri
 
     @staticmethod
     def expand_uri_aliases(store, table_name: str, uris: Set[str]) -> Set[str]:

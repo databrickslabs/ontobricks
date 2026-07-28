@@ -19,6 +19,31 @@ def default_schema() -> str:
     return DEFAULT_GRAPH_SCHEMA
 
 
+def resolve_postgres_database_override(cfg: Optional[Dict[str, Any]]) -> str:
+    """Return Lakebase's Postgres ``database`` override from engine config.
+
+    Accepts a Lakebase section, a nested ``graph_engine_config`` root, or a
+    legacy flat blob. Nested storage keeps backends fully separated; the
+    flat-era heuristic (ignore ``database: "neo4j"`` when a Neo4j URI /
+    ``neo4j_database`` is also present) remains for unmigrated saves.
+    """
+    data = cfg if isinstance(cfg, dict) else {}
+    if isinstance(data.get("lakebase"), dict) or isinstance(data.get("neo4j"), dict):
+        from back.core.graphdb.engine_config import lakebase_section
+
+        data = lakebase_section(data)
+        return str(data.get("database") or "").strip()
+    raw = str(data.get("database") or "").strip()
+    if not raw:
+        return ""
+    if raw.lower() == "neo4j" and (
+        str(data.get("uri") or "").strip()
+        or str(data.get("neo4j_database") or "").strip()
+    ):
+        return ""
+    return raw
+
+
 def validate_graph_schema(name: str) -> str:
     """Return a safe Postgres schema name or raise ValueError."""
     s = (name or "").strip() or DEFAULT_GRAPH_SCHEMA

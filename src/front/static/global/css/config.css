@@ -4,7 +4,6 @@
 
 /* Settings sections — each section scrolls independently within the sidebar content */
 #databricks-section.active,
-#ts-global-section.active,
 #lakebase-section.active,
 #global-section.active,
 #permissions-section.active,
@@ -159,10 +158,6 @@
 /* Settings → Graph DB & admin badges (inline styles → classes) */
 .settings-badge-admin-note {
     font-size: 0.65rem;
-}
-
-.settings-graph-engine-select {
-    max-width: 22rem;
 }
 
 .settings-summary-cursor {

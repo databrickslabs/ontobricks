@@ -342,7 +342,7 @@ class TestAdminOnlyPaths:
             ("/settings/registry", "GET"),
             ("/settings/registry/domains", "GET"),
             ("/settings/registry/bridges", "GET"),
-            ("/settings/graph-engine", "GET"),
+            ("/settings/delta-warehouse", "GET"),
             ("/settings/graph-engine-config", "GET"),
             ("/settings/graph-engine/lakebase-health", "GET"),
         ],
@@ -361,14 +361,6 @@ class TestAdminOnlyPaths:
         NOT benefit from the read-only GET exception."""
         _, resp, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_VIEWER, method="POST", path="/settings/registry"
-        )
-        assert resp.status_code in (302, 403)
-        assert not result.get("passed")
-
-    def test_post_graph_engine_still_admin_only(self):
-        """POST /settings/graph-engine must not use the GET read exception."""
-        _, resp, result = _dispatch_with_roles(
-            ROLE_APP_USER, ROLE_VIEWER, method="POST", path="/settings/graph-engine"
         )
         assert resp.status_code in (302, 403)
         assert not result.get("passed")

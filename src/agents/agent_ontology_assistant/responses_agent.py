@@ -244,7 +244,10 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
                 trace_name="responses_agent:llm",
             )
         except Exception as exc:
-            logger.error("ResponsesAgent _call_llm failed: %s", exc)
+            # Streaming contract: the caller converts ``None`` into a
+            # user-facing error event, so we can't re-raise here. Use
+            # ``exception`` to preserve the traceback rather than swallow it.
+            logger.exception("ResponsesAgent _call_llm failed: %s", exc)
             return None
 
     @mlflow.trace(span_type=SpanType.TOOL)
