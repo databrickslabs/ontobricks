@@ -3262,8 +3262,18 @@ class DigitalTwin:
 
     @staticmethod
     def extract_local_id(uri: str) -> str:
-        """Extract the local entity identifier from a URI."""
-        return extract_local_name(uri) or uri
+        """Extract the local entity identifier from a URI.
+
+        Entity subjects are minted by R2RML as ``{base_uri}{Class}/{id}``, and
+        ``base_uri`` normally ends in ``#``. The fragment is therefore
+        ``Class/id``, not the bare id, so the class segment is stripped here.
+        Class URIs such as ``{base}#Customer`` have no slash and are returned
+        unchanged.
+        """
+        local = extract_local_name(uri)
+        if "/" in local:
+            local = local.rsplit("/", 1)[-1]
+        return local or uri
 
     @staticmethod
     def expand_uri_aliases(store, table_name: str, uris: Set[str]) -> Set[str]:
