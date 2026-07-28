@@ -601,6 +601,7 @@ async def cleanup_shapes(session_mgr: SessionManager = Depends(get_session_manag
     """Remove SHACL shapes that are stale or reference excluded mapping entries.
 
     A shape is considered stale when any of the following is true:
+
     - Its ``target_class_uri`` is set but matches no current ontology class (by URI or name).
     - Its ``property_uri`` is set, is not a W3C standard URI, and matches no current
       ontology property or data-property (by URI or name).
@@ -1936,13 +1937,15 @@ async def ontology_assistant_chat(
 ):
     """Process a single chat turn with the ontology assistant agent.
 
-    Expects JSON body:
+    Expects a JSON body::
+
         {
             "message": "Remove the entity Customer",
             "history": [...]   // optional prior conversation messages
         }
 
-    Returns:
+    and responds with::
+
         {
             "success": true/false,
             "reply": "...",

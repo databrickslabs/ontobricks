@@ -46,16 +46,16 @@ API Service
    :undoc-members:
    :show-inheritance:
 
-Projects API (list & artifacts)
---------------------------------
+Domains API (list, classes & artifacts)
+---------------------------------------
 
-.. automodule:: api.routers.projects
+.. automodule:: api.routers.domains
    :members:
    :undoc-members:
    :show-inheritance:
 
 Knowledge Graph API
-----------------
+-------------------
 
 .. automodule:: api.routers.digitaltwin
    :members:

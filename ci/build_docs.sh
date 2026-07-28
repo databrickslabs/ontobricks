@@ -3,9 +3,9 @@
 # build_docs.sh -- Build the OntoBricks Sphinx documentation.
 #
 # Usage:
-#   scripts/build_docs.sh          # build HTML docs
-#   scripts/build_docs.sh clean    # remove previous build artifacts
-#   scripts/build_docs.sh open     # build and open in the default browser
+#   ci/build_docs.sh          # build HTML docs
+#   ci/build_docs.sh clean    # remove previous build artifacts
+#   ci/build_docs.sh open     # build and open in the default browser
 #
 set -euo pipefail
 

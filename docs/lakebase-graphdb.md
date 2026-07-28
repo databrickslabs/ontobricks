@@ -19,7 +19,7 @@ For the developer guide on *adding a new engine*, see `docs/graphdb-integration.
 6. [Postgres schema layout](#6-postgres-schema-layout)
 7. [Scripts reference](#7-scripts-reference)
 8. [Permissions bootstrap](#8-permissions-bootstrap)
-9. [Knowledge Graph build — step by step](#9-digital-twin-build--step-by-step)
+9. [Knowledge Graph build — step by step](#knowledge-graph-build-step-by-step)
 10. [Troubleshooting](#10-troubleshooting)
 
 ---

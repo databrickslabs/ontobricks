@@ -107,10 +107,12 @@ class PermissionService:
         """Resolve the app-level access for *email*.
 
         Returns:
-            ``ROLE_ADMIN``   -- user has CAN_MANAGE on the Databricks App.
-            ``ROLE_APP_USER`` -- user (or a group they belong to) appears in
-                                 the App's ACL.
-            ``ROLE_NONE``    -- otherwise.
+            One of:
+
+            - ``ROLE_ADMIN`` -- user has CAN_MANAGE on the Databricks App.
+            - ``ROLE_APP_USER`` -- user (or a group they belong to) appears
+              in the App's ACL.
+            - ``ROLE_NONE`` -- otherwise.
 
         ``registry_cfg`` is accepted for backward compatibility with the
         previous signature but is no longer used.

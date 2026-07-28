@@ -1411,7 +1411,7 @@ Still in the **Knowledge Graph** section, open **Data Quality** in the sidebar.
 
 Quality checks validate the triple store against your ontology using two complementary systems:
 
-##### Legacy Constraint Checks
+#### Legacy Constraint Checks
 These check OWL property constraints defined in the ontology:
 
 | Check | What It Validates |
@@ -1425,7 +1425,7 @@ These check OWL property constraints defined in the ontology:
 | **Require Labels** | All entities have rdfs:label |
 | **No Orphans** | No entities with only type and label |
 
-##### SHACL Data Quality Shapes
+#### SHACL Data Quality Shapes
 Define fine-grained rules using the W3C SHACL standard (Ontology > Data Quality sidebar):
 
 | Shape Type | What It Validates |

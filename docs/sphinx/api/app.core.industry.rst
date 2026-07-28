@@ -4,7 +4,15 @@
 CDISC
 -----
 
-.. automodule:: back.core.industry.cdisc.service
+.. automodule:: back.core.industry.cdisc.CdiscImportService
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+FHIR
+----
+
+.. automodule:: back.core.industry.fhir.FhirImportService
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,7 +20,7 @@ CDISC
 FIBO
 ----
 
-.. automodule:: back.core.industry.fibo.service
+.. automodule:: back.core.industry.fibo.FiboImportService
    :members:
    :undoc-members:
    :show-inheritance:
@@ -20,7 +28,7 @@ FIBO
 IOF
 ---
 
-.. automodule:: back.core.industry.iof.service
+.. automodule:: back.core.industry.iof.IofImportService
    :members:
    :undoc-members:
    :show-inheritance:

@@ -431,8 +431,8 @@ scripts/setup.sh
 - See the [Architecture](architecture.md) for technical details
 - Check [Deployment](deployment.md) for Databricks Apps deployment
 - Explore the [MCP Server](mcp.md) for Databricks Playground integration
-- Review [Data Quality](user-guide.md#data-quality) for SHACL shape validation
-- Explore [Reasoning](user-guide.md#reasoning) for OWL 2 RL and SWRL inference
+- Review [Data Quality](user-guide.md#data-quality-shacl-shapes) for SHACL shape validation
+- Explore [Reasoning](user-guide.md#step-7b-run-reasoning-optional) for OWL 2 RL and SWRL inference
 - See the [External API](api.md) for REST and GraphQL programmatic access
 
 ---

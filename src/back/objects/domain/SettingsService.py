@@ -1822,13 +1822,16 @@ class SettingsService:
         ``verify_connectivity()`` (a lightweight Bolt handshake — no Cypher
         is executed, no data is touched).
 
-        Returns one of:
+        Returns one of::
 
-        - ``{"success": True, "ok": True, "uri": ..., "database": ...,
-           "latency_ms": ..., "credentials_source": "env var" | "engine_config"}``
-        - ``{"success": True, "ok": False, "error": ..., "category": ...}``
-          for clean error states (auth failure, DNS unresolvable, bad config) —
-          surfaces a friendly UI message without 5xx-ing the route.
+            {"success": True, "ok": True, "uri": ..., "database": ...,
+             "latency_ms": ..., "credentials_source": "env var" | "engine_config"}
+
+            {"success": True, "ok": False, "error": ..., "category": ...}
+
+        The second form covers clean error states (auth failure, DNS
+        unresolvable, bad config) — it surfaces a friendly UI message without
+        5xx-ing the route.
         """
         import time as _time
 
@@ -2556,6 +2559,7 @@ class SettingsService:
         """List UC Delta tables in the configured graph schema, plus Lakeflow state.
 
         Approach:
+
         1. Resolve ``sync_uc_catalog`` and ``uc_schema`` from engine config,
            falling back to the registry catalog when the former is unset.
         2. Call the UC REST API (``/api/2.1/unity-catalog/tables``) to enumerate

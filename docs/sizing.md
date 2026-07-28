@@ -67,13 +67,13 @@ Add another copy of this subsection for each additional source or workload.
 
 - **Required — Number of business domains:** ______________________________
 - **Required — Number of production ontology versions retained per domain:**
-  ______________________________
+  `______________________________`
 - **Required — Estimated ontology size per domain:**
   - Entity or class types: ______________________________
   - Relationship types: ______________________________
   - Attributes or properties: ______________________________
 - **Required — Estimated number of source-to-ontology mappings:**
-  ______________________________
+  `______________________________`
 - **Required — Typical mapping complexity:** [ ] Simple column mapping
   [ ] Joins across tables  [ ] Complex SQL transformations  [ ] Mixed
 - **Optional — Maximum tables joined by one mapping:** _______________________
@@ -117,7 +117,7 @@ expected number of entities, relationships, and attributes generated per row.
   [ ] One-hop traversal  [ ] Multi-hop traversal  [ ] Aggregation
   [ ] Mixed
 - **Required — Maximum acceptable interactive response time:**
-  ______________________________
+  `______________________________`
 - **Optional — Typical result size:** __________________ rows or objects
 - **Optional — Maximum traversal depth:** __________________ hops
 - **Optional — Bulk exports:** ______ exports/day of approximately
@@ -141,7 +141,7 @@ OntoBricks uses Lakebase Autoscaling for its registry and graph storage.
   __________________ days
 - **Optional — Largest expected write burst:** __________________ rows/second
 - **Optional — Known connection limit or connection-pooling constraints:**
-  ______________________________
+  `______________________________`
 
 ## 8. SQL Warehouse Workload
 
@@ -154,13 +154,13 @@ Delta-backed operations.
 - **Required — Expected OntoBricks warehouse activity:**
   ______ hours/day, ______ days/week
 - **Required — Maximum concurrent OntoBricks SQL statements:**
-  ______________________________
+  `______________________________`
 - **Required — Largest data volume scanned by one operation:**
   __________________ [ ] GB  [ ] TB  [ ] Unknown
 - **Optional — Preferred warehouse type:** [ ] Serverless  [ ] Pro
   [ ] Classic  [ ] No preference
 - **Optional — Existing warehouse size and scaling range:**
-  ______________________________
+  `______________________________`
 - **Optional — Auto-stop requirement:** __________________ minutes
 
 ## 9. Databricks Apps and MCP
@@ -175,9 +175,9 @@ companion application.
 - **Optional — App compute preference:** [ ] Medium  [ ] Large
   [ ] Let the sizing team recommend
 - **Optional — High availability or minimum replica requirement:**
-  ______________________________
+  `______________________________`
 - **Optional — External systems calling OntoBricks APIs:**
-  ______________________________
+  `______________________________`
 
 ## 10. AI-Assisted Features
 
@@ -195,7 +195,7 @@ separately from the core Databricks compute estimate.
 - **Optional — Typical output size:** __________________ tokens
 - **Optional — Required model or serving endpoint:** ________________________
 - **Optional — Data residency or model governance constraints:**
-  ______________________________
+  `______________________________`
 
 ## 11. Service Levels, Security, and Growth
 
@@ -210,7 +210,7 @@ separately from the core Databricks compute estimate.
 - **Optional — Customer-managed keys required:** [ ] Yes  [ ] No
 - **Optional — Audit-log retention requirement:** ___________________________
 - **Optional — Planned traffic peaks or seasonal events:**
-  ______________________________
+  `______________________________`
 
 ## 12. Representative Performance Sample
 
@@ -229,13 +229,13 @@ When possible, provide a representative production sample or benchmark:
 ## 13. Additional Context
 
 - Current solution being replaced or complemented:
-  ______________________________
+  `______________________________`
 - Known bottlenecks or performance concerns:
-  ______________________________
+  `______________________________`
 - Constraints not covered above:
-  ______________________________
+  `______________________________`
 - Additional comments:
-  ______________________________
+  `______________________________`
 
 ## 14. Sizing Summary — For the Sizing Team
 
@@ -245,7 +245,7 @@ The customer may leave this section blank.
 - Recommended MCP App compute: ______________________________
 - Recommended Lakebase capacity and storage: _____________________________
 - Recommended SQL Warehouse type, size, and scaling range:
-  ______________________________
+  `______________________________`
 - Estimated monthly workload by component: ______________________________
 - Foundation Model API estimate, if applicable: __________________________
 - Growth headroom applied: ______________________________ %

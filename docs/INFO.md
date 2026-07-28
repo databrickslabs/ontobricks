@@ -70,21 +70,21 @@ OntoBricks builds a **materialized graph viewer** (triple store) from your Datab
 Design your ontology visually — create entities, relationships, and inheritance hierarchies on an interactive canvas with emoji icons, attributes, constraints, and dashboard integration.
 
 <p align="center">
-  <img src="docs/screenshots/Ontology%20design.png" alt="Ontology Design" width="800">
+  <img src="docs/screenshots/Ontology-design.png" alt="Ontology Design" width="800">
 </p>
 
 ### Semantic Mapping
 Map ontology entities to Databricks tables — click any entity on the graph, write or generate SQL, then assign columns to attributes with a live data preview.
 
 <p align="center">
-  <img src="docs/screenshots/Ontology%20Mapping.png" alt="Ontology Mapping" width="800">
+  <img src="docs/screenshots/Ontology-Mapping.png" alt="Ontology Mapping" width="800">
 </p>
 
 ### Graph Viewer
 Explore your graph viewer — search, filter, and navigate entities and relationships with full attribute details, up to N levels deep.
 
 <p align="center">
-  <img src="docs/screenshots/Graph%20result.png" alt="Graph Viewer" width="800">
+  <img src="docs/screenshots/Graph-result.png" alt="Graph Viewer" width="800">
 </p>
 
 ## Features

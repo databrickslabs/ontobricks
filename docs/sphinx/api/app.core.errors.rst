@@ -5,6 +5,7 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 .. automodule:: back.core.errors.OntoBricksError
    :members:

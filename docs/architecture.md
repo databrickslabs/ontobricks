@@ -484,7 +484,7 @@ tests/                                  # Test suite (at project root)
 
 OntoViz is a custom JavaScript library for visual entity-relationship diagram editing. It is designed to be **reusable** and can be integrated into other projects.
 
-For complete documentation, see [OntoViz Documentation](architecture.md#ontoviz---visual-ontology-editor).
+For complete documentation, see [OntoViz Documentation](#ontoviz-component-architecture).
 
 ### Key Features
 
@@ -1906,7 +1906,7 @@ OntoViz provides a visual canvas for creating and managing ontology structures w
 - **Relationships** (OWL Object Properties) - Connect entities with directed links
 - **Inheritances** (rdfs:subClassOf) - Define class hierarchies with property inheritance
 
-![OntoViz Editor](screenshots/Ontology%20design.png)
+![OntoViz Editor](screenshots/Ontology-design.png)
 
 ---
 

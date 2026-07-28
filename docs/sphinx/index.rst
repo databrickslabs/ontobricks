@@ -19,14 +19,20 @@ RST summaries; see the architecture guide for the full design document.
 
    guides/documentation
    guides/get-started
+   guides/features
    guides/deployment
    guides/architecture
+   guides/code_organization
    guides/user-guide
    guides/import-export
    guides/api
    guides/data-access
+   guides/graphdb-integration
+   guides/lakebase-graphdb
+   guides/cohort_discovery
    guides/mcp
    guides/development
+   guides/sizing
    guides/product
    guides/examples
 

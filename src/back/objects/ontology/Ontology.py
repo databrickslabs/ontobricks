@@ -713,9 +713,10 @@ class Ontology:
         """Parse OWL content, apply to project, return the appropriate success payload.
 
         ``outcome`` controls the response shape:
-        - ``"import"``  → :meth:`build_import_owl_success_payload`
-        - ``"parse"``   → :meth:`build_parse_owl_success_payload`
-        - ``"load_file"``→ :meth:`build_load_owl_file_success_payload`
+
+        - ``"import"`` → :meth:`build_import_owl_success_payload`
+        - ``"parse"`` → :meth:`build_parse_owl_success_payload`
+        - ``"load_file"`` → :meth:`build_load_owl_file_success_payload`
         """
         result = Ontology.parse_owl(owl_content, extract_advanced=True)
         (

@@ -1,5 +1,5 @@
-``back.objects.digitaltwin`` -- Digital twin / query pipeline (domain)
-=====================================================================
+``back.objects.digitaltwin`` -- Knowledge graph / query pipeline (domain)
+=========================================================================
 
 DigitalTwin class
 -----------------

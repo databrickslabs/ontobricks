@@ -12,6 +12,7 @@ Package
    :members:
    :undoc-members:
    :show-inheritance:
+   :no-index:
 
 Base helpers
 ------------
