@@ -1,0 +1,67 @@
+## Harden Unity Catalog SQL against identifier injection — backport (fixes #124)
+
+Context: Issue #124 reports that SQL queries fail for Unity Catalog names
+containing hyphens (e.g. `arc-dbx-uc-cdp`): Databricks SQL parses the hyphen as a
+minus operator, so `SHOW SCHEMAS IN arc-dbx-uc-cdp` is a parse error. Every
+metadata statement that interpolated a catalog/schema/table name directly into
+SQL was affected — SHOW SCHEMAS, SHOW TABLES, SHOW VOLUMES, DESCRIBE, the SELECT
+permission probe, and the `information_schema` queries.
+
+This was already fixed on develop (targeting v0.7.0) by the identifier-hardening
+pass, but the 0.6 line diverged from develop at `ea6ce28` on 2026-07-03 — two
+days *before* that fix landed — so no 0.6.x release contains it. Backported here
+as a cherry-pick of `b17c618`; the v0.7.0 changelog entry from that commit was
+dropped, and the identifier module keeps this line's pre-refactor layout
+(`src/back/core/uc_identifiers.py`, not `databricks/uc/identifiers.py`).
+
+Changes:
+
+1. src/back/core/uc_identifiers.py
+   New central module: `validate_uc_identifier` (allows letters, digits,
+   underscore and hyphen via `^[a-zA-Z_][a-zA-Z0-9_-]*$`, rejects `--`),
+   `quote_uc_identifier` (backtick-quotes a validated segment) and
+   `quote_uc_fqn` (quotes `catalog.schema[.table]`).
+2. src/back/core/databricks/UnityCatalog.py
+   Route every SQL path through those helpers: `get_schemas` (SHOW SCHEMAS),
+   `get_tables` (SHOW TABLES), `get_volumes` (SHOW VOLUMES), `get_table_columns`
+   (DESCRIBE), `check_table_select_permission` (SELECT … LIMIT 0), plus
+   `probe_schema_has_tables` and `get_table_comment`, which quote the catalog as
+   an identifier while keeping the schema/table as bound parameters in the
+   `WHERE` predicate.
+3. src/back/core/helpers/SQLHelpers.py
+   Expose the identifier helpers as `SQLHelpers` delegates so callers have one
+   entry point.
+4. src/back/core/databricks/DatabricksAuth.py
+   Incidental to this backport, not part of the #124 fix: `b17c618` also carried a
+   `_resolving_cloud_fetch` re-entrancy flag guarding
+   `_resolve_global_cloud_fetch_default`, which loads registry settings and could
+   otherwise recurse back into itself. Kept so the cherry-pick stays faithful and
+   this line does not retain a recursion bug already fixed on develop.
+5. tests/units/core/test_unity_catalog.py
+   Backported injection-guard coverage, plus a new `TestHyphenatedCatalogNames`
+   class that exercises the exact name from #124 (`arc-dbx-uc-cdp`) across SHOW
+   SCHEMAS / SHOW TABLES / SHOW VOLUMES / DESCRIBE / the SELECT probe and the
+   `information_schema` count, asserting the identifier is backtick-quoted and
+   the predicate value stays bound. All six fail against the unfixed file and
+   pass with the backport, so they reproduce the reported bug.
+6. tests/units/core/test_uri_sql_helpers.py
+   Cover the identifier helpers via the `SQLHelpers` delegates, including
+   `validate_uc_identifier("my-catalog")`.
+
+Known behavioural change: the validation regex requires a leading letter or
+underscore, so a catalog whose name starts with a digit now raises
+`ValidationError` instead of producing a SQL parse error. Unity Catalog does
+permit such names when quoted; this is a narrow edge case the hardening trades
+away and is unchanged from the develop implementation.
+
+Modified files:
+- src/back/core/uc_identifiers.py
+- src/back/core/databricks/UnityCatalog.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/core/databricks/DatabricksAuth.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/core/test_uri_sql_helpers.py
+- changelogs/v0.6.3/benoitcayladbx_2026-07-28.log
+
+Tests: uv run pytest -q -m "not scenario" → 3027 passed, 286 skipped,
+5 deselected, 23 warnings in 22.03s.
