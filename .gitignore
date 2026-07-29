@@ -95,3 +95,6 @@ tests/e2e/_e2e_server.log
 
 # Local working drafts — should never be committed (per topic-folder convention)
 syncs/
+
+# Superpowers brainstorming visual-companion session files
+.superpowers/
