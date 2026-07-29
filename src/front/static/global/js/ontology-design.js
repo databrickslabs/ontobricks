@@ -1594,6 +1594,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
                     label: cls.label || cls.name || cls.localName,
                     icon: cls.emoji || cls.icon || '📦',
                     description: cls.description || '',
+                    hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
                     x: posX,
                     y: posY,
                     properties: ownProperties.map(dp => ({
@@ -1745,6 +1746,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
                 if (cls) {
                     entity.icon = cls.emoji || cls.icon || entity.icon || '📦';
                     entity.description = cls.description || entity.description || '';
+                    entity.hasExternal = !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length);
                 }
             });
         }
@@ -1820,6 +1822,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
                 name: cls.name || cls.localName || `Class_${index}`,
                 icon: cls.emoji || cls.icon || '📦',
                 description: cls.description || '',
+                hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
                 x: x,
                 y: y,
                 properties: dataProps
