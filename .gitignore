@@ -35,6 +35,9 @@ htmlcov/
 # Live scenario campaign reports (make scenario-campaign)
 artifacts/
 
+# Sphinx build output (ci/build_docs.sh) — regenerate, never commit
+docs/sphinx/_build/
+
 # OS
 .DS_Store
 Thumbs.db
