@@ -32,10 +32,12 @@
 - **SQL Query Testing**: Test and validate SQL queries directly in the mapping interface before saving.
 - **Relationship Direction**: Control forward, reverse, or bidirectional relationships with visual indicators.
 - **R2RML Generation**: Automatic generation of W3C-compliant R2RML mappings from visual configuration. Excluded attributes are never emitted as `rr:predicateObjectMap` triples.
+- **Unmap all**: Clear every entity and relationship mapping from both **Mapping → Information** and **Mapping → Designer** via a shared confirmation dialog (`Unmap all`). Attribute exclusions stamped on ontology objects are re-evaluated after the wipe so the Designer canvas stays consistent.
 
 ## Knowledge Graph (Sync & Explore)
 - **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine (Lakebase Postgres today; pluggable behind `GraphDBFactory`).
 - **Readiness Status**: Validates ontology, entity mappings, relationship mappings, and attribute mapping completeness before enabling sync and explore actions.
+- **Graph readiness indicator**: Each Knowledge Graph sub-page (Explorer, Chat, Insights, Analytics, Cohorts, GraphQL, Data Quality, Inference) shows a badge next to the title — *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with a **Go to Build** shortcut. The backend label reflects the domain's selected engine (Lakebase / Lakehouse / Neo4j).
 - **Triple Store Sync**: Synchronize generated triples to a Unity Catalog table — SQL is generated automatically from R2RML mappings (no manual query writing required).
 - **Last Updated Timestamp**: Triple store status displays the last modification date and time retrieved from Unity Catalog Delta table metadata (`DESCRIBE DETAIL`).
 - **Auto-Load Triple Store**: Triples and Graph Viewer views automatically load data from the triple store on navigation (no manual button click required).
@@ -58,6 +60,7 @@
 - **Domain Cockpit (Validation)**: Readiness tiles including **Active Version** — the version currently exposed via API/MCP (from the registry), with a *(not loaded)* hint when it differs from the version open in the session. Distinct from “latest on disk” vs read-only UI gating (still driven by whether the loaded version is the latest).
 - **Audit Trail**: The Domain → Audit trail page is one unified, newest-first activity feed interleaving three streams: **ontology/mapping changes** (who changed what — class/property/mapping add/update/remove, SHACL/SWRL/group edits, imports, resets — and when, with AI-assistant edits tagged), **status & comments** (review/validation decisions), and **build runs**. Change events are buffered in the working session as edits happen and flushed to the registry (`domain_change_events`) on **Save to registry**; the real edit time is preserved. Filter buttons and a version dropdown scope the timeline.
 - **New-domain loading**: After **New Domain** from the navbar, a full-page spinner runs until Domain Information has finished its initial fetches (LLM endpoints, version status, domain info).
+- **CamelCase domain names**: New domains must use alphanumeric CamelCase names (no spaces or special characters); the creation UI sanitizes as you type and the backend rejects invalid names.
 - **Domain Information — Knowledge Graph fields**: Triple-store FQN and Graph DB table name (e.g. Lakebase `g_<domain>_v<version>`) refresh when the domain name is **committed** (blur / `change`) or the version changes, so previews match naming rules before save.
 - **Duplicate domain names**: Save to registry is blocked when the sanitized name already exists (`/domain/check-name` + guard on **Save to UC**); inline validation clears when the name is cleared or the check errors.
 - **Navbar domain identity**: Top bar name/version invalidate cached `/navbar/state` (and related caches) after domain mutations so reloads and navigations do not show stale labels for up to 15 seconds.
@@ -89,6 +92,7 @@
 
 ## Navigation & UX
 - **Deep-Linkable Sections**: Sidebar section changes push `?section=<id>` to browser history — sections are bookmarkable and navigable with Back/Forward.
+- **Registry modal from navbar**: Open **Registry → Browse** as a modal overlay from the top navbar without leaving the current domain; legacy `/registry/` URLs redirect into Home with the modal opened.
 - **Registry Browse for “Active” version**: Expand a domain in **Registry → Browse** to set which version is **Active** (API/MCP); the Domain app no longer exposes a per-version toggle on **Domain → Versions** (badge only).
 - **Breadcrumb Navigation**: Auto-generated breadcrumb bar below the navbar shows Registry > Domain > Ontology > Section context.
 - **Keyboard Shortcuts**: `Cmd/Ctrl+S` to save domain, `Cmd/Ctrl+K` to focus sidebar search, `?` for a shortcut overlay.

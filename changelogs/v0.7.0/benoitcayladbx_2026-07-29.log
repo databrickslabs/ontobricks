@@ -1,0 +1,68 @@
+## Code-review follow-ups for v0.7.0
+
+Context: Post-review cleanup on `develop` (v0.6.3 → 0.7.0). Extract fat node
+context/action routes into a domain service, migrate remaining `success: False`
+envelopes to `OntoBricksError`, wire `bridge_depth`, bound PGE session extras,
+add missing UI contract tests, and close docs gaps.
+
+Changes:
+
+1. src/back/objects/digitaltwin/NodeContextService.py
+   Extract Class for node context resolution and UC action invocation; raise
+   ValidationError / NotFoundError / InfrastructureError on hard failures
+   (complies with `.cursor/05` / `src/.coding_rules.md §1` + §4).
+2. src/api/routers/digitaltwin.py
+   Thin `dt_nodes_context` / `dt_nodes_action` routes; wire `bridge_depth`
+   through to BFS (le=5); re-export `_RDF_TYPE` for tests.
+3. src/back/objects/digitaltwin/__init__.py
+   Re-export `NodeContextService`.
+4. src/back/objects/digitaltwin/DigitalTwin.py
+   `interpret_graph_metrics` raises `InfrastructureError` instead of returning
+   `{"success": False, ...}`.
+5. src/back/objects/domain/SettingsService.py
+   Registry check / Lakebase permission / grant helpers raise OntoBricksError
+   subclasses instead of success envelopes.
+6. src/front/templates/partials/registry/_registry_configuration.html
+   Repair-permissions UI handles HTTP ErrorResponse (`message`) from grants.
+7. src/back/objects/mapping/Mapping.py
+   Cap `assignment.mapping_run_log` at 500 newest entries across PGE runs.
+8. src/mcp-server/server/app.py
+   `invoke_entity_action` surfaces HTTP 4xx/5xx OntoBricksError messages.
+9. src/front/routes/home.py
+   Remove unused logger / session_mgr imports from settings route.
+10. docs/features.md
+    Document Unmap all, graph readiness indicator, registry navbar modal,
+    CamelCase domain names.
+11. docs/sphinx/api/app.objects.digitaltwin.rst
+    Automodule entry for `NodeContextService`.
+12. tests/units/api/test_node_context_endpoint.py
+    Patch service helpers; assert `bridge_depth` is passed to BFS.
+13. tests/units/api/test_node_action_endpoint.py
+    Expect OntoBricksError HTTP status codes (400/404/502).
+14. tests/units/front/test_unmap_all_ui.py
+    Contract tests for Unmap all buttons, confirm copy, failure restore.
+15. tests/units/front/test_kg_readiness_indicator.py
+    Contract tests for readiness badge states and backend labels.
+16. tests/units/mapping/test_pge_session_extras_retention.py
+    Regression for capped `mapping_run_log`.
+
+Modified files:
+- src/back/objects/digitaltwin/NodeContextService.py
+- src/back/objects/digitaltwin/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/digitaltwin.py
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/back/objects/mapping/Mapping.py
+- src/mcp-server/server/app.py
+- src/front/routes/home.py
+- docs/features.md
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/api/test_node_action_endpoint.py
+- tests/units/front/test_unmap_all_ui.py
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/mapping/test_pge_session_extras_retention.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3428 passed, 275 skipped, 5 deselected in 25.68s

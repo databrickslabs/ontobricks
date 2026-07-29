@@ -3444,7 +3444,9 @@ class DigitalTwin:
         )
 
         if not result.success:
-            return {"success": False, "sections": [], "error": result.error}
+            raise InfrastructureError(
+                result.error or "Graph metrics interpretation failed"
+            )
 
         return {"success": True, "sections": result.sections}
 

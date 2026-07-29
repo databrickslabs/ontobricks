@@ -4,11 +4,13 @@ from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 from back.objects.digitaltwin.models import DomainSnapshot
 from back.objects.digitaltwin.CohortService import CohortService
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+from back.objects.digitaltwin.NodeContextService import NodeContextService
 
 __all__ = [
     "CohortService",
     "DigitalTwin",
     "DomainSnapshot",
+    "NodeContextService",
     "RDF_TYPE",
     "RDFS_LABEL",
     "augment_mappings_from_config",

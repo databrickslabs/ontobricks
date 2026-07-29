@@ -25,6 +25,10 @@ from back.core.errors import InfrastructureError, ValidationError
 logger = get_logger(__name__)
 
 _MAX_DOC_CHARS = 50_000
+# Cap PGE observability extras so repeated auto-map runs cannot grow the
+# session assignment unboundedly. ``mapping_evaluations`` is a dict keyed by
+# item id (naturally bounded); ``mapping_run_log`` is an append-only list.
+_MAX_MAPPING_RUN_LOG_ENTRIES = 500
 
 if TYPE_CHECKING:
     from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
@@ -1180,7 +1184,9 @@ class Mapping:
             # Mapping-PGE extras — persisted alongside the assignment so the
             # UI (future work) and downstream observability can surface
             # planner state, per-item evaluation reports, and the per-item
-            # attempt log without re-running the agent.
+            # attempt log without re-running the agent. ``mapping_run_log``
+            # is capped at ``_MAX_MAPPING_RUN_LOG_ENTRIES`` (newest retained)
+            # so repeated auto-map runs cannot grow the session unboundedly.
             if source_model is not None:
                 assignment["source_model"] = source_model
             if mapping_evaluations is not None:
@@ -1190,6 +1196,8 @@ class Mapping:
             if mapping_run_log is not None:
                 existing_log = list(assignment.get("mapping_run_log") or [])
                 existing_log.extend(mapping_run_log)
+                if len(existing_log) > _MAX_MAPPING_RUN_LOG_ENTRIES:
+                    existing_log = existing_log[-_MAX_MAPPING_RUN_LOG_ENTRIES:]
                 assignment["mapping_run_log"] = existing_log
 
             domain_node = bucket.setdefault("domain", {})

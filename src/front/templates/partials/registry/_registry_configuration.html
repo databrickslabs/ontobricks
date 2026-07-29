@@ -447,10 +447,17 @@
                 credentials: 'same-origin'
             });
             var data = await resp.json();
+            if (!resp.ok) {
+                var errMsg = data.message || data.error || ('HTTP ' + resp.status);
+                if (typeof showNotification === 'function') {
+                    showNotification('Permission repair failed: ' + errMsg, 'danger');
+                }
+                return;
+            }
             _renderGrantResult(data);
             if (typeof showNotification === 'function') {
                 if (data.success === false) {
-                    showNotification('Permission repair failed: ' + (data.error || 'unknown error'), 'danger');
+                    showNotification('Permission repair failed: ' + (data.error || data.message || 'unknown error'), 'danger');
                 } else if ((data.warnings || []).length) {
                     showNotification('Permissions applied with warnings — review the details below.', 'warning');
                 } else {

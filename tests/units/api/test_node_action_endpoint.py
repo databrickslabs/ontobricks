@@ -50,10 +50,10 @@ def _invoke(client, action_full_name, mock_client, classes=None):
         "api.routers.digitaltwin.DigitalTwin.resolve_domain",
         return_value=_mock_domain(classes),
     ), patch(
-        "api.routers.digitaltwin.get_databricks_client",
+        "back.objects.digitaltwin.NodeContextService.get_databricks_client",
         return_value=mock_client,
     ), patch(
-        "api.routers.digitaltwin.run_blocking",
+        "back.objects.digitaltwin.NodeContextService.run_blocking",
         side_effect=lambda fn, *a, **kw: fn(*a, **kw),
     ):
         return client.post(
@@ -104,9 +104,9 @@ class TestNodeActionEndpoint:
 
         resp = _invoke(client, "main.ops.drop_everything", mock_client)
 
-        assert resp.status_code == 200
+        assert resp.status_code == 400
         body = resp.json()
-        assert body["success"] is False
+        assert body["error"] == "validation"
         assert "not configured" in body["message"]
         mock_client.execute_query.assert_not_called()
 
@@ -124,8 +124,8 @@ class TestNodeActionEndpoint:
             client, "main.ops.x(); DROP TABLE y", mock_client, classes=classes
         )
 
-        assert resp.status_code == 200
-        assert resp.json()["success"] is False
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "validation"
         mock_client.execute_query.assert_not_called()
 
     def test_unknown_class_is_rejected(self, client):
@@ -135,7 +135,7 @@ class TestNodeActionEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=_mock_domain(),
         ), patch(
-            "api.routers.digitaltwin.get_databricks_client",
+            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
             return_value=mock_client,
         ):
             resp = client.post(
@@ -147,9 +147,9 @@ class TestNodeActionEndpoint:
                 },
             )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         body = resp.json()
-        assert body["success"] is False
+        assert body["error"] == "not_found"
         assert "No ontology class" in body["message"]
         mock_client.execute_query.assert_not_called()
 
@@ -159,18 +159,17 @@ class TestNodeActionEndpoint:
 
         resp = _invoke(client, "main.ops.recompute_risk", mock_client)
 
-        assert resp.status_code == 200
+        assert resp.status_code == 502
         body = resp.json()
-        assert body["success"] is False
+        assert body["error"] == "infrastructure"
         assert body["message"] == "warehouse unavailable"
-        assert body["rows"] == []
 
     def test_missing_databricks_client_is_reported(self, client):
         resp = _invoke(client, "main.ops.recompute_risk", None)
 
-        assert resp.status_code == 200
+        assert resp.status_code == 502
         body = resp.json()
-        assert body["success"] is False
+        assert body["error"] == "infrastructure"
         assert "not configured" in body["message"]
 
     def test_missing_action_full_name_returns_422(self, client):

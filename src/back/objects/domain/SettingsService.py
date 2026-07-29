@@ -504,15 +504,14 @@ class SettingsService:
 
         Delegates to :meth:`LakebaseRegistryStore.check_permissions` which
         probes connection, schema existence/privileges, and per-table CRUD
-        rights in a single round-trip. Returns ``{"success": False, ...}``
-        when psycopg is not installed or the Lakebase resource is unbound.
+        rights in a single round-trip. Raises ``ValidationError`` /
+        ``InfrastructureError`` when the registry is unbound or Lakebase is unavailable.
         """
         rcfg = RegistryCfg.from_session(session_mgr, settings)
         if not rcfg.is_configured:
-            return {
-                "success": False,
-                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA",
-            }
+            raise ValidationError(
+                "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA"
+            )
         try:
             from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
             store = RegistryFactory.lakebase(
@@ -521,14 +520,15 @@ class SettingsService:
                 database=rcfg.lakebase_database,
             )
             return await run_blocking(store.check_permissions)
-        except ImportError:
-            return {
-                "success": False,
-                "error": "psycopg is not installed — Lakebase backend unavailable.",
-            }
+        except ImportError as exc:
+            raise InfrastructureError(
+                "psycopg is not installed — Lakebase backend unavailable."
+            ) from exc
         except Exception as exc:
             logger.warning("check_lakebase_permissions failed: %s", exc)
-            return {"success": False, "error": str(exc)}
+            raise InfrastructureError(
+                str(exc) or "Lakebase permission check failed", detail=str(exc)
+            ) from exc
 
     @staticmethod
     async def check_registry_access(
@@ -563,14 +563,13 @@ class SettingsService:
         """
         rcfg = RegistryCfg.from_session(session_mgr, settings)
         if not rcfg.is_configured:
-            return {
-                "success": False,
-                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME",
-            }
+            raise ValidationError(
+                "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME"
+            )
 
         client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
-            return {"success": False, "error": "Databricks client not available"}
+            raise InfrastructureError("Databricks client not available")
 
         schema_result = await run_blocking(
             client.catalog.check_schema_access, rcfg.catalog, rcfg.schema
@@ -920,15 +919,9 @@ class SettingsService:
             return None
         app_names = SettingsService._registry_grant_app_names(settings)
         if not app_names:
-            return {
-                "success": False,
-                "granted": [],
-                "warnings": [],
-                "error": (
-                    "Could not determine the app name to grant — set "
-                    "ONTOBRICKS_APP_NAME."
-                ),
-            }
+            raise ValidationError(
+                "Could not determine the app name to grant — set ONTOBRICKS_APP_NAME."
+            )
         try:
             from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
 
@@ -937,13 +930,10 @@ class SettingsService:
                 schema=rcfg.lakebase_schema,
                 database=rcfg.lakebase_database,
             )
-        except ImportError:
-            return {
-                "success": False,
-                "granted": [],
-                "warnings": [],
-                "error": "psycopg is not installed — Lakebase backend unavailable.",
-            }
+        except ImportError as exc:
+            raise InfrastructureError(
+                "psycopg is not installed — Lakebase backend unavailable."
+            ) from exc
         return store.grant_app_permissions(
             app_names=app_names,
             uc_catalog=(rcfg.catalog or "").strip(),
@@ -962,22 +952,22 @@ class SettingsService:
         """
         rcfg = RegistryCfg.from_session(session_mgr, settings)
         if not rcfg.is_configured:
-            return {
-                "success": False,
-                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA",
-            }
+            raise ValidationError(
+                "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA"
+            )
         try:
             summary = await run_blocking(
                 SettingsService._grant_registry_permissions, session_mgr, settings
             )
+        except (ValidationError, InfrastructureError):
+            raise
         except Exception as exc:  # noqa: BLE001
             logger.warning("grant_registry_permissions failed: %s", exc)
-            return {"success": False, "error": str(exc)}
+            raise InfrastructureError(
+                str(exc) or "Permission grant failed", detail=str(exc)
+            ) from exc
         if summary is None:
-            return {
-                "success": False,
-                "error": "Lakebase registry backend is not available.",
-            }
+            raise InfrastructureError("Lakebase registry backend is not available.")
         return summary
 
     @staticmethod

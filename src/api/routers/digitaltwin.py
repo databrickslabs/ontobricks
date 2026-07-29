@@ -16,7 +16,6 @@ targets a specific version; when omitted, the latest version is used.
 Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
 
-import re
 import time
 
 from fastapi import APIRouter, Depends, Query
@@ -33,24 +32,21 @@ from back.core.helpers import (
     get_triplestore_sql_credentials,
     get_databricks_client,
     sql_escape,
-    extract_local_name,
     effective_view_table,
     effective_graph_name,
     effective_graph_query_table,
     run_blocking,
 )
-from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
+from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot, NodeContextService
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
 _resolve_registry = DigitalTwin.resolve_registry
 _extract_local_id = DigitalTwin.extract_local_id
 _expand_uri_aliases = DigitalTwin.expand_uri_aliases
+# Re-exported for tests that assert against the RDF type constant.
+_RDF_TYPE = NodeContextService.RDF_TYPE
 
 logger = get_logger(__name__)
-
-_SAFE_SQL_IDENT = re.compile(r'^[A-Za-z0-9_.]+$')
-_SAFE_COL_IDENT = re.compile(r'^[A-Za-z0-9_]+$')
-_RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
 router = APIRouter()
 
@@ -1670,70 +1666,6 @@ async def dt_cohort_materialize(
 # ---------------------------------------------------------------------------
 
 
-def _match_ontology_class(entity_uri: str, classes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Resolve an entity instance URI to its ontology class definition.
-
-    Prefers exact class-URI prefix match (``classUri/instance``), then falls
-    back to matching the class local name / display name as a path or hash
-    segment. Needed because R2RML often mints path-based instance URIs while
-    OWL classes use ``base#ClassName``.
-    """
-    if not entity_uri or not classes:
-        return None
-
-    for cls in classes:
-        cls_uri = (cls.get("uri") or "").rstrip("/")
-        if not cls_uri:
-            continue
-        if entity_uri.startswith(cls_uri + "/") or entity_uri.startswith(cls_uri + "#"):
-            return cls
-
-    for cls in classes:
-        tokens = {
-            t for t in (
-                extract_local_name(cls.get("uri") or ""),
-                (cls.get("name") or "").strip(),
-            ) if t
-        }
-        for token in tokens:
-            if (
-                f"/{token}/" in entity_uri
-                or f"#{token}/" in entity_uri
-                or f"#{token}_" in entity_uri
-            ):
-                return cls
-    return None
-
-
-def _class_action_entries(cls: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Return the class's UC function actions, keeping only usable entries.
-
-    Each action binds a Unity Catalog function that takes exactly one
-    parameter: the ID of the entity being acted on. Entries without a
-    syntactically valid ``fullName`` are dropped rather than raising, so a
-    single bad entry never breaks the whole node context.
-    """
-    entries: List[Dict[str, Any]] = []
-    for action in cls.get("actions") or []:
-        if not isinstance(action, dict):
-            continue
-        full_name = str(action.get("fullName") or "").strip()
-        if not full_name or not _SAFE_SQL_IDENT.match(full_name):
-            logger.warning("Skipping action with invalid fullName: %r", full_name)
-            continue
-        entries.append(
-            {
-                "fullName": full_name,
-                "function": str(
-                    action.get("function") or extract_local_name(full_name) or ""
-                ),
-                "description": (str(action.get("description") or "").strip() or None),
-                "returns_table": bool(action.get("returns_table")),
-            }
-        )
-    return entries
-
-
 @router.get(
     "/nodes/context",
     response_model=NodeContextResponse,
@@ -1757,8 +1689,8 @@ async def dt_nodes_context(
     bridge_depth: int = Query(
         1,
         ge=1,
-        le=1,
-        description="Bridge traversal depth (only depth=1 supported in this version)",
+        le=5,
+        description="Bridge traversal depth (BFS hops in the target domain graph)",
     ),
     registry_catalog: Optional[str] = Query(None),
     registry_schema: Optional[str] = Query(None),
@@ -1766,175 +1698,25 @@ async def dt_nodes_context(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    local_id = _extract_local_id(entity_uri)
-
     domain = DigitalTwin.resolve_domain(
         domain_name, session_mgr, settings,
         registry_catalog, registry_schema, registry_volume,
         domain_version, read_only=True,
     )
-    dname = domain.domain_folder or (domain.info or {}).get("name", "")
-
-    # Resolve class by URI prefix, then by local class name in the entity URI
-    raw_classes = domain.get_classes() or []
-    matched_cls = _match_ontology_class(entity_uri, raw_classes)
-
-    if matched_cls is None:
-        logger.info(
-            "nodes/context: no class match for entity=%s domain=%s classes=%d",
-            local_id, dname, len(raw_classes),
-        )
-        return NodeContextResponse(
-            success=True,
-            entity_uri=entity_uri,
-            entity_local_id=local_id,
-        )
-
-    class_name = matched_cls.get("name", "")
-    raw_dataset = matched_cls.get("dataset") or None
-    raw_bridges = matched_cls.get("bridges") or []
-    actions_out = [NodeContextAction(**a) for a in _class_action_entries(matched_cls)]
-    fetch_error: Optional[str] = None
-
-    # --- Dataset ---
-    dataset_out: Optional[NodeContextDataset] = None
-    if raw_dataset and raw_dataset.get("fullName"):
-        full_name = raw_dataset.get("fullName", "")
-        if not full_name or not _SAFE_SQL_IDENT.match(full_name):
-            return NodeContextResponse(
-                success=False,
-                entity_uri=entity_uri,
-                message=f"Invalid dataset fullName in class config: {full_name!r}",
-            )
-
-        key_col = raw_dataset.get("key_column")
-        if key_col and not _SAFE_COL_IDENT.match(key_col):
-            return NodeContextResponse(
-                success=False,
-                entity_uri=entity_uri,
-                message=f"Invalid key_column in class config: {key_col!r}",
-            )
-
-        rows = None
-        key_col_missing = None
-
-        if fetch_dataset_rows:
-            if not key_col:
-                key_col_missing = True
-            else:
-                try:
-                    client_db = get_databricks_client(domain, settings)
-                    if client_db is None:
-                        fetch_error = "Databricks client is not configured"
-                        rows = []
-                    else:
-                        sql = (
-                            f"SELECT * FROM {raw_dataset['fullName']} "
-                            f"WHERE {key_col} = '{sql_escape(local_id)}' "
-                            f"LIMIT {dataset_row_limit}"
-                        )
-                        result = await run_blocking(client_db.execute_query, sql)
-                        rows = result if isinstance(result, list) else []
-                except Exception as exc:
-                    fetch_error = str(exc)
-                    rows = []
-                    logger.warning(
-                        "nodes/context: dataset row fetch failed for %s: %s", entity_uri, exc
-                    )
-
-        dataset_out = NodeContextDataset(
-            fullName=raw_dataset["fullName"],
-            key_column=key_col,
-            key_column_missing=key_col_missing,
-            description=(raw_dataset.get("description") or "").strip() or None,
-            rows=rows,
-        )
-
-    # --- Bridges ---
-    bridges_out: List[NodeContextBridge] = []
-    for b in raw_bridges:
-        target_domain = b.get("target_domain") or b.get("target_project", "")
-        target_class_name = b.get("target_class_name", "")
-        target_class_uri = b.get("target_class_uri", "")
-        label = b.get("label", "")
-
-        bridge_entry = NodeContextBridge(
-            target_domain=target_domain,
-            target_class_name=target_class_name,
-            target_class_uri=target_class_uri,
-            label=label,
-            entities=None,
-        )
-
-        if follow_bridges and target_domain and target_class_name:
-            try:
-                target_dom = DigitalTwin.resolve_domain(
-                    target_domain, session_mgr, settings,
-                    registry_catalog, registry_schema, registry_volume,
-                    read_only=True,
-                )
-                target_store = get_graphdb(target_dom, settings)
-                if target_store:
-                    target_table = effective_graph_query_table(target_dom, settings, store=target_store)
-                    if target_table:
-                        if not _SAFE_SQL_IDENT.match(target_table):
-                            logger.warning(
-                                "nodes/context: invalid target_table %r for bridge %s — skipping",
-                                target_table, target_class_name,
-                            )
-                            continue
-                        esc_type = sql_escape(target_class_name).lower()
-                        esc_id = sql_escape(local_id).lower()
-                        seed_where = (
-                            f" WHERE subject IN ("
-                            f"SELECT subject FROM {target_table} "
-                            f"WHERE predicate = '{_RDF_TYPE}' "
-                            f"AND (LOWER(object) LIKE '%#{esc_type}' "
-                            f"OR LOWER(object) LIKE '%/{esc_type}'))"
-                            f" AND (LOWER(subject) LIKE '%/{esc_id}%' "
-                            f"OR LOWER(subject) LIKE '%#{esc_id}%')"
-                        )
-                        rows_bridge = target_store.bfs_traversal(
-                            target_table, seed_where, depth=1,
-                            search=local_id, entity_type=target_class_name,
-                        )
-                        entities = [
-                            {"uri": r.get("subject", ""), "predicate": r.get("predicate", ""),
-                             "object": r.get("object", "")}
-                            for r in (rows_bridge or [])
-                        ]
-                        bridge_entry = NodeContextBridge(
-                            target_domain=target_domain,
-                            target_class_name=target_class_name,
-                            target_class_uri=target_class_uri,
-                            label=label,
-                            entities=entities,
-                        )
-                bridges_out.append(bridge_entry)
-            except Exception as exc:
-                logger.warning(
-                    "nodes/context: bridge traversal to %s/%s failed — skipping: %s",
-                    target_domain, target_class_name, exc,
-                )
-        else:
-            bridges_out.append(bridge_entry)
-
-    logger.info(
-        "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d actions=%d",
-        local_id, class_name, dname, bool(dataset_out), len(bridges_out),
-        len(actions_out),
-    )
-
-    return NodeContextResponse(
-        success=True,
+    payload = await NodeContextService.resolve_context(
+        domain,
+        settings,
         entity_uri=entity_uri,
-        entity_local_id=local_id,
-        class_name=class_name,
-        dataset=dataset_out,
-        bridges=bridges_out or None,
-        actions=actions_out or None,
-        message=fetch_error,
+        session_mgr=session_mgr,
+        fetch_dataset_rows=fetch_dataset_rows,
+        dataset_row_limit=dataset_row_limit,
+        follow_bridges=follow_bridges,
+        bridge_depth=bridge_depth,
+        registry_catalog=registry_catalog,
+        registry_schema=registry_schema,
+        registry_volume=registry_volume,
     )
+    return NodeContextResponse(**payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1957,96 +1739,15 @@ async def dt_nodes_action(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    entity_uri = payload.entity_uri
-    local_id = _extract_local_id(entity_uri)
-
     domain = DigitalTwin.resolve_domain(
         payload.domain_name, session_mgr, settings,
         payload.registry_catalog, payload.registry_schema, payload.registry_volume,
         payload.domain_version, read_only=True,
     )
-    dname = domain.domain_folder or (domain.info or {}).get("name", "")
-
-    raw_classes = domain.get_classes() or []
-    matched_cls = _match_ontology_class(entity_uri, raw_classes)
-    if matched_cls is None:
-        return NodeActionResponse(
-            success=False,
-            entity_uri=entity_uri,
-            entity_local_id=local_id,
-            message="No ontology class matches this entity URI",
-        )
-
-    class_name = matched_cls.get("name", "")
-
-    # Allow-list: only functions declared on the resolved class may run. This
-    # is what keeps the endpoint from becoming an arbitrary SQL executor.
-    requested = payload.action_full_name.strip()
-    action = next(
-        (a for a in _class_action_entries(matched_cls) if a["fullName"] == requested),
-        None,
+    result = await NodeContextService.invoke_action(
+        domain,
+        settings,
+        entity_uri=payload.entity_uri,
+        action_full_name=payload.action_full_name,
     )
-    if action is None:
-        logger.warning(
-            "nodes/action: %r is not declared on class %s — rejected",
-            requested, class_name,
-        )
-        return NodeActionResponse(
-            success=False,
-            entity_uri=entity_uri,
-            entity_local_id=local_id,
-            class_name=class_name,
-            message=f"Action {requested!r} is not configured on class {class_name!r}",
-        )
-
-    full_name = action["fullName"]
-    returns_table = action["returns_table"]
-
-    try:
-        client_db = get_databricks_client(domain, settings)
-        if client_db is None:
-            return NodeActionResponse(
-                success=False,
-                entity_uri=entity_uri,
-                entity_local_id=local_id,
-                class_name=class_name,
-                action=full_name,
-                message="Databricks client is not configured",
-            )
-        arg = f"'{sql_escape(local_id)}'"
-        sql = (
-            f"SELECT * FROM {full_name}({arg})"
-            if returns_table
-            else f"SELECT {full_name}({arg}) AS result"
-        )
-        result = await run_blocking(client_db.execute_query, sql)
-        rows = result if isinstance(result, list) else []
-    except Exception as exc:
-        logger.warning(
-            "nodes/action: %s failed for %s: %s", full_name, entity_uri, exc
-        )
-        return NodeActionResponse(
-            success=False,
-            entity_uri=entity_uri,
-            entity_local_id=local_id,
-            class_name=class_name,
-            action=full_name,
-            returns_table=returns_table,
-            rows=[],
-            message=str(exc),
-        )
-
-    logger.info(
-        "nodes/action: entity=%s class=%s domain=%s action=%s rows=%d",
-        local_id, class_name, dname, full_name, len(rows),
-    )
-
-    return NodeActionResponse(
-        success=True,
-        entity_uri=entity_uri,
-        entity_local_id=local_id,
-        class_name=class_name,
-        action=full_name,
-        returns_table=returns_table,
-        rows=rows,
-    )
+    return NodeActionResponse(**result)

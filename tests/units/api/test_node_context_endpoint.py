@@ -207,10 +207,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             side_effect=_resolve_side_effect,
         ), patch(
-            "api.routers.digitaltwin.get_graphdb",
+            "back.objects.digitaltwin.NodeContextService.get_graphdb",
             return_value=mock_target_store,
         ), patch(
-            "api.routers.digitaltwin.effective_graph_query_table",
+            "back.objects.digitaltwin.NodeContextService.effective_graph_query_table",
             return_value="catalog.schema.graph",
         ):
             resp = client.get(
@@ -269,10 +269,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "api.routers.digitaltwin.get_databricks_client",
+            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
             return_value=mock_client,
         ) as mock_get_client, patch(
-            "api.routers.digitaltwin.run_blocking",
+            "back.objects.digitaltwin.NodeContextService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(
@@ -303,10 +303,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "api.routers.digitaltwin.get_databricks_client",
+            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
             return_value=mock_client,
         ), patch(
-            "api.routers.digitaltwin.run_blocking",
+            "back.objects.digitaltwin.NodeContextService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(
@@ -335,10 +335,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "api.routers.digitaltwin.get_databricks_client",
+            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
             return_value=mock_client,
         ), patch(
-            "api.routers.digitaltwin.run_blocking",
+            "back.objects.digitaltwin.NodeContextService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(
@@ -368,3 +368,37 @@ class TestNodeContextEndpoint:
         )
 
         assert resp.status_code == 422
+
+    def test_bridge_depth_is_passed_to_bfs(self, client):
+        mock_domain = self._mock_domain()
+        mock_target_dom = MagicMock()
+        mock_target_store = MagicMock()
+        mock_target_store.bfs_traversal.return_value = []
+        resolve_calls = []
+
+        def _resolve_side_effect(*args, **kwargs):
+            resolve_calls.append(args)
+            return mock_domain if len(resolve_calls) == 1 else mock_target_dom
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            side_effect=_resolve_side_effect,
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.get_graphdb",
+            return_value=mock_target_store,
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.effective_graph_query_table",
+            return_value="catalog.schema.graph",
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                    "follow_bridges": "true",
+                    "bridge_depth": "2",
+                },
+            )
+
+        assert resp.status_code == 200
+        assert mock_target_store.bfs_traversal.call_args.kwargs["depth"] == 2
