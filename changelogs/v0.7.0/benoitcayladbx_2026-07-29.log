@@ -243,3 +243,86 @@ Modified files:
 - docs/superpowers/plans/2026-07-29-designer-external-indicator.md
 
 Tests: uv run pytest -q -m "not scenario" → 3443 passed, 275 skipped, 5 deselected in 21.21s
+
+## Correction: move external-link badge from Business Views (OntoViz) to Designer (D3 map)
+
+Context: the previous two entries built the external-link badge into the
+OntoViz canvas, whose sidebar item is labelled "Business Views"
+(`menu_config.json` item id `design`). The original request was for the
+"Ontology > Designer" sidebar item (id `map`), which is a separate D3.js
+force-directed graph (`ontology-map.js` / `_ontology_map.html`, heading
+"Ontology Designer") with its own node rendering (SVG, not HTML/CSS cards)
+and its own entity-data construction (a single `classes.map(...)` site, no
+saved-layout persistence of class fields, and no change-detection fingerprint
+to go stale). Reverted the OntoViz-side implementation and re-implemented the
+same visual concept (small dark badge, `bi-link-45deg` glyph, top-right of the
+icon, no tooltip/click handler) natively in the D3 view. Live browser
+verification (web-devloop-tester) confirmed the badge now appears only on
+Customer/Meter (the two classes with External-tab data) on the Designer graph,
+is absent from all other nodes there, and is fully gone from Business Views.
+
+Changes:
+
+1. src/front/static/global/ontoviz/css/ontoviz-entity.css
+   Removed `.ovz-entity-external-badge` and the `position: relative` added to
+   `.ovz-entity-icon` for it.
+2. src/front/static/global/ontoviz/ontoviz.js
+   Removed `Entity.hasExternal` and the badge markup from `_renderEntity`.
+3. src/front/static/global/js/ontology-design.js
+   Removed `hasExternal` computation from all four entity-construction sites
+   and reverted `_getOntologyVersion()`'s fingerprint to its prior form (no
+   longer needed once the badge left this view).
+4. tests/units/front/test_designer_external_badge.py
+   Deleted (covered the removed OntoViz implementation).
+5. src/front/static/ontology/js/ontology-map.js
+   Node data now computes `hasExternal` from the same class fields; nodes
+   with the flag get a small `<circle>` + `<text>` (bootstrap-icons
+   `\uf470` = `bi-link-45deg`) badge appended at (14, -14) relative to the
+   node's icon, filtered so only matching nodes render it. Purely visual —
+   `pointer-events: none`, no `<title>`, no click handler.
+6. src/front/static/ontology/css/ontology-map.css
+   `.map-node-external-badge-bg` / `.map-node-external-badge-icon` styles;
+   also dims the badge alongside the icon/label under `.map-node.dimmed`
+   (neighborhood-highlight mode).
+7. tests/units/front/test_ontology_map_external_badge.py
+   New contract tests: `hasExternal` computation, badge rendered only for
+   matching nodes via `.filter(...)`, no tooltip/click handler in the badge
+   block, `aria-hidden`/`aria-label` accessibility, and CSS presence
+   including the dimmed-state rule.
+
+Modified files:
+- src/front/static/global/ontoviz/css/ontoviz-entity.css
+- src/front/static/global/ontoviz/ontoviz.js
+- src/front/static/global/js/ontology-design.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- tests/units/front/test_ontology_map_external_badge.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Removed files:
+- tests/units/front/test_designer_external_badge.py
+
+Tests: uv run pytest -q -m "not scenario" → 3441 passed, 275 skipped, 5 deselected in 27.17s
+
+## Designer external-config badge: swap glyph to yellow lightning bolt, bigger size
+
+Context: follow-up polish request — use the same glyph/colour as the entity
+panel's own "External" tab (`bi-lightning-charge text-warning` in
+`ontology-shared-panels.js`, e.g. the Actions picker) instead of the link
+icon, and make the badge a bit bigger.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Badge circle grows `r: 7 -> 9`, offset `(14,-14) -> (16,-16)`; glyph
+   codepoint `\uf470` (bi-link-45deg) -> `\uf46d` (bi-lightning-charge).
+2. src/front/static/ontology/css/ontology-map.css
+   `.map-node-external-badge-icon`: `font-size: 9px -> 12px`, `fill: #fff ->
+   #ffc107` (Bootstrap's `text-warning` yellow, matching the External tab).
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3441 passed, 275 skipped, 5 deselected in 27.05s

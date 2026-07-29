@@ -173,6 +173,9 @@ async function initOntologyMap() {
             name: cls.name,
             label: cls.label || cls.name,
             icon: cls.emoji || OntologyState.defaultClassEmoji || '📦',
+            // True when the backing class has a Dashboard, Dataset, Actions, or
+            // Bridges configured under the entity panel's External tab.
+            hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
             parent: cls.parent,
             // Use saved position if available, fix positions to prevent animation
             x: x,
@@ -507,6 +510,27 @@ async function initOntologyMap() {
         .attr('class', 'map-node-label')
         .attr('dy', 35)
         .text(d => d.label || d.name);
+
+    // Small badge overlay signalling the class has Dashboard/Dataset/Actions/
+    // Bridges configured (entity panel's "External" tab). Purely visual — no
+    // tooltip, no click handler — so it's rendered only for matching nodes
+    // and marked pointer-events: none in CSS.
+    const externalBadgeNodes = nodeElements.filter(d => d.hasExternal);
+
+    externalBadgeNodes.append('circle')
+        .attr('class', 'map-node-external-badge-bg')
+        .attr('cx', 16)
+        .attr('cy', -16)
+        .attr('r', 9)
+        .attr('role', 'img')
+        .attr('aria-label', 'Has external configuration');
+
+    externalBadgeNodes.append('text')
+        .attr('class', 'map-node-external-badge-icon')
+        .attr('x', 16)
+        .attr('y', -16)
+        .attr('aria-hidden', 'true')
+        .text('\uf46d'); // bi-lightning-charge codepoint (bootstrap-icons font) — same glyph/colour as the entity panel's External tab
 
     // Tooltip on hover
     nodeElements.append('title')

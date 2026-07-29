@@ -46,7 +46,6 @@
 }
 
 .ovz-entity-icon {
-    position: relative;
     font-size: 20px;
     cursor: pointer;
     transition: transform var(--ovz-transition);
@@ -55,30 +54,6 @@
 
 .ovz-entity-icon:hover {
     transform: scale(1.15);
-}
-
-/* Badge shown on entities that have a Dashboard, Dataset, Actions, or
-   Bridges configured under the entity panel's "External" tab. */
-.ovz-entity-external-badge {
-    position: absolute;
-    top: -6px;
-    right: -7px;
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
-    background: var(--ovz-accent-purple);
-    color: #fff;
-    border: 2px solid var(--ovz-entity-header-bg);
-    font-size: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-}
-
-.ovz-entity-external-badge i {
-    font-size: 9px;
-    line-height: 1;
 }
 
 .ovz-entity-title {

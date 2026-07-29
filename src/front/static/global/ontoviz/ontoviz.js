@@ -56,9 +56,6 @@
             }));
             this.color = options.color || null; // Use default if null
             this.collapsed = options.collapsed || false; // Header-only display when true
-            // True when the backing class has a Dashboard, Dataset, Actions,
-            // or Bridges configured under the entity panel's External tab.
-            this.hasExternal = options.hasExternal || false;
             this.element = null;
         }
 
@@ -1199,12 +1196,6 @@
             // Icon - clickable only in edit mode
             const iconAttr = isViewOnly ? '' : 'data-action="edit-icon" title="Click to change icon"';
 
-            // Small badge overlay signalling the class has Dashboard/Dataset/
-            // Actions/Bridges configured (entity panel's "External" tab).
-            const externalBadgeHTML = entity.hasExternal
-                ? '<span class="ovz-entity-external-badge" aria-label="Has external configuration"><i class="bi bi-link-45deg" aria-hidden="true"></i></span>'
-                : '';
-
             // Collapse / expand toggle (available in both view and edit modes)
             const collapseBtnHTML = `
                 <button class="ovz-entity-collapse-btn" data-action="toggle-collapse"
@@ -1230,7 +1221,7 @@
 
             el.innerHTML = `
                 <div class="ovz-entity-header">
-                    <span class="ovz-entity-icon" ${iconAttr}>${entity.icon || '📦'}${externalBadgeHTML}</span>
+                    <span class="ovz-entity-icon" ${iconAttr}>${entity.icon || '📦'}</span>
                     ${entityTitleHTML}
                     ${collapseBtnHTML}
                     ${entityActionsHTML}

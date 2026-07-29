@@ -1,16 +1,29 @@
 # Designer Entity External-Link Indicator
 
+> **Correction (same day):** the first version of this spec targeted the
+> wrong view. The Ontology app has two visually-similar but distinct
+> sections: sidebar item **"Designer"** (`menu_config.json` id `map`) is the
+> D3.js force-directed graph (`ontology-map.js` / `_ontology_map.html`,
+> content heading "Ontology Designer"); sidebar item **"Business Views"**
+> (id `design`) is the OntoViz canvas (`ontoviz.js` / `_ontology_design.html`,
+> content heading "Visual Ontology Designer - Business Views"). The original
+> request ("Ontology/designer") meant the former. The feature below was
+> initially built in OntoViz/Business Views, then reverted and re-implemented
+> in the D3 "Designer" view once the mix-up was caught. This spec has been
+> rewritten to describe the actual (D3) implementation.
+
 ## Goal
 
-Give a visual signal on entity cards in the Ontology Designer canvas that an
-entity already has one or more items configured under its "External" panel
-tab (Dashboard, Dataset, Actions, Bridges), without opening the panel.
+Give a visual signal on entity nodes in the Ontology **Designer** (the D3.js
+force-directed graph) that an entity already has one or more items
+configured under its "External" panel tab (Dashboard, Dataset, Actions,
+Bridges), without opening the panel.
 
 ## Scope
 
-- Designer canvas only (`ontoviz.js` / `ontology-design.js`). Map view
-  (`ontology-map.js`) and the Entities tree (`ontology-entities.js`) are out
-  of scope for this change.
+- Designer view only (`ontology-map.js` / `ontology-map.css`). The OntoViz
+  "Business Views" canvas (`ontoviz.js`) and the Entities tree
+  (`ontology-entities.js`) are out of scope for this change.
 - This is unrelated to the (unbuilt) vocabulary-reuse feature described in
   `releasereq/optional/vocabulary_reuse.md` (`external` / `source_vocabulary`
   fields for reused ontology terms). That feature, if built later, would need
@@ -28,81 +41,65 @@ tab (Dashboard, Dataset, Actions, Bridges), without opening the panel.
    - `actions` (non-empty array)
    - `bridges` (non-empty array)
 2. When true, the Designer renders a small badge overlaid on the top-right
-   corner of the entity's emoji icon (Option B from visual review: a dark
-   badge with a "link/reuse" glyph). Per `.cursor/11-frontend-design.mdc`,
-   OntoViz is a **greyscale-only** token scope (no hardcoded hex) and the app
-   forbids emoji-as-icon (Bootstrap Icons only), so Option B's shape/position
-   is implemented with the existing `--ovz-accent-purple` token (`#333333`
-   grey, not literal purple, per the theme) and the Bootstrap icon
-   `bi-link-45deg` — the same glyph the entity panel already uses for
-   "Assign" on the Dashboard field, keeping the visual language consistent.
+   of the node's emoji icon: a dark circle (`#333333`, matching the app's
+   neutral badge/dark-accent convention) with a small white "link" glyph
+   (Bootstrap Icons `bi-link-45deg`, codepoint `\uf470` — the same glyph the
+   entity panel already uses for "Assign" on the Dashboard field). Since this
+   view renders nodes as raw SVG (not HTML/CSS cards), the glyph is drawn via
+   an SVG `<text>` using the `bootstrap-icons` webfont directly rather than an
+   `<i class="bi ...">` element.
 3. When false, no badge is rendered — the icon looks exactly as it does
    today.
-4. The badge must survive re-renders that already exist today: collapse /
-   expand, drag, add/edit property, icon change. It is computed once per
-   entity at designer-load time and stored on the `Entity` instance, so any
-   `_renderEntity` call naturally re-paints it consistently.
+4. The badge is recomputed on every `initOntologyMap()` call (full SVG
+   rebuild from `OntologyState.config.classes`), which already runs on every
+   navigation to the Designer section and after every entity-panel save while
+   the Designer is the active section (`ontology-shared-panels.js`). There is
+   no saved-layout persistence of class fields and no change-detection
+   fingerprint to go stale here — unlike the OntoViz canvas, this view has no
+   analogous "badge only updates after reload" risk.
 
 ## Implementation
 
-`ontology-design.js` in `src/front/static/global/js/ontology-design.js`
-has **four** distinct entity-construction sites — all four already thread
-`icon`/`description` from `cls` the same way, so `hasExternal` follows the
-identical pattern at each:
+- `src/front/static/ontology/js/ontology-map.js`
+  - `initOntologyMap()`'s `classes.map(...)` (builds the `nodes` array): add
+    `hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions ||
+    []).length || (cls.bridges || []).length)` alongside the existing `icon`
+    field. This is the *only* entity-construction site in this file (no
+    saved-layout entity merge like OntoViz — the map only persists
+    `positions`).
+  - After the existing `.map-node-icon` / `.map-node-label` `<text>`
+    appends: `const externalBadgeNodes = nodeElements.filter(d =>
+    d.hasExternal);` then append a `<circle class="map-node-external-badge-bg">`
+    (`cx=14, cy=-14, r=7`) and a `<text class="map-node-external-badge-icon">`
+    (same `x`/`y`, text content `'\uf470'`) to `externalBadgeNodes` only —
+    nodes without the flag get no extra DOM at all. `aria-label="Has external
+    configuration"` on the circle plus `aria-hidden="true"` on the text
+    (decorative duplicate) for accessibility; no `<title>` (would add a
+    native SVG tooltip) and no `.on('click', ...)` handler.
+- `src/front/static/ontology/css/ontology-map.css`
+  - `.map-node-external-badge-bg { fill: #333333; stroke: #fff; stroke-width:
+    2px; pointer-events: none; }` and `.map-node-external-badge-icon {
+    font-family: "bootstrap-icons" !important; font-size: 9px; fill: #fff;
+    text-anchor: middle; dominant-baseline: central; pointer-events: none; }`.
+  - Also fade the badge alongside the icon/label under
+    `.map-node.dimmed .map-node-external-badge-bg,
+    .map-node.dimmed .map-node-external-badge-icon { opacity: 0.15; }` so it
+    behaves consistently with the existing neighborhood-highlight feature.
 
-1. **Primary path — saved layout + ontology classes merge** (inside
-   `loadOntologyIntoDesigner`, ~line 1578,
-   `mergedLayout.entities = classes.map(cls => {...})`): the common case for
-   any domain that's been opened before. Add `hasExternal: !!(cls.dashboard
-   || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length)`
-   to the returned object literal (~line 1591-1602), alongside the existing
-   `icon`/`description` fields.
-2. **Fallback path — saved layout only, no ontology classes loaded yet**
-   (inside `loadOntologyIntoDesigner`, ~line 1735,
-   `savedLayout.entities.forEach(entity => { const cls =
-   classMap.get(entity.name); if (cls) {...} })`): add
-   `entity.hasExternal = !!(cls.dashboard || cls.dataset || (cls.actions ||
-   []).length || (cls.bridges || []).length);` next to the existing
-   `entity.icon` / `entity.description` assignment (~line 1746-1747).
-3. **Fresh-layout path — no saved layout at all** (inside
-   `loadOntologyIntoDesigner`, ~line 1819,
-   `ontologyDesigner.addEntity({...})` inside `classes.forEach((cls, index)
-   => {...})`): compute the same `hasExternal` expression and pass it into
-   the `addEntity` call alongside `icon`/`description`.
-4. **`_buildFreshDesignLayout`** — builds entity objects the same way but is
-   called from `loadFromOntologyFresh()` and the create-business-view flow,
-   bypassing `loadOntologyIntoDesigner` entirely. Add the same `hasExternal`
-   field to the object returned inside its `classes.map(...)` alongside the
-   existing `icon`/`description` fields.
+### Reverted OntoViz implementation
 
-Using the exact same field names (`dashboard`, `dataset`, `actions`,
-`bridges`) that `src/front/static/global/js/ontology-design.js:465-469`
-already reads/writes when converting the designer's state back to ontology
-classes on save — confirming these are the live field names, not the
-planned-but-unbuilt vocabulary-reuse fields.
+The following were added to `ontoviz.js` / `ontoviz-entity.css` /
+`ontology-design.js` (four entity-construction sites there, plus a
+change-detection fingerprint fix) and then fully removed once the mix-up was
+caught — see the changelog for the exact revert:
 
-- `src/front/static/global/ontoviz/ontoviz.js`
-  - `Entity` constructor (~line 41): store
-    `this.hasExternal = options.hasExternal || false`.
-  - `_renderEntity` (~line 1222): render
-    `<span class="ovz-entity-external-badge"><i class="bi bi-link-45deg"></i></span>`
-    inside `.ovz-entity-icon` only when `entity.hasExternal` is true. No
-    `title` text needed since there's no tooltip behavior, and no click
-    handler is bound to it.
-- `src/front/static/global/ontoviz/css/ontoviz-entity.css`
-  - Add `position: relative;` to `.ovz-entity-icon` (currently has no
-    positioning context).
-  - Add `.ovz-entity-external-badge`: `position: absolute; top: -6px;
-    right: -7px; width: 16px; height: 16px; border-radius: 4px; background:
-    var(--ovz-accent-purple); color: #fff; border: 2px solid
-    var(--ovz-entity-header-bg); font-size: 9px; display: flex;
-    align-items: center; justify-content: center; pointer-events: none;`
-    (`--ovz-accent-purple` and `--ovz-entity-header-bg` are existing tokens
-    from `ontoviz-variables.css` — no new hardcoded colours, per the
-    project's greyscale-only OntoViz token rule. The border colour matches
-    the entity header background it sits on so the badge reads as a clean
-    overlay. `pointer-events: none` keeps the existing icon-click-to-
-    edit-icon behavior working unchanged).
+- `Entity.hasExternal` field and its badge render in `_renderEntity`
+  (`ontoviz.js`).
+- `.ovz-entity-external-badge` CSS (`ontoviz-entity.css`).
+- `hasExternal` computation threaded through all four
+  `loadOntologyIntoDesigner` / `_buildFreshDesignLayout` entity-construction
+  sites, and the `_getOntologyVersion()` fingerprint fields
+  (`ontology-design.js`).
 
 ## Error Handling
 
@@ -111,21 +108,23 @@ missing/undefined class fields never throw and simply omit the badge.
 
 ## Testing
 
-There is no existing JS rendering-test harness for the Designer canvas
-(confirmed: only a smoke test in `tests/units/api/test_ui_rendering.py` that
-`ontoviz.js` is loaded as a script — no DOM assertions). This change stays
-manual-verification:
+`tests/units/front/test_ontology_map_external_badge.py` — contract tests
+asserting: the `hasExternal` expression is computed in the node-data builder;
+the badge circle/text are appended only to `nodeElements.filter(d =>
+d.hasExternal)`; no `<title>` or `.on(...)` handler inside the badge-append
+block; `aria-label`/`aria-hidden` are present; CSS rules exist for both badge
+elements and for the dimmed state.
 
-- Load the Designer with a domain containing at least one class that has a
-  dashboard, dataset, action, or bridge set, and at least one that has none —
-  confirm the badge appears only on the former.
-- Reload the page (or switch away from and back to the Design tab) on a
-  domain that already has a saved layout, to exercise the primary merge path
-  (site 1 above) — confirm the badge still appears, not just on first-ever
-  layout generation (site 3).
-- Confirm collapse/expand, drag, add-property, and icon-change re-renders
-  keep the badge in place.
-- Confirm the icon's existing "click to change icon" behavior (edit mode)
-  still works with the badge overlaid (`pointer-events: none` on the badge).
-- Run `uv run pytest -q -m "not scenario"` to confirm no regressions (no
-  backend/Python code is touched by this change, so this is a safety net).
+Manual/live verification (via `web-devloop-tester`, against the running dev
+session `Cust360Auto V5`):
+
+- Designer graph: badge appears only on `Customer` and `Meter` (the two
+  classes with External-tab data in that session); all other 13 entities show
+  no badge.
+- DOM inspection on the `Customer` node confirmed
+  `circle.map-node-external-badge-bg` and `text.map-node-external-badge-icon`
+  as siblings inside `g.map-node`, no `<title>` on either badge element, and
+  `pointer-events: none` (hover produced no native tooltip).
+- Business Views (OntoViz) canvas: zero `.ovz-entity-external-badge` elements
+  across all 15 entities, confirming the revert was complete.
+- No console/JS errors on either page.

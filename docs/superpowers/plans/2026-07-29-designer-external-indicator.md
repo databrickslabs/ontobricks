@@ -416,3 +416,24 @@ Expected: same pass count as Task 3's run (3436 passed, 275 skipped, 5 deselecte
 git add src/front/static/global/js/ontology-design.js
 git commit -m "fix(ontology-design): include External fields in change-detection fingerprint"
 ```
+
+---
+
+### Task 5 (added after user correction): move the badge from OntoViz ("Business Views") to the D3 map ("Designer")
+
+**Discovered after Task 4 shipped**: the user's original wording — "Ontology/designer" — refers to the sidebar item literally labelled **"Designer"** in `menu_config.json` (id `map`), which is the D3.js force-directed graph (`ontology-map.js`). Everything built in Tasks 1–4 targeted the *other* sidebar item, **"Business Views"** (id `design`, `ontoviz.js`) — a different view entirely, with a confusingly similar internal/heading name ("Visual Ontology Designer - Business Views"). See the corrected spec (`docs/superpowers/specs/2026-07-29-designer-external-indicator-design.md`) for the full explanation and the new implementation details.
+
+**Files:**
+- Revert: `src/front/static/global/ontoviz/css/ontoviz-entity.css` (Task 1's changes)
+- Revert: `src/front/static/global/ontoviz/ontoviz.js` (Task 2's changes)
+- Revert: `src/front/static/global/js/ontology-design.js` (Task 3 + Task 4's changes)
+- Delete: `tests/units/front/test_designer_external_badge.py`
+- Modify: `src/front/static/ontology/js/ontology-map.js` (new `hasExternal` node field + badge append, filtered by `.filter(d => d.hasExternal)`)
+- Modify: `src/front/static/ontology/css/ontology-map.css` (new badge styles + dimmed-state rule)
+- Add: `tests/units/front/test_ontology_map_external_badge.py`
+
+- [x] **Step 1: Revert all OntoViz-side changes from Tasks 1–4**, restoring `ontoviz-entity.css`, `ontoviz.js`, and `ontology-design.js` (including `_getOntologyVersion()`) to their pre-feature state, and delete the OntoViz contract test.
+- [x] **Step 2: Implement the equivalent feature in `ontology-map.js`/`ontology-map.css`** per the corrected spec — single `hasExternal` computation site (`classes.map(...)` in `initOntologyMap()`), SVG `<circle>` + `<text>` badge (bootstrap-icons `\uf470` glyph) appended only to matching nodes, dimmed-state CSS.
+- [x] **Step 3: Add `tests/units/front/test_ontology_map_external_badge.py`** and run `uv run pytest -q -m "not scenario"` — 3441 passed (3436 baseline + 5 new), 275 skipped, 5 deselected.
+- [x] **Step 4: Live browser verification** (`web-devloop-tester`, session `Cust360Auto V5`): badge shown only on `Customer`/`Meter` (the two classes with External-tab data) on the Designer graph; absent on the other 13; DOM confirms sibling `<circle>`/`<text>` inside `g.map-node` with no `<title>`/click handler; Business Views canvas confirmed to have zero badges (clean revert); no console errors.
+- [x] **Step 5: Update the changelog** with a correction entry explaining the move and listing both the reverted and the new files.

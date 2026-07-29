@@ -176,19 +176,10 @@ function _getOntologyVersion() {
     if (typeof OntologyState === 'undefined' || !OntologyState.config) return null;
     const classes = OntologyState.config.classes || [];
     const props = OntologyState.config.properties || [];
-    // Encode class count + names + property count + names into a simple fingerprint.
-    // Also encode the External-tab fields (dashboard/dataset/actions/bridges) so
-    // editing them while the Design tab is hidden is detected as a change and
-    // triggers a reload (needed for the entity external-link badge to refresh).
-    // Note: dashboard/dataset collapse to a presence bit (0/1) and actions/bridges
-    // to a count — swapping one dashboard/action/bridge for another of the same
-    // kind won't be detected as a change.  This is intentional: the badge only
-    // cares about presence/absence, not identity.
+    // Encode class count + names + property count + names into a simple fingerprint
     const parts = [
         classes.length,
-        classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '') +
-            ':' + (c.dashboard ? '1' : '0') + (c.dataset ? '1' : '0') +
-            ':' + (c.actions || []).length + ':' + (c.bridges || []).length).join(','),
+        classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '')).join(','),
         props.length,
         props.map(p => p.name + ':' + p.type + ':' + (p.domain || '') + ':' + (p.range || '')).join(',')
     ];
@@ -779,7 +770,6 @@ function _buildFreshDesignLayout(visibleNames = null) {
             type: cls.label || name,
             icon: cls.emoji || OntologyState.defaultClassEmoji || '📦',
             description: cls.description || '',
-            hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
             properties: ownProperties.map(dp => ({
                 name: dp.name || dp.localName || dp,
                 type: 'string'
@@ -1604,7 +1594,6 @@ async function loadOntologyIntoDesigner(showAlert = true) {
                     label: cls.label || cls.name || cls.localName,
                     icon: cls.emoji || cls.icon || '📦',
                     description: cls.description || '',
-                    hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
                     x: posX,
                     y: posY,
                     properties: ownProperties.map(dp => ({
@@ -1756,7 +1745,6 @@ async function loadOntologyIntoDesigner(showAlert = true) {
                 if (cls) {
                     entity.icon = cls.emoji || cls.icon || entity.icon || '📦';
                     entity.description = cls.description || entity.description || '';
-                    entity.hasExternal = !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length);
                 }
             });
         }
@@ -1832,7 +1820,6 @@ async function loadOntologyIntoDesigner(showAlert = true) {
                 name: cls.name || cls.localName || `Class_${index}`,
                 icon: cls.emoji || cls.icon || '📦',
                 description: cls.description || '',
-                hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
                 x: x,
                 y: y,
                 properties: dataProps
