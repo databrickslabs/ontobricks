@@ -120,3 +120,46 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3432 passed, 275 skipped, 5 deselected in 24.98s
+
+## Show external-link badge on Designer entities with External-tab data
+
+Context: Ontology Designer entity cards gave no visual cue that a class already
+had a Dashboard, Dataset, Actions, or Bridges configured under its entity
+panel's "External" tab. Users asked for a small icon near the entity icon
+signalling this without opening the panel. Implemented via subagent-driven
+development from a written spec and plan (docs/superpowers/specs and
+docs/superpowers/plans, 2026-07-29). Live browser verification (web-devloop-tester)
+caught and this session fixed a follow-on bug: the Designer's change-detection
+fingerprint didn't consider the four External fields, so the badge only
+appeared after a full page reload instead of immediately after saving.
+
+Changes:
+
+1. src/front/static/global/ontoviz/css/ontoviz-entity.css
+   Add `.ovz-entity-external-badge` (dark badge, `--ovz-accent-purple` /
+   `--ovz-entity-header-bg` tokens, no hardcoded hex) and `position: relative`
+   on `.ovz-entity-icon` for the overlay anchor.
+2. src/front/static/global/ontoviz/ontoviz.js
+   `Entity.hasExternal` (default `false`); `_renderEntity` renders a
+   `bi-link-45deg` badge inside `.ovz-entity-icon` when `hasExternal` is true;
+   `pointer-events: none` keeps the existing icon-click-to-edit-icon behaviour
+   working.
+3. src/front/static/global/js/ontology-design.js
+   Compute `hasExternal = !!(cls.dashboard || cls.dataset ||
+   (cls.actions || []).length || (cls.bridges || []).length)` and thread it
+   into all three entity-build paths in `loadOntologyIntoDesigner` (saved
+   layout + ontology merge, saved-layout-only fallback, fresh-layout
+   generation). Also fix `_getOntologyVersion()`'s change-detection
+   fingerprint to include the four External fields per class, so editing them
+   and returning to the Design tab (no reload) now correctly refreshes the
+   badge instead of requiring a full page reload.
+
+Modified files:
+- src/front/static/global/ontoviz/css/ontoviz-entity.css
+- src/front/static/global/ontoviz/ontoviz.js
+- src/front/static/global/js/ontology-design.js
+- docs/superpowers/specs/2026-07-29-designer-external-indicator-design.md
+- docs/superpowers/plans/2026-07-29-designer-external-indicator.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3436 passed, 275 skipped, 5 deselected, 23 warnings in 26.05s

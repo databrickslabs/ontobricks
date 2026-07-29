@@ -334,3 +334,85 @@ Append a new section to `changelogs/v0.7.0/benoitcayladbx_<today's date, YYYY-MM
 git add src/front/static/global/js/ontology-design.js changelogs/v0.7.0/benoitcayladbx_<today>.log
 git commit -m "feat(ontology-design): thread hasExternal into designer entities"
 ```
+
+---
+
+### Task 4 (added after live verification): fix stale change-detection fingerprint
+
+**Discovered during live browser verification of Task 3**: saving Dashboard/Dataset/Actions/Bridges on a class via the entity panel's External tab, then returning to the Design tab in the *same session* (no page reload), does not show the new badge. Root cause: `_getOntologyVersion()` in `src/front/static/global/js/ontology-design.js` computes a change-detection fingerprint from class name/property-count/parent only — it never encoded dashboard/dataset/actions/bridges, so `initOntologyDesigner()` (which short-circuits and skips reloading when the fingerprint is unchanged) never notices the External-tab edit. A full page reload happens to work because it bypasses the fingerprint short-circuit entirely (fresh `designerInitialized` state).
+
+**Files:**
+- Modify: `src/front/static/global/js/ontology-design.js:175-187` (`_getOntologyVersion`)
+
+**Interfaces:**
+- No interface change — `_getOntologyVersion()` keeps returning a string, callers (`initOntologyDesigner` and the five `ontologyVersionAtLoad = _getOntologyVersion()` assignments) are unaffected.
+
+- [ ] **Step 1: Include the four External fields in the per-class fingerprint**
+
+Current code:
+
+```javascript
+function _getOntologyVersion() {
+    if (typeof OntologyState === 'undefined' || !OntologyState.config) return null;
+    const classes = OntologyState.config.classes || [];
+    const props = OntologyState.config.properties || [];
+    // Encode class count + names + property count + names into a simple fingerprint
+    const parts = [
+        classes.length,
+        classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '')).join(','),
+        props.length,
+        props.map(p => p.name + ':' + p.type + ':' + (p.domain || '') + ':' + (p.range || '')).join(',')
+    ];
+    return parts.join('|');
+}
+```
+
+Replace with:
+
+```javascript
+function _getOntologyVersion() {
+    if (typeof OntologyState === 'undefined' || !OntologyState.config) return null;
+    const classes = OntologyState.config.classes || [];
+    const props = OntologyState.config.properties || [];
+    // Encode class count + names + property count + names into a simple fingerprint.
+    // Also encode the External-tab fields (dashboard/dataset/actions/bridges) so
+    // editing them while the Design tab is hidden is detected as a change and
+    // triggers a reload (needed for the entity external-link badge to refresh).
+    const parts = [
+        classes.length,
+        classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '') +
+            ':' + (c.dashboard ? '1' : '0') + (c.dataset ? '1' : '0') +
+            ':' + (c.actions || []).length + ':' + (c.bridges || []).length).join(','),
+        props.length,
+        props.map(p => p.name + ':' + p.type + ':' + (p.domain || '') + ':' + (p.range || '')).join(',')
+    ];
+    return parts.join('|');
+}
+```
+
+- [ ] **Step 2: Verify no linter errors**
+
+Run: read the file back or use the workspace linter on `src/front/static/global/js/ontology-design.js`.
+Expected: no errors introduced by the edit above.
+
+- [ ] **Step 3: Manual verification of the exact regression found**
+
+With the dev server running:
+
+1. Open a domain with at least one class in the Design tab. Note which entities have no badge.
+2. Switch to the Entities tab, open one of those classes, go to its External tab, assign a Dataset/Action/Bridge, and save — without reloading the page.
+3. Switch back to the Design tab (using the in-app tab/section switcher, not a page reload).
+
+Expected: the badge now appears on that entity immediately, with no page reload required. This is the specific regression the live-verification subagent found; confirming it here closes the gap.
+
+- [ ] **Step 4: Run the full regression suite**
+
+Run: `uv run pytest -q -m "not scenario"`
+Expected: same pass count as Task 3's run (3436 passed, 275 skipped, 5 deselected) or higher — no new failures.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/front/static/global/js/ontology-design.js
+git commit -m "fix(ontology-design): include External fields in change-detection fingerprint"
+```
