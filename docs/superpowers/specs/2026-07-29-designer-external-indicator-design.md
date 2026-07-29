@@ -45,27 +45,35 @@ tab (Dashboard, Dataset, Actions, Bridges), without opening the panel.
 
 ## Implementation
 
-`loadOntologyIntoDesigner` in `src/front/static/global/js/ontology-design.js`
-has **three** distinct entity-construction sites, chosen based on whether a
-saved layout exists — all three already thread `icon`/`description` from
-`cls` the same way, so `hasExternal` follows the identical pattern at each:
+`ontology-design.js` in `src/front/static/global/js/ontology-design.js`
+has **four** distinct entity-construction sites — all four already thread
+`icon`/`description` from `cls` the same way, so `hasExternal` follows the
+identical pattern at each:
 
-1. **Primary path — saved layout + ontology classes merge** (~line 1578,
+1. **Primary path — saved layout + ontology classes merge** (inside
+   `loadOntologyIntoDesigner`, ~line 1578,
    `mergedLayout.entities = classes.map(cls => {...})`): the common case for
    any domain that's been opened before. Add `hasExternal: !!(cls.dashboard
    || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length)`
    to the returned object literal (~line 1591-1602), alongside the existing
    `icon`/`description` fields.
 2. **Fallback path — saved layout only, no ontology classes loaded yet**
-   (~line 1735, `savedLayout.entities.forEach(entity => { const cls =
+   (inside `loadOntologyIntoDesigner`, ~line 1735,
+   `savedLayout.entities.forEach(entity => { const cls =
    classMap.get(entity.name); if (cls) {...} })`): add
    `entity.hasExternal = !!(cls.dashboard || cls.dataset || (cls.actions ||
    []).length || (cls.bridges || []).length);` next to the existing
    `entity.icon` / `entity.description` assignment (~line 1746-1747).
-3. **Fresh-layout path — no saved layout at all** (~line 1819,
+3. **Fresh-layout path — no saved layout at all** (inside
+   `loadOntologyIntoDesigner`, ~line 1819,
    `ontologyDesigner.addEntity({...})` inside `classes.forEach((cls, index)
    => {...})`): compute the same `hasExternal` expression and pass it into
    the `addEntity` call alongside `icon`/`description`.
+4. **`_buildFreshDesignLayout`** — builds entity objects the same way but is
+   called from `loadFromOntologyFresh()` and the create-business-view flow,
+   bypassing `loadOntologyIntoDesigner` entirely. Add the same `hasExternal`
+   field to the object returned inside its `classes.map(...)` alongside the
+   existing `icon`/`description` fields.
 
 Using the exact same field names (`dashboard`, `dataset`, `actions`,
 `bridges`) that `src/front/static/global/js/ontology-design.js:465-469`

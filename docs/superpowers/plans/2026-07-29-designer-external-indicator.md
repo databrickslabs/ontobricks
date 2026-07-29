@@ -4,7 +4,7 @@
 
 **Goal:** Show a small badge on the top-right corner of an entity's icon in the Ontology Designer canvas whenever that class already has a Dashboard, Dataset, Actions, or Bridges configured under its entity panel's "External" tab.
 
-**Architecture:** Compute a boolean `hasExternal` flag per class from four already-existing fields (`dashboard`, `dataset`, `actions`, `bridges`), thread it into the `Entity` object at all three places the Designer builds entities from ontology classes, and render a small overlay badge in `_renderEntity` only when the flag is true. Pure frontend, vanilla JS + CSS, no backend changes.
+**Architecture:** Compute a boolean `hasExternal` flag per class from four already-existing fields (`dashboard`, `dataset`, `actions`, `bridges`), thread it into the `Entity` object at all four places the Designer builds entities from ontology classes (`loadOntologyIntoDesigner`'s three paths, plus `_buildFreshDesignLayout`), and render a small overlay badge in `_renderEntity` only when the flag is true. Pure frontend, vanilla JS + CSS, no backend changes.
 
 **Tech Stack:** Vanilla JS (`ontoviz.js`, `ontology-design.js`), CSS (`ontoviz-entity.css`), Bootstrap Icons.
 
@@ -14,7 +14,7 @@
 - No tooltip, no click handler on the badge — visual signal only (spec §Scope).
 - OntoViz CSS is a greyscale-only, `--ovz-*`-tokens-only scope — never hardcode a hex colour (`.cursor/11-frontend-design.mdc`).
 - Bootstrap Icons only, no emoji-as-icon for any *new* UI element (`.cursor/11-frontend-design.mdc`) — the existing entity emoji icon itself is untouched/out of scope for this rule.
-- "Has externals" means: `!!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length)` — exactly this expression, reused verbatim at all three sites.
+- "Has externals" means: `!!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length)` — exactly this expression, reused verbatim at all four sites (the three paths in `loadOntologyIntoDesigner` plus `_buildFreshDesignLayout`).
 - There is no JS DOM-rendering test harness for the Designer canvas today — verification for this plan is manual (spec §Testing), backed by the existing `uv run pytest -q -m "not scenario"` regression run.
 - After the change, update `changelogs/v0.7.0/benoitcayladbx_<today>.log` per `.cursorrules` (append a new section; the file already exists for today).
 
@@ -303,9 +303,9 @@ Replace with:
 - [ ] **Step 4: Verify no linter errors**
 
 Run: read the file back or use the workspace linter on `src/front/static/global/js/ontology-design.js`.
-Expected: no errors introduced by the three edits above.
+Expected: no errors introduced by the four edits above.
 
-- [ ] **Step 5: Manual verification (all three paths + regressions)**
+- [ ] **Step 5: Manual verification (all four paths + regressions)**
 
 With the dev server running (`./scripts/start.sh`):
 
