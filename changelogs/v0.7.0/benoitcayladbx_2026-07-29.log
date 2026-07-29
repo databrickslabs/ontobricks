@@ -207,3 +207,39 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3436 passed, 275 skipped, 5 deselected in 21.91s
+
+---
+
+## Final-review fix pass: entity external-link badge (OntoViz Designer)
+
+Context: A final whole-branch code review of the external-link badge feature
+found five issues to resolve before finishing the branch.
+
+Changes:
+1. src/front/static/global/js/ontology-design.js
+   Added `hasExternal` field to `_buildFreshDesignLayout`'s `classes.map(...)`,
+   the missed fourth entity-construction site (used by the create-business-view
+   and switch-to-empty-view flows).
+2. src/front/static/global/js/ontology-design.js
+   Added clarifying comment to `_getOntologyVersion()` noting that
+   dashboard/dataset collapse to a presence bit and actions/bridges to a count.
+3. src/front/static/global/ontoviz/ontoviz.js
+   Added `aria-label="Has external configuration"` to the badge `<span>` and
+   `aria-hidden="true"` to the inner `<i>` for screen reader accessibility.
+4. tests/units/front/test_designer_external_badge.py
+   New contract test: asserts the hasExternal expression is present at all four
+   construction sites, badge markup+CSS are present, and the version fingerprint
+   covers all External-tab fields.
+5. docs/superpowers/specs/2026-07-29-designer-external-indicator-design.md
+   docs/superpowers/plans/2026-07-29-designer-external-indicator.md
+   Corrected "three entity-construction sites" → "four", naming
+   `_buildFreshDesignLayout` alongside the three `loadOntologyIntoDesigner` sites.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/front/static/global/ontoviz/ontoviz.js
+- tests/units/front/test_designer_external_badge.py
+- docs/superpowers/specs/2026-07-29-designer-external-indicator-design.md
+- docs/superpowers/plans/2026-07-29-designer-external-indicator.md
+
+Tests: uv run pytest -q -m "not scenario" → 3443 passed, 275 skipped, 5 deselected in 21.21s

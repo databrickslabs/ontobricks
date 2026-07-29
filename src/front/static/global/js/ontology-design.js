@@ -180,6 +180,10 @@ function _getOntologyVersion() {
     // Also encode the External-tab fields (dashboard/dataset/actions/bridges) so
     // editing them while the Design tab is hidden is detected as a change and
     // triggers a reload (needed for the entity external-link badge to refresh).
+    // Note: dashboard/dataset collapse to a presence bit (0/1) and actions/bridges
+    // to a count — swapping one dashboard/action/bridge for another of the same
+    // kind won't be detected as a change.  This is intentional: the badge only
+    // cares about presence/absence, not identity.
     const parts = [
         classes.length,
         classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '') +
@@ -775,6 +779,7 @@ function _buildFreshDesignLayout(visibleNames = null) {
             type: cls.label || name,
             icon: cls.emoji || OntologyState.defaultClassEmoji || '📦',
             description: cls.description || '',
+            hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
             properties: ownProperties.map(dp => ({
                 name: dp.name || dp.localName || dp,
                 type: 'string'

@@ -1202,7 +1202,7 @@
             // Small badge overlay signalling the class has Dashboard/Dataset/
             // Actions/Bridges configured (entity panel's "External" tab).
             const externalBadgeHTML = entity.hasExternal
-                ? '<span class="ovz-entity-external-badge"><i class="bi bi-link-45deg"></i></span>'
+                ? '<span class="ovz-entity-external-badge" aria-label="Has external configuration"><i class="bi bi-link-45deg" aria-hidden="true"></i></span>'
                 : '';
 
             // Collapse / expand toggle (available in both view and edit modes)
