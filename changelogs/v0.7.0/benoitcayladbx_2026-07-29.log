@@ -163,3 +163,47 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3436 passed, 275 skipped, 5 deselected, 23 warnings in 26.05s
+
+## Save domain without confirmation popup
+
+Context: Clicking Save Domain (or Cmd/Ctrl+S) opened a "Save Domain to Registry"
+confirmation modal before POST /domain/save-to-uc. Users want a direct save.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   domainSave() calls doDomainSave() directly; showDomainSaveDialog is a thin
+   alias for backward compatibility.
+2. src/front/static/domain/js/domain.js
+   Update comment to match direct-save behaviour.
+3. tests/units/front/test_domain_save_no_confirm.py
+   Contract that the confirmation modal markup is gone.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain.js
+- tests/units/front/test_domain_save_no_confirm.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3434 passed, 275 skipped, 5 deselected in 22.26s
+
+## Show registry operational status line on Browse
+
+Context: Opening Registry (Browse) hid the status area when the registry was
+configured. Users want a single line stating whether the registry is
+operational or not.
+
+Changes:
+
+1. src/front/static/registry/js/registry.js
+   Always render #registryStatus: green "Registry is operational" when
+   configured, otherwise "Registry is not operational" with a short reason.
+2. tests/units/front/test_registry_operational_status.py
+   Contract coverage for the status line copy and visibility.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_registry_operational_status.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3436 passed, 275 skipped, 5 deselected in 21.91s
