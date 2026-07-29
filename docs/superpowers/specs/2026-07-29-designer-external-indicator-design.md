@@ -28,9 +28,14 @@ tab (Dashboard, Dataset, Actions, Bridges), without opening the panel.
    - `actions` (non-empty array)
    - `bridges` (non-empty array)
 2. When true, the Designer renders a small badge overlaid on the top-right
-   corner of the entity's emoji icon (Option B from visual review: a purple
-   circular badge with a "link/reuse" glyph, white border for contrast
-   against the icon background).
+   corner of the entity's emoji icon (Option B from visual review: a dark
+   badge with a "link/reuse" glyph). Per `.cursor/11-frontend-design.mdc`,
+   OntoViz is a **greyscale-only** token scope (no hardcoded hex) and the app
+   forbids emoji-as-icon (Bootstrap Icons only), so Option B's shape/position
+   is implemented with the existing `--ovz-accent-purple` token (`#333333`
+   grey, not literal purple, per the theme) and the Bootstrap icon
+   `bi-link-45deg` — the same glyph the entity panel already uses for
+   "Assign" on the Dashboard field, keeping the visual language consistent.
 3. When false, no badge is rendered — the icon looks exactly as it does
    today.
 4. The badge must survive re-renders that already exist today: collapse /
@@ -40,29 +45,56 @@ tab (Dashboard, Dataset, Actions, Bridges), without opening the panel.
 
 ## Implementation
 
-- `src/front/static/global/js/ontology-design.js`
-  (`loadOntologyIntoDesigner`, ~line 1819): compute
-  `hasExternal = !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length)`
-  per class and pass it into `ontologyDesigner.addEntity({..., hasExternal})`.
+`loadOntologyIntoDesigner` in `src/front/static/global/js/ontology-design.js`
+has **three** distinct entity-construction sites, chosen based on whether a
+saved layout exists — all three already thread `icon`/`description` from
+`cls` the same way, so `hasExternal` follows the identical pattern at each:
+
+1. **Primary path — saved layout + ontology classes merge** (~line 1578,
+   `mergedLayout.entities = classes.map(cls => {...})`): the common case for
+   any domain that's been opened before. Add `hasExternal: !!(cls.dashboard
+   || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length)`
+   to the returned object literal (~line 1591-1602), alongside the existing
+   `icon`/`description` fields.
+2. **Fallback path — saved layout only, no ontology classes loaded yet**
+   (~line 1735, `savedLayout.entities.forEach(entity => { const cls =
+   classMap.get(entity.name); if (cls) {...} })`): add
+   `entity.hasExternal = !!(cls.dashboard || cls.dataset || (cls.actions ||
+   []).length || (cls.bridges || []).length);` next to the existing
+   `entity.icon` / `entity.description` assignment (~line 1746-1747).
+3. **Fresh-layout path — no saved layout at all** (~line 1819,
+   `ontologyDesigner.addEntity({...})` inside `classes.forEach((cls, index)
+   => {...})`): compute the same `hasExternal` expression and pass it into
+   the `addEntity` call alongside `icon`/`description`.
+
+Using the exact same field names (`dashboard`, `dataset`, `actions`,
+`bridges`) that `src/front/static/global/js/ontology-design.js:465-469`
+already reads/writes when converting the designer's state back to ontology
+classes on save — confirming these are the live field names, not the
+planned-but-unbuilt vocabulary-reuse fields.
+
 - `src/front/static/global/ontoviz/ontoviz.js`
   - `Entity` constructor (~line 41): store
     `this.hasExternal = options.hasExternal || false`.
   - `_renderEntity` (~line 1222): render
-    `<span class="ovz-entity-external-badge" title="">↪</span>` (or an
-    inline SVG/Bootstrap-icon glyph) inside `.ovz-entity-icon` only when
-    `entity.hasExternal` is true. No `title` text needed since there's no
-    tooltip behavior, but keep the span free of click handlers.
+    `<span class="ovz-entity-external-badge"><i class="bi bi-link-45deg"></i></span>`
+    inside `.ovz-entity-icon` only when `entity.hasExternal` is true. No
+    `title` text needed since there's no tooltip behavior, and no click
+    handler is bound to it.
 - `src/front/static/global/ontoviz/css/ontoviz-entity.css`
   - Add `position: relative;` to `.ovz-entity-icon` (currently has no
     positioning context).
   - Add `.ovz-entity-external-badge`: `position: absolute; top: -6px;
-    right: -7px; width: 17px; height: 17px; border-radius: 5px; background:
-    #7c3aed; color: #fff; border: 2px solid var(--ovz-entity-header-bg,
-    #fff); font-size: 10px; display: flex; align-items: center;
-    justify-content: center; pointer-events: none;` (matches the reviewed
-    Option B mockup; the border color matches the entity header background
-    it sits on so the badge reads as a clean overlay; `pointer-events: none`
-    keeps the existing icon-click-to-edit-icon behavior working unchanged).
+    right: -7px; width: 16px; height: 16px; border-radius: 4px; background:
+    var(--ovz-accent-purple); color: #fff; border: 2px solid
+    var(--ovz-entity-header-bg); font-size: 9px; display: flex;
+    align-items: center; justify-content: center; pointer-events: none;`
+    (`--ovz-accent-purple` and `--ovz-entity-header-bg` are existing tokens
+    from `ontoviz-variables.css` — no new hardcoded colours, per the
+    project's greyscale-only OntoViz token rule. The border colour matches
+    the entity header background it sits on so the badge reads as a clean
+    overlay. `pointer-events: none` keeps the existing icon-click-to-
+    edit-icon behavior working unchanged).
 
 ## Error Handling
 
@@ -79,6 +111,10 @@ manual-verification:
 - Load the Designer with a domain containing at least one class that has a
   dashboard, dataset, action, or bridge set, and at least one that has none —
   confirm the badge appears only on the former.
+- Reload the page (or switch away from and back to the Design tab) on a
+  domain that already has a saved layout, to exercise the primary merge path
+  (site 1 above) — confirm the badge still appears, not just on first-ever
+  layout generation (site 3).
 - Confirm collapse/expand, drag, add-property, and icon-change re-renders
   keep the badge in place.
 - Confirm the icon's existing "click to change icon" behavior (edit mode)
