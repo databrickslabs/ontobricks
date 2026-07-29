@@ -176,10 +176,15 @@ function _getOntologyVersion() {
     if (typeof OntologyState === 'undefined' || !OntologyState.config) return null;
     const classes = OntologyState.config.classes || [];
     const props = OntologyState.config.properties || [];
-    // Encode class count + names + property count + names into a simple fingerprint
+    // Encode class count + names + property count + names into a simple fingerprint.
+    // Also encode the External-tab fields (dashboard/dataset/actions/bridges) so
+    // editing them while the Design tab is hidden is detected as a change and
+    // triggers a reload (needed for the entity external-link badge to refresh).
     const parts = [
         classes.length,
-        classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '')).join(','),
+        classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '') +
+            ':' + (c.dashboard ? '1' : '0') + (c.dataset ? '1' : '0') +
+            ':' + (c.actions || []).length + ':' + (c.bridges || []).length).join(','),
         props.length,
         props.map(p => p.name + ':' + p.type + ':' + (p.domain || '') + ':' + (p.range || '')).join(',')
     ];
