@@ -343,6 +343,57 @@ class TestExportImport:
         domain_session.import_from_file(export)
         assert domain_session.info["graph_backend"] == "neo4j"
 
+    def test_class_dataset_and_actions_round_trip(self, domain_session):
+        """Registry export/import must preserve External dataset + UC actions."""
+        dataset = {
+            "catalog": "main",
+            "schema": "crm",
+            "asset": "customers",
+            "type": "TABLE",
+            "fullName": "main.crm.customers",
+            "key_column": "id",
+            "description": "Customer master",
+        }
+        actions = [
+            {
+                "catalog": "main",
+                "schema": "ops",
+                "function": "recompute_risk",
+                "fullName": "main.ops.recompute_risk",
+                "description": "Recompute risk",
+                "returns_table": False,
+            }
+        ]
+        domain_session.info["name"] = "ExtMeta"
+        domain_session.ontology["classes"] = [
+            {
+                "uri": "https://example.com/Customer",
+                "name": "Customer",
+                "label": "Customer",
+                "dataset": dataset,
+                "actions": actions,
+                "bridges": [
+                    {
+                        "target_domain": "Finance",
+                        "target_class_name": "Contract",
+                        "label": "Owns",
+                    }
+                ],
+            }
+        ]
+        export = domain_session.export_for_save()
+        exported_cls = export["versions"]["1"]["ontology"]["classes"][0]
+        assert exported_cls["dataset"] == dataset
+        assert exported_cls["actions"] == actions
+        assert exported_cls["bridges"][0]["target_domain"] == "Finance"
+
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        loaded = domain_session.get_classes()[0]
+        assert loaded["dataset"] == dataset
+        assert loaded["actions"] == actions
+        assert loaded["bridges"][0]["label"] == "Owns"
+
     def test_import_from_file(self, domain_session):
         domain_data = {
             "info": {"name": "Imported", "description": "Test import"},

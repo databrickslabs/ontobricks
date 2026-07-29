@@ -1435,8 +1435,9 @@ var SigmaGraph = (function () {
                 if (!actFullName) return;
                 var actLabel = action.function || actFullName;
                 var actTitle = action.description || ('Run ' + actFullName);
+                var actDesc = action.description || '';
                 actionBody += '<div class="entity-detail-item"><button type="button" onclick="openEntityActionModal(\'' +
-                    esc(entity.id) + '\', \'' + esc(actFullName) + '\', \'' + esc(actLabel) +
+                    esc(entity.id) + '\', \'' + esc(actFullName) + '\', \'' + esc(actLabel) + '\', \'' + esc(actDesc) +
                     '\')" class="btn btn-sm btn-outline-primary w-100" title="' + esc(actTitle) + '">' +
                     '<i class="bi bi-lightning-charge me-1"></i>' + esc(actLabel) + '</button></div>';
             });
@@ -2228,8 +2229,10 @@ var SigmaGraph = (function () {
                     || [action.catalog, action.schema, action.function].filter(Boolean).join('.');
                 if (!actFullName) return;
                 var actLabel = action.function || actFullName;
+                var actDesc = action.description || '';
                 actionItems += '<div class="ctx-item" data-sg-node-action="action-invoke" data-uri="' + esc(meta.entity.id) +
-                    '" data-action="' + esc(actFullName) + '" data-label="' + esc(actLabel) + '">' +
+                    '" data-action="' + esc(actFullName) + '" data-label="' + esc(actLabel) +
+                    '" data-description="' + esc(actDesc) + '">' +
                     '<i class="bi bi-lightning-charge"></i> ' + esc(actLabel) + '</div>';
             });
             if (actionItems) {
@@ -3459,8 +3462,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 var actUri = nodeItem.getAttribute('data-uri');
                 var actName = nodeItem.getAttribute('data-action');
                 var actLbl = nodeItem.getAttribute('data-label');
+                var actDesc = nodeItem.getAttribute('data-description') || '';
                 if (actUri && actName && typeof openEntityActionModal === 'function') {
-                    openEntityActionModal(actUri, actName, actLbl);
+                    openEntityActionModal(actUri, actName, actLbl, actDesc);
                 } else if (typeof showNotification === 'function') {
                     showNotification('Action execution is unavailable.', 'warning');
                 }

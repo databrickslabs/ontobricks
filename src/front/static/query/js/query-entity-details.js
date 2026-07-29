@@ -463,10 +463,11 @@ async function showEntityDetails(entity) {
             if (!fullName) return '';
             const label = action.function || fullName;
             const title = action.description || `Run ${fullName}`;
+            const description = action.description || '';
             return `
                 <div class="entity-detail-item">
                     <button type="button"
-                            onclick="openEntityActionModal('${escapeHtml(entity.id)}', '${escapeHtml(fullName)}', '${escapeHtml(label)}')"
+                            onclick="openEntityActionModal('${escapeHtml(entity.id)}', '${escapeHtml(fullName)}', '${escapeHtml(label)}', '${escapeHtml(description)}')"
                             class="btn btn-sm btn-outline-primary w-100"
                             title="${escapeHtml(title)}">
                         <i class="bi bi-lightning-charge me-1"></i>${escapeHtml(label)}

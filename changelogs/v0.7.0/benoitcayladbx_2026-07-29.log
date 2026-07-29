@@ -66,3 +66,57 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3428 passed, 275 skipped, 5 deselected in 25.68s
+
+## Preserve class dataset/actions through designer sync and registry save
+
+Context: Ontology External-tab Datasets and UC Actions were saved correctly from
+the entity panel and by the registry JSONB path, but Designer sync and OWL/RDFS
+import remappers rebuilt class objects without `actions` (and sometimes
+`bridges`), so a later Save to registry dropped them.
+
+Changes:
+
+1. src/front/static/global/js/ontology-design.js
+   Preserve `bridges`, `dataset`, and `actions` when syncing Designer → ontology.
+2. src/front/static/ontology/js/ontology-information.js
+   Keep dataset/actions/bridges/dashboard on OWL and RDFS import remappers.
+3. tests/units/front/test_class_actions_ui.py
+   Contract checks that design sync and import remappers retain External fields.
+4. tests/units/domain/test_domain_session.py
+   Registry export/import round-trip for class dataset, actions, and bridges.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/front/static/ontology/js/ontology-information.js
+- tests/units/front/test_class_actions_ui.py
+- tests/units/domain/test_domain_session.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3431 passed, 275 skipped, 5 deselected in 27.70s
+
+## Show UC action description in KG action popup
+
+Context: When running a class Action from the Knowledge Graph (details pane
+or context menu), the result modal showed only the function label and FQN.
+Users asked to also see the configured function description in the popup.
+
+Changes:
+
+1. src/front/static/query/js/query-dashboard.js
+   Accept optional description in openEntityActionModal and render it above
+   the loading/result body.
+2. src/front/static/query/js/query-entity-details.js
+   Pass action.description into the modal opener.
+3. src/front/static/query/js/query-sigmagraph.js
+   Pass description from details buttons and context-menu data-description.
+4. tests/units/front/test_class_actions_ui.py
+   Contract coverage for description wiring and modal rendering.
+
+Modified files:
+- src/front/static/query/js/query-dashboard.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_class_actions_ui.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3432 passed, 275 skipped, 5 deselected in 24.98s

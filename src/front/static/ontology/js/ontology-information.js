@@ -380,6 +380,7 @@ async function parseAndLoadOwl(content, filename) {
                     dashboardParams: cls.dashboardParams || {},
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
+                    actions: cls.actions || [],
                     dataProperties: merged
                 };
             });
@@ -752,6 +753,11 @@ async function parseAndLoadRdfs(content, filename) {
                     description: cls.description || cls.comment || '',
                     parent: cls.parent || '',
                     emoji: cls.emoji || OntologyState.defaultClassEmoji,
+                    dashboard: cls.dashboard || '',
+                    dashboardParams: cls.dashboardParams || {},
+                    bridges: cls.bridges || [],
+                    dataset: cls.dataset || null,
+                    actions: cls.actions || [],
                     dataProperties: merged
                 };
             });

@@ -464,7 +464,9 @@ async function syncDesignToOntology(showFeedback = false) {
             description: entity.description || existing.comment || '',
             dashboard: existing.dashboard || '',
             dashboardParams: existing.dashboardParams || {},
+            bridges: existing.bridges || [],
             dataset: existing.dataset || null,
+            actions: existing.actions || [],
             dataProperties: [...ownProperties, ...inheritedProperties]
         };
         
