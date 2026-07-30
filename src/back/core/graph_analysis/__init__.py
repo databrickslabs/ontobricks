@@ -4,7 +4,10 @@ from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.GraphMetrics import GraphMetrics
+from back.core.graph_analysis.PushdownMetrics import PushdownMetrics, supports_pushdown
 from back.core.graph_analysis.models import (
+    MODE_IN_MEMORY,
+    MODE_PUSHDOWN,
     ClusterRequest,
     ClusterResult,
     DetectionResult,
@@ -98,11 +101,15 @@ __all__ = [
     "CommunityDetector",
     "GraphBuilder",
     "GraphMetrics",
+    "PushdownMetrics",
+    "supports_pushdown",
     "EntityTypeProfile",
     "MetricsRequest",
     "NodeMetrics",
     "MetricsStats",
     "MetricsResult",
+    "MODE_IN_MEMORY",
+    "MODE_PUSHDOWN",
     "ClusterRequest",
     "ClusterResult",
     "DetectionResult",

@@ -19,21 +19,11 @@ from back.core.graph_analysis.models import (
     MetricsStats,
     NodeMetrics,
 )
+from back.core.graph_analysis.profiles import flat_reasons, has_temporal_predicates
 
 logger = get_logger(__name__)
 
 _TOP_N = 10
-
-# Predicate local-name fragments that suggest time-series / temporal data
-_TEMPORAL_KEYWORDS: Set[str] = {
-    "time", "date", "timestamp", "ts", "at", "created", "modified", "dt",
-    "start", "end", "recorded", "occurred", "measured",
-}
-
-
-def _local_name(uri: str) -> str:
-    """Extract the local name from a URI (last path/fragment segment, lower-cased)."""
-    return (uri or "").rstrip("/").split("/")[-1].split("#")[-1].lower()
 
 
 class GraphMetrics(GraphBuilder):
@@ -233,20 +223,10 @@ class GraphMetrics(GraphBuilder):
             for u in instances:
                 all_preds.update(predicates_by_node.get(u, set()))
 
-            has_temporal = any(
-                kw in _local_name(p) for p in all_preds for kw in _TEMPORAL_KEYWORDS
-            )
-
-            # Heuristic rules — degree centrality is normalised by (N-1) so we
-            # rely on predicate diversity as the primary flat-dataset signal.
-            reasons: List[str] = []
+            has_temporal = has_temporal_predicates(all_preds)
             n = len(instances)
             n_preds = len(all_preds)
-
-            if n_preds == 0:
-                reasons.append("no entity-entity relationships (fully isolated instances)")
-            elif n_preds == 1 and n > 20:
-                reasons.append(f"only 1 distinct relationship predicate across {n} instances")
+            reasons = flat_reasons(n, n_preds)
 
             profiles[class_uri] = EntityTypeProfile(
                 uri=class_uri,

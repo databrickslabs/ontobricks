@@ -23,6 +23,11 @@ from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
 from back.core.databricks import DatabricksClient, is_databricks_app
 from back.core.graphdb import get_graphdb
+from back.core.graph_analysis import (
+    MODE_IN_MEMORY,
+    MODE_PUSHDOWN,
+    supports_pushdown,
+)
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 from back.objects.domain import HomeService, Domain
 from back.core.helpers import (
@@ -515,21 +520,39 @@ async def compute_graph_metrics(
         if not graph_name:
             raise ValidationError("Graph name is not configured")
 
-        # Fail fast on graphs too large for in-memory analysis — the triple
-        # count is already known, so reject here instead of spawning a
-        # background task that would only fail after loading everything.
+        # Pick the compute mode from the known triple count. Above the limit
+        # the full graph cannot be held in memory, so the analysis runs as
+        # engine-side SQL aggregation instead (fewer metrics, no size limit).
+        # A class filter is pushed down to the engine, so a filtered run is
+        # still attempted in memory first and degrades only if it really does
+        # not fit.
         try:
             total_triples = int(store.get_aggregate_stats(graph_name).get("total", 0))
         except Exception:  # noqa: BLE001
             total_triples = 0
-        if total_triples and total_triples > max_triples:
-            raise ValidationError(
-                f"This Knowledge Graph has {total_triples:,} triples, which "
-                f"exceeds the analytics limit of {max_triples:,}. In-memory "
-                f"centrality/structure analysis is disabled for graphs this "
-                f"large — reduce the synced graph (exclude entity types in "
-                f"KG → Sync) or raise ONTOBRICKS_ANALYTICS_MAX_TRIPLES."
-            )
+
+        oversized = bool(total_triples and total_triples > max_triples)
+        pushdown_available = (
+            settings.analytics_pushdown_enabled and supports_pushdown(store)
+        )
+        mode = MODE_IN_MEMORY
+        allow_pushdown_fallback = False
+
+        if oversized:
+            if not pushdown_available:
+                raise ValidationError(
+                    f"This Knowledge Graph has {total_triples:,} triples, which "
+                    f"exceeds the analytics limit of {max_triples:,}. In-memory "
+                    f"centrality/structure analysis is disabled for graphs this "
+                    f"large, and engine-side aggregation is not available for "
+                    f"this graph backend — reduce the synced graph (exclude "
+                    f"entity types in KG → Sync) or raise "
+                    f"ONTOBRICKS_ANALYTICS_MAX_TRIPLES."
+                )
+            if class_filter:
+                allow_pushdown_fallback = True
+            else:
+                mode = MODE_PUSHDOWN
 
         tm = get_task_manager()
         task = tm.create_task(
@@ -553,6 +576,9 @@ async def compute_graph_metrics(
                 class_filter=class_filter,
                 max_triples=max_triples,
                 max_nodes_betweenness=max_nodes_betweenness,
+                mode=mode,
+                top_n=settings.analytics_top_n,
+                allow_pushdown_fallback=allow_pushdown_fallback,
             )
 
         thread = threading.Thread(target=run_metrics, daemon=True)
@@ -561,7 +587,12 @@ async def compute_graph_metrics(
         return {
             "success": True,
             "task_id": task.id,
-            "message": "Analysis started",
+            "mode": mode,
+            "message": (
+                "Analysis started (engine-side aggregation)"
+                if mode == MODE_PUSHDOWN
+                else "Analysis started"
+            ),
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -1449,10 +1480,14 @@ async def triplestore_stats(
             "type_assertion_count": type_count,
             "relationship_count": max(relationship_count, 0),
             "inferred_triples": inferred_count,
-            # Effective KG-analytics safety limit, so the Analytics page can
-            # warn up-front when total_triples exceeds it (in-memory NetworkX
-            # guard; see Settings.analytics_max_triples).
+            # Effective KG-analytics limit and whether exceeding it can still
+            # be served by engine-side aggregation, so the Analytics page can
+            # tell the user up-front which mode a run will use rather than
+            # disabling the button (see Settings.analytics_max_triples).
             "analytics_max_triples": settings.analytics_max_triples,
+            "analytics_pushdown_available": (
+                settings.analytics_pushdown_enabled and supports_pushdown(store)
+            ),
         }
         DigitalTwin(domain).set_ts_cache("stats", result)
         return result

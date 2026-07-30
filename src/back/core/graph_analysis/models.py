@@ -66,6 +66,10 @@ class MetricsRequest:
     max_nodes_betweenness: int = 2_000
 
 
+#: Per-node metric keys, in the order the UI charts them.
+NODE_METRIC_KEYS = ("degree", "pagerank", "betweenness", "closeness", "clustering")
+
+
 @dataclass
 class NodeMetrics:
     """Centrality scores for a single node."""
@@ -76,6 +80,9 @@ class NodeMetrics:
     closeness: float = 0.0
     clustering: float = 0.0
 
+    def to_dict(self) -> Dict[str, float]:
+        return {k: getattr(self, k) for k in NODE_METRIC_KEYS}
+
 
 @dataclass
 class MetricsStats:
@@ -84,10 +91,23 @@ class MetricsStats:
     node_count: int = 0          # filtered nodes (instances of selected type, or all)
     graph_node_count: int = 0    # total nodes in the computation graph (incl. neighbors)
     edge_count: int = 0
-    connected_components: int = 0
+    # ``None`` when the run could not determine it — component counting needs
+    # an iterative pass, which the SQL pushdown path does not do.
+    connected_components: Optional[int] = 0
     avg_degree: float = 0.0
     density: float = 0.0
     elapsed_ms: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "node_count": self.node_count,
+            "graph_node_count": self.graph_node_count,
+            "edge_count": self.edge_count,
+            "connected_components": self.connected_components,
+            "avg_degree": self.avg_degree,
+            "density": self.density,
+            "elapsed_ms": self.elapsed_ms,
+        }
 
 
 @dataclass
@@ -104,10 +124,39 @@ class EntityTypeProfile:
     is_flat: bool                    # heuristic: True when this type looks like a flat dataset
     flat_reasons: List[str] = field(default_factory=list)  # human-readable flags (empty if not flat)
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "uri": self.uri,
+            "count": self.count,
+            "avg_degree": self.avg_degree,
+            "avg_clustering": self.avg_clustering,
+            "avg_betweenness": self.avg_betweenness,
+            "distinct_predicates": self.distinct_predicates,
+            "has_temporal_predicates": self.has_temporal_predicates,
+            "is_flat": self.is_flat,
+            "flat_reasons": self.flat_reasons,
+        }
+
+
+MODE_IN_MEMORY = "in_memory"
+MODE_PUSHDOWN = "pushdown"
+
 
 @dataclass
 class MetricsResult:
-    """Full result of a graph metrics computation."""
+    """Full result of a graph metrics computation.
+
+    ``nodes`` is exhaustive in ``in_memory`` mode.  In ``pushdown`` mode it is
+    deliberately bounded to the highest-ranked nodes (see
+    ``Settings.analytics_top_n``): the UI only ever charts a top-N slice, and
+    an exhaustive map would not fit in the registry row or the browser on the
+    graph sizes this mode exists to serve.  ``stats.node_count`` remains the
+    true total either way, so never derive a node count from ``len(nodes)``.
+
+    ``unavailable_metrics`` names the per-node metrics this run could not
+    compute (they are present but zero), so the UI can say so instead of
+    drawing a flat zero chart.
+    """
 
     nodes: Dict[str, NodeMetrics] = field(default_factory=dict)
     stats: MetricsStats = field(default_factory=MetricsStats)
@@ -115,6 +164,23 @@ class MetricsResult:
     node_types: Dict[str, str] = field(default_factory=dict)    # node_uri → class_uri
     node_labels: Dict[str, str] = field(default_factory=dict)   # node_uri → rdfs:label
     entity_type_profiles: Dict[str, "EntityTypeProfile"] = field(default_factory=dict)  # class_uri → profile
+    mode: str = MODE_IN_MEMORY
+    unavailable_metrics: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the JSON-serializable API/registry payload."""
+        return {
+            "nodes": {uri: m.to_dict() for uri, m in self.nodes.items()},
+            "stats": self.stats.to_dict(),
+            "top_pagerank": self.top_pagerank,
+            "node_types": self.node_types,
+            "node_labels": self.node_labels,
+            "entity_type_profiles": {
+                k: v.to_dict() for k, v in self.entity_type_profiles.items()
+            },
+            "mode": self.mode,
+            "unavailable_metrics": list(self.unavailable_metrics),
+        }
 
 
 # ---------------------------------------------------------------------------

@@ -10,8 +10,33 @@ from back.core.graph_analysis.models import (
     MetricsResult,
 )
 from back.core.graph_analysis.GraphMetrics import GraphMetrics
+from back.core.graphdb.GraphDBBackend import GraphDBBackend
 
 pytestmark = pytest.mark.unit
+
+
+class _FakeStore:
+    """In-memory triple store exposing the analytics pushdown contract.
+
+    Reuses the backend's own Python filter so a filtered test exercises the
+    same triple-selection semantics the SQL pushdown implements, rather than
+    a mock that quietly returns whatever it is asked for.
+    """
+
+    def __init__(self, triples):
+        self._triples = list(triples)
+
+    def query_triples(self, table_name):
+        return list(self._triples)
+
+    def query_triples_for_analysis(
+        self, table_name, *, class_filter=None, predicate_filter=None
+    ):
+        return GraphDBBackend._filter_analysis_triples_in_python(
+            self._triples,
+            class_filter=class_filter,
+            predicate_filter=predicate_filter,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -65,11 +90,8 @@ class TestGraphMetrics:
     ]
 
     def _make_service(self, triples=None):
-        store = MagicMock()
-        store.query_triples.return_value = (
-            list(self._HUB_TRIPLES) if triples is None else triples
-        )
-        return GraphMetrics(store, "test_graph")
+        rows = list(self._HUB_TRIPLES) if triples is None else triples
+        return GraphMetrics(_FakeStore(rows), "test_graph")
 
     def test_compute_returns_metrics_result(self):
         svc = self._make_service()

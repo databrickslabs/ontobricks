@@ -503,7 +503,9 @@ the workspace token (locally) or the SP token (in Apps).
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` | Max triples loaded into memory for the NetworkX centrality/structure analysis. Graphs larger than this are rejected up-front (the Analytics page warns and disables **Run Analysis** using the known triple count). Class/predicate filters narrow the charts, not the load, so they don't lift this limit. | `500000` |
+| `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` | Max triples loaded into memory for the NetworkX centrality/structure analysis. This is the switch point between the two compute modes, not a rejection threshold: larger graphs fall back to engine-side SQL aggregation. Entity-type filters are pushed down to the graph store, so they reduce the load and can bring an oversized graph back under the limit. | `500000` |
+| `ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED` | Whether graphs over the limit fall back to engine-side SQL aggregation (reduced metric set, no size limit). Set to `false` to reject oversized graphs outright instead. Requires a SQL graph backend (Delta or Lakebase). | `true` |
+| `ONTOBRICKS_ANALYTICS_TOP_N` | How many top-ranked nodes per metric the engine-side path returns. Keeps the persisted payload bounded on very large graphs; must stay above the Analytics page "Top N" selector maximum (50). | `100` |
 
 #### Databricks Runtime Detection
 
@@ -534,6 +536,8 @@ LOG_FORMAT=json                        # Structured JSON logging (default: text)
 LOG_LEVEL=INFO                         # DEBUG, INFO, WARNING, ERROR, CRITICAL
 ONTOBRICKS_THREAD_POOL_SIZE=20         # Max threads for blocking I/O
 ONTOBRICKS_ANALYTICS_MAX_TRIPLES=500000  # KG analytics in-memory triple cap
+ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED=true  # Engine-side SQL fallback above the cap
+ONTOBRICKS_ANALYTICS_TOP_N=100           # Top nodes per metric in engine-side mode
 ```
 
 #### Shell Export

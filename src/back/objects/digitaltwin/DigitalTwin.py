@@ -2680,10 +2680,13 @@ class DigitalTwin:
         class_filter: Optional[List[str]] = None,
         max_triples: int = 500_000,
         max_nodes_betweenness: int = 2_000,
+        mode: str = "in_memory",
+        top_n: int = 100,
+        allow_pushdown_fallback: bool = False,
     ) -> None:
         """Compute graph metrics in a worker thread and persist the LAST result.
 
-        Runs the same NetworkX pipeline as the synchronous
+        Runs the same pipeline as the synchronous
         :meth:`compute_graph_metrics`, then UPSERTs the result into the
         registry ``graph_analytics`` cache keyed by ``(folder, version)``
         so the Analytics page and the Domain Validation cockpit can render
@@ -2702,7 +2705,13 @@ class DigitalTwin:
         t0 = _time.time()
         try:
             tm.start_task(task_id, "Computing knowledge graph metrics...")
-            tm.update_progress(task_id, 20, "Running centrality analysis")
+            tm.update_progress(
+                task_id,
+                20,
+                "Aggregating graph structure in the engine"
+                if mode == "pushdown"
+                else "Running centrality analysis",
+            )
 
             dt = DigitalTwin(domain)
             result = dt.compute_graph_metrics(
@@ -2712,6 +2721,9 @@ class DigitalTwin:
                 class_filter=class_filter,
                 max_triples=max_triples,
                 max_nodes_betweenness=max_nodes_betweenness,
+                mode=mode,
+                top_n=top_n,
+                allow_pushdown_fallback=allow_pushdown_fallback,
             )
 
             tm.update_progress(task_id, 85, "Storing analytics result")
@@ -2731,6 +2743,9 @@ class DigitalTwin:
                 "duration_ms": duration_ms,
                 "computed_at": now_iso,
             }
+            # The effective mode can differ from the requested one when an
+            # in-memory run degraded to pushdown.
+            effective_mode = result.get("mode", mode)
             if folder and version:
                 svc = RegistryService.from_context(domain, settings)
                 svc.save_graph_analytics(folder, version, entry)
@@ -2757,10 +2772,17 @@ class DigitalTwin:
                 )
 
             node_count = stats.get("node_count", 0)
+            suffix = " (engine-side aggregation)" if effective_mode == "pushdown" else ""
             tm.complete_task(
                 task_id,
-                result={"node_count": node_count, "duration_ms": duration_ms},
-                message=f"Analysis done: {node_count} nodes in {duration_ms} ms",
+                result={
+                    "node_count": node_count,
+                    "duration_ms": duration_ms,
+                    "mode": effective_mode,
+                },
+                message=(
+                    f"Analysis done: {node_count:,} nodes in {duration_ms} ms{suffix}"
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Graph metrics task failed: %s", exc)
@@ -3352,13 +3374,31 @@ class DigitalTwin:
         class_filter: Optional[List[str]] = None,
         max_triples: int = 500_000,
         max_nodes_betweenness: int = 2_000,
+        mode: str = "in_memory",
+        top_n: int = 100,
+        allow_pushdown_fallback: bool = False,
     ) -> Dict[str, Any]:
-        """Compute centrality and structural metrics on the full knowledge graph.
+        """Compute centrality and structural metrics on the knowledge graph.
 
-        Delegates to :class:`GraphMetrics` from ``back.core.graph_analysis``.
+        *mode* selects the engine: ``in_memory`` runs the full NetworkX
+        analysis (all five per-node metrics, capped by *max_triples*), while
+        ``pushdown`` runs engine-side SQL aggregations with no size limit but
+        a reduced metric set.
+
+        With *allow_pushdown_fallback*, an ``in_memory`` run that trips the
+        *max_triples* guard degrades to ``pushdown`` instead of failing — a
+        class-filtered analysis is worth attempting exactly first, because the
+        filter is pushed down and the selected subgraph often fits.
+
         Returns a JSON-serializable dict matching the API contract.
         """
-        from back.core.graph_analysis import GraphMetrics, MetricsRequest
+        from back.core.graph_analysis import (
+            MODE_PUSHDOWN,
+            GraphMetrics,
+            MetricsRequest,
+            PushdownMetrics,
+            supports_pushdown,
+        )
 
         request = MetricsRequest(
             predicate_filter=predicate_filter,
@@ -3366,47 +3406,21 @@ class DigitalTwin:
             max_triples=max_triples,
             max_nodes_betweenness=max_nodes_betweenness,
         )
-        service = GraphMetrics(store, graph_name)
-        result = service.compute(request)
 
-        return {
-            "nodes": {
-                uri: {
-                    "degree": m.degree,
-                    "pagerank": m.pagerank,
-                    "betweenness": m.betweenness,
-                    "closeness": m.closeness,
-                    "clustering": m.clustering,
-                }
-                for uri, m in result.nodes.items()
-            },
-            "stats": {
-                "node_count": result.stats.node_count,
-                "graph_node_count": result.stats.graph_node_count,
-                "edge_count": result.stats.edge_count,
-                "connected_components": result.stats.connected_components,
-                "avg_degree": result.stats.avg_degree,
-                "density": result.stats.density,
-                "elapsed_ms": result.stats.elapsed_ms,
-            },
-            "top_pagerank": result.top_pagerank,
-            "node_types": result.node_types,
-            "node_labels": result.node_labels,
-            "entity_type_profiles": {
-                k: {
-                    "uri": v.uri,
-                    "count": v.count,
-                    "avg_degree": v.avg_degree,
-                    "avg_clustering": v.avg_clustering,
-                    "avg_betweenness": v.avg_betweenness,
-                    "distinct_predicates": v.distinct_predicates,
-                    "has_temporal_predicates": v.has_temporal_predicates,
-                    "is_flat": v.is_flat,
-                    "flat_reasons": v.flat_reasons,
-                }
-                for k, v in result.entity_type_profiles.items()
-            },
-        }
+        if mode == MODE_PUSHDOWN:
+            return PushdownMetrics(store, graph_name, top_n=top_n).compute(request).to_dict()
+
+        try:
+            return GraphMetrics(store, graph_name).compute(request).to_dict()
+        except ValueError as exc:
+            if not (allow_pushdown_fallback and supports_pushdown(store)):
+                raise
+            logger.info(
+                "compute_graph_metrics: in-memory analysis rejected (%s) — "
+                "falling back to SQL pushdown",
+                exc,
+            )
+            return PushdownMetrics(store, graph_name, top_n=top_n).compute(request).to_dict()
 
     def interpret_graph_metrics(
         self,

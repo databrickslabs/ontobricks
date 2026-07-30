@@ -381,7 +381,8 @@
     var _charts = {};
     var _allTypes = [];   // [{ name, uri, count }] — populated from /dtwin/sync/stats
     var _totalTriples = null;   // known triple count (from /dtwin/sync/stats)
-    var _maxTriples   = null;   // analytics safety limit (from /dtwin/sync/stats)
+    var _maxTriples   = null;   // in-memory analytics limit (from /dtwin/sync/stats)
+    var _pushdownAvailable = false;  // engine can aggregate server-side instead
 
     // ------------------------------------------------------------------
     // Metric explanations — shown in popup when user clicks ? on a card
@@ -507,27 +508,52 @@
         }
     }
 
-    // Warn (and block) up-front when the graph is too large for in-memory
-    // analytics — the triple count is already known from /dtwin/sync/stats, so
-    // there is no point letting the user start a background job that will fail.
+    // Explain up-front what happens on a graph over the in-memory limit. When
+    // engine-side aggregation is available the run still works with a reduced
+    // metric set, so this informs rather than blocks; without it there is no
+    // point letting the user start a background job that will fail.
     function _showOverLimitBanner(show) {
         var existing = document.getElementById('analyticsOverLimitBanner');
-        if (show && !existing) {
-            var banner = document.createElement('div');
-            banner.id = 'analyticsOverLimitBanner';
-            banner.className = 'alert alert-danger d-flex align-items-start gap-2 small mb-3';
-            banner.innerHTML = '<i class="bi bi-exclamation-octagon-fill flex-shrink-0 mt-1"></i>'
-                + '<span>This Knowledge Graph has <strong>' + (_totalTriples || 0).toLocaleString() + '</strong> triples, '
-                + 'which exceeds the analytics limit of <strong>' + (_maxTriples || 0).toLocaleString() + '</strong>. '
-                + 'In-memory centrality &amp; structure analysis is disabled for graphs this large — '
-                + 'reduce the synced graph (exclude entity types in <strong>KG &rarr; Sync</strong>) '
-                + 'or ask an admin to raise <code>ONTOBRICKS_ANALYTICS_MAX_TRIPLES</code>.</span>';
-            var section = document.getElementById('analyticsSection');
-            var header = section && section.querySelector('.section-header');
-            if (header) header.insertAdjacentElement('afterend', banner);
-        } else if (!show && existing) {
-            existing.remove();
+        if (!show) {
+            if (existing) existing.remove();
+            return;
         }
+
+        var head = 'This Knowledge Graph has <strong>' + (_totalTriples || 0).toLocaleString() + '</strong> triples, '
+            + 'which exceeds the in-memory analytics limit of <strong>' + (_maxTriples || 0).toLocaleString() + '</strong>. ';
+        var cls, icon, body;
+        if (_pushdownAvailable) {
+            cls  = 'alert-warning';
+            icon = 'bi-exclamation-triangle-fill';
+            body = head
+                + 'The analysis will run as <strong>engine-side aggregation</strong> instead, which has no size '
+                + 'limit but only reports node/edge counts, average degree, density, degree centrality and the '
+                + 'entity-type profiles. PageRank, clustering, betweenness, closeness and the component count '
+                + 'need the in-memory engine — pick an <strong>Entity Type</strong> above to analyse a subgraph '
+                + 'and get all of them.';
+        } else {
+            cls  = 'alert-danger';
+            icon = 'bi-exclamation-octagon-fill';
+            body = head
+                + 'In-memory analysis is disabled for graphs this large and engine-side aggregation is not '
+                + 'available for this graph backend — reduce the synced graph (exclude entity types in '
+                + '<strong>KG &rarr; Sync</strong>) or ask an admin to raise '
+                + '<code>ONTOBRICKS_ANALYTICS_MAX_TRIPLES</code>.';
+        }
+
+        var html = '<i class="bi ' + icon + ' flex-shrink-0 mt-1"></i><span>' + body + '</span>';
+        if (existing) {
+            existing.className = 'alert ' + cls + ' d-flex align-items-start gap-2 small mb-3';
+            existing.innerHTML = html;
+            return;
+        }
+        var banner = document.createElement('div');
+        banner.id = 'analyticsOverLimitBanner';
+        banner.className = 'alert ' + cls + ' d-flex align-items-start gap-2 small mb-3';
+        banner.innerHTML = html;
+        var section = document.getElementById('analyticsSection');
+        var header = section && section.querySelector('.section-header');
+        if (header) header.insertAdjacentElement('afterend', banner);
     }
 
     // True when the known triple count is over the analytics limit.
@@ -545,12 +571,13 @@
             var limitTxt = (_maxTriples != null) ? _maxTriples.toLocaleString() : '—';
             var curTxt   = (_totalTriples != null) ? _totalTriples.toLocaleString() : '—';
             var html = '<i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>'
-                + '<span>Analysis loads the full graph into memory (NetworkX), so it is capped at '
+                + '<span>Full centrality analysis loads the graph into memory (NetworkX), so it is capped at '
                 + '<strong>' + limitTxt + '</strong> triples'
                 + (_totalTriples != null ? ' (this graph: <strong>' + curTxt + '</strong>)' : '')
                 + '. It runs <strong>asynchronously</strong> in the background — you can keep working, '
-                + 'and the last result is cached and shown here. Entity-type filters narrow the '
-                + '<em>charts</em>, not the load, so they do not lift this limit.</span>';
+                + 'and the last result is cached and shown here. An <strong>Entity Type</strong> filter is '
+                + 'pushed down to the graph store, so it reduces what is loaded and can bring an oversized '
+                + 'graph back under the limit.</span>';
             if (existing) {
                 existing.innerHTML = html;
                 return;
@@ -608,12 +635,19 @@
             // and disable Run Analysis up-front rather than failing later.
             _totalTriples = (data.total_triples != null) ? data.total_triples : null;
             _maxTriples   = data.analytics_max_triples || _maxTriples;
+            _pushdownAvailable = !!data.analytics_pushdown_available;
             if (_isOverTripleLimit()) {
                 _showOverLimitBanner(true);
                 _showLimitInfo(false);
-                _setComputeBtnState(false,
-                    'Graph too large: ' + _totalTriples.toLocaleString()
-                    + ' triples exceeds the analytics limit of ' + _maxTriples.toLocaleString());
+                // Engine-side aggregation has no size limit, so an oversized
+                // graph is still analysable — only block when it is unavailable.
+                if (_pushdownAvailable) {
+                    _setComputeBtnState(true);
+                } else {
+                    _setComputeBtnState(false,
+                        'Graph too large: ' + _totalTriples.toLocaleString()
+                        + ' triples exceeds the analytics limit of ' + _maxTriples.toLocaleString());
+                }
             } else {
                 _showOverLimitBanner(false);
                 _showLimitInfo(true);
@@ -712,7 +746,8 @@
         if (_ca && _caTxt) {
             var when = _formatComputedAt(meta.computed_at);
             if (when) {
-                _caTxt.textContent = 'Last computed ' + when;
+                var how = data.mode === 'pushdown' ? ' (engine-side aggregation)' : '';
+                _caTxt.textContent = 'Last computed ' + when + how;
                 _ca.classList.remove('d-none');
             } else {
                 _ca.classList.add('d-none');
@@ -934,9 +969,13 @@
             }
 
             if (typeof showNotification === 'function') {
-                var n = _analyticsData && _analyticsData.nodes ? Object.keys(_analyticsData.nodes).length : 0;
-                var ms = _analyticsData && _analyticsData.stats ? _analyticsData.stats.elapsed_ms : '';
-                showNotification('Analysis done: ' + n + ' nodes' + (ms ? ' in ' + ms + 'ms' : ''), 'success');
+                // Read the count from stats, never from Object.keys(nodes): in
+                // engine-side mode ``nodes`` is deliberately a bounded top-N slice.
+                var st = (_analyticsData && _analyticsData.stats) || {};
+                var n  = st.node_count || 0;
+                var ms = st.elapsed_ms;
+                showNotification('Analysis done: ' + n.toLocaleString() + ' nodes'
+                    + (ms ? ' in ' + ms + 'ms' : ''), 'success');
             }
 
         } catch (e) {
@@ -971,6 +1010,9 @@
         var nodeLabels = _analyticsData.node_labels || {};
         var allNodes   = _analyticsData.nodes;
         var candidateUris = Object.keys(allNodes);
+        // Metrics the run could not compute — charted as zeros, so label them
+        // rather than showing a flat bar chart.
+        var unavailable = _analyticsData.unavailable_metrics || [];
 
         _METRICS.forEach(function (m) {
             var sorted = candidateUris
@@ -995,14 +1037,25 @@
             var existing = document.getElementById(zeroNoticeId);
             if (existing) existing.remove();
             if (allZero) {
+                var reason;
+                if (unavailable.indexOf(m.key) !== -1) {
+                    reason = '<strong>Not computed for this graph.</strong> '
+                        + m.key.charAt(0).toUpperCase() + m.key.slice(1)
+                        + ' needs an iterative pass over the whole graph, which the engine-side '
+                        + 'aggregation used for graphs over the in-memory limit does not do. '
+                        + 'Pick an <strong>Entity Type</strong> above to analyse a subgraph in memory '
+                        + 'and get this metric.';
+                } else if (m.key === 'clustering') {
+                    reason = '<strong>All values are 0.</strong> '
+                        + 'Clustering coefficient is 0 when none of a node\'s neighbors are connected to each other — typical for KGs with a bipartite structure (e.g. Customer → Order → Product). Triangles are rare unless entities of the same type link directly.';
+                } else {
+                    reason = '<strong>All values are 0.</strong> '
+                        + 'No ' + m.key + ' scores could be computed for the current graph / filter.';
+                }
                 var notice = document.createElement('div');
                 notice.id = zeroNoticeId;
                 notice.className = 'alert alert-light border small text-muted mb-0';
-                notice.innerHTML = '<i class="bi bi-info-circle me-1"></i>'
-                    + '<strong>All values are 0.</strong> '
-                    + (m.key === 'clustering'
-                        ? 'Clustering coefficient is 0 when none of a node\'s neighbors are connected to each other — typical for KGs with a bipartite structure (e.g. Customer → Order → Product). Triangles are rare unless entities of the same type link directly.'
-                        : 'No ' + m.key + ' scores could be computed for the current graph / filter.');
+                notice.innerHTML = '<i class="bi bi-info-circle me-1"></i>' + reason;
                 canvas.parentNode.insertBefore(notice, canvas);
                 canvas.style.display = 'none';
                 return;   // skip chart rendering for this metric
