@@ -366,3 +366,45 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3447 passed, 275 skipped, 5 deselected in 22.02s
+
+## Designer "Create Relationship" dialog: split into Label + ID fields
+
+Context: the quick-create dialog shown when connecting two entities on the
+Ontology Designer (D3 map) had a single "Relationship Name" field. Users
+asked for separate editable Label and ID fields — cursor defaults to Label,
+ID mirrors the Label live (camelCase) until edited directly, and ID must be
+unique across the ontology or Create is blocked with an inline error.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   `showMapRelationshipDialog`: two fields (`mapRelationshipLabel`,
+   `mapRelationshipName`). Label auto-focuses (via `shown.bs.modal`, since a
+   synchronous `.focus()` right after `.show()` gets overridden by
+   Bootstrap's own modal focus-trap). Typing in Label mirrors into ID via
+   `columnToCamelCase()` until the user edits the ID field directly
+   (`idManuallyEdited` flag, set only by a real `input` event on the ID
+   field — programmatic mirroring doesn't trigger it). `validateName()`
+   checks the ID is non-empty and not already used by any property in
+   `OntologyState.config.properties` (Bootstrap `is-invalid` +
+   `invalid-feedback`), blocking the Create button on failure. Resolves
+   `{ name, label }` instead of a bare string.
+   `createRelationshipFromMap` updated for the new `{ name, label }` shape
+   and its duplicate check widened from domain+range-scoped to global by
+   `name` (properties are looked up by name alone everywhere else in the
+   app, e.g. `editPropertyByName`, so scoping this check to domain+range was
+   a latent bug — two properties sharing a name but different domain/range
+   would have broken those lookups).
+2. tests/units/front/test_map_relationship_dialog.py
+   Contract tests: both fields present, Label autofocus wiring (`shown.bs.modal`),
+   ID mirroring + manual-edit override, uniqueness validation blocking
+   Create, `{name, label}` resolve shape, and the widened global uniqueness
+   check + label wiring in `createRelationshipFromMap`.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_map_relationship_dialog.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3453 passed, 275 skipped, 5 deselected in 28.12s
+

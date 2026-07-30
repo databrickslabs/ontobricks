@@ -1918,20 +1918,22 @@ function hideMapConnectionTooltip() {
  * Create a new relationship between two entities
  */
 async function createRelationshipFromMap(sourceEntity, targetEntity) {
-    // Show dialog to get relationship name
-    const relationshipName = await showMapRelationshipDialog(sourceEntity, targetEntity);
+    // Show dialog to get the relationship's ID (name) and Label
+    const result = await showMapRelationshipDialog(sourceEntity, targetEntity);
     
-    if (!relationshipName) return; // Cancelled
+    if (!result) return; // Cancelled
+    
+    const relationshipName = result.name;
+    const relationshipLabel = result.label || relationshipName;
     
     try {
         if (typeof OntologyState !== 'undefined' && OntologyState.config) {
-            // Check if relationship already exists
-            const existingProp = OntologyState.config.properties.find(p => 
-                p.name === relationshipName && p.domain === sourceEntity.name && p.range === targetEntity.name
-            );
+            // Property IDs are unique across the whole ontology (defensive
+            // re-check — the dialog already blocks duplicates before this point).
+            const existingProp = OntologyState.config.properties.find(p => p.name === relationshipName);
             
             if (existingProp) {
-                showNotification(`Relationship "${relationshipName}" already exists`, 'warning');
+                showNotification(`A relationship with ID "${relationshipName}" already exists`, 'warning');
                 return;
             }
             
@@ -1939,6 +1941,7 @@ async function createRelationshipFromMap(sourceEntity, targetEntity) {
             const newProperty = {
                 name: relationshipName,
                 localName: relationshipName,
+                label: relationshipLabel,
                 type: 'ObjectProperty',
                 domain: sourceEntity.name,
                 range: targetEntity.name,
@@ -2345,10 +2348,16 @@ function showMapRelationshipDialog(sourceEntity, targetEntity) {
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Relationship Name</label>
-                                <input type="text" class="form-control" id="mapRelationshipName" 
-                                       placeholder="e.g., hasRelation, belongsTo, contains" autofocus>
-                                <div class="form-text">Use camelCase naming convention (e.g., hasCustomer, belongsTo)</div>
+                                <label class="form-label" for="mapRelationshipLabel">Label</label>
+                                <input type="text" class="form-control" id="mapRelationshipLabel"
+                                       placeholder="e.g., Has Customer, Belongs To" autofocus>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="mapRelationshipName">ID <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="mapRelationshipName"
+                                       placeholder="e.g., hasCustomer, belongsTo">
+                                <div class="invalid-feedback" id="mapRelationshipNameError">This ID already exists in the ontology.</div>
+                                <div class="form-text">Unique identifier, camelCase convention. Mirrors the Label until edited directly.</div>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -2365,28 +2374,66 @@ function showMapRelationshipDialog(sourceEntity, targetEntity) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         const modalEl = document.getElementById('mapRelationshipModal');
         const modal = new bootstrap.Modal(modalEl);
+        const labelInput = document.getElementById('mapRelationshipLabel');
         const nameInput = document.getElementById('mapRelationshipName');
+        const nameError = document.getElementById('mapRelationshipNameError');
         
         let resolved = false;
+        let idManuallyEdited = false;
+        
+        const isDuplicateId = (id) => {
+            const props = (typeof OntologyState !== 'undefined' && OntologyState.config && OntologyState.config.properties) || [];
+            return props.some(p => p.name === id);
+        };
+        
+        // Validates the ID field and reflects the result in the UI.
+        // Returns true when the ID is non-empty and not already used.
+        const validateName = () => {
+            const id = nameInput.value.trim();
+            if (!id) {
+                nameInput.classList.add('is-invalid');
+                nameError.textContent = 'ID is required.';
+                return false;
+            }
+            if (isDuplicateId(id)) {
+                nameInput.classList.add('is-invalid');
+                nameError.textContent = 'This ID already exists in the ontology.';
+                return false;
+            }
+            nameInput.classList.remove('is-invalid');
+            return true;
+        };
+        
+        // Mirror the Label into the ID (camelCase) until the user edits the ID directly.
+        labelInput.addEventListener('input', () => {
+            if (idManuallyEdited) return;
+            nameInput.value = typeof columnToCamelCase === 'function'
+                ? columnToCamelCase(labelInput.value)
+                : labelInput.value;
+            validateName();
+        });
+        
+        nameInput.addEventListener('input', () => {
+            idManuallyEdited = true;
+            validateName();
+        });
         
         // Handle create button
         document.getElementById('mapRelationshipCreate').addEventListener('click', () => {
-            const name = nameInput.value.trim();
-            if (!name) {
-                nameInput.classList.add('is-invalid');
-                return;
-            }
+            if (!validateName()) return;
             resolved = true;
             modal.hide();
-            resolve(name);
+            resolve({ name: nameInput.value.trim(), label: labelInput.value.trim() });
         });
         
-        // Handle enter key in input
-        nameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('mapRelationshipCreate').click();
-            }
-            nameInput.classList.remove('is-invalid');
+        // Handle enter key in either input
+        [labelInput, nameInput].forEach(input => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('mapRelationshipCreate').click();
+                }
+            });
         });
         
         // Handle modal close
@@ -2397,7 +2444,13 @@ function showMapRelationshipDialog(sourceEntity, targetEntity) {
             }
         }, { once: true });
         
+        // Bootstrap's own focus-trap grabs focus once the modal's shown
+        // transition completes, so focus the Label field only after that
+        // (a synchronous .focus() right after .show() gets overridden).
+        modalEl.addEventListener('shown.bs.modal', () => {
+            labelInput.focus();
+        }, { once: true });
+        
         modal.show();
-        nameInput.focus();
     });
 }
