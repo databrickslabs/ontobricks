@@ -482,8 +482,8 @@ async function saveDomainFromSettings() {
         baseUriEl.addEventListener('input', () => baseUriEl.classList.remove('is-invalid'), { once: true });
     }
     
-    // Save domain info to session and open Unity Catalog save dialog
-    // (saveDomainInfo only saves to session; domainSave opens the UC dialog for actual persistence)
+    // Save domain info to session and persist to the registry (no confirmation popup)
+    // (saveDomainInfo only saves to session; domainSave writes to the registry)
     if (typeof domainSave === 'function') {
         await domainSave();
     } else {

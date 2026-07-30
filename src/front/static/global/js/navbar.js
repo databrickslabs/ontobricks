@@ -438,8 +438,8 @@ async function domainNew() {
 }
 
 /**
- * Save domain to Unity Catalog Volume
- * Volume path uses the domain folder; file name = version number
+ * Save domain to the registry.
+ * Persists domain info / design layout first, then saves without a confirmation popup.
  */
 async function domainSave() {
     try {
@@ -479,8 +479,7 @@ async function domainSave() {
             }
         }
         
-        // Show catalog/schema selection dialog
-        showDomainSaveDialog();
+        await doDomainSave();
     } catch (error) {
         console.error('Error preparing save:', error);
         showNotification('Failed to prepare save: ' + error.message, 'error');
@@ -539,73 +538,13 @@ async function saveDomainInfoBeforeSave() {
 }
 
 /**
- * Show confirmation dialog before saving to the registry.
+ * Persist the domain to the registry (no confirmation popup).
+ * Kept as a named export for callers that previously opened the save dialog.
  * @param {Object} [opts]
  * @param {string} [opts.afterSave] - URL to navigate to after a successful save.
  */
 async function showDomainSaveDialog(opts = {}) {
-    const modalHtml = `
-        <div class="modal fade" id="domainSaveModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-cloud-upload"></i> Save Domain to Registry</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div id="saveRegistryInfo" class="mb-3">
-                            <span class="spinner-border spinner-border-sm me-1"></span> Checking registry...
-                        </div>
-                        <div class="alert alert-info small">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Domain:</strong> <span id="saveDomainName">Loading...</span><br>
-                            <strong>Version:</strong> <span id="saveDomainVersion">Loading...</span>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="btnConfirmSave" disabled>
-                            <i class="bi bi-cloud-upload"></i> Save
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const existingModal = document.getElementById('domainSaveModal');
-    if (existingModal) existingModal.remove();
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('domainSaveModal'));
-    modal.show();
-
-    try {
-        const infoData = await fetchOnce('/domain/info');
-        if (infoData.success) {
-            document.getElementById('saveDomainName').textContent = infoData.info.name || 'NewDomain';
-            document.getElementById('saveDomainVersion').textContent = infoData.info.version || '1';
-        }
-    } catch (_) { /* ignore */ }
-
-    // Check registry
-    try {
-        const regResp = await fetch('/settings/registry', { credentials: 'same-origin' });
-        const reg = await regResp.json();
-        const infoDiv = document.getElementById('saveRegistryInfo');
-        if (reg.configured) {
-            infoDiv.innerHTML = '<div class="alert alert-success small mb-0"><i class="bi bi-check-circle-fill text-success me-1"></i> Registry</div>';
-            document.getElementById('btnConfirmSave').disabled = false;
-        } else {
-            infoDiv.innerHTML = '<div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. <a href="/settings">Go to Settings</a></div>';
-        }
-    } catch (e) {
-        document.getElementById('saveRegistryInfo').innerHTML = '<div class="alert alert-danger small mb-0">Error checking registry</div>';
-    }
-
-    document.getElementById('btnConfirmSave').addEventListener('click', async () => {
-        modal.hide();
-        await doDomainSave({ afterSave: opts.afterSave });
-    });
+    return doDomainSave({ afterSave: opts.afterSave });
 }
 
 async function doDomainSave(opts = {}) {
