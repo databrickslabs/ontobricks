@@ -177,28 +177,35 @@ document.addEventListener('DOMContentLoaded', function () {
         const configDiv = document.getElementById('registryConfigStatus');
         registryConfigured = !!cfg.configured;
 
+        const setStatus = (html) => {
+            if (div) { div.style.display = 'block'; div.innerHTML = html; }
+            if (configDiv) { configDiv.style.display = 'block'; configDiv.innerHTML = html; }
+        };
+
         if (cfg.configured) {
-            if (div) div.style.display = 'none';
-            if (configDiv) configDiv.style.display = 'none';
+            setStatus(
+                '<p class="small text-success mb-0">' +
+                '<i class="bi bi-check-circle-fill me-1"></i>Registry is operational</p>'
+            );
             loadRegistryDomains();
         } else if (cfg.catalog && cfg.schema) {
             const msg = registryLocked
                 ? 'Registry volume is set via Databricks App resource but not yet initialized. Click <strong>Initialize</strong> to set up the registry.'
                 : 'Registry location set but not initialized yet. Click <strong>Initialize</strong> to create the volume.';
-            const alertHtml = '<div class="alert alert-warning small mb-0">' +
-                '<i class="bi bi-exclamation-triangle me-1"></i> ' + msg + '</div>';
-            if (div) { div.style.display = 'block'; div.innerHTML = alertHtml; }
-            if (configDiv) { configDiv.style.display = 'block'; configDiv.innerHTML = alertHtml; }
+            setStatus(
+                '<p class="small text-warning mb-0">' +
+                '<i class="bi bi-exclamation-triangle-fill me-1"></i>Registry is not operational — ' + msg + '</p>'
+            );
             const section = document.getElementById('registryDomainsSection');
             if (section) section.style.display = 'none';
         } else {
-            const notConfiguredAlert = '<div class="alert alert-warning small mb-0">' +
-                '<i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. ' +
+            setStatus(
+                '<p class="small text-danger mb-0">' +
+                '<i class="bi bi-x-circle-fill me-1"></i>Registry is not operational — not configured. ' +
                 'Set <code>REGISTRY_CATALOG</code> / <code>REGISTRY_SCHEMA</code> / <code>LAKEBASE_SCHEMA</code> in <code>.env</code> ' +
                 '(local development) or bind the Volume and Lakebase resources in <code>app.yaml</code> ' +
-                '(Databricks Apps deployment), then restart the app.</div>';
-            if (div) { div.style.display = 'block'; div.innerHTML = notConfiguredAlert; }
-            if (configDiv) { configDiv.style.display = 'block'; configDiv.innerHTML = notConfiguredAlert; }
+                '(Databricks Apps deployment), then restart the app.</p>'
+            );
             const section = document.getElementById('registryDomainsSection');
             if (section) section.style.display = 'none';
         }
