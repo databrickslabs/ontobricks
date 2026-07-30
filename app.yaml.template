@@ -115,6 +115,22 @@ env:
   # MLflow — ensure traces are persisted to the workspace tracking server.
   - name: MLFLOW_TRACKING_URI
     value: "${APP_MLFLOW_TRACKING_URI}"
+  # ── Knowledge-graph analytics ─────────────────────────────────
+  # Graphs over ONTOBRICKS_ANALYTICS_MAX_TRIPLES cannot be analysed in
+  # memory. They always fall back to engine-side SQL aggregation, which
+  # gives the structural metrics but not PageRank / clustering / the
+  # component count.  Set this to "true" to additionally offload those
+  # three to the serverless job in resources/graph_analytics.job.yml.
+  #
+  # Requires: the bundle deployed (so the job exists), and the graph
+  # readable from Spark as a UC table — true for the Delta engine and
+  # for Lakebase in managed_synced mode, but NOT for Lakebase
+  # app_managed or Neo4j.  When unavailable the run degrades to
+  # engine-side aggregation rather than failing, so turning this on is
+  # safe even if the prerequisites are not met.
+  # See docs/user-guide.md (Analytics → compute modes).
+  - name: ONTOBRICKS_ANALYTICS_JOB_ENABLED
+    value: "false"
   # ── Neo4j (optional) ──────────────────────────────────────────
   # Password sourced from a Databricks Apps secret resource (see
   # `resources:` below). The `neo4j-password` resource is unbound by
