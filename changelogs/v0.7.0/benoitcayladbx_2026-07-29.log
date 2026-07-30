@@ -546,3 +546,35 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3458 passed, 275 skipped, 5 deselected in 22.06s
+
+## Relationship Constraints tab: explain each option with a visible caption
+
+Context: the relationship edit panel's Constraints tab (Ontology Designer)
+relied on hover tooltips to explain the OWL property characteristics
+(Functional, Inverse Functional, Symmetric, Transitive) and the Min/Max
+cardinality fields. Users asked for a visible caption below each option
+instead of a tooltip, so the meaning is clear without hovering.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Relationship Constraints tab: removed `title=` tooltips from the
+   Min/Max cardinality inputs and the four Property Characteristics
+   checkboxes/labels. Restructured the checkboxes from an inline
+   `form-check-inline` row into a stacked list, each with a `form-text
+   small` caption directly beneath it explaining exactly what it does
+   (e.g. Functional: "Each subject can have at most one value for this
+   relationship (forces Max cardinality to 1)"). Added matching captions
+   under the Min/Max inputs, replacing the single shared "Leave Max empty
+   for unlimited" hint.
+2. tests/units/front/test_relationship_constraints_descriptions.py
+   New contract tests: visible captions present for cardinality and all
+   four characteristics, no `title=` attributes remain on the checkboxes/
+   inputs, and consistent `form-text small mt-0` styling.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_relationship_constraints_descriptions.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3462 passed, 275 skipped, 5 deselected in 23.40s

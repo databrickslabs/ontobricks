@@ -2680,58 +2680,47 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="input-group input-group-sm">
-                                <span class="input-group-text" title="Minimum cardinality">Min</span>
+                                <span class="input-group-text">Min</span>
                                 <input type="number" class="form-control" id="sharedRelMinCard" 
                                        value="${minCard}" min="0" placeholder="0" ${disabled}>
                             </div>
+                            <div class="form-text small">Minimum number of values required per subject (0 = optional)</div>
                         </div>
                         <div class="col-6">
                             <div class="input-group input-group-sm">
-                                <span class="input-group-text" title="Maximum cardinality">Max</span>
+                                <span class="input-group-text">Max</span>
                                 <input type="number" class="form-control" id="sharedRelMaxCard" 
                                        value="${maxCard}" min="0" placeholder="*" ${disabled}>
                             </div>
+                            <div class="form-text small">Maximum number of values allowed; leave empty for unlimited (*)</div>
                         </div>
                     </div>
-                    <div class="form-text small">Leave Max empty for unlimited (*)</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label small text-muted mb-1">Property Characteristics</label>
-                    <div class="d-flex flex-wrap gap-2">
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="sharedRelFunctional" 
-                                   ${isFunctional ? 'checked' : ''} ${disabled}>
-                            <label class="form-check-label small" for="sharedRelFunctional" 
-                                   title="Each subject can have at most one value for this property">
-                                Functional
-                            </label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="sharedRelInverseFunctional" 
-                                   ${isInverseFunctional ? 'checked' : ''} ${disabled}>
-                            <label class="form-check-label small" for="sharedRelInverseFunctional"
-                                   title="Each value can be linked to at most one subject">
-                                Inverse Functional
-                            </label>
-                        </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="sharedRelFunctional" 
+                               ${isFunctional ? 'checked' : ''} ${disabled}>
+                        <label class="form-check-label small fw-semibold" for="sharedRelFunctional">Functional</label>
+                        <div class="form-text small mt-0">Each subject can have at most one value for this relationship (forces Max cardinality to 1)</div>
                     </div>
-                    <div class="d-flex flex-wrap gap-2 mt-1">
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="sharedRelSymmetric" 
-                                   ${isSymmetric ? 'checked' : ''} ${disabled}>
-                            <label class="form-check-label small" for="sharedRelSymmetric"
-                                   title="If A relates to B, then B also relates to A">
-                                Symmetric
-                            </label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="sharedRelTransitive" 
-                                   ${isTransitive ? 'checked' : ''} ${disabled}>
-                            <label class="form-check-label small" for="sharedRelTransitive"
-                                   title="If A relates to B and B relates to C, then A relates to C">
-                                Transitive
-                            </label>
-                        </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="sharedRelInverseFunctional" 
+                               ${isInverseFunctional ? 'checked' : ''} ${disabled}>
+                        <label class="form-check-label small fw-semibold" for="sharedRelInverseFunctional">Inverse Functional</label>
+                        <div class="form-text small mt-0">Each target value can be linked back to at most one subject (this relationship is one-to-one on the target side)</div>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="sharedRelSymmetric" 
+                               ${isSymmetric ? 'checked' : ''} ${disabled}>
+                        <label class="form-check-label small fw-semibold" for="sharedRelSymmetric">Symmetric</label>
+                        <div class="form-text small mt-0">If A is related to B, then B is automatically related to A too (the relationship reads the same in both directions)</div>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="sharedRelTransitive" 
+                               ${isTransitive ? 'checked' : ''} ${disabled}>
+                        <label class="form-check-label small fw-semibold" for="sharedRelTransitive">Transitive</label>
+                        <div class="form-text small mt-0">If A is related to B, and B is related to C, then A is automatically related to C (chains propagate through the relationship)</div>
                     </div>
                 </div>
             </div>
