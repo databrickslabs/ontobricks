@@ -1,0 +1,122 @@
+## Lift the graph-analytics triple cap via engine-side SQL aggregation
+
+Context: KG Analytics was capped at `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` (500,000)
+and rejected larger graphs outright, because `GraphBuilder._load_triples`
+materialises every triple into a Python list and `GraphMetrics` builds one
+in-memory `networkx.Graph`. Phase A of the Lakeflow-pushdown plan removes that
+wall without any new infrastructure: oversized graphs are analysed by SQL
+aggregations executed inside the graph store, and entity-type filters are now
+pushed down so a filtered analysis reads only the selected subgraph.
+
+Removing the memory cap also exposed a second ceiling — `MetricsResult` carried
+five floats plus a type and a label for *every* node, stored as one JSONB
+`result` column and shipped whole to the browser. That payload is now bounded.
+
+Branch: `feat/graph-analytics-lakeflow-pushdown` (from `develop`).
+
+Changes:
+
+1. src/back/core/graphdb/GraphDBBackend.py
+   Add the analytics aggregation family as default-SQL methods, so Delta and
+   Lakebase inherit them and only non-SQL engines need an override:
+   `get_graph_structure_stats`, `get_top_nodes_by_degree`, `get_type_edge_stats`,
+   `get_type_predicate_pairs`, plus the shared `_analytics_edge_cte` /
+   `_degree_cte` fragments. The entity-entity edge definition is passed in by
+   the caller (`excluded_predicates`) so storage stays free of analytics policy.
+   Self-loops are excluded — a documented difference from NetworkX, which counts
+   a self-loop as degree 2.
+   Also add `query_triples_for_analysis`, which scopes a filtered load to the
+   selected instances plus their direct neighbours, and its Python equivalent
+   `_filter_analysis_triples_in_python` used by non-SQL engines and as the test
+   oracle. `rdf:type` / `rdfs:label` are always retained: they never become
+   edges but the analysis needs them for node types and display labels.
+2. src/back/core/graph_analysis/PushdownMetrics.py
+   New service assembling the same `MetricsResult` from those aggregations, with
+   `supports_pushdown()` as the engine capability probe. Reports PageRank,
+   clustering, betweenness, closeness and the component count through
+   `unavailable_metrics` instead of returning zeros or approximations labelled
+   like exact values.
+3. src/back/core/graph_analysis/profiles.py
+   Extract the temporal-predicate detection and flat-dataset heuristic out of
+   `GraphMetrics` so both compute paths share one copy and cannot drift on what
+   counts as flat.
+4. src/back/core/graph_analysis/GraphMetrics.py
+   Use the shared profile helpers; drop the now-duplicated private copies.
+5. src/back/core/graph_analysis/GraphBuilder.py
+   `_load_triples` pushes class/predicate filters down to the store when it
+   supports it, so the cap applies to the reduced set. Reword the guard message,
+   which previously told users filters could not help.
+6. src/back/core/graph_analysis/models.py
+   Add `mode` (`in_memory` | `pushdown`) and `unavailable_metrics` to
+   `MetricsResult`; make `MetricsStats.connected_components` optional so an
+   unknown count renders as em-dash rather than a misleading 0. Add `to_dict()`
+   on each model, replacing the hand-rolled serialisation in `DigitalTwin` so
+   both paths emit an identical payload. Document that `nodes` is bounded in
+   pushdown mode and that node counts must come from `stats.node_count`.
+7. src/back/objects/digitaltwin/DigitalTwin.py
+   `compute_graph_metrics` gains `mode` / `top_n` / `allow_pushdown_fallback`:
+   a class-filtered run over the cap is attempted in memory first and degrades
+   to pushdown only if the subgraph still does not fit. `run_metrics_task`
+   records the effective mode on the task result and in the registry row.
+   Drops ~35 lines of duplicated serialisation.
+8. src/api/routers/internal/dtwin.py
+   `/metrics/compute` selects a mode instead of rejecting oversized graphs, and
+   only errors when pushdown is genuinely unavailable (non-SQL engine or the
+   setting disabled). `/dtwin/sync/stats` returns
+   `analytics_pushdown_available` so the page can describe the mode up-front.
+   `/metrics/latest` needed no change — `mode` rides along in `**result`.
+9. src/shared/config/settings.py
+   Add `analytics_pushdown_enabled` (default true) and `analytics_top_n`
+   (default 100); reword `analytics_max_triples` as the mode switch point.
+10. src/front/templates/partials/dtwin/_query_analytics.html
+    The over-limit banner informs instead of blocking when pushdown is
+    available, and Run Analysis stays enabled. Charts for unavailable metrics
+    explain why rather than drawing a flat zero line. Fix the completion
+    notification, which derived the node count from `Object.keys(nodes).length`
+    — wrong now that `nodes` is a bounded slice. Correct the "filters narrow the
+    charts, not the load" copy.
+11. tests/units/core/test_pushdown_metrics.py
+    New: 35 tests. A `SqliteStore` subclass of `GraphDBBackend` executes the
+    generated SQL for real (SQLite needs only `least` / `greatest` registered),
+    so the queries are validated rather than string-matched. `TestPushdownParity`
+    asserts the SQL and NetworkX paths agree on structure stats, degree
+    centrality and every type-profile field; `TestAnalysisTriplePushdown` checks
+    the pushed-down triple selection against its Python oracle.
+12. tests/units/core/test_graph_metrics.py
+    Replace the bare `MagicMock` store with a `_FakeStore` implementing the
+    pushdown contract via the backend's own filter, so filtered tests exercise
+    real selection semantics instead of a mock returning whatever it is asked.
+13. docs/user-guide.md, docs/get-started.md
+    Document the two compute modes, what engine-side aggregation does and does
+    not report, filter pushdown as the route to the full metric set on a large
+    graph, and the two new environment variables.
+
+Modified files:
+
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graph_analysis/PushdownMetrics.py (new)
+- src/back/core/graph_analysis/profiles.py (new)
+- src/back/core/graph_analysis/GraphMetrics.py
+- src/back/core/graph_analysis/GraphBuilder.py
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/shared/config/settings.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- tests/units/core/test_pushdown_metrics.py (new)
+- tests/units/core/test_graph_metrics.py
+- docs/user-guide.md
+- docs/get-started.md
+
+Test result: `uv run pytest -q -m "not scenario"` — 3497 passed, 275 skipped,
+5 deselected. No lint errors. Verified the live Lakebase engine resolves
+`_sql_relation` and `_readable_table_id` to the same `physical_table_id`, so the
+inherited SQL targets the correct union view.
+
+Not done (phase B of the plan): the serverless Lakeflow job that would restore
+PageRank, connected components and clustering coefficient at scale. This
+environment has no `pyspark` and no JRE, so a Spark job cannot be executed or
+tested locally — deferred pending a decision on whether to build it as
+generated SQL (executable against SQLite in tests, like the phase A queries) or
+the PySpark DataFrame API.
