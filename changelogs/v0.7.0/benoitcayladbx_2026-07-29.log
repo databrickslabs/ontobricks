@@ -679,3 +679,64 @@ Modified files:
 
 Tests: uv run pytest -q -m "not scenario" → 3616 passed, 275 skipped,
 5 deselected in 30.35s
+
+================================================================================
+Expose the analytics tunables in app.yaml.template
+================================================================================
+
+Context: closing out the Lakeflow graph-analytics plan. Every plan item was
+already implemented and committed except one gap in the final "settings and
+tests" item: `app.yaml.template` declared only
+`ONTOBRICKS_ANALYTICS_JOB_ENABLED`, so a deployed app had no visible knob for
+the other analytics settings and silently took whatever the code defaulted to.
+
+Changes:
+
+1. app.yaml.template
+   Declared the remaining analytics env vars with literal defaults mirroring
+   settings.py: `ONTOBRICKS_ANALYTICS_MAX_TRIPLES`,
+   `..._PUSHDOWN_ENABLED`, `..._TOP_N`, `..._JOB_NAME`,
+   `..._JOB_PAGERANK_ITERATIONS`, `..._JOB_PIVOTS`. Literals rather than
+   `${APP_*}` placeholders because the deploy script uses
+   `string.Template.substitute`, so every placeholder must exist in the
+   environment or the render fails. `JOB_NAME` is deliberately empty, which
+   means "derive `<app>-graph-analytics`" and matches the bundle — a
+   hard-coded name would break every renamed deploy.
+2. tests/units/settings/test_app_yaml_template.py
+   New contract tests. The template now duplicates the analytics defaults, and
+   duplication rots silently: a default changed in one place and not the other
+   makes a deployed app behave differently from a local one with nothing to
+   signal it. These assert the template renders under the same strict
+   substitution the deploy script uses, has no duplicated env names, and that
+   each analytics value *parses* to the same thing the corresponding `Settings`
+   field defaults to (comparing parsed values, not raw strings, so `"true"` vs
+   `"True"` is not a false failure). Also pins the job toggle to opt-in, since
+   job mode needs a deployed bundle and Spark-readable data.
+
+   Verified the drift test is not vacuous: changing the template's TOP_N to 250
+   fails exactly that parametrised case, and only that one.
+
+Deliberate deviation from the plan, for the record: plan todo 2 mentions "with
+a Neo4j Cypher override" for the SQL aggregations, but the plan body (B5 and
+"What genuinely cannot be saved") specifies that Neo4j is unsupported for
+pushdown and stays on the in-app path with the cap. The implementation follows
+the body — `supports_pushdown` returns False for any non-SQL dialect — so there
+is no Cypher override, and the docs say oversized Neo4j graphs are still
+rejected. The per-type rollups are also split across `get_type_edge_stats` +
+`get_type_predicate_pairs` composed in `PushdownMetrics._build_type_profiles`
+rather than a single `get_type_profiles`, which is the same SQL work under a
+different decomposition.
+
+Also note: betweenness and closeness now ship as pivot-sampled estimates
+(previous entry), which the plan had recommended against. That was an explicit
+later decision by the user; the estimates are labelled as such in the UI and
+are exact when the pivot count reaches the node count, which is how they are
+tested.
+
+Modified files:
+- app.yaml.template
+- tests/units/settings/test_app_yaml_template.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3634 passed, 275 skipped,
+5 deselected in 24.08s

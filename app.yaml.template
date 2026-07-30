@@ -116,11 +116,29 @@ env:
   - name: MLFLOW_TRACKING_URI
     value: "${APP_MLFLOW_TRACKING_URI}"
   # ── Knowledge-graph analytics ─────────────────────────────────
-  # Graphs over ONTOBRICKS_ANALYTICS_MAX_TRIPLES cannot be analysed in
-  # memory. They always fall back to engine-side SQL aggregation, which
-  # gives the structural metrics but not PageRank / clustering / the
-  # component count.  Set this to "true" to additionally offload those
-  # three to the serverless job in resources/graph_analytics.job.yml.
+  # These mirror the defaults in src/shared/config/settings.py. They are
+  # spelled out here so an admin can retune a deployed app without a code
+  # change; edit the value, then re-run `make deploy`.
+  #
+  # Switch point between the in-memory (NetworkX) engine and engine-side
+  # SQL aggregation — not a rejection threshold. The full triple set is
+  # held in memory below it, so raise it only with headroom to spare.
+  - name: ONTOBRICKS_ANALYTICS_MAX_TRIPLES
+    value: "500000"
+  # Whether oversized graphs fall back to engine-side aggregation at all.
+  # "false" restores the old behaviour of refusing them outright.
+  - name: ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED
+    value: "true"
+  # Top-ranked nodes per metric returned by the engine-side and job paths.
+  # This is what keeps the persisted payload bounded on a graph of any
+  # size; the Analytics page "Top N" selector is capped well below it.
+  - name: ONTOBRICKS_ANALYTICS_TOP_N
+    value: "100"
+  #
+  # Engine-side aggregation gives the structural metrics but not PageRank,
+  # clustering, the component count, betweenness or closeness. Set this to
+  # "true" to additionally offload those to the serverless job in
+  # resources/graph_analytics.job.yml.
   #
   # Requires: the bundle deployed (so the job exists), and the graph
   # readable from Spark as a UC table — true for the Delta engine and
@@ -131,6 +149,23 @@ env:
   # See docs/user-guide.md (Analytics → compute modes).
   - name: ONTOBRICKS_ANALYTICS_JOB_ENABLED
     value: "false"
+  # Deployed name of that job. Leave empty to derive it from the app name
+  # as "<app>-graph-analytics", matching the bundle. Only set this if you
+  # renamed the job; a bundle deployed in development mode prefixes the
+  # name with "[dev <user>] ", which the lookup already allows for.
+  - name: ONTOBRICKS_ANALYTICS_JOB_NAME
+    value: ""
+  # PageRank power iterations. 20 fixes the top-N ordering; raise it only
+  # if you need converged absolute scores rather than a ranking.
+  - name: ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS
+    value: "20"
+  # Source nodes sampled for the betweenness/closeness estimates. This is
+  # the job's dominant cost — the intermediate search holds one row per
+  # (pivot, reachable node), so raising it scales the largest shuffle
+  # linearly. "0" skips both metrics and makes the job cheaper; a value at
+  # or above the node count makes them exact instead of estimated.
+  - name: ONTOBRICKS_ANALYTICS_JOB_PIVOTS
+    value: "64"
   # ── Neo4j (optional) ──────────────────────────────────────────
   # Password sourced from a Databricks Apps secret resource (see
   # `resources:` below). The `neo4j-password` resource is unbound by
