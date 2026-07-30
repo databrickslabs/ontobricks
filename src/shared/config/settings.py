@@ -124,6 +124,62 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Whether an oversized graph may offload PageRank / connected components /
+    # clustering to the serverless Lakeflow job
+    # (``resources/graph_analytics.job.yml``). Opt-in, because it only works
+    # once the bundle carrying that job has been deployed and the graph data is
+    # reachable from Spark as a Unity Catalog table. With this off, those
+    # metrics stay unavailable above the cap rather than being computed.
+    analytics_job_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_ANALYTICS_JOB_ENABLED",
+            "analytics_job_enabled",
+        ),
+    )
+
+    # Deployed name of that job. Empty means "derive it from the app name" as
+    # ``<app>-graph-analytics``, matching the bundle. A bundle deployed in
+    # development mode prefixes the name with ``[dev <user>] ``, which the
+    # runner's lookup allows for.
+    analytics_job_name: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_ANALYTICS_JOB_NAME",
+            "analytics_job_name",
+        ),
+    )
+
+    # Unity Catalog schema (``catalog.schema``) that holds the job's per-node
+    # output tables. Empty means "use the registry catalog/schema".
+    analytics_job_output_schema: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_ANALYTICS_JOB_OUTPUT_SCHEMA",
+            "analytics_job_output_schema",
+        ),
+    )
+
+    # How long to follow a job run before giving up on it. The run itself is
+    # not cancelled on timeout — the task simply stops waiting and says so.
+    analytics_job_timeout_s: int = Field(
+        default=3600,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_ANALYTICS_JOB_TIMEOUT_S",
+            "analytics_job_timeout_s",
+        ),
+    )
+
+    # PageRank power iterations the job runs. 20 fixes the top-N ordering;
+    # raise it if you need converged absolute scores rather than a ranking.
+    analytics_job_pagerank_iterations: int = Field(
+        default=20,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS",
+            "analytics_job_pagerank_iterations",
+        ),
+    )
+
     model_config = ConfigDict(
         env_prefix="",
         case_sensitive=False,

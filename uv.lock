@@ -3560,6 +3560,7 @@ dev = [
     { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi-proxy.dev.databricks.com/simple" }, marker = "python_full_version < '3.11'" },
     { name = "sphinx", version = "9.0.4", source = { registry = "https://pypi-proxy.dev.databricks.com/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "sphinx", version = "9.1.0", source = { registry = "https://pypi-proxy.dev.databricks.com/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "sqlglot" },
     { name = "syrupy" },
     { name = "testcontainers" },
 ]
@@ -3620,6 +3621,7 @@ dev = [
     { name = "responses", specifier = ">=0.24.0" },
     { name = "ruff", specifier = ">=0.7.4" },
     { name = "sphinx", specifier = ">=7.0.0" },
+    { name = "sqlglot", specifier = ">=25.0.0" },
     { name = "syrupy", specifier = ">=4.6.0" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.0.0" },
 ]
@@ -5836,6 +5838,15 @@ wheels = [
     { url = "https://pypi-proxy.dev.databricks.com/packages/c8/95/32107c4d13be077a9cae61e9ae49966a35dc4bf442a8852dd871db31f62e/sqlalchemy-2.0.48-cp314-cp314t-win32.whl", hash = "sha256:b8438ec5594980d405251451c5b7ea9aa58dda38eb7ac35fb7e4c696712ee24f", upload-time = "2026-03-02T15:52:54.274Z" },
     { url = "https://pypi-proxy.dev.databricks.com/packages/d2/d7/1e073da7a4bc645eb83c76067284a0374e643bc4be57f14cc6414656f92c/sqlalchemy-2.0.48-cp314-cp314t-win_amd64.whl", hash = "sha256:d854b3970067297f3a7fbd7a4683587134aa9b3877ee15aa29eea478dc68f933", upload-time = "2026-03-02T15:52:55.606Z" },
     { url = "https://pypi-proxy.dev.databricks.com/packages/46/2c/9664130905f03db57961b8980b05cab624afd114bf2be2576628a9f22da4/sqlalchemy-2.0.48-py3-none-any.whl", hash = "sha256:a66fe406437dd65cacd96a72689a3aaaecaebbcd62d81c5ac1c0fdbeac835096", upload-time = "2026-03-02T15:52:43.285Z" },
+]
+
+[[package]]
+name = "sqlglot"
+version = "30.13.0"
+source = { registry = "https://pypi-proxy.dev.databricks.com/simple" }
+sdist = { url = "https://pypi-proxy.dev.databricks.com/packages/bf/62/6d5bd3169478b7f09e08ab3e50175d486a9e7f3a419b88fc9280ba564ab1/sqlglot-30.13.0.tar.gz", hash = "sha256:f0a6eb79de2fd6efe2689f8cf197caa4f08bfe77c7880315616fa4420b8ba2bf", upload-time = "2026-07-20T20:16:54.873Z" }
+wheels = [
+    { url = "https://pypi-proxy.dev.databricks.com/packages/f2/2f/2076eca54f6a8ed1c86301bdb4bb2ae4181b0c1c4dbc041062ca997dc1b2/sqlglot-30.13.0-py3-none-any.whl", hash = "sha256:08f87ff7b052246d61b731628c8c2db0bc91f2c9e69f5ba68a1d160a9f5b49b1", upload-time = "2026-07-20T20:16:53.248Z" },
 ]
 
 [[package]]

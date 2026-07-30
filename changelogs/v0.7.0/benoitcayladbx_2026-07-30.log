@@ -120,3 +120,128 @@ environment has no `pyspark` and no JRE, so a Spark job cannot be executed or
 tested locally — deferred pending a decision on whether to build it as
 generated SQL (executable against SQLite in tests, like the phase A queries) or
 the PySpark DataFrame API.
+
+================================================================================
+
+## Graph analytics phase B — iterative metrics on a serverless Lakeflow job
+
+Context
+-------
+Phase A (above) lifted the 500k triple cap by pushing the aggregatable metrics
+into the graph store as SQL, but PageRank, connected components and the
+clustering coefficient stayed unavailable above the cap because each needs
+repeated passes over the graph. Phase B computes those three on a serverless
+Databricks job and reads the result back, leaving only betweenness and
+closeness (all-pairs shortest paths) unavailable in engine-side modes.
+
+Implementation style: **generated SQL**, chosen over the PySpark DataFrame API
+so the algorithms are verifiable without a cluster. Every statement the job
+executes is emitted as a string and driven through injected `execute` / `scalar`
+callables; the tests run the exact same statements against SQLite and compare
+against a NetworkX oracle. A DataFrame implementation could only have been
+tested on a live workspace.
+
+Changes
+-------
+1. `src/jobs/graph_analytics_job.py` (new) — the job. Module-level SQL builders
+   with no pyspark import (so tests can use them), plus a `main()` that imports
+   pyspark lazily. Emits `DROP TABLE IF EXISTS` + `CREATE TABLE AS` pairs rather
+   than `CREATE OR REPLACE TABLE`: portable, and the write truncates the Spark
+   lineage between iterations. PageRank is power iteration with exact rank-mass
+   conservation (no dangling nodes, so no re-normalisation); components are
+   min-label propagation that stops when no label changes and reports
+   non-convergence rather than publishing a wrong count; triangles are counted
+   via a degree-oriented acyclic edge list, which enumerates each triangle
+   exactly once and bounds work at high-degree hubs. Both iterative algorithms
+   alternate between `_a` / `_b` tables so no step reads and writes the same
+   relation. `validate_identifier` rejects non-identifier table names, which are
+   interpolated unquoted.
+2. `resources/graph_analytics.job.yml` (new) — serverless `spark_python_task`
+   with an `environments` block, `max_concurrent_runs: 1`, failure email, and
+   per-run `job_parameters`. No Maven libraries: GraphFrames would be the
+   obvious choice but cannot be installed on serverless compute, which is why
+   the algorithms are hand-rolled.
+3. `databricks.yml` — added the `include: resources/*.yml` block the bundle
+   previously lacked, so the job resource is deployed. `sync.exclude` already
+   permits `src/jobs/`.
+4. `src/back/core/graph_analysis/LakeflowRunner.py` (new) — resolves the job by
+   name (exact, then `[dev <user>] ` prefixed, since DAB renames in development
+   mode), triggers `run_now`, and polls `get_run` mapping life-cycle state onto
+   task-tracker progress. Injectable client factory and sleep.
+5. `src/back/core/graph_analysis/JobMetrics.py` (new) — the third compute mode.
+   `resolve_spark_source` decides whether a graph is reachable from Spark at
+   all (Delta: yes; Lakebase `managed_synced`: the UC table upstream of the
+   sync; Lakebase `app_managed` and Neo4j: refused with an actionable reason).
+   `compute` reuses `PushdownMetrics` verbatim for the aggregates so the two
+   modes cannot drift, runs the job, then overlays per-node PageRank/clustering,
+   the component count and per-type `avg_clustering`. Read-back keeps the
+   bounded-payload contract: only the union of top-N per metric.
+6. `src/back/objects/digitaltwin/DigitalTwin.py` — `compute_graph_metrics`
+   gained the `job` mode plus `settings` / `on_progress`; a job failure degrades
+   to pushdown rather than losing the user the aggregates. Added
+   `build_job_metrics` and `analytics_output_table` (one output table per domain
+   version, sanitised to `[A-Za-z0-9_]`).
+7. `src/api/routers/internal/dtwin.py` — `/metrics/compute` prefers `job` over
+   `pushdown` when enabled and the source resolves; `/dtwin/sync/stats` returns
+   `analytics_job_available`.
+8. `src/front/templates/partials/dtwin/_query_analytics.html` — **fixed a phase
+   A bug**: `analyticsCompute` refused every oversized run unconditionally even
+   though the button was enabled and the server would have accepted it, so the
+   phase A pushdown path was unreachable from the UI. The backstop now only
+   blocks when no engine-side path exists. Added the job-mode banner, the
+   *(computed on Databricks)* provenance label, and a mode-aware explanation on
+   the unavailable-metric charts.
+9. `src/shared/config/settings.py` — five `analytics_job_*` settings; the
+   feature is opt-in (`analytics_job_enabled` defaults to `false`) because it
+   needs a deployed bundle and Spark-readable data.
+10. `pyproject.toml` — added `sqlglot` as a dev dependency so the cross-dialect
+    parse checks actually run instead of skipping.
+
+Modified files
+--------------
+- src/jobs/graph_analytics_job.py (new)
+- resources/graph_analytics.job.yml (new)
+- databricks.yml
+- src/back/core/graph_analysis/LakeflowRunner.py (new)
+- src/back/core/graph_analysis/JobMetrics.py (new)
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/shared/config/settings.py
+- pyproject.toml
+- tests/units/core/test_graph_analytics_job_sql.py (new)
+- tests/units/core/test_job_metrics.py (new)
+- tests/units/core/test_lakeflow_runner.py (new)
+- docs/user-guide.md
+- docs/get-started.md
+
+Test result
+-----------
+`uv run pytest -q -m "not scenario"` — **3591 passed**, 275 skipped, 5
+deselected (up 94 from phase A's 3497). No lint errors.
+
+The 94 new tests are mostly parity rather than assertion: degree, connected
+components and the clustering coefficient match NetworkX **exactly** on four
+structurally different graphs (star, two-component, K5, karate club), and
+PageRank matches to 1e-6. All generated SQL — the job's and the read-back's —
+is parse-checked against Databricks, Spark and Postgres dialects.
+
+Two findings worth recording from writing those tests:
+
+- `nx.karate_club_graph()` ships edge weights and `nx.pagerank` uses them by
+  default, so the oracle needs `weight=None`; a triple graph is unweighted.
+- Power iteration converges at roughly `damping^k`, and near-bipartite graphs
+  (a star, a path) sit at the slow end. The job's default 20 iterations fixes
+  the top-N *ordering* — which is all the UI charts — but not absolute scores;
+  this is asserted separately and documented at the constant.
+
+Not verified
+------------
+`databricks bundle validate` could not run: the workspace OAuth refresh token
+is expired (`invalid_request: Refresh token is invalid`). The bundle YAML was
+checked structurally offline (parses; correct `environments` / `environment_key`
+/ `job_parameters` shape) but not against the workspace. Re-run
+`databricks auth login` then `databricks bundle validate -t dev-lakebase`
+before deploying. Nothing in the job itself has been executed on Spark yet.

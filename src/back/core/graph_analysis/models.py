@@ -140,6 +140,9 @@ class EntityTypeProfile:
 
 MODE_IN_MEMORY = "in_memory"
 MODE_PUSHDOWN = "pushdown"
+#: Iterative metrics computed by the serverless Lakeflow job, aggregates still
+#: by engine-side SQL. A superset of ``pushdown``.
+MODE_JOB = "job"
 
 
 @dataclass

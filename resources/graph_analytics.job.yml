@@ -1,0 +1,70 @@
+# Serverless job computing the iterative KG graph metrics.
+#
+# The app runs everything it can as SQL inside the graph store
+# (``back.core.graph_analysis.PushdownMetrics``). PageRank, connected
+# components and the clustering coefficient need repeated passes over the
+# graph, so they run here instead and land per-node scores in a Delta table
+# the app reads back with a top-N query.
+#
+# Triggered on demand by ``LakeflowRunner`` via ``jobs.run_now`` — there is no
+# schedule. DAB in ``mode: development`` prefixes the deployed job name with
+# ``[dev <user>] ``, which is why the runner resolves the job by listing and
+# suffix-matching rather than assuming the literal name.
+#
+# Serverless notes:
+# - ``environment_key`` is required for a serverless ``spark_python_task``; the
+#   matching entry lives in ``environments`` below.
+# - No Maven libraries are declared on purpose. GraphFrames would be the
+#   obvious choice for these algorithms but cannot be installed on serverless
+#   compute, which is exactly why the job hand-rolls them in SQL.
+# - The script is synced as a workspace file by the bundle, so it needs no
+#   packaging step. ``sync.exclude`` in databricks.yml must keep ``src/jobs/``.
+
+resources:
+  jobs:
+    graph_analytics_job:
+      name: "${var.app_name}-graph-analytics"
+      description: "OntoBricks: iterative knowledge-graph metrics (PageRank, components, clustering)"
+
+      # Surfaces a failed run without anyone watching the task tracker.
+      email_notifications:
+        on_failure:
+          - "${workspace.current_user.userName}"
+
+      # One run at a time per deployment; the app polls a single run to
+      # completion and a second concurrent run would fight over the same
+      # output tables.
+      max_concurrent_runs: 1
+
+      environments:
+        - environment_key: default
+          spec:
+            client: "3"
+
+      tasks:
+        - task_key: compute_metrics
+          environment_key: default
+          spark_python_task:
+            python_file: "${workspace.file_path}/src/jobs/graph_analytics_job.py"
+            # ``--source-table`` / ``--output-table`` are supplied per run by
+            # LakeflowRunner through ``job_parameters``; the defaults below
+            # exist so ``databricks bundle run`` is usable for a smoke test.
+            parameters:
+              - "--source-table"
+              - "{{job.parameters.source_table}}"
+              - "--output-table"
+              - "{{job.parameters.output_table}}"
+              - "--exclude-predicates"
+              - "{{job.parameters.exclude_predicates}}"
+              - "--pagerank-iterations"
+              - "{{job.parameters.pagerank_iterations}}"
+
+      parameters:
+        - name: source_table
+          default: ""
+        - name: output_table
+          default: ""
+        - name: exclude_predicates
+          default: ""
+        - name: pagerank_iterations
+          default: "20"

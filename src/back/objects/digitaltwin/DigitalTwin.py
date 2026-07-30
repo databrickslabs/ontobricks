@@ -2708,9 +2708,10 @@ class DigitalTwin:
             tm.update_progress(
                 task_id,
                 20,
-                "Aggregating graph structure in the engine"
-                if mode == "pushdown"
-                else "Running centrality analysis",
+                {
+                    "pushdown": "Aggregating graph structure in the engine",
+                    "job": "Starting the Databricks graph analytics job",
+                }.get(mode, "Running centrality analysis"),
             )
 
             dt = DigitalTwin(domain)
@@ -2724,6 +2725,10 @@ class DigitalTwin:
                 mode=mode,
                 top_n=top_n,
                 allow_pushdown_fallback=allow_pushdown_fallback,
+                settings=settings,
+                # A job run takes minutes, so forward its state to the tracker
+                # the front-end is already polling.
+                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
             )
 
             tm.update_progress(task_id, 85, "Storing analytics result")
@@ -2772,7 +2777,10 @@ class DigitalTwin:
                 )
 
             node_count = stats.get("node_count", 0)
-            suffix = " (engine-side aggregation)" if effective_mode == "pushdown" else ""
+            suffix = {
+                "pushdown": " (engine-side aggregation)",
+                "job": " (computed on Databricks)",
+            }.get(effective_mode, "")
             tm.complete_task(
                 task_id,
                 result={
@@ -3377,22 +3385,35 @@ class DigitalTwin:
         mode: str = "in_memory",
         top_n: int = 100,
         allow_pushdown_fallback: bool = False,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Compute centrality and structural metrics on the knowledge graph.
 
-        *mode* selects the engine: ``in_memory`` runs the full NetworkX
-        analysis (all five per-node metrics, capped by *max_triples*), while
-        ``pushdown`` runs engine-side SQL aggregations with no size limit but
-        a reduced metric set.
+        *mode* selects the engine:
+
+        * ``in_memory`` — the full NetworkX analysis (all five per-node
+          metrics), capped by *max_triples*;
+        * ``pushdown`` — engine-side SQL aggregations, no size limit but no
+          iterative metrics;
+        * ``job`` — pushdown aggregates plus PageRank, connected components and
+          clustering from the serverless Lakeflow job. Needs *settings*, and
+          degrades to ``pushdown`` if the job is unavailable rather than
+          failing the run.
 
         With *allow_pushdown_fallback*, an ``in_memory`` run that trips the
         *max_triples* guard degrades to ``pushdown`` instead of failing — a
         class-filtered analysis is worth attempting exactly first, because the
         filter is pushed down and the selected subgraph often fits.
 
+        *on_progress* receives ``(percent, message)`` during a ``job`` run,
+        which is the only mode slow enough to be worth reporting on.
+
         Returns a JSON-serializable dict matching the API contract.
         """
+        domain = self._domain
         from back.core.graph_analysis import (
+            MODE_JOB,
             MODE_PUSHDOWN,
             GraphMetrics,
             MetricsRequest,
@@ -3406,6 +3427,26 @@ class DigitalTwin:
             max_triples=max_triples,
             max_nodes_betweenness=max_nodes_betweenness,
         )
+
+        if mode == MODE_JOB:
+            job_metrics = DigitalTwin.build_job_metrics(
+                store, graph_name, domain, settings, top_n=top_n
+            )
+            try:
+                return job_metrics.compute(request, on_progress=on_progress).to_dict()
+            except OntoBricksError as exc:
+                # A misconfigured or undeployed job must not lose the user the
+                # aggregates the pushdown path can still give them.
+                logger.warning(
+                    "compute_graph_metrics: job mode failed (%s) — "
+                    "falling back to SQL pushdown",
+                    exc,
+                )
+                return (
+                    PushdownMetrics(store, graph_name, top_n=top_n)
+                    .compute(request)
+                    .to_dict()
+                )
 
         if mode == MODE_PUSHDOWN:
             return PushdownMetrics(store, graph_name, top_n=top_n).compute(request).to_dict()
@@ -3421,6 +3462,77 @@ class DigitalTwin:
                 exc,
             )
             return PushdownMetrics(store, graph_name, top_n=top_n).compute(request).to_dict()
+
+    @staticmethod
+    def build_job_metrics(
+        store: Any,
+        graph_name: str,
+        domain: Any,
+        settings: Any,
+        *,
+        top_n: int = 100,
+    ) -> Any:
+        """Wire a :class:`JobMetrics` from domain credentials and settings.
+
+        The per-node output lands in one Delta table per domain version, so a
+        re-run replaces its own results rather than accumulating tables.
+        """
+        from back.core.graph_analysis import JobMetrics, LakeflowRunner
+        from back.core.databricks import DatabricksClient
+        from back.core.helpers import (
+            get_databricks_host_and_token,
+            resolve_delta_warehouse_id,
+        )
+        from back.objects.registry import RegistryCfg
+
+        host, token = get_databricks_host_and_token(domain, settings)
+        warehouse_id = resolve_delta_warehouse_id(domain, settings)
+        client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+
+        job_name = (getattr(settings, "analytics_job_name", "") or "").strip()
+        if not job_name:
+            app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
+            job_name = f"{app_name}-graph-analytics" if app_name else ""
+
+        runner = LakeflowRunner(
+            job_name,
+            timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
+        )
+
+        output_schema = (
+            getattr(settings, "analytics_job_output_schema", "") or ""
+        ).strip()
+        if not output_schema:
+            rcfg = RegistryCfg.from_domain(domain, settings)
+            output_schema = f"{rcfg.catalog}.{rcfg.schema}"
+
+        return JobMetrics(
+            store,
+            graph_name,
+            runner=runner,
+            query=client.execute_query,
+            output_table=DigitalTwin.analytics_output_table(
+                output_schema, domain, graph_name
+            ),
+            top_n=top_n,
+            pagerank_iterations=int(
+                getattr(settings, "analytics_job_pagerank_iterations", 20) or 20
+            ),
+        )
+
+    @staticmethod
+    def analytics_output_table(output_schema: str, domain: Any, graph_name: str) -> str:
+        """Build the per-version output table name for the analytics job.
+
+        Only ``[A-Za-z0-9_]`` survives, because the name is interpolated into
+        generated SQL unquoted on both the job and the read-back side.
+        """
+        import re
+
+        folder = str(getattr(domain, "uc_domain_folder", "") or "") or graph_name
+        version = str(getattr(domain, "current_version", "") or "")
+        slug = re.sub(r"[^A-Za-z0-9_]+", "_", f"{folder}_{version}").strip("_").lower()
+        return f"{output_schema}.graph_metrics_{slug or 'default'}"
 
     def interpret_graph_metrics(
         self,

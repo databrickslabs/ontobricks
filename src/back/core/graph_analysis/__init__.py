@@ -4,9 +4,12 @@ from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.GraphMetrics import GraphMetrics
+from back.core.graph_analysis.JobMetrics import JobMetrics, resolve_spark_source
+from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
 from back.core.graph_analysis.PushdownMetrics import PushdownMetrics, supports_pushdown
 from back.core.graph_analysis.models import (
     MODE_IN_MEMORY,
+    MODE_JOB,
     MODE_PUSHDOWN,
     ClusterRequest,
     ClusterResult,
@@ -101,7 +104,10 @@ __all__ = [
     "CommunityDetector",
     "GraphBuilder",
     "GraphMetrics",
+    "JobMetrics",
+    "LakeflowRunner",
     "PushdownMetrics",
+    "resolve_spark_source",
     "supports_pushdown",
     "EntityTypeProfile",
     "MetricsRequest",
@@ -109,6 +115,7 @@ __all__ = [
     "MetricsStats",
     "MetricsResult",
     "MODE_IN_MEMORY",
+    "MODE_JOB",
     "MODE_PUSHDOWN",
     "ClusterRequest",
     "ClusterResult",

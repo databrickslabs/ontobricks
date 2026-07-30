@@ -43,6 +43,12 @@
 bundle:
   name: ontobricks_dev_bundle
 
+# Resource definitions kept out of this file. Currently the serverless graph
+# analytics job (``resources/graph_analytics.job.yml``); the two apps are still
+# declared inline below.
+include:
+  - resources/*.yml
+
 workspace:
   # Sandbox path — distinct from any other ``ontobricks*`` bundle so
   # we cannot share/clobber sync state with the production apps.

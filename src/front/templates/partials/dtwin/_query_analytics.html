@@ -383,6 +383,7 @@
     var _totalTriples = null;   // known triple count (from /dtwin/sync/stats)
     var _maxTriples   = null;   // in-memory analytics limit (from /dtwin/sync/stats)
     var _pushdownAvailable = false;  // engine can aggregate server-side instead
+    var _jobAvailable = false;       // ...and can offload the iterative metrics to Databricks
 
     // ------------------------------------------------------------------
     // Metric explanations — shown in popup when user clicks ? on a card
@@ -522,7 +523,16 @@
         var head = 'This Knowledge Graph has <strong>' + (_totalTriples || 0).toLocaleString() + '</strong> triples, '
             + 'which exceeds the in-memory analytics limit of <strong>' + (_maxTriples || 0).toLocaleString() + '</strong>. ';
         var cls, icon, body;
-        if (_pushdownAvailable) {
+        if (_jobAvailable) {
+            cls  = 'alert-info';
+            icon = 'bi-info-circle-fill';
+            body = head
+                + 'The analysis will run <strong>on Databricks</strong> instead, which has no size limit. '
+                + 'Node/edge counts, average degree, density and degree centrality are aggregated in the '
+                + 'engine; PageRank, the clustering coefficient and the component count are computed by a '
+                + 'serverless job, so expect this to take a few minutes. Only betweenness and closeness stay '
+                + 'unavailable — pick an <strong>Entity Type</strong> above to get those from a subgraph.';
+        } else if (_pushdownAvailable) {
             cls  = 'alert-warning';
             icon = 'bi-exclamation-triangle-fill';
             body = head
@@ -636,6 +646,7 @@
             _totalTriples = (data.total_triples != null) ? data.total_triples : null;
             _maxTriples   = data.analytics_max_triples || _maxTriples;
             _pushdownAvailable = !!data.analytics_pushdown_available;
+            _jobAvailable      = !!data.analytics_job_available;
             if (_isOverTripleLimit()) {
                 _showOverLimitBanner(true);
                 _showLimitInfo(false);
@@ -746,7 +757,9 @@
         if (_ca && _caTxt) {
             var when = _formatComputedAt(meta.computed_at);
             if (when) {
-                var how = data.mode === 'pushdown' ? ' (engine-side aggregation)' : '';
+                var how = data.mode === 'pushdown' ? ' (engine-side aggregation)'
+                        : data.mode === 'job'      ? ' (computed on Databricks)'
+                        : '';
                 _caTxt.textContent = 'Last computed ' + when + how;
                 _ca.classList.remove('d-none');
             } else {
@@ -926,8 +939,11 @@
     };
 
     window.analyticsCompute = async function () {
-        // Backstop: never start a doomed run when the graph is over the limit.
-        if (_isOverTripleLimit()) {
+        // Backstop for the case the server would refuse too: over the limit
+        // *and* no engine-side path. An oversized graph on its own is fine —
+        // it runs as engine-side aggregation, or on Databricks when the job is
+        // available.
+        if (_isOverTripleLimit() && !_pushdownAvailable) {
             _showOverLimitBanner(true);
             _showAnalyticsError('This graph has ' + _totalTriples.toLocaleString()
                 + ' triples, which exceeds the analytics limit of '
@@ -1039,10 +1055,14 @@
             if (allZero) {
                 var reason;
                 if (unavailable.indexOf(m.key) !== -1) {
+                    var name = m.key.charAt(0).toUpperCase() + m.key.slice(1);
                     reason = '<strong>Not computed for this graph.</strong> '
-                        + m.key.charAt(0).toUpperCase() + m.key.slice(1)
-                        + ' needs an iterative pass over the whole graph, which the engine-side '
-                        + 'aggregation used for graphs over the in-memory limit does not do. '
+                        + (_analyticsData.mode === 'job'
+                            ? name + ' needs all-pairs shortest paths, which is not computed even '
+                              + 'by the Databricks job this run used. '
+                            : name + ' needs an iterative pass over the whole graph, which the '
+                              + 'engine-side aggregation used for graphs over the in-memory limit '
+                              + 'does not do. ')
                         + 'Pick an <strong>Entity Type</strong> above to analyse a subgraph in memory '
                         + 'and get this metric.';
                 } else if (m.key === 'clustering') {

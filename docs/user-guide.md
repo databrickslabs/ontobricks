@@ -557,11 +557,21 @@ Click **Analytics** in the sidebar to compute and visualise centrality and struc
 
 Because this computation can take a while on large graphs, it runs **asynchronously** in the background. The **last** result is persisted in the registry (the `graph_analytics` table), so re-opening the Analytics page (or the Domain Validation cockpit) shows the previously computed result immediately without recomputing — a "Last computed …" line marks when it was produced.
 
-> **Graph-size limit and the two compute modes.** The full analysis loads the triple set into memory (NetworkX), so it is capped at `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` triples (default **500,000**). Graphs above that limit are **not** rejected: the analysis instead runs as **engine-side aggregation** — SQL executed by the graph store itself, with no size limit. That mode reports node and edge counts, average degree, density, degree centrality and the entity-type profiles, but not PageRank, clustering coefficient, betweenness, closeness or the component count, because those need an iterative pass over the whole graph. The charts for those metrics say so explicitly rather than drawing a flat zero line, and the "Last computed" line is annotated with *(engine-side aggregation)*.
+> **Graph-size limit and the three compute modes.** The full analysis loads the triple set into memory (NetworkX), so it is capped at `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` triples (default **500,000**). Graphs above that limit are **not** rejected — one of two engine-side modes takes over instead, and the "Last computed" line says which one ran.
+>
+> | Mode | When it runs | Metrics you get |
+> |---|---|---|
+> | **In-memory** (NetworkX) | Under the limit, or a filtered subgraph that fits | All five per-node metrics plus the component count |
+> | **Engine-side aggregation** | Over the limit | Node/edge counts, average degree, density, degree centrality, entity-type profiles |
+> | **On Databricks** | Over the limit, with `ONTOBRICKS_ANALYTICS_JOB_ENABLED=true` | The above **plus** PageRank, clustering coefficient and the component count |
+>
+> Engine-side aggregation cannot produce PageRank, clustering, betweenness, closeness or the component count, because those need repeated passes over the whole graph. The job mode computes three of those five on a **serverless Databricks job**, leaving only betweenness and closeness — both need all-pairs shortest paths. Charts for whatever a run could not compute say so explicitly rather than drawing a flat zero line.
 >
 > To get **all** metrics on a large graph, select an **entity type**. The filter is pushed down to the graph store, so only the selected subgraph is read — that usually brings the load back under the limit, and OntoBricks tries the in-memory engine first in that case, falling back to engine-side aggregation only if the subgraph is still too big.
 >
-> Set `ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED=false` to restore the old behaviour of refusing oversized graphs outright. Engine-side aggregation requires a SQL graph backend (Delta or Lakebase); on Neo4j, oversized graphs are still rejected.
+> **Prerequisites.** Engine-side aggregation requires a SQL graph backend (Delta or Lakebase); on Neo4j, oversized graphs are still rejected. The job mode additionally requires the graph to be readable from Spark as a Unity Catalog table — true for Delta, and for Lakebase only in `managed_synced` mode (where the job reads the UC table upstream of the sync, not Postgres). It also requires the bundle carrying the job to have been deployed (`make deploy`). When the job is unavailable for any of these reasons, the run silently degrades to engine-side aggregation rather than failing.
+>
+> Set `ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED=false` to restore the old behaviour of refusing oversized graphs outright.
 
 #### Running an Analysis
 

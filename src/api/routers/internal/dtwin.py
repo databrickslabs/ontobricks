@@ -25,7 +25,9 @@ from back.core.databricks import DatabricksClient, is_databricks_app
 from back.core.graphdb import get_graphdb
 from back.core.graph_analysis import (
     MODE_IN_MEMORY,
+    MODE_JOB,
     MODE_PUSHDOWN,
+    resolve_spark_source,
     supports_pushdown,
 )
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
@@ -535,6 +537,13 @@ async def compute_graph_metrics(
         pushdown_available = (
             settings.analytics_pushdown_enabled and supports_pushdown(store)
         )
+        # The job mode is a strict superset of pushdown, so prefer it whenever
+        # it is enabled and the graph is actually reachable from Spark.
+        job_available = bool(
+            settings.analytics_job_enabled
+            and pushdown_available
+            and resolve_spark_source(store, graph_name)[0]
+        )
         mode = MODE_IN_MEMORY
         allow_pushdown_fallback = False
 
@@ -552,7 +561,7 @@ async def compute_graph_metrics(
             if class_filter:
                 allow_pushdown_fallback = True
             else:
-                mode = MODE_PUSHDOWN
+                mode = MODE_JOB if job_available else MODE_PUSHDOWN
 
         tm = get_task_manager()
         task = tm.create_task(
@@ -588,11 +597,10 @@ async def compute_graph_metrics(
             "success": True,
             "task_id": task.id,
             "mode": mode,
-            "message": (
-                "Analysis started (engine-side aggregation)"
-                if mode == MODE_PUSHDOWN
-                else "Analysis started"
-            ),
+            "message": {
+                MODE_PUSHDOWN: "Analysis started (engine-side aggregation)",
+                MODE_JOB: "Analysis started (running on Databricks)",
+            }.get(mode, "Analysis started"),
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -1487,6 +1495,14 @@ async def triplestore_stats(
             "analytics_max_triples": settings.analytics_max_triples,
             "analytics_pushdown_available": (
                 settings.analytics_pushdown_enabled and supports_pushdown(store)
+            ),
+            # Whether an oversized run can additionally offload PageRank /
+            # components / clustering to the Databricks job, so the banner can
+            # promise the full metric set instead of the reduced one.
+            "analytics_job_available": bool(
+                settings.analytics_job_enabled
+                and supports_pushdown(store)
+                and resolve_spark_source(store, graph_name)[0]
             ),
         }
         DigitalTwin(domain).set_ts_cache("stats", result)

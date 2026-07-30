@@ -108,6 +108,11 @@ dev = [
     "psycopg-pool>=3.2.0",
     "pytest-html>=4.1.0",
     "pytest-dependency>=0.6.0",
+    # Parses generated SQL against both target dialects. The analytics
+    # aggregations and the Lakeflow job's algorithms are written once and run on
+    # Postgres (Lakebase) and Spark (Delta / serverless), so a dialect
+    # regression would otherwise only surface against a live workspace.
+    "sqlglot>=25.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]
