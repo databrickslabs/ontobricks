@@ -440,3 +440,109 @@ Modified files:
 
 Tests: uv run pytest -q -m "not scenario" → 3458 passed, 275 skipped, 5 deselected in 24.08s
 
+## Terminology consistency: "Class" → "Entity" in user-facing UI text
+
+Context: user-facing labels/tooltips/help text/notifications inconsistently
+mixed "Class(es)" and "Entity/Entities" for the same ontology concept (e.g.
+the Constraints tab's "Classes that have exactly the same instances" help
+text). Standardized on "Entity/Entities" everywhere the app already uses that
+term elsewhere, while leaving genuine OWL/RDF/SHACL technical identifiers
+untouched (`owl:Class`, `sh:class`, `equivalentClass`/`disjointWith` axiom
+values, RDF/Turtle sample code, and the Help glossary's explicit "Entity /
+Class" OWL-synonym explanation).
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Entity Constraints tab: "Disjoint With"/"Equivalent To" tooltips and help
+   text now say "entities/entity" instead of "classes/class".
+2. src/front/templates/partials/ontology/_ontology_axioms.html,
+   src/front/static/ontology/js/ontology-axioms.js
+   Expressions & Axioms section/modal copy, optgroup labels, "Equivalent
+   Classes" option, and Subject/Object Class(es) labels renamed to
+   Entity/Entity(ies); axiom values (`equivalentClass`, etc.) kept as-is.
+3. src/front/templates/partials/ontology/_ontology_entities.html,
+   src/front/static/ontology/js/ontology-entities.js
+   "Classes (Hierarchy)" heading → "Entities (Hierarchy)"; empty-state and
+   help copy now say "entities"/"entity inheritance hierarchy".
+4. src/front/templates/partials/ontology/_ontology_import.html,
+   _ontology_groups.html, _ontology_dataquality.html,
+   _ontology_business_rules.html, _ontology_wizard.html
+   Import help text, group-membership help text, Auto-generate/Cleanup
+   tooltips, suggested-rules banner, "Assign class"/"Result Class" business
+   rule labels, and "Suggest class hierarchy" wizard option reworded to
+   "entity"/"entities".
+5. src/front/static/ontology/js/ontology-dataquality.js
+   "Target class" labels → "Target entity" (kept the `sh:class` SHACL token);
+   cleanup-rules confirm dialog reworded.
+6. src/front/static/ontology/js/ontology-pitfalls.js,
+   src/back/core/external/pitfalls/runner.py
+   Reworded "class(es)" → "entity/entities" in pitfall titles/descriptions
+   (P1.1–P1.3, P2.1–P2.3, P3.3, P4.1–P4.3, P4.5–P4.7) and the results-summary
+   line, keeping OWL-technical wording (subclass, rdfs:subClassOf, owl:Nothing)
+   untouched.
+7. src/front/templates/settings.html, src/front/static/config/js/settings.js
+   "Default Class Icon" → "Default Entity Icon"; help text and update
+   notification reworded.
+8. src/front/static/mapping/js/mapping-design.js, mapping-autoassign.js,
+   mapping-diagnostics.js, mapping-relationship-modal.js,
+   src/front/static/global/js/mapping-core.js
+   Notification/placeholder/detail-row copy ("Class not found", "No ontology
+   classes...", "Class URI", "Select source/target class...", "class(es) not
+   mapped") reworded to "Entity".
+9. src/front/static/global/js/ontology-design.js
+   Designer description text and no-classes/import-summary notifications
+   reworded to "entities".
+10. src/front/templates/partials/registry/_registry_bridges.html,
+    src/front/static/registry/js/registry.js
+    Bridges section subtitle and "Source/Target Class" table headers renamed.
+11. src/front/static/domain/js/domain-audit.js
+    Audit feed labels "Class added/updated/removed" → "Entity
+    added/updated/removed" (action-type keys `class_added` etc. kept as-is —
+    backend-defined identifiers).
+12. src/front/templates/partials/layout/help_modal.html
+    "add classes and object properties manually" → "add entities...".
+13. src/front/static/query/js/query-graphql.js
+    GraphQL-not-ready fallback message and stats line reworded.
+14. src/front/static/ontology/js/ontology-import.js
+    Replace/FIBO/FHIR/IOF import result messages reworded.
+15. src/front/static/ontology/js/ontology-information.js
+    "attribute(s) without domain class" → "domain entity" (both renderers).
+16. src/front/templates/partials/dtwin/_query_api.html
+    GraphQL schema-generation doc copy ("every class becomes a GraphQL
+    type", "each class is a type") reworded to "entity"; left the raw
+    OWL/Turtle endpoint description (genuine OWL "class" counts) untouched.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/templates/partials/ontology/_ontology_axioms.html
+- src/front/static/ontology/js/ontology-axioms.js
+- src/front/templates/partials/ontology/_ontology_entities.html
+- src/front/static/ontology/js/ontology-entities.js
+- src/front/templates/partials/ontology/_ontology_import.html
+- src/front/templates/partials/ontology/_ontology_groups.html
+- src/front/templates/partials/ontology/_ontology_dataquality.html
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/ontology/js/ontology-dataquality.js
+- src/front/static/ontology/js/ontology-pitfalls.js
+- src/back/core/external/pitfalls/runner.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/static/mapping/js/mapping-diagnostics.js
+- src/front/static/mapping/js/mapping-relationship-modal.js
+- src/front/static/global/js/mapping-core.js
+- src/front/static/global/js/ontology-design.js
+- src/front/templates/partials/registry/_registry_bridges.html
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-audit.js
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/query/js/query-graphql.js
+- src/front/static/ontology/js/ontology-import.js
+- src/front/static/ontology/js/ontology-information.js
+- src/front/templates/partials/dtwin/_query_api.html
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3458 passed, 275 skipped, 5 deselected in 22.06s

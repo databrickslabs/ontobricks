@@ -516,7 +516,7 @@ window.AutoAssignModule = {
         const properties = this.filterObjectProperties(ontology.properties || []);
         
         if (classes.length === 0 && properties.length === 0) {
-            showNotification('No ontology classes or properties found', 'info');
+            showNotification('No ontology entities or properties found', 'info');
             return;
         }
         

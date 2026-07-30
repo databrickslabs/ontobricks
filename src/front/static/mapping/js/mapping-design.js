@@ -907,7 +907,7 @@ function openEntityMappingFromDesign(entity) {
     );
     
     if (!ontologyClass) {
-        showNotification(`Class "${entity.name}" not found in ontology`, 'warning');
+        showNotification(`Entity "${entity.name}" not found in ontology`, 'warning');
         return;
     }
     

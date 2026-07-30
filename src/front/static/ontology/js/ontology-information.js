@@ -482,7 +482,7 @@ function showOwlImportReport(filename, onto, details) {
         orphanHtml = `
             <div class="alert alert-warning mt-3">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>${details.orphanAttributes.length} attribute(s) without domain class:</strong>
+                <strong>${details.orphanAttributes.length} attribute(s) without domain entity:</strong>
                 <ul class="mb-0 mt-2">
                     ${details.orphanAttributes.map(a => `<li>${a.name} (range: ${a.range || 'unspecified'})</li>`).join('')}
                 </ul>
@@ -859,7 +859,7 @@ function showRdfsImportReport(filename, onto, details) {
         orphanHtml = `
             <div class="alert alert-warning mt-3">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>${details.orphanAttributes.length} attribute(s) without domain class:</strong>
+                <strong>${details.orphanAttributes.length} attribute(s) without domain entity:</strong>
                 <ul class="mb-0 mt-2">
                     ${details.orphanAttributes.map(a => `<li>${a.name} (range: ${a.range || 'unspecified'})</li>`).join('')}
                 </ul>

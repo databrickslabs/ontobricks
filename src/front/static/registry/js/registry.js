@@ -1399,10 +1399,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     html += '<table class="table table-sm table-hover bridges-table">' +
                         '<thead><tr>' +
-                            '<th>Source Class</th>' +
+                            '<th>Source Entity</th>' +
                             '<th style="width:3rem;"></th>' +
                             '<th>Target Domain</th>' +
-                            '<th>Target Class</th>' +
+                            '<th>Target Entity</th>' +
                             '<th>Label</th>' +
                         '</tr></thead><tbody>';
 

@@ -719,24 +719,24 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
 
             <div class="form-tab-pane ${_eTab === 'constraints' ? 'active' : ''}" data-form-tab-content="constraints">
                 <div class="mb-3">
-                    <label class="form-label small text-muted mb-1" title="Classes that share no instances with this class">
+                    <label class="form-label small text-muted mb-1" title="Entities that share no instances with this entity">
                         <i class="bi bi-x-circle me-1"></i>Disjoint With
                     </label>
                     <select class="form-select form-select-sm" id="sharedEntityDisjointWith" ${disabled} multiple size="3" 
-                            title="Select classes that cannot share instances with this class">
+                            title="Select entities that cannot share instances with this entity">
                         ${otherClassOptions}
                     </select>
-                    <div class="form-text small">No instance can belong to both this class and the selected classes</div>
+                    <div class="form-text small">No instance can belong to both this entity and the selected entities</div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small text-muted mb-1" title="Classes that have exactly the same instances as this class">
+                    <label class="form-label small text-muted mb-1" title="Entities that have exactly the same instances as this entity">
                         <i class="bi bi-arrows-angle-expand me-1"></i>Equivalent To
                     </label>
                     <select class="form-select form-select-sm" id="sharedEntityEquivalentTo" ${disabled} multiple size="3"
-                            title="Select classes that are equivalent to this class">
+                            title="Select entities that are equivalent to this entity">
                         ${otherClassOptions}
                     </select>
-                    <div class="form-text small">Classes that have exactly the same instances</div>
+                    <div class="form-text small">Entities that have exactly the same instances</div>
                 </div>
             </div>
         </form>

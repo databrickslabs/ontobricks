@@ -417,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
             if (result.success) {
                 document.getElementById('currentDefaultEmoji').textContent = emoji;
-                showNotification('Default class icon updated to ' + emoji, 'success', 2000);
+                showNotification('Default entity icon updated to ' + emoji, 'success', 2000);
             } else {
                 showNotification('Error: ' + result.message, 'error');
             }

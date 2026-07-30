@@ -240,8 +240,8 @@ function populateRelationshipClassSelects() {
     const sourceSelect = document.getElementById('modalRelSourceClass');
     const targetSelect = document.getElementById('modalRelTargetClass');
     
-    sourceSelect.innerHTML = '<option value="">Select source class...</option>';
-    targetSelect.innerHTML = '<option value="">Select target class...</option>';
+    sourceSelect.innerHTML = '<option value="">Select source entity...</option>';
+    targetSelect.innerHTML = '<option value="">Select target entity...</option>';
     
     MappingState.config.entities.forEach(mapping => {
         const optionSource = document.createElement('option');

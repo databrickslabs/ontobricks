@@ -55,12 +55,12 @@ window.DataQualityModule = {
             <div class="mb-3">
                 <label class="form-label">Constraint type</label>
                 <select class="form-select" id="dqParamConsistencyType" onchange="DataQualityModule.onConsistencyTypeChange()">
-                    <option value="sh:class">Target class (sh:class)</option>
+                    <option value="sh:class">Target entity (sh:class)</option>
                     <option value="sh:datatype">Datatype (sh:datatype)</option>
                 </select>
             </div>
             <div class="mb-3" id="dqConsistencyValueGroup">
-                <label class="form-label">Target class</label>
+                <label class="form-label">Target entity</label>
                 <select class="form-select" id="dqParamTargetType">
                     <option value="">Select...</option>
                 </select>
@@ -941,7 +941,7 @@ window.DataQualityModule = {
 
         const confirmed = await showConfirmDialog({
             title: 'Clean up rules',
-            message: 'This will remove all rules whose target class or property no longer exists in the ontology. Continue?',
+            message: 'This will remove all rules whose target entity or property no longer exists in the ontology. Continue?',
             confirmText: 'Clean up',
             confirmClass: 'btn-warning',
             icon: 'brush',
