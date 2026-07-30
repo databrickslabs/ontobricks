@@ -117,8 +117,14 @@ class GraphDBFactory:
             logger.warning("Neo4j graph backend unavailable (neo4j driver not installed)")
             return None
 
-        cfg = engine_config or {}
-        base_name = (domain.info or {}).get("name", DEFAULT_GRAPH_NAME)
+        cfg = dict(engine_config or {})
+        info = domain.info or {}
+        # Per-domain Neo4j database override (Domain Info selector) wins over the
+        # workspace-global configured database. Empty → keep the configured one.
+        domain_db = str(info.get("neo4j_database") or "").strip()
+        if domain_db:
+            cfg["database"] = domain_db
+        base_name = info.get("name", DEFAULT_GRAPH_NAME)
         version = getattr(domain, "current_version", "1") or "1"
         db_name = "%s_V%s" % (base_name, version)
         try:

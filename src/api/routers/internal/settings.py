@@ -931,6 +931,53 @@ async def post_graph_engine_neo4j_test(
         return config_service.graph_engine_neo4j_test_result(session_mgr, settings)
 
 
+@router.get("/graph-engine/neo4j-databases")
+async def get_graph_engine_neo4j_databases(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Neo4j databases on the server for the Domain Info DB selector (P4)."""
+    with map_route_errors("graph engine Neo4j databases", logger):
+        return config_service.graph_engine_neo4j_databases_result(session_mgr, settings)
+
+
+@router.get("/graph-engine/neo4j-labels")
+async def get_graph_engine_neo4j_labels(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List materialised Neo4j graphs (marker labels) with node/edge counts (admin Objects tab, P5)."""
+    with map_route_errors("graph engine Neo4j labels", logger):
+        return config_service.graph_engine_neo4j_labels_result(session_mgr, settings)
+
+
+@router.get("/graph-engine/neo4j-health")
+async def get_graph_engine_neo4j_health(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Bolt health probe for the Neo4j admin Health tab (P5)."""
+    with map_route_errors("graph engine Neo4j health", logger):
+        return config_service.graph_engine_neo4j_health_result(session_mgr, settings)
+
+
+@router.post("/graph-engine/neo4j-drop-label")
+async def post_graph_engine_neo4j_drop_label(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Drop one Neo4j graph (marker label) and its schema map (admin, P5).
+
+    Body: ``{ "label": "<marker label>" }``
+    """
+    with map_route_errors("graph engine Neo4j drop label", logger):
+        data = await request.json()
+        return config_service.graph_engine_neo4j_drop_label_result(
+            (data.get("label") or "").strip(), session_mgr, settings
+        )
+
+
 @router.get("/graph-engine/uc-catalogs")
 async def get_graph_engine_uc_catalogs(
     session_mgr: SessionManager = Depends(get_session_manager),

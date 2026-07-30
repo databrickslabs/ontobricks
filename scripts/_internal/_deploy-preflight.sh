@@ -13,10 +13,14 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+# Resolve this file's own directory. Do NOT inherit a caller-set SCRIPT_DIR:
+# deploy.sh sets SCRIPT_DIR to scripts/, but this helper and its siblings
+# (e.g. _lakebase-diag.sh) live in scripts/_internal/, so we must compute our
+# own location or the source below resolves to the wrong directory.
+_PREFLIGHT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/_lakebase-diag.sh"
+source "${_PREFLIGHT_DIR}/_lakebase-diag.sh"
 
 if [[ -t 1 ]]; then
     _PF_C_GRN=$'\033[32m'; _PF_C_YEL=$'\033[33m'; _PF_C_RED=$'\033[31m'; _PF_C_RST=$'\033[0m'
