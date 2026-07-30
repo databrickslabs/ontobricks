@@ -408,3 +408,35 @@ Modified files:
 
 Tests: uv run pytest -q -m "not scenario" → 3453 passed, 275 skipped, 5 deselected in 28.12s
 
+## Simplify navbar breadcrumb: main menu + sub menu only
+
+Context: the top-right breadcrumb showed "Registry > <DomainName> > <MainMenu>
+> <SubMenu>" for Ontology/Mapping/Domain/Knowledge Graph pages. Users asked
+to drop the Registry and Domain-name ancestor crumbs entirely and show only
+the current main menu (Ontology, Mapping, etc.) and the sub menu (sidebar
+section) selected within it.
+
+Changes:
+
+1. src/front/static/global/js/breadcrumb.js
+   `_buildCrumbs()` no longer walks a `_HIERARCHY` array to push ancestor
+   "Registry" / domain-name crumbs — it always returns just the single
+   matched main-menu entry from `_ROUTE_MAP`; `_updateSection()` (unchanged)
+   still appends the active sidebar section as the second/last crumb.
+   Removed the now-unused `_HIERARCHY` constant and `_getDomainName()`
+   helper. `init()`'s hide guard changed from `crumbs.length <= 1` (hid the
+   breadcrumb whenever there were no ancestors to show) to
+   `crumbs.length === 0` (hides only when the current path isn't a
+   recognized main menu at all).
+2. tests/units/front/test_breadcrumb.py
+   Contract tests: no Registry/ancestor logic in `_buildCrumbs`, removed
+   `_HIERARCHY`/`_getDomainName`/`currentDomainName` references, single-crumb
+   return shape, and the relaxed hide guard.
+
+Modified files:
+- src/front/static/global/js/breadcrumb.js
+- tests/units/front/test_breadcrumb.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3458 passed, 275 skipped, 5 deselected in 24.08s
+
