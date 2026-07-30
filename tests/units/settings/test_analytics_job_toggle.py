@@ -263,3 +263,67 @@ class TestUiWiring:
         """
         assert "analytics_job_enabled: analyticsJobInput.checked" in js
         assert "if (analyticsJobInput.checked)" not in js
+
+
+class TestUnhydratedCheckboxIsNeverPersisted:
+    """An unread checkbox must not be saved as "off".
+
+    The Save handler is bound to *every* section's Save button and posts this
+    checkbox on each one. Its markup default is unchecked, so before this guard a
+    hydration GET that failed — or simply had not resolved yet — turned the next
+    Save anywhere in Settings into a silent write of ``false`` over an admin's
+    ``true``, with a success toast and nobody having touched the control. That is
+    the reported "the option is not saved in the registry".
+    """
+
+    @pytest.fixture(scope="class")
+    def js(self) -> str:
+        return SETTINGS_JS.read_text()
+
+    @pytest.fixture(scope="class")
+    def hydrate_fn(self, js: str) -> str:
+        start = js.index("async function loadAnalyticsJobEnabled")
+        return js[start : js.index("\n    }", start)]
+
+    def test_a_hydration_flag_exists(self, js):
+        assert "let analyticsJobHydrated = false;" in js
+
+    def test_save_is_gated_on_the_flag(self, js):
+        assert "if (analyticsJobInput && analyticsJobHydrated) {" in js
+
+    def test_the_old_ungated_guard_is_gone(self, js):
+        """``if (analyticsJobInput) {`` alone is what allowed the clobber."""
+        assert "if (analyticsJobInput) {" not in js
+
+    def test_a_failed_read_is_reported_rather_than_saved(self, js):
+        assert "could not be read, so it was left" in js
+
+    def test_flag_is_cleared_before_each_read(self, hydrate_fn):
+        # Re-entrant: a later failed refresh must not leave a stale "hydrated".
+        assert "analyticsJobHydrated = false;" in hydrate_fn
+
+    def test_flag_is_set_only_after_the_value_is_applied(self, hydrate_fn):
+        applied = hydrate_fn.index("input.checked = !!result.analytics_job_enabled")
+        marked = hydrate_fn.index("analyticsJobHydrated = true")
+        assert applied < marked, "the flag must not be set before the value lands"
+
+    def test_success_check_precedes_the_flag(self, hydrate_fn):
+        """A ``success: false`` body must not count as hydrated."""
+        assert hydrate_fn.index("if (!result.success) return;") < hydrate_fn.index(
+            "analyticsJobHydrated = true"
+        )
+
+    def test_checkbox_is_disabled_until_hydrated(self, hydrate_fn):
+        assert "input.disabled = true;" in hydrate_fn
+        assert "input.disabled = false;" in hydrate_fn
+        assert hydrate_fn.index("input.disabled = true;") < hydrate_fn.index(
+            "input.disabled = false;"
+        )
+
+    def test_failure_is_surfaced_in_the_source_note(self, hydrate_fn):
+        assert "Could not read the current setting" in hydrate_fn
+        assert "finally" in hydrate_fn
+
+    def test_failure_still_caught_so_init_is_not_disrupted(self, hydrate_fn):
+        """Hydration runs un-awaited at load; a throw must not reject upward."""
+        assert "catch" in hydrate_fn

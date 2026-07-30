@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', function () {
     let graphDbLoaded = false;
     let graphEngineConfigLoaded = false;
     let graphDbHeavyLoaded = false;
+    // Whether the analytics-job checkbox reflects the stored value yet. The
+    // Save handler posts that checkbox from *every* section's Save button, and
+    // its markup default is unchecked, so without this flag a hydration that
+    // failed or had not resolved yet would make the next Save silently write
+    // "off" over an admin's "on" — with no error and nobody touching the box.
+    let analyticsJobHydrated = false;
     // Registry rebuilt on every loadLakebaseObjects call; keyed by domain base name.
     // Avoids embedding JSON in onclick HTML attributes (double quotes break the attribute).
     let _lkDomainRegistry = {};
@@ -394,11 +400,17 @@ document.addEventListener('DOMContentLoaded', function () {
         const input = document.getElementById('analyticsJobEnabled');
         if (!input) return;
         const note = document.getElementById('analyticsJobEnabledSource');
+        // Inert until the stored value arrives, so the unchecked markup default
+        // is never mistaken for a setting the user can act on.
+        analyticsJobHydrated = false;
+        input.disabled = true;
         try {
             const resp = await fetch('/settings/analytics-job-enabled', { credentials: 'same-origin' });
             const result = await resp.json();
             if (!result.success) return;
             input.checked = !!result.analytics_job_enabled;
+            analyticsJobHydrated = true;
+            input.disabled = false;
             // Say where the value came from: an unconfigured toggle tracks the
             // deployment default, and a bare checkbox would imply someone chose it.
             if (note) {
@@ -409,7 +421,15 @@ document.addEventListener('DOMContentLoaded', function () {
                       + (result.env_default ? 'true' : 'false') + '). Saving here overrides it.';
             }
         } catch (error) {
-            console.log('Using default analytics job setting');
+            console.log('Could not read the analytics job setting', error);
+        } finally {
+            // A failed read leaves the box disabled and says so, rather than
+            // showing a plausible-looking "off" the next Save would persist.
+            if (!analyticsJobHydrated && note) {
+                note.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>'
+                    + 'Could not read the current setting, so it cannot be changed '
+                    + 'from this page. Reload to try again.';
+            }
         }
     }
 
@@ -2991,11 +3011,21 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // 3c. Save the Databricks graph-analytics job toggle. Sent
-        // unconditionally rather than only when checked, because unchecking it
-        // has to persist an explicit "off" that overrides the env-var default.
+        // 3c. Save the Databricks graph-analytics job toggle. An explicit "off"
+        // is sent as readily as an "on", because unchecking has to persist a
+        // value that overrides the env-var default — but only once the checkbox
+        // is known to hold the stored state. Posting an unhydrated box would
+        // write its unchecked default over an admin's "on", and this handler is
+        // shared by every section's Save button, so that would happen on a save
+        // having nothing to do with analytics.
         const analyticsJobInput = document.getElementById('analyticsJobEnabled');
-        if (analyticsJobInput) {
+        if (analyticsJobInput && !analyticsJobHydrated) {
+            errors.push(
+                'Analytics job: current value could not be read, so it was left '
+                + 'unchanged. Reload the page and try again.'
+            );
+        }
+        if (analyticsJobInput && analyticsJobHydrated) {
             try {
                 const resp = await fetch('/settings/save-analytics-job-enabled', {
                     method: 'POST',

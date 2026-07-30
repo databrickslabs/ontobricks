@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import string
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,11 @@ ANALYTICS_VARS = {
     "ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS": "analytics_job_pagerank_iterations",
     "ONTOBRICKS_ANALYTICS_JOB_PIVOTS": "analytics_job_pivots",
 }
+
+
+def _pyproject() -> dict:
+    with open(REPO_ROOT / "pyproject.toml", "rb") as fh:
+        return tomllib.load(fh)
 
 
 def _render() -> dict:
@@ -90,3 +96,44 @@ class TestJobToggleIsOptIn:
         # Empty means "derive <app>-graph-analytics", which is what matches the
         # bundle. A hard-coded name here would break every renamed deploy.
         assert env_map["ONTOBRICKS_ANALYTICS_JOB_NAME"] == ""
+
+
+class TestStartCommandExtras:
+    """``uv run --extra X`` aborts when X is not a declared extra.
+
+    The Neo4j driver was promoted to a core dependency, but the template kept
+    passing ``--extra neo4j``. Every deploy then installed cleanly and crashed on
+    the first line of startup with "Extra `neo4j` is not defined in the
+    optional-dependencies table" — a four-minute build to reach a one-line
+    failure that nothing checked for.
+    """
+
+    @staticmethod
+    def _declared_extras() -> set:
+        return set((_pyproject().get("project") or {}).get("optional-dependencies") or {})
+
+    @staticmethod
+    def _requested_extras() -> list:
+        command = _render().get("command") or []
+        return [
+            command[i + 1]
+            for i, token in enumerate(command)
+            if token == "--extra" and i + 1 < len(command)
+        ]
+
+    def test_every_requested_extra_is_declared(self):
+        declared = self._declared_extras()
+        missing = [e for e in self._requested_extras() if e not in declared]
+        assert not missing, (
+            f"app.yaml.template asks uv for undeclared extra(s) {missing}; "
+            f"pyproject declares {sorted(declared)}. The app will crash on start."
+        )
+
+    def test_lakebase_extra_is_still_requested(self):
+        """It carries psycopg, without which the registry cannot connect."""
+        assert "lakebase" in self._requested_extras()
+
+    def test_neo4j_is_a_core_dependency_so_no_extra_is_needed(self):
+        core = " ".join((_pyproject().get("project") or {}).get("dependencies") or [])
+        assert "neo4j" in core
+        assert "neo4j" not in self._requested_extras()

@@ -3481,6 +3481,7 @@ class DigitalTwin:
         from back.core.databricks import DatabricksClient
         from back.core.helpers import (
             get_databricks_host_and_token,
+            resolve_analytics_job_name,
             resolve_delta_warehouse_id,
         )
         from back.objects.registry import RegistryCfg
@@ -3489,10 +3490,7 @@ class DigitalTwin:
         warehouse_id = resolve_delta_warehouse_id(domain, settings)
         client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
 
-        job_name = (getattr(settings, "analytics_job_name", "") or "").strip()
-        if not job_name:
-            app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
-            job_name = f"{app_name}-graph-analytics" if app_name else ""
+        job_name = resolve_analytics_job_name(settings)
 
         runner = LakeflowRunner(
             job_name,

@@ -255,6 +255,27 @@ class DatabricksHelpers:
         return env_default if configured is None else bool(configured)
 
     @staticmethod
+    def resolve_analytics_job_name(settings) -> str:
+        """Return the graph-analytics job name, or ``""`` if none can be formed.
+
+        ``ONTOBRICKS_ANALYTICS_JOB_NAME`` wins when set. Otherwise the name is
+        derived from the app name as ``<app>-graph-analytics``, matching what the
+        bundle deploys. The derivation needs ``DATABRICKS_APP_NAME``, which the
+        Apps platform injects but a local dev shell does not, so local runs must
+        set the name explicitly.
+
+        Returning ``""`` is meaningful: it is the one case where job mode is
+        configured but cannot run, so callers gating the UI on availability must
+        treat it as unavailable rather than promising metrics the run will then
+        silently fall back from.
+        """
+        explicit = (getattr(settings, "analytics_job_name", "") or "").strip()
+        if explicit:
+            return explicit
+        app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
+        return f"{app_name}-graph-analytics" if app_name else ""
+
+    @staticmethod
     def get_databricks_client(domain, settings):
         """Get Databricks client from domain session or settings.
 

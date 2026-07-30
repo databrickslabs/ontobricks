@@ -81,6 +81,8 @@ mlartifacts/
 # never the rendered outputs.
 /app.yaml
 /src/mcp-server/app.yaml
+# Per-INSTANCE_ID DAB target written by _ensure-instance-target.sh
+/resources/_generated_instance_target.yml
 
 # Cookie jars / curl session dumps (may contain live session + CSRF tokens)
 cookies*.txt

@@ -193,6 +193,7 @@
                         </span>
                     </div>
                     <div class="card-body p-0">
+                        <div id="pagerankTableNote" class="small text-muted px-3 pt-2 d-none"></div>
                         <div class="table-responsive">
                             <table class="table table-sm table-hover align-middle mb-0" id="pagerankDetailTable">
                                 <thead class="table-light">
@@ -384,6 +385,7 @@
     var _maxTriples   = null;   // in-memory analytics limit (from /dtwin/sync/stats)
     var _pushdownAvailable = false;  // engine can aggregate server-side instead
     var _jobAvailable = false;       // ...and can offload the iterative metrics to Databricks
+    var _jobBlockedReason = '';      // why not, when an admin has enabled it and expects it to work
 
     // ------------------------------------------------------------------
     // Metric explanations — shown in popup when user clicks ? on a card
@@ -542,9 +544,15 @@
                 + 'limit but only reports node/edge counts, average degree, density, degree centrality and the '
                 + 'entity-type profiles. PageRank, clustering, betweenness, closeness and the component count '
                 + 'need either the in-memory engine or the Databricks job. Pick an <strong>Entity Type</strong> '
-                + 'above to analyse a subgraph and get all of them exactly, or enable '
-                + '<strong>Compute large-graph metrics on Databricks</strong> in '
-                + '<strong>Settings &rarr; Global</strong> (admin only) to compute them over the whole graph.';
+                + 'above to analyse a subgraph and get all of them exactly';
+            // When the setting is already on, telling the user to turn it on is
+            // worse than useless — name the prerequisite that is actually missing.
+            body += _jobBlockedReason
+                ? '. <br><br><i class="bi bi-wrench me-1"></i><strong>Compute large-graph metrics on '
+                  + 'Databricks</strong> is enabled, but the job cannot run: ' + _jobBlockedReason
+                : ', or enable <strong>Compute large-graph metrics on Databricks</strong> in '
+                  + '<strong>Settings &rarr; Global</strong> (admin only) to compute them over the '
+                  + 'whole graph.';
         } else {
             cls  = 'alert-danger';
             icon = 'bi-exclamation-octagon-fill';
@@ -651,6 +659,7 @@
             _maxTriples   = data.analytics_max_triples || _maxTriples;
             _pushdownAvailable = !!data.analytics_pushdown_available;
             _jobAvailable      = !!data.analytics_job_available;
+            _jobBlockedReason  = data.analytics_job_blocked_reason || '';
             if (_isOverTripleLimit()) {
                 _showOverLimitBanner(true);
                 _showLimitInfo(false);
@@ -1195,13 +1204,50 @@
         _renderPagerankTable(candidateUris, allNodes, nodeTypes, topN);
     };
 
+    // Explain what the table is ranked by and which columns are missing or
+    // sampled, so the numbers cannot be read as more precise than they are.
+    function _setPagerankTableNote(rankBy, unavailable, approximate) {
+        var note = document.getElementById('pagerankTableNote');
+        if (!note) return;
+        var parts = [];
+        if (rankBy !== 'pagerank') {
+            parts.push('Ranked by <strong>degree</strong>, because PageRank was not '
+                + 'computed in this mode.');
+        }
+        if (unavailable.length) {
+            parts.push('<strong>&mdash;</strong> marks a metric this run did not compute ('
+                + unavailable.join(', ') + ').');
+        }
+        if (approximate.length) {
+            parts.push('<strong>&asymp;</strong> marks a sampled estimate ('
+                + approximate.join(', ') + ') &mdash; reliable for ranking the '
+                + 'clear leaders, not as an absolute value.');
+        }
+        if (!parts.length) {
+            note.classList.add('d-none');
+            note.innerHTML = '';
+            return;
+        }
+        note.classList.remove('d-none');
+        note.innerHTML = '<i class="bi bi-info-circle me-1"></i>' + parts.join(' ');
+    }
+
     function _renderPagerankTable(candidateUris, allNodes, nodeTypes, topN) {
         var tbody = document.getElementById('pagerankDetailBody');
         if (!tbody) return;
+
+        var unavailable = (_analyticsData && _analyticsData.unavailable_metrics) || [];
+        var approximate = (_analyticsData && _analyticsData.approximate_metrics) || [];
+
+        // Rank by PageRank only when it was actually computed. In engine-side
+        // aggregation every value is 0, so sorting by it would produce an
+        // arbitrary order under a column header that implies a ranking.
+        var rankBy = unavailable.indexOf('pagerank') === -1 ? 'pagerank' : 'degree';
         var sorted = candidateUris
             .slice()
-            .sort(function (a, b) { return (allNodes[b].pagerank || 0) - (allNodes[a].pagerank || 0); })
+            .sort(function (a, b) { return (allNodes[b][rankBy] || 0) - (allNodes[a][rankBy] || 0); })
             .slice(0, topN);
+        _setPagerankTableNote(rankBy, unavailable, approximate);
 
         // Per-metric max values for relative bar widths
         var metrics = ['pagerank', 'degree', 'betweenness', 'closeness', 'clustering'];
@@ -1226,10 +1272,22 @@
             var displayName = _displayName(uri);
 
             function cell(key) {
+                // A metric this run could not compute is stored as 0. Printing
+                // "0.0000" would read as a real measurement, so show a dash
+                // instead — the charts already explain why it is missing.
+                if (unavailable.indexOf(key) !== -1) {
+                    return '<td class="text-end text-muted" style="min-width:90px"'
+                        + ' title="Not computed in this mode — see the chart above">'
+                        + '<div style="font-size:0.78rem">&mdash;</div></td>';
+                }
                 var v   = nm[key] || 0;
                 var pct = Math.round((v / maxVal[key]) * 100);
+                // "≈" marks a sampled estimate so a reader comparing this column
+                // to an exact one knows the difference.
+                var prefix = approximate.indexOf(key) !== -1 ? '&asymp;&thinsp;' : '';
                 return '<td class="text-end" style="min-width:90px">'
-                    + '<div style="font-size:0.78rem;font-variant-numeric:tabular-nums">' + v.toFixed(4) + '</div>'
+                    + '<div style="font-size:0.78rem;font-variant-numeric:tabular-nums">'
+                    + prefix + v.toFixed(4) + '</div>'
                     + '<div style="height:3px;border-radius:2px;background:' + colors[key] + ';width:' + pct + '%;margin-left:auto"></div>'
                     + '</td>';
             }

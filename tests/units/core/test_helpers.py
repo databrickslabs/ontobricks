@@ -1,5 +1,7 @@
 """Tests for back.core.helpers — Databricks client/credentials helpers."""
 
+from pathlib import Path
+
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 
@@ -178,6 +180,59 @@ def _cfg(catalog="main", schema="ob"):
             return_value=("https://test.databricks.com", "tok-123"),
         ),
     )
+
+
+class TestResolveAnalyticsJobName:
+    """The name gates job mode as hard as the on/off toggle does.
+
+    When no name can be formed the runner cannot resolve a job, so the run falls
+    back to engine-side aggregation. That happened silently in local dev, where
+    ``DATABRICKS_APP_NAME`` is absent and so the derivation yields nothing while
+    the UI still advertised the full metric set.
+    """
+
+    class _S:
+        def __init__(self, name="", app=""):
+            self.analytics_job_name = name
+            self.ontobricks_app_name = app
+
+    def test_explicit_name_wins_over_the_derivation(self):
+        s = self._S(name="renamed-job", app="ontobricks-07x")
+        assert DatabricksHelpers.resolve_analytics_job_name(s) == "renamed-job"
+
+    def test_name_is_derived_from_the_app_name(self):
+        s = self._S(app="ontobricks-07x")
+        assert (
+            DatabricksHelpers.resolve_analytics_job_name(s)
+            == "ontobricks-07x-graph-analytics"
+        )
+
+    def test_empty_when_neither_is_available(self):
+        """The local-dev case: no explicit name and no app name to derive from."""
+        assert DatabricksHelpers.resolve_analytics_job_name(self._S()) == ""
+
+    def test_whitespace_is_not_a_name(self):
+        assert DatabricksHelpers.resolve_analytics_job_name(self._S("  ", "  ")) == ""
+
+    def test_explicit_name_is_trimmed(self):
+        s = self._S(name="  spaced  ")
+        assert DatabricksHelpers.resolve_analytics_job_name(s) == "spaced"
+
+    def test_absent_attributes_do_not_raise(self):
+        assert DatabricksHelpers.resolve_analytics_job_name(object()) == ""
+
+    def test_derived_name_matches_the_bundle_resource(self):
+        """Drift here silently disables job mode on a fresh deploy."""
+        import yaml
+
+        repo_root = Path(__file__).resolve().parents[3]
+        job = yaml.safe_load(
+            (repo_root / "resources/graph_analytics.job.yml").read_text()
+        )["resources"]["jobs"]["graph_analytics_job"]
+        # The bundle names it "${var.app_name}-graph-analytics".
+        assert job["name"] == "${var.app_name}-graph-analytics"
+        derived = DatabricksHelpers.resolve_analytics_job_name(self._S(app="APP"))
+        assert derived == job["name"].replace("${var.app_name}", "APP")
 
 
 class TestResolveAnalyticsJobEnabled:

@@ -20,14 +20,13 @@
 # lakebase = [...]`) so the Lakebase Postgres backend works in the
 # deployed app even when the `database` resource is not yet bound.
 #
-# `--extra neo4j` installs the official `neo4j` Python driver
-# (Bolt / Cypher) so the Neo4j graph DB engine works when an admin
-# selects it in **Settings → Triple store → Global**. Same rationale
-# as Lakebase: the extra costs ~5MB of unused wheels on
-# Volume/Lakebase-only deployments but Neo4j code paths are guarded
-# by `NEO4J_AVAILABLE` and never reached.
+# There is deliberately no `--extra neo4j`: the Bolt driver is a *core*
+# dependency (see `pyproject.toml`), so the Neo4j engine works when an admin
+# selects it in **Settings → Triple store → Global** without an extra. Passing
+# `--extra neo4j` makes uv abort with "Extra `neo4j` is not defined in the
+# optional-dependencies table", which crashes the app on startup.
 #
-# Both extras together power the runtime backend toggle:
+# Together with the Lakebase extra this powers the runtime backend toggle:
 # the admin can switch Volume / Lakebase / Neo4j without redeploying.
 #
 # Databricks Apps sets DATABRICKS_APP_PORT automatically.
@@ -46,8 +45,6 @@ command:
   - "--no-dev"
   - "--extra"
   - "lakebase"
-  - "--extra"
-  - "neo4j"
   - "python"
   - "run.py"
 

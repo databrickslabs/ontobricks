@@ -13,10 +13,14 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+# Resolved from BASH_SOURCE, not from the caller's SCRIPT_DIR: this file is
+# sourced by scripts/deploy.sh, where SCRIPT_DIR already points at scripts/
+# rather than scripts/_internal/, so a `${SCRIPT_DIR:-...}` default never
+# applies and the sibling lookup below would miss.
+_PREFLIGHT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/_lakebase-diag.sh"
+source "${_PREFLIGHT_DIR}/_lakebase-diag.sh"
 
 if [[ -t 1 ]]; then
     _PF_C_GRN=$'\033[32m'; _PF_C_YEL=$'\033[33m'; _PF_C_RED=$'\033[31m'; _PF_C_RST=$'\033[0m'
@@ -170,6 +174,117 @@ print(d.get("service_principal_client_id") or "")' 2>/dev/null || true)"
             _preflight_ok "app '${app}' exists (SP ${sp_id})"
         else
             _preflight_warn "app '${app}' not found yet — bootstrap-app-permissions.sh will run after first deploy"
+        fi
+    done
+}
+
+# A Databricks app name is immutable, so changing it renames nothing: Terraform
+# destroys the app and creates a new one. The DAB resource key is static while
+# the name comes from DEFAULT_APP_NAME, so editing that one line silently means
+# "delete the running app". If the create then fails — a missing secret scope is
+# enough — you are left with no app at all, which is exactly how ontobricks-060
+# disappeared on 2026-07-30.
+#
+# Args: <dab_target> <app_resource_key> <desired_app_name>
+_preflight_check_app_rename() {
+    local target="$1" resource_key="$2" desired="$3"
+    _preflight_begin "App rename safety"
+
+    local state=".databricks/bundle/${target}/terraform/terraform.tfstate"
+    if [[ ! -f "$state" ]]; then
+        _preflight_ok "no local Terraform state for '${target}' — nothing to replace"
+        return 0
+    fi
+
+    local current
+    current="$(python3 - "$state" "$resource_key" <<'PY' 2>/dev/null || true
+import json, sys
+path, key = sys.argv[1], sys.argv[2]
+try:
+    with open(path) as fh:
+        state = json.load(fh)
+except Exception:
+    sys.exit(0)
+for res in state.get("resources") or []:
+    if res.get("type") == "databricks_app" and res.get("name") == key:
+        for inst in res.get("instances") or []:
+            name = (inst.get("attributes") or {}).get("name")
+            if name:
+                print(name)
+                sys.exit(0)
+PY
+)"
+
+    if [[ -z "$current" ]]; then
+        _preflight_ok "no app recorded under '${resource_key}' — this deploy creates one"
+        return 0
+    fi
+    if [[ "$current" == "$desired" ]]; then
+        _preflight_ok "app name unchanged ('${current}')"
+        return 0
+    fi
+
+    echo "" >&2
+    echo "  ${_PF_C_RED}This deploy will DESTROY the running app '${current}'${_PF_C_RST}" >&2
+    echo "  and create '${desired}' in its place, because a Databricks app name" >&2
+    echo "  cannot be changed in place. The old app, its URL and its compute are" >&2
+    echo "  gone for good; if the create then fails you are left with neither." >&2
+    echo "" >&2
+    echo "  Your registry Volume and Lakebase schema are separate resources and" >&2
+    echo "  are not touched." >&2
+    echo "" >&2
+    echo "  To keep '${current}', revert DEFAULT_INSTANCE_ID in ${CONFIG_FILE:-scripts/deploy.config.sh}" >&2
+    echo "  (or deploy the new ID under its own target — the default when you only" >&2
+    echo "  change INSTANCE_ID). Same-target renames destroy the old app." >&2
+    echo "" >&2
+
+    if [[ "${ALLOW_APP_RENAME:-}" == "1" ]]; then
+        _preflight_warn "ALLOW_APP_RENAME=1 — proceeding to replace '${current}' with '${desired}'"
+        return 0
+    fi
+    if [[ -t 0 ]]; then
+        local reply=""
+        read -r -p "  Type the name of the app to destroy ('${current}') to continue: " reply
+        if [[ "$reply" == "$current" ]]; then
+            _preflight_warn "confirmed — replacing '${current}' with '${desired}'"
+            return 0
+        fi
+        _preflight_fail "app rename not confirmed — aborting before anything is destroyed"
+        return 1
+    fi
+    _preflight_fail "app rename needs confirmation — re-run with ALLOW_APP_RENAME=1 to accept destroying '${current}'"
+    return 1
+}
+
+# A secret scope that does not exist fails `terraform apply` on the app resource.
+# Args: <scope> [key ...]
+_preflight_check_secret_scope() {
+    local scope="$1"; shift
+    _preflight_begin "App secret bindings"
+    if [[ -z "$scope" ]]; then
+        _preflight_warn "no secret scope configured — skipping"
+        return 0
+    fi
+    if ! databricks secrets list-secrets "$scope" >/dev/null 2>&1; then
+        _preflight_fail "secret scope '${scope}' not found or unreadable — the app resource binds a secret from it and \`terraform apply\` will fail. Check \`databricks secrets list-scopes\`, then set NEO4J_SECRET_SCOPE in ${CONFIG_FILE:-scripts/deploy.config.sh}"
+        return 1
+    fi
+    _preflight_ok "secret scope '${scope}' readable"
+
+    local key present
+    for key in "$@"; do
+        [[ -z "$key" ]] && continue
+        present="$(databricks secrets list-secrets "$scope" -o json 2>/dev/null \
+            | python3 -c 'import sys,json
+try:
+    rows=json.load(sys.stdin)
+except Exception:
+    rows=[]
+print("yes" if any(r.get("key")==sys.argv[1] for r in rows) else "")' "$key" 2>/dev/null || true)"
+        if [[ -n "$present" ]]; then
+            _preflight_ok "secret '${scope}/${key}' present"
+        else
+            _preflight_fail "secret '${scope}/${key}' missing — create it: databricks secrets put-secret ${scope} ${key} --string-value '<value>'"
         fi
     done
 }

@@ -7,7 +7,7 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 from dataclasses import dataclass
 import os
 import time
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 from fastapi import APIRouter, Request, Depends
 from back.core.logging import get_logger
@@ -43,6 +43,7 @@ from back.core.helpers import (
     make_volume_file_service,
     is_uri,
     resolve_analytics_job_enabled,
+    resolve_analytics_job_name,
     run_blocking,
 )
 
@@ -469,6 +470,50 @@ async def detect_clusters(
 # ===========================================
 
 
+def _analytics_job_status(
+    domain, settings, store, graph_name, *, pushdown_ok: bool
+) -> Tuple[bool, str]:
+    """Return ``(job_mode_available, reason_it_is_not)`` for this graph.
+
+    Job mode needs four things: the admin toggle, an engine that can aggregate
+    server-side, a resolvable job name, and a graph Spark can read as a Unity
+    Catalog table. Each has a different remedy, so the caller gets the specific
+    one rather than a bare ``False`` — telling an admin who has already enabled
+    the toggle to go and enable it is worse than saying nothing.
+
+    The reason is empty whenever the toggle is off, because then nothing is
+    broken: not using the job is the configured behaviour.
+
+    ``pushdown_ok`` is passed in rather than derived because callers disagree on
+    what it means — the analytics run also honours
+    ``settings.analytics_pushdown_enabled``, while the stats endpoint reports raw
+    engine capability.
+    """
+    if not resolve_analytics_job_enabled(domain, settings):
+        return False, ""
+
+    if not pushdown_ok:
+        return False, (
+            "This graph engine cannot aggregate server-side, which the job path "
+            "builds on."
+        )
+
+    if not resolve_analytics_job_name(settings):
+        return False, (
+            "No Databricks job name could be determined. Set "
+            "ONTOBRICKS_ANALYTICS_JOB_NAME, or deploy the bundle so the name can "
+            "be derived from the app name."
+        )
+
+    source, reason = resolve_spark_source(store, graph_name)
+    if not source:
+        return False, reason or (
+            "The graph is not readable from Spark as a Unity Catalog table."
+        )
+
+    return True, ""
+
+
 def _load_stored_metrics(domain, settings) -> Optional[dict]:
     """Return the cached ``graph_analytics`` row for the active domain/version.
 
@@ -538,12 +583,10 @@ async def compute_graph_metrics(
         pushdown_available = (
             settings.analytics_pushdown_enabled and supports_pushdown(store)
         )
-        # The job mode is a strict superset of pushdown, so prefer it whenever
-        # it is enabled and the graph is actually reachable from Spark.
-        job_available = bool(
-            resolve_analytics_job_enabled(domain, settings)
-            and pushdown_available
-            and resolve_spark_source(store, graph_name)[0]
+        # The job mode is a strict superset of pushdown, so prefer it whenever it
+        # is enabled and every prerequisite holds.
+        job_available, _job_blocked_reason = _analytics_job_status(
+            domain, settings, store, graph_name, pushdown_ok=pushdown_available
         )
         mode = MODE_IN_MEMORY
         allow_pushdown_fallback = False
@@ -1453,10 +1496,17 @@ async def triplestore_stats(
             if cached:
                 preds = cached.get("top_predicates") or []
                 has_kind = preds and "kind" in preds[0]
-                if has_kind:
+                # A payload predating a field would otherwise be served until the
+                # cache expired, hiding a setting the user just changed.
+                has_job_reason = "analytics_job_blocked_reason" in cached
+                if has_kind and has_job_reason:
                     logger.debug("Returning cached graph stats")
                     return cached
-                logger.debug("Stale stats cache (missing 'kind'); refreshing")
+                logger.debug(
+                    "Stale stats cache (kind=%s, job_reason=%s); refreshing",
+                    has_kind,
+                    has_job_reason,
+                )
 
         store = _require_graph_store(domain, settings)
 
@@ -1475,6 +1525,10 @@ async def triplestore_stats(
         inferred_count = store.get_inferred_triple_count(graph_name)
 
         classified = DigitalTwin(domain).classify_predicates(top_predicates)
+
+        job_available, job_blocked_reason = _analytics_job_status(
+            domain, settings, store, graph_name, pushdown_ok=supports_pushdown(store)
+        )
 
         result = {
             "success": True,
@@ -1500,11 +1554,12 @@ async def triplestore_stats(
             # Whether an oversized run can additionally offload PageRank /
             # components / clustering to the Databricks job, so the banner can
             # promise the full metric set instead of the reduced one.
-            "analytics_job_available": bool(
-                resolve_analytics_job_enabled(domain, settings)
-                and supports_pushdown(store)
-                and resolve_spark_source(store, graph_name)[0]
-            ),
+            "analytics_job_available": job_available,
+            # Why it is not, when an admin has turned it on and therefore expects
+            # it to work. ``resolve_spark_source`` writes these for the person
+            # reading them, and every cause is a configuration problem only they
+            # can fix, so discarding them just moves the diagnosis into the logs.
+            "analytics_job_blocked_reason": job_blocked_reason,
         }
         DigitalTwin(domain).set_ts_cache("stats", result)
         return result
