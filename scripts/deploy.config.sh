@@ -32,7 +32,7 @@
 
 # ── 0a. Instance identity ────────────────────────────────────────────
 # THE ONLY LINE YOU NEED TO CHANGE to create a new deployment.
-DEFAULT_APP_NAME="ontobricks-060"
+DEFAULT_APP_NAME="ontobricks-07x"
 
 # ── 0b. Workspace constants ──────────────────────────────────────────
 # Set once for your workspace. Shared across all instances deployed here.
