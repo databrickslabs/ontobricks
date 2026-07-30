@@ -498,6 +498,9 @@ async function openEntityPanelForEdit(idx, options = {}) {
         .map(p => ({ name: p.name || p.localName || p }))
         .filter(a => !inheritedNames.has(a.name));
     
+    // Jump straight to a specific tab (e.g. Designer context-menu shortcuts)
+    if (options.activeTab) _entityPanelActiveTab = options.activeTab;
+    
     openSharedPanel();
     
     const panel = sharedPanelCurrentSection?.querySelector('.shared-detail-panel');
@@ -534,6 +537,9 @@ async function openEntityPanelForView(idx, options = {}) {
     sharedPanelOwnAttributes = (cls.dataProperties || [])
         .map(p => ({ name: p.name || p.localName || p }))
         .filter(a => !inheritedNames.has(a.name));
+    
+    // Jump straight to a specific tab (e.g. Designer context-menu shortcuts)
+    if (options.activeTab) _entityPanelActiveTab = options.activeTab;
     
     openSharedPanel();
     
@@ -2549,6 +2555,9 @@ async function openRelationshipPanelForEdit(idx, options = {}) {
     sharedPanelViewOnly = false;
     sharedPanelOnSaveCallback = options.onSave || null;
     
+    // Jump straight to a specific tab (e.g. Designer context-menu shortcuts)
+    if (options.activeTab) _relPanelActiveTab = options.activeTab;
+    
     openSharedPanel();
     
     const panel = sharedPanelCurrentSection?.querySelector('.shared-detail-panel');
@@ -2573,6 +2582,9 @@ async function openRelationshipPanelForView(idx, options = {}) {
     sharedPanelEditIndex = idx;
     sharedPanelViewOnly = true;
     sharedPanelOnSaveCallback = null;
+    
+    // Jump straight to a specific tab (e.g. Designer context-menu shortcuts)
+    if (options.activeTab) _relPanelActiveTab = options.activeTab;
     
     openSharedPanel();
     
@@ -2943,26 +2955,38 @@ async function saveSharedPanelItem() {
 // COMPATIBILITY FUNCTIONS
 // =====================================================
 
-function editClassByName(className) {
+function editClassByName(className, activeTab) {
     const idx = OntologyState.config.classes.findIndex(cls => cls.name === className);
     if (idx >= 0) {
-        if (_canEditOntologyPanel()) openEntityPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } });
-        else openEntityPanelForView(idx);
+        const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+        if (activeTab) opts.activeTab = activeTab;
+        if (_canEditOntologyPanel()) openEntityPanelForEdit(idx, opts);
+        else openEntityPanelForView(idx, opts);
     }
 }
 
-function editClass(idx) { openEntityPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } }); }
+function editClass(idx, activeTab) {
+    const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+    if (activeTab) opts.activeTab = activeTab;
+    openEntityPanelForEdit(idx, opts);
+}
 function viewClass(idx) { openEntityPanelForView(idx); }
 
-function editPropertyByName(propertyName) {
+function editPropertyByName(propertyName, activeTab) {
     const idx = OntologyState.config.properties.findIndex(prop => prop.name === propertyName);
     if (idx >= 0) {
-        if (_canEditOntologyPanel()) openRelationshipPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } });
-        else openRelationshipPanelForView(idx);
+        const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+        if (activeTab) opts.activeTab = activeTab;
+        if (_canEditOntologyPanel()) openRelationshipPanelForEdit(idx, opts);
+        else openRelationshipPanelForView(idx, opts);
     }
 }
 
-function editProperty(idx) { openRelationshipPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } }); }
+function editProperty(idx, activeTab) {
+    const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+    if (activeTab) opts.activeTab = activeTab;
+    openRelationshipPanelForEdit(idx, opts);
+}
 function viewProperty(idx) { openRelationshipPanelForView(idx); }
 
 

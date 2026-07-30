@@ -326,3 +326,43 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3441 passed, 275 skipped, 5 deselected in 27.05s
+
+## Designer context menu: jump straight to a panel tab (entity + relationship)
+
+Context: right-clicking an entity or relationship on the Ontology Designer
+(D3 map) opened a context menu with structural actions only (Create
+Relationship, Delete, etc.) — there was no shortcut to a specific tab of the
+shared entity/relationship edit panel. Users asked for the right-pane tabs to
+be offered as menu items too.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   `openEntityPanelForEdit`/`openEntityPanelForView` set `_entityPanelActiveTab`
+   from `options.activeTab` when provided (same for
+   `openRelationshipPanelForEdit`/`openRelationshipPanelForView` with
+   `_relPanelActiveTab`), so the panel opens directly on the requested tab.
+   `editClassByName`/`editClass`/`editPropertyByName`/`editProperty` gained an
+   optional `activeTab` second parameter threaded into `opts.activeTab`.
+2. src/front/static/ontology/js/ontology-map.js
+   Entity context menu (`showMapContextMenu`) gained 4 new items right after
+   the header — Details (`bi-info-circle`), Attributes (`bi-tags`), External
+   (`bi-lightning`), Constraints (`bi-sliders`) — each calling
+   `editClassByName(entityData.name, tab)`. Added a `contextmenu` handler on
+   relationship link hitareas plus a new `showMapRelationshipContextMenu()`
+   function with 2 items (Details, Constraints — relationships have no
+   Attributes/External tab), calling `editPropertyByName(linkData.name, tab)`.
+   Reuses the existing `#mapContextMenu` element/outside-click-to-close
+   infrastructure.
+3. tests/units/front/test_map_context_menu_tabs.py
+   Contract tests for the 4 entity items, the 2 relationship items, the new
+   relationship `contextmenu` handler, and the `activeTab` threading through
+   both shared-panel option paths and compatibility functions.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_map_context_menu_tabs.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3447 passed, 275 skipped, 5 deselected in 22.02s

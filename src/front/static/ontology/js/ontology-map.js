@@ -463,6 +463,18 @@ async function initOntologyMap() {
             if (typeof editPropertyByName === 'function') {
                 editPropertyByName(d.name);
             }
+        })
+        .on('contextmenu', function(event, d) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (window.isActiveVersion === false) return;
+
+            // Clear entity selection, then highlight both endpoints
+            d3.selectAll('.map-node').classed('selected', false);
+            highlightLink(d);
+
+            showMapRelationshipContextMenu(event, d, container);
         });
 
     // Draw relationship labels
@@ -1294,6 +1306,23 @@ function showMapContextMenu(event, entityData, container) {
             <span class="map-context-title">${entityData.name}</span>
         </div>
         <div class="map-context-divider"></div>
+        <div class="map-context-item" data-action="open-tab-details">
+            <i class="bi bi-info-circle"></i>
+            <span>Details</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-attributes">
+            <i class="bi bi-tags"></i>
+            <span>Attributes</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-actions">
+            <i class="bi bi-lightning"></i>
+            <span>External</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-constraints">
+            <i class="bi bi-sliders"></i>
+            <span>Constraints</span>
+        </div>
+        <div class="map-context-divider"></div>
         <div class="map-context-item" data-action="create-relationship">
             <i class="bi bi-arrow-right"></i>
             <span>Create Relationship</span>
@@ -1335,6 +1364,15 @@ function showMapContextMenu(event, entityData, container) {
     }
     
     // Handle menu item clicks
+    ['details', 'attributes', 'actions', 'constraints'].forEach(tab => {
+        menu.querySelector(`[data-action="open-tab-${tab}"]`).addEventListener('click', () => {
+            hideMapContextMenu();
+            if (typeof editClassByName === 'function') {
+                editClassByName(entityData.name, tab);
+            }
+        });
+    });
+
     menu.querySelector('[data-action="delete"]').addEventListener('click', async () => {
         hideMapContextMenu();
         await deleteEntityFromMap(entityData.name);
@@ -1355,6 +1393,70 @@ function showMapContextMenu(event, entityData, container) {
         await createBusinessViewFromEntity(entityData);
     });
     
+    // Close menu when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', hideMapContextMenuOnClickOutside);
+        document.addEventListener('contextmenu', hideMapContextMenuOnClickOutside);
+    }, 0);
+}
+
+/**
+ * Show a right-click context menu for a relationship link, offering
+ * shortcuts straight to each tab of its edit panel (Details, Constraints —
+ * relationships have no Attributes/External tab).
+ */
+function showMapRelationshipContextMenu(event, linkData, container) {
+    // Remove existing menu
+    hideMapContextMenu();
+
+    const menu = document.createElement('div');
+    menu.id = 'mapContextMenu';
+    menu.className = 'map-context-menu';
+    menu.innerHTML = `
+        <div class="map-context-header">
+            <span class="map-context-icon"><i class="bi bi-arrow-left-right"></i></span>
+            <span class="map-context-title">${linkData.label || linkData.name}</span>
+        </div>
+        <div class="map-context-divider"></div>
+        <div class="map-context-item" data-action="open-tab-details">
+            <i class="bi bi-info-circle"></i>
+            <span>Details</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-constraints">
+            <i class="bi bi-sliders"></i>
+            <span>Constraints</span>
+        </div>
+    `;
+
+    // Position the menu
+    const containerRect = container.getBoundingClientRect();
+    let x = event.clientX - containerRect.left;
+    let y = event.clientY - containerRect.top;
+
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+
+    container.appendChild(menu);
+
+    // Adjust if menu goes off-screen
+    const menuRect = menu.getBoundingClientRect();
+    if (menuRect.right > containerRect.right) {
+        menu.style.left = (x - menuRect.width) + 'px';
+    }
+    if (menuRect.bottom > containerRect.bottom) {
+        menu.style.top = (y - menuRect.height) + 'px';
+    }
+
+    // Handle menu item clicks
+    ['details', 'constraints'].forEach(tab => {
+        menu.querySelector(`[data-action="open-tab-${tab}"]`).addEventListener('click', () => {
+            hideMapContextMenu();
+            if (typeof editPropertyByName === 'function') {
+                editPropertyByName(linkData.name, tab);
+            }
+        });
+    });
+
     // Close menu when clicking outside
     setTimeout(() => {
         document.addEventListener('click', hideMapContextMenuOnClickOutside);
