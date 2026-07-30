@@ -578,3 +578,104 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3462 passed, 275 skipped, 5 deselected in 23.40s
+
+================================================================================
+Approximate betweenness & closeness in the Databricks analytics job
+================================================================================
+
+Context: after the serverless graph-analytics job landed (PageRank, clustering
+coefficient, connected components), betweenness and closeness were still the
+only two metrics with no engine-side path — an oversized graph could get three
+of the five per-node metrics and had to fall back to an entity-type filter for
+the other two. Computing them exactly needs shortest paths from every node to
+every other node (O(V*E)), which is not viable at the sizes the job exists for,
+so they are now estimated with Brandes-Pich pivot sampling and clearly labelled
+as estimates rather than presented as exact values.
+
+The design decision that makes this trustworthy: the pivot set is an *input*,
+not a hard-coded sample. Both estimators are written so that "pivots = every
+node" reduces algebraically to the exact textbook definition, which means the
+SQL can be checked against NetworkX for an exact match before any approximation
+is involved. Verified: betweenness and closeness match nx.betweenness_centrality
+and nx.closeness_centrality to 1e-9 on four graph fixtures, including a
+disconnected graph and a 4-cycle where two shortest paths tie.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Added a fifth stage to the generated SQL. `build_pivots` samples k nodes
+   deterministically (`ORDER BY md5(n)` — md5 rather than a plain hash because
+   it exists in both Spark and Postgres; ordering by the URI would sample one
+   entity type on a real KG). `bfs_init`/`bfs_iteration` run a *single*
+   multi-source breadth-first search in which all pivots advance together,
+   carrying both distance and sigma (shortest-path counts), so the loop runs
+   for the graph diameter rather than k * diameter. `delta_init`/
+   `delta_iteration` implement Brandes' backward dependency accumulation.
+   `build_centrality_rollups` reduces per-pivot results to one row per node.
+   `write_output` gained `betweenness`/`closeness` columns and the two
+   estimators; the summary gained `pivot_count` and `bfs_complete`. New
+   `--pivots` / `--max-depth` arguments; new `_run_pivot_centrality` driver.
+2. src/back/core/graph_analysis/models.py
+   `MetricsResult` gained `approximate_metrics` and `pivot_count`, kept
+   separate from `unavailable_metrics` so the UI can distinguish "sampled" from
+   "not computed" — conflating them would either hide real numbers or present
+   estimates as exact.
+3. src/back/core/graph_analysis/JobMetrics.py
+   Read-back extended to the new columns and summary fields; top-nodes query now
+   also unions the top-k by betweenness and by closeness. Job mode now reports
+   nothing unavailable when pivots were sampled. Estimates are *withheld*
+   (reported unavailable, not written onto nodes) when no pivots were sampled or
+   when the BFS hit its depth cap, since a truncated search biases the distance
+   sums — a wrong number is worse than a missing one.
+4. src/back/core/graph_analysis/LakeflowRunner.py
+   `submit`/`run_and_wait` pass a `pivots` job parameter.
+5. resources/graph_analytics.job.yml
+   New `pivots` job parameter (default 64) wired to `--pivots`.
+6. src/shared/config/settings.py
+   New `analytics_job_pivots` / `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` (default 64),
+   documented as the job's dominant cost.
+7. src/back/objects/digitaltwin/DigitalTwin.py
+   `build_job_metrics` passes the pivot setting through.
+8. src/front/templates/partials/dtwin/_query_analytics.html
+   Approximate metrics render normally but carry a standing "Estimate" note
+   stating the pivot count and warning that adjacent ranks can swap. The blue
+   over-limit banner now says betweenness/closeness are estimated rather than
+   unavailable. The amber (pushdown-only) banner now mentions that the
+   serverless job exists and names the flag that enables it — its silence about
+   that option was what made the feature undiscoverable.
+9. tests/units/core/test_graph_analytics_job_sql.py
+   New TestBetweennessAndClosenessParity: exact parity against NetworkX with a
+   full pivot set on four fixtures; disconnected-component handling; sigma
+   correctness on a 4-cycle; error decreasing as k grows (proves the n/k
+   rescaling); determinism across runs; pivots=0 skipping both; depth-cap
+   truncation reported. Dialect coverage extended to all new statements.
+10. tests/units/core/test_job_metrics.py
+   Output/summary fixtures carry the new columns; new tests for the two
+   withholding paths and for estimates landing on nodes only when available.
+11. docs/user-guide.md, docs/get-started.md
+   Documented that job-mode betweenness/closeness are estimates, how to trade
+   pivot count against cost, and that pivots >= node count makes them exact.
+
+Note on accuracy (measured, karate club, 34 nodes): with a full pivot set both
+metrics are exact. With k=8 the top betweenness node is still identified but
+its value reads 0.328 vs a true 0.438, and closeness ranks n33 above n0 when
+the truth is the reverse. Hence the UI wording: use these to find the leaders,
+not as absolute values.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/LakeflowRunner.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/shared/config/settings.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- resources/graph_analytics.job.yml
+- tests/units/core/test_graph_analytics_job_sql.py
+- tests/units/core/test_job_metrics.py
+- docs/user-guide.md
+- docs/get-started.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3616 passed, 275 skipped,
+5 deselected in 30.35s

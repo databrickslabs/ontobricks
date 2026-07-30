@@ -14,6 +14,7 @@ import pytest
 
 from back.core.errors import InfrastructureError
 from back.core.graph_analysis.JobMetrics import (
+    APPROXIMATE_METRICS,
     UNAVAILABLE_METRICS,
     JobMetrics,
     metrics_for_nodes_query,
@@ -169,21 +170,31 @@ class TestResolveSparkSource:
 class _OutputDB:
     """SQLite holding a fabricated job output table plus the source triples."""
 
-    def __init__(self, rows: List[Dict[str, Any]], triples: List[Dict[str, str]]):
+    def __init__(
+        self,
+        rows: List[Dict[str, Any]],
+        triples: List[Dict[str, str]],
+        *,
+        pivot_count: int = 8,
+        bfs_complete: int = 1,
+    ):
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
         self.conn.execute(
             "CREATE TABLE metrics (node_uri TEXT, degree REAL, pagerank REAL, "
-            "clustering REAL, component_id TEXT, degree_raw INTEGER)"
+            "clustering REAL, betweenness REAL, closeness REAL, "
+            "component_id TEXT, degree_raw INTEGER)"
         )
         self.conn.executemany(
-            "INSERT INTO metrics VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     r["node_uri"],
                     r.get("degree", 0.0),
                     r.get("pagerank", 0.0),
                     r.get("clustering", 0.0),
+                    r.get("betweenness", 0.0),
+                    r.get("closeness", 0.0),
                     r.get("component_id", "c"),
                     r.get("degree_raw", 0),
                 )
@@ -192,11 +203,12 @@ class _OutputDB:
         )
         self.conn.execute(
             "CREATE TABLE metrics_summary (node_count INTEGER, edge_count INTEGER, "
-            "component_count INTEGER, components_converged INTEGER)"
+            "component_count INTEGER, components_converged INTEGER, "
+            "pivot_count INTEGER, bfs_complete INTEGER)"
         )
         self.conn.execute(
-            "INSERT INTO metrics_summary VALUES (?, ?, ?, ?)",
-            (len(rows), 7, 2, 1),
+            "INSERT INTO metrics_summary VALUES (?, ?, ?, ?, ?, ?)",
+            (len(rows), 7, 2, 1, pivot_count, bfs_complete),
         )
         self.conn.execute(
             "CREATE TABLE triples (subject TEXT, predicate TEXT, object TEXT)"
@@ -323,7 +335,7 @@ class _QualifiedSqliteStore(SqliteStore):
 
 
 def _job_metrics(
-    db: _OutputDB, runner: _FakeRunner, *, top_n: int = 100
+    db: _OutputDB, runner: _FakeRunner, *, top_n: int = 100, pivots: int = 64
 ) -> JobMetrics:
     return JobMetrics(
         _QualifiedSqliteStore(_hub_triples()),
@@ -332,6 +344,7 @@ def _job_metrics(
         query=db.query,
         output_table="metrics",
         top_n=top_n,
+        pivots=pivots,
     )
 
 
@@ -413,16 +426,58 @@ class TestMergeJobResults:
 
 
 class TestJobMetricsCompute:
-    def test_full_compute_reports_job_mode_and_narrow_unavailable_set(self):
+    def test_full_compute_reports_job_mode_with_nothing_unavailable(self):
         db = _OutputDB(_sample_rows(), _hub_triples())
         runner = _FakeRunner()
         result = _job_metrics(db, runner).compute(MetricsRequest())
         assert result.mode == MODE_JOB
-        # Only betweenness/closeness remain — pagerank, clustering and the
-        # component count now come from the job.
-        assert set(result.unavailable_metrics) == set(UNAVAILABLE_METRICS)
-        assert "pagerank" not in result.unavailable_metrics
+        # Every metric is now produced: pagerank, clustering and the component
+        # count exactly, betweenness and closeness as sampled estimates.
+        assert result.unavailable_metrics == []
+        assert set(result.approximate_metrics) == set(APPROXIMATE_METRICS)
+        assert result.pivot_count == 8
         assert result.stats.connected_components == 2
+
+    def test_estimates_are_withheld_when_no_pivots_were_sampled(self):
+        db = _OutputDB(_sample_rows(), _hub_triples(), pivot_count=0)
+        result = _job_metrics(db, _FakeRunner()).compute(MetricsRequest())
+        assert set(result.unavailable_metrics) == set(UNAVAILABLE_METRICS)
+        assert result.approximate_metrics == []
+        assert result.pivot_count == 0
+
+    def test_estimates_are_withheld_when_the_bfs_was_truncated(self):
+        # A truncated BFS biases the distance sums, so the numbers must not be
+        # published as estimates — a wrong number is worse than a missing one.
+        db = _OutputDB(_sample_rows(), _hub_triples(), bfs_complete=0)
+        result = _job_metrics(db, _FakeRunner()).compute(MetricsRequest())
+        assert set(result.unavailable_metrics) == set(UNAVAILABLE_METRICS)
+        assert result.approximate_metrics == []
+
+    def test_withheld_estimates_are_not_written_onto_nodes(self):
+        rows = _sample_rows()
+        for r in rows:
+            r["betweenness"] = 0.9
+            r["closeness"] = 0.9
+        db = _OutputDB(rows, _hub_triples(), pivot_count=0)
+        result = _job_metrics(db, _FakeRunner()).compute(MetricsRequest())
+        assert all(n.betweenness == 0.0 for n in result.nodes.values())
+        assert all(n.closeness == 0.0 for n in result.nodes.values())
+
+    def test_estimates_land_on_nodes_when_available(self):
+        rows = _sample_rows()
+        rows[0]["betweenness"] = 0.42
+        rows[0]["closeness"] = 0.77
+        db = _OutputDB(rows, _hub_triples())
+        result = _job_metrics(db, _FakeRunner()).compute(MetricsRequest())
+        node = result.nodes[rows[0]["node_uri"]]
+        assert node.betweenness == pytest.approx(0.42)
+        assert node.closeness == pytest.approx(0.77)
+
+    def test_pivot_count_reaches_the_runner(self):
+        db = _OutputDB(_sample_rows(), _hub_triples())
+        runner = _FakeRunner()
+        _job_metrics(db, runner, pivots=32).compute(MetricsRequest())
+        assert runner.calls[0]["pivots"] == 32
 
     def test_progress_is_reported(self):
         db = _OutputDB(_sample_rows(), _hub_triples())

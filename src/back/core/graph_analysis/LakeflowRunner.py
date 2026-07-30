@@ -148,6 +148,7 @@ class LakeflowRunner:
         output_table: str,
         exclude_predicates: Optional[List[str]] = None,
         pagerank_iterations: int = 20,
+        pivots: int = 64,
     ) -> int:
         """Start a run and return its run id."""
         job_id = self.resolve_job_id()
@@ -156,6 +157,7 @@ class LakeflowRunner:
             "output_table": output_table,
             "exclude_predicates": ",".join(exclude_predicates or []),
             "pagerank_iterations": str(int(pagerank_iterations)),
+            "pivots": str(int(pivots)),
         }
         try:
             started = self._w().jobs.run_now(job_id=job_id, job_parameters=params)
@@ -245,6 +247,7 @@ class LakeflowRunner:
         output_table: str,
         exclude_predicates: Optional[List[str]] = None,
         pagerank_iterations: int = 20,
+        pivots: int = 64,
         on_progress: Optional[Callable[[int, str], None]] = None,
     ) -> Dict[str, Any]:
         """Convenience wrapper: submit, then follow the run to completion."""
@@ -253,6 +256,7 @@ class LakeflowRunner:
             output_table=output_table,
             exclude_predicates=exclude_predicates,
             pagerank_iterations=pagerank_iterations,
+            pivots=pivots,
         )
         return self.wait_for(run_id, on_progress=on_progress)
 

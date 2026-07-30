@@ -3518,6 +3518,7 @@ class DigitalTwin:
             pagerank_iterations=int(
                 getattr(settings, "analytics_job_pagerank_iterations", 20) or 20
             ),
+            pivots=int(getattr(settings, "analytics_job_pivots", 64) or 0),
         )
 
     @staticmethod

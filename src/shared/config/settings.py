@@ -180,6 +180,21 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Source nodes sampled for betweenness and closeness (Brandes-Pich pivots).
+    # Exact betweenness is O(V*E), which is not viable at the sizes this job
+    # exists for, so both are estimated from a sample and labelled as
+    # approximate in the UI. This is the job's dominant cost — the intermediate
+    # BFS holds one row per (pivot, reachable node), so 128 pivots over a
+    # 1M-node graph is a ~128M-row shuffle. 0 skips both metrics; a value at or
+    # above the node count makes them exact.
+    analytics_job_pivots: int = Field(
+        default=64,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_ANALYTICS_JOB_PIVOTS",
+            "analytics_job_pivots",
+        ),
+    )
+
     model_config = ConfigDict(
         env_prefix="",
         case_sensitive=False,

@@ -56,8 +56,10 @@ resources:
               - "{{job.parameters.output_table}}"
               - "--exclude-predicates"
               - "{{job.parameters.exclude_predicates}}"
-              - "--pagerank-iterations"
-              - "{{job.parameters.pagerank_iterations}}"
+                    - "--pagerank-iterations"
+                    - "{{job.parameters.pagerank_iterations}}"
+                    - "--pivots"
+                    - "{{job.parameters.pivots}}"
 
       parameters:
         - name: source_table
@@ -66,5 +68,9 @@ resources:
           default: ""
         - name: exclude_predicates
           default: ""
-        - name: pagerank_iterations
-          default: "20"
+      - name: pagerank_iterations
+        default: "20"
+      # Pivots for the sampled betweenness/closeness. This is the cost driver:
+      # the BFS holds one row per (pivot, reachable node). 0 skips both metrics.
+      - name: pivots
+        default: "64"

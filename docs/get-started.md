@@ -511,6 +511,7 @@ the workspace token (locally) or the SP token (in Apps).
 | `ONTOBRICKS_ANALYTICS_JOB_OUTPUT_SCHEMA` | `catalog.schema` holding the job's per-node output tables (one per domain version). Empty uses the registry catalog/schema. | *(registry)* |
 | `ONTOBRICKS_ANALYTICS_JOB_TIMEOUT_S` | How long to follow a job run before giving up waiting. The run itself is not cancelled. | `3600` |
 | `ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS` | PageRank power iterations the job runs. 20 fixes the top-N ordering; raise for converged absolute scores. | `20` |
+| `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` | Source nodes sampled for the betweenness/closeness estimates. Dominant cost of the job — the intermediate search holds one row per (pivot, reachable node). `0` skips both metrics; a value at or above the node count makes them exact. | `64` |
 
 #### Databricks Runtime Detection
 

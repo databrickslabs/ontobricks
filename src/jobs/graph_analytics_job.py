@@ -64,6 +64,18 @@ DEFAULT_PAGERANK_ITERATIONS = 20
 
 DEFAULT_COMPONENT_ITERATIONS = 50
 
+#: Pivots sampled for the betweenness / closeness estimates (Brandes-Pich).
+#: This is the cost driver of the whole job: the BFS table holds one row per
+#: (pivot, reached node), so doubling this doubles the largest intermediate.
+#: 0 disables both metrics. Set it to at least the node count to compute them
+#: exactly — the estimators below are built so that case reduces to the exact
+#: definition, which is how they are tested against NetworkX.
+DEFAULT_PIVOTS = 64
+
+#: Cap on BFS levels. Knowledge graphs have small diameters; this only exists
+#: so a pathological graph cannot loop forever. Truncation is reported.
+DEFAULT_MAX_DEPTH = 12
+
 
 #: Up to three dot-separated plain identifiers (``catalog.schema.table``).
 _IDENTIFIER_RE = re.compile(
@@ -143,6 +155,31 @@ class GraphAnalyticsSQL:
     def summary_table(self) -> str:
         return f"{self.output_table}_summary"
 
+    @property
+    def pivots(self) -> str:
+        return f"{self.work_prefix}_pivots"
+
+    @property
+    def bfs(self) -> str:
+        """Accumulated ``(pivot, node, dist, sigma)`` from the multi-source BFS."""
+        return f"{self.work_prefix}_bfs"
+
+    @property
+    def delta_acc(self) -> str:
+        """Accumulated Brandes dependencies ``(pivot, node, val)``."""
+        return f"{self.work_prefix}_delta"
+
+    @property
+    def betweenness_table(self) -> str:
+        return f"{self.work_prefix}_bc"
+
+    @property
+    def closeness_table(self) -> str:
+        return f"{self.work_prefix}_cl"
+
+    def frontier(self, slot: str) -> str:
+        return f"{self.work_prefix}_frontier_{slot}"
+
     def pagerank_table(self, slot: str) -> str:
         return f"{self.work_prefix}_pr_{slot}"
 
@@ -162,6 +199,13 @@ class GraphAnalyticsSQL:
             self.pagerank_table("b"),
             self.components_table("a"),
             self.components_table("b"),
+            self.pivots,
+            self.bfs,
+            self.delta_acc,
+            self.betweenness_table,
+            self.closeness_table,
+            self.frontier("a"),
+            self.frontier("b"),
         ]
 
     # -- helpers -------------------------------------------------------
@@ -342,19 +386,199 @@ class GraphAnalyticsSQL:
         )
         return statements
 
-    # -- stage 5: output ------------------------------------------------
+    # -- stage 5: betweenness / closeness via pivot sampling ------------
+    #
+    # Brandes-Pich: run single-source shortest paths from a sample of *pivots*
+    # instead of every node, then rescale by ``n / k``. Exact betweenness is
+    # O(V*E), which is not viable at the sizes this job exists for.
+    #
+    # All pivots are expanded in one BFS (a single ``(pivot, node, dist,
+    # sigma)`` table advancing one level per iteration) rather than k separate
+    # searches, so the loop runs for the graph's diameter, not k * diameter.
+    #
+    # The estimators in :meth:`write_output` are written so that pivots = all
+    # nodes reduces to the exact NetworkX definition. That is not a
+    # coincidence — it is what makes the approximation testable.
+
+    def build_pivots(self, pivot_count: int) -> List[str]:
+        """Sample *pivot_count* nodes deterministically.
+
+        Ordering by a hash rather than by the URI avoids picking a
+        lexicographically clustered sample, which on a real knowledge graph
+        would mean sampling one entity type. Deterministic so a re-run gives
+        the same estimate rather than a slightly different number each time.
+
+        When ``pivot_count >= node_count`` this returns every node, and the
+        metrics become exact.
+        """
+        return self._recreate(
+            self.pivots,
+            f"SELECT n FROM {self.deg}\n"
+            # md5 rather than a plain hash: present in both Spark and Postgres,
+            # so the same statement is valid wherever this runs.
+            f"ORDER BY md5(n), n\n"
+            f"LIMIT {max(1, int(pivot_count))}",
+        )
+
+    def pivot_count_query(self) -> str:
+        return f"SELECT COUNT(*) AS n FROM {self.pivots}"
+
+    def bfs_init(self) -> List[str]:
+        """Seed every pivot at distance 0 with one shortest path to itself."""
+        seed = (
+            f"SELECT n AS pivot, n AS node, 0 AS dist, CAST(1.0 AS DOUBLE) AS sigma\n"
+            f"FROM {self.pivots}"
+        )
+        return self._recreate(self.frontier("a"), seed) + self._recreate(self.bfs, seed)
+
+    def bfs_iteration(self, depth: int, read_slot: str, write_slot: str) -> List[str]:
+        """Expand every pivot's frontier by one hop.
+
+        ``sigma`` (the number of shortest paths) is the sum over the
+        predecessors one level back, which is exactly the current frontier —
+        that is why the anti-join against the accumulated table must happen
+        before the new level is appended.
+        """
+        src = self.frontier(read_slot)
+        dst = self.frontier(write_slot)
+        statements = self._recreate(
+            dst,
+            f"SELECT f.pivot AS pivot, b.v AS node, {int(depth)} AS dist,\n"
+            f"       SUM(f.sigma) AS sigma\n"
+            f"FROM {src} f\n"
+            f"JOIN {self.bi} b ON b.u = f.node\n"
+            f"LEFT JOIN {self.bfs} seen\n"
+            f"  ON seen.pivot = f.pivot AND seen.node = b.v\n"
+            f"WHERE seen.node IS NULL\n"
+            f"GROUP BY f.pivot, b.v",
+        )
+        statements.append(
+            f"INSERT INTO {self.bfs} SELECT pivot, node, dist, sigma FROM {dst}"
+        )
+        return statements
+
+    def frontier_count_query(self, slot: str) -> str:
+        return f"SELECT COUNT(*) AS n FROM {self.frontier(slot)}"
+
+    def delta_init(self) -> List[str]:
+        """An empty dependency table; an absent row means a dependency of 0."""
+        return self._recreate(
+            self.delta_acc,
+            f"SELECT pivot, node, CAST(0.0 AS DOUBLE) AS val\n"
+            f"FROM {self.bfs}\n"
+            f"WHERE 1 = 0",
+        )
+
+    def delta_iteration(self, depth: int) -> List[str]:
+        """Push dependencies from level *depth* back onto level ``depth - 1``.
+
+        Brandes' recurrence: each predecessor ``u`` of ``w`` accumulates
+        ``(sigma(u)/sigma(w)) * (1 + delta(w))``. Because a node sits at exactly
+        one level, it receives contributions in exactly one of these steps, so
+        the accumulator gets one row per ``(pivot, node)`` and can be appended
+        to rather than re-aggregated.
+        """
+        staging = f"{self.delta_acc}_stage"
+        statements = self._recreate(
+            staging,
+            f"SELECT cur.pivot AS pivot, pred.node AS node,\n"
+            f"       SUM((pred.sigma / cur.sigma) * (1.0 + COALESCE(d.val, 0.0)))"
+            f" AS val\n"
+            f"FROM {self.bfs} cur\n"
+            f"JOIN {self.bi} b ON b.u = cur.node\n"
+            f"JOIN {self.bfs} pred\n"
+            f"  ON pred.pivot = cur.pivot AND pred.node = b.v\n"
+            f"  AND pred.dist = cur.dist - 1\n"
+            f"LEFT JOIN {self.delta_acc} d\n"
+            f"  ON d.pivot = cur.pivot AND d.node = cur.node\n"
+            f"WHERE cur.dist = {int(depth)}\n"
+            f"GROUP BY cur.pivot, pred.node",
+        )
+        statements.append(
+            f"INSERT INTO {self.delta_acc} SELECT pivot, node, val FROM {staging}"
+        )
+        statements.append(f"DROP TABLE IF EXISTS {staging}")
+        return statements
+
+    def build_centrality_rollups(self) -> List[str]:
+        """Roll the per-pivot results up into one row per node.
+
+        ``pivot <> node`` on both: Brandes excludes the source from its own
+        betweenness, and a node's distance to itself is not part of closeness.
+        """
+        statements = self._recreate(
+            self.betweenness_table,
+            f"SELECT node, SUM(val) AS raw\n"
+            f"FROM {self.delta_acc}\n"
+            f"WHERE pivot <> node\n"
+            f"GROUP BY node",
+        )
+        statements += self._recreate(
+            self.closeness_table,
+            f"SELECT node,\n"
+            f"       COUNT(*) AS reached,\n"
+            f"       SUM(dist) AS dist_sum\n"
+            f"FROM {self.bfs}\n"
+            f"WHERE pivot <> node\n"
+            f"GROUP BY node",
+        )
+        return statements
+
+    def max_depth_query(self) -> str:
+        return f"SELECT MAX(dist) AS d FROM {self.bfs}"
+
+    # -- stage 6: output ------------------------------------------------
     def write_output(
-        self, pagerank_slot: str, components_slot: str, node_count: int
+        self,
+        pagerank_slot: str,
+        components_slot: str,
+        node_count: int,
+        *,
+        pivot_count: int = 0,
     ) -> List[str]:
-        """Write one row per node with all four metrics.
+        """Write one row per node with every metric.
 
         ``degree`` is normalised by ``node_count - 1`` to match
         ``networkx.degree_centrality``; ``degree_raw`` keeps the plain count
         because the per-type rollups need it.
+
+        Betweenness and closeness are only present when pivots were sampled.
+        Both estimators reduce to the exact NetworkX definition when the pivot
+        set is every node:
+
+        * **betweenness** — Brandes' accumulated dependency, rescaled by
+          ``1/((n-1)(n-2))`` for an undirected normalised result and by ``n/k``
+          to extrapolate from the sample. At ``k == n`` the second factor is 1.
+        * **closeness** — ``reached^2 / (k_eff * dist_sum)``, where ``k_eff``
+          excludes the node itself when it is a pivot. At ``k == n`` this is
+          ``(r/totsp) * (r/(n-1))``, which is NetworkX's ``wf_improved`` form.
         """
         divisor = float(node_count - 1) if node_count > 1 else 1.0
         pr = self.pagerank_table(pagerank_slot)
         cc = self.components_table(components_slot)
+
+        if pivot_count > 0 and node_count > 2:
+            scale = (1.0 / ((node_count - 1) * (node_count - 2))) * (
+                float(node_count) / float(pivot_count)
+            )
+            betweenness = (
+                f"  COALESCE(bc.raw, 0.0) * {scale} AS betweenness,\n"
+                f"  CASE\n"
+                f"    WHEN cl.dist_sum IS NULL OR cl.dist_sum <= 0 THEN 0.0\n"
+                f"    ELSE (CAST(cl.reached AS DOUBLE) * cl.reached)\n"
+                f"         / ((CAST({pivot_count} AS DOUBLE)"
+                f" - CASE WHEN pv.n IS NULL THEN 0 ELSE 1 END) * cl.dist_sum)\n"
+                f"  END AS closeness\n"
+            )
+            joins = (
+                f"LEFT JOIN {self.betweenness_table} bc ON bc.node = d.n\n"
+                f"LEFT JOIN {self.closeness_table} cl ON cl.node = d.n\n"
+                f"LEFT JOIN {self.pivots} pv ON pv.n = d.n"
+            )
+        else:
+            betweenness = "  0.0 AS betweenness,\n  0.0 AS closeness\n"
+            joins = ""
+
         return self._recreate(
             self.output_table,
             f"SELECT\n"
@@ -365,11 +589,13 @@ class GraphAnalyticsSQL:
             f"  cc.component_id AS component_id,\n"
             f"  CASE WHEN d.d < 2 THEN 0.0\n"
             f"       ELSE 2.0 * COALESCE(t.t, 0) / (CAST(d.d AS DOUBLE) * (d.d - 1))\n"
-            f"  END AS clustering\n"
+            f"  END AS clustering,\n"
+            f"{betweenness}"
             f"FROM {self.deg} d\n"
             f"JOIN {pr} p ON p.n = d.n\n"
             f"JOIN {cc} cc ON cc.n = d.n\n"
-            f"LEFT JOIN {self.triangle_counts} t ON t.n = d.n",
+            f"LEFT JOIN {self.triangle_counts} t ON t.n = d.n"
+            + (f"\n{joins}" if joins else ""),
         )
 
     def write_summary(self, stats: Dict[str, object]) -> List[str]:
@@ -382,6 +608,13 @@ class GraphAnalyticsSQL:
             f" AS components_converged",
             f"{int(stats['pagerank_iterations'])} AS pagerank_iterations",
             f"{int(stats['component_iterations'])} AS component_iterations",
+            f"{int(stats.get('pivot_count', 0) or 0)} AS pivot_count",
+            # False means the BFS hit the depth cap, so the betweenness and
+            # closeness estimates are missing the far tail of the distance
+            # distribution. The app downgrades them to "unavailable" rather
+            # than publishing a number it cannot stand behind.
+            f"{'true' if stats.get('bfs_complete', True) else 'false'}"
+            f" AS bfs_complete",
             f"'{sql_escape(str(stats['source_table']))}' AS source_table",
         ]
         return self._recreate(
@@ -399,6 +632,8 @@ def run_analysis(
     *,
     pagerank_iterations: int = DEFAULT_PAGERANK_ITERATIONS,
     component_iterations: int = DEFAULT_COMPONENT_ITERATIONS,
+    pivots: int = DEFAULT_PIVOTS,
+    max_depth: int = DEFAULT_MAX_DEPTH,
     cleanup: bool = True,
 ) -> Dict[str, object]:
     """Drive the full pipeline.
@@ -425,6 +660,8 @@ def run_analysis(
             "components_converged": True,
             "pagerank_iterations": 0,
             "component_iterations": 0,
+            "pivot_count": 0,
+            "bfs_complete": True,
             "source_table": builder.source_table,
         }
         for stmt in builder.write_summary(stats):
@@ -471,7 +708,17 @@ def run_analysis(
 
     component_count = int(scalar(builder.component_count_query(cc_slot)) or 0)
 
-    for stmt in builder.write_output(pr_slot, cc_slot, node_count):
+    # -- Betweenness / closeness: BFS from sampled pivots, then Brandes ---
+    pivot_count = 0
+    bfs_complete = True
+    if pivots > 0:
+        pivot_count, bfs_complete = _run_pivot_centrality(
+            execute, scalar, builder, pivots=pivots, max_depth=max_depth
+        )
+
+    for stmt in builder.write_output(
+        pr_slot, cc_slot, node_count, pivot_count=pivot_count
+    ):
         execute(stmt)
 
     stats: Dict[str, object] = {
@@ -481,6 +728,8 @@ def run_analysis(
         "components_converged": converged,
         "pagerank_iterations": max(0, pagerank_iterations),
         "component_iterations": cc_iterations,
+        "pivot_count": pivot_count,
+        "bfs_complete": bfs_complete,
         "source_table": builder.source_table,
     }
     for stmt in builder.write_summary(stats):
@@ -491,6 +740,71 @@ def run_analysis(
             execute(stmt)
 
     return stats
+
+
+def _run_pivot_centrality(
+    execute,
+    scalar,
+    builder: GraphAnalyticsSQL,
+    *,
+    pivots: int,
+    max_depth: int,
+) -> tuple:
+    """Run the pivot BFS and Brandes accumulation.
+
+    Returns ``(pivot_count, bfs_complete)``. ``bfs_complete`` is False when the
+    search hit *max_depth* with a non-empty frontier, which means the distance
+    sums are truncated and both estimates are biased.
+    """
+    for stmt in builder.build_pivots(pivots):
+        execute(stmt)
+    pivot_count = int(scalar(builder.pivot_count_query()) or 0)
+    if pivot_count == 0:
+        return 0, True
+    logger.info("betweenness/closeness: %d pivots", pivot_count)
+
+    for stmt in builder.bfs_init():
+        execute(stmt)
+
+    slot = "a"
+    depth = 0
+    bfs_complete = True
+    for depth in range(1, max(1, max_depth) + 1):
+        nxt = "b" if slot == "a" else "a"
+        for stmt in builder.bfs_iteration(depth, slot, nxt):
+            execute(stmt)
+        slot = nxt
+        reached = int(scalar(builder.frontier_count_query(slot)) or 0)
+        logger.info("bfs level %d: %d (pivot, node) pairs", depth, reached)
+        if reached == 0:
+            depth -= 1
+            break
+    else:
+        # The loop ran to the cap without the frontier emptying.
+        bfs_complete = int(scalar(builder.frontier_count_query(slot)) or 0) == 0
+        if not bfs_complete:
+            logger.warning(
+                "BFS hit the depth cap of %d with the frontier still growing — "
+                "betweenness and closeness will be reported as unavailable "
+                "rather than as truncated estimates",
+                max_depth,
+            )
+
+    max_dist = int(scalar(builder.max_depth_query()) or 0)
+
+    # Brandes accumulates backwards, so the deepest level is processed first
+    # and each level's dependency is complete before its predecessors read it.
+    for stmt in builder.delta_init():
+        execute(stmt)
+    for level in range(max_dist, 0, -1):
+        for stmt in builder.delta_iteration(level):
+            execute(stmt)
+        logger.info("dependency accumulation: level %d done", level)
+
+    for stmt in builder.build_centrality_rollups():
+        execute(stmt)
+
+    return pivot_count, bfs_complete
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -523,6 +837,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--component-iterations", type=int, default=DEFAULT_COMPONENT_ITERATIONS
     )
+    parser.add_argument(
+        "--pivots",
+        type=int,
+        default=DEFAULT_PIVOTS,
+        help=(
+            "Pivots sampled for the betweenness/closeness estimates. 0 skips "
+            "both; >= node count computes them exactly. Cost driver of the job."
+        ),
+    )
+    parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH)
     parser.add_argument("--damping", type=float, default=DEFAULT_DAMPING)
     parser.add_argument(
         "--keep-work-tables",
@@ -574,6 +898,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         builder,
         pagerank_iterations=args.pagerank_iterations,
         component_iterations=args.component_iterations,
+        pivots=args.pivots,
+        max_depth=args.max_depth,
         cleanup=not args.keep_work_tables,
     )
 

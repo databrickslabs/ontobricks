@@ -529,9 +529,11 @@
             body = head
                 + 'The analysis will run <strong>on Databricks</strong> instead, which has no size limit. '
                 + 'Node/edge counts, average degree, density and degree centrality are aggregated in the '
-                + 'engine; PageRank, the clustering coefficient and the component count are computed by a '
-                + 'serverless job, so expect this to take a few minutes. Only betweenness and closeness stay '
-                + 'unavailable — pick an <strong>Entity Type</strong> above to get those from a subgraph.';
+                + 'engine; PageRank, the clustering coefficient and the component count are computed exactly '
+                + 'by a serverless job, so expect this to take a few minutes. Betweenness and closeness are '
+                + '<strong>estimated</strong> from a sample of source nodes, because computing them exactly '
+                + 'is quadratic in the graph size — good enough to rank nodes, but pick an '
+                + '<strong>Entity Type</strong> above if you need exact values.';
         } else if (_pushdownAvailable) {
             cls  = 'alert-warning';
             icon = 'bi-exclamation-triangle-fill';
@@ -539,8 +541,10 @@
                 + 'The analysis will run as <strong>engine-side aggregation</strong> instead, which has no size '
                 + 'limit but only reports node/edge counts, average degree, density, degree centrality and the '
                 + 'entity-type profiles. PageRank, clustering, betweenness, closeness and the component count '
-                + 'need the in-memory engine — pick an <strong>Entity Type</strong> above to analyse a subgraph '
-                + 'and get all of them.';
+                + 'need either the in-memory engine or the Databricks job. Pick an <strong>Entity Type</strong> '
+                + 'above to analyse a subgraph and get all of them exactly, or ask an admin to enable the '
+                + 'serverless analytics job (<code>ONTOBRICKS_ANALYTICS_JOB_ENABLED</code>) to compute them '
+                + 'over the whole graph.';
         } else {
             cls  = 'alert-danger';
             icon = 'bi-exclamation-octagon-fill';
@@ -1029,6 +1033,10 @@
         // Metrics the run could not compute — charted as zeros, so label them
         // rather than showing a flat bar chart.
         var unavailable = _analyticsData.unavailable_metrics || [];
+        // Metrics that *were* computed but only from a sample of source nodes.
+        // Charted normally, but badged so the numbers are never read as exact.
+        var approximate = _analyticsData.approximate_metrics || [];
+        var pivotCount  = _analyticsData.pivot_count || 0;
 
         _METRICS.forEach(function (m) {
             var sorted = candidateUris
@@ -1058,8 +1066,10 @@
                     var name = m.key.charAt(0).toUpperCase() + m.key.slice(1);
                     reason = '<strong>Not computed for this graph.</strong> '
                         + (_analyticsData.mode === 'job'
-                            ? name + ' needs all-pairs shortest paths, which is not computed even '
-                              + 'by the Databricks job this run used. '
+                            ? name + ' is estimated from a sample of source nodes, and this run '
+                              + 'could not produce a sample it can stand behind — either no '
+                              + 'pivots were sampled or the breadth-first search hit its depth '
+                              + 'cap, which would have biased the result. '
                             : name + ' needs an iterative pass over the whole graph, which the '
                               + 'engine-side aggregation used for graphs over the in-memory limit '
                               + 'does not do. ')
@@ -1081,6 +1091,27 @@
                 return;   // skip chart rendering for this metric
             }
             canvas.style.display = '';
+
+            // Estimated metrics get a standing note above the chart. Ranking is
+            // reliable for the clear leaders; adjacent values can swap, so the
+            // note says that rather than letting the bars imply precision.
+            var estNoticeId = m.canvasId + '_estNotice';
+            var oldEst = document.getElementById(estNoticeId);
+            if (oldEst) oldEst.remove();
+            if (approximate.indexOf(m.key) !== -1) {
+                var estName = m.key.charAt(0).toUpperCase() + m.key.slice(1);
+                var est = document.createElement('div');
+                est.id = estNoticeId;
+                est.className = 'alert alert-warning border small py-1 px-2 mb-2';
+                est.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>'
+                    + '<strong>Estimate.</strong> ' + estName + ' is sampled from '
+                    + pivotCount + ' source node' + (pivotCount === 1 ? '' : 's')
+                    + ' rather than all of them, because the exact computation is '
+                    + 'quadratic in the graph size. Use it to rank nodes, not as an '
+                    + 'absolute value — nodes with similar scores may be ordered '
+                    + 'wrongly. Analyse a single Entity Type for exact values.';
+                canvas.parentNode.insertBefore(est, canvas);
+            }
 
             _charts[m.key] = new Chart(canvas, {
                 type: 'bar',

@@ -14,6 +14,7 @@ not Databricks-specific behaviour. ``TestJobSqlDialects`` covers the parse side
 for Spark and Postgres.
 """
 
+import hashlib
 import sqlite3
 from typing import Dict, List, Optional
 
@@ -44,6 +45,10 @@ class SqliteRunner:
         # The only two functions the generated SQL uses that SQLite lacks.
         self.conn.create_function("least", 2, lambda a, b: min(a, b))
         self.conn.create_function("greatest", 2, lambda a, b: max(a, b))
+        # Spark and Postgres both ship md5; SQLite does not.
+        self.conn.create_function(
+            "md5", 1, lambda s: hashlib.md5((s or "").encode()).hexdigest()
+        )
         self.conn.execute(
             "CREATE TABLE triples (subject TEXT, predicate TEXT, object TEXT)"
         )
@@ -290,6 +295,134 @@ class TestClusteringParity:
         assert all(r["clustering"] == 0.0 for r in _output(runner).values())
 
 
+class TestBetweennessAndClosenessParity:
+    """Pivot sampling must be exact when the pivot set is every node.
+
+    This is the whole reason the estimators are written the way they are. An
+    approximation that cannot be checked against a known answer is a guess; by
+    making the pivot set an input, ``pivots >= node_count`` collapses both
+    estimators to the exact definition and can be compared to NetworkX
+    directly. Only once that holds do the sampled cases mean anything.
+    """
+
+    @pytest.mark.parametrize(
+        "graph_fn", [_hub, _two_components, _triangle_rich, _karate]
+    )
+    def test_all_pivots_matches_exact_betweenness(self, graph_fn):
+        graph = graph_fn()
+        runner, _, stats = _run(graph, pivots=graph.number_of_nodes())
+        out = _output(runner)
+        assert stats["pivot_count"] == graph.number_of_nodes()
+        expected = nx.betweenness_centrality(graph, normalized=True)
+        for uri, row in out.items():
+            assert row["betweenness"] == pytest.approx(expected[uri], abs=1e-9)
+
+    @pytest.mark.parametrize(
+        "graph_fn", [_hub, _two_components, _triangle_rich, _karate]
+    )
+    def test_all_pivots_matches_exact_closeness(self, graph_fn):
+        graph = graph_fn()
+        runner, _, _ = _run(graph, pivots=graph.number_of_nodes())
+        out = _output(runner)
+        expected = nx.closeness_centrality(graph)
+        for uri, row in out.items():
+            assert row["closeness"] == pytest.approx(expected[uri], abs=1e-9)
+
+    def test_closeness_handles_disconnected_components(self):
+        # The two-component fixture is the case a naive 1/sum(d) estimator
+        # gets wrong: nodes cannot reach the other component at all.
+        graph = _two_components()
+        runner, _, _ = _run(graph, pivots=graph.number_of_nodes())
+        out = _output(runner)
+        expected = nx.closeness_centrality(graph)
+        for uri, row in out.items():
+            assert row["closeness"] == pytest.approx(expected[uri], abs=1e-9)
+
+    def test_sampled_pivots_surface_the_true_top_node_near_the_top(self):
+        """A sample ranks the leaders roughly, not exactly.
+
+        Deliberately *not* asserting that the top estimated node is the top
+        exact node: on karate the top two are 0.438 and 0.304, and a 12-pivot
+        sample of 34 nodes swaps them often. That is ordinary variance, so the
+        honest guarantee is that the true leader stays near the top — which is
+        what matters for a chart of the top N.
+        """
+        graph = _karate()
+        runner, _, stats = _run(graph, pivots=12)
+        assert stats["pivot_count"] == 12
+        out = _output(runner)
+        exact = nx.betweenness_centrality(graph, normalized=True)
+        top_exact = max(exact, key=lambda n: exact[n])
+        est_order = sorted(out, key=lambda n: -out[n]["betweenness"])
+        assert top_exact in est_order[:3]
+
+    def test_more_pivots_means_less_error(self):
+        """The estimator must converge on the exact answer as k grows.
+
+        This is the property that shows the ``n/k`` rescaling is right: a
+        mis-scaled estimator would be consistently wrong at every k rather
+        than improving.
+        """
+        graph = _karate()
+        exact = nx.betweenness_centrality(graph, normalized=True)
+
+        def mean_abs_error(k: int) -> float:
+            out = _output(_run(graph, pivots=k)[0])
+            return sum(abs(out[u]["betweenness"] - exact[u]) for u in out) / len(out)
+
+        assert mean_abs_error(30) < mean_abs_error(4)
+        # And a full pivot set has essentially no error at all.
+        assert mean_abs_error(graph.number_of_nodes()) < 1e-9
+
+    def test_sampled_estimate_is_in_the_right_ballpark(self):
+        graph = _karate()
+        runner, _, _ = _run(graph, pivots=20)
+        out = _output(runner)
+        exact = nx.betweenness_centrality(graph, normalized=True)
+        # The n/k rescaling should keep the totals comparable; a factor-of-two
+        # error here would mean the rescale is wrong rather than merely noisy.
+        est_total = sum(r["betweenness"] for r in out.values())
+        exact_total = sum(exact.values())
+        assert 0.5 * exact_total < est_total < 2.0 * exact_total
+
+    def test_pivot_sampling_is_deterministic(self):
+        graph = _karate()
+        first = _output(_run(graph, pivots=10)[0])
+        second = _output(_run(graph, pivots=10)[0])
+        for uri in first:
+            assert first[uri]["betweenness"] == second[uri]["betweenness"]
+
+    def test_pivots_zero_skips_both_metrics(self):
+        graph = _karate()
+        runner, _, stats = _run(graph, pivots=0)
+        out = _output(runner)
+        assert stats["pivot_count"] == 0
+        assert all(r["betweenness"] == 0.0 for r in out.values())
+        assert all(r["closeness"] == 0.0 for r in out.values())
+
+    def test_depth_cap_is_reported_as_incomplete(self):
+        # A long path cannot be searched in one level, and the run must say the
+        # estimates are truncated rather than publish them as final.
+        graph = _relabel(nx.path_graph(14))
+        _, _, stats = _run(graph, pivots=graph.number_of_nodes(), max_depth=2)
+        assert stats["bfs_complete"] is False
+
+    def test_completed_bfs_is_reported_complete(self):
+        graph = _karate()
+        _, _, stats = _run(graph, pivots=graph.number_of_nodes(), max_depth=12)
+        assert stats["bfs_complete"] is True
+
+    def test_sigma_counts_multiple_shortest_paths(self):
+        # A 4-cycle gives two equal-length paths between opposite corners;
+        # betweenness is only right if sigma counts both.
+        graph = _relabel(nx.cycle_graph(4))
+        runner, _, _ = _run(graph, pivots=4)
+        out = _output(runner)
+        expected = nx.betweenness_centrality(graph, normalized=True)
+        for uri, row in out.items():
+            assert row["betweenness"] == pytest.approx(expected[uri], abs=1e-9)
+
+
 class TestSummaryAndCleanup:
     def test_summary_row_matches_returned_stats(self):
         graph = _karate()
@@ -386,6 +519,14 @@ class TestJobSqlDialects:
         statements += builder.components_init()
         statements += builder.components_iteration("a", "b")
         statements += builder.clustering()
+        statements += builder.build_pivots(64)
+        statements += builder.bfs_init()
+        statements += builder.bfs_iteration(1, "a", "b")
+        statements += builder.delta_init()
+        statements += builder.delta_iteration(3)
+        statements += builder.build_centrality_rollups()
+        # Both branches: with pivots (the estimator expressions) and without.
+        statements += builder.write_output("b", "b", 10, pivot_count=64)
         statements += builder.write_output("b", "b", 10)
         statements += builder.write_summary(
             {
@@ -395,6 +536,8 @@ class TestJobSqlDialects:
                 "components_converged": True,
                 "pagerank_iterations": 1,
                 "component_iterations": 1,
+                "pivot_count": 64,
+                "bfs_complete": True,
                 "source_table": "cat.sch.triples",
             }
         )
@@ -403,6 +546,9 @@ class TestJobSqlDialects:
             builder.edge_count_query(),
             builder.components_changed_query("a", "b"),
             builder.component_count_query("b"),
+            builder.pivot_count_query(),
+            builder.frontier_count_query("a"),
+            builder.max_depth_query(),
         ]
         statements += builder.drop_work_tables()
         return statements

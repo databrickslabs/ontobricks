@@ -42,7 +42,13 @@ logger = get_logger(__name__)
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
-#: Still not computed in this mode — both need all-pairs shortest paths.
+#: Betweenness and closeness are sampled from a subset of source nodes rather
+#: than computed exactly, so they are reported as approximate rather than as
+#: plain values. Nothing is unavailable in this mode when pivots were sampled.
+APPROXIMATE_METRICS = ("betweenness", "closeness")
+
+#: What is missing when the job ran with no pivots, or when its BFS was
+#: truncated and the estimates would be biased.
 UNAVAILABLE_METRICS = ("betweenness", "closeness")
 
 
@@ -140,7 +146,8 @@ def _quote(value: str) -> str:
 def summary_query(output_table: str) -> str:
     """One-row run summary written by the job."""
     return (
-        "SELECT node_count, edge_count, component_count, components_converged "
+        "SELECT node_count, edge_count, component_count, components_converged, "
+        "pivot_count, bfs_complete "
         f"FROM {output_table}_summary"
     )
 
@@ -156,14 +163,18 @@ def top_nodes_query(output_table: str, top_n: int) -> str:
     k = max(1, int(top_n))
     return (
         "WITH ranked AS (\n"
-        "  SELECT node_uri, degree, pagerank, clustering, component_id,\n"
+        "  SELECT node_uri, degree, pagerank, clustering, betweenness, closeness,\n"
+        "         component_id,\n"
         "         ROW_NUMBER() OVER (ORDER BY pagerank DESC, node_uri) AS rn_pr,\n"
-        "         ROW_NUMBER() OVER (ORDER BY clustering DESC, node_uri) AS rn_cl\n"
+        "         ROW_NUMBER() OVER (ORDER BY clustering DESC, node_uri) AS rn_cl,\n"
+        "         ROW_NUMBER() OVER (ORDER BY betweenness DESC, node_uri) AS rn_bc,\n"
+        "         ROW_NUMBER() OVER (ORDER BY closeness DESC, node_uri) AS rn_cn\n"
         f"  FROM {output_table}\n"
         ")\n"
-        "SELECT node_uri, degree, pagerank, clustering, component_id\n"
+        "SELECT node_uri, degree, pagerank, clustering, betweenness, closeness,\n"
+        "       component_id\n"
         "FROM ranked\n"
-        f"WHERE rn_pr <= {k} OR rn_cl <= {k}\n"
+        f"WHERE rn_pr <= {k} OR rn_cl <= {k} OR rn_bc <= {k} OR rn_cn <= {k}\n"
         "ORDER BY pagerank DESC, node_uri"
     )
 
@@ -176,7 +187,8 @@ def metrics_for_nodes_query(output_table: str, node_uris: List[str]) -> str:
     """
     in_list = ", ".join(_quote(u) for u in node_uris)
     return (
-        "SELECT node_uri, degree, pagerank, clustering, component_id\n"
+        "SELECT node_uri, degree, pagerank, clustering, betweenness, closeness,\n"
+        "       component_id\n"
         f"FROM {output_table}\n"
         f"WHERE node_uri IN ({in_list})"
     )
@@ -218,6 +230,7 @@ class JobMetrics:
         output_table: str,
         top_n: int = 100,
         pagerank_iterations: int = 20,
+        pivots: int = 64,
     ) -> None:
         self._store = store
         self._graph_name = graph_name
@@ -226,6 +239,7 @@ class JobMetrics:
         self._output_table = output_table
         self._top_n = max(1, int(top_n))
         self._pagerank_iterations = max(1, int(pagerank_iterations))
+        self._pivots = max(0, int(pivots))
 
     def compute(
         self,
@@ -254,6 +268,7 @@ class JobMetrics:
             output_table=self._output_table,
             exclude_predicates=None,
             pagerank_iterations=self._pagerank_iterations,
+            pivots=self._pivots,
             on_progress=on_progress,
         )
         if not outcome.get("success"):
@@ -272,7 +287,6 @@ class JobMetrics:
         self._merge_job_results(base, source_table)
 
         base.mode = MODE_JOB
-        base.unavailable_metrics = list(UNAVAILABLE_METRICS)
         base.stats.elapsed_ms = int((time.time() - t0) * 1000)
 
         logger.info(
@@ -290,15 +304,38 @@ class JobMetrics:
     def _merge_job_results(self, base: MetricsResult, source_table: str) -> None:
         """Overlay the job's per-node scores and component count onto *base*."""
         summary = self._query(summary_query(self._output_table)) or []
+        # Default to "not computed" so a summary the job could not write never
+        # results in sampled zeros being charted as real centrality values.
+        pivot_count = 0
+        bfs_complete = True
         if summary:
             row = summary[0]
             base.stats.connected_components = int(row.get("component_count", 0) or 0)
+            pivot_count = int(row.get("pivot_count", 0) or 0)
+            bfs_complete = bool(row.get("bfs_complete", True))
             if not row.get("components_converged", True):
                 # Surfaced rather than silently trusted: an unconverged label
                 # propagation over-counts components.
                 logger.warning(
                     "Component labelling did not converge for %s — the component "
                     "count is a lower bound",
+                    self._graph_name,
+                )
+
+        # A truncated BFS biases both estimates, so they are withheld rather
+        # than published with a caveat nobody would read.
+        if pivot_count > 0 and bfs_complete:
+            base.approximate_metrics = list(APPROXIMATE_METRICS)
+            base.unavailable_metrics = []
+            base.pivot_count = pivot_count
+        else:
+            base.approximate_metrics = []
+            base.unavailable_metrics = list(UNAVAILABLE_METRICS)
+            base.pivot_count = 0
+            if pivot_count > 0 and not bfs_complete:
+                logger.warning(
+                    "The pivot BFS for %s hit its depth cap; betweenness and "
+                    "closeness are reported as unavailable rather than truncated",
                     self._graph_name,
                 )
 
@@ -318,6 +355,9 @@ class JobMetrics:
             node = base.nodes.get(uri) or NodeMetrics()
             node.pagerank = round(float(row.get("pagerank", 0.0) or 0.0), 8)
             node.clustering = round(float(row.get("clustering", 0.0) or 0.0), 6)
+            if base.approximate_metrics:
+                node.betweenness = round(float(row.get("betweenness", 0.0) or 0.0), 8)
+                node.closeness = round(float(row.get("closeness", 0.0) or 0.0), 6)
             # The job's ``degree`` is already normalised, but the pushdown pass
             # computed it too; prefer the existing value so a node's degree
             # never changes depending on which query returned it.

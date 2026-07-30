@@ -159,6 +159,13 @@ class MetricsResult:
     ``unavailable_metrics`` names the per-node metrics this run could not
     compute (they are present but zero), so the UI can say so instead of
     drawing a flat zero chart.
+
+    ``approximate_metrics`` names metrics that were computed but are
+    *estimates* rather than exact values — currently betweenness and closeness
+    in ``job`` mode, which are sampled from a subset of source nodes
+    (Brandes-Pich pivots). They are usable for ranking but must not be
+    presented as exact, which is why they are flagged separately from
+    ``unavailable_metrics`` rather than lumped in with it.
     """
 
     nodes: Dict[str, NodeMetrics] = field(default_factory=dict)
@@ -169,6 +176,9 @@ class MetricsResult:
     entity_type_profiles: Dict[str, "EntityTypeProfile"] = field(default_factory=dict)  # class_uri → profile
     mode: str = MODE_IN_MEMORY
     unavailable_metrics: List[str] = field(default_factory=list)
+    approximate_metrics: List[str] = field(default_factory=list)
+    #: Pivots sampled for the approximate metrics (0 when none were).
+    pivot_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the JSON-serializable API/registry payload."""
@@ -183,6 +193,8 @@ class MetricsResult:
             },
             "mode": self.mode,
             "unavailable_metrics": list(self.unavailable_metrics),
+            "approximate_metrics": list(self.approximate_metrics),
+            "pivot_count": self.pivot_count,
         }
 
 
