@@ -42,6 +42,7 @@ from back.core.helpers import (
     get_databricks_host_and_token,
     make_volume_file_service,
     is_uri,
+    resolve_analytics_job_enabled,
     run_blocking,
 )
 
@@ -540,7 +541,7 @@ async def compute_graph_metrics(
         # The job mode is a strict superset of pushdown, so prefer it whenever
         # it is enabled and the graph is actually reachable from Spark.
         job_available = bool(
-            settings.analytics_job_enabled
+            resolve_analytics_job_enabled(domain, settings)
             and pushdown_available
             and resolve_spark_source(store, graph_name)[0]
         )
@@ -1500,7 +1501,7 @@ async def triplestore_stats(
             # components / clustering to the Databricks job, so the banner can
             # promise the full metric set instead of the reduced one.
             "analytics_job_available": bool(
-                settings.analytics_job_enabled
+                resolve_analytics_job_enabled(domain, settings)
                 and supports_pushdown(store)
                 and resolve_spark_source(store, graph_name)[0]
             ),

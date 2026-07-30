@@ -125,11 +125,16 @@ class Settings(BaseSettings):
     )
 
     # Whether an oversized graph may offload PageRank / connected components /
-    # clustering to the serverless Lakeflow job
+    # clustering / sampled betweenness+closeness to the serverless Lakeflow job
     # (``resources/graph_analytics.job.yml``). Opt-in, because it only works
     # once the bundle carrying that job has been deployed and the graph data is
     # reachable from Spark as a Unity Catalog table. With this off, those
     # metrics stay unavailable above the cap rather than being computed.
+    #
+    # This is the *deployment default* only. The effective value comes from
+    # :meth:`DatabricksHelpers.resolve_analytics_job_enabled`, which prefers the
+    # admin toggle in Settings → Global when one has been set. Read that
+    # resolver rather than this field.
     analytics_job_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices(

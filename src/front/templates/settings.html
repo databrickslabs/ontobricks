@@ -846,6 +846,30 @@
 
                     <hr>
 
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            Knowledge-Graph Analytics
+                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                            </span>
+                        </label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="analyticsJobEnabled">
+                            <label class="form-check-label" for="analyticsJobEnabled">
+                                Compute large-graph metrics on Databricks
+                            </label>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            <i class="bi bi-info-circle"></i> Graphs over the in-memory analytics limit fall back to engine-side aggregation, which reports only counts, average degree, density, degree centrality and the entity-type profiles. Enable this to additionally run a serverless Databricks job that computes <strong>PageRank</strong>, the <strong>clustering coefficient</strong> and the <strong>component count</strong> exactly, plus <strong>betweenness</strong> and <strong>closeness</strong> as sampled estimates.
+                        </small>
+                        <small class="text-muted d-block mt-1">
+                            <i class="bi bi-exclamation-triangle"></i> Requires the Databricks bundle to have been deployed (so the job exists) and the graph to be readable from Spark as a Unity Catalog table &mdash; true for the Delta engine and for Lakebase in <code>managed_synced</code> mode, but not for Lakebase <code>app_managed</code> or Neo4j. When a prerequisite is missing the run degrades to engine-side aggregation instead of failing, so turning this on is safe either way. Runs take minutes rather than seconds.
+                        </small>
+                        <small id="analyticsJobEnabledSource" class="text-muted d-block mt-1"></small>
+                    </div>
+
+                    <hr>
+
                     <div class="mb-0">
                         <label class="form-label fw-semibold"><i class="bi bi-code-square me-1"></i> API Documentation</label>
                         <p class="small text-muted mb-2">External API: REST <code>/api/v1/*</code>, domains <code>/api/v1/domains</code> and <code>/api/v1/domain/*</code> (versions, design status, OWL, R2RML, Spark SQL), Knowledge Graph <code>/api/v1/digitaltwin/*</code>, GraphQL <code>/api/v1/graphql/*</code>. In-app GraphQL also lives under <code>/graphql</code>. Other JSON routes are documented under <a href="/docs" target="_blank">/docs</a>.</p>

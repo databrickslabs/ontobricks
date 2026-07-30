@@ -35,6 +35,7 @@ resolve_delta_warehouse_id = DatabricksHelpers.resolve_delta_warehouse_id
 resolve_default_base_uri = DatabricksHelpers.resolve_default_base_uri
 resolve_default_emoji = DatabricksHelpers.resolve_default_emoji
 resolve_use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch
+resolve_analytics_job_enabled = DatabricksHelpers.resolve_analytics_job_enabled
 get_databricks_client = DatabricksHelpers.get_databricks_client
 get_databricks_credentials = DatabricksHelpers.get_databricks_credentials
 get_delta_databricks_credentials = DatabricksHelpers.get_delta_databricks_credentials
@@ -52,6 +53,7 @@ __all__ = [
     "resolve_default_base_uri",
     "resolve_default_emoji",
     "resolve_use_cloud_fetch",
+    "resolve_analytics_job_enabled",
     "get_databricks_client",
     "get_databricks_credentials",
     "get_delta_databricks_credentials",

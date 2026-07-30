@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     loadRegistryCacheTtl();
     loadEditLockTtl();
+    loadAnalyticsJobEnabled();
     loadNavbarLogo();
     // Preload the Delta warehouse selection + registry location so the Delta
     // panel reflects the saved SQL warehouse. Also preload graph_engine_config
@@ -386,6 +387,29 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             console.log('Using default edit-lock lease TTL');
+        }
+    }
+
+    async function loadAnalyticsJobEnabled() {
+        const input = document.getElementById('analyticsJobEnabled');
+        if (!input) return;
+        const note = document.getElementById('analyticsJobEnabledSource');
+        try {
+            const resp = await fetch('/settings/analytics-job-enabled', { credentials: 'same-origin' });
+            const result = await resp.json();
+            if (!result.success) return;
+            input.checked = !!result.analytics_job_enabled;
+            // Say where the value came from: an unconfigured toggle tracks the
+            // deployment default, and a bare checkbox would imply someone chose it.
+            if (note) {
+                note.innerHTML = result.source === 'admin'
+                    ? '<i class="bi bi-person-check me-1"></i>Set by an admin.'
+                    : '<i class="bi bi-gear me-1"></i>Not configured — following the deployment '
+                      + 'default (<code>ONTOBRICKS_ANALYTICS_JOB_ENABLED</code> = '
+                      + (result.env_default ? 'true' : 'false') + '). Saving here overrides it.';
+            }
+        } catch (error) {
+            console.log('Using default analytics job setting');
         }
     }
 
@@ -2965,6 +2989,24 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (!r.success) errors.push('Edit lock lease: ' + r.message);
                 } catch (e) { errors.push('Edit lock lease: ' + e.message); }
             }
+        }
+
+        // 3c. Save the Databricks graph-analytics job toggle. Sent
+        // unconditionally rather than only when checked, because unchecking it
+        // has to persist an explicit "off" that overrides the env-var default.
+        const analyticsJobInput = document.getElementById('analyticsJobEnabled');
+        if (analyticsJobInput) {
+            try {
+                const resp = await fetch('/settings/save-analytics-job-enabled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ analytics_job_enabled: analyticsJobInput.checked })
+                });
+                const r = await resp.json();
+                if (!r.success) errors.push('Analytics job: ' + r.message);
+                else loadAnalyticsJobEnabled();
+            } catch (e) { errors.push('Analytics job: ' + e.message); }
         }
 
         // 4. Graph DB connection config + Delta warehouse (same tab; top Save only)

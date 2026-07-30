@@ -140,6 +140,12 @@ env:
   # "true" to additionally offload those to the serverless job in
   # resources/graph_analytics.job.yml.
   #
+  # This is only the INITIAL value. Admins flip it at runtime in
+  # Settings -> Global ("Compute large-graph metrics on Databricks"), and once
+  # they have, their choice overrides this — including an explicit "off"
+  # against a "true" here. Changing this value does not un-set an admin's
+  # choice.
+  #
   # Requires: the bundle deployed (so the job exists), and the graph
   # readable from Spark as a UC table — true for the Delta engine and
   # for Lakebase in managed_synced mode, but NOT for Lakebase

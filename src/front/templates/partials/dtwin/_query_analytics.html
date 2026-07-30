@@ -542,9 +542,9 @@
                 + 'limit but only reports node/edge counts, average degree, density, degree centrality and the '
                 + 'entity-type profiles. PageRank, clustering, betweenness, closeness and the component count '
                 + 'need either the in-memory engine or the Databricks job. Pick an <strong>Entity Type</strong> '
-                + 'above to analyse a subgraph and get all of them exactly, or ask an admin to enable the '
-                + 'serverless analytics job (<code>ONTOBRICKS_ANALYTICS_JOB_ENABLED</code>) to compute them '
-                + 'over the whole graph.';
+                + 'above to analyse a subgraph and get all of them exactly, or enable '
+                + '<strong>Compute large-graph metrics on Databricks</strong> in '
+                + '<strong>Settings &rarr; Global</strong> (admin only) to compute them over the whole graph.';
         } else {
             cls  = 'alert-danger';
             icon = 'bi-exclamation-octagon-fill';

@@ -7,6 +7,7 @@ from back.core.helpers import (
     get_databricks_client,
     get_databricks_credentials,
     get_databricks_host_and_token,
+    resolve_analytics_job_enabled,
     resolve_use_cloud_fetch,
 )
 from back.core.helpers.DatabricksHelpers import DatabricksHelpers
@@ -161,6 +162,91 @@ class TestResolveUseCloudFetch:
     )
     def test_defaults_to_true_when_registry_unconfigured(self, _hst, _rcfg):
         assert resolve_use_cloud_fetch(_make_domain(), _make_settings()) is True
+
+
+def _cfg(catalog="main", schema="ob"):
+    """Patch the registry/host lookups the global-config resolvers depend on."""
+    return (
+        patch.object(
+            DatabricksHelpers,
+            "_resolve_registry_cfg",
+            return_value={"catalog": catalog, "schema": schema},
+        ),
+        patch.object(
+            DatabricksHelpers,
+            "get_databricks_host_and_token",
+            return_value=("https://test.databricks.com", "tok-123"),
+        ),
+    )
+
+
+class TestResolveAnalyticsJobEnabled:
+    """Settings → Global admin toggle wins over the env-var deployment default.
+
+    The three-state getter is the whole point here: ``None`` has to mean "no
+    admin has decided", so it falls through to the env var, while a stored
+    ``False`` must still be able to override an env var that turns the job on.
+    Collapsing that to a plain bool would make "admin turned it off" and "never
+    configured" indistinguishable.
+    """
+
+    def _resolve(self, *, configured, env_default):
+        rcfg, hst = _cfg()
+        with rcfg, hst, patch(
+            "back.objects.session.global_config_service.get_analytics_job_enabled",
+            return_value=configured,
+        ):
+            return resolve_analytics_job_enabled(
+                _make_domain(), _make_settings(analytics_job_enabled=env_default)
+            )
+
+    def test_admin_on_overrides_env_off(self):
+        assert self._resolve(configured=True, env_default=False) is True
+
+    def test_admin_off_overrides_env_on(self):
+        # The regression that the `if val: return val` idiom would cause.
+        assert self._resolve(configured=False, env_default=True) is False
+
+    def test_unset_falls_back_to_env_default_on(self):
+        assert self._resolve(configured=None, env_default=True) is True
+
+    def test_unset_falls_back_to_env_default_off(self):
+        assert self._resolve(configured=None, env_default=False) is False
+
+    def test_registry_unconfigured_uses_env_default(self):
+        rcfg, hst = _cfg(catalog="", schema="")
+        with rcfg, hst:
+            assert (
+                resolve_analytics_job_enabled(
+                    _make_domain(), _make_settings(analytics_job_enabled=True)
+                )
+                is True
+            )
+
+    def test_lookup_failure_uses_env_default(self):
+        # A registry hiccup must not silently flip the feature on or off.
+        rcfg, hst = _cfg()
+        with rcfg, hst, patch(
+            "back.objects.session.global_config_service.get_analytics_job_enabled",
+            side_effect=RuntimeError("registry down"),
+        ):
+            assert (
+                resolve_analytics_job_enabled(
+                    _make_domain(), _make_settings(analytics_job_enabled=True)
+                )
+                is True
+            )
+
+    def test_missing_setting_attribute_defaults_off(self):
+        # MCP / probe callers may pass a Settings without the field at all.
+        rcfg, hst = _cfg()
+        settings = _make_settings()
+        del settings.analytics_job_enabled
+        with rcfg, hst, patch(
+            "back.objects.session.global_config_service.get_analytics_job_enabled",
+            return_value=None,
+        ):
+            assert resolve_analytics_job_enabled(_make_domain(), settings) is False
 
 
 class TestGetDatabricksClientCloudFetch:

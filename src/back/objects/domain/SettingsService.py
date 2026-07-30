@@ -1445,6 +1445,63 @@ class SettingsService:
             )
         return {"success": True, "edit_lock_ttl_s": ttl_s}
 
+    @staticmethod
+    def get_analytics_job_enabled_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the effective graph-analytics job toggle plus its provenance.
+
+        ``source`` lets the Settings UI say whether the value in force came from
+        an admin or from the deployment default, which matters because an
+        unconfigured toggle silently tracks the env var — showing a bare
+        checkbox would imply someone had chosen it.
+        """
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        configured = None
+        try:
+            configured = global_config_service.get_analytics_job_enabled(
+                host, token, registry_cfg
+            )
+        except Exception as exc:  # noqa: BLE001 - fall back to the env default
+            logger.debug("Analytics-job toggle lookup skipped: %s", exc)
+
+        env_default = bool(getattr(settings, "analytics_job_enabled", False))
+        return {
+            "success": True,
+            "analytics_job_enabled": (
+                env_default if configured is None else bool(configured)
+            ),
+            "source": "default" if configured is None else "admin",
+            "env_default": env_default,
+        }
+
+    @staticmethod
+    def save_analytics_job_enabled_result(
+        enabled: bool,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist the graph-analytics job toggle globally (admin only)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        enabled = bool(enabled)
+        ok, msg = global_config_service.set_analytics_job_enabled(
+            host, token, registry_cfg, enabled
+        )
+        if not ok:
+            raise InfrastructureError(
+                "Failed to save the graph-analytics job setting", detail=msg
+            )
+        return {"success": True, "analytics_job_enabled": enabled, "source": "admin"}
+
     # ------------------------------------------------------------------
     #  Graph DB Engine
     # ------------------------------------------------------------------

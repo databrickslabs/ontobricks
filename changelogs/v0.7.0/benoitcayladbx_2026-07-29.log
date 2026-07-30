@@ -740,3 +740,106 @@ Modified files:
 
 Tests: uv run pytest -q -m "not scenario" → 3634 passed, 275 skipped,
 5 deselected in 24.08s
+
+================================================================================
+Admin toggle for the Databricks graph-analytics job (Settings → Global)
+================================================================================
+
+Context: job mode was reachable only via the `ONTOBRICKS_ANALYTICS_JOB_ENABLED`
+env var, which meant a redeploy to turn the feature on or off. That is the wrong
+control surface for something an admin should own at runtime, and it made the
+feature effectively undiscoverable — a user hitting the over-limit banner had no
+way to act on it. Now there is a checkbox in Settings → Global, and the env var
+becomes the deployment default it overrides.
+
+Followed the existing `edit_lock_ttl_s` precedence pattern (admin global-config
+value beats env var) and the `use_cloud_fetch` shape for boolean handling.
+
+Changes:
+
+1. src/back/objects/session/GlobalConfigService.py
+   New `get_analytics_job_enabled` / `set_analytics_job_enabled`. The getter is
+   deliberately three-state (`Optional[bool]`): `None` means "no admin has
+   expressed an opinion" so the caller falls back to the env var, while a stored
+   `False` still overrides an env var that enables the job. A plain `bool` would
+   make "admin turned it off" indistinguishable from "never configured". Also
+   parses "false"/"off"/"0" strings, since JSON round-trips through a text
+   column on some backends and a bare truthiness check would read those as True.
+   Kept out of `_empty()` so a failed load yields `None` rather than masking the
+   env fallback.
+2. src/back/core/helpers/DatabricksHelpers.py
+   New `resolve_analytics_job_enabled(domain, settings)`. Bypasses
+   `_resolve_global_setting` for the documented reason `resolve_use_cloud_fetch`
+   does: its `if val: return val` short-circuit would discard an admin's
+   explicit "off". Falls back to the env default when the registry is
+   unconfigured or the lookup raises, so a registry hiccup cannot silently flip
+   the feature either way. Re-exported from `back.core.helpers`.
+3. src/api/routers/internal/dtwin.py
+   Both `settings.analytics_job_enabled` read sites (the `/metrics/compute` mode
+   decision and `analytics_job_available` in `/dtwin/sync/stats`) now go through
+   the resolver.
+4. src/back/objects/domain/SettingsService.py
+   New `get_analytics_job_enabled_result` / `save_analytics_job_enabled_result`,
+   the latter gated by `require_admin_error`. The read result carries `source`
+   ("admin" | "default") and `env_default`, because an unconfigured toggle
+   silently tracks the env var and a bare checkbox would imply somebody had
+   chosen that state.
+5. src/api/routers/internal/settings.py
+   `GET /settings/analytics-job-enabled` and
+   `POST /settings/save-analytics-job-enabled`.
+6. src/front/templates/settings.html
+   Checkbox in the Global section with the admin-only badge, what each compute
+   mode produces, and the prerequisites (deployed bundle; Delta or Lakebase
+   `managed_synced`, not `app_managed`/Neo4j), plus a line showing whether the
+   current value came from an admin or the deployment default.
+7. src/front/static/config/js/settings.js
+   `loadAnalyticsJobEnabled()` hydrates on page load; the shared
+   `.btn-save-settings` handler POSTs it. Sent unconditionally rather than only
+   when checked — a `if (checked)` guard would make the toggle one-way, unable
+   to store an "off" that overrides a `true` env var.
+8. src/front/templates/partials/dtwin/_query_analytics.html
+   The over-limit banner now points at Settings → Global instead of naming an
+   env var the reader cannot set.
+9. docs/user-guide.md, docs/get-started.md, app.yaml.template,
+   src/shared/config/settings.py
+   Documented that the env var is the initial value only and that the admin
+   toggle wins once used; the settings docstring points readers at the resolver
+   rather than the raw field.
+10. tests/units/core/test_helpers.py
+   `TestResolveAnalyticsJobEnabled`: admin-on beats env-off, admin-off beats
+   env-on (the regression the `if val` idiom would cause), unset falls through
+   in both directions, unconfigured registry and lookup failure both use the env
+   default, and a Settings object missing the field defaults off.
+11. tests/units/settings/test_analytics_job_toggle.py
+   New file: getter three-state and string parsing, absence from `_empty()`,
+   setter coercion, service read provenance, admin gating (verifying the setter
+   is *not* called when authorization fails), explicit-off persistence, store
+   failure raising, and the UI wiring including the one-way-toggle guard.
+
+Verified against the running dev server, not just in tests: GET reported
+`{"analytics_job_enabled": false, "source": "default"}`, POST true returned
+`source: "admin"`, and a follow-up GET confirmed the persisted override. The
+registry was then reset to false so the instance is left as found — job mode
+should be switched on from the UI after `make deploy`, not before, or the banner
+promises Databricks and the run falls back to engine-side aggregation.
+
+Modified files:
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/shared/config/settings.py
+- app.yaml.template
+- docs/user-guide.md
+- docs/get-started.md
+- tests/units/core/test_helpers.py
+- tests/units/settings/test_analytics_job_toggle.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3673 passed, 275 skipped,
+5 deselected in 29.87s
