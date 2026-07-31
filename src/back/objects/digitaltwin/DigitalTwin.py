@@ -3444,8 +3444,15 @@ class DigitalTwin:
         )
 
         if mode == MODE_JOB:
+            from back.core.graph_analysis import resolve_analytics_source
+            source_table, reason = resolve_analytics_source(domain, settings)
+            if not source_table:
+                raise InfrastructureError(
+                    "The graph analytics job cannot read this domain", detail=reason
+                )
             job_metrics = DigitalTwin.build_job_metrics(
-                store, graph_name, domain, settings, top_n=top_n
+                domain, settings, source_table=source_table,
+                graph_name=graph_name, top_n=top_n,
             )
             try:
                 return job_metrics.compute(request, on_progress=on_progress).to_dict()
@@ -3480,17 +3487,17 @@ class DigitalTwin:
 
     @staticmethod
     def build_job_metrics(
-        store: Any,
-        graph_name: str,
         domain: Any,
         settings: Any,
         *,
+        source_table: str,
+        graph_name: str,
         top_n: int = 100,
     ) -> Any:
         """Wire a :class:`JobMetrics` from domain credentials and settings.
 
-        The per-node output lands in one Delta table per domain version, so a
-        re-run replaces its own results rather than accumulating tables.
+        *graph_name* is used only to name the output table, not to read data:
+        the job reads *source_table*, which is always the mapped snapshot.
         """
         from back.core.graph_analysis import JobMetrics, LakeflowRunner
         from back.core.databricks import DatabricksClient
@@ -3520,8 +3527,7 @@ class DigitalTwin:
             output_schema = f"{rcfg.catalog}.{rcfg.schema}"
 
         return JobMetrics(
-            store,
-            graph_name,
+            source_table,
             runner=runner,
             query=client.execute_query,
             output_table=DigitalTwin.analytics_output_table(

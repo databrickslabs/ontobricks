@@ -1,24 +1,23 @@
-"""Graph metrics for oversized graphs, with the iterative parts run on Databricks.
+"""Graph metrics, computed entirely by the Databricks graph analytics job.
 
-This is the third compute mode, above ``in_memory`` and ``pushdown``:
+This is the *only* analytics compute path. The job reads the ``…_data``
+snapshot the Build materialises from the R2RML VIEW, writes four tables, and
+this module assembles them into a :class:`MetricsResult`:
 
-* aggregates (structure counts, degree centrality, type profiles) come from the
-  engine-side SQL of :class:`~back.core.graph_analysis.PushdownMetrics`, reused
-  verbatim so the two modes cannot drift apart;
-* PageRank, connected components and the clustering coefficient come from the
-  serverless job in ``resources/graph_analytics.job.yml``, which the app
-  triggers and then reads back from a Delta table.
+* ``<out>``                  one row per scored node, with ``type_uri`` and ``label``
+* ``<out>_summary``          node / edge / component counts, pivot and BFS flags
+* ``<out>_type_profiles``    per-entity-type counts, degree sum, mean clustering
+* ``<out>_type_predicates``  the distinct relationship predicates per type
 
-Betweenness and closeness come from the same job but are *estimates*, sampled
-from Brandes-Pich pivots rather than all-pairs shortest paths, so they are
-flagged as approximate. They drop to unavailable when the pivot BFS was
+Nothing here computes a metric. The one piece of logic the app still applies is
+the flat-dataset heuristic in :mod:`back.core.graph_analysis.profiles`, which
+turns ``(instance_count, distinct_predicates)`` into a human-readable verdict —
+string matching on predicate names, not graph computation.
+
+Betweenness and closeness are Brandes-Pich *estimates* sampled from pivots, so
+they are flagged as approximate. They drop to unavailable when the pivot BFS was
 truncated by its depth cap, since the distance sums would be biased — raise
-``analytics_job_max_depth`` and re-run when that happens. Narrowing the
-analysis with an entity-type filter gets both exactly from the in-memory path.
-
-**Prerequisite.** The domain must have a materialized ``…_data`` Unity Catalog
-table — the R2RML-mapped triples snapshot the Build step produces. Analytics
-reads only that table, so the graph engine is irrelevant to this mode.
+``analytics_job_max_depth`` and re-run when that happens.
 
 The read-back keeps the bounded-payload contract: only the union of the top-N
 per metric is returned, never a row per node.
@@ -27,22 +26,21 @@ per metric is returned, never a row per node.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from back.core.errors import InfrastructureError
-from back.core.graph_analysis.PushdownMetrics import PushdownMetrics
-from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.graph_analysis.models import (
     MODE_JOB,
+    EntityTypeProfile,
     MetricsRequest,
     MetricsResult,
     NodeMetrics,
 )
+from back.core.graph_analysis.profiles import flat_reasons, has_temporal_predicates
+from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
 #: Betweenness and closeness are sampled from a subset of source nodes rather
 #: than computed exactly, so they are reported as approximate rather than as
@@ -90,32 +88,28 @@ def resolve_analytics_source(domain: Any, settings: Any) -> Tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def _quote(value: str) -> str:
-    return "'" + str(value or "").replace("'", "''") + "'"
-
-
 def summary_query(output_table: str) -> str:
     """One-row run summary written by the job."""
     return (
-        "SELECT node_count, edge_count, component_count, components_converged, "
-        "pivot_count, bfs_complete "
+        "SELECT node_count, total_node_count, edge_count, component_count, "
+        "components_converged, pivot_count, bfs_complete "
         f"FROM {output_table}_summary"
     )
 
 
 def top_nodes_query(output_table: str, top_n: int) -> str:
-    """Union of the top *top_n* by PageRank and by clustering coefficient.
+    """Union of the top *top_n* by each ranked metric.
 
-    Degree ranking is deliberately absent: the pushdown base result already
-    carries the top nodes by degree, and this query's job is to add what the
-    engine-side SQL could not rank. Ties break on ``node_uri`` so the result is
-    deterministic across runs.
+    Degree is ranked here too: with the pushdown path gone, this query is the
+    only source of the node payload. Ties break on ``node_uri`` so the result
+    is deterministic across runs.
     """
     k = max(1, int(top_n))
     return (
         "WITH ranked AS (\n"
         "  SELECT node_uri, degree, pagerank, clustering, betweenness, closeness,\n"
-        "         component_id,\n"
+        "         component_id, type_uri, label,\n"
+        "         ROW_NUMBER() OVER (ORDER BY degree DESC, node_uri) AS rn_dg,\n"
         "         ROW_NUMBER() OVER (ORDER BY pagerank DESC, node_uri) AS rn_pr,\n"
         "         ROW_NUMBER() OVER (ORDER BY clustering DESC, node_uri) AS rn_cl,\n"
         "         ROW_NUMBER() OVER (ORDER BY betweenness DESC, node_uri) AS rn_bc,\n"
@@ -123,44 +117,26 @@ def top_nodes_query(output_table: str, top_n: int) -> str:
         f"  FROM {output_table}\n"
         ")\n"
         "SELECT node_uri, degree, pagerank, clustering, betweenness, closeness,\n"
-        "       component_id\n"
+        "       component_id, type_uri, label\n"
         "FROM ranked\n"
-        f"WHERE rn_pr <= {k} OR rn_cl <= {k} OR rn_bc <= {k} OR rn_cn <= {k}\n"
+        f"WHERE rn_dg <= {k} OR rn_pr <= {k} OR rn_cl <= {k}\n"
+        f"   OR rn_bc <= {k} OR rn_cn <= {k}\n"
         "ORDER BY pagerank DESC, node_uri"
     )
 
 
-def metrics_for_nodes_query(output_table: str, node_uris: List[str]) -> str:
-    """Fetch the job's metrics for an explicit node set.
-
-    Used to fill in the nodes the pushdown pass already selected by degree, so
-    they are charted with a real PageRank rather than a zero.
-    """
-    in_list = ", ".join(_quote(u) for u in node_uris)
+def type_profiles_query(output_table: str) -> str:
+    """Per-entity-type rollups, as written by the job."""
     return (
-        "SELECT node_uri, degree, pagerank, clustering, betweenness, closeness,\n"
-        "       component_id\n"
-        f"FROM {output_table}\n"
-        f"WHERE node_uri IN ({in_list})"
+        "SELECT type_uri, instance_count, connected_count, degree_sum,\n"
+        "       avg_clustering, avg_betweenness\n"
+        f"FROM {output_table}_type_profiles"
     )
 
 
-def type_clustering_query(output_table: str, source_table: str) -> str:
-    """Mean clustering coefficient per entity type.
-
-    Joins the per-node output back to ``rdf:type`` in the source triples. This
-    is what lets the job mode fill in ``EntityTypeProfile.avg_clustering``,
-    which the pushdown mode has to leave at zero.
-    """
-    return (
-        "SELECT t.object AS type_uri,\n"
-        "       AVG(m.clustering) AS avg_clustering,\n"
-        "       COUNT(*) AS instance_count\n"
-        f"FROM {output_table} m\n"
-        f"JOIN {source_table} t\n"
-        f"  ON t.subject = m.node_uri AND t.predicate = {_quote(RDF_TYPE)}\n"
-        "GROUP BY t.object"
-    )
+def type_predicates_query(output_table: str) -> str:
+    """Distinct ``(type, predicate)`` pairs, as written by the job."""
+    return f"SELECT type_uri, predicate FROM {output_table}_type_predicates"
 
 
 # ---------------------------------------------------------------------------
@@ -169,12 +145,11 @@ def type_clustering_query(output_table: str, source_table: str) -> str:
 
 
 class JobMetrics:
-    """Run the Lakeflow job, then merge its output onto the pushdown result."""
+    """Run the Lakeflow job, then assemble its output into a MetricsResult."""
 
     def __init__(
         self,
-        store: Any,
-        graph_name: str,
+        source_table: str,
         *,
         runner: Any,
         query: Callable[[str], List[Dict[str, Any]]],
@@ -183,13 +158,8 @@ class JobMetrics:
         pagerank_iterations: int = 20,
         pivots: int = 64,
         max_depth: int = 32,
-        domain: Any = None,
-        settings: Any = None,
     ) -> None:
-        self._store = store
-        self._graph_name = graph_name
-        self._domain = domain
-        self._settings = settings
+        self._source_table = source_table
         self._runner = runner
         self._query = query
         self._output_table = output_table
@@ -203,27 +173,14 @@ class JobMetrics:
         request: MetricsRequest,
         on_progress: Optional[Callable[[int, str], None]] = None,
     ) -> MetricsResult:
-        """Compute the full metric set, offloading the iterative parts."""
+        """Trigger the job and read every metric back."""
         t0 = time.time()
 
-        source_table, reason = resolve_analytics_source(self._domain, self._settings)
-        if not source_table:
-            raise InfrastructureError(
-                "The graph analytics job cannot read this graph", detail=reason
-            )
-
-        # The engine-side aggregations run while the job is being scheduled
-        # anyway, and reusing them keeps one definition of the type profiles.
-        if on_progress:
-            on_progress(20, "Aggregating graph structure")
-        base = PushdownMetrics(
-            self._store, self._graph_name, top_n=self._top_n
-        ).compute(request)
-
         outcome = self._runner.run_and_wait(
-            source_table=source_table,
+            source_table=self._source_table,
             output_table=self._output_table,
-            exclude_predicates=None,
+            exclude_predicates=list(request.predicate_filter or []) or None,
+            class_filter=list(request.class_filter or []) or None,
             pagerank_iterations=self._pagerank_iterations,
             pivots=self._pivots,
             max_depth=self._max_depth,
@@ -236,116 +193,154 @@ class JobMetrics:
                     f"{outcome.get('life_cycle_state', '')} "
                     f"{outcome.get('result_state', '')} "
                     f"{outcome.get('message', '')}".strip()
-                    + (f" — {outcome['run_page_url']}" if outcome.get("run_page_url") else "")
+                    + (
+                        f" — {outcome['run_page_url']}"
+                        if outcome.get("run_page_url")
+                        else ""
+                    )
                 ),
             )
 
         if on_progress:
             on_progress(85, "Reading results back")
-        self._merge_job_results(base, source_table)
 
-        base.mode = MODE_JOB
-        base.stats.elapsed_ms = int((time.time() - t0) * 1000)
+        result = MetricsResult(mode=MODE_JOB)
+        self._read_summary(result)
+        self._read_nodes(result)
+        self._read_type_profiles(result)
+        result.stats.elapsed_ms = int((time.time() - t0) * 1000)
 
         logger.info(
-            "JobMetrics: %s nodes / %s edges, %s components, %d nodes returned in %dms",
-            f"{base.stats.graph_node_count:,}",
-            f"{base.stats.edge_count:,}",
-            base.stats.connected_components,
-            len(base.nodes),
-            base.stats.elapsed_ms,
+            "JobMetrics: %s nodes / %s edges, %s components, "
+            "%d profiles, %d nodes returned in %dms",
+            f"{result.stats.graph_node_count:,}",
+            f"{result.stats.edge_count:,}",
+            result.stats.connected_components,
+            len(result.entity_type_profiles),
+            len(result.nodes),
+            result.stats.elapsed_ms,
         )
-        return base
+        return result
 
     # ------------------------------------------------------------------
 
-    def _merge_job_results(self, base: MetricsResult, source_table: str) -> None:
-        """Overlay the job's per-node scores and component count onto *base*."""
-        summary = self._query(summary_query(self._output_table)) or []
-        # Default to "not computed" so a summary the job could not write never
-        # results in sampled zeros being charted as real centrality values.
-        pivot_count = 0
-        bfs_complete = True
-        if summary:
-            row = summary[0]
-            base.stats.connected_components = int(row.get("component_count", 0) or 0)
-            pivot_count = int(row.get("pivot_count", 0) or 0)
-            bfs_complete = bool(row.get("bfs_complete", True))
-            if not row.get("components_converged", True):
-                # Surfaced rather than silently trusted: an unconverged label
-                # propagation over-counts components.
-                logger.warning(
-                    "Component labelling did not converge for %s — the component "
-                    "count is a lower bound",
-                    self._graph_name,
-                )
+    def _read_summary(self, result: MetricsResult) -> None:
+        """Fill the structure counts and decide on the sampled metrics."""
+        rows = self._query(summary_query(self._output_table)) or []
+        if not rows:
+            # No summary means no run to trust: withhold the sampled metrics
+            # rather than charting zeros as real centrality values.
+            result.approximate_metrics = []
+            result.unavailable_metrics = list(UNAVAILABLE_METRICS)
+            result.pivot_count = 0
+            return
 
-        # A truncated BFS biases both estimates, so they are withheld rather
-        # than published with a caveat nobody would read.
+        row = rows[0]
+        graph_node_count = int(row.get("node_count", 0) or 0)
+        edge_count = int(row.get("edge_count", 0) or 0)
+        divisor = float(graph_node_count - 1) if graph_node_count > 1 else 1.0
+
+        result.stats.node_count = int(row.get("total_node_count", 0) or 0)
+        result.stats.graph_node_count = graph_node_count
+        result.stats.edge_count = edge_count
+        result.stats.connected_components = int(row.get("component_count", 0) or 0)
+        if graph_node_count:
+            result.stats.avg_degree = round(2.0 * edge_count / graph_node_count, 4)
+            result.stats.density = round(
+                2.0 * edge_count / (graph_node_count * divisor), 6
+            )
+
+        if not row.get("components_converged", True):
+            # Surfaced rather than silently trusted: an unconverged label
+            # propagation over-counts components.
+            logger.warning(
+                "Component labelling did not converge for %s — the component "
+                "count is a lower bound",
+                self._output_table,
+            )
+
+        pivot_count = int(row.get("pivot_count", 0) or 0)
+        bfs_complete = bool(row.get("bfs_complete", True))
         if pivot_count > 0 and bfs_complete:
-            base.approximate_metrics = list(APPROXIMATE_METRICS)
-            base.unavailable_metrics = []
-            base.pivot_count = pivot_count
+            result.approximate_metrics = list(APPROXIMATE_METRICS)
+            result.unavailable_metrics = []
+            result.pivot_count = pivot_count
         else:
-            base.approximate_metrics = []
-            base.unavailable_metrics = list(UNAVAILABLE_METRICS)
-            base.pivot_count = 0
+            result.approximate_metrics = []
+            result.unavailable_metrics = list(UNAVAILABLE_METRICS)
+            result.pivot_count = 0
             if pivot_count > 0 and not bfs_complete:
                 logger.warning(
                     "The pivot BFS for %s hit its depth cap; betweenness and "
                     "closeness are reported as unavailable rather than truncated",
-                    self._graph_name,
+                    self._output_table,
                 )
 
-        rows = list(self._query(top_nodes_query(self._output_table, self._top_n)) or [])
-        # Fill in the degree-ranked nodes the pushdown pass already chose, so
-        # they are not charted with a zero PageRank.
-        known = [u for u in base.nodes if u not in {r.get("node_uri") for r in rows}]
-        if known:
-            rows += list(
-                self._query(metrics_for_nodes_query(self._output_table, known)) or []
-            )
-
+    def _read_nodes(self, result: MetricsResult) -> None:
+        """Fill the bounded node payload from the top-N union."""
+        rows = self._query(top_nodes_query(self._output_table, self._top_n)) or []
         for row in rows:
             uri = row.get("node_uri") or ""
             if not uri:
                 continue
-            node = base.nodes.get(uri) or NodeMetrics()
-            node.pagerank = round(float(row.get("pagerank", 0.0) or 0.0), 8)
-            node.clustering = round(float(row.get("clustering", 0.0) or 0.0), 6)
-            if base.approximate_metrics:
+            node = NodeMetrics(
+                degree=round(float(row.get("degree", 0.0) or 0.0), 6),
+                pagerank=round(float(row.get("pagerank", 0.0) or 0.0), 8),
+                clustering=round(float(row.get("clustering", 0.0) or 0.0), 6),
+            )
+            if result.approximate_metrics:
                 node.betweenness = round(float(row.get("betweenness", 0.0) or 0.0), 8)
                 node.closeness = round(float(row.get("closeness", 0.0) or 0.0), 6)
-            # The job's ``degree`` is already normalised, but the pushdown pass
-            # computed it too; prefer the existing value so a node's degree
-            # never changes depending on which query returned it.
-            if uri not in base.nodes:
-                node.degree = round(float(row.get("degree", 0.0) or 0.0), 6)
-            base.nodes[uri] = node
+            result.nodes[uri] = node
+            if row.get("type_uri"):
+                result.node_types[uri] = row["type_uri"]
+            if row.get("label"):
+                result.node_labels[uri] = row["label"]
 
-        base.top_pagerank = [
+        result.top_pagerank = [
             uri
             for uri, _ in sorted(
-                base.nodes.items(), key=lambda kv: (-kv[1].pagerank, kv[0])
+                result.nodes.items(), key=lambda kv: (-kv[1].pagerank, kv[0])
             )
         ][: self._top_n]
 
-        self._merge_type_clustering(base, source_table)
+    def _read_type_profiles(self, result: MetricsResult) -> None:
+        """Assemble the per-type profiles and label the flat ones."""
+        profiles = self._query(type_profiles_query(self._output_table)) or []
+        pairs = self._query(type_predicates_query(self._output_table)) or []
 
-    def _merge_type_clustering(self, base: MetricsResult, source_table: str) -> None:
-        """Fill ``avg_clustering`` on the type profiles the job can now supply."""
-        try:
-            rows = self._query(
-                type_clustering_query(self._output_table, source_table)
-            ) or []
-        except Exception as exc:  # noqa: BLE001
-            # A missing per-type rollup is not worth failing an otherwise
-            # complete run over.
-            logger.warning("Could not read per-type clustering: %s", exc)
-            return
-        for row in rows:
+        predicates_by_type: Dict[str, Set[str]] = {}
+        for row in pairs:
             type_uri = row.get("type_uri") or ""
-            profile = base.entity_type_profiles.get(type_uri)
-            if profile is None:
+            predicate = row.get("predicate") or ""
+            if type_uri and predicate:
+                predicates_by_type.setdefault(type_uri, set()).add(predicate)
+
+        graph_node_count = result.stats.graph_node_count or 0
+        divisor = float(graph_node_count - 1) if graph_node_count > 1 else 1.0
+
+        for row in profiles:
+            type_uri = row.get("type_uri") or ""
+            if not type_uri:
                 continue
-            profile.avg_clustering = round(float(row.get("avg_clustering", 0.0) or 0.0), 6)
+            count = int(row.get("instance_count", 0) or 0)
+            connected = int(row.get("connected_count", 0) or 0)
+            degree_sum = int(row.get("degree_sum", 0) or 0)
+            preds = predicates_by_type.get(type_uri, set())
+            reasons = flat_reasons(count, len(preds))
+
+            result.entity_type_profiles[type_uri] = EntityTypeProfile(
+                uri=type_uri,
+                count=count,
+                # Normalised the same way ``nx.degree_centrality`` does, so a
+                # type's average degree is comparable with a node's.
+                avg_degree=(
+                    round((degree_sum / connected) / divisor, 6) if connected else 0.0
+                ),
+                avg_clustering=round(float(row.get("avg_clustering", 0.0) or 0.0), 6),
+                avg_betweenness=round(float(row.get("avg_betweenness", 0.0) or 0.0), 8),
+                distinct_predicates=len(preds),
+                has_temporal_predicates=has_temporal_predicates(preds),
+                is_flat=bool(reasons),
+                flat_reasons=reasons,
+            )

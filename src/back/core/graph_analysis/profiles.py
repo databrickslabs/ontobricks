@@ -1,9 +1,10 @@
 """Shared entity-type profiling helpers.
 
-The temporal-predicate detection and the flat-dataset heuristic are used by
-both the in-memory NetworkX path (:mod:`GraphMetrics`) and the SQL pushdown
-path (:mod:`PushdownMetrics`).  Keeping one copy means the two modes cannot
-drift apart on what they call "flat".
+The temporal-predicate detection and the flat-dataset heuristic label the
+per-type rollups the Databricks analytics job computes. They are pure string
+heuristics over predicate names and instance counts, which is why they live in
+the app rather than in the job's SQL — keeping one copy means the wording of
+"flat" cannot drift.
 """
 
 from __future__ import annotations
