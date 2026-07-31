@@ -52,3 +52,38 @@ class TestCliExitCode:
             text = fh.read()
         assert "raise SystemExit(main())" not in text
         assert "run_cli()" in text.rsplit('if __name__ == "__main__":', 1)[1]
+
+
+class TestExcludedPredicateMerge:
+    """A caller's exclusions add to the defaults; they never replace them.
+
+    The app started forwarding ``MetricsRequest.predicate_filter`` when analytics
+    became job-only. Treating that list as the complete set would turn
+    ``rdf:type`` and ``rdfs:label`` into entity-entity edges, wiring every
+    instance to its class node and inflating every degree and PageRank — a wrong
+    number rather than a visible failure.
+    """
+
+    def test_no_filter_yields_exactly_the_defaults(self):
+        assert job.merge_excluded_predicates(None) == list(
+            job.DEFAULT_EXCLUDED_PREDICATES
+        )
+        assert job.merge_excluded_predicates("") == list(
+            job.DEFAULT_EXCLUDED_PREDICATES
+        )
+
+    def test_a_caller_predicate_is_added_to_the_defaults(self):
+        merged = job.merge_excluded_predicates("http://ex.org/noisy")
+        assert job.RDF_TYPE in merged
+        assert job.RDFS_LABEL in merged
+        assert "http://ex.org/noisy" in merged
+
+    def test_a_default_is_not_repeated_when_the_caller_names_it(self):
+        merged = job.merge_excluded_predicates(f"{job.RDF_TYPE}, http://ex.org/noisy")
+        assert merged.count(job.RDF_TYPE) == 1
+
+    def test_whitespace_and_empty_entries_are_ignored(self):
+        merged = job.merge_excluded_predicates(" , http://ex.org/noisy , ")
+        assert merged == list(job.DEFAULT_EXCLUDED_PREDICATES) + [
+            "http://ex.org/noisy"
+        ]

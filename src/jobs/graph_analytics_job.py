@@ -1008,6 +1008,20 @@ def _run_pivot_centrality(
     return pivot_count, bfs_complete
 
 
+def merge_excluded_predicates(raw: Optional[str]) -> List[str]:
+    """Combine the caller's ``--exclude-predicates`` with the defaults.
+
+    The caller's list *adds to* the defaults rather than replacing them. A user
+    excluding one noisy predicate must not thereby promote ``rdf:type`` and
+    ``rdfs:label`` into entity-entity edges, which would connect every instance
+    to its class node and silently inflate every degree and PageRank in the run.
+    """
+    requested = [p.strip() for p in (raw or "").split(",") if p.strip()]
+    return list(DEFAULT_EXCLUDED_PREDICATES) + [
+        p for p in requested if p not in DEFAULT_EXCLUDED_PREDICATES
+    ]
+
+
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compute iterative graph metrics for an OntoBricks knowledge graph"
@@ -1077,9 +1091,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     spark = SparkSession.builder.getOrCreate()
 
-    excluded = [
-        p.strip() for p in (args.exclude_predicates or "").split(",") if p.strip()
-    ] or list(DEFAULT_EXCLUDED_PREDICATES)
+    excluded = merge_excluded_predicates(args.exclude_predicates)
 
     class_filter = [
         v.strip() for v in (args.class_filter or "").split(",") if v.strip()

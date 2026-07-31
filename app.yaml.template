@@ -117,21 +117,19 @@ env:
   # spelled out here so an admin can retune a deployed app without a code
   # change; edit the value, then re-run `make deploy`.
   #
-  # Switch point between the in-memory (NetworkX) engine and engine-side
-  # SQL aggregation — not a rejection threshold. The full triple set is
-  # held in memory below it, so raise it only with headroom to spare.
+  # In-memory triple cap for community detection (POST /clusters/detect).
+  # Graph analytics does not read this — it always runs in the job.
   - name: ONTOBRICKS_ANALYTICS_MAX_TRIPLES
     value: "500000"
-  # Top-ranked nodes per metric returned by the job path.
+  # Top-ranked nodes per metric returned by the job.
   # This is what keeps the persisted payload bounded on a graph of any
   # size; the Analytics page "Top N" selector is capped well below it.
   - name: ONTOBRICKS_ANALYTICS_TOP_N
     value: "100"
   #
-  # Engine-side aggregation gives the structural metrics but not PageRank,
-  # clustering, the component count, betweenness or closeness. Set this to
-  # "true" to additionally offload those to the serverless job in
-  # resources/graph_analytics.job.yml.
+  # The serverless job in resources/graph_analytics.job.yml computes every
+  # graph KPI, and it is the only thing that does, so leaving this off
+  # disables the Analytics page rather than selecting a cheaper calculation.
   #
   # This is only the INITIAL value. Admins flip it at runtime in
   # Settings -> Global ("Compute large-graph metrics on Databricks"), and once
@@ -139,13 +137,12 @@ env:
   # against a "true" here. Changing this value does not un-set an admin's
   # choice.
   #
-  # Requires: the bundle deployed (so the job exists), and the graph
-  # readable from Spark as a UC table — true for the Delta engine and
-  # for Lakebase in managed_synced mode, but NOT for Lakebase
-  # app_managed or Neo4j.  When unavailable the run degrades to
-  # engine-side aggregation rather than failing, so turning this on is
-  # safe even if the prerequisites are not met.
-  # See docs/user-guide.md (Analytics → compute modes).
+  # Requires: the bundle deployed (so the job exists), and the domain built
+  # at least once. The job reads the mapped-triples snapshot every Build
+  # materialises, so it behaves identically on the Delta engine, on Lakebase
+  # in either mode, and on Neo4j. A missing prerequisite is reported on the
+  # Analytics page by name; nothing falls back to a different calculation.
+  # See docs/user-guide.md (Analytics).
   - name: ONTOBRICKS_ANALYTICS_JOB_ENABLED
     value: "false"
   # Deployed name of that job. Leave empty to derive it from the app name

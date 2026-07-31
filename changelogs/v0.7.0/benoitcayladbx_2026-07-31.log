@@ -285,3 +285,57 @@ rather than a cleanup.
 ## Test Result
 
 `pytest -q -m "not scenario"` → **3760 passed, 275 skipped, 1 xfailed, 0 failed**
+
+---
+
+# Final whole-branch review fixes
+
+## Context
+
+The whole-branch review of the Lakeflow-only analytics work found two things the
+eleven per-task reviews could not, because each is a seam between tasks rather
+than a defect inside one.
+
+The first is a silent wrong-number bug. Before this work, the app always passed
+`exclude_predicates=None`, so the job fell back to its own defaults —
+`rdf:type`, `rdfs:label`, `rdfs:comment`, `rdfs:seeAlso`, the predicates that
+never form an entity-entity edge. Task 6 started forwarding
+`MetricsRequest.predicate_filter`, and the job treated a non-empty list as the
+complete set rather than as an addition. So a user excluding one noisy predicate
+would promote `rdf:type` into an edge, wiring every instance to its class node
+and inflating every degree and PageRank in the run. Nothing would fail; the
+numbers would just be wrong.
+
+The second is stale operator-facing copy in `app.yaml.template`, which still
+described the pre-change world: a triple cap that switched between NetworkX and
+engine-side SQL, Neo4j and `app_managed` Lakebase as unsupported, and the claim
+that turning the toggle on is "safe even if the prerequisites are not met"
+because a run degrades rather than failing. All three are now the opposite of
+the truth, and an operator reads this file to decide how to configure a deploy.
+
+## Changes
+
+1. `src/jobs/graph_analytics_job.py` — Extracted
+   `merge_excluded_predicates(raw)`, which unions the caller's
+   `--exclude-predicates` with `DEFAULT_EXCLUDED_PREDICATES` and de-duplicates,
+   and called it from `main()`. Pulling it out of `main()` also makes it testable:
+   `main()` needs a live `SparkSession`, so the merge had no unit coverage where
+   it sat.
+2. `tests/units/core/test_graph_analytics_job_exit.py` — Four tests: no filter
+   yields exactly the defaults, a caller predicate is added to rather than
+   replacing them, naming a default does not duplicate it, and blank entries are
+   ignored.
+3. `app.yaml.template` — Rewrote the three analytics comment blocks for the
+   single path: the triple cap belongs to community detection, the job computes
+   every KPI and is the only thing that does, and every backend behaves
+   identically because the job reads the snapshot each Build materialises.
+
+## Modified Files
+
+- `src/jobs/graph_analytics_job.py`
+- `tests/units/core/test_graph_analytics_job_exit.py`
+- `app.yaml.template`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3764 passed, 275 skipped, 1 xfailed, 0 failed**
