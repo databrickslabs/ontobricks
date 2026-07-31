@@ -231,3 +231,37 @@ Tests: pytest -q -m "not scenario" -> 3794 passed, 3 failed, 275 skipped,
 5 deselected in 27.77s. The three failures (test_health
 test_local_mode_with_cli_profile, test_graph_engine_config x2) are pre-existing
 environment-dependent failures — verified identical on a stashed tree.
+
+---
+
+## Task 1: Job — per-node `type_uri` and `label`
+
+**Context:** First step of the analytics-lakeflow refactor. Teaches the Lakeflow graph analytics job to resolve `rdf:type` and `rdfs:label` per node so the app can eventually stop fetching them from `PushdownMetrics`.
+
+**Changes:**
+
+1. `src/jobs/graph_analytics_job.py` — Added `GraphAnalyticsSQL.node_type_select()` and `node_label_select()` subquery builders just above `write_output`; modified `write_output` to always include `type_uri` and `label` columns via LEFT JOINs on those subqueries; renamed `joins` → `pivot_joins` for clarity; fixed trailing comma on `closeness` expression
+2. `tests/units/core/test_graph_analytics_job_sql.py` — Updated imports to pull `RDF_TYPE` and `RDFS_LABEL` directly from the job module; added shared helpers `_run_job` and `_table_rows`; added `test_output_carries_rdf_type_and_label` covering NULL type, NULL label, single type, and MIN determinism over multiple types
+
+**Modified files:**
+- `src/jobs/graph_analytics_job.py`
+- `tests/units/core/test_graph_analytics_job_sql.py`
+
+**Test result:** 59 passed, 1 warning in 1.18s (full `test_graph_analytics_job_sql.py` suite)
+
+---
+
+## Fix: total_node_count reads from source, not the filtered degree table (follow-up to Task 2)
+
+**Context:** Task 2's `total_node_count_query` unioned the source's subjects with the `deg` work table. `deg` is derived from the filtered edge list, so any future filter (e.g. Task 3's `class_filter`) that narrows `deg` would silently shrink a value labelled "total" — indefensible.
+
+**Changes:**
+
+1. `src/jobs/graph_analytics_job.py` — Replaced the object side of `total_node_count_query`: instead of reading from `deg`, reads URI objects directly from the source table, filtered by `(LIKE 'http://%' OR LIKE 'https://%')` and `predicate NOT IN (excluded_predicates)`. Subject side unchanged. Option (a) chosen: excluded predicates filter the object side so class URIs (objects of `rdf:type`) are not counted as entities. Docstring updated to state the trade-off.
+2. `tests/units/core/test_graph_analytics_job_sql.py` — Added `test_total_node_count_comes_from_source_not_degree_table`: two runs with different `excluded_predicates` where the wider exclusion empties the degree table; asserts `total_node_count == 3` in both cases, pinning source-based counting.
+
+**Modified files:**
+- `src/jobs/graph_analytics_job.py`
+- `tests/units/core/test_graph_analytics_job_sql.py`
+
+**Test result:** `env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH uv run pytest tests/units/core/test_graph_analytics_job_sql.py -q` → 64 passed, 1 warning in 1.45s
