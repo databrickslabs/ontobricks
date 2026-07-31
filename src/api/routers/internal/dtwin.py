@@ -27,7 +27,7 @@ from back.core.graph_analysis import (
     MODE_IN_MEMORY,
     MODE_JOB,
     MODE_PUSHDOWN,
-    resolve_spark_source,
+    resolve_analytics_source,
     supports_pushdown,
 )
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
@@ -505,10 +505,10 @@ def _analytics_job_status(
             "be derived from the app name."
         )
 
-    source, reason = resolve_spark_source(store, graph_name)
+    source, reason = resolve_analytics_source(domain, settings)
     if not source:
         return False, reason or (
-            "The graph is not readable from Spark as a Unity Catalog table."
+            "The mapped-triples table for this domain could not be resolved."
         )
 
     return True, ""
@@ -1556,7 +1556,7 @@ async def triplestore_stats(
             # promise the full metric set instead of the reduced one.
             "analytics_job_available": job_available,
             # Why it is not, when an admin has turned it on and therefore expects
-            # it to work. ``resolve_spark_source`` writes these for the person
+            # it to work. ``resolve_analytics_source`` writes these for the person
             # reading them, and every cause is a configuration problem only they
             # can fix, so discarding them just moves the diagnosis into the logs.
             "analytics_job_blocked_reason": job_blocked_reason,

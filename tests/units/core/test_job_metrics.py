@@ -8,7 +8,7 @@ pushdown base result without breaking the bounded-payload contract.
 """
 
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pytest
 
@@ -18,7 +18,7 @@ from back.core.graph_analysis.JobMetrics import (
     UNAVAILABLE_METRICS,
     JobMetrics,
     metrics_for_nodes_query,
-    resolve_spark_source,
+    resolve_analytics_source,
     summary_query,
     top_nodes_query,
     type_clustering_query,
@@ -47,119 +47,36 @@ RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
 
 # ---------------------------------------------------------------------------
-# Source resolution
+# resolve_analytics_source
 # ---------------------------------------------------------------------------
 
 
-class _DeltaLikeStore:
-    query_dialect = "sql"
+def test_analytics_source_is_the_data_table_whatever_the_engine(monkeypatch):
+    """No engine branch: every backend resolves the same mapped snapshot."""
+    from back.core.helpers.SQLHelpers import SQLHelpers
 
-    def __init__(self, relation: str) -> None:
-        self._relation = relation
-
-    def sql_table_reference(self, name: str) -> str:
-        return self._relation
-
-
-class _CypherStore:
-    query_dialect = "cypher"
-
-
-class _LakebaseStore:
-    """Minimal stand-in exposing only what source resolution looks at."""
-
-    query_dialect = "sql"
-
-    def __init__(self, *, synced: bool, source: Optional[Any] = "") -> None:
-        self.sync_mode = "managed_synced" if synced else "app_managed"
-        self.is_synced = synced
-        self._source = source
-
-    def synced_uc_name(self, name: str) -> str:
-        return f"cat.sch.{name}_sync"
-
-    def synced_manager(self) -> Any:
-        store = self
-
-        class _Manager:
-            def get(self, name: str) -> Any:
-                return store._source
-
-        return _Manager()
+    monkeypatch.setattr(
+        SQLHelpers, "effective_databricks_table",
+        staticmethod(lambda domain, settings=None: "cat.sch.triplestore_dom_V3_data"),
+    )
+    table, reason = resolve_analytics_source(object(), object())
+    assert table == "cat.sch.triplestore_dom_V3_data"
+    assert reason == ""
 
 
-class _Spec:
-    def __init__(self, source_table_full_name: str) -> None:
-        self.source_table_full_name = source_table_full_name
+def test_unqualified_source_is_refused_with_a_remedy(monkeypatch):
+    """A half-configured domain must say what to fix, not fail obscurely."""
+    from back.core.helpers.SQLHelpers import SQLHelpers
+
+    monkeypatch.setattr(
+        SQLHelpers, "effective_databricks_table",
+        staticmethod(lambda domain, settings=None: "triplestore_dom_V3_data"),
+    )
+    table, reason = resolve_analytics_source(object(), object())
+    assert table == ""
+    assert "catalog.schema.table" in reason
 
 
-class _Synced:
-    def __init__(self, source: str) -> None:
-        self.spec = _Spec(source)
-
-
-class TestResolveSparkSource:
-    def test_delta_table_resolves_to_itself(self):
-        store = _DeltaLikeStore("main.onto.demo_graph")
-        table, reason = resolve_spark_source(store, "demo_graph")
-        assert table == "main.onto.demo_graph"
-        assert reason == ""
-
-    def test_backticks_are_stripped(self):
-        store = _DeltaLikeStore("`main`.`onto`.`demo_graph`")
-        table, _ = resolve_spark_source(store, "demo_graph")
-        assert table == "main.onto.demo_graph"
-
-    def test_unqualified_name_is_refused(self):
-        store = _DeltaLikeStore("demo_graph")
-        table, reason = resolve_spark_source(store, "demo_graph")
-        assert table == ""
-        assert "catalog.schema.table" in reason
-
-    def test_no_store_is_refused(self):
-        table, reason = resolve_spark_source(None, "g")
-        assert table == ""
-        assert reason
-
-    def test_cypher_engine_is_refused_with_a_workaround(self):
-        table, reason = resolve_spark_source(_CypherStore(), "g")
-        assert table == ""
-        # The message has to tell the user what to do instead.
-        assert "entity-type filter" in reason
-
-    def test_app_managed_lakebase_is_refused(self):
-        table, reason = resolve_spark_source(_LakebaseStore(synced=False), "g")
-        assert table == ""
-        assert "managed_synced" in reason
-
-    def test_managed_synced_lakebase_resolves_to_uc_source(self):
-        store = _LakebaseStore(synced=True, source=_Synced("main.onto.demo_graph"))
-        table, reason = resolve_spark_source(store, "demo_graph")
-        assert table == "main.onto.demo_graph"
-        assert reason == ""
-
-    def test_managed_synced_dict_shape_also_works(self):
-        store = _LakebaseStore(
-            synced=True,
-            source={"spec": {"source_table_full_name": "main.onto.g"}},
-        )
-        table, _ = resolve_spark_source(store, "g")
-        assert table == "main.onto.g"
-
-    def test_missing_synced_table_is_refused(self):
-        store = _LakebaseStore(synced=True, source=None)
-        table, reason = resolve_spark_source(store, "g")
-        assert table == ""
-        assert "Rebuild the graph" in reason
-
-    def test_synced_manager_failure_is_refused_not_raised(self):
-        class _Broken(_LakebaseStore):
-            def synced_manager(self):
-                raise RuntimeError("no manager wired")
-
-        table, reason = resolve_spark_source(_Broken(synced=True), "g")
-        assert table == ""
-        assert reason
 
 
 # ---------------------------------------------------------------------------
@@ -432,6 +349,16 @@ class TestMergeJobResults:
 
 
 class TestJobMetricsCompute:
+    @pytest.fixture(autouse=True)
+    def _patch_source(self, monkeypatch):
+        """Patch the data-table resolver so compute doesn't reach out to UC."""
+        from back.core.helpers.SQLHelpers import SQLHelpers
+
+        monkeypatch.setattr(
+            SQLHelpers, "effective_databricks_table",
+            staticmethod(lambda domain, settings=None: "main.onto.triples"),
+        )
+
     def test_full_compute_reports_job_mode_with_nothing_unavailable(self):
         db = _OutputDB(_sample_rows(), _hub_triples())
         runner = _FakeRunner()
@@ -508,18 +435,6 @@ class TestJobMetricsCompute:
         _job_metrics(db, runner).compute(MetricsRequest())
         assert runner.calls[0]["source_table"] == "main.onto.triples"
         assert runner.calls[0]["output_table"] == "metrics"
-
-    def test_unreachable_graph_raises_with_the_reason(self):
-        db = _OutputDB(_sample_rows(), _hub_triples())
-        jm = JobMetrics(
-            _CypherStore(),
-            "g",
-            runner=_FakeRunner(),
-            query=db.query,
-            output_table="metrics",
-        )
-        with pytest.raises(InfrastructureError):
-            jm.compute(MetricsRequest())
 
     def test_output_table_is_sanitised_for_unquoted_sql(self):
         from back.objects.digitaltwin.DigitalTwin import DigitalTwin

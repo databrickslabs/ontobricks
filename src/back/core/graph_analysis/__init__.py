@@ -4,7 +4,7 @@ from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.GraphMetrics import GraphMetrics
-from back.core.graph_analysis.JobMetrics import JobMetrics, resolve_spark_source
+from back.core.graph_analysis.JobMetrics import JobMetrics, resolve_analytics_source
 from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
 from back.core.graph_analysis.PushdownMetrics import PushdownMetrics, supports_pushdown
 from back.core.graph_analysis.models import (
@@ -107,7 +107,7 @@ __all__ = [
     "JobMetrics",
     "LakeflowRunner",
     "PushdownMetrics",
-    "resolve_spark_source",
+    "resolve_analytics_source",
     "supports_pushdown",
     "EntityTypeProfile",
     "MetricsRequest",

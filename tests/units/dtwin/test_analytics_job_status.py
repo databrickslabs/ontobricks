@@ -3,7 +3,7 @@
 An admin who has already ticked "Compute large-graph metrics on Databricks" and
 is still told to go and tick it has been given no information. Each of the four
 prerequisites has a different remedy, so ``_analytics_job_status`` reports which
-one is missing. ``resolve_spark_source`` already writes those strings for a
+one is missing. ``resolve_analytics_source`` already writes those strings for a
 reader; the endpoint used to discard them with ``[0]``.
 """
 
@@ -33,7 +33,7 @@ def _status(
 ):
     with patch(f"{MODULE}.resolve_analytics_job_enabled", return_value=enabled), patch(
         f"{MODULE}.resolve_analytics_job_name", return_value=job_name
-    ), patch(f"{MODULE}.resolve_spark_source", return_value=spark):
+    ), patch(f"{MODULE}.resolve_analytics_source", return_value=spark):
         return _analytics_job_status(
             object(), _Settings(), object(), "graph", pushdown_ok=pushdown_ok
         )
@@ -54,9 +54,9 @@ class TestToggleOff:
         assert _status(enabled=False) == (False, "")
 
     def test_nothing_else_is_probed(self):
-        """Spark resolution can be a remote call; skip it when the toggle is off."""
+        """Source resolution can be a remote call; skip it when the toggle is off."""
         with patch(f"{MODULE}.resolve_analytics_job_enabled", return_value=False), patch(
-            f"{MODULE}.resolve_spark_source"
+            f"{MODULE}.resolve_analytics_source"
         ) as spark, patch(f"{MODULE}.resolve_analytics_job_name") as name:
             _analytics_job_status(
                 object(), _Settings(), object(), "graph", pushdown_ok=True

@@ -16,10 +16,9 @@ truncated by its depth cap, since the distance sums would be biased — raise
 ``analytics_job_max_depth`` and re-run when that happens. Narrowing the
 analysis with an entity-type filter gets both exactly from the in-memory path.
 
-**Prerequisite.** The graph must be readable from Spark as a Unity Catalog
-table, which is not true for every engine —
-:func:`resolve_spark_source` is where that is decided, and it refuses rather
-than guessing.
+**Prerequisite.** The domain must have a materialized ``…_data`` Unity Catalog
+table — the R2RML-mapped triples snapshot the Build step produces. Analytics
+reads only that table, so the graph engine is irrelevant to this mode.
 
 The read-back keeps the bounded-payload contract: only the union of the top-N
 per metric is returned, never a row per node.
@@ -32,6 +31,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from back.core.errors import InfrastructureError
 from back.core.graph_analysis.PushdownMetrics import PushdownMetrics
+from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.graph_analysis.models import (
     MODE_JOB,
     MetricsRequest,
@@ -59,81 +59,30 @@ UNAVAILABLE_METRICS = ("betweenness", "closeness")
 # ---------------------------------------------------------------------------
 
 
-def resolve_spark_source(store: Any, graph_name: str) -> Tuple[str, str]:
-    """Resolve the Unity Catalog table the Spark job should read.
+def resolve_analytics_source(domain: Any, settings: Any) -> Tuple[str, str]:
+    """Resolve the Unity Catalog table analytics reads.
 
-    Returns ``(table, "")`` when the graph is reachable from Spark, or
-    ``("", reason)`` when it is not. The reason is written for the person
-    reading it in the UI, because "the job can't see your data" is a
-    configuration problem only they can fix.
+    Always the ``…_data`` snapshot the Build materialises from the R2RML VIEW,
+    never the engine's own graph relation. That is what makes a KPI identical
+    on Lakehouse, Lakebase and Neo4j: the engines differ, the mapped snapshot
+    does not.
 
-    The three cases that matter:
-
-    * **Delta** — the graph already *is* a UC table; use it directly.
-    * **Lakebase managed_synced** — Postgres holds a synced copy of a UC
-      table, so point Spark at that upstream source rather than at Postgres.
-    * **Lakebase app_managed / Neo4j** — the triples live only in a store
-      Spark cannot read. Refused.
+    Returns ``(table, "")`` or ``("", reason)``, where the reason is written for
+    whoever reads it in the UI.
     """
-    if store is None:
-        return "", "No graph store is configured."
-
-    if getattr(store, "query_dialect", "sql") != "sql":
+    table = (SQLHelpers.effective_databricks_table(domain, settings) or "").strip()
+    table = table.replace("`", "")
+    if not table:
         return "", (
-            "This engine is not SQL-based, so the Databricks job cannot read "
-            "its data. Use an entity-type filter to analyse a subgraph in-app."
+            "No mapped-triples table could be resolved for this domain. Run "
+            "Knowledge Graph → Build to materialise it."
         )
-
-    # Lakebase: only the managed_synced mode has a UC table upstream.
-    if hasattr(store, "sync_mode"):
-        if not getattr(store, "is_synced", False):
-            return "", (
-                "This Lakebase graph is in app_managed mode, so its triples "
-                "exist only in Postgres and are not readable from Spark. "
-                "Switch the graph to managed_synced to use the job."
-            )
-        source = _lakebase_uc_source(store, graph_name)
-        if not source:
-            return "", (
-                "Could not determine the Unity Catalog source table behind "
-                "this synced Lakebase graph. Rebuild the graph so the synced "
-                "table is registered, then retry."
-            )
-        return source, ""
-
-    # Delta and anything else exposing a fully-qualified relation.
-    try:
-        relation = store.sql_table_reference(graph_name)
-    except Exception as exc:  # noqa: BLE001
-        return "", f"Could not resolve the graph's table name: {exc}"
-
-    relation = (relation or "").replace("`", "").strip()
-    if relation.count(".") != 2:
+    if table.count(".") != 2:
         return "", (
-            f"The graph resolves to {relation!r}, which is not a "
+            f"The mapped-triples table resolves to {table!r}, which is not a "
             f"catalog.schema.table name the Databricks job can read."
         )
-    return relation, ""
-
-
-def _lakebase_uc_source(store: Any, graph_name: str) -> str:
-    """Read ``spec.source_table_full_name`` off the synced-table object."""
-    try:
-        manager = store.synced_manager()
-        synced = manager.get(store.synced_uc_name(graph_name))
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not fetch the synced table for %s: %s", graph_name, exc)
-        return ""
-    if synced is None:
-        return ""
-    spec = getattr(synced, "spec", None)
-    if spec is not None:
-        value = getattr(spec, "source_table_full_name", "") or ""
-        if value:
-            return str(value)
-    if isinstance(synced, dict):
-        return str((synced.get("spec") or {}).get("source_table_full_name", "") or "")
-    return ""
+    return table, ""
 
 
 # ---------------------------------------------------------------------------
@@ -234,9 +183,13 @@ class JobMetrics:
         pagerank_iterations: int = 20,
         pivots: int = 64,
         max_depth: int = 32,
+        domain: Any = None,
+        settings: Any = None,
     ) -> None:
         self._store = store
         self._graph_name = graph_name
+        self._domain = domain
+        self._settings = settings
         self._runner = runner
         self._query = query
         self._output_table = output_table
@@ -253,7 +206,7 @@ class JobMetrics:
         """Compute the full metric set, offloading the iterative parts."""
         t0 = time.time()
 
-        source_table, reason = resolve_spark_source(self._store, self._graph_name)
+        source_table, reason = resolve_analytics_source(self._domain, self._settings)
         if not source_table:
             raise InfrastructureError(
                 "The graph analytics job cannot read this graph", detail=reason
