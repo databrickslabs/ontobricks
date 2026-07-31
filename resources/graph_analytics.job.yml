@@ -1,10 +1,8 @@
-# Serverless job computing the iterative KG graph metrics.
-#
-# The app runs everything it can as SQL inside the graph store
-# (``back.core.graph_analysis.PushdownMetrics``). PageRank, connected
-# components and the clustering coefficient need repeated passes over the
-# graph, so they run here instead and land per-node scores in a Delta table
-# the app reads back with a top-N query.
+# Serverless job computing every KG graph metric: degree, PageRank,
+# clustering, connected components, betweenness and closeness (Brandes–Pich
+# estimates). The job reads the R2RML-mapped Delta snapshot
+# (``…_data`` table) and writes four output tables the app reads back.
+# No in-memory or SQL-pushdown fallback exists; this is the only compute path.
 #
 # Triggered on demand by ``LakeflowRunner`` via ``jobs.run_now`` — there is no
 # schedule. DAB in ``mode: development`` prefixes the deployed job name with

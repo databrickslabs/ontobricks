@@ -553,29 +553,21 @@ The cluster panel also displays:
 
 ### Analytics (Sidebar)
 
-Click **Analytics** in the sidebar to compute and visualise centrality and structural metrics for the entities in your knowledge graph. Analytics runs a server-side NetworkX computation — no sampling is needed for typical graphs.
+Click **Analytics** in the sidebar to compute and visualise centrality and structural metrics for the entities in your knowledge graph. Analytics always runs on a **serverless Databricks Lakeflow job** — there is no in-memory or SQL-pushdown fallback.
 
-Because this computation can take a while on large graphs, it runs **asynchronously** in the background. The **last** result is persisted in the registry (the `graph_analytics` table), so re-opening the Analytics page (or the Domain Validation cockpit) shows the previously computed result immediately without recomputing — a "Last computed …" line marks when it was produced.
+Because the job can take a while on large graphs, it runs **asynchronously** in the background. The **last** result is persisted in the registry (the `graph_analytics` table), so re-opening the Analytics page (or the Domain Validation cockpit) shows the previously computed result immediately without recomputing — a "Last computed …" line marks when it was produced.
 
-> **Graph-size limit and the three compute modes.** The full analysis loads the triple set into memory (NetworkX), so it is capped at `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` triples (default **500,000**). Graphs above that limit are **not** rejected — one of two engine-side modes takes over instead, and the "Last computed" line says which one ran.
+> **Prerequisites.** Three conditions must all be met before a run can start; the Analytics panel tells you which one is missing if any of them fails:
 >
-> | Mode | When it runs | Metrics you get |
-> |---|---|---|
-> | **In-memory** (NetworkX) | Under the limit, or a filtered subgraph that fits | All five per-node metrics plus the component count |
-> | **Engine-side aggregation** | Over the limit | Node/edge counts, average degree, density, degree centrality, entity-type profiles |
-> | **On Databricks** | Over the limit, with **Settings → Global → Compute large-graph metrics on Databricks** enabled | The above **plus** PageRank, clustering coefficient and the component count exactly, and betweenness and closeness as estimates |
+> 1. **Admin toggle on** — an admin must enable *Compute large-graph metrics on Databricks* in **Settings → Global**. `ONTOBRICKS_ANALYTICS_JOB_ENABLED` sets the *initial* value for a new deployment; once an admin uses the checkbox their choice wins (including an explicit "off").
+> 2. **Bundle deployed** — the Lakeflow job (`resources/graph_analytics.job.yml`) must be deployed via `make deploy`. OntoBricks resolves the job by name (suffix-matching so `[dev <user>]` prefixes work automatically).
+> 3. **Domain built** — the domain must have been built at least once after this version of OntoBricks was deployed. Build unconditionally materialises a Delta snapshot of the R2RML-mapped triples (`catalog.schema.triplestore_<domain>_V<n>_data`). If that snapshot is absent or empty, the panel names this requirement and the remedy is a rebuild. Domains built before upgrading to this version need one rebuild.
 >
-> Engine-side aggregation cannot produce PageRank, clustering, betweenness, closeness or the component count, because those need repeated passes over the whole graph. The job mode computes all of them on a **serverless Databricks job**. Charts for whatever a run could not compute say so explicitly rather than drawing a flat zero line.
+> **What the job scores.** Analytics reads the mapped-triple snapshot — the same table regardless of whether your backend is Lakehouse, Lakebase or Neo4j. Inferred and cohort triples are out of scope; reasoning does not affect the KPIs.
 >
-> **Betweenness and closeness in job mode are estimates.** Computing them exactly requires shortest paths from every node to every other node — O(V·E), which is not viable at the sizes this mode exists for. Instead the job runs a breadth-first search from a sample of `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` source nodes (default **64**) and extrapolates, the standard Brandes–Pich approach. Both charts carry an "Estimate" note in that mode. Treat them as a **ranking** of the clear leaders, not as absolute values: nodes with similar true scores can come out in the wrong order. Raise the pivot count for a tighter estimate — accuracy improves with more pivots, and setting it at or above the node count makes both metrics exact — but it is the dominant cost of the job, because the intermediate search result holds one row per (pivot, reachable node). Set it to `0` to skip both metrics entirely and make the job cheaper.
+> **Betweenness and closeness are estimates.** The job samples `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` source nodes (default **64**) and runs a breadth-first search from each (the Brandes–Pich approach). Both charts carry an "Estimate" note. Treat them as a ranking of the clear leaders, not as absolute values. If the BFS hits the depth cap (`ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH`, default **32**) before the graph is fully explored, betweenness and closeness are withheld entirely — reported as unavailable rather than as numbers — because truncated distance sums would be biased. Raise `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` and re-run to resolve this. Set pivots to `0` to skip both metrics and make the job cheaper; setting pivots at or above the node count makes them exact.
 >
-> To get **all** metrics on a large graph exactly, select an **entity type**. The filter is pushed down to the graph store, so only the selected subgraph is read — that usually brings the load back under the limit, and OntoBricks tries the in-memory engine first in that case, falling back to engine-side aggregation only if the subgraph is still too big.
->
-> **Turning the Databricks mode on.** An admin enables it in **Settings → Global** with the *Compute large-graph metrics on Databricks* checkbox; it applies to every user of the instance and takes effect on the next run. `ONTOBRICKS_ANALYTICS_JOB_ENABLED` still sets the *initial* value for a deployment, but once an admin has used the checkbox their choice wins — including an explicit "off" against an env var that enables it. The panel tells you which of the two the current value came from.
->
-> **Prerequisites.** Engine-side aggregation requires a SQL graph backend (Delta or Lakebase); on Neo4j, oversized graphs are still rejected. The job mode additionally requires the graph to be readable from Spark as a Unity Catalog table — true for Delta, and for Lakebase only in `managed_synced` mode (where the job reads the UC table upstream of the sync, not Postgres). It also requires the bundle carrying the job to have been deployed (`make deploy`). When the job is unavailable for any of these reasons, the run silently degrades to engine-side aggregation rather than failing.
->
-> Set `ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED=false` to restore the old behaviour of refusing oversized graphs outright.
+> **Entity-type counts.** The *Instances* column in the entity-type profile table shows the full population of each class in the mapped graph, including isolated nodes (instances with no relationships). This is a more complete number than earlier releases, which showed only the connected instances on unfiltered runs — types that have isolated nodes will show higher counts.
 
 #### Running an Analysis
 

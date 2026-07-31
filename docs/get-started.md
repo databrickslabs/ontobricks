@@ -503,10 +503,9 @@ the workspace token (locally) or the SP token (in Apps).
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` | Max triples loaded into memory for the NetworkX centrality/structure analysis. This is the switch point between the two compute modes, not a rejection threshold: larger graphs fall back to engine-side SQL aggregation. Entity-type filters are pushed down to the graph store, so they reduce the load and can bring an oversized graph back under the limit. | `500000` |
-| `ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED` | Whether graphs over the limit fall back to engine-side SQL aggregation (reduced metric set, no size limit). Set to `false` to reject oversized graphs outright instead. Requires a SQL graph backend (Delta or Lakebase). | `true` |
-| `ONTOBRICKS_ANALYTICS_TOP_N` | How many top-ranked nodes per metric the engine-side path returns. Keeps the persisted payload bounded on very large graphs; must stay above the Analytics page "Top N" selector maximum (50). | `100` |
-| `ONTOBRICKS_ANALYTICS_JOB_ENABLED` | **Initial value only** — admins override this in Settings → Global (*Compute large-graph metrics on Databricks*), and their choice wins, including an explicit "off". Whether oversized graphs may offload PageRank, connected components, the clustering coefficient and the sampled betweenness/closeness to the serverless Lakeflow job (`resources/graph_analytics.job.yml`). Requires the bundle to be deployed and the graph to be readable from Spark as a UC table (Delta, or Lakebase in `managed_synced` mode). Degrades to engine-side aggregation when unavailable. | `false` |
+| `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` | Max triples loaded into memory for community detection (`POST /clusters/detect`). Not used by graph analytics, which always runs on the Lakeflow job. | `500000` |
+| `ONTOBRICKS_ANALYTICS_TOP_N` | How many top-ranked nodes per metric the job returns per output table. Keeps the persisted payload bounded on very large graphs; must stay above the Analytics page "Top N" selector maximum (50). | `100` |
+| `ONTOBRICKS_ANALYTICS_JOB_ENABLED` | **Initial value only** — admins override this in Settings → Global (*Compute large-graph metrics on Databricks*), and their choice wins, including an explicit "off". Enables the serverless Lakeflow job that computes all graph KPIs. Requires the bundle to be deployed and the domain to have been built (which materialises the `…_data` Delta snapshot the job reads). | `false` |
 | `ONTOBRICKS_ANALYTICS_JOB_NAME` | Deployed name of that job. Empty derives `<app name>-graph-analytics`, matching the bundle. A bundle deployed in development mode prefixes the name with `[dev <user>] `, which is matched automatically. | *(derived)* |
 | `ONTOBRICKS_ANALYTICS_JOB_OUTPUT_SCHEMA` | `catalog.schema` holding the job's per-node output tables (one per domain version). Empty uses the registry catalog/schema. | *(registry)* |
 | `ONTOBRICKS_ANALYTICS_JOB_TIMEOUT_S` | How long to follow a job run before giving up waiting. The run itself is not cancelled. | `3600` |
@@ -541,9 +540,8 @@ DATABRICKS_APP_PORT=8000
 LOG_FORMAT=json                        # Structured JSON logging (default: text)
 LOG_LEVEL=INFO                         # DEBUG, INFO, WARNING, ERROR, CRITICAL
 ONTOBRICKS_THREAD_POOL_SIZE=20         # Max threads for blocking I/O
-ONTOBRICKS_ANALYTICS_MAX_TRIPLES=500000  # KG analytics in-memory triple cap
-ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED=true  # Engine-side SQL fallback above the cap
-ONTOBRICKS_ANALYTICS_TOP_N=100           # Top nodes per metric in engine-side mode
+ONTOBRICKS_ANALYTICS_MAX_TRIPLES=500000  # Community detection in-memory triple cap
+ONTOBRICKS_ANALYTICS_TOP_N=100           # Top nodes per metric returned by the Lakeflow job
 ONTOBRICKS_ANALYTICS_JOB_ENABLED=false   # Initial value; admins override it in Settings → Global
 ```
 
