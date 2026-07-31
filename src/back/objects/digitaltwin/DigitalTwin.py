@@ -2688,16 +2688,11 @@ class DigitalTwin:
         task_id: str,
         domain,
         settings,
-        store: Any,
         graph_name: str,
         *,
         predicate_filter: Optional[List[str]] = None,
         class_filter: Optional[List[str]] = None,
-        max_triples: int = 500_000,
-        max_nodes_betweenness: int = 2_000,
-        mode: str = "in_memory",
         top_n: int = 100,
-        allow_pushdown_fallback: bool = False,
     ) -> None:
         """Compute graph metrics in a worker thread and persist the LAST result.
 
@@ -2721,25 +2716,15 @@ class DigitalTwin:
         try:
             tm.start_task(task_id, "Computing knowledge graph metrics...")
             tm.update_progress(
-                task_id,
-                20,
-                {
-                    "pushdown": "Aggregating graph structure in the engine",
-                    "job": "Starting the Databricks graph analytics job",
-                }.get(mode, "Running centrality analysis"),
+                task_id, 20, "Starting the Databricks graph analytics job"
             )
 
             dt = DigitalTwin(domain)
             result = dt.compute_graph_metrics(
-                store,
                 graph_name,
                 predicate_filter=predicate_filter,
                 class_filter=class_filter,
-                max_triples=max_triples,
-                max_nodes_betweenness=max_nodes_betweenness,
-                mode=mode,
                 top_n=top_n,
-                allow_pushdown_fallback=allow_pushdown_fallback,
                 settings=settings,
                 # A job run takes minutes, so forward its state to the tracker
                 # the front-end is already polling.
@@ -2763,9 +2748,6 @@ class DigitalTwin:
                 "duration_ms": duration_ms,
                 "computed_at": now_iso,
             }
-            # The effective mode can differ from the requested one when an
-            # in-memory run degraded to pushdown.
-            effective_mode = result.get("mode", mode)
             if folder and version:
                 svc = RegistryService.from_context(domain, settings)
                 svc.save_graph_analytics(folder, version, entry)
@@ -2792,19 +2774,16 @@ class DigitalTwin:
                 )
 
             node_count = stats.get("node_count", 0)
-            suffix = {
-                "pushdown": " (engine-side aggregation)",
-                "job": " (computed on Databricks)",
-            }.get(effective_mode, "")
             tm.complete_task(
                 task_id,
                 result={
                     "node_count": node_count,
                     "duration_ms": duration_ms,
-                    "mode": effective_mode,
+                    "mode": "job",
                 },
                 message=(
-                    f"Analysis done: {node_count:,} nodes in {duration_ms} ms{suffix}"
+                    f"Analysis done: {node_count:,} nodes in {duration_ms} ms"
+                    " (computed on Databricks)"
                 ),
             )
         except Exception as exc:  # noqa: BLE001
@@ -3391,99 +3370,47 @@ class DigitalTwin:
 
     def compute_graph_metrics(
         self,
-        store: Any,
         graph_name: str,
         predicate_filter: Optional[List[str]] = None,
         class_filter: Optional[List[str]] = None,
-        max_triples: int = 500_000,
-        max_nodes_betweenness: int = 2_000,
-        mode: str = "in_memory",
         top_n: int = 100,
-        allow_pushdown_fallback: bool = False,
         settings: Any = None,
         on_progress: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """Compute centrality and structural metrics on the knowledge graph.
+        """Compute centrality and structural metrics on the mapped graph.
 
-        *mode* selects the engine:
+        There is one compute path: the Databricks analytics job, reading the
+        ``…_data`` snapshot the Build materialises from the R2RML VIEW. That is
+        deliberate — the same domain must produce the same KPIs whatever engine
+        holds its graph, and at any size.
 
-        * ``in_memory`` — the full NetworkX analysis (all five per-node
-          metrics), capped by *max_triples*;
-        * ``pushdown`` — engine-side SQL aggregations, no size limit but no
-          iterative metrics;
-        * ``job`` — pushdown aggregates plus PageRank, connected components and
-          clustering from the serverless Lakeflow job. Needs *settings*, and
-          degrades to ``pushdown`` if the job is unavailable rather than
-          failing the run.
+        Raises rather than degrading when the job cannot run: a run that
+        silently returns fewer metrics is exactly what this path replaced.
 
-        With *allow_pushdown_fallback*, an ``in_memory`` run that trips the
-        *max_triples* guard degrades to ``pushdown`` instead of failing — a
-        class-filtered analysis is worth attempting exactly first, because the
-        filter is pushed down and the selected subgraph often fits.
-
-        *on_progress* receives ``(percent, message)`` during a ``job`` run,
-        which is the only mode slow enough to be worth reporting on.
+        *graph_name* names the output table only; the data comes from the
+        resolved source. *on_progress* receives ``(percent, message)``.
 
         Returns a JSON-serializable dict matching the API contract.
         """
-        domain = self._domain
-        from back.core.graph_analysis import (
-            MODE_JOB,
-            MODE_PUSHDOWN,
-            GraphMetrics,
-            MetricsRequest,
-            PushdownMetrics,
-            supports_pushdown,
-        )
+        from back.core.graph_analysis import MetricsRequest, resolve_analytics_source
 
+        source_table, reason = resolve_analytics_source(self._domain, settings)
+        if not source_table:
+            raise InfrastructureError(
+                "The graph analytics job cannot read this domain", detail=reason
+            )
+
+        job_metrics = DigitalTwin.build_job_metrics(
+            self._domain,
+            settings,
+            source_table=source_table,
+            graph_name=graph_name,
+            top_n=top_n,
+        )
         request = MetricsRequest(
-            predicate_filter=predicate_filter,
-            class_filter=class_filter,
-            max_triples=max_triples,
-            max_nodes_betweenness=max_nodes_betweenness,
+            predicate_filter=predicate_filter, class_filter=class_filter
         )
-
-        if mode == MODE_JOB:
-            from back.core.graph_analysis import resolve_analytics_source
-            source_table, reason = resolve_analytics_source(domain, settings)
-            if not source_table:
-                raise InfrastructureError(
-                    "The graph analytics job cannot read this domain", detail=reason
-                )
-            job_metrics = DigitalTwin.build_job_metrics(
-                domain, settings, source_table=source_table,
-                graph_name=graph_name, top_n=top_n,
-            )
-            try:
-                return job_metrics.compute(request, on_progress=on_progress).to_dict()
-            except OntoBricksError as exc:
-                # A misconfigured or undeployed job must not lose the user the
-                # aggregates the pushdown path can still give them.
-                logger.warning(
-                    "compute_graph_metrics: job mode failed (%s) — "
-                    "falling back to SQL pushdown",
-                    exc,
-                )
-                return (
-                    PushdownMetrics(store, graph_name, top_n=top_n)
-                    .compute(request)
-                    .to_dict()
-                )
-
-        if mode == MODE_PUSHDOWN:
-            return PushdownMetrics(store, graph_name, top_n=top_n).compute(request).to_dict()
-
-        try:
-            return GraphMetrics(store, graph_name).compute(request).to_dict()
-        except ValueError as exc:
-            if not (allow_pushdown_fallback and supports_pushdown(store)):
-                raise
-            logger.info(
-                "compute_graph_metrics: in-memory analysis rejected (%s) — "
-                "falling back to SQL pushdown",
-                exc,
-            )
-            return PushdownMetrics(store, graph_name, top_n=top_n).compute(request).to_dict()
+        return job_metrics.compute(request, on_progress=on_progress).to_dict()
 
     @staticmethod
     def build_job_metrics(

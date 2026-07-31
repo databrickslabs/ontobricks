@@ -24,11 +24,8 @@ from back.core.w3c import sparql
 from back.core.databricks import DatabricksClient, is_databricks_app
 from back.core.graphdb import get_graphdb
 from back.core.graph_analysis import (
-    MODE_IN_MEMORY,
     MODE_JOB,
-    MODE_PUSHDOWN,
     resolve_analytics_source,
-    supports_pushdown,
 )
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 from back.objects.domain import HomeService, Domain
@@ -470,33 +467,44 @@ async def detect_clusters(
 # ===========================================
 
 
-def _analytics_job_status(
-    domain, settings, store, graph_name, *, pushdown_ok: bool
-) -> Tuple[bool, str]:
-    """Return ``(job_mode_available, reason_it_is_not)`` for this graph.
+def _data_table_has_rows(domain, settings, table: str) -> bool:
+    """Whether the mapped snapshot exists and holds at least one triple.
 
-    Job mode needs four things: the admin toggle, an engine that can aggregate
-    server-side, a resolvable job name, and a graph Spark can read as a Unity
-    Catalog table. Each has a different remedy, so the caller gets the specific
-    one rather than a bare ``False`` — telling an admin who has already enabled
-    the toggle to go and enable it is worse than saying nothing.
+    A ``…_data`` that is absent and one that is empty have the same remedy —
+    build the domain — so they are one check.
+    """
+    from back.core.databricks import DatabricksClient
+    from back.core.helpers import (
+        get_databricks_host_and_token,
+        resolve_delta_warehouse_id,
+    )
+
+    try:
+        host, token = get_databricks_host_and_token(domain, settings)
+        client = DatabricksClient(
+            host=host,
+            token=token,
+            warehouse_id=resolve_delta_warehouse_id(domain, settings),
+        )
+        rows = client.execute_query(f"SELECT 1 AS ok FROM {table} LIMIT 1")
+        return bool(rows)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("mapped-snapshot probe failed for %s: %s", table, exc)
+        return False
+
+
+def _analytics_job_status(domain, settings) -> Tuple[bool, str]:
+    """Return ``(analytics_available, reason_it_is_not)`` for this domain.
+
+    Analytics needs three things: the admin toggle, a resolvable job name, and
+    the mapped snapshot the job reads. Each has a different remedy, so the
+    caller gets the specific one rather than a bare ``False``.
 
     The reason is empty whenever the toggle is off, because then nothing is
     broken: not using the job is the configured behaviour.
-
-    ``pushdown_ok`` is passed in rather than derived because callers disagree on
-    what it means — the analytics run also honours
-    ``settings.analytics_pushdown_enabled``, while the stats endpoint reports raw
-    engine capability.
     """
     if not resolve_analytics_job_enabled(domain, settings):
         return False, ""
-
-    if not pushdown_ok:
-        return False, (
-            "This graph engine cannot aggregate server-side, which the job path "
-            "builds on."
-        )
 
     if not resolve_analytics_job_name(settings):
         return False, (
@@ -508,7 +516,13 @@ def _analytics_job_status(
     source, reason = resolve_analytics_source(domain, settings)
     if not source:
         return False, reason or (
-            "The mapped-triples table for this domain could not be resolved."
+            "No mapped-triples table could be resolved for this domain."
+        )
+
+    if not _data_table_has_rows(domain, settings, source):
+        return False, (
+            f"The mapped-triples table {source} is missing or empty. Run "
+            f"Knowledge Graph → Build to materialise it, then retry."
         )
 
     return True, ""
@@ -559,8 +573,6 @@ async def compute_graph_metrics(
             data = {}
         predicate_filter = data.get("predicate_filter")
         class_filter = data.get("class_filter")
-        max_triples = int(data.get("max_triples", settings.analytics_max_triples))
-        max_nodes_betweenness = int(data.get("max_nodes_betweenness", 2_000))
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
@@ -568,44 +580,18 @@ async def compute_graph_metrics(
         if not graph_name:
             raise ValidationError("Graph name is not configured")
 
-        # Pick the compute mode from the known triple count. Above the limit
-        # the full graph cannot be held in memory, so the analysis runs as
-        # engine-side SQL aggregation instead (fewer metrics, no size limit).
-        # A class filter is pushed down to the engine, so a filtered run is
-        # still attempted in memory first and degrades only if it really does
-        # not fit.
-        try:
-            total_triples = int(store.get_aggregate_stats(graph_name).get("total", 0))
-        except Exception:  # noqa: BLE001
-            total_triples = 0
-
-        oversized = bool(total_triples and total_triples > max_triples)
-        pushdown_available = (
-            settings.analytics_pushdown_enabled and supports_pushdown(store)
-        )
-        # The job mode is a strict superset of pushdown, so prefer it whenever it
-        # is enabled and every prerequisite holds.
-        job_available, _job_blocked_reason = _analytics_job_status(
-            domain, settings, store, graph_name, pushdown_ok=pushdown_available
-        )
-        mode = MODE_IN_MEMORY
-        allow_pushdown_fallback = False
-
-        if oversized:
-            if not pushdown_available:
-                raise ValidationError(
-                    f"This Knowledge Graph has {total_triples:,} triples, which "
-                    f"exceeds the analytics limit of {max_triples:,}. In-memory "
-                    f"centrality/structure analysis is disabled for graphs this "
-                    f"large, and engine-side aggregation is not available for "
-                    f"this graph backend — reduce the synced graph (exclude "
-                    f"entity types in KG → Sync) or raise "
-                    f"ONTOBRICKS_ANALYTICS_MAX_TRIPLES."
+        # One compute path. When it cannot run, say why instead of quietly
+        # returning a thinner metric set.
+        job_available, blocked_reason = _analytics_job_status(domain, settings)
+        if not job_available:
+            raise ValidationError(
+                blocked_reason
+                or (
+                    "Graph analytics runs on Databricks, which is not enabled "
+                    "for this workspace. Enable 'Compute large-graph metrics on "
+                    "Databricks' in Settings."
                 )
-            if class_filter:
-                allow_pushdown_fallback = True
-            else:
-                mode = MODE_JOB if job_available else MODE_PUSHDOWN
+            )
 
         tm = get_task_manager()
         task = tm.create_task(
@@ -623,15 +609,10 @@ async def compute_graph_metrics(
                 task.id,
                 domain,
                 settings,
-                store,
                 graph_name,
                 predicate_filter=predicate_filter,
                 class_filter=class_filter,
-                max_triples=max_triples,
-                max_nodes_betweenness=max_nodes_betweenness,
-                mode=mode,
                 top_n=settings.analytics_top_n,
-                allow_pushdown_fallback=allow_pushdown_fallback,
             )
 
         thread = threading.Thread(target=run_metrics, daemon=True)
@@ -640,11 +621,8 @@ async def compute_graph_metrics(
         return {
             "success": True,
             "task_id": task.id,
-            "mode": mode,
-            "message": {
-                MODE_PUSHDOWN: "Analysis started (engine-side aggregation)",
-                MODE_JOB: "Analysis started (running on Databricks)",
-            }.get(mode, "Analysis started"),
+            "mode": MODE_JOB,
+            "message": "Analysis started (running on Databricks)",
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -1526,9 +1504,7 @@ async def triplestore_stats(
 
         classified = DigitalTwin(domain).classify_predicates(top_predicates)
 
-        job_available, job_blocked_reason = _analytics_job_status(
-            domain, settings, store, graph_name, pushdown_ok=supports_pushdown(store)
-        )
+        job_available, job_blocked_reason = _analytics_job_status(domain, settings)
 
         result = {
             "success": True,
@@ -1543,17 +1519,7 @@ async def triplestore_stats(
             "type_assertion_count": type_count,
             "relationship_count": max(relationship_count, 0),
             "inferred_triples": inferred_count,
-            # Effective KG-analytics limit and whether exceeding it can still
-            # be served by engine-side aggregation, so the Analytics page can
-            # tell the user up-front which mode a run will use rather than
-            # disabling the button (see Settings.analytics_max_triples).
-            "analytics_max_triples": settings.analytics_max_triples,
-            "analytics_pushdown_available": (
-                settings.analytics_pushdown_enabled and supports_pushdown(store)
-            ),
-            # Whether an oversized run can additionally offload PageRank /
-            # components / clustering to the Databricks job, so the banner can
-            # promise the full metric set instead of the reduced one.
+            # Whether the Databricks analytics job can run for this domain.
             "analytics_job_available": job_available,
             # Why it is not, when an admin has turned it on and therefore expects
             # it to work. ``resolve_analytics_source`` writes these for the person

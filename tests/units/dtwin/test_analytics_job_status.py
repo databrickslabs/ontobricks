@@ -1,7 +1,7 @@
 """Why job mode is unavailable has to reach the user, not just the logs.
 
 An admin who has already ticked "Compute large-graph metrics on Databricks" and
-is still told to go and tick it has been given no information. Each of the four
+is still told to go and tick it has been given no information. Each of the three
 prerequisites has a different remedy, so ``_analytics_job_status`` reports which
 one is missing. ``resolve_analytics_source`` already writes those strings for a
 reader; the endpoint used to discard them with ``[0]``.
@@ -27,16 +27,16 @@ class _Settings:
 def _status(
     *,
     enabled=True,
-    pushdown_ok=True,
     job_name="some-job",
     spark=("cat.sch.tbl", ""),
+    has_rows=True,
 ):
     with patch(f"{MODULE}.resolve_analytics_job_enabled", return_value=enabled), patch(
         f"{MODULE}.resolve_analytics_job_name", return_value=job_name
-    ), patch(f"{MODULE}.resolve_analytics_source", return_value=spark):
-        return _analytics_job_status(
-            object(), _Settings(), object(), "graph", pushdown_ok=pushdown_ok
-        )
+    ), patch(f"{MODULE}.resolve_analytics_source", return_value=spark), patch(
+        f"{MODULE}._data_table_has_rows", return_value=has_rows
+    ):
+        return _analytics_job_status(object(), _Settings())
 
 
 class TestAvailable:
@@ -58,19 +58,12 @@ class TestToggleOff:
         with patch(f"{MODULE}.resolve_analytics_job_enabled", return_value=False), patch(
             f"{MODULE}.resolve_analytics_source"
         ) as spark, patch(f"{MODULE}.resolve_analytics_job_name") as name:
-            _analytics_job_status(
-                object(), _Settings(), object(), "graph", pushdown_ok=True
-            )
+            _analytics_job_status(object(), _Settings())
         spark.assert_not_called()
         name.assert_not_called()
 
 
 class TestEachCauseIsNamed:
-    def test_engine_cannot_aggregate(self):
-        available, reason = _status(pushdown_ok=False)
-        assert available is False
-        assert "cannot aggregate server-side" in reason
-
     def test_missing_job_name_names_the_env_var(self):
         available, reason = _status(job_name="")
         assert available is False
@@ -91,13 +84,19 @@ class TestEachCauseIsNamed:
         assert available is False
         assert reason, "an unavailable job must always explain itself"
 
+    def test_empty_table_names_the_build_remedy(self):
+        """A snapshot that exists but is empty should say 'Build first'."""
+        available, reason = _status(has_rows=False)
+        assert available is False
+        assert "Build" in reason
+
     @pytest.mark.parametrize(
         "kwargs",
         [
-            {"pushdown_ok": False},
             {"job_name": ""},
             {"spark": ("", "some reason")},
             {"spark": ("", "")},
+            {"has_rows": False},
         ],
     )
     def test_every_blocked_case_is_reported_as_unavailable(self, kwargs):
@@ -108,10 +107,6 @@ class TestEachCauseIsNamed:
 
 class TestCauseOrdering:
     """The first missing prerequisite is the one worth reporting."""
-
-    def test_pushdown_is_reported_before_the_job_name(self):
-        _a, reason = _status(pushdown_ok=False, job_name="")
-        assert "cannot aggregate server-side" in reason
 
     def test_job_name_is_reported_before_spark(self):
         _a, reason = _status(job_name="", spark=("", "a spark problem"))
