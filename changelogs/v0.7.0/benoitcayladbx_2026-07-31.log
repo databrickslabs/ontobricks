@@ -265,3 +265,48 @@ environment-dependent failures — verified identical on a stashed tree.
 - `tests/units/core/test_graph_analytics_job_sql.py`
 
 **Test result:** `env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH uv run pytest tests/units/core/test_graph_analytics_job_sql.py -q` → 64 passed, 1 warning in 1.45s
+
+================================================================================
+feat: Lakeflow job accepts a class filter and scores the induced subgraph
+================================================================================
+
+Context
+-------
+
+The entity-type filter (e.g. "score only Person nodes") was previously applied
+by an in-memory NetworkX path that is being deleted. This change moves the
+filter into the Lakeflow job itself, so filtered analyses work at any graph
+size. The filter is applied once where the bidirectional edge list is built;
+every downstream stage (PageRank, components, clustering, pivot BFS) then
+operates on the restricted graph without further changes.
+
+Changes
+-------
+
+1. `src/jobs/graph_analytics_job.py` — Added `class_filter: List[str]` field
+   to `GraphAnalyticsSQL` after `excluded_predicates`; added `_class_clause()`
+   and `typed_nodes_select()` helpers; modified `build_edges()` to produce the
+   induced subgraph when `class_filter` is non-empty; modified
+   `node_type_select()` and `type_population_select()` to narrow to selected
+   types; added `--class-filter` CLI flag; updated `main()` to parse and log it.
+
+2. `resources/graph_analytics.job.yml` — Added `class_filter` job parameter
+   (default `""`) and wired it to the task via `--class-filter`.
+
+3. `tests/units/core/test_graph_analytics_job_sql.py` — Threaded
+   `class_filter` through `_run_job` and `_table_rows` helpers; removed dead
+   `tmp_path` argument and updated all call sites; added two new tests
+   (`test_class_filter_matches_networkx_induced_subgraph`,
+   `test_class_filter_narrows_type_profiles`); extended `_all_statements` with
+   the class-filtered `build_edges` variant for dialect parse coverage.
+
+Modified files
+--------------
+- `src/jobs/graph_analytics_job.py`
+- `resources/graph_analytics.job.yml`
+- `tests/units/core/test_graph_analytics_job_sql.py`
+
+Test result
+-----------
+`env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH uv run pytest tests/units/core/test_graph_analytics_job_sql.py tests/units/core/test_graph_analytics_job_exit.py -v` → 71 passed, 1 warning in 1.37s
+`uv run pytest -q -m "not scenario"` → 3805 passed, 275 skipped, 5 deselected, 23 warnings in 37.83s
