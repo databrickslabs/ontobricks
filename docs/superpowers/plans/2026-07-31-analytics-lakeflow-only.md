@@ -20,8 +20,20 @@
 - Analytics KPIs are defined on the **mapped graph only**. Inferred and cohort triples are out of scope by decision.
 - `networkx` stays a runtime dependency — community detection and cohort discovery still use it. Only the analytics NetworkX path is deleted.
 - `Settings.analytics_max_triples` stays (used by `POST /clusters/detect`). `Settings.analytics_pushdown_enabled` is deleted.
-- Run tests with the Databricks env vars unset, or the SDK tries to reach a real workspace and the suite hangs:
-  `env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH uv run pytest -q -m "not scenario"`
+- Run tests with the Databricks and Lakebase env vars unset. Without this the SDK
+  tries to reach a real workspace and the suite hangs, and three unrelated tests
+  fail on leaked local config (`test_health.py` reads the real CLI profile,
+  `test_graph_engine_config.py` reads the real Lakebase database name):
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    uv run pytest -q -m "not scenario"
+```
+
+  Baseline with the full list, as of Task 5: **3798 passed, 275 skipped**. Any
+  failure beyond that is yours.
 - Changelog is mandatory after every task: `changelogs/v0.7.0/benoitcayladbx_2026-07-31.log` (append a section; do not create a second file for the same day).
 
 ## File Structure
