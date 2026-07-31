@@ -175,19 +175,32 @@ def test_the_databricks_build_endpoint_also_materialises():
     pipe = object.__new__(DeltaTripleStoreBuildPipeline)
     pipe.tm = _StubTM()
     pipe.task_id = "t-test"
+    pipe.domain_name = "dom"
     pipe.view_table = "cat.sch.triplestore_dom_V3"
     pipe.data_table = "cat.sch.triplestore_dom_V3_data"
     pipe.source_client = MagicMock()
     pipe.start_time = time.time()
     pipe.triple_count = 0
+    pipe._build_recorded = False
+    pipe._record_build_run = MagicMock()
     pipe._count_view_triples = MagicMock(return_value=5)
+
+    # Driven through run() rather than the method alone, so dropping the call
+    # from the sequence fails the test as loudly as gutting the method would.
+    pipe._prepare_translation = MagicMock(return_value=True)
+    pipe._create_view = MagicMock(return_value=True)
+    pipe._ensure_inferred_companion = MagicMock()
+    pipe._truncate_inferred = MagicMock()
+    pipe._ensure_graph_view = MagicMock()
+    pipe._complete_task = MagicMock()
+    pipe._log_phase = MagicMock()
 
     calls = []
     with patch(
         "back.core.graphdb.delta.materialize.materialize_from_view",
         side_effect=lambda client, view, table: calls.append((view, table)),
-    ):
-        assert pipe._materialize_data_table() is True
+    ), patch("back.core.graphdb.delta.materialize.optimize_table"):
+        pipe.run()
 
     assert calls == [(
         "cat.sch.triplestore_dom_V3",
