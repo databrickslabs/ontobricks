@@ -77,6 +77,30 @@ def test_unqualified_source_is_refused_with_a_remedy(monkeypatch):
     assert "catalog.schema.table" in reason
 
 
+def test_missing_source_points_at_the_build(monkeypatch):
+    """The remedy for an unbuilt domain is a Build, not a support ticket."""
+    from back.core.helpers.SQLHelpers import SQLHelpers
+
+    monkeypatch.setattr(
+        SQLHelpers, "effective_databricks_table",
+        staticmethod(lambda domain, settings=None: ""),
+    )
+    table, reason = resolve_analytics_source(object(), object())
+    assert table == ""
+    assert "Build" in reason
+
+
+def test_quoted_identifiers_are_accepted(monkeypatch):
+    """Delta naming may hand back backticked parts; the job needs them bare."""
+    from back.core.helpers.SQLHelpers import SQLHelpers
+
+    monkeypatch.setattr(
+        SQLHelpers, "effective_databricks_table",
+        staticmethod(lambda domain, settings=None: " `cat`.`sch`.`tbl_data` "),
+    )
+    table, reason = resolve_analytics_source(object(), object())
+    assert table == "cat.sch.tbl_data"
+    assert reason == ""
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +370,26 @@ class TestMergeJobResults:
         jm._merge_job_results(base, "no_such_table")
         # The per-node merge still happened.
         assert base.nodes[f"{NS}A"].pagerank == pytest.approx(0.50)
+
+
+def test_compute_refuses_before_running_the_job_when_there_is_no_source(monkeypatch):
+    """An unreadable source must fail with the remedy, not burn a job run.
+
+    Deliberately outside ``TestJobMetricsCompute``: that class patches the
+    resolver to always succeed, so the refusal branch can only be reached here.
+    """
+    from back.core.helpers.SQLHelpers import SQLHelpers
+
+    monkeypatch.setattr(
+        SQLHelpers, "effective_databricks_table",
+        staticmethod(lambda domain, settings=None: ""),
+    )
+    db = _OutputDB(_sample_rows(), _hub_triples())
+    runner = _FakeRunner()
+    with pytest.raises(InfrastructureError) as excinfo:
+        _job_metrics(db, runner).compute(MetricsRequest())
+    assert "Build" in str(excinfo.value.detail)
+    assert runner.calls == []
 
 
 class TestJobMetricsCompute:
