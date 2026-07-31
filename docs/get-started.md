@@ -511,6 +511,7 @@ the workspace token (locally) or the SP token (in Apps).
 | `ONTOBRICKS_ANALYTICS_JOB_TIMEOUT_S` | How long to follow a job run before giving up waiting. The run itself is not cancelled. | `3600` |
 | `ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS` | PageRank power iterations the job runs. 20 fixes the top-N ordering; raise for converged absolute scores. | `20` |
 | `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` | Source nodes sampled for the betweenness/closeness estimates. Dominant cost of the job — the intermediate search holds one row per (pivot, reachable node). `0` skips both metrics; a value at or above the node count makes them exact. | `64` |
+| `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` | How many levels the pivot breadth-first search may explore. A runaway guard, not a tuning knob: the search stops as soon as it runs out of frontier, so headroom costs nothing on a shallow graph. Hitting the cap withholds betweenness and closeness rather than reporting truncated values, so raise this if the Analytics page reports them as unavailable. | `32` |
 
 #### Databricks Runtime Detection
 

@@ -545,7 +545,7 @@ make help
 |-------|-------------|
 | **Backend** | Python 3.10+, FastAPI 0.109+, Uvicorn, RDFLib 7.0, Strawberry GraphQL |
 | **Reasoning** | owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom SWRL engine (SQL translator) |
-| **Graph Analysis** | NetworkX 3.0+ (community detection: Louvain, Label Propagation, Greedy Modularity), Graphology communities-louvain (client-side) |
+| **Graph Analysis** | Databricks Lakeflow serverless job (all graph KPIs: degree, PageRank, clustering, connected components, Brandes–Pich betweenness/closeness, per-entity-type profiles), NetworkX 3.0+ (community detection: Louvain, Label Propagation, Greedy Modularity), Graphology communities-louvain (client-side) |
 | **Graph DB** | Lakebase Postgres flat triple table (`psycopg`, `COPY FROM STDIN`, optional Lakeflow synced-table mode); pluggable behind `GraphDBBackend` for future Cypher / Gremlin engines |
 | **Frontend** | Bootstrap 5.3, Sigma.js 3.x, Graphology, D3.js 7.x, OntoViz, Vanilla JS |
 | **Data** | Databricks SQL Connector, Unity Catalog, Delta Lake |
