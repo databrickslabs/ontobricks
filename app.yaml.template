@@ -122,11 +122,7 @@ env:
   # held in memory below it, so raise it only with headroom to spare.
   - name: ONTOBRICKS_ANALYTICS_MAX_TRIPLES
     value: "500000"
-  # Whether oversized graphs fall back to engine-side aggregation at all.
-  # "false" restores the old behaviour of refusing them outright.
-  - name: ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED
-    value: "true"
-  # Top-ranked nodes per metric returned by the engine-side and job paths.
+  # Top-ranked nodes per metric returned by the job path.
   # This is what keeps the persisted payload bounded on a graph of any
   # size; the Analytics page "Top N" selector is capped well below it.
   - name: ONTOBRICKS_ANALYTICS_TOP_N

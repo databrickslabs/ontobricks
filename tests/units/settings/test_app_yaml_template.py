@@ -25,7 +25,6 @@ TEMPLATE = REPO_ROOT / "app.yaml.template"
 #: Template env var → the ``Settings`` field it must agree with.
 ANALYTICS_VARS = {
     "ONTOBRICKS_ANALYTICS_MAX_TRIPLES": "analytics_max_triples",
-    "ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED": "analytics_pushdown_enabled",
     "ONTOBRICKS_ANALYTICS_TOP_N": "analytics_top_n",
     "ONTOBRICKS_ANALYTICS_JOB_ENABLED": "analytics_job_enabled",
     "ONTOBRICKS_ANALYTICS_JOB_NAME": "analytics_job_name",

@@ -30,10 +30,9 @@ from back.core.graph_analysis.models import (
     NodeMetrics,
 )
 
-# NS is still needed for _sample_rows used by TestReadBackSql
-from tests.units.core.test_pushdown_metrics import NS
-
 pytestmark = pytest.mark.unit
+
+NS = "http://ex.org/"
 
 
 # ---------------------------------------------------------------------------

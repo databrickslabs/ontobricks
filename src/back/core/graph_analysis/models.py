@@ -138,10 +138,10 @@ class EntityTypeProfile:
         }
 
 
-MODE_IN_MEMORY = "in_memory"
-MODE_PUSHDOWN = "pushdown"
-#: Iterative metrics computed by the serverless Lakeflow job, aggregates still
-#: by engine-side SQL. A superset of ``pushdown``.
+#: The only compute mode. Analytics runs in the Databricks job and nowhere
+#: else, so a result carries this for the API contract's sake rather than as a
+#: choice. Stored results from earlier versions may carry "in_memory" or
+#: "pushdown"; the read path must tolerate an unknown string.
 MODE_JOB = "job"
 
 
@@ -149,23 +149,22 @@ MODE_JOB = "job"
 class MetricsResult:
     """Full result of a graph metrics computation.
 
-    ``nodes`` is exhaustive in ``in_memory`` mode.  In ``pushdown`` mode it is
-    deliberately bounded to the highest-ranked nodes (see
+    ``nodes`` is always bounded to the highest-ranked nodes (see
     ``Settings.analytics_top_n``): the UI only ever charts a top-N slice, and
     an exhaustive map would not fit in the registry row or the browser on the
     graph sizes this mode exists to serve.  ``stats.node_count`` remains the
-    true total either way, so never derive a node count from ``len(nodes)``.
+    true total; a node count must never be derived from ``len(nodes)``.
 
     ``unavailable_metrics`` names the per-node metrics this run could not
     compute (they are present but zero), so the UI can say so instead of
     drawing a flat zero chart.
 
     ``approximate_metrics`` names metrics that were computed but are
-    *estimates* rather than exact values — currently betweenness and closeness
-    in ``job`` mode, which are sampled from a subset of source nodes
-    (Brandes-Pich pivots). They are usable for ranking but must not be
-    presented as exact, which is why they are flagged separately from
-    ``unavailable_metrics`` rather than lumped in with it.
+    *estimates* rather than exact values — betweenness and closeness are
+    sampled from a subset of source nodes (Brandes-Pich pivots). They are
+    usable for ranking but must not be presented as exact, which is why they
+    are flagged separately from ``unavailable_metrics`` rather than lumped in
+    with it.
     """
 
     nodes: Dict[str, NodeMetrics] = field(default_factory=dict)
@@ -174,7 +173,7 @@ class MetricsResult:
     node_types: Dict[str, str] = field(default_factory=dict)    # node_uri → class_uri
     node_labels: Dict[str, str] = field(default_factory=dict)   # node_uri → rdfs:label
     entity_type_profiles: Dict[str, "EntityTypeProfile"] = field(default_factory=dict)  # class_uri → profile
-    mode: str = MODE_IN_MEMORY
+    mode: str = MODE_JOB
     unavailable_metrics: List[str] = field(default_factory=list)
     approximate_metrics: List[str] = field(default_factory=list)
     #: Pivots sampled for the approximate metrics (0 when none were).

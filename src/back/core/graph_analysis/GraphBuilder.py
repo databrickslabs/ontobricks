@@ -31,7 +31,7 @@ class GraphBuilder:
         self._graph_name = graph_name
 
     # ------------------------------------------------------------------
-    # Shared helpers (used by CommunityDetector and GraphMetrics)
+    # Shared helpers (used by CommunityDetector)
     # ------------------------------------------------------------------
 
     def _load_triples(self, request: Any) -> List[Dict[str, str]]:

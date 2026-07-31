@@ -87,12 +87,9 @@ class Settings(BaseSettings):
     session_dir: str = _get_default_session_dir()
     session_max_age: int = 86400  # 24 hours
 
-    # Knowledge-graph analytics: the maximum number of triples loaded into
-    # memory for the NetworkX centrality / structure analysis. This is the
-    # switch point between the two compute modes, not a hard rejection —
-    # graphs above it fall back to engine-side SQL aggregation (see
-    # ``analytics_pushdown_enabled``). Raise with care: the full triple set is
-    # held in memory during the in-memory computation.
+    # Knowledge-graph analytics: the maximum number of triples the cluster
+    # detection endpoint will load into memory. Raise with care: the full
+    # triple set is held in memory during community detection.
     analytics_max_triples: int = Field(
         default=500_000,
         validation_alias=AliasChoices(
@@ -101,18 +98,7 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Whether graphs over ``analytics_max_triples`` fall back to the SQL
-    # pushdown path. Disable to restore the previous behaviour of rejecting
-    # oversized graphs outright.
-    analytics_pushdown_enabled: bool = Field(
-        default=True,
-        validation_alias=AliasChoices(
-            "ONTOBRICKS_ANALYTICS_PUSHDOWN_ENABLED",
-            "analytics_pushdown_enabled",
-        ),
-    )
-
-    # How many top-ranked nodes per metric the pushdown path returns. The
+    # How many top-ranked nodes per metric the job path returns. The
     # Analytics page "Top N" selector is capped well below this, so the
     # returned set is always a superset of what the UI can chart while keeping
     # the persisted payload bounded on graphs of any size.

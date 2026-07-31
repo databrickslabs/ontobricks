@@ -1,11 +1,8 @@
 """Serverless Lakeflow job computing the iterative graph metrics at scale.
 
-The in-app SQL pushdown path
-(:mod:`back.core.graph_analysis.PushdownMetrics`) lifts the triple cap for
-everything that is a plain aggregation, but PageRank, connected components and
-the clustering coefficient need repeated passes over the graph. Those run here,
-as a Databricks job, and land per-node scores in a Delta table the app reads
-back with a top-N query.
+PageRank, connected components, and the clustering coefficient need repeated
+passes over the graph. Those run here, as a Databricks job, and land per-node
+scores in a Delta table the app reads back with a top-N query.
 
 **Why generated SQL rather than the DataFrame API.** Every algorithm below is
 emitted as SQL strings and executed with ``spark.sql``. That keeps one
