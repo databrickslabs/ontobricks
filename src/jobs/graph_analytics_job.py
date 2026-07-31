@@ -813,6 +813,21 @@ class GraphAnalyticsSQL:
         return [f"DROP TABLE IF EXISTS {t}" for t in self.work_tables()]
 
 
+def _drop_work_tables(execute, builder: GraphAnalyticsSQL) -> None:
+    """Drop every intermediate, best-effort and statement by statement.
+
+    Called from a ``finally``, so it must never raise: an exception here would
+    replace whatever made the run fail with a misleading "could not drop
+    table" and discard the stack the operator actually needs. A single
+    undroppable table must also not strand the other sixteen.
+    """
+    for stmt in builder.drop_work_tables():
+        try:
+            execute(stmt)
+        except Exception:  # noqa: BLE001 — cleanup is never worth failing over
+            logger.warning("could not drop work table: %s", stmt, exc_info=True)
+
+
 def run_analysis(
     execute,
     scalar,
@@ -824,15 +839,49 @@ def run_analysis(
     max_depth: int = DEFAULT_MAX_DEPTH,
     cleanup: bool = True,
 ) -> Dict[str, object]:
-    """Drive the full pipeline.
+    """Drive the full pipeline, always dropping the intermediates afterwards.
 
     Engine-agnostic on purpose: *execute* runs a statement and *scalar* runs a
     query and returns its first column of the first row. The Spark driver and
     the SQLite test harness supply their own pair, so both exercise the same
     orchestration and the same SQL.
 
+    Cleanup lives here rather than at the end of the stages so it also covers
+    the paths that do not reach the end: a stage that raises, and the early
+    return for a graph with no edges. The seventeen work tables are named
+    after the output table, so a stranded set is both a storage cost and the
+    first thing an operator finds when looking for the results of the run that
+    just failed. ``cleanup=False`` (``--keep-work-tables``) still wins, since
+    its whole purpose is to leave the evidence in place after a failure.
+
     Returns the run summary.
     """
+    try:
+        return _run_analysis_stages(
+            execute,
+            scalar,
+            builder,
+            pagerank_iterations=pagerank_iterations,
+            component_iterations=component_iterations,
+            pivots=pivots,
+            max_depth=max_depth,
+        )
+    finally:
+        if cleanup:
+            _drop_work_tables(execute, builder)
+
+
+def _run_analysis_stages(
+    execute,
+    scalar,
+    builder: GraphAnalyticsSQL,
+    *,
+    pagerank_iterations: int,
+    component_iterations: int,
+    pivots: int,
+    max_depth: int,
+) -> Dict[str, object]:
+    """The pipeline itself. Wrapped by :func:`run_analysis`, which cleans up."""
     for stmt in builder.build_edges():
         execute(stmt)
 
@@ -932,10 +981,6 @@ def run_analysis(
     }
     for stmt in builder.write_summary(stats):
         execute(stmt)
-
-    if cleanup:
-        for stmt in builder.drop_work_tables():
-            execute(stmt)
 
     return stats
 

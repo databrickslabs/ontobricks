@@ -510,6 +510,91 @@ class TestSummaryAndCleanup:
         # ...while the results survive.
         assert "out" in existing and "out_summary" in existing
 
+    def test_cleanup_happens_even_when_a_stage_raises(self):
+        """A failed run must not strand its intermediates in the catalog.
+
+        The work tables are named after the output table, so a stranded set
+        both costs storage and is what an operator sees when they go looking
+        for the results of the run that just failed.
+        """
+        runner = SqliteRunner(_triples_from_graph(_hub()))
+        builder = GraphAnalyticsSQL(
+            source_table="triples", work_prefix="w", output_table="out"
+        )
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("pivot stage exploded")
+
+        builder.write_output = boom  # type: ignore[method-assign]
+
+        with pytest.raises(RuntimeError, match="pivot stage exploded"):
+            run_analysis(runner.execute, runner.scalar, builder, cleanup=True)
+
+        existing = {
+            r["name"]
+            for r in runner.rows("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        assert not (existing & set(builder.work_tables()))
+
+    def test_a_failing_drop_does_not_mask_the_original_error(self):
+        """Cleanup is best-effort: the real failure is what the operator needs.
+
+        Raising out of the cleanup would replace the diagnosis with a
+        misleading "could not drop table" and lose the stack that matters.
+        """
+        runner = SqliteRunner(_triples_from_graph(_hub()))
+        builder = GraphAnalyticsSQL(
+            source_table="triples", work_prefix="w", output_table="out"
+        )
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("the real failure")
+
+        builder.write_output = boom  # type: ignore[method-assign]
+        builder.drop_work_tables = lambda: ["DROP TABLE nonexistent_no_if_exists"]  # type: ignore[method-assign]
+
+        with pytest.raises(RuntimeError, match="the real failure"):
+            run_analysis(runner.execute, runner.scalar, builder, cleanup=True)
+
+    def test_keep_work_tables_still_wins_on_failure(self):
+        """``--keep-work-tables`` exists to debug a failure, so it must hold
+        on exactly the path where a failure happened."""
+        runner = SqliteRunner(_triples_from_graph(_hub()))
+        builder = GraphAnalyticsSQL(
+            source_table="triples", work_prefix="w", output_table="out"
+        )
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("kaboom")
+
+        builder.write_output = boom  # type: ignore[method-assign]
+
+        with pytest.raises(RuntimeError):
+            run_analysis(runner.execute, runner.scalar, builder, cleanup=False)
+
+        existing = {
+            r["name"]
+            for r in runner.rows("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        assert "w_edges" in existing
+
+    def test_an_empty_graph_also_cleans_up(self):
+        """The early return for a graph with no edges still built ``_edges``,
+        ``_bi`` and ``_deg`` on its way to deciding there was nothing to do."""
+        runner = SqliteRunner([])
+        builder = GraphAnalyticsSQL(
+            source_table="triples", work_prefix="w", output_table="out"
+        )
+        stats = run_analysis(runner.execute, runner.scalar, builder, cleanup=True)
+        assert stats["node_count"] == 0
+
+        existing = {
+            r["name"]
+            for r in runner.rows("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        assert not (existing & set(builder.work_tables()))
+        assert "out" in existing and "out_summary" in existing
+
 
 class TestArgParsing:
     def test_required_arguments(self):

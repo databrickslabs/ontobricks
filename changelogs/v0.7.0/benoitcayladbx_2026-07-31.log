@@ -411,3 +411,70 @@ remedy, which is the documented and intended migration.
 
 Live: 2 job runs, both SUCCESS. `bfs_complete = true`. Betweenness and closeness
 populated where they were previously withheld.
+
+---
+
+# Guarantee work-table cleanup in the graph analytics job
+
+## Context
+
+Reviewing leftover `graph_metrics_cust360auto_5_work_*` tables in Unity Catalog
+surfaced that cleanup was the last statement of `run_analysis` and was not
+protected, so it was skipped on two paths:
+
+1. **A stage that raises.** No `try/finally`, so any failure — most likely the
+   BFS/Brandes phase, the longest and most memory-hungry stage — stranded all
+   seventeen intermediates.
+2. **The empty-graph early return.** Even on a completely successful run,
+   `return stats` for a graph with no edges skipped the drop, leaking the
+   `_edges`, `_bi` and `_deg` tables that `build_edges` had just created.
+
+This matters more than the storage it wastes. The work tables are named after
+the output table (`<output>_work_<stage>`), so a stranded set is exactly what an
+operator sees when they go looking for the results of the run that just failed —
+which is how this was found.
+
+Cancellation is covered by the same fix: Databricks cancels a run by raising in
+the driver, and `finally` runs for `KeyboardInterrupt` and `SystemExit` too.
+A hard OOM kill of the driver can still strand tables, but that self-heals —
+every work table is created with `DROP IF EXISTS` + `CREATE`, and the next
+successful run of the same domain drops all seventeen unconditionally.
+
+## Changes
+
+1. `src/jobs/graph_analytics_job.py` — Split `run_analysis` into a thin wrapper
+   that owns a `try/finally` and `_run_analysis_stages` holding the pipeline
+   unchanged. Cleanup now covers every exit path. `cleanup=False`
+   (`--keep-work-tables`) deliberately still wins, since its purpose is to
+   leave the evidence in place after a failure.
+2. `src/jobs/graph_analytics_job.py` — Added `_drop_work_tables(execute,
+   builder)`, which drops statement by statement and swallows per-statement
+   failures with a `WARNING`. Called from a `finally`, it must never raise:
+   an exception there would replace the real diagnosis with a misleading
+   "could not drop table" and discard the stack that matters. Dropping one
+   table at a time also stops a single undroppable table stranding the rest.
+3. `src/jobs/graph_analytics_job.py` — Removed the now-superseded trailing
+   `if cleanup:` block.
+4. `tests/units/core/test_graph_analytics_job_sql.py` — Four tests, two of
+   which reproduced the leaks before the fix: cleanup runs when a stage
+   raises, a failing drop does not mask the original error, `keep_work_tables`
+   holds on the failure path, and the empty-graph return also cleans up.
+
+## Verification
+
+The stranded `cust360auto_5` set was not in fact orphaned — a run launched from
+the UI at 18:35 was still in flight. It completed SUCCESS after 8 minutes and
+dropped all fifteen, leaving exactly the four output tables per domain and no
+`_work_*` anywhere in `benoit_cayla`. That same run also confirms the analytics
+path works end-to-end through the UI on a second domain.
+
+## Modified Files
+
+- `src/jobs/graph_analytics_job.py`
+- `tests/units/core/test_graph_analytics_job_sql.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-07-31.log`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3768 passed, 275 skipped, 1 xfailed, 0 failed**
+(+4 from the new cleanup tests)
