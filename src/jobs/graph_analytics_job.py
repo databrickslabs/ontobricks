@@ -273,20 +273,32 @@ class GraphAnalyticsSQL:
         return f"SELECT COUNT(*) AS n FROM {self.deg}"
 
     def total_node_count_query(self) -> str:
-        """Every distinct entity: subjects from the source plus scored nodes.
+        """Every distinct entity URI in the source, connected or not.
 
-        ``node_count`` counts only nodes that survived edge construction. A
-        subject that has no entity-entity edges (isolated) never enters the
-        degree table, so ``node_count`` would miss it. Conversely, a URI that
-        only appears as an edge target is in the degree table but not the
-        source as a subject. The union of both sets is the full population.
+        ``node_count`` counts only nodes that survived edge construction, so a
+        domain of fully isolated instances would otherwise report zero nodes and
+        look broken rather than flat.
+
+        Read straight from the source rather than from the degree table, and
+        deliberately ignoring both filters: this is a population total, and a
+        total that moved when the user picked an entity type would be
+        indefensible. An entity is anything appearing as a subject or as a URI
+        object.
+
+        The object side excludes excluded predicates (rdf:type, rdfs:label) so
+        that class URIs and annotation values are not counted as entities — only
+        the subject side accepts triples regardless of predicate, because a
+        subject is an entity no matter which predicate it carries.
         """
         return (
-            f"SELECT COUNT(*) AS n FROM ("
-            f"SELECT DISTINCT subject AS n FROM {self.source_table}"
-            f" WHERE subject <> ''"
-            f" UNION"
-            f" SELECT DISTINCT n FROM {self.deg}"
+            f"SELECT COUNT(*) AS n FROM (\n"
+            f"  SELECT DISTINCT subject AS n FROM {self.source_table}\n"
+            f"  WHERE subject <> ''\n"
+            f"  UNION\n"
+            f"  SELECT DISTINCT object AS n FROM {self.source_table}\n"
+            f"  WHERE object <> ''\n"
+            f"    AND (object LIKE 'http://%' OR object LIKE 'https://%')\n"
+            f"    AND predicate NOT IN ({_in_list(self.excluded_predicates)})\n"
             f") s"
         )
 

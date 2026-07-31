@@ -639,6 +639,47 @@ def test_summary_reports_total_and_connected_node_counts(tmp_path):
     assert summary["total_node_count"] == 3  # a, b, c
 
 
+def test_total_node_count_comes_from_source_not_degree_table(tmp_path):
+    """total_node_count is read from the source, not the filtered degree table.
+
+    Subjects that have no entity-entity edges under ANY exclusion set must still
+    be counted — they never enter the degree table, so a deg-based total would
+    silently undercount them.  Two separate runs with different exclusion lists
+    are used to show that subject-based counting is stable.
+    """
+    # a, b, c are all subjects; c's only predicate (rdf:type) is always excluded,
+    # so c is fully isolated and will never appear in the degree table.
+    triples = [
+        ("http://ex/a", "http://ex/knows", "http://ex/b"),
+        ("http://ex/b", "http://ex/knows", "http://ex/a"),  # b is also a subject
+        ("http://ex/c", RDF_TYPE, "http://ex/Person"),       # fully isolated subject
+    ]
+
+    def _total(excluded):
+        runner = SqliteRunner([
+            {"subject": s, "predicate": p, "object": o} for s, p, o in triples
+        ])
+        builder = GraphAnalyticsSQL(
+            source_table="triples",
+            work_prefix="w",
+            output_table="out",
+            excluded_predicates=excluded,
+        )
+        run_analysis(runner.execute, runner.scalar, builder, cleanup=False)
+        return runner.conn.execute(
+            "SELECT total_node_count FROM out_summary"
+        ).fetchone()[0]
+
+    default = list(DEFAULT_EXCLUDED_PREDICATES)
+    # Excluding http://ex/knows collapses the degree table to zero rows (no
+    # remaining entity-entity edges).  A total read from the degree table would
+    # drop to at most the subject count.  The correct answer is 3 in both cases.
+    also_exclude_knows = default + ["http://ex/knows"]
+
+    assert _total(default) == 3            # a, b, c
+    assert _total(also_exclude_knows) == 3  # still a, b, c — all three are subjects
+
+
 def test_flat_source_still_gets_profiles(tmp_path):
     """A source with no entity-entity edges still reports its types."""
     triples = [
