@@ -244,8 +244,17 @@ class TestUiWiring:
 
     def test_help_text_states_the_prerequisites(self, html):
         block = html.split("Knowledge-Graph Analytics")[1][:2600]
-        assert "managed_synced" in block
+        assert "bundle to have been deployed" in block
+        assert "built at least once" in block
         assert "estimates" in block
+
+    def test_help_text_does_not_promise_a_fallback(self, html):
+        """Analytics has one compute path; the copy must not imply otherwise."""
+        block = html.split("Knowledge-Graph Analytics")[1][:2600]
+        assert "engine-side" not in block
+        assert "managed_synced" not in block, (
+            "the engine no longer decides whether analytics can run"
+        )
 
     def test_hydrated_on_page_load(self, js):
         assert "loadAnalyticsJobEnabled();" in js

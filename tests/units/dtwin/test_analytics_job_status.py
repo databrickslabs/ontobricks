@@ -191,31 +191,20 @@ class TestStatsCacheDoesNotHideTheField:
 
 
 class TestStoredResultsBackwardCompat:
-    """Cached rows written before the Lakeflow-only change must still render."""
+    """Cached rows written before the Lakeflow-only change must still render.
 
-    def test_a_stored_in_memory_result_still_renders(self):
-        """Cached results predate the Lakeflow-only path; they must not crash."""
-        from api.routers.internal.dtwin import _render_latest_metrics
+    Rows persisted by the old paths carry ``mode="in_memory"`` or
+    ``mode="pushdown"``. The guarantee is the *absence* of a gate: the read path
+    must not compare ``mode`` against the surviving constant, because that would
+    hide every result computed before this change.
+    """
 
-        stored = {
-            "mode": "in_memory",
-            "stats": {"node_count": 10, "graph_node_count": 10, "edge_count": 9},
-            "nodes": {},
-            "unavailable_metrics": [],
-        }
-        payload = _render_latest_metrics(stored)
-        assert payload["mode"] == "in_memory"
-
-    def test_a_stored_pushdown_result_still_renders(self):
-        """Pushdown-mode rows are also pre-existing; mode must pass through."""
-        from api.routers.internal.dtwin import _render_latest_metrics
-
-        stored = {
-            "mode": "pushdown",
-            "stats": {"node_count": 5, "edge_count": 3},
-            "nodes": {},
-            "unavailable_metrics": ["pagerank", "betweenness", "closeness", "clustering"],
-        }
-        payload = _render_latest_metrics(stored)
-        assert payload["mode"] == "pushdown"
-        assert payload["unavailable_metrics"] == stored["unavailable_metrics"]
+    def test_the_read_path_does_not_gate_on_mode(self):
+        router = ROUTER.read_text()
+        latest = router.split('@router.get("/metrics/latest")')[1].split("@router.")[0]
+        assert "**result," in latest, (
+            "the stored result should be spread through untouched"
+        )
+        assert "MODE_JOB" not in latest, (
+            "comparing a stored mode against MODE_JOB would drop legacy results"
+        )

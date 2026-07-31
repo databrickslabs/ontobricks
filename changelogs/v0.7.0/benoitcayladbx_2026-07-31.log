@@ -206,3 +206,82 @@ sleeping warehouse or a permissions gap. Both are fixed below.
 ## Test Result
 
 `pytest -q -m "not scenario"` → **3809 passed, 275 skipped, 0 failed**
+
+---
+
+# Tasks 9 and 10: delete the dead paths, then make the UI stop describing them
+
+## Context
+
+With every metric computed by the Lakeflow job, `GraphMetrics` (NetworkX) and
+`PushdownMetrics` (engine SQL) were two complete metric implementations no code
+path could reach — the kind of thing that gets accidentally revived or silently
+diverges from the job's definition of the same number. They are gone, along with
+`MODE_IN_MEMORY`, `MODE_PUSHDOWN` and `Settings.analytics_pushdown_enabled`.
+
+The UI was then the last place still telling the user a story that was no longer
+true: a banner about in-memory size caps, a field the stats payload no longer
+sends, and — worst — a message saying betweenness could not be computed and to
+"pick an Entity Type above to analyse a subgraph in memory", an instruction that
+had become impossible to follow. The settings help text was equally stale: it
+claimed Lakebase `app_managed` and Neo4j were unsupported and that a missing
+prerequisite "degrades to engine-side aggregation instead of failing". Both
+statements were the opposite of the truth after Tasks 5 and 8.
+
+Deleting the two test modules also silently dropped the only coverage of
+`profiles.py`, which survives and is now the only analytics computation left in
+the app. Pinning it directly turned up a pre-existing false positive in
+`has_temporal_predicates`, recorded as a strict xfail rather than changed —
+fixing it alters what the UI reports for existing domains, so it is a decision
+rather than a cleanup.
+
+## Changes
+
+1. `src/back/core/graph_analysis/` — `GraphMetrics.py` and `PushdownMetrics.py`
+   deleted, with `supports_pushdown` and the two mode constants; `models.py` now
+   defaults `MetricsResult.mode` to `MODE_JOB` and notes why a single-valued
+   constant still exists.
+2. `src/shared/config/settings.py`, `app.yaml.template` —
+   `analytics_pushdown_enabled` removed. `analytics_max_triples` stays; cluster
+   detection still uses it.
+3. `tests/units/core/test_profiles.py` — New file covering `local_name`,
+   `has_temporal_predicates` and `flat_reasons` directly, including a strict
+   xfail for the short-keyword false positive (`assignedTo` reads as temporal
+   because "dt" appears inside it).
+4. `src/front/templates/partials/dtwin/_query_analytics.html` — Dropped the
+   over-limit banner, the size-cap wording and the removed
+   `analytics_pushdown_available` field. Run Analysis is gated on
+   `analytics_job_available`; a blocked job shows its specific reason. The
+   in-memory escape hatch in the unavailable-metric copy is replaced with the
+   remedy that actually exists: raise the job's max depth and re-run.
+5. `src/front/templates/settings.html` — Rewrote both help paragraphs for the
+   single path: analytics runs only in the job, works identically on every
+   backend because it reads the snapshot each Build materialises, and names the
+   missing prerequisite instead of falling back.
+6. `src/api/routers/internal/dtwin.py` — Legacy stored results still render; the
+   guarantee is the absence of a mode gate, so the stored dict is spread through
+   untouched rather than routed via a no-op helper.
+7. `tests/units/settings/test_analytics_job_toggle.py`,
+   `tests/units/dtwin/test_analytics_job_status.py` — Help-text assertions
+   updated to the true prerequisites, plus one that the copy never promises a
+   fallback, and one that the latest-metrics read path never compares a stored
+   mode against `MODE_JOB`.
+
+## Modified Files
+
+- `src/back/core/graph_analysis/GraphMetrics.py` (deleted)
+- `src/back/core/graph_analysis/PushdownMetrics.py` (deleted)
+- `src/back/core/graph_analysis/__init__.py`, `models.py`, `GraphBuilder.py`
+- `src/shared/config/settings.py`, `app.yaml.template`, `src/jobs/graph_analytics_job.py`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `src/front/templates/settings.html`
+- `src/api/routers/internal/dtwin.py`
+- `tests/units/core/test_graph_metrics.py`, `tests/units/core/test_pushdown_metrics.py` (deleted)
+- `tests/units/core/test_profiles.py` (new)
+- `tests/units/core/test_job_metrics.py`
+- `tests/units/dtwin/test_analytics_job_status.py`
+- `tests/units/settings/test_analytics_job_toggle.py`, `test_app_yaml_template.py`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3760 passed, 275 skipped, 1 xfailed, 0 failed**

@@ -573,16 +573,6 @@ def _load_stored_metrics(domain, settings) -> Optional[dict]:
         return None
 
 
-def _render_latest_metrics(result: dict) -> dict:
-    """Return the stored result dict unchanged.
-
-    Old rows may carry ``mode='in_memory'`` or ``mode='pushdown'``; those
-    compute paths are gone, but cached results must still render. Nothing
-    branches on mode here.
-    """
-    return dict(result)
-
-
 @router.post("/metrics/compute")
 async def compute_graph_metrics(
     request: Request,
@@ -686,6 +676,8 @@ async def get_latest_graph_metrics(
         if not stored:
             return {"success": True, "has_result": False}
 
+        # Rows stored before analytics became job-only carry mode="in_memory" or
+        # "pushdown". Nothing branches on mode, so they still render.
         result = stored.get("result") or {}
         return {
             "success": True,
@@ -694,7 +686,7 @@ async def get_latest_graph_metrics(
             "duration_ms": stored.get("duration_ms", 0),
             "class_filter": stored.get("class_filter") or [],
             "graph_name": stored.get("graph_name", ""),
-            **_render_latest_metrics(result),
+            **result,
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
