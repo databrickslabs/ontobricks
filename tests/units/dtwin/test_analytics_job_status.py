@@ -188,3 +188,34 @@ class TestStatsCacheDoesNotHideTheField:
         router = ROUTER.read_text()
         assert '"analytics_job_blocked_reason" in cached' in router
         assert "has_kind and has_job_reason" in router
+
+
+class TestStoredResultsBackwardCompat:
+    """Cached rows written before the Lakeflow-only change must still render."""
+
+    def test_a_stored_in_memory_result_still_renders(self):
+        """Cached results predate the Lakeflow-only path; they must not crash."""
+        from api.routers.internal.dtwin import _render_latest_metrics
+
+        stored = {
+            "mode": "in_memory",
+            "stats": {"node_count": 10, "graph_node_count": 10, "edge_count": 9},
+            "nodes": {},
+            "unavailable_metrics": [],
+        }
+        payload = _render_latest_metrics(stored)
+        assert payload["mode"] == "in_memory"
+
+    def test_a_stored_pushdown_result_still_renders(self):
+        """Pushdown-mode rows are also pre-existing; mode must pass through."""
+        from api.routers.internal.dtwin import _render_latest_metrics
+
+        stored = {
+            "mode": "pushdown",
+            "stats": {"node_count": 5, "edge_count": 3},
+            "nodes": {},
+            "unavailable_metrics": ["pagerank", "betweenness", "closeness", "clustering"],
+        }
+        payload = _render_latest_metrics(stored)
+        assert payload["mode"] == "pushdown"
+        assert payload["unavailable_metrics"] == stored["unavailable_metrics"]

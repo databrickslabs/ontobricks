@@ -381,10 +381,7 @@
     var _analyticsLastSections = null;
     var _charts = {};
     var _allTypes = [];   // [{ name, uri, count }] — populated from /dtwin/sync/stats
-    var _totalTriples = null;   // known triple count (from /dtwin/sync/stats)
-    var _maxTriples   = null;   // in-memory analytics limit (from /dtwin/sync/stats)
-    var _pushdownAvailable = false;  // engine can aggregate server-side instead
-    var _jobAvailable = false;       // ...and can offload the iterative metrics to Databricks
+    var _jobAvailable = false;       // Databricks analytics job can run for this domain
     var _jobBlockedReason = '';      // why not, when an admin has enabled it and expects it to work
 
     // ------------------------------------------------------------------
@@ -511,58 +508,31 @@
         }
     }
 
-    // Explain up-front what happens on a graph over the in-memory limit. When
-    // engine-side aggregation is available the run still works with a reduced
-    // metric set, so this informs rather than blocks; without it there is no
-    // point letting the user start a background job that will fail.
-    function _showOverLimitBanner(show) {
-        var existing = document.getElementById('analyticsOverLimitBanner');
+    // Show a banner when the Databricks analytics job is not available.
+    // Differentiates two cases: toggle is off (no reason, quiet info) vs.
+    // admin enabled it but something prevents it from running (warn + reason).
+    function _showJobUnavailableBanner(show) {
+        var existing = document.getElementById('analyticsJobUnavailableBanner');
         if (!show) {
             if (existing) existing.remove();
             return;
         }
-
-        var head = 'This Knowledge Graph has <strong>' + (_totalTriples || 0).toLocaleString() + '</strong> triples, '
-            + 'which exceeds the in-memory analytics limit of <strong>' + (_maxTriples || 0).toLocaleString() + '</strong>. ';
         var cls, icon, body;
-        if (_jobAvailable) {
-            cls  = 'alert-info';
-            icon = 'bi-info-circle-fill';
-            body = head
-                + 'The analysis will run <strong>on Databricks</strong> instead, which has no size limit. '
-                + 'Node/edge counts, average degree, density and degree centrality are aggregated in the '
-                + 'engine; PageRank, the clustering coefficient and the component count are computed exactly '
-                + 'by a serverless job, so expect this to take a few minutes. Betweenness and closeness are '
-                + '<strong>estimated</strong> from a sample of source nodes, because computing them exactly '
-                + 'is quadratic in the graph size — good enough to rank nodes, but pick an '
-                + '<strong>Entity Type</strong> above if you need exact values.';
-        } else if (_pushdownAvailable) {
+        // When the setting is already on, telling the user to turn it on is
+        // worse than useless — name the prerequisite that is actually missing.
+        if (_jobBlockedReason) {
             cls  = 'alert-warning';
             icon = 'bi-exclamation-triangle-fill';
-            body = head
-                + 'The analysis will run as <strong>engine-side aggregation</strong> instead, which has no size '
-                + 'limit but only reports node/edge counts, average degree, density, degree centrality and the '
-                + 'entity-type profiles. PageRank, clustering, betweenness, closeness and the component count '
-                + 'need either the in-memory engine or the Databricks job. Pick an <strong>Entity Type</strong> '
-                + 'above to analyse a subgraph and get all of them exactly';
-            // When the setting is already on, telling the user to turn it on is
-            // worse than useless — name the prerequisite that is actually missing.
-            body += _jobBlockedReason
-                ? '. <br><br><i class="bi bi-wrench me-1"></i><strong>Compute large-graph metrics on '
-                  + 'Databricks</strong> is enabled, but the job cannot run: ' + _jobBlockedReason
-                : ', or enable <strong>Compute large-graph metrics on Databricks</strong> in '
-                  + '<strong>Settings &rarr; Global</strong> (admin only) to compute them over the '
-                  + 'whole graph.';
+            body = '<strong>Compute large-graph metrics on Databricks</strong> is enabled, '
+                + 'but the job cannot run: ' + _jobBlockedReason;
         } else {
-            cls  = 'alert-danger';
-            icon = 'bi-exclamation-octagon-fill';
-            body = head
-                + 'In-memory analysis is disabled for graphs this large and engine-side aggregation is not '
-                + 'available for this graph backend — reduce the synced graph (exclude entity types in '
-                + '<strong>KG &rarr; Sync</strong>) or ask an admin to raise '
-                + '<code>ONTOBRICKS_ANALYTICS_MAX_TRIPLES</code>.';
+            cls  = 'alert-info';
+            icon = 'bi-info-circle-fill';
+            body = 'Graph Analytics runs on a Databricks job. '
+                + 'Run <strong>Knowledge Graph &rarr; Build</strong> first if the graph has not been built yet, '
+                + 'or enable <strong>Compute large-graph metrics on Databricks</strong> in '
+                + '<strong>Settings &rarr; Global</strong> (admin only) to enable Run Analysis.';
         }
-
         var html = '<i class="bi ' + icon + ' flex-shrink-0 mt-1"></i><span>' + body + '</span>';
         if (existing) {
             existing.className = 'alert ' + cls + ' d-flex align-items-start gap-2 small mb-3';
@@ -570,50 +540,12 @@
             return;
         }
         var banner = document.createElement('div');
-        banner.id = 'analyticsOverLimitBanner';
+        banner.id = 'analyticsJobUnavailableBanner';
         banner.className = 'alert ' + cls + ' d-flex align-items-start gap-2 small mb-3';
         banner.innerHTML = html;
         var section = document.getElementById('analyticsSection');
         var header = section && section.querySelector('.section-header');
         if (header) header.insertAdjacentElement('afterend', banner);
-    }
-
-    // True when the known triple count is over the analytics limit.
-    function _isOverTripleLimit() {
-        return _totalTriples != null && _maxTriples != null && _totalTriples > _maxTriples;
-    }
-
-    // Persistent, up-front note explaining how the analysis runs and its limits,
-    // so users understand the constraints before clicking Run (shown only when a
-    // graph exists and is UNDER the limit — the red over-limit banner covers the
-    // over-limit case, and the no-graph banner covers the empty case).
-    function _showLimitInfo(show) {
-        var existing = document.getElementById('analyticsLimitInfoBanner');
-        if (show) {
-            var limitTxt = (_maxTriples != null) ? _maxTriples.toLocaleString() : '—';
-            var curTxt   = (_totalTriples != null) ? _totalTriples.toLocaleString() : '—';
-            var html = '<i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>'
-                + '<span>Full centrality analysis loads the graph into memory (NetworkX), so it is capped at '
-                + '<strong>' + limitTxt + '</strong> triples'
-                + (_totalTriples != null ? ' (this graph: <strong>' + curTxt + '</strong>)' : '')
-                + '. It runs <strong>asynchronously</strong> in the background — you can keep working, '
-                + 'and the last result is cached and shown here. An <strong>Entity Type</strong> filter is '
-                + 'pushed down to the graph store, so it reduces what is loaded and can bring an oversized '
-                + 'graph back under the limit.</span>';
-            if (existing) {
-                existing.innerHTML = html;
-                return;
-            }
-            var banner = document.createElement('div');
-            banner.id = 'analyticsLimitInfoBanner';
-            banner.className = 'alert alert-info d-flex align-items-start gap-2 small mb-3';
-            banner.innerHTML = html;
-            var section = document.getElementById('analyticsSection');
-            var header = section && section.querySelector('.section-header');
-            if (header) header.insertAdjacentElement('afterend', banner);
-        } else if (existing) {
-            existing.remove();
-        }
     }
 
     // Load entity types from the live KG stats and populate the <select>
@@ -631,12 +563,8 @@
             return;
         }
 
-        // A graph is configured — enable Run Analysis immediately rather than
-        // waiting for the /dtwin/sync/stats round-trip below. The entity-type
-        // dropdown is only an optional filter and is enriched asynchronously,
-        // so it must not gate the button (avoids a multi-second disabled state
-        // on first open).
-        _setComputeBtnState(true);
+        // Entity-type dropdown is an optional filter populated asynchronously;
+        // the button state is refined after the stats fetch below.
         _showNoGraphBanner(false);
 
         try {
@@ -653,28 +581,14 @@
             _populateTypeSelect(sel);
             _showNoGraphBanner(false);
 
-            // Pre-flight size guard: the triple count is known here, so warn
-            // and disable Run Analysis up-front rather than failing later.
-            _totalTriples = (data.total_triples != null) ? data.total_triples : null;
-            _maxTriples   = data.analytics_max_triples || _maxTriples;
-            _pushdownAvailable = !!data.analytics_pushdown_available;
-            _jobAvailable      = !!data.analytics_job_available;
-            _jobBlockedReason  = data.analytics_job_blocked_reason || '';
-            if (_isOverTripleLimit()) {
-                _showOverLimitBanner(true);
-                _showLimitInfo(false);
-                // Engine-side aggregation has no size limit, so an oversized
-                // graph is still analysable — only block when it is unavailable.
-                if (_pushdownAvailable) {
-                    _setComputeBtnState(true);
-                } else {
-                    _setComputeBtnState(false,
-                        'Graph too large: ' + _totalTriples.toLocaleString()
-                        + ' triples exceeds the analytics limit of ' + _maxTriples.toLocaleString());
-                }
+            _jobAvailable     = !!data.analytics_job_available;
+            _jobBlockedReason = data.analytics_job_blocked_reason || '';
+            if (!_jobAvailable) {
+                _showJobUnavailableBanner(true);
+                _setComputeBtnState(false,
+                    _jobBlockedReason || 'Enable the Databricks analytics job in Settings → Global first');
             } else {
-                _showOverLimitBanner(false);
-                _showLimitInfo(true);
+                _showJobUnavailableBanner(false);
                 _setComputeBtnState(true);
             }
         } catch (e) {
@@ -770,9 +684,7 @@
         if (_ca && _caTxt) {
             var when = _formatComputedAt(meta.computed_at);
             if (when) {
-                var how = data.mode === 'pushdown' ? ' (engine-side aggregation)'
-                        : data.mode === 'job'      ? ' (computed on Databricks)'
-                        : '';
+                var how = data.mode === 'job' ? ' (computed on Databricks)' : '';
                 _caTxt.textContent = 'Last computed ' + when + how;
                 _ca.classList.remove('d-none');
             } else {
@@ -952,16 +864,12 @@
     };
 
     window.analyticsCompute = async function () {
-        // Backstop for the case the server would refuse too: over the limit
-        // *and* no engine-side path. An oversized graph on its own is fine —
-        // it runs as engine-side aggregation, or on Databricks when the job is
-        // available.
-        if (_isOverTripleLimit() && !_pushdownAvailable) {
-            _showOverLimitBanner(true);
-            _showAnalyticsError('This graph has ' + _totalTriples.toLocaleString()
-                + ' triples, which exceeds the analytics limit of '
-                + _maxTriples.toLocaleString()
-                + '. Reduce the synced graph (KG → Sync) or raise ONTOBRICKS_ANALYTICS_MAX_TRIPLES.');
+        // Backstop guard: the button is already disabled when the job is
+        // unavailable, but direct JS calls also need defending.
+        if (!_jobAvailable) {
+            _showAnalyticsError(_jobBlockedReason
+                ? 'The analytics job cannot run: ' + _jobBlockedReason
+                : 'Enable the Databricks analytics job in Settings → Global first.');
             return;
         }
 
@@ -998,8 +906,8 @@
             }
 
             if (typeof showNotification === 'function') {
-                // Read the count from stats, never from Object.keys(nodes): in
-                // engine-side mode ``nodes`` is deliberately a bounded top-N slice.
+                // Read the count from stats, never from Object.keys(nodes): the
+                // nodes dict is a bounded top-N slice, not the full graph.
                 var st = (_analyticsData && _analyticsData.stats) || {};
                 var n  = st.node_count || 0;
                 var ms = st.elapsed_ms;
@@ -1074,16 +982,10 @@
                 if (unavailable.indexOf(m.key) !== -1) {
                     var name = m.key.charAt(0).toUpperCase() + m.key.slice(1);
                     reason = '<strong>Not computed for this graph.</strong> '
-                        + (_analyticsData.mode === 'job'
-                            ? name + ' is estimated from a sample of source nodes, and this run '
-                              + 'could not produce a sample it can stand behind — either no '
-                              + 'pivots were sampled or the breadth-first search hit its depth '
-                              + 'cap, which would have biased the result. '
-                            : name + ' needs an iterative pass over the whole graph, which the '
-                              + 'engine-side aggregation used for graphs over the in-memory limit '
-                              + 'does not do. ')
-                        + 'Pick an <strong>Entity Type</strong> above to analyse a subgraph in memory '
-                        + 'and get this metric.';
+                        + name + ' is estimated from a sample of source nodes, and this run '
+                        + 'could not produce a sample it can stand behind — either no '
+                        + 'pivots were sampled or the breadth-first search hit its depth cap. '
+                        + 'Raise the analytics job\'s max depth in Settings and re-run.';
                 } else if (m.key === 'clustering') {
                     reason = '<strong>All values are 0.</strong> '
                         + 'Clustering coefficient is 0 when none of a node\'s neighbors are connected to each other — typical for KGs with a bipartite structure (e.g. Customer → Order → Product). Triangles are rare unless entities of the same type link directly.';
@@ -1239,9 +1141,9 @@
         var unavailable = (_analyticsData && _analyticsData.unavailable_metrics) || [];
         var approximate = (_analyticsData && _analyticsData.approximate_metrics) || [];
 
-        // Rank by PageRank only when it was actually computed. In engine-side
-        // aggregation every value is 0, so sorting by it would produce an
-        // arbitrary order under a column header that implies a ranking.
+        // Rank by PageRank only when it was actually computed; fall back to
+        // degree when PageRank is in unavailable_metrics to avoid an arbitrary
+        // order under a header that implies a ranking.
         var rankBy = unavailable.indexOf('pagerank') === -1 ? 'pagerank' : 'degree';
         var sorted = candidateUris
             .slice()

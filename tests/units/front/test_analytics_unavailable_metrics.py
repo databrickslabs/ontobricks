@@ -104,7 +104,15 @@ class TestChartNoticesStillPresent:
         assert "Not computed for this graph." in html
         assert "All values are 0." in html
 
-    def test_pushdown_and_job_modes_get_different_explanations(self, html):
-        block = html[html.index("Not computed for this graph.") :][:1400]
-        assert "_analyticsData.mode === 'job'" in block
-        assert re.search(r"engine-side aggregation", block)
+    def test_unavailable_metric_copy_names_the_depth_cap_remedy(self, html):
+        # Job is the only path; the notice must name the depth-cap remedy and
+        # not suggest an in-memory escape hatch that no longer exists.
+        block = html[html.index("Not computed for this graph."):][:1400]
+        assert re.search(r"depth cap", block)
+        assert "Raise the analytics job" in block
+
+    def test_no_in_memory_escape_hatch_in_unavailable_notice(self, html):
+        # "Pick an Entity Type above to analyse a subgraph in memory" was the
+        # pre-Lakeflow-only escape hatch.  It is false now and must be gone.
+        block = html[html.index("Not computed for this graph."):][:1400]
+        assert "analyse a subgraph in memory" not in block
