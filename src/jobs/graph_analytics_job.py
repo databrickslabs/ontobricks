@@ -910,5 +910,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     return 0
 
 
+def run_cli(argv: Optional[List[str]] = None) -> None:
+    """Run :func:`main`, raising ``SystemExit`` only when it reports a failure.
+
+    Databricks serverless executes this file inside an IPython shell, which
+    reports *any* raised ``SystemExit`` — code 0 included — as an uncaught
+    exception and fails the run. Returning normally on success keeps a
+    completed analysis from being recorded as ``RUN_EXECUTION_ERROR``.
+    """
+    code = main(argv)
+    if code:
+        raise SystemExit(code)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    run_cli()

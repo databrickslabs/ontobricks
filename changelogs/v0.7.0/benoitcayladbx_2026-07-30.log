@@ -841,3 +841,57 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
 
 Tests: prior suite green; deploy verified live (healthz 200, both apps RUNNING)
+
+================================================================================
+Fix: successful graph-analytics run reported as failed (SystemExit at exit)
+================================================================================
+
+Context:
+
+Run 314895410340960 of ``[dev benoit_cayla] ontobricks-07x-graph-analytics``
+(job 334933950622420) terminated with ``RUN_EXECUTION_ERROR`` even though the
+analysis had completed: the driver log ends with
+``wrote benoit_cayla.ontobricks.graph_metrics_bigcustomers_1 (1349202 nodes)``
+followed by the ``ONTOBRICKS_GRAPH_ANALYTICS_SUMMARY`` line. The reported
+error was ``SystemExit: 0``.
+
+Root cause: Databricks serverless executes a ``spark_python_task`` file inside
+an IPython shell (visible in the run output as the
+``To exit: use 'exit', 'quit', or Ctrl-D`` warning from
+``IPython/core/interactiveshell.py``). The module guard ended the process with
+``raise SystemExit(main())``; that shell reports *any* raised ``SystemExit`` —
+code 0 included — as an uncaught exception, so a clean run was recorded as a
+failed workload and the app surfaced the analysis as failed.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Replace ``raise SystemExit(main())`` with ``run_cli()``, which raises
+   ``SystemExit`` only for a non-zero return so genuine failures still fail the
+   run while a successful analysis exits normally.
+2. tests/units/core/test_graph_analytics_job_exit.py (new)
+   Five unit tests over ``run_cli``: return 0 and return ``None`` must not
+   raise, a non-zero return must raise ``SystemExit`` with that code, argv is
+   forwarded, and the module guard no longer calls ``raise SystemExit(main())``.
+
+Follow-up noted, not changed:
+
+- Two jobs now answer to the name ``[dev benoit_cayla] ontobricks-07x-graph-analytics``:
+  334933950622420 (target ``dev-lakebase-07x``, current) and 822506438871868
+  (target ``dev-lakebase``, orphaned by today's per-instance target split).
+  ``LakeflowRunner.resolve_job_id`` warns and takes the first match, so the app
+  can pick the stale one. Deleting the orphan is pending user confirmation.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- tests/units/core/test_graph_analytics_job_exit.py (new)
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+Tests: uv run pytest -q -m "not scenario" → 3773 passed, 275 skipped, 5
+deselected in 32.78s.
+
+Note on running the suite: sourcing ``scripts/deploy.config.sh`` exports
+``LAKEBASE_PROJECT``/``LAKEBASE_BRANCH``/``DATABRICKS_CONFIG_PROFILE`` into the
+shell. pytest inherits them, ``LakebaseAuth`` then resolves a *real* Lakebase
+endpoint through the SDK, and unit tests block on retry backoff instead of
+failing fast. Run the suite from a shell that has not sourced the deploy config.

@@ -1,0 +1,67 @@
+================================================================================
+Fix: analytics banner keeps saying "enable it in Settings" after enabling it
+================================================================================
+
+Context
+-------
+
+User report: ticked Settings -> Global -> "Compute large-graph metrics on
+Databricks", saved, went to Analytics, and the amber over-limit banner still
+ended with "...or enable Compute large-graph metrics on Databricks in
+Settings -> Global (admin only)".
+
+The setting was stored correctly. Read directly from the live Lakebase registry
+(benoit_cayla / ontobricks_demo, Postgres schema ontobricks_demo,
+global_config JSONB): `analytics_job_enabled = True`, updated_at
+2026-07-31 05:44:44Z — 62 seconds before the report. The deployed app already
+carried yesterday's `_jobBlockedReason` work, so the code was current too.
+
+Root cause: the banner reads job availability from `/dtwin/sync/stats`
+(`analytics_job_available` + `analytics_job_blocked_reason`), and the Analytics
+page fetches it *without* `refresh=true` — deliberately, because the aggregate
+counts behind it are expensive on a 7.6M-triple graph. That payload is cached on
+the domain session for `_TS_STATS_CACHE_TTL_SECONDS` (300s), and the cache
+validity check added yesterday only tests that the fields are *present*, not
+that they still agree with the stored toggle. Nothing invalidated the section
+when an admin flipped the setting, so for up to five minutes the page served the
+pre-change answer.
+
+That is exactly the branch the banner takes when the toggle reads as off, which
+is why an admin who had just enabled it was told to go and enable it — and why
+it was indistinguishable from the save having failed.
+
+Changes
+-------
+
+1. src/back/objects/digitaltwin/DigitalTwin.py
+   New `clear_ts_cache(section)`: drops one cached triplestore section and
+   persists the session, leaving the other sections (`status`, `dt_existence`)
+   alone. The TTL cannot cover a setting that changes what a section reports.
+
+2. src/back/objects/domain/SettingsService.py
+   `save_analytics_job_enabled_result` now drops the cached `stats` section
+   after a successful write, so the next Analytics load recomputes availability.
+   Best-effort: the value is already committed, so a failure to invalidate is
+   logged rather than turned into a 500.
+
+3. tests/units/settings/test_analytics_toggle_invalidates_stats.py (new, 10 tests)
+   `clear_ts_cache` round-trip, section isolation, absent-section no-op and
+   persistence; save-path invalidation for both on and off; unrelated sections
+   preserved; invalidation failure does not fail the save; nothing dropped when
+   the write itself failed; plus a guard on the TTL premise.
+
+Not changed
+-----------
+
+`/dtwin/metrics/compute` resolves job availability live, so an actual run always
+used the current setting — only the banner was stale.
+
+Modified files
+--------------
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/domain/SettingsService.py
+- tests/units/settings/test_analytics_toggle_invalidates_stats.py (new)
+- changelogs/v0.7.0/benoitcayladbx_2026-07-31.log (new)
+
+Tests: pytest -q -m "not scenario" -> 3783 passed, 275 skipped, 5 deselected
+in 28.48s.

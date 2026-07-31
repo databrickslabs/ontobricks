@@ -1489,7 +1489,7 @@ class SettingsService:
         """Persist the graph-analytics job toggle globally (admin only)."""
         SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
-        _, host, token, registry_cfg = SettingsService._resolve_context(
+        domain, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         enabled = bool(enabled)
@@ -1500,6 +1500,18 @@ class SettingsService:
             raise InfrastructureError(
                 "Failed to save the graph-analytics job setting", detail=msg
             )
+
+        # The Analytics banner reads job availability from the cached
+        # ``/dtwin/sync/stats`` payload, which the page fetches without
+        # ``refresh`` because the counts behind it are expensive. Left in place,
+        # it would keep telling an admin to enable what they just enabled.
+        try:
+            from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+
+            DigitalTwin(domain).clear_ts_cache("stats")
+        except Exception as exc:  # noqa: BLE001 - the value is already stored
+            logger.debug("Could not drop the cached stats payload: %s", exc)
+
         return {"success": True, "analytics_job_enabled": enabled, "source": "admin"}
 
     # ------------------------------------------------------------------

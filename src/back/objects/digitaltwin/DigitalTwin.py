@@ -708,6 +708,21 @@ class DigitalTwin:
         ts["_ts_cache_timestamp"] = time.time()
         self._domain.save()
 
+    def clear_ts_cache(self, section: str) -> None:
+        """Drop a cached triplestore section so the next read recomputes it.
+
+        The TTL alone cannot cover a setting that changes what a section
+        *reports*: ``stats`` carries the analytics job availability, so an admin
+        flipping the Settings → Global toggle would otherwise keep reading the
+        pre-change answer until the entry expired.
+        """
+        ts = self._domain.triplestore or {}
+        stats = ts.get("stats")
+        if not isinstance(stats, dict) or section not in stats:
+            return
+        del stats[section]
+        self._domain.save()
+
     async def get_or_fetch_graph_status(self, settings) -> Dict[str, Any]:
         """Return graph triplestore status from session cache, or fetch live and cache."""
         cached = self.get_ts_cache("status")
