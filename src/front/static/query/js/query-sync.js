@@ -118,7 +118,11 @@ function _applyReadiness(data) {
 
     var syncBtn = document.getElementById('syncStartBtn');
     var loadBtn = document.getElementById('syncLoadBtn');
-    if (syncBtn) syncBtn.disabled = !syncIsReady;
+    // Read-only versions / viewers must not be able to start a build even
+    // when the graph is otherwise "ready" — CSS also blocks the click.
+    var canBuild = syncIsReady && !(window.OB && typeof window.OB.canEditOntology === 'function'
+        && !window.OB.canEditOntology());
+    if (syncBtn) syncBtn.disabled = !canBuild;
     if (loadBtn) loadBtn.disabled = !syncIsReady;
 
     var contentEl = document.getElementById('syncReadinessContent');
@@ -784,6 +788,15 @@ function _showSaveBeforeBuildDialog() {
  * contains the latest ontology and mapping configuration.
  */
 async function startTripleStoreSync() {
+    if (window.OB && typeof window.OB.canEditOntology === 'function'
+            && !window.OB.canEditOntology()) {
+        showNotification(
+            'Build is unavailable — this version is read-only.',
+            'warning'
+        );
+        return;
+    }
+
     const tableEl = document.getElementById('syncTriplestoreTable');
     const triplestoreTable = tableEl ? tableEl.value.trim() : '';
 
@@ -948,7 +961,11 @@ async function monitorSyncTask(taskId) {
     }
 
     const btn = document.getElementById('syncStartBtn');
-    if (btn) btn.disabled = !syncIsReady;
+    if (btn) {
+        var canBuild = syncIsReady && !(window.OB && typeof window.OB.canEditOntology === 'function'
+            && !window.OB.canEditOntology());
+        btn.disabled = !canBuild;
+    }
 }
 
 /**

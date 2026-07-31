@@ -65,3 +65,62 @@ Modified files
 
 Tests: pytest -q -m "not scenario" -> 3783 passed, 275 skipped, 5 deselected
 in 28.48s.
+
+================================================================================
+Disable Unmap all / Build / Materialise in view mode
+================================================================================
+
+Context
+-------
+
+TODO: on a non-editable domain (IN-REVIEW / PUBLISHED / older version, Viewer
+role, or edit lock), Unmap all, Knowledge Graph Build, and Materialise must not
+run. Designer Unmap all had no gate; Information Unmap all was only *hidden*
+via ``.ontology-edit-btn``; Build was re-enabled by readiness JS; Reasoning
+Materialise had no gate.
+
+Changes
+-------
+
+1. src/front/static/global/css/permissions.css
+   Add ``#resetMappingsBtn``, ``#resetMappingsDesignBtn``, ``#syncStartBtn``,
+   ``#runMaterializeBtn`` to the read-only disable list (pointer-events: none).
+   ``#cohortMaterializeBtn`` was already listed.
+
+2. src/front/templates/partials/mapping/_mapping_information.html
+   Drop ``ontology-edit-btn`` from Unmap all so it disables rather than hides.
+
+3. src/front/static/global/js/mapping-information.js
+   ``confirmResetMappings`` early-returns when ``OB.canEditOntology()`` is false.
+
+4. src/front/static/query/js/query-sync.js
+   Readiness and post-run enable of ``#syncStartBtn`` respect canEditOntology;
+   ``startTripleStoreSync`` refuses with a notification.
+
+5. src/front/static/query/js/query-cohorts.js
+   Materialise enable after Preview respects canEditOntology;
+   ``openMaterializeModal`` / ``materialize`` refuse when read-only.
+
+6. src/front/static/query/js/query-reasoning.js
+   ``runMaterialize`` refuses when read-only.
+
+7. tests/units/front/test_view_mode_write_gates.py (new)
+   CSS gate + JS guard contract tests.
+
+8. docs/superpowers/specs/2026-07-31-view-mode-write-gates-design.md
+   Approved design note.
+
+9. releasereq/TODO.md — mark the three items DONE.
+
+Modified files
+--------------
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/static/global/js/mapping-information.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-cohorts.js
+- src/front/static/query/js/query-reasoning.js
+- tests/units/front/test_view_mode_write_gates.py (new)
+- docs/superpowers/specs/2026-07-31-view-mode-write-gates-design.md (new)
+- releasereq/TODO.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-31.log

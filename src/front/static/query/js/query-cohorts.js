@@ -374,7 +374,11 @@ const CohortModule = {
         this._renderRuleSummary();
 
         const btnMat = document.getElementById('cohortMaterializeBtn');
-        if (btnMat) btnMat.disabled = !this.lastPreview;
+        if (btnMat) {
+            const readOnly = window.OB && typeof window.OB.canEditOntology === 'function'
+                && !window.OB.canEditOntology();
+            btnMat.disabled = readOnly || !this.lastPreview;
+        }
         const btnPrev = document.getElementById('cohortPreviewBtn');
         if (btnPrev) btnPrev.disabled = !this.rule?.class_uri;
     },
@@ -1110,7 +1114,11 @@ const CohortModule = {
             this.lastPreview = data;
             this._renderPreview(data);
             const btnMat = document.getElementById('cohortMaterializeBtn');
-            if (btnMat) btnMat.disabled = false;
+            if (btnMat) {
+                const readOnly = window.OB && typeof window.OB.canEditOntology === 'function'
+                    && !window.OB.canEditOntology();
+                btnMat.disabled = readOnly;
+            }
             this._setStatus(`Preview: ${data.cohorts?.length || 0} cohorts in ${data.stats?.elapsed_ms || 0} ms.`);
         } catch (e) {
             const aborted = e && (e.name === 'AbortError' || ctrl.signal.aborted);
@@ -1565,6 +1573,11 @@ const CohortModule = {
     },
 
     openMaterializeModal() {
+        if (window.OB && typeof window.OB.canEditOntology === 'function'
+                && !window.OB.canEditOntology()) {
+            this._notify('Materialise is unavailable — this version is read-only.', 'warning');
+            return;
+        }
         if (!this.lastPreview) {
             this._notify('Run Preview first.', 'warning');
             return;
@@ -1634,6 +1647,11 @@ const CohortModule = {
     },
 
     async materialize() {
+        if (window.OB && typeof window.OB.canEditOntology === 'function'
+                && !window.OB.canEditOntology()) {
+            this._notify('Materialise is unavailable — this version is read-only.', 'warning');
+            return;
+        }
         try {
             const r = await fetch('/dtwin/cohorts/materialize', {
                 method: 'POST',

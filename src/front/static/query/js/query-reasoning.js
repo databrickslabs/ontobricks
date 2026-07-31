@@ -550,6 +550,13 @@ const ReasoningModule = {
     },
 
     async runMaterialize() {
+        if (window.OB && typeof window.OB.canEditOntology === 'function'
+                && !window.OB.canEditOntology()) {
+            if (typeof showNotification === 'function')
+                showNotification('Materialise is unavailable — this version is read-only.', 'warning');
+            return;
+        }
+
         const deltaChecked = document.getElementById('materializeDelta')?.checked || false;
         const graphChecked = document.getElementById('materializeGraph')?.checked || false;
         const tableName = (document.getElementById('materializeTableName')?.value || '').trim();

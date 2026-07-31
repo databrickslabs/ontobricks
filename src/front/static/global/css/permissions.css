@@ -166,6 +166,17 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #manualAutoMapBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #manualSavePanelBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingAutoExclude,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingIncludeExcluded,
+/* --- Mapping > Information / Designer: Unmap all. Kept visible (not
+       hidden via ``.ontology-edit-btn``) so the operator sees the control
+       is unavailable rather than wondering where it went. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsDesignBtn,
+/* --- Knowledge Graph > Build: start of a triple-store rebuild. JS
+       re-enables ``#syncStartBtn`` when readiness flips true; pointer-events
+       keeps the click dead on a non-DRAFT / viewer / locked domain. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) #syncStartBtn,
+/* --- Knowledge Graph > Reasoning: materialise inferred triples. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) #runMaterializeBtn,
 /* --- Ontology > Business Views: CRUD buttons (top toolbar) + the
        empty-state "Create View" CTA shown when no view exists. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #createViewBtn,
