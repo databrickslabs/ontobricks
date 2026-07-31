@@ -534,6 +534,29 @@ class GraphAnalyticsSQL:
         return f"SELECT MAX(dist) AS d FROM {self.bfs}"
 
     # -- stage 6: output ------------------------------------------------
+    def node_type_select(self) -> str:
+        """One ``rdf:type`` per node.
+
+        ``MIN`` rather than an arbitrary pick: a node typed both ``Person`` and
+        ``Agent`` must land in the same profile on every run, or the per-type
+        rollups move between runs for no reason.
+        """
+        return (
+            f"SELECT subject AS n, MIN(object) AS type_uri\n"
+            f"FROM {self.source_table}\n"
+            f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''\n"
+            f"GROUP BY subject"
+        )
+
+    def node_label_select(self) -> str:
+        """One ``rdfs:label`` per node, chosen the same way as the type."""
+        return (
+            f"SELECT subject AS n, MIN(object) AS label\n"
+            f"FROM {self.source_table}\n"
+            f"WHERE predicate = '{sql_escape(RDFS_LABEL)}' AND object <> ''\n"
+            f"GROUP BY subject"
+        )
+
     def write_output(
         self,
         pagerank_slot: str,
@@ -574,16 +597,16 @@ class GraphAnalyticsSQL:
                 f"    ELSE (CAST(cl.reached AS DOUBLE) * cl.reached)\n"
                 f"         / ((CAST({pivot_count} AS DOUBLE)"
                 f" - CASE WHEN pv.n IS NULL THEN 0 ELSE 1 END) * cl.dist_sum)\n"
-                f"  END AS closeness\n"
+                f"  END AS closeness,\n"
             )
-            joins = (
-                f"LEFT JOIN {self.betweenness_table} bc ON bc.node = d.n\n"
-                f"LEFT JOIN {self.closeness_table} cl ON cl.node = d.n\n"
-                f"LEFT JOIN {self.pivots} pv ON pv.n = d.n"
+            pivot_joins = (
+                f"\nLEFT JOIN {self.betweenness_table} bc ON bc.node = d.n"
+                f"\nLEFT JOIN {self.closeness_table} cl ON cl.node = d.n"
+                f"\nLEFT JOIN {self.pivots} pv ON pv.n = d.n"
             )
         else:
-            betweenness = "  0.0 AS betweenness,\n  0.0 AS closeness\n"
-            joins = ""
+            betweenness = "  0.0 AS betweenness,\n  0.0 AS closeness,\n"
+            pivot_joins = ""
 
         return self._recreate(
             self.output_table,
@@ -597,11 +620,15 @@ class GraphAnalyticsSQL:
             f"       ELSE 2.0 * COALESCE(t.t, 0) / (CAST(d.d AS DOUBLE) * (d.d - 1))\n"
             f"  END AS clustering,\n"
             f"{betweenness}"
+            f"  ty.type_uri AS type_uri,\n"
+            f"  lb.label AS label\n"
             f"FROM {self.deg} d\n"
             f"JOIN {pr} p ON p.n = d.n\n"
             f"JOIN {cc} cc ON cc.n = d.n\n"
-            f"LEFT JOIN {self.triangle_counts} t ON t.n = d.n"
-            + (f"\n{joins}" if joins else ""),
+            f"LEFT JOIN {self.triangle_counts} t ON t.n = d.n\n"
+            f"LEFT JOIN ({self.node_type_select()}) ty ON ty.n = d.n\n"
+            f"LEFT JOIN ({self.node_label_select()}) lb ON lb.n = d.n"
+            + pivot_joins,
         )
 
     def write_summary(self, stats: Dict[str, object]) -> List[str]:

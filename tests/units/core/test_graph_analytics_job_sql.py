@@ -23,6 +23,8 @@ import pytest
 
 from jobs.graph_analytics_job import (
     DEFAULT_EXCLUDED_PREDICATES,
+    RDFS_LABEL,
+    RDF_TYPE,
     GraphAnalyticsSQL,
     parse_args,
     run_analysis,
@@ -33,7 +35,6 @@ pytestmark = pytest.mark.unit
 NS = "http://ex.org/"
 REL = NS + "rel"
 NAME = NS + "name"
-RDF_TYPE = DEFAULT_EXCLUDED_PREDICATES[0]
 
 
 class SqliteRunner:
@@ -102,6 +103,40 @@ def _run(graph: nx.Graph, **kwargs) -> tuple:
 
 def _output(runner: SqliteRunner) -> Dict[str, Dict[str, object]]:
     return {r["node_uri"]: r for r in runner.rows("SELECT * FROM out")}
+
+
+def _run_job(tmp_path, triples) -> tuple:  # noqa: ARG001
+    """Build a SQLite connection and builder, run the job, return (conn, builder).
+
+    *triples* may be dicts or ``(subject, predicate, object)`` tuples.
+    ``tmp_path`` is accepted for API compatibility with Task 3, which adds a
+    ``class_filter`` argument that forwards a file path; it is unused here.
+    """
+    normalised = [
+        t if isinstance(t, dict) else {"subject": t[0], "predicate": t[1], "object": t[2]}
+        for t in triples
+    ]
+    runner = SqliteRunner(normalised)
+    builder = GraphAnalyticsSQL(
+        source_table="triples",
+        work_prefix="w",
+        output_table="out",
+        excluded_predicates=list(DEFAULT_EXCLUDED_PREDICATES),
+    )
+    run_analysis(runner.execute, runner.scalar, builder, cleanup=False)
+    return runner.conn, builder
+
+
+def _table_rows(tmp_path, triples, *, suffix="") -> List[Dict[str, object]]:
+    """Run the job over *triples*, return one output table as a list of dicts.
+
+    ``suffix`` selects which output table to read: "" is the per-node table,
+    "_summary" / "_type_profiles" / "_type_predicates" the others.
+    """
+    conn, builder = _run_job(tmp_path, triples)
+    cur = conn.execute(f"SELECT * FROM {builder.output_table}{suffix}")
+    names = [d[0] for d in cur.description]
+    return [dict(zip(names, r)) for r in cur.fetchall()]
 
 
 def _relabel(graph: nx.Graph) -> nx.Graph:
@@ -497,6 +532,27 @@ class TestArgParsing:
         assert args.pagerank_iterations == 7
         assert args.component_iterations == 3
         assert args.damping == 0.5
+
+
+def test_output_carries_rdf_type_and_label(tmp_path):
+    """The per-node output resolves one type and one label per node."""
+    triples = [
+        ("http://ex/a", "http://ex/knows", "http://ex/b"),
+        ("http://ex/a", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/a", RDFS_LABEL, "Alice"),
+        ("http://ex/b", RDF_TYPE, "http://ex/Person"),
+        # A second type must not duplicate the node's output row.
+        ("http://ex/b", RDF_TYPE, "http://ex/Agent"),
+    ]
+    rows = _table_rows(tmp_path, triples)
+
+    by_uri = {r["node_uri"]: r for r in rows}
+    assert len(rows) == 2
+    assert by_uri["http://ex/a"]["type_uri"] == "http://ex/Person"
+    assert by_uri["http://ex/a"]["label"] == "Alice"
+    # MIN over {Agent, Person} — deterministic, not arbitrary.
+    assert by_uri["http://ex/b"]["type_uri"] == "http://ex/Agent"
+    assert by_uri["http://ex/b"]["label"] is None
 
 
 class TestSqlInjectionEscaping:
