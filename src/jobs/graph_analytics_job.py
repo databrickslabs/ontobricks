@@ -128,6 +128,8 @@ class GraphAnalyticsSQL:
     excluded_predicates: List[str] = field(
         default_factory=lambda: list(DEFAULT_EXCLUDED_PREDICATES)
     )
+    #: Entity types to restrict the analysis to. Empty means the whole graph.
+    class_filter: List[str] = field(default_factory=list)
     damping: float = DEFAULT_DAMPING
 
     # -- table names ---------------------------------------------------
@@ -236,6 +238,24 @@ class GraphAnalyticsSQL:
             f"CREATE TABLE {table} AS\n{select_sql}",
         ]
 
+    def _class_clause(self, column: str) -> str:
+        """``AND <column> IN (…)`` when a class filter is set, else empty."""
+        if not self.class_filter:
+            return ""
+        return f"\n  AND {column} IN ({_in_list(self.class_filter)})"
+
+    def typed_nodes_select(self) -> str:
+        """Nodes carrying one of ``class_filter``'s types.
+
+        Only called when a filter is set, so it never widens the graph.
+        """
+        return (
+            f"SELECT DISTINCT subject AS n\n"
+            f"FROM {self.source_table}\n"
+            f"WHERE predicate = '{sql_escape(RDF_TYPE)}'\n"
+            f"  AND object IN ({_in_list(self.class_filter)})"
+        )
+
     # -- stage 1: edge list, degrees -----------------------------------
     def build_edges(self) -> List[str]:
         """Build the deduplicated undirected edge list and per-node degree.
@@ -245,6 +265,16 @@ class GraphAnalyticsSQL:
         are dropped: they are not meaningful for centrality and would make the
         degree accounting differ from the rest of the pipeline.
         """
+        keep = ""
+        if self.class_filter:
+            # Both endpoints must survive, which is exactly an induced
+            # subgraph — the same graph the entity-type filter produced when
+            # the analysis ran in memory.
+            keep = (
+                f"  AND subject IN ({self.typed_nodes_select()})\n"
+                f"  AND object IN ({self.typed_nodes_select()})\n"
+            )
+
         statements = self._recreate(
             self.edges,
             f"SELECT DISTINCT\n"
@@ -255,7 +285,8 @@ class GraphAnalyticsSQL:
             f"  AND object <> ''\n"
             f"  AND subject <> object\n"
             f"  AND (object LIKE 'http://%' OR object LIKE 'https://%')\n"
-            f"  AND predicate NOT IN ({_in_list(self.excluded_predicates)})",
+            f"  AND predicate NOT IN ({_in_list(self.excluded_predicates)})\n"
+            f"{keep}",
         )
         statements += self._recreate(
             self.bi,
@@ -585,7 +616,7 @@ class GraphAnalyticsSQL:
         return (
             f"SELECT subject AS n, MIN(object) AS type_uri\n"
             f"FROM {self.source_table}\n"
-            f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''\n"
+            f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''{self._class_clause('object')}\n"
             f"GROUP BY subject"
         )
 
@@ -599,11 +630,11 @@ class GraphAnalyticsSQL:
         )
 
     def type_population_select(self) -> str:
-        """Instance count per type over the whole source, isolated included."""
+        """Instance count per type in the scored subgraph, isolated included."""
         return (
             f"SELECT object AS type_uri, COUNT(DISTINCT subject) AS instance_count\n"
             f"FROM {self.source_table}\n"
-            f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''\n"
+            f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''{self._class_clause('object')}\n"
             f"GROUP BY object"
         )
 
@@ -1005,6 +1036,15 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Comma-separated predicate URIs that do not form edges",
     )
     parser.add_argument(
+        "--class-filter",
+        default="",
+        help=(
+            "Comma-separated entity type URIs. When set, only nodes carrying "
+            "one of these rdf:type values are scored, and only edges whose "
+            "both endpoints survive."
+        ),
+    )
+    parser.add_argument(
         "--pagerank-iterations", type=int, default=DEFAULT_PAGERANK_ITERATIONS
     )
     parser.add_argument(
@@ -1044,10 +1084,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         p.strip() for p in (args.exclude_predicates or "").split(",") if p.strip()
     ] or list(DEFAULT_EXCLUDED_PREDICATES)
 
+    class_filter = [
+        v.strip() for v in (args.class_filter or "").split(",") if v.strip()
+    ]
+
     work_prefix = args.work_prefix or f"{args.output_table}_work"
     validate_identifier(args.source_table, "--source-table")
     validate_identifier(args.output_table, "--output-table")
     validate_identifier(work_prefix, "--work-prefix")
+
+    if class_filter:
+        logger.info("class filter: %d type(s) — %s", len(class_filter), ", ".join(class_filter))
 
     builder = GraphAnalyticsSQL(
         source_table=args.source_table,
@@ -1055,6 +1102,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         output_table=args.output_table,
         excluded_predicates=excluded,
         damping=args.damping,
+        class_filter=class_filter,
     )
 
     def execute(stmt: str) -> None:

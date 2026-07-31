@@ -105,12 +105,10 @@ def _output(runner: SqliteRunner) -> Dict[str, Dict[str, object]]:
     return {r["node_uri"]: r for r in runner.rows("SELECT * FROM out")}
 
 
-def _run_job(tmp_path, triples) -> tuple:  # noqa: ARG001
+def _run_job(triples, *, class_filter=None) -> tuple:
     """Build a SQLite connection and builder, run the job, return (conn, builder).
 
     *triples* may be dicts or ``(subject, predicate, object)`` tuples.
-    ``tmp_path`` is accepted for API compatibility with Task 3, which adds a
-    ``class_filter`` argument that forwards a file path; it is unused here.
     """
     normalised = [
         t if isinstance(t, dict) else {"subject": t[0], "predicate": t[1], "object": t[2]}
@@ -122,18 +120,19 @@ def _run_job(tmp_path, triples) -> tuple:  # noqa: ARG001
         work_prefix="w",
         output_table="out",
         excluded_predicates=list(DEFAULT_EXCLUDED_PREDICATES),
+        class_filter=class_filter or [],
     )
     run_analysis(runner.execute, runner.scalar, builder, cleanup=False)
     return runner.conn, builder
 
 
-def _table_rows(tmp_path, triples, *, suffix="") -> List[Dict[str, object]]:
+def _table_rows(triples, *, suffix="", class_filter=None) -> List[Dict[str, object]]:
     """Run the job over *triples*, return one output table as a list of dicts.
 
     ``suffix`` selects which output table to read: "" is the per-node table,
     "_summary" / "_type_profiles" / "_type_predicates" the others.
     """
-    conn, builder = _run_job(tmp_path, triples)
+    conn, builder = _run_job(triples, class_filter=class_filter)
     cur = conn.execute(f"SELECT * FROM {builder.output_table}{suffix}")
     names = [d[0] for d in cur.description]
     return [dict(zip(names, r)) for r in cur.fetchall()]
@@ -534,7 +533,7 @@ class TestArgParsing:
         assert args.damping == 0.5
 
 
-def test_output_carries_rdf_type_and_label(tmp_path):
+def test_output_carries_rdf_type_and_label():
     """The per-node output resolves one type and one label per node."""
     triples = [
         ("http://ex/a", "http://ex/knows", "http://ex/b"),
@@ -544,7 +543,7 @@ def test_output_carries_rdf_type_and_label(tmp_path):
         # A second type must not duplicate the node's output row.
         ("http://ex/b", RDF_TYPE, "http://ex/Agent"),
     ]
-    rows = _table_rows(tmp_path, triples)
+    rows = _table_rows(triples)
 
     by_uri = {r["node_uri"]: r for r in rows}
     assert len(rows) == 2
@@ -586,7 +585,7 @@ class TestSqlInjectionEscaping:
         assert "it''s" in sql
 
 
-def test_type_profiles_cover_isolated_and_connected_instances(tmp_path):
+def test_type_profiles_cover_isolated_and_connected_instances():
     """instance_count is the full population; the rest covers scored nodes."""
     triples = [
         ("http://ex/a", "http://ex/knows", "http://ex/b"),
@@ -596,7 +595,7 @@ def test_type_profiles_cover_isolated_and_connected_instances(tmp_path):
         ("http://ex/c", RDF_TYPE, "http://ex/Person"),
         ("http://ex/c", RDFS_LABEL, "Carol"),
     ]
-    profiles = _table_rows(tmp_path, triples, suffix="_type_profiles")
+    profiles = _table_rows(triples, suffix="_type_profiles")
 
     assert len(profiles) == 1
     row = profiles[0]
@@ -607,7 +606,7 @@ def test_type_profiles_cover_isolated_and_connected_instances(tmp_path):
     assert row["avg_clustering"] == 0.0
 
 
-def test_type_predicates_are_distinct_and_exclude_metadata(tmp_path):
+def test_type_predicates_are_distinct_and_exclude_metadata():
     """rdf:type and rdfs:label never count as relationship predicates."""
     triples = [
         ("http://ex/a", "http://ex/knows", "http://ex/b"),
@@ -618,7 +617,7 @@ def test_type_predicates_are_distinct_and_exclude_metadata(tmp_path):
         # A literal object is not a relationship.
         ("http://ex/a", "http://ex/age", "41"),
     ]
-    rows = _table_rows(tmp_path, triples, suffix="_type_predicates")
+    rows = _table_rows(triples, suffix="_type_predicates")
 
     pairs = {(r["type_uri"], r["predicate"]) for r in rows}
     assert pairs == {
@@ -627,19 +626,19 @@ def test_type_predicates_are_distinct_and_exclude_metadata(tmp_path):
     }
 
 
-def test_summary_reports_total_and_connected_node_counts(tmp_path):
+def test_summary_reports_total_and_connected_node_counts():
     """node_count is the scored graph; total_node_count is every subject."""
     triples = [
         ("http://ex/a", "http://ex/knows", "http://ex/b"),
         ("http://ex/c", RDF_TYPE, "http://ex/Person"),  # isolated subject
     ]
-    summary = _table_rows(tmp_path, triples, suffix="_summary")[0]
+    summary = _table_rows(triples, suffix="_summary")[0]
 
     assert summary["node_count"] == 2        # a, b
     assert summary["total_node_count"] == 3  # a, b, c
 
 
-def test_total_node_count_comes_from_source_not_degree_table(tmp_path):
+def test_total_node_count_comes_from_source_not_degree_table():
     """total_node_count is stable under per-run predicate exclusions.
 
     ``obj_only`` appears only as an object of ``http://ex/rel``, never as a
@@ -680,19 +679,66 @@ def test_total_node_count_comes_from_source_not_degree_table(tmp_path):
     assert _total(also_exclude_rel) == 3   # same — obj_only is still in the source
 
 
-def test_flat_source_still_gets_profiles(tmp_path):
+def test_flat_source_still_gets_profiles():
     """A source with no entity-entity edges still reports its types."""
     triples = [
         ("http://ex/a", RDF_TYPE, "http://ex/Reading"),
         ("http://ex/a", "http://ex/value", "41"),
         ("http://ex/b", RDF_TYPE, "http://ex/Reading"),
     ]
-    profiles = _table_rows(tmp_path, triples, suffix="_type_profiles")
+    profiles = _table_rows(triples, suffix="_type_profiles")
 
     assert len(profiles) == 1
     assert profiles[0]["instance_count"] == 2
     assert profiles[0]["connected_count"] == 0
-    assert _table_rows(tmp_path, triples, suffix="_type_predicates") == []
+    assert _table_rows(triples, suffix="_type_predicates") == []
+
+
+def test_class_filter_matches_networkx_induced_subgraph():
+    """A class-filtered run equals NetworkX on graph.subgraph(typed nodes)."""
+    triples = [
+        ("http://ex/p1", "http://ex/knows", "http://ex/p2"),
+        ("http://ex/p2", "http://ex/knows", "http://ex/p3"),
+        ("http://ex/p1", "http://ex/knows", "http://ex/p3"),
+        # An Order attached to a Person must vanish with the filter, taking
+        # its edge with it.
+        ("http://ex/p1", "http://ex/ordered", "http://ex/o1"),
+        ("http://ex/p1", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/p2", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/p3", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/o1", RDF_TYPE, "http://ex/Order"),
+    ]
+    rows = _table_rows(triples, class_filter=["http://ex/Person"])
+
+    g = nx.Graph()
+    g.add_edges_from([
+        ("http://ex/p1", "http://ex/p2"),
+        ("http://ex/p2", "http://ex/p3"),
+        ("http://ex/p1", "http://ex/p3"),
+    ])
+    expected_degree = nx.degree_centrality(g)
+    expected_clustering = nx.clustering(g)
+
+    assert {r["node_uri"] for r in rows} == set(g.nodes)
+    for row in rows:
+        uri = row["node_uri"]
+        assert row["degree"] == pytest.approx(expected_degree[uri], abs=1e-6)
+        assert row["clustering"] == pytest.approx(expected_clustering[uri], abs=1e-6)
+
+
+def test_class_filter_narrows_type_profiles():
+    """Only the selected types get a profile."""
+    triples = [
+        ("http://ex/p1", "http://ex/knows", "http://ex/p2"),
+        ("http://ex/p1", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/p2", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/o1", RDF_TYPE, "http://ex/Order"),
+    ]
+    profiles = _table_rows(
+        triples, suffix="_type_profiles",
+        class_filter=["http://ex/Person"],
+    )
+    assert [r["type_uri"] for r in profiles] == ["http://ex/Person"]
 
 
 class TestJobSqlDialects:
@@ -706,7 +752,15 @@ class TestJobSqlDialects:
             work_prefix="main.ontobricks.graph_metrics_demo_v1_work",
             output_table="main.ontobricks.graph_metrics_demo_v1",
         )
+        # Both: unfiltered (whole graph) and class-filtered (induced subgraph).
         statements = list(builder.build_edges())
+        filtered = GraphAnalyticsSQL(
+            source_table="main.ontobricks.triplestore_demo_v1_graph",
+            work_prefix="main.ontobricks.graph_metrics_demo_v1_work",
+            output_table="main.ontobricks.graph_metrics_demo_v1",
+            class_filter=["http://example.org/Person"],
+        )
+        statements += filtered.build_edges()
         statements += builder.pagerank_init(10)
         statements += builder.pagerank_iteration("a", "b", 10)
         statements += builder.components_init()

@@ -62,6 +62,8 @@ resources:
               - "{{job.parameters.pivots}}"
               - "--max-depth"
               - "{{job.parameters.max_depth}}"
+              - "--class-filter"
+              - "{{job.parameters.class_filter}}"
 
       parameters:
         - name: source_table
@@ -82,3 +84,5 @@ resources:
         # a graph that finishes sooner: the job stops when the frontier empties.
         - name: max_depth
           default: "32"
+        - name: class_filter
+          default: ""
