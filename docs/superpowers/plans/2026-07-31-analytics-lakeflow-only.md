@@ -1532,7 +1532,7 @@ it, and a failure to materialise fails the build.
 
 **Files:**
 - Modify: `src/back/objects/digitaltwin/_build_pipeline.py` (`run`, around line 386)
-- Modify: `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py` (remove the now-duplicate materialisation at lines 255-258)
+- ~~Modify: `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py` (remove the now-duplicate materialisation at lines 255-258)~~ — **the plan was wrong here.** That materialisation is not a duplicate. `DeltaTripleStoreBuildPipeline` is a second, independent entry point, reached only from `POST /dtwin/databricks-build/start` via `_databricks_triplestore_build.run_databricks_triplestore_build`; it never runs inside `_BuildPipeline`, so the two never both fire for one build. Removing it silently left that endpoint producing a domain with no `…_data` and therefore no analytics. The step stays in both pipelines. See Step 4.
 - Test: `tests/units/objects/test_build_pipeline_materialize.py` (create)
 
 **Interfaces:**
@@ -1653,10 +1653,15 @@ differ.
 
 - [ ] **Step 4: Remove the duplicate from the Delta pipeline**
 
-In `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`, delete the
-`materialize.materialize_from_view(self.source_client, self.view_table, self.data_table)`
-call and its `try` wrapper at lines 255-258, keeping the surrounding progress
-reporting that is still meaningful. The shared pipeline now owns this step.
+**Superseded — do not do this.** The step was deleted from
+`DeltaTripleStoreBuildPipeline` as originally written and then restored, because
+it was never a duplicate: that class is only ever constructed by
+`_databricks_triplestore_build.run_databricks_triplestore_build`, which serves
+`POST /dtwin/databricks-build/start` and does not go through `_BuildPipeline`.
+Both pipelines materialise, each for the builds it owns. `_BuildPipeline` calling
+it once per build is asserted by `test_the_delta_pipeline_materialises_once`; the
+endpoint's own pipeline is covered by
+`test_the_databricks_build_endpoint_also_materialises`.
 
 - [ ] **Step 5: Run the tests**
 

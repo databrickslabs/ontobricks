@@ -98,3 +98,54 @@ env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
     -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
     .venv/bin/pytest -q -m "not scenario"
 ```
+
+---
+
+# Task 7: every Build materialises the mapped snapshot
+
+## Context
+
+`…_data` is the contract between Build and Analytics: the Lakeflow job reads
+that Delta snapshot of the R2RML-mapped triples and nothing else, which is what
+makes a KPI identical on Lakehouse, Lakebase and Neo4j. Until now only the Delta
+build produced it, so a Lakebase or Neo4j domain built cleanly and then could not
+be analysed at all. The materialisation moves into the shared build pipeline, and
+failing to take the snapshot now fails the build rather than leaving a domain
+that looks green and is unanalysable.
+
+One correction to the plan landed here. The plan called the materialisation
+inside `DeltaTripleStoreBuildPipeline` a duplicate to be removed. It is not:
+that class is reached only from `POST /dtwin/databricks-build/start`, never from
+`_BuildPipeline`, so the two are alternative entry points that never both fire
+for one build. Deleting it left that endpoint producing a domain with no `…_data`.
+It has been restored, and both pipelines now materialise for the builds they own.
+
+## Changes
+
+1. `src/back/objects/digitaltwin/_build_pipeline.py` — Added
+   `_materialize_data_table()`, called from `run()` between
+   `_post_create_view_progress` and `_apply_full_rebuild`, so every engine takes
+   the snapshot. An unresolvable table name or a failed materialisation fails the
+   task, following the `fail_task` + `return False` convention the neighbouring
+   phases already use.
+2. `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py` — Materialisation
+   restored after the plan's "duplicate" premise proved wrong, with a comment
+   recording why both pipelines need it.
+3. `tests/units/objects/test_build_pipeline_materialize.py` — New file: a Lakebase
+   build materialises, a failed materialisation fails the build with the
+   underlying message, the shared pipeline materialises exactly once, and the
+   `/dtwin/databricks-build/start` pipeline still materialises on its own.
+4. `docs/superpowers/plans/2026-07-31-analytics-lakeflow-only.md` — Struck the
+   incorrect "now-duplicate" instruction and recorded why the step stays in both
+   pipelines.
+
+## Modified Files
+
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+- `tests/units/objects/test_build_pipeline_materialize.py` (new)
+- `docs/superpowers/plans/2026-07-31-analytics-lakeflow-only.md`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3802 passed, 275 skipped, 0 failed**

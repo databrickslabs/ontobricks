@@ -252,12 +252,25 @@ class DeltaTripleStoreBuildPipeline:
             self._record_build_run("success", message=msg)
             return False
 
-        self.tm.update_progress(
-            self.task_id,
-            85,
-            f"Counted {self.triple_count} triples",
-        )
-        return True
+        # This pipeline is a separate entry point from _BuildPipeline — the
+        # /dtwin/databricks-build/start endpoint reaches only this one — so the
+        # snapshot has to be taken here too. The two never run in the same
+        # build, so this is not a second materialisation of the same table.
+        try:
+            materialize.materialize_from_view(
+                self.source_client, self.view_table, self.data_table
+            )
+            self.tm.update_progress(
+                self.task_id,
+                85,
+                f"Materialized {self.triple_count} triples",
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001
+            self.tm.fail_task(
+                self.task_id, f"Failed to materialize Delta table: {exc}"
+            )
+            return False
 
     def _ensure_inferred_companion(self) -> None:
         if not self.inferred_table:

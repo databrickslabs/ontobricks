@@ -159,3 +159,37 @@ def test_the_delta_pipeline_materialises_once(delta_pipeline):
         delta_pipeline.run()
 
     assert len(calls) == 1
+
+
+def test_the_databricks_build_endpoint_also_materialises():
+    """``/dtwin/databricks-build/start`` never reaches ``_BuildPipeline``.
+
+    It drives ``DeltaTripleStoreBuildPipeline`` directly, so that pipeline has
+    to take the snapshot itself. The two are alternative entry points, never
+    both run for one build, so this is not a duplicate of the step above.
+    """
+    from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (
+        DeltaTripleStoreBuildPipeline,
+    )
+
+    pipe = object.__new__(DeltaTripleStoreBuildPipeline)
+    pipe.tm = _StubTM()
+    pipe.task_id = "t-test"
+    pipe.view_table = "cat.sch.triplestore_dom_V3"
+    pipe.data_table = "cat.sch.triplestore_dom_V3_data"
+    pipe.source_client = MagicMock()
+    pipe.start_time = time.time()
+    pipe.triple_count = 0
+    pipe._count_view_triples = MagicMock(return_value=5)
+
+    calls = []
+    with patch(
+        "back.core.graphdb.delta.materialize.materialize_from_view",
+        side_effect=lambda client, view, table: calls.append((view, table)),
+    ):
+        assert pipe._materialize_data_table() is True
+
+    assert calls == [(
+        "cat.sch.triplestore_dom_V3",
+        "cat.sch.triplestore_dom_V3_data",
+    )]
