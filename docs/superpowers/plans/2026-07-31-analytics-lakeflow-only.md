@@ -65,17 +65,17 @@ SQLite database holding a `triples` table, runs `run_analysis` against it, and
 compares the result with NetworkX. Reuse its existing seeding harness — do not
 add a second one.
 
-Add one shared reader next to the existing fixtures. Tasks 2 and 3 both use it,
-so it takes the table suffix and the class filter as arguments:
+Add one shared reader next to the existing fixtures. Task 2 uses it too, so it
+takes the table suffix as an argument:
 
 ```python
-def _table_rows(tmp_path, triples, *, suffix="", class_filter=None):
+def _table_rows(tmp_path, triples, *, suffix=""):
     """Run the job over *triples*, return one output table as a list of dicts.
 
     ``suffix`` selects which output table to read: "" is the per-node table,
     "_summary" / "_type_profiles" / "_type_predicates" the others.
     """
-    conn, builder = _run_job(tmp_path, triples, class_filter=class_filter)
+    conn, builder = _run_job(tmp_path, triples)
     cur = conn.execute(f"SELECT * FROM {builder.output_table}{suffix}")
     names = [d[0] for d in cur.description]
     return [dict(zip(names, r)) for r in cur.fetchall()]
@@ -84,10 +84,9 @@ def _table_rows(tmp_path, triples, *, suffix="", class_filter=None):
 `_run_job` is whatever the file already calls to build the SQLite connection and
 the `GraphAnalyticsSQL` builder and drive `run_analysis`. If it does not return
 both the connection and the builder, widen its return value rather than writing
-a parallel harness. `class_filter` is threaded now so Task 3 does not have to
-reopen this helper; `GraphAnalyticsSQL` ignores it until Task 3 adds the field,
-so pass it through only once that field exists — until then the parameter is
-accepted and unused.
+a parallel harness. (Task 3 adds a `class_filter` argument to both helpers when
+it adds the field they would forward it to — do not add the parameter now, while
+nothing can consume it.)
 
 Now the test:
 
@@ -331,19 +330,49 @@ Next to `node_count_query`:
 
 ```python
     def total_node_count_query(self) -> str:
-        """Every distinct subject in the source, connected or not.
+        """Every distinct entity URI in the source, connected or not.
 
         ``node_count`` counts only nodes that survived edge construction, so a
         domain of fully isolated instances would otherwise report zero nodes and
         look broken rather than flat.
+
+        Read straight from the source rather than from the degree table: this is
+        a population total, and a total that moved when the user narrowed the
+        run would be indefensible. Neither per-run filter may reach it — not the
+        class filter, and not ``excluded_predicates`` either, which the app sets
+        per request.
+
+        An entity is anything appearing as a subject, or as a URI object of a
+        predicate that can carry one. The predicate test uses the fixed
+        metadata list rather than ``self.excluded_predicates`` for exactly that
+        reason, and applies to the object side only: a subject is an entity
+        whatever it carries, while ``rdf:type``'s object is a class and
+        ``rdfs:label``'s is a literal.
         """
         return (
-            f"SELECT COUNT(*) AS n FROM ("
-            f"SELECT DISTINCT subject AS n FROM {self.source_table}"
-            f" WHERE subject <> ''"
+            f"SELECT COUNT(*) AS n FROM (\n"
+            f"  SELECT DISTINCT subject AS n FROM {self.source_table}\n"
+            f"  WHERE subject <> ''\n"
+            f"  UNION\n"
+            f"  SELECT DISTINCT object AS n FROM {self.source_table}\n"
+            f"  WHERE object <> ''\n"
+            f"    AND (object LIKE 'http://%' OR object LIKE 'https://%')\n"
+            f"    AND predicate NOT IN "
+            f"({_in_list(list(DEFAULT_EXCLUDED_PREDICATES))})\n"
             f") s"
         )
 ```
+
+`UNION` (not `UNION ALL`) does the deduplication across the two sides. The
+`LIKE` pair is the same literal-object test `build_edges` uses, so
+`(a, ex:age, "41")` contributes no phantom entity.
+
+The regression test must prove the *property*, not just the number: seed a
+source where one entity appears **only as an object**, run the job twice with
+different `excluded_predicates` (one of them excluding the predicate that links
+to that entity), and assert `total_node_count` is identical both times. A test
+whose entities are all subjects would pass against the degree-table
+implementation too, and so proves nothing.
 
 - [ ] **Step 5: Add the two output-table builders**
 
@@ -468,12 +497,15 @@ Three edits in `run_analysis`:
             f"  0.0 AS clustering,\n"
             f"  0.0 AS betweenness,\n"
             f"  0.0 AS closeness,\n"
-            f"  CAST(NULL AS STRING) AS type_uri,\n"
-            f"  CAST(NULL AS STRING) AS label\n"
+            f"  CAST(NULL AS VARCHAR) AS type_uri,\n"
+            f"  CAST(NULL AS VARCHAR) AS label\n"
             f"FROM {self.deg} d\n"
             f"WHERE 1 = 0",
         )
 ```
+
+`VARCHAR`, not `STRING`: `STRING` is Spark-specific and the dialect parse test
+rejects it on Postgres. `VARCHAR` parses on all three dialects and on SQLite.
 
 3. On the normal path, after the `write_output` loop and before `write_summary`:
 
@@ -487,13 +519,25 @@ Three edits in `run_analysis`:
 Order matters: `type_profiles` reads `self.output_table`, so it must run after
 `write_output`.
 
-- [ ] **Step 8: Run the tests**
+- [ ] **Step 8: Register the new SQL with the dialect parse test**
+
+`tests/units/core/test_graph_analytics_job_sql.py` has a `TestJobSqlDialects`
+class whose `_all_statements` helper collects every statement the builder can
+generate and parses each against the Spark, Databricks and Postgres dialects.
+New builders are invisible to it until they are listed there, so add
+`write_empty_output()`, `type_profiles()`, `type_predicates()` and
+`total_node_count_query()`.
+
+This is the guard that catches accidentally Spark-only SQL, so a new builder
+missing from it is a silent hole rather than a missing nicety.
+
+- [ ] **Step 9: Run the tests**
 
 Run: `env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH uv run pytest tests/units/core/test_graph_analytics_job_sql.py -v`
 
 Expected: PASS, all tests including the pre-existing NetworkX parity ones.
 
-- [ ] **Step 9: Add an empty-graph regression test**
+- [ ] **Step 10: Add an empty-graph regression test**
 
 ```python
 def test_flat_source_still_gets_profiles(tmp_path):
@@ -513,7 +557,7 @@ def test_flat_source_still_gets_profiles(tmp_path):
 
 Run the same pytest command. Expected: PASS.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add src/jobs/graph_analytics_job.py tests/units/core/test_graph_analytics_job_sql.py
@@ -1371,7 +1415,9 @@ class JobMetrics:
 ```
 
 Fix the imports at the top of the module: drop `PushdownMetrics`, add
-`EntityTypeProfile` and `MetricsStats` to the `models` import, add
+`EntityTypeProfile` to the `models` import (`MetricsStats` is not needed —
+`MetricsResult.stats` has a `default_factory`, so `MetricsResult(mode=MODE_JOB)`
+already carries a zeroed `MetricsStats`), add
 `from back.core.graph_analysis.profiles import flat_reasons, has_temporal_predicates`,
 and add `Set` to the `typing` import.
 
@@ -1994,6 +2040,13 @@ there is only one:
 #: "pushdown"; the read path must tolerate an unknown string.
 MODE_JOB = "job"
 ```
+
+The `MetricsResult` class docstring (lines 148-169) explains `nodes` in terms of
+`in_memory` versus `pushdown` mode, and `approximate_metrics` in terms of "``job``
+mode" as one option among several. Rewrite both paragraphs for a single mode:
+`nodes` is always the bounded top-N slice (`Settings.analytics_top_n`), and
+`stats.node_count` remains the true total, so a node count must never be derived
+from `len(nodes)`.
 
 - [ ] **Step 5: Delete the pushdown setting**
 
