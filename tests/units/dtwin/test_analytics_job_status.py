@@ -1,10 +1,15 @@
 """Why job mode is unavailable has to reach the user, not just the logs.
 
 An admin who has already ticked "Compute large-graph metrics on Databricks" and
-is still told to go and tick it has been given no information. Each of the three
-prerequisites has a different remedy, so ``_analytics_job_status`` reports which
-one is missing. ``resolve_analytics_source`` already writes those strings for a
-reader; the endpoint used to discard them with ``[0]``.
+is still told to go and tick it has been given no information. Each prerequisite
+has a different remedy, so ``_analytics_job_status`` reports which one is
+missing. ``resolve_analytics_source`` already writes those strings for a reader;
+the endpoint used to discard them with ``[0]``.
+
+The check is split in two on cost. ``_analytics_job_configured`` is the three
+free checks and is what the stats payload calls on every page render;
+``_analytics_job_status`` adds the warehouse probe and is for the caller about to
+launch a job.
 """
 
 from __future__ import annotations
@@ -14,7 +19,10 @@ from unittest.mock import patch
 
 import pytest
 
-from api.routers.internal.dtwin import _analytics_job_status
+from api.routers.internal.dtwin import (
+    _analytics_job_configured,
+    _analytics_job_status,
+)
 
 MODULE = "api.routers.internal.dtwin"
 
@@ -90,6 +98,13 @@ class TestEachCauseIsNamed:
         assert available is False
         assert "Build" in reason
 
+    def test_an_unreachable_warehouse_does_not_blame_the_build(self):
+        """Rebuilding a domain does not wake a sleeping warehouse."""
+        available, reason = _status(has_rows=None)
+        assert available is False
+        assert "retry" in reason.lower()
+        assert "Build" not in reason
+
     @pytest.mark.parametrize(
         "kwargs",
         [
@@ -103,6 +118,28 @@ class TestEachCauseIsNamed:
         available, reason = _status(**kwargs)
         assert available is False
         assert reason != ""
+
+
+class TestTheCheapCheckStaysCheap:
+    """The stats payload renders on every page; it must not hit the warehouse."""
+
+    def test_the_probe_is_never_run(self):
+        with patch(
+            f"{MODULE}.resolve_analytics_job_enabled", return_value=True
+        ), patch(
+            f"{MODULE}.resolve_analytics_job_name", return_value="some-job"
+        ), patch(
+            f"{MODULE}.resolve_analytics_source", return_value=("cat.sch.tbl", "")
+        ), patch(
+            f"{MODULE}._data_table_has_rows"
+        ) as probe:
+            assert _analytics_job_configured(object(), _Settings()) == (True, "")
+        probe.assert_not_called()
+
+    def test_the_stats_endpoint_uses_it(self):
+        assert (
+            "_analytics_job_configured(domain, settings)" in ROUTER.read_text()
+        )
 
 
 class TestCauseOrdering:

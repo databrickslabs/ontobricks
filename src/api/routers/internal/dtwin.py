@@ -467,13 +467,15 @@ async def detect_clusters(
 # ===========================================
 
 
-def _data_table_has_rows(domain, settings, table: str) -> bool:
+def _data_table_has_rows(domain, settings, table: str) -> Optional[bool]:
     """Whether the mapped snapshot exists and holds at least one triple.
 
     A ``…_data`` that is absent and one that is empty have the same remedy —
-    build the domain — so they are one check.
+    build the domain — so they are one check. ``None`` means the probe could not
+    reach the warehouse at all, which is a different situation entirely: telling
+    someone to rebuild a domain because the warehouse was asleep sends them off
+    to fix something that was never broken.
     """
-    from back.core.databricks import DatabricksClient
     from back.core.helpers import (
         get_databricks_host_and_token,
         resolve_delta_warehouse_id,
@@ -489,16 +491,17 @@ def _data_table_has_rows(domain, settings, table: str) -> bool:
         rows = client.execute_query(f"SELECT 1 AS ok FROM {table} LIMIT 1")
         return bool(rows)
     except Exception as exc:  # noqa: BLE001
-        logger.debug("mapped-snapshot probe failed for %s: %s", table, exc)
-        return False
+        logger.warning("mapped-snapshot probe failed for %s: %s", table, exc)
+        return None
 
 
-def _analytics_job_status(domain, settings) -> Tuple[bool, str]:
-    """Return ``(analytics_available, reason_it_is_not)`` for this domain.
+def _analytics_job_configured(domain, settings) -> Tuple[bool, str]:
+    """Return ``(configured, reason_it_is_not)`` without touching the warehouse.
 
-    Analytics needs three things: the admin toggle, a resolvable job name, and
-    the mapped snapshot the job reads. Each has a different remedy, so the
-    caller gets the specific one rather than a bare ``False``.
+    The three checks that cost nothing: the admin toggle, a resolvable job name,
+    and a resolvable snapshot table. Callers that only need to know whether
+    analytics *could* run — the stats payload, which renders on every page —
+    stop here rather than paying a SQL round-trip on a possibly cold warehouse.
 
     The reason is empty whenever the toggle is off, because then nothing is
     broken: not using the job is the configured behaviour.
@@ -519,7 +522,28 @@ def _analytics_job_status(domain, settings) -> Tuple[bool, str]:
             "No mapped-triples table could be resolved for this domain."
         )
 
-    if not _data_table_has_rows(domain, settings, source):
+    return True, ""
+
+
+def _analytics_job_status(domain, settings) -> Tuple[bool, str]:
+    """Return ``(analytics_available, reason_it_is_not)`` for this domain.
+
+    :func:`_analytics_job_configured` plus a probe that the snapshot actually
+    holds triples. The probe costs a warehouse round-trip, so this is for the
+    caller about to spend far more than that on a job run.
+    """
+    configured, reason = _analytics_job_configured(domain, settings)
+    if not configured:
+        return False, reason
+
+    source, _ = resolve_analytics_source(domain, settings)
+    has_rows = _data_table_has_rows(domain, settings, source)
+    if has_rows is None:
+        return False, (
+            f"The mapped-triples table {source} could not be reached. The SQL "
+            f"warehouse may be starting up — retry in a moment."
+        )
+    if not has_rows:
         return False, (
             f"The mapped-triples table {source} is missing or empty. Run "
             f"Knowledge Graph → Build to materialise it, then retry."
@@ -1504,7 +1528,7 @@ async def triplestore_stats(
 
         classified = DigitalTwin(domain).classify_predicates(top_predicates)
 
-        job_available, job_blocked_reason = _analytics_job_status(domain, settings)
+        job_available, job_blocked_reason = _analytics_job_configured(domain, settings)
 
         result = {
             "success": True,

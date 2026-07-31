@@ -149,3 +149,60 @@ It has been restored, and both pipelines now materialise for the builds they own
 ## Test Result
 
 `pytest -q -m "not scenario"` → **3802 passed, 275 skipped, 0 failed**
+
+---
+
+# Task 8: one compute path, and a preflight that stays cheap
+
+## Context
+
+This is where "the Lakeflow job is the only compute path" becomes true in the
+code rather than just in the design. The `mode` argument, the `store` parameter,
+`max_triples` and `allow_pushdown_fallback` are gone from
+`compute_graph_metrics` and `run_metrics_task`, and so is the fallback Task 6
+left behind: a failed job run used to answer with SQL-pushdown numbers, which is
+the worst possible outcome — the user sees plausible figures computed by a
+different algorithm and has no way to tell. A failed run now raises.
+
+The review of the first pass caught two problems with the new snapshot probe.
+It ran from the stats payload, which renders on every page, so every uncached
+page view paid a SQL round-trip that can take tens of seconds against a cold
+warehouse. And it swallowed every exception into "the table is missing or empty.
+Run Build", sending someone off to rebuild a domain when the real cause was a
+sleeping warehouse or a permissions gap. Both are fixed below.
+
+## Changes
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py` — `compute_graph_metrics` and
+   `run_metrics_task` lost `store`, `mode`, `max_triples`,
+   `max_nodes_betweenness` and `allow_pushdown_fallback`. The pushdown fallback
+   is deleted; the method is now resolve-source → build → compute, and any
+   failure propagates.
+2. `src/api/routers/internal/dtwin.py` — Split the preflight in two.
+   `_analytics_job_configured` is the three checks that cost nothing (toggle, job
+   name, resolvable snapshot) and is what the stats payload calls;
+   `_analytics_job_status` adds the warehouse probe and is called only where a job
+   run is about to be launched. `_data_table_has_rows` now returns `None` when the
+   probe itself failed, which produces a "retry in a moment" reason instead of
+   blaming the Build, and logs at WARNING so an operator can see it. The
+   `POST /metrics/compute` endpoint lost its mode selection and oversized branch;
+   the stats payload lost `analytics_max_triples` and
+   `analytics_pushdown_available`.
+3. `tests/units/dtwin/test_analytics_job_status.py` — Added the unreachable-probe
+   case (must not say "Build"), and two tests pinning that the cheap check never
+   probes and that the stats endpoint is the caller using it.
+4. `tests/units/dtwin/test_dtwin_analytics.py`, `tests/units/api/test_dtwin_analytics.py`
+   — Tests that a failed job run propagates rather than degrading, and that the
+   source table is wired through to the runner.
+
+## Modified Files
+
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `tests/units/dtwin/test_analytics_job_status.py`
+- `tests/units/dtwin/test_dtwin_analytics.py`
+- `tests/units/api/test_dtwin_analytics.py` (new)
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3809 passed, 275 skipped, 0 failed**
