@@ -162,6 +162,14 @@ class GraphAnalyticsSQL:
         return f"{self.output_table}_summary"
 
     @property
+    def type_profiles_table(self) -> str:
+        return f"{self.output_table}_type_profiles"
+
+    @property
+    def type_predicates_table(self) -> str:
+        return f"{self.output_table}_type_predicates"
+
+    @property
     def pivots(self) -> str:
         return f"{self.work_prefix}_pivots"
 
@@ -263,6 +271,24 @@ class GraphAnalyticsSQL:
 
     def node_count_query(self) -> str:
         return f"SELECT COUNT(*) AS n FROM {self.deg}"
+
+    def total_node_count_query(self) -> str:
+        """Every distinct entity: subjects from the source plus scored nodes.
+
+        ``node_count`` counts only nodes that survived edge construction. A
+        subject that has no entity-entity edges (isolated) never enters the
+        degree table, so ``node_count`` would miss it. Conversely, a URI that
+        only appears as an edge target is in the degree table but not the
+        source as a subject. The union of both sets is the full population.
+        """
+        return (
+            f"SELECT COUNT(*) AS n FROM ("
+            f"SELECT DISTINCT subject AS n FROM {self.source_table}"
+            f" WHERE subject <> ''"
+            f" UNION"
+            f" SELECT DISTINCT n FROM {self.deg}"
+            f") s"
+        )
 
     def edge_count_query(self) -> str:
         return f"SELECT COUNT(*) AS n FROM {self.edges}"
@@ -557,6 +583,15 @@ class GraphAnalyticsSQL:
             f"GROUP BY subject"
         )
 
+    def type_population_select(self) -> str:
+        """Instance count per type over the whole source, isolated included."""
+        return (
+            f"SELECT object AS type_uri, COUNT(DISTINCT subject) AS instance_count\n"
+            f"FROM {self.source_table}\n"
+            f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''\n"
+            f"GROUP BY object"
+        )
+
     def write_output(
         self,
         pagerank_slot: str,
@@ -631,10 +666,86 @@ class GraphAnalyticsSQL:
             + pivot_joins,
         )
 
+    def write_empty_output(self) -> List[str]:
+        """An empty per-node output, for a source with no entity-entity edges.
+
+        The read-back then never has to distinguish "no edges" from "the job
+        did not get that far", and ``type_profiles`` can join unconditionally.
+        """
+        return self._recreate(
+            self.output_table,
+            f"SELECT\n"
+            f"  d.n AS node_uri,\n"
+            f"  d.d AS degree_raw,\n"
+            f"  0.0 AS degree,\n"
+            f"  0.0 AS pagerank,\n"
+            f"  CAST(NULL AS BIGINT) AS component_id,\n"
+            f"  0.0 AS clustering,\n"
+            f"  0.0 AS betweenness,\n"
+            f"  0.0 AS closeness,\n"
+            f"  CAST(NULL AS STRING) AS type_uri,\n"
+            f"  CAST(NULL AS STRING) AS label\n"
+            f"FROM {self.deg} d\n"
+            f"WHERE 1 = 0",
+        )
+
+    # -- stage 7: per-type rollups --------------------------------------
+    def type_profiles(self) -> List[str]:
+        """One row per entity type, joining the population to the scored nodes.
+
+        ``instance_count`` comes from the source so isolated instances are
+        counted, which is what makes the "flat dataset" heuristic meaningful:
+        a type with 5,000 instances and no relationships must be visible.
+        ``connected_count`` and the averages come from the output table, so
+        they describe exactly the graph that was scored.
+        """
+        return self._recreate(
+            self.type_profiles_table,
+            f"SELECT\n"
+            f"  pop.type_uri AS type_uri,\n"
+            f"  pop.instance_count AS instance_count,\n"
+            f"  COALESCE(m.connected_count, 0) AS connected_count,\n"
+            f"  COALESCE(m.degree_sum, 0) AS degree_sum,\n"
+            f"  COALESCE(m.avg_clustering, 0.0) AS avg_clustering,\n"
+            f"  COALESCE(m.avg_betweenness, 0.0) AS avg_betweenness\n"
+            f"FROM ({self.type_population_select()}) pop\n"
+            f"LEFT JOIN (\n"
+            f"  SELECT type_uri,\n"
+            f"         COUNT(*) AS connected_count,\n"
+            f"         SUM(degree_raw) AS degree_sum,\n"
+            f"         AVG(clustering) AS avg_clustering,\n"
+            f"         AVG(betweenness) AS avg_betweenness\n"
+            f"  FROM {self.output_table}\n"
+            f"  WHERE type_uri IS NOT NULL\n"
+            f"  GROUP BY type_uri\n"
+            f") m ON m.type_uri = pop.type_uri",
+        )
+
+    def type_predicates(self) -> List[str]:
+        """Distinct ``(type, predicate)`` pairs over entity-entity edges.
+
+        Rows rather than an array column: ``collect_set`` has no SQLite
+        equivalent, and the test harness runs this same SQL.
+
+        The predicate filter mirrors ``build_edges`` exactly, so a predicate
+        that forms no edge never shows up as a type's relationship.
+        """
+        return self._recreate(
+            self.type_predicates_table,
+            f"SELECT DISTINCT ty.type_uri AS type_uri, s.predicate AS predicate\n"
+            f"FROM {self.source_table} s\n"
+            f"JOIN ({self.node_type_select()}) ty ON ty.n = s.subject\n"
+            f"WHERE s.object <> ''\n"
+            f"  AND s.subject <> s.object\n"
+            f"  AND (s.object LIKE 'http://%' OR s.object LIKE 'https://%')\n"
+            f"  AND s.predicate NOT IN ({_in_list(self.excluded_predicates)})",
+        )
+
     def write_summary(self, stats: Dict[str, object]) -> List[str]:
         """Write the one-row run summary the app reads for the aggregates."""
         columns = [
             f"{int(stats['node_count'])} AS node_count",
+            f"{int(stats.get('total_node_count', 0) or 0)} AS total_node_count",
             f"{int(stats['edge_count'])} AS edge_count",
             f"{int(stats['component_count'])} AS component_count",
             f"{'true' if stats['components_converged'] else 'false'}"
@@ -683,11 +794,13 @@ def run_analysis(
 
     node_count = int(scalar(builder.node_count_query()) or 0)
     edge_count = int(scalar(builder.edge_count_query()) or 0)
+    total_node_count = int(scalar(builder.total_node_count_query()) or 0)
     logger.info("graph: %d nodes, %d edges", node_count, edge_count)
 
     if node_count == 0:
         stats = {
             "node_count": 0,
+            "total_node_count": total_node_count,
             "edge_count": 0,
             "component_count": 0,
             "components_converged": True,
@@ -697,6 +810,10 @@ def run_analysis(
             "bfs_complete": True,
             "source_table": builder.source_table,
         }
+        for stmt in builder.write_empty_output():
+            execute(stmt)
+        for stmt in builder.type_profiles() + builder.type_predicates():
+            execute(stmt)
         for stmt in builder.write_summary(stats):
             execute(stmt)
         return stats
@@ -754,8 +871,12 @@ def run_analysis(
     ):
         execute(stmt)
 
+    for stmt in builder.type_profiles() + builder.type_predicates():
+        execute(stmt)
+
     stats: Dict[str, object] = {
         "node_count": node_count,
+        "total_node_count": total_node_count,
         "edge_count": edge_count,
         "component_count": component_count,
         "components_converged": converged,

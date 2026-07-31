@@ -586,6 +586,74 @@ class TestSqlInjectionEscaping:
         assert "it''s" in sql
 
 
+def test_type_profiles_cover_isolated_and_connected_instances(tmp_path):
+    """instance_count is the full population; the rest covers scored nodes."""
+    triples = [
+        ("http://ex/a", "http://ex/knows", "http://ex/b"),
+        ("http://ex/a", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/b", RDF_TYPE, "http://ex/Person"),
+        # Typed but with no entity-entity edge: counted, never scored.
+        ("http://ex/c", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/c", RDFS_LABEL, "Carol"),
+    ]
+    profiles = _table_rows(tmp_path, triples, suffix="_type_profiles")
+
+    assert len(profiles) == 1
+    row = profiles[0]
+    assert row["type_uri"] == "http://ex/Person"
+    assert row["instance_count"] == 3     # a, b, c
+    assert row["connected_count"] == 2    # a, b
+    assert row["degree_sum"] == 2         # one undirected edge, two endpoints
+    assert row["avg_clustering"] == 0.0
+
+
+def test_type_predicates_are_distinct_and_exclude_metadata(tmp_path):
+    """rdf:type and rdfs:label never count as relationship predicates."""
+    triples = [
+        ("http://ex/a", "http://ex/knows", "http://ex/b"),
+        ("http://ex/a", "http://ex/knows", "http://ex/c"),
+        ("http://ex/a", "http://ex/owns", "http://ex/b"),
+        ("http://ex/a", RDF_TYPE, "http://ex/Person"),
+        ("http://ex/a", RDFS_LABEL, "Alice"),
+        # A literal object is not a relationship.
+        ("http://ex/a", "http://ex/age", "41"),
+    ]
+    rows = _table_rows(tmp_path, triples, suffix="_type_predicates")
+
+    pairs = {(r["type_uri"], r["predicate"]) for r in rows}
+    assert pairs == {
+        ("http://ex/Person", "http://ex/knows"),
+        ("http://ex/Person", "http://ex/owns"),
+    }
+
+
+def test_summary_reports_total_and_connected_node_counts(tmp_path):
+    """node_count is the scored graph; total_node_count is every subject."""
+    triples = [
+        ("http://ex/a", "http://ex/knows", "http://ex/b"),
+        ("http://ex/c", RDF_TYPE, "http://ex/Person"),  # isolated subject
+    ]
+    summary = _table_rows(tmp_path, triples, suffix="_summary")[0]
+
+    assert summary["node_count"] == 2        # a, b
+    assert summary["total_node_count"] == 3  # a, b, c
+
+
+def test_flat_source_still_gets_profiles(tmp_path):
+    """A source with no entity-entity edges still reports its types."""
+    triples = [
+        ("http://ex/a", RDF_TYPE, "http://ex/Reading"),
+        ("http://ex/a", "http://ex/value", "41"),
+        ("http://ex/b", RDF_TYPE, "http://ex/Reading"),
+    ]
+    profiles = _table_rows(tmp_path, triples, suffix="_type_profiles")
+
+    assert len(profiles) == 1
+    assert profiles[0]["instance_count"] == 2
+    assert profiles[0]["connected_count"] == 0
+    assert _table_rows(tmp_path, triples, suffix="_type_predicates") == []
+
+
 class TestJobSqlDialects:
     """The generated statements must parse as Spark SQL and Postgres."""
 
