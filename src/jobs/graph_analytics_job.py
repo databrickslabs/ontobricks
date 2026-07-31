@@ -279,16 +279,18 @@ class GraphAnalyticsSQL:
         domain of fully isolated instances would otherwise report zero nodes and
         look broken rather than flat.
 
-        Read straight from the source rather than from the degree table, and
-        deliberately ignoring both filters: this is a population total, and a
-        total that moved when the user picked an entity type would be
-        indefensible. An entity is anything appearing as a subject or as a URI
-        object.
+        Read straight from the source rather than from the degree table: this is
+        a population total, and a total that moved when the user narrowed the
+        run would be indefensible. Neither per-run filter may reach it — not the
+        class filter, and not ``excluded_predicates`` either, which the app sets
+        per request.
 
-        The object side excludes excluded predicates (rdf:type, rdfs:label) so
-        that class URIs and annotation values are not counted as entities — only
-        the subject side accepts triples regardless of predicate, because a
-        subject is an entity no matter which predicate it carries.
+        An entity is anything appearing as a subject, or as a URI object of a
+        predicate that can carry one. The predicate test uses the fixed
+        metadata list rather than ``self.excluded_predicates`` for exactly that
+        reason, and applies to the object side only: a subject is an entity
+        whatever it carries, while ``rdf:type``'s object is a class and
+        ``rdfs:label``'s is a literal.
         """
         return (
             f"SELECT COUNT(*) AS n FROM (\n"
@@ -298,7 +300,8 @@ class GraphAnalyticsSQL:
             f"  SELECT DISTINCT object AS n FROM {self.source_table}\n"
             f"  WHERE object <> ''\n"
             f"    AND (object LIKE 'http://%' OR object LIKE 'https://%')\n"
-            f"    AND predicate NOT IN ({_in_list(self.excluded_predicates)})\n"
+            f"    AND predicate NOT IN "
+            f"({_in_list(list(DEFAULT_EXCLUDED_PREDICATES))})\n"
             f") s"
         )
 
@@ -695,8 +698,8 @@ class GraphAnalyticsSQL:
             f"  0.0 AS clustering,\n"
             f"  0.0 AS betweenness,\n"
             f"  0.0 AS closeness,\n"
-            f"  CAST(NULL AS STRING) AS type_uri,\n"
-            f"  CAST(NULL AS STRING) AS label\n"
+            f"  CAST(NULL AS VARCHAR) AS type_uri,\n"
+            f"  CAST(NULL AS VARCHAR) AS label\n"
             f"FROM {self.deg} d\n"
             f"WHERE 1 = 0",
         )
@@ -747,7 +750,8 @@ class GraphAnalyticsSQL:
             f"SELECT DISTINCT ty.type_uri AS type_uri, s.predicate AS predicate\n"
             f"FROM {self.source_table} s\n"
             f"JOIN ({self.node_type_select()}) ty ON ty.n = s.subject\n"
-            f"WHERE s.object <> ''\n"
+            f"WHERE s.subject <> ''\n"
+            f"  AND s.object <> ''\n"
             f"  AND s.subject <> s.object\n"
             f"  AND (s.object LIKE 'http://%' OR s.object LIKE 'https://%')\n"
             f"  AND s.predicate NOT IN ({_in_list(self.excluded_predicates)})",

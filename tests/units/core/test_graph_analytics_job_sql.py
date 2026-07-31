@@ -640,25 +640,26 @@ def test_summary_reports_total_and_connected_node_counts(tmp_path):
 
 
 def test_total_node_count_comes_from_source_not_degree_table(tmp_path):
-    """total_node_count is read from the source, not the filtered degree table.
+    """total_node_count is stable under per-run predicate exclusions.
 
-    Subjects that have no entity-entity edges under ANY exclusion set must still
-    be counted — they never enter the degree table, so a deg-based total would
-    silently undercount them.  Two separate runs with different exclusion lists
-    are used to show that subject-based counting is stable.
+    ``obj_only`` appears only as an object of ``http://ex/rel``, never as a
+    subject, so the subject-side of the union cannot count it.  Run 2 excludes
+    ``http://ex/rel`` from edge construction.  Under the old implementation
+    (using ``self.excluded_predicates`` on the object side) ``obj_only`` would
+    vanish from run 2's total because the object side would filter it out;
+    under the correct implementation (using ``DEFAULT_EXCLUDED_PREDICATES``) it
+    is always counted, and both runs must agree.
     """
-    # a, b, c are all subjects; c's only predicate (rdf:type) is always excluded,
-    # so c is fully isolated and will never appear in the degree table.
     triples = [
-        ("http://ex/a", "http://ex/knows", "http://ex/b"),
-        ("http://ex/b", "http://ex/knows", "http://ex/a"),  # b is also a subject
-        ("http://ex/c", RDF_TYPE, "http://ex/Person"),       # fully isolated subject
+        {"subject": "http://ex/a", "predicate": "http://ex/rel", "object": "http://ex/b"},
+        # obj_only never appears as a subject; it can only be counted via the
+        # object side of the UNION — which must use the fixed metadata list,
+        # not the per-run excluded_predicates.
+        {"subject": "http://ex/a", "predicate": "http://ex/rel", "object": "http://ex/obj_only"},
     ]
 
     def _total(excluded):
-        runner = SqliteRunner([
-            {"subject": s, "predicate": p, "object": o} for s, p, o in triples
-        ])
+        runner = SqliteRunner(triples)
         builder = GraphAnalyticsSQL(
             source_table="triples",
             work_prefix="w",
@@ -671,13 +672,12 @@ def test_total_node_count_comes_from_source_not_degree_table(tmp_path):
         ).fetchone()[0]
 
     default = list(DEFAULT_EXCLUDED_PREDICATES)
-    # Excluding http://ex/knows collapses the degree table to zero rows (no
-    # remaining entity-entity edges).  A total read from the degree table would
-    # drop to at most the subject count.  The correct answer is 3 in both cases.
-    also_exclude_knows = default + ["http://ex/knows"]
+    # Excluding http://ex/rel eliminates every entity-entity edge, so the
+    # degree table is empty on run 2.  The population total must not shrink.
+    also_exclude_rel = default + ["http://ex/rel"]
 
-    assert _total(default) == 3            # a, b, c
-    assert _total(also_exclude_knows) == 3  # still a, b, c — all three are subjects
+    assert _total(default) == 3            # a, b, obj_only
+    assert _total(also_exclude_rel) == 3   # same — obj_only is still in the source
 
 
 def test_flat_source_still_gets_profiles(tmp_path):
@@ -734,7 +734,11 @@ class TestJobSqlDialects:
                 "source_table": "cat.sch.triples",
             }
         )
+        statements += builder.write_empty_output()
+        statements += builder.type_profiles()
+        statements += builder.type_predicates()
         statements += [
+            builder.total_node_count_query(),
             builder.node_count_query(),
             builder.edge_count_query(),
             builder.components_changed_query("a", "b"),
