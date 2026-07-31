@@ -252,21 +252,12 @@ class DeltaTripleStoreBuildPipeline:
             self._record_build_run("success", message=msg)
             return False
 
-        try:
-            materialize.materialize_from_view(
-                self.source_client, self.view_table, self.data_table
-            )
-            self.tm.update_progress(
-                self.task_id,
-                85,
-                f"Materialized {self.triple_count} triples",
-            )
-            return True
-        except Exception as exc:  # noqa: BLE001
-            self.tm.fail_task(
-                self.task_id, f"Failed to materialize Delta table: {exc}"
-            )
-            return False
+        self.tm.update_progress(
+            self.task_id,
+            85,
+            f"Counted {self.triple_count} triples",
+        )
+        return True
 
     def _ensure_inferred_companion(self) -> None:
         if not self.inferred_table:
