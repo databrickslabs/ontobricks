@@ -339,3 +339,75 @@ the truth, and an operator reads this file to decide how to configure a deploy.
 ## Test Result
 
 `pytest -q -m "not scenario"` → **3764 passed, 275 skipped, 1 xfailed, 0 failed**
+
+---
+
+# Deploy and end-to-end verification of Lakeflow-only analytics
+
+## Context
+
+The Lakeflow-only analytics work replaced three compute paths with one, so the
+only verification that means anything is a real run against a real graph. Unit
+tests assert the SQL a given input produces; they cannot tell us the job's own
+`bfs_complete` flag flips on the graph that originally reported it false, nor
+that the two new output tables agree with the source data.
+
+The subject is the domain that produced the original bug report:
+`benoit_cayla.ontobricks.triplestore_bigcustomers_v1_data` — 7,641,879 triples
+over 1,350,051 subjects.
+
+## Changes
+
+No code changes. `make deploy` shipped the app, the MCP server and the job
+bundle; the rest of this entry is the verification record.
+
+1. Deploy — both apps returned to `RUNNING`, Lakebase and UC grants reapplied,
+   registry migrations idempotent.
+2. Job definition — the deployed job carries the two new parameters with the
+   intended defaults (`max_depth = 32`, `class_filter = ''`) and forwards both
+   to `spark_python_task` as `--max-depth` / `--class-filter`.
+3. Deployed script — the workspace copy of `src/jobs/graph_analytics_job.py`
+   contains `merge_excluded_predicates`, `type_profiles`, `type_predicates`,
+   `node_label_select`, `total_node_count` and `DEFAULT_MAX_DEPTH = 32`, so the
+   bundle shipped this branch and not a cached earlier build.
+4. Full run (`run_id 1073016770999708`, ~12 min, SUCCESS) — **`bfs_complete =
+   true`**, the original defect fixed: 460,811 nodes with non-zero betweenness
+   and 1,305,748 with non-zero closeness, where both were withheld before.
+5. `clustering = 0` is correct, not a second bug. A triangle count run directly
+   against the source data — independent of the job's own output — returns 0,
+   so the graph is genuinely triangle-free and zero is the right answer.
+6. New output tables cross-check against the source. The eight type populations
+   in `_type_profiles` sum to exactly 1,350,051, matching `total_node_count`.
+   `Customer` reports 100,000 instances but 99,151 connected, and that 849 gap
+   equals `total_node_count - node_count` exactly. `Agent` (51 nodes) carries
+   the highest average betweenness, which is what the 224,860 interactions it
+   handles should produce. `_type_predicates` lists per-type outgoing predicates.
+7. `class_filter` run (`run_id 96951766871503`, ~7 min, SUCCESS) — the induced
+   subgraph over Customer/Interaction/Agent scores 341,817 nodes and 399,860
+   edges, the latter matching `Interaction.degree_sum` from the unfiltered run.
+   `_type_profiles` narrows to exactly the three requested types, and
+   `Customer.connected_count` drops 99,151 → 91,766 as customers reachable only
+   through contracts and claims fall out of the subgraph.
+8. `total_node_count` stayed 1,350,051 across both runs, confirming live the
+   design decision that the denominator is stable under per-run filters.
+9. Scratch output tables (`graph_metrics_verify_1*`, `graph_metrics_verify_cf*`)
+   dropped; the app's live `graph_metrics_bigcustomers_1*` was never touched.
+
+## Observations for follow-up
+
+Domains built before this version have no `…_data` snapshot — of the domains in
+`benoit_cayla.ontobricks`, only `bigcustomers_v1` and `cust360auto_v5` have one.
+Analytics hard-fails on the others with the banner naming a rebuild as the
+remedy, which is the documented and intended migration.
+
+## Modified Files
+
+- `changelogs/v0.7.0/benoitcayladbx_2026-07-31.log`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3764 passed, 275 skipped, 1 xfailed, 0 failed**
+(unchanged; no code changed in this step)
+
+Live: 2 job runs, both SUCCESS. `bfs_complete = true`. Betweenness and closeness
+populated where they were previously withheld.
