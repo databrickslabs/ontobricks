@@ -163,6 +163,16 @@ class TestSubmit:
         # Job parameters must be strings, not ints.
         assert params["pagerank_iterations"] == "30"
 
+    def test_max_depth_reaches_the_job(self):
+        # The BFS depth cap decides whether betweenness and closeness are
+        # published at all, so it has to travel with the run rather than
+        # falling back to the job script's own default.
+        client = _Client([_Job(2, JOB_NAME)])
+        _runner(client).submit(
+            source_table="a.b.c", output_table="a.b.d", max_depth=48
+        )
+        assert client.jobs.run_now_calls[0]["job_parameters"]["max_depth"] == "48"
+
     def test_no_excluded_predicates_sends_empty_string(self):
         client = _Client([_Job(2, JOB_NAME)])
         _runner(client).submit(source_table="a.b.c", output_table="a.b.d")

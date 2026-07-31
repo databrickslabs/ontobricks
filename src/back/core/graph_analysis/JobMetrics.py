@@ -9,10 +9,12 @@ This is the third compute mode, above ``in_memory`` and ``pushdown``:
   serverless job in ``resources/graph_analytics.job.yml``, which the app
   triggers and then reads back from a Delta table.
 
-That leaves only betweenness and closeness unavailable — both need all-pairs
-shortest paths, which is not worth a distributed implementation here. Narrow
-the analysis with an entity-type filter to get those from the exact in-memory
-path.
+Betweenness and closeness come from the same job but are *estimates*, sampled
+from Brandes-Pich pivots rather than all-pairs shortest paths, so they are
+flagged as approximate. They drop to unavailable when the pivot BFS was
+truncated by its depth cap, since the distance sums would be biased — raise
+``analytics_job_max_depth`` and re-run when that happens. Narrowing the
+analysis with an entity-type filter gets both exactly from the in-memory path.
 
 **Prerequisite.** The graph must be readable from Spark as a Unity Catalog
 table, which is not true for every engine —
@@ -231,6 +233,7 @@ class JobMetrics:
         top_n: int = 100,
         pagerank_iterations: int = 20,
         pivots: int = 64,
+        max_depth: int = 32,
     ) -> None:
         self._store = store
         self._graph_name = graph_name
@@ -240,6 +243,7 @@ class JobMetrics:
         self._top_n = max(1, int(top_n))
         self._pagerank_iterations = max(1, int(pagerank_iterations))
         self._pivots = max(0, int(pivots))
+        self._max_depth = max(1, int(max_depth))
 
     def compute(
         self,
@@ -269,6 +273,7 @@ class JobMetrics:
             exclude_predicates=None,
             pagerank_iterations=self._pagerank_iterations,
             pivots=self._pivots,
+            max_depth=self._max_depth,
             on_progress=on_progress,
         )
         if not outcome.get("success"):

@@ -335,7 +335,12 @@ class _QualifiedSqliteStore(SqliteStore):
 
 
 def _job_metrics(
-    db: _OutputDB, runner: _FakeRunner, *, top_n: int = 100, pivots: int = 64
+    db: _OutputDB,
+    runner: _FakeRunner,
+    *,
+    top_n: int = 100,
+    pivots: int = 64,
+    max_depth: int = 32,
 ) -> JobMetrics:
     return JobMetrics(
         _QualifiedSqliteStore(_hub_triples()),
@@ -345,6 +350,7 @@ def _job_metrics(
         output_table="metrics",
         top_n=top_n,
         pivots=pivots,
+        max_depth=max_depth,
     )
 
 
@@ -478,6 +484,14 @@ class TestJobMetricsCompute:
         runner = _FakeRunner()
         _job_metrics(db, runner, pivots=32).compute(MetricsRequest())
         assert runner.calls[0]["pivots"] == 32
+
+    def test_max_depth_reaches_the_runner(self):
+        # A depth cap that never leaves the app would strand betweenness and
+        # closeness as unavailable with no way to raise it.
+        db = _OutputDB(_sample_rows(), _hub_triples())
+        runner = _FakeRunner()
+        _job_metrics(db, runner, max_depth=48).compute(MetricsRequest())
+        assert runner.calls[0]["max_depth"] == 48
 
     def test_progress_is_reported(self):
         db = _OutputDB(_sample_rows(), _hub_triples())

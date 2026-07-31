@@ -72,9 +72,15 @@ DEFAULT_COMPONENT_ITERATIONS = 50
 #: definition, which is how they are tested against NetworkX.
 DEFAULT_PIVOTS = 64
 
-#: Cap on BFS levels. Knowledge graphs have small diameters; this only exists
-#: so a pathological graph cannot loop forever. Truncation is reported.
-DEFAULT_MAX_DEPTH = 12
+#: Cap on BFS levels. A runaway guard, not a budget: the loop below stops the
+#: moment the frontier empties, so a shallow graph never pays for the headroom
+#: and only a graph that genuinely needs more levels feels this number. It is
+#: set generously because falling short is expensive — a truncated search makes
+#: betweenness and closeness unavailable for the whole run. Sparse knowledge
+#: graphs (average degree near 2, long Customer -> Order -> ... chains) reach
+#: well past a dozen levels, so do not tune this down on the assumption that
+#: knowledge graphs have small diameters.
+DEFAULT_MAX_DEPTH = 32
 
 
 #: Up to three dot-separated plain identifiers (``catalog.schema.table``).
@@ -781,13 +787,16 @@ def _run_pivot_centrality(
             break
     else:
         # The loop ran to the cap without the frontier emptying.
-        bfs_complete = int(scalar(builder.frontier_count_query(slot)) or 0) == 0
+        remaining = int(scalar(builder.frontier_count_query(slot)) or 0)
+        bfs_complete = remaining == 0
         if not bfs_complete:
             logger.warning(
-                "BFS hit the depth cap of %d with the frontier still growing — "
-                "betweenness and closeness will be reported as unavailable "
-                "rather than as truncated estimates",
+                "BFS hit the depth cap of %d with %d (pivot, node) pairs still "
+                "unexplored — betweenness and closeness will be reported as "
+                "unavailable rather than as truncated estimates. Raise "
+                "ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH to let the search finish",
                 max_depth,
+                remaining,
             )
 
     max_dist = int(scalar(builder.max_depth_query()) or 0)

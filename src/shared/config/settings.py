@@ -200,6 +200,19 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Levels the pivot BFS may expand before it gives up. A search that stops
+    # short is truncated, which biases the distance sums, so the job withholds
+    # betweenness and closeness entirely rather than publishing them — raise
+    # this when a run reports them as unavailable. Costs nothing on a graph
+    # that finishes sooner: the job stops as soon as the frontier empties.
+    analytics_job_max_depth: int = Field(
+        default=32,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH",
+            "analytics_job_max_depth",
+        ),
+    )
+
     model_config = ConfigDict(
         env_prefix="",
         case_sensitive=False,

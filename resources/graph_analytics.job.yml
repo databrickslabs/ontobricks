@@ -60,6 +60,8 @@ resources:
               - "{{job.parameters.pagerank_iterations}}"
               - "--pivots"
               - "{{job.parameters.pivots}}"
+              - "--max-depth"
+              - "{{job.parameters.max_depth}}"
 
       parameters:
         - name: source_table
@@ -74,3 +76,9 @@ resources:
         # the BFS holds one row per (pivot, reachable node). 0 skips both metrics.
         - name: pivots
           default: "64"
+        # Levels the pivot BFS may expand. A search that stops short is
+        # truncated, so betweenness and closeness are withheld for the whole
+        # run — raise this when they come back unavailable. Headroom is free on
+        # a graph that finishes sooner: the job stops when the frontier empties.
+        - name: max_depth
+          default: "32"

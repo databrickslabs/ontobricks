@@ -412,6 +412,34 @@ class TestBetweennessAndClosenessParity:
         _, _, stats = _run(graph, pivots=graph.number_of_nodes(), max_depth=12)
         assert stats["bfs_complete"] is True
 
+    def test_default_depth_covers_a_graph_deeper_than_a_dozen_levels(self):
+        # Sparse knowledge graphs are chains, not small worlds: a 25-hop path
+        # needs more levels than the cap this job originally shipped with, and
+        # falling short costs betweenness and closeness for the whole run.
+        graph = _relabel(nx.path_graph(26))
+        _, _, stats = _run(graph, pivots=graph.number_of_nodes())
+        assert stats["bfs_complete"] is True
+
+    def test_headroom_costs_nothing_on_a_shallow_graph(self):
+        # The cap is a runaway guard, not a budget: the search stops when the
+        # frontier empties, so raising it must not add levels to a small graph.
+        levels: List[int] = []
+        runner = SqliteRunner(_triples_from_graph(_hub()))
+        builder = GraphAnalyticsSQL(
+            source_table="triples", work_prefix="w", output_table="out"
+        )
+        original = builder.bfs_iteration
+
+        def counting(depth, read_slot, write_slot):
+            levels.append(depth)
+            return original(depth, read_slot, write_slot)
+
+        builder.bfs_iteration = counting  # type: ignore[method-assign]
+        run_analysis(runner.execute, runner.scalar, builder, pivots=7, cleanup=False)
+        # A star is fully explored two hops out; level 3 is the probe that
+        # finds the frontier empty and stops. The cap never comes into it.
+        assert levels == [1, 2, 3]
+
     def test_sigma_counts_multiple_shortest_paths(self):
         # A 4-cycle gives two equal-length paths between opposite corners;
         # betweenness is only right if sigma counts both.

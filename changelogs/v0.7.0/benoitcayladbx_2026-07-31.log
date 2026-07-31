@@ -124,3 +124,110 @@ Modified files
 - docs/superpowers/specs/2026-07-31-view-mode-write-gates-design.md (new)
 - releasereq/TODO.md
 - changelogs/v0.7.0/benoitcayladbx_2026-07-31.log
+
+================================================================================
+Make the analytics job's BFS depth cap reachable so betweenness/closeness ship
+================================================================================
+
+Context
+-------
+
+Reported: in job mode betweenness and closeness come back at zero, labelled
+"Not computed for this graph ... either no pivots were sampled or the
+breadth-first search hit its depth cap".
+
+Read the summary row the last run actually wrote
+(benoit_cayla.ontobricks.graph_metrics_bigcustomers_1_summary): node_count
+1,349,202, edge_count 1,549,860, component_count 4,986, pivot_count 64,
+bfs_complete false. Pivots were sampled, so it is unambiguously the depth-cap
+branch. The withholding itself is correct — a truncated BFS biases the distance
+sums, and JobMetrics refuses to publish an estimate it cannot stand behind.
+
+The defect is that the cap could not be raised. ``--max-depth`` was the one
+tuning parameter never wired through: ``pagerank_iterations`` and ``pivots``
+both travel Settings -> JobMetrics -> LakeflowRunner -> job_parameters and are
+declared in graph_analytics.job.yml, while max_depth existed only as an
+argparse default. Every run was pinned at 12 with no way out short of editing
+source.
+
+12 came from the assumption that knowledge graphs have small diameters. This
+graph averages degree 2.3 — long Customer -> Order -> ... chains, not a small
+world — so it needs far more levels. The BFS itself is sound: bfs_iteration
+anti-joins each new level against the accumulated table, so every
+(pivot, node) pair expands exactly once and the frontier is guaranteed to
+empty. It simply needed more room.
+
+Headroom is close to free because the loop breaks the moment the frontier
+empties, so the cap is a runaway guard rather than a budget. Hence a generous
+new default rather than a cautious bump.
+
+Clustering at zero, also mentioned in the report, is not a defect. Clustering
+is never placed in unavailable_metrics in job mode, so it renders the separate
+"All values are 0 ... bipartite structure" notice, and the clustering SQL is
+checked against nx.clustering on four graph shapes. Zero triangles is the
+correct answer for a Customer -> Order -> Product graph. Left alone.
+
+Changes
+-------
+
+1. src/jobs/graph_analytics_job.py
+   DEFAULT_MAX_DEPTH 12 -> 32, with the rationale rewritten to say the cap is a
+   runaway guard and to warn against tuning it back down on the small-diameter
+   assumption. The truncation warning now reports how many (pivot, node) pairs
+   were left unexplored and names the setting to raise, instead of claiming the
+   frontier was "still growing" — which was not what the code measured.
+
+2. src/shared/config/settings.py
+   New ``analytics_job_max_depth`` (ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH),
+   default 32.
+
+3. src/back/core/graph_analysis/LakeflowRunner.py
+   ``submit`` / ``run_and_wait`` take max_depth and send it as the ``max_depth``
+   job parameter.
+
+4. src/back/core/graph_analysis/JobMetrics.py
+   Takes max_depth and forwards it to the runner. Module docstring corrected:
+   it claimed betweenness and closeness were unavailable in this mode, which
+   stopped being true when pivot sampling landed.
+
+5. src/back/objects/digitaltwin/DigitalTwin.py
+   Reads the setting when building JobMetrics.
+
+6. resources/graph_analytics.job.yml
+   Declares the ``max_depth`` parameter (default 32) and passes ``--max-depth``
+   to the task.
+
+7. tests/units/core/test_lakeflow_runner.py
+   max_depth reaches job_parameters as a string.
+
+8. tests/units/core/test_job_metrics.py
+   max_depth reaches the runner; helper gained the argument.
+
+9. tests/units/core/test_graph_analytics_job_sql.py
+   A 25-hop path completes under the default cap (it would not have under 12);
+   a star still stops after its own depth, proving the headroom costs nothing.
+
+Deployment note
+---------------
+
+The app now sends a job parameter the deployed job does not yet declare, and
+``run_now`` rejects unknown parameters. The job must be redeployed (make
+deploy) before the next analysis run, otherwise it fails at submit.
+
+Modified files
+--------------
+- src/jobs/graph_analytics_job.py
+- src/shared/config/settings.py
+- src/back/core/graph_analysis/LakeflowRunner.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- resources/graph_analytics.job.yml
+- tests/units/core/test_lakeflow_runner.py
+- tests/units/core/test_job_metrics.py
+- tests/units/core/test_graph_analytics_job_sql.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-31.log
+
+Tests: pytest -q -m "not scenario" -> 3794 passed, 3 failed, 275 skipped,
+5 deselected in 27.77s. The three failures (test_health
+test_local_mode_with_cli_profile, test_graph_engine_config x2) are pre-existing
+environment-dependent failures — verified identical on a stashed tree.
