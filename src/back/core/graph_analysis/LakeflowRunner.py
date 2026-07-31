@@ -150,6 +150,7 @@ class LakeflowRunner:
         pagerank_iterations: int = 20,
         pivots: int = 64,
         max_depth: int = 32,
+        class_filter: Optional[List[str]] = None,
     ) -> int:
         """Start a run and return its run id."""
         job_id = self.resolve_job_id()
@@ -160,6 +161,7 @@ class LakeflowRunner:
             "pagerank_iterations": str(int(pagerank_iterations)),
             "pivots": str(int(pivots)),
             "max_depth": str(int(max_depth)),
+            "class_filter": ",".join(class_filter or []),
         }
         try:
             started = self._w().jobs.run_now(job_id=job_id, job_parameters=params)
@@ -251,6 +253,7 @@ class LakeflowRunner:
         pagerank_iterations: int = 20,
         pivots: int = 64,
         max_depth: int = 32,
+        class_filter: Optional[List[str]] = None,
         on_progress: Optional[Callable[[int, str], None]] = None,
     ) -> Dict[str, Any]:
         """Convenience wrapper: submit, then follow the run to completion."""
@@ -261,6 +264,7 @@ class LakeflowRunner:
             pagerank_iterations=pagerank_iterations,
             pivots=pivots,
             max_depth=max_depth,
+            class_filter=class_filter,
         )
         return self.wait_for(run_id, on_progress=on_progress)
 

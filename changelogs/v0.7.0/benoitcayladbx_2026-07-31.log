@@ -310,3 +310,38 @@ Test result
 -----------
 `env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH uv run pytest tests/units/core/test_graph_analytics_job_sql.py tests/units/core/test_graph_analytics_job_exit.py -v` → 71 passed, 1 warning in 1.37s
 `uv run pytest -q -m "not scenario"` → 3805 passed, 275 skipped, 5 deselected, 23 warnings in 37.83s
+
+================================================================================
+feat(analytics): thread the class filter through the Lakeflow runner
+================================================================================
+
+Context
+-------
+
+Task 3 added `--class-filter` to the graph-analytics job and declared the
+`class_filter` job parameter in the bundle. The Lakeflow runner is the middle
+link: it must pass that parameter through `submit` / `run_and_wait` so a later
+task can supply the value from the app. Non-empty lists are comma-joined; absent
+or empty filters send `""` (not omitted, not the string `"None"`).
+
+Changes
+-------
+
+1. `src/back/core/graph_analysis/LakeflowRunner.py` — Added
+   `class_filter: Optional[List[str]] = None` to `submit` and `run_and_wait`;
+   forwarded from `run_and_wait` to `submit`; added
+   `"class_filter": ",".join(class_filter or [])` to `job_parameters`.
+
+2. `tests/units/core/test_lakeflow_runner.py` — Added
+   `test_class_filter_reaches_the_job` and
+   `test_absent_class_filter_sends_an_empty_string`.
+
+Modified files
+--------------
+- `src/back/core/graph_analysis/LakeflowRunner.py`
+- `tests/units/core/test_lakeflow_runner.py`
+
+Test result
+-----------
+`env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH uv run pytest tests/units/core/test_lakeflow_runner.py -v` → 27 passed, 1 warning in 1.96s
+`uv run pytest -q -m "not scenario"` → 3807 passed, 275 skipped, 5 deselected, 23 warnings in 29.36s
