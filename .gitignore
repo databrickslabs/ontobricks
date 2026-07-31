@@ -14,8 +14,11 @@ build/
 venv/
 ENV/
 
-# Environment variables
+# Environment variables. The .bak/.local variants matter as much as .env
+# itself: they are copies of a file holding a live PAT.
 .env
+.env.*
+!.env.example
 
 # IDE
 .vscode/
