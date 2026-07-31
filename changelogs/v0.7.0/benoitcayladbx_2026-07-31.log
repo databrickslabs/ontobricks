@@ -23,3 +23,78 @@ Analytics source resolution used to branch per engine (Delta, Lakebase managed_s
 ## Test Result
 
 `uv run pytest tests/units -q` → **3422 passed, 1 warning** (pre-existing Starlette deprecation only)
+
+---
+
+# Task 5 review fix + Task 6: JobMetrics becomes a read-back assembler
+
+## Context
+
+Two things landed here. First, the Task 5 review found the `InfrastructureError`
+guard for an unresolvable analytics source had no test — the autouse fixture in
+`TestJobMetricsCompute` resolved a source for every test in the class, so the
+refusal branch was unreachable. Second, and the substance of Task 6: `JobMetrics`
+still called `PushdownMetrics` to build a "base" result and merged the job's
+per-node scores onto it. That hybrid contradicts the decision that the Lakeflow
+job is the only compute path, so `JobMetrics` now assembles `MetricsResult`
+purely from the job's four output tables and no longer takes a store at all.
+
+The only computation left in the app is the pure-Python flat/temporal labelling
+in `profiles.py`, which turns `(instance_count, distinct_predicates)` into a
+human-readable verdict — string heuristics over predicate names, not graph maths.
+
+## Changes
+
+1. `tests/units/core/test_job_metrics.py` — Added the missing coverage for the
+   source refusal: the "run a Build" remedy text, backtick normalisation of the
+   resolved FQN, and a compute-level test placed outside `TestJobMetricsCompute`
+   so the autouse fixture cannot mask the branch. Then rewrote the suite for the
+   new constructor: added the `_query_for` fake that dispatches on the table
+   being read, plus tests for summary-driven stats, type-profile assembly, and
+   per-node `type_uri`/`label`.
+2. `src/back/core/graph_analysis/JobMetrics.py` — New constructor
+   `JobMetrics(source_table, *, runner, query, output_table, …)`: no `store`, no
+   `graph_name`, no `domain`/`settings` scaffolding. Replaced the read-back SQL
+   with `summary_query`, `top_nodes_query`, `type_profiles_query` and
+   `type_predicates_query`; dropped `metrics_for_nodes_query`,
+   `type_clustering_query` and the `RDF_TYPE` constant. `compute` now triggers
+   the job and assembles the result from `_read_summary`, `_read_nodes` and
+   `_read_type_profiles`. `stats.node_count` carries the total entity population
+   from `total_node_count` while `graph_node_count` carries the scored count, and
+   `avg_degree`/`density` derive from the scored count only.
+3. `src/back/core/graph_analysis/profiles.py` — Docstring corrected; it claimed
+   two callers that this plan removes.
+4. `src/back/objects/digitaltwin/DigitalTwin.py` — `build_job_metrics` takes
+   `(domain, settings, *, source_table, graph_name, top_n)`; the `MODE_JOB`
+   branch of `compute_graph_metrics` resolves the source and fails with the
+   remedy before building anything. The surviving pushdown fallback in that
+   branch is Task 8's to delete and is pinned in the plan.
+5. `tests/units/dtwin/test_dtwin_analytics.py` — New file covering the guard at
+   its new home: an unresolvable source must raise before a Lakeflow run is
+   launched, asserted by `build_job_metrics` never being called.
+6. `docs/superpowers/plans/2026-07-31-analytics-lakeflow-only.md` — Recorded the
+   fallback removal as a requirement of Task 8 rather than a side effect.
+
+## Modified Files
+
+- `src/back/core/graph_analysis/JobMetrics.py`
+- `src/back/core/graph_analysis/profiles.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `tests/units/core/test_job_metrics.py`
+- `tests/units/dtwin/test_dtwin_analytics.py` (new)
+- `docs/superpowers/plans/2026-07-31-analytics-lakeflow-only.md`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3798 passed, 275 skipped, 0 failed**
+(3797 after Task 6's obsolete-test deletions, plus the new guard test).
+
+Tests must run with the local Databricks/Lakebase env vars unset, or the SDK
+reaches for a real workspace:
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```

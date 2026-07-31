@@ -1680,6 +1680,18 @@ git commit -m "feat(build): materialize the mapped snapshot on every engine"
 One path, three prerequisites, hard failure. This is where the mode selection
 disappears.
 
+**Carried over from the Task 6 review — this task must not ship without it:**
+Task 6 left the `except OntoBricksError` fallback inside the `MODE_JOB` branch of
+`compute_graph_metrics` (currently lines 3457-3471), which silently answers a
+failed job run with `PushdownMetrics` output. That is the "no other paths"
+requirement violated in the one place it matters most, so deleting it is a
+requirement of this task, not a side effect. A failed job run must raise. Add a
+test that a raising `job_metrics.compute` propagates rather than degrading.
+The guard in front of it — an unresolvable source failing before a run is
+launched — is already covered by
+`tests/units/dtwin/test_dtwin_analytics.py::test_an_unresolvable_source_fails_before_any_job_is_launched`;
+keep that test passing through the signature change.
+
 **Files:**
 - Modify: `src/back/objects/digitaltwin/DigitalTwin.py` (`compute_graph_metrics` lines 3392-3479, `run_metrics_task` lines 2685-2747)
 - Modify: `src/api/routers/internal/dtwin.py` (`_analytics_job_status` lines 473-514, `compute_graph_metrics` endpoint lines 538-657, stats endpoint lines 1519-1552)
