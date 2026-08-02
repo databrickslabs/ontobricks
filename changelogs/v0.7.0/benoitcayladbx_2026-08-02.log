@@ -992,3 +992,20 @@ env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT \
 (full suite; +15 from the new analytics-object cases).
 
 `node --check src/front/static/config/js/settings.js` passes.
+
+## Tighten stacked confirm modal source contracts
+
+Context: Important review findings on Task 1 unit contracts — cleanup assertions
+were incomplete and CSS checks used unscoped substrings.
+
+Changes:
+
+1. `tests/units/front/test_stacked_confirm_modal.py`
+   Require `classList.remove` for all three stack classes; scope blur/z-index
+   assertions to selector-adjacent CSS slices.
+
+Modified files:
+- `tests/units/front/test_stacked_confirm_modal.py`
+- `.superpowers/sdd/task-1-report.md`
+
+Tests: `uv run pytest -q tests/units/front/test_stacked_confirm_modal.py` → 5 failed (expected RED)
