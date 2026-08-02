@@ -932,7 +932,7 @@
 .modal.ob-modal-underlying .modal-content {
     filter: blur(2px);
     opacity: 0.72;
-    transition: filter 0.15s ease, opacity 0.15s ease;
+    transition: var(--db-transition-fast);
     pointer-events: none;
 }
 
@@ -940,7 +940,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(27, 28, 29, 0.28); /* --db-dark */
+    background: rgba(var(--db-dark-rgb), 0.28);
     pointer-events: none;
     z-index: 1;
 }
@@ -951,7 +951,7 @@
 
 .modal-backdrop.ob-modal-stacked-backdrop {
     z-index: 1060 !important;
-    background-color: rgba(27, 28, 29, 0.45);
+    background-color: rgba(var(--db-dark-rgb), 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {
