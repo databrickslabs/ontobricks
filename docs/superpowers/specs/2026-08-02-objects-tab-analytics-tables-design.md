@@ -198,8 +198,11 @@ The analytics scan is best-effort and must never blank the tab:
 - a scan failure yields empty `analytics` / `orphans` plus
   `analytics_message`, with `domains` still populated
 
-**Template/front smoke** — extend whatever settings render check exists to
-assert the analytics slot markup ids are present, so the JS has a mount point.
+**Front source contract** — the Lakebase slot is built by JS rather than by a
+template, so there is no markup to assert. A source-contract test over
+`settings.js`, following the existing front-test pattern, covers the mount
+points, both Delete paths including their nested analytics, both orphan cards,
+and the JS match key mirroring `domain_match_key`.
 
 ## Out of scope
 

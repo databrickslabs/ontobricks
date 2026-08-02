@@ -1569,9 +1569,11 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        """List triple-store UC objects in the Registry schema, grouped by domain version."""
+        """List triple-store and analytics UC objects, grouped by domain version."""
         from back.core.graphdb.delta.objects import (
+            domain_match_key,
             fetch_uc_schema_tables,
+            group_analytics_objects,
             group_triplestore_objects,
         )
 
@@ -1591,6 +1593,10 @@ class SettingsService:
                 "registry_catalog": catalog,
                 "registry_schema": schema,
                 "domains": [],
+                "analytics": [],
+                "orphans": [],
+                "analytics_location": "",
+                "analytics_message": "",
                 "message": (
                     "Registry catalog/schema is not configured "
                     "(Settings → Registry)"
@@ -1603,6 +1609,7 @@ class SettingsService:
             domains = [
                 {
                     "base": grp["base"],
+                    "key": domain_match_key(grp["base"]),
                     "items": [
                         {
                             "kind": item["kind"],
@@ -1614,6 +1621,12 @@ class SettingsService:
                 }
                 for grp in sorted(groups.values(), key=lambda g: g["base"])
             ]
+            analytics_location, analytics, analytics_message = (
+                SettingsService._analytics_objects(
+                    settings, catalog, schema, raw_tables
+                )
+            )
+            domain_keys = {d["key"] for d in domains if d["key"]}
             return {
                 "success": True,
                 "registry_configured": True,
@@ -1621,12 +1634,74 @@ class SettingsService:
                 "registry_catalog": catalog,
                 "registry_schema": schema,
                 "domains": domains,
+                "analytics": analytics,
+                "orphans": [a for a in analytics if a["key"] not in domain_keys],
+                "analytics_location": analytics_location,
+                "analytics_message": analytics_message,
             }
         except Exception as exc:
             logger.warning("triple_store_databricks_objects failed: %s", exc)
             raise InfrastructureError(
                 "list Delta triple-store objects failed", detail=str(exc)
             ) from exc
+
+    @staticmethod
+    def _analytics_objects(
+        settings: Settings,
+        registry_catalog: str,
+        registry_schema: str,
+        registry_tables: List[Dict[str, Any]],
+    ) -> Tuple[str, List[Dict[str, Any]], str]:
+        """Group the analytics job's UC output tables, best-effort.
+
+        The job writes to ``analytics_job_output_schema`` when set and to the
+        registry schema otherwise, so the common case reuses the enumeration the
+        caller already performed. A scan that fails returns its reason instead of
+        raising — the triple-store listing must still render.
+        """
+        from back.core.graphdb.delta.objects import (
+            fetch_uc_schema_tables,
+            group_analytics_objects,
+        )
+
+        configured = (
+            getattr(settings, "analytics_job_output_schema", "") or ""
+        ).strip()
+        location = configured or f"{registry_catalog}.{registry_schema}"
+        if location.count(".") != 1:
+            return (
+                location,
+                [],
+                f"Analytics output schema '{location}' is not a catalog.schema pair",
+            )
+
+        catalog, schema = location.split(".", 1)
+        try:
+            if (catalog, schema) == (registry_catalog, registry_schema):
+                raw_tables = registry_tables
+            else:
+                raw_tables = fetch_uc_schema_tables(catalog, schema)
+        except Exception as exc:
+            logger.warning("analytics object listing failed for %s: %s", location, exc)
+            return (location, [], f"Could not list analytics tables in {location}")
+
+        groups = group_analytics_objects(raw_tables, catalog, schema)
+        analytics = [
+            {
+                "key": grp["key"],
+                "base": grp["base"],
+                "items": [
+                    {
+                        "kind": item["kind"],
+                        "name": item["name"],
+                        "full_name": item["full_name"],
+                    }
+                    for item in grp["sorted_items"]
+                ],
+            }
+            for grp in sorted(groups.values(), key=lambda g: g["base"])
+        ]
+        return (location, analytics, "")
 
     @staticmethod
     def get_graph_engine_config_result(

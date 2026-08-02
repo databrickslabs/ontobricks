@@ -882,3 +882,113 @@ Both new structural assertions were canary-verified: injecting a second
 made `test_build_runs_is_the_default_tab` and
 `test_each_tab_button_targets_its_own_pane` fail as intended, and the
 injected changes were reverted.
+
+---
+
+# Analytics Delta tables surfaced in the Settings → Objects tabs
+
+## Context
+
+Every Run Analysis writes Unity Catalog Delta tables through the Lakeflow job:
+`graph_metrics_<slug>` plus `_summary`, `_type_profiles`, `_type_predicates`,
+and — when a run dies before its own cleanup — stranded `_work_<stage>` scratch
+tables. `DigitalTwin.analytics_output_table` places them in
+`analytics_job_output_schema`, defaulting to the registry `catalog.schema`, so
+they sit right next to the triple-store objects.
+
+Neither Objects tab could see them. Settings → Lakehouse → Objects listed only
+names starting with `triplestore_`; Settings → Lakebase → Objects listed
+Postgres objects plus the Lakeflow sync sub-block. An operator deleting a
+domain version therefore dropped the graph and silently left the analytics
+tables behind, with no UI able to find them afterwards.
+
+Design: `docs/superpowers/specs/2026-08-02-objects-tab-analytics-tables-design.md`.
+
+## Changes
+
+1. `src/back/core/graphdb/delta/objects.py` — Added the analytics grouping
+   helpers alongside the existing triple-store ones: `analytics_base` (strips
+   `_work_<stage>` then a companion suffix), `analytics_match_key` (the
+   `<safe>_<version>` slug), `domain_match_key` (`triplestore_<safe>_V<n>` →
+   `<safe>_<n>`), `_analytics_drop_sort_key`, and `group_analytics_objects`,
+   which returns the same `{key, base, items, sorted_items}` shape as
+   `group_triplestore_objects`.
+2. `src/back/objects/domain/SettingsService.py` —
+   `triple_store_databricks_objects_result` now also returns `analytics`,
+   `orphans`, `analytics_location` and `analytics_message`, and each `domains`
+   entry carries its `key` so the front end never re-parses names. The new
+   private `_analytics_objects` resolves the analytics schema the same way
+   `DigitalTwin._build_job_metrics` does — `analytics_job_output_schema` when
+   set, the registry schema otherwise — reusing the caller's enumeration when
+   the two coincide and scanning separately when they do not. A failed scan
+   returns its reason instead of raising, so the triple-store listing still
+   renders.
+3. `src/front/static/config/js/settings.js` (Lakehouse) — `loadDeltaObjects`
+   nests an Analytics sub-block inside each domain card, styled like the
+   existing Lakebase sync block, with a `work` badge distinguishing scratch
+   tables from real output. Unmatched groups render as their own "orphan"
+   cards after the domain cards. `dropDeltaDomainObjects` appends the card's
+   analytics items to the drop list; the modal boilerplate it shared with the
+   new `dropDeltaOrphanObjects` was extracted into `_confirmDropDelta`.
+4. `src/front/static/config/js/settings.js` (Lakebase) — Each domain card gains
+   a `.lk-analytics-slot` next to its `.lk-sync-slot`, filled by the new
+   `loadLakebaseAnalyticsObjects` from the same endpoint. `dropDomainObjects`
+   folds the analytics tables into its UC drop pass, and
+   `dropLakebaseOrphanObjects` handles the orphan cards. Orphan wiring is
+   scoped to `.lk-orphan-card` so the domain cards' own drop handlers are not
+   attached twice.
+5. `tests/units/settings/test_delta_objects.py` — Added `TestAnalyticsObjectHelpers`
+   (suffix and work-table stripping, key agreement and the documented
+   divergence, grouping and drop order) and four service cases (matching
+   analytics is not an orphan, unmatched analytics is, a configured output
+   schema is scanned separately, a failed scan still lists domains).
+6. `tests/units/front/test_settings_analytics_objects.py` (new) — Source-contract
+   tests over `settings.js`, following the existing front-test pattern: both
+   tabs mount their analytics block, both Delete paths include the nested
+   tables, both orphan cards exist and are deletable, and the JS match key
+   mirrors the server rule. The Lakebase slot is created by JS rather than by a
+   template, so there is no markup mount point to assert instead.
+
+## Design notes
+
+- **Nesting under the domain card, not separate top-level cards.** One card per
+  domain version is the mental model both tabs already use, and it makes the
+  card's Delete the single place that removes everything for that version.
+- **`_work_*` tables are listed and deleted with the rest.** They are garbage
+  from failed runs; hiding them is how they accumulated in the first place.
+- **The match can miss, by design.** `triplestore_<safe>_V<n>` derives `safe`
+  from `re.sub(r"[^a-z0-9_]", "_", name.lower())` while the analytics slug comes
+  from `sanitize_domain_folder`, which *removes* offending characters rather
+  than replacing them. The two agree for an ordinary domain name and diverge for
+  a punctuated one. Reconciling the naming rules would touch the build path, so
+  the divergence resolves to the orphan card instead — which is exactly the case
+  where an operator most needs to find these tables. A unit test pins both
+  behaviours.
+- **Lakebase orphans come from the server, not from the Postgres cards.** The
+  server matches analytics against the UC triple-store objects that every
+  engine's Build writes. Matching against the Postgres cards on that tab instead
+  would flag every Lakehouse-backed domain's analytics as orphaned.
+- **The analytics scan never blanks the tab.** It degrades to an empty list plus
+  a warning line, mirroring how `loadLakebaseSyncObjects` degrades to empty
+  slots.
+
+## Modified Files
+
+- `src/back/core/graphdb/delta/objects.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/front/static/config/js/settings.js`
+- `tests/units/settings/test_delta_objects.py`
+- `tests/units/front/test_settings_analytics_objects.py` (new)
+- `docs/superpowers/specs/2026-08-02-objects-tab-analytics-tables-design.md` (new)
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH uv run pytest -q -m "not scenario"
+```
+
+`3841 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 28.42s`
+(full suite; +15 from the new analytics-object cases).
+
+`node --check src/front/static/config/js/settings.js` passes.
