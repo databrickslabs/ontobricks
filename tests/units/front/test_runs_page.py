@@ -152,9 +152,12 @@ class TestRunsScript:
 
     def test_the_two_fetches_are_independent(self):
         """One endpoint failing must not blank the other table, so the two
-        loads cannot share a try block or a Promise.all that rejects."""
+        loads cannot share a try block or a Promise.all() that rejects as
+        soon as either promise does. This deliberately does not forbid
+        Promise.allSettled() — the one combinator that would make loader
+        isolation structural rather than conventional."""
         src = _js()
-        assert "Promise.all" not in src
+        assert "Promise.all(" not in src
         assert src.count("async function _loadBuildRuns") == 1
         assert src.count("async function _loadAnalyticsRuns") == 1
 
@@ -174,8 +177,32 @@ class TestRunsScript:
 
     def test_failed_analytics_rows_do_not_show_zeroed_metrics(self):
         """A failed run records zeros, and printing them as real values
-        would read as a graph with no nodes rather than a run that died."""
-        assert "_analyticsRunRow" in _js()
+        would read as a graph with no nodes rather than a run that died.
+
+        Extracts the _analyticsRunRow function body and checks that each
+        numeric metric column is gated behind the `failed` check rather
+        than always calling the raw formatter — a renderer that dropped the
+        dashing and printed the stored zeros unconditionally would fail
+        this (a bare `assert "_analyticsRunRow" in src` would not)."""
+        src = _js()
+        match = re.search(
+            r"function _analyticsRunRow\(run, idx\) \{(.*?)\n\}",
+            src,
+            re.DOTALL,
+        )
+        assert match is not None, "_analyticsRunRow function not found"
+        body = match.group(1)
+
+        assert "const failed = " in body
+        assert "const dash = " in body
+
+        for metric in ("node_count", "edge_count", "connected_components"):
+            assert f"failed ? dash : num(run.{metric})" in body, (
+                f"{metric} column must dash out on a failed run, not print "
+                "the stored zero"
+            )
+        assert 'failed ? dash : _esc((Number(run.avg_degree)' in body
+        assert 'failed ? dash : _esc((Number(run.density)' in body
 
     def test_runs_loaded_flag_is_not_latched_unconditionally(self):
         """_runsLoaded must reflect whether the loads actually succeeded, not
