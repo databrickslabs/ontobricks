@@ -1009,3 +1009,21 @@ Modified files:
 - `.superpowers/sdd/task-1-report.md`
 
 Tests: `uv run pytest -q tests/units/front/test_stacked_confirm_modal.py` → 5 failed (expected RED)
+
+## Accept clearStack cleanup in stacked confirm contract
+
+Context: Task 1 review — `test_confirm_cleans_stack_on_hidden` required
+`classList.remove` in the unbounded post-`hidden.bs.modal` slice, which would
+stay RED after Task 3's `clearStack()` helper pattern.
+
+Changes:
+
+1. `tests/units/front/test_stacked_confirm_modal.py`
+   Accept either inline handler removals or `clearStack` helper with all three
+   class removals; tighten z-index asserts to `z-index\s*:\s*1065` / `1060`.
+
+Modified files:
+- `tests/units/front/test_stacked_confirm_modal.py`
+- `.superpowers/sdd/task-1-report.md`
+
+Tests: `uv run pytest -q tests/units/front/test_stacked_confirm_modal.py` → 5 failed (expected RED)

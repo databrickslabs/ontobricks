@@ -75,6 +75,51 @@ def _rule_body_any(css: str, *selectors: str) -> str:
     return ""
 
 
+def _brace_block_after(source: str, start: int) -> str:
+    """Return the inner text of the ``{ ... }`` block opened at ``start``."""
+    i = start
+    while i < len(source) and source[i] != "{":
+        i += 1
+    if i >= len(source):
+        return ""
+    i += 1
+    depth = 1
+    body_start = i
+    while i < len(source) and depth > 0:
+        if source[i] == "{":
+            depth += 1
+        elif source[i] == "}":
+            depth -= 1
+        i += 1
+    return source[body_start : i - 1] if depth == 0 else ""
+
+
+def _hidden_modal_handler_body(body: str) -> str:
+    """Return the callback body for the ``hidden.bs.modal`` listener."""
+    idx = body.index("hidden.bs.modal")
+    slice_ = body[idx:]
+    match = re.search(r"(?:=>\s*\{|function\s*\([^)]*\)\s*\{)", slice_)
+    if not match:
+        return ""
+    return _brace_block_after(slice_, match.end() - 1)
+
+
+def _function_body(source: str, name: str) -> str:
+    """Return the body of ``const name = () => { ... }`` in ``source``."""
+    match = re.search(
+        rf"const\s+{re.escape(name)}\s*=\s*\([^)]*\)\s*=>\s*\{{",
+        source,
+    )
+    if not match:
+        return ""
+    return _brace_block_after(source, match.end() - 1)
+
+
+def _removals_cover_classes(text: str, classes: tuple[str, ...]) -> bool:
+    removal_text = " ".join(re.findall(r"classList\.remove\([^)]+\)", text))
+    return all(cls in removal_text for cls in classes)
+
+
 def test_confirm_detects_visible_parent_modal():
     body = _confirm_body()
     assert ".modal.show" in body
@@ -90,14 +135,19 @@ def test_confirm_marks_itself_stacked():
 def test_confirm_cleans_stack_on_hidden():
     body = _confirm_body()
     assert "hidden.bs.modal" in body
-    hidden_idx = body.index("hidden.bs.modal")
-    cleanup_slice = body[hidden_idx:]
-    removals = re.findall(r"classList\.remove\([^)]+\)", cleanup_slice)
-    assert removals, "classList.remove cleanup required on hidden.bs.modal"
-    removal_text = " ".join(removals)
-    for cls in _STACK_CLASSES:
-        assert cls in removal_text, (
-            f"{cls} must be removed via classList.remove on hidden.bs.modal"
+    handler = _hidden_modal_handler_body(body)
+    assert handler, "hidden.bs.modal listener callback required"
+
+    uses_clear_stack = re.search(r"\bclearStack\b", handler) is not None
+    if uses_clear_stack:
+        clear_body = _function_body(body, "clearStack")
+        assert clear_body, "clearStack helper must be defined in showConfirmDialog"
+        assert _removals_cover_classes(clear_body, _STACK_CLASSES), (
+            "clearStack must remove all stack classes via classList.remove"
+        )
+    else:
+        assert _removals_cover_classes(handler, _STACK_CLASSES), (
+            "hidden.bs.modal handler must remove all stack classes via classList.remove"
         )
 
 
@@ -125,7 +175,9 @@ def test_css_raises_stacked_z_index():
     )
     assert stacked_body, ".ob-modal-stacked rule missing from components.css"
     assert backdrop_body, ".ob-modal-stacked-backdrop rule missing from components.css"
-    assert "1065" in stacked_body, ".ob-modal-stacked must set z-index: 1065"
-    assert "1060" in backdrop_body, (
+    assert re.search(r"z-index\s*:\s*1065", stacked_body), (
+        ".ob-modal-stacked must set z-index: 1065"
+    )
+    assert re.search(r"z-index\s*:\s*1060", backdrop_body), (
         ".ob-modal-stacked-backdrop must set z-index: 1060"
     )
