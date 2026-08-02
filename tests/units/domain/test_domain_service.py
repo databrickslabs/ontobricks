@@ -248,6 +248,63 @@ class TestAuditTrail:
             Domain(domain).audit_trail_result(self._svc([], []))
 
 
+class TestListBuildRuns:
+    """The build-runs response backs the Runs page table only; the version
+    dropdown it used to feed is gone (see docs/superpowers/specs/
+    2026-08-02-runs-page-analytics-rows-design.md), so the payload must not
+    carry ``current_version`` / ``versions`` nor pay for the registry
+    round-trip that built them."""
+
+    def _svc(self, runs, configured=True):
+        svc = MagicMock()
+        svc.cfg.is_configured = configured
+        svc.load_build_runs.return_value = runs
+        return svc
+
+    def test_payload_has_no_version_dropdown_fields(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        domain.current_version = "2"
+        runs = [{"id": 1, "status": "success", "started_at": "t1"}]
+        result = Domain(domain).list_build_runs_result(self._svc(runs))
+        assert result["success"] is True
+        assert result["domain_folder"] == "test_domain"
+        assert result["runs"] == runs
+        assert "current_version" not in result
+        assert "versions" not in result
+
+    def test_does_not_query_the_versions_registry(self):
+        """versions used to cost a list_versions_sorted round-trip on
+        every Runs page load; nothing consumes it now, so it must not be
+        called at all."""
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        svc = self._svc([])
+        Domain(domain).list_build_runs_result(svc)
+        svc.list_versions_sorted.assert_not_called()
+
+    def test_passes_version_and_limit_to_store(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        svc = self._svc([])
+        Domain(domain).list_build_runs_result(svc, version="3", limit=42)
+        svc.load_build_runs.assert_called_once_with(
+            "test_domain", version="3", limit=42
+        )
+
+    def test_requires_configured_registry(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        with pytest.raises(ValidationError):
+            Domain(domain).list_build_runs_result(self._svc([], configured=False))
+
+    def test_requires_saved_domain(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = ""
+        with pytest.raises(ValidationError):
+            Domain(domain).list_build_runs_result(self._svc([]))
+
+
 class TestGetVersionStatusAuthoritative:
     """The lifecycle status is sourced from the registry, not the stale
     in-session snapshot, so an out-of-band publish/reopen is reflected
