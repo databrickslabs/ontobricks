@@ -97,3 +97,16 @@ class TestAnalyticsModal:
 
     def test_modal_has_a_body_for_the_script_to_fill(self):
         assert 'id="analyticsRunDetailsBody"' in _DTWIN.read_text(encoding="utf-8")
+
+    def test_modal_aria_labelledby_references_existing_id(self, client):
+        """aria-labelledby on analyticsRunDetailsModal must name an id that
+        actually exists on the rendered page (WCAG accessible name linkage)."""
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        modal = _find(tags, id_="analyticsRunDetailsModal")
+        assert modal is not None
+        label_id = modal.get("aria-labelledby")
+        assert label_id, "analyticsRunDetailsModal is missing aria-labelledby"
+        assert _find(tags, id_=label_id) is not None, (
+            f"aria-labelledby='{label_id}' points to an id that does not exist on the page"
+        )

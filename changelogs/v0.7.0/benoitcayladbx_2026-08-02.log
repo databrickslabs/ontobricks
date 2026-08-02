@@ -255,3 +255,19 @@ env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
 12 of 14 failed before the markup changes, matching the brief's prediction
 that only `runsTableBody` and the pre-existing Refresh-button wiring would
 already pass).
+
+## Fix pass 1 — Markup fixes from commit 00de1c2 review
+
+**Context:** Two findings from code review of commit 00de1c2 (runs page analytics feature). Both originated in plan text slips, not implementer errors.
+
+**Changes:**
+1. `src/front/templates/partials/domain/_domain_runs.html` — Restored `py-5` on `#runsLoading` and `#runsEmpty` (were accidentally changed to `py-4`).
+2. `src/front/templates/dtwin.html` — Added `aria-labelledby="analyticsRunDetailsModalLabel"` to `#analyticsRunDetailsModal` and `id="analyticsRunDetailsModalLabel"` to its `<h5>`.
+3. `tests/units/front/test_runs_page.py` — Added `test_modal_aria_labelledby_references_existing_id` for WCAG accessible name linkage.
+
+**Modified files:**
+- `src/front/templates/partials/domain/_domain_runs.html`
+- `src/front/templates/dtwin.html`
+- `tests/units/front/test_runs_page.py`
+
+**Test result:** 3797 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 24.85s
