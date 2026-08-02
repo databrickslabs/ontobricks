@@ -2012,13 +2012,19 @@ class LakebaseRegistryStore(RegistryStore):
         }
 
     def load_graph_analytics_runs(
-        self, folder: str, version: str, *, limit: int = 100
+        self, folder: str, version: Optional[str] = None, *, limit: int = 100
     ) -> List[GraphAnalyticsRun]:
         if not self._ensure_graph_analytics_runs_table():
             return []
         try:
             _psycopg, dict_row = _require_psycopg()
             sch = self._q(self._schema)
+            where = "WHERE d.registry_id = %s AND d.folder = %s"
+            params: List[Any] = [self._registry(), folder]
+            if version is not None:
+                where += " AND r.version = %s"
+                params.append(version)
+            params.append(int(limit))
             with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     f"""
@@ -2028,11 +2034,11 @@ class LakebaseRegistryStore(RegistryStore):
                            r.computed_at
                     FROM {sch}.graph_analytics_runs r
                     JOIN {sch}.domains d ON d.id = r.domain_id
-                    WHERE d.registry_id = %s AND d.folder = %s AND r.version = %s
+                    {where}
                     ORDER BY r.computed_at DESC, r.id DESC
                     LIMIT %s
                     """,
-                    (self._registry(), folder, version, int(limit)),
+                    tuple(params),
                 )
                 rows = cur.fetchall()
             return [self._graph_analytics_run_row_to_entry(r) for r in rows]

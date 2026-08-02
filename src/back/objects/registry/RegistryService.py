@@ -853,7 +853,7 @@ class RegistryService:
             logger.warning("record_graph_analytics_run(%s) raised: %s", folder, exc)
 
     def load_graph_analytics_runs(
-        self, folder: str, version: str, *, limit: int = 100
+        self, folder: str, version: Optional[str] = None, *, limit: int = 100
     ) -> list:
         """Newest-first analytics run history for *folder*/*version*."""
         try:

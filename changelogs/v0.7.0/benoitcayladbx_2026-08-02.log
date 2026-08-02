@@ -1,0 +1,65 @@
+# Task 1: analytics run history — `version` becomes optional on the store read
+
+## Context
+
+Analytics run history is moving off the Knowledge Graph → Analytics tab and
+onto the Knowledge Graph → Management → Runs page, as a second table below
+the existing build-runs table. That page has no version filter, so the read
+needs to span every version of a domain in one call. This is the bottom of
+that stack: `load_graph_analytics_runs` gains an optional `version`, and
+`version=None` returns the whole folder's history, newest-first, instead of
+one version's.
+
+## Changes
+
+1. `src/back/objects/registry/store/base.py` — `load_graph_analytics_runs`
+   contract widened to `version: Optional[str] = None`; docstring documents
+   that `None` spans every version.
+2. `src/back/objects/registry/store/lakebase/store.py` — Same signature
+   change. The `WHERE` clause only appends `AND r.version = %s` when
+   `version is not None`; the `ORDER BY r.computed_at DESC, r.id DESC` was
+   already correct for the multi-version case and is unchanged.
+3. `src/back/objects/registry/RegistryService.py` — Pass-through wrapper's
+   signature widened the same way; docstring/error handling unchanged.
+4. `tests/units/registry/test_registry_store.py` — `_InMemoryStore` fake's
+   `_graph_analytics_runs` map now stores `(seq, row)` tuples (a monotonic
+   counter standing in for `computed_at`, since the fake has no real
+   timestamp to order cross-version reads by) instead of plain dicts;
+   `record_graph_analytics_run` tags each row with the version it was
+   recorded under (`row.setdefault("version", version)`) and
+   `load_graph_analytics_runs` filters by folder (and by version only when
+   given), then sorts by sequence descending. Added four new tests: a read
+   with no version spans all versions newest-first, each returned row
+   carries its `version`, `limit` applies across the merged version set,
+   and other folders are excluded. The four pre-existing
+   `graph_analytics_runs` tests (empty-by-default, newest-first, limit,
+   scoped-by-version) still pass unchanged, so explicit-version scoping is
+   still fully supported.
+
+## Modified Files
+
+- `src/back/objects/registry/store/base.py`
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/registry/RegistryService.py`
+- `tests/units/registry/test_registry_store.py`
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3772 passed, 275 skipped, 5 deselected, 1 xfailed, 0 failed` (registry
+subset: `332 passed`). Only one existing call site
+(`src/api/routers/internal/dtwin.py:719`), not the three the task brief
+assumed — it passes `version` positionally and is unaffected either way.
+
+Note: because the `_InMemoryStore` fake fully overrides the abstract method,
+the four new fake-based tests passed as soon as the fake was updated (before
+`base.py`/`store.py`/`RegistryService.py` were touched), rather than failing
+with the `TypeError` the brief predicted. See
+`.superpowers/sdd/task-1-report.md` for the full account.
