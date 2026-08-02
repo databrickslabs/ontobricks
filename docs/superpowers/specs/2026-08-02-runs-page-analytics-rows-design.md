@@ -71,7 +71,7 @@ ID · Date & Time · Version · Status · Triples · Details.
 
 | Column | Source | Notes |
 |---|---|---|
-| When | `computed_at` | relative time, full timestamp as tooltip |
+| When | `computed_at` | absolute local timestamp via the existing `_fmtTs`, matching the build table directly above it. The History tab used relative time, but consistency within one page beats fidelity to the old tab. |
 | Scope | `class_filter` | local name of first entry, or "All types" |
 | **Version** | `version` | **new** — needed now that rows from several versions interleave with no filter |
 | Status | `status` | green completed / red failed badge |
