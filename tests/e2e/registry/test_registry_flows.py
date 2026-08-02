@@ -56,6 +56,9 @@ class TestRegistryModal:
 
         page.locator(".modal.ob-modal-stacked .btn-secondary").click()
         page.wait_for_selector(".modal.ob-modal-stacked", state="detached")
+        page.wait_for_selector(
+            ".modal-backdrop.ob-modal-stacked-backdrop", state="detached"
+        )
 
         assert page.locator("#registryModal.show").count() == 1
         assert page.locator("#registryModal.ob-modal-underlying").count() == 0

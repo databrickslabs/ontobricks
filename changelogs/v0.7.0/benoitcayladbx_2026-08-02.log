@@ -1027,3 +1027,55 @@ Modified files:
 - `.superpowers/sdd/task-1-report.md`
 
 Tests: `uv run pytest -q tests/units/front/test_stacked_confirm_modal.py` → 5 failed (expected RED)
+
+## Blur underlying modal when confirm stacks on top
+
+Context: Task 3 of stacked-confirmation-modal — `showConfirmDialog()` opened above
+an already-visible Bootstrap modal (e.g. Registry → Load Domain) rendered
+white-on-white. CSS from Task 2 is in place; this wires `applyStack` /
+`clearStack` into the shared helper so the parent modal gets
+`ob-modal-underlying`, the confirm gets `ob-modal-stacked`, and the backdrop
+gets `ob-modal-stacked-backdrop`.
+
+Changes:
+
+1. `src/front/static/global/js/utils.js`
+   Detect topmost `.modal.show`, apply/remove stack classes via `applyStack` /
+   `clearStack` on show/hide; idempotent cleanup on `hidden.bs.modal`.
+
+Modified files:
+- `src/front/static/global/js/utils.js`
+
+Tests: `uv run pytest -q tests/units/front/test_stacked_confirm_modal.py` → 5 passed in 0.11s
+
+## Cover stacked Registry confirmation in Playwright
+
+Context: Add a browser regression for the white-on-white modal stacking case.
+The test opens Registry, invokes the shared confirmation helper, verifies the
+stack classes, cancels, and checks that the Registry modal remains cleanly open.
+
+Changes:
+
+1. `tests/e2e/registry/test_registry_flows.py`
+   Add a Playwright flow covering stacked confirmation classes and cancel cleanup.
+
+Modified files:
+- `tests/e2e/registry/test_registry_flows.py`
+
+Tests: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run pytest -q tests/e2e/registry/test_registry_flows.py::TestRegistryModal::test_confirm_stacks_over_registry_modal` → 1 passed, 1 warning in 5.82s; `uv run pytest -q -m "not scenario"` → 3846 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.16s
+
+## Assert stacked backdrop cleanup in Registry e2e
+
+Context: Task 4 review — after cancel, the Playwright test waited for the
+stacked modal to detach but did not assert that the stacked backdrop was
+removed, leaving a potential regression gap.
+
+Changes:
+
+1. `tests/e2e/registry/test_registry_flows.py`
+   Wait for `.modal-backdrop.ob-modal-stacked-backdrop` to detach after cancel.
+
+Modified files:
+- `tests/e2e/registry/test_registry_flows.py`
+
+Tests: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run pytest -q tests/e2e/registry/test_registry_flows.py::TestRegistryModal::test_confirm_stacks_over_registry_modal` → 1 passed, 1 warning in 5.20s
