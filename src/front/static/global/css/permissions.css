@@ -247,12 +247,12 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
        (navbar → Load Domain). Viewers must still be able to navigate
        between domains and pick a version to load — without this, the
        Load button stays disabled because the select can't be focused.
-     - ``#auditVersionFilter`` / ``#runsVersionFilter`` version filters on
-       Domain → Audit trail / Runs. These only filter the read-only
-       timeline by version; a reader on an IN-REVIEW / PUBLISHED version
-       must still be able to switch the filter. (The ``[id*="filter"]``
-       input exemption above is case-sensitive and would not match the
-       capital-F ids, so they are listed explicitly.)
+     - ``#auditVersionFilter`` version filter on Domain → Audit trail.
+       This only filters the read-only timeline by version; a reader on
+       an IN-REVIEW / PUBLISHED version must still be able to switch the
+       filter. (The ``[id*="filter"]`` input exemption above is
+       case-sensitive and would not match the capital-F id, so it is
+       listed explicitly.)
      - ``textarea[data-rm-comment]`` the review-workflow comment box
        (ReviewModals.promptComment). Every status switch — including the
        admin "Back to Draft" / Publish on an IN-REVIEW or PUBLISHED
@@ -290,7 +290,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
    to check and run the analysis. */
 body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not([data-collab]),
 body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) textarea:not([data-rm-comment]):not([data-collab]),
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not(#runsVersionFilter):not([data-collab]) {
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not([data-collab]) {
     pointer-events: none !important;
     background-color: #e9ecef !important;
     opacity: 0.7 !important;

@@ -117,6 +117,25 @@ class TestAnalyticsModal:
         )
 
 
+_PERMISSIONS_CSS = Path("src/front/static/global/css/permissions.css")
+
+
+class TestPermissionsCssCleanup:
+    """The version dropdown is gone from the Runs page (see
+    TestRunsPartial.test_the_version_filter_is_gone), so the read-only-mode
+    select exemption that named it is stale documentation debt."""
+
+    def test_runs_version_filter_selector_is_gone(self):
+        css = _PERMISSIONS_CSS.read_text(encoding="utf-8")
+        assert "#runsVersionFilter" not in css
+
+    def test_audit_version_filter_selector_survives(self):
+        """#auditVersionFilter still backs a real control on Domain → Audit
+        trail, so its exemption from the read-only select gate must stay."""
+        css = _PERMISSIONS_CSS.read_text(encoding="utf-8")
+        assert "#auditVersionFilter" in css
+
+
 _JS = Path("src/front/static/domain/js/domain-runs.js")
 
 
