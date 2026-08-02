@@ -582,3 +582,140 @@ env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
 `3819 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 26.58s`
 (full suite). Each part's new tests were confirmed failing before its source
 change and passing after (see per-part notes above).
+
+# Task 7: Documentation and full-suite verification
+
+## Context
+
+Tasks 1-6 above moved analytics run history off the eighth tab of Knowledge
+Graph → Analytics onto Knowledge Graph → Management → Runs, as a second
+table below the existing build-runs table, spanning every version with no
+filter. This task is documentation only (no application code, template, JS
+or CSS touched) plus a full-suite verification pass.
+
+## Changes
+
+1. `docs/user-guide.md` — Two edits, both in the Knowledge Graph walkthrough:
+   - Added a new **Runs (Sidebar)** subsection (after **Build (Sidebar)**,
+     since both live in the same **Management** sidebar group) documenting
+     the two stacked tables — build runs (unchanged) and analytics runs (11
+     columns: Date & Time, Scope, Version, Status, Nodes, Edges, Components,
+     Avg Degree, Density, Duration, Details) — explicitly noting neither
+     table has a version filter and both always span every version, that a
+     failed analytics run shows a red "Failed" badge with dashes instead of
+     stored zeros, that the Details button opens a modal with full scope
+     (local names + raw URIs), metrics, duration, task ID and any error, and
+     that the two tables load independently.
+   - Replaced the old `#### History` subsection under **Analytics
+     (Sidebar)** — which described a per-tab history list that no longer
+     exists — with a short pointer note directing readers to the new Runs
+     page, since the Analytics page itself only ever shows the last result
+     per version.
+   - `docs/sphinx/guides/user-guide.md` needed no edit: it is a one-line
+     MyST `{include}` stub that pulls in `docs/user-guide.md` verbatim, so
+     the Sphinx-rendered guide picks up both edits automatically.
+   - No other hit needed changing. `rg -n -i "history tab|analysis
+     history|analytics history|run history" docs/ README.md` also matched
+     `docs/architecture.md:706` and `docs/deployment.md:117` (both describe
+     the unrelated `schedule_runs` build-run ring buffer — accurate,
+     untouched) and several files under `docs/superpowers/specs/` and
+     `docs/superpowers/plans/` — those are this feature's own dated
+     design/plan artifacts (a historical record of *how* the History tab was
+     removed), not living user-facing documentation, so they were left as
+     written. `README.md` and `docs/features.md` had no hits at all.
+
+## Changelog review (Part B)
+
+Read the existing Task 1-6 entries in full before adding anything. They
+already: state the correct context for each change, list file paths, list
+modified files, and carry a real test-result line for each task. Nothing in
+them is inaccurate as written — Task 2's "default rises from 100 to 200"
+matches the current `dtwin.py` handler, and Task 6's closing count (`3819
+passed, 275 skipped, 5 deselected, 1 xfailed`) matches this task's own full-
+suite run (see below) with no drift. No corrections were needed. The one
+gap was the documentation entry above and a closing summary of the feature
+as a whole, both added now.
+
+## Modified Files
+
+- `docs/user-guide.md`
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3819 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.52s`
+(full suite) — unchanged from Task 6's closing count, as expected for a
+docs-only change. No lockfile churn (`git status --short` showed only
+`docs/user-guide.md` modified).
+
+# Feature summary: analytics run history moves to the Runs page
+
+Closing summary of the whole `feat/graph-analytics-lakeflow-pushdown` Runs-
+page feature (Tasks 1-7 above), for anyone scanning this log later without
+reading every task section.
+
+**Before:** analytics run history lived behind the eighth tab of Knowledge
+Graph → Analytics, scoped to the domain's *current* version only (empty if
+that version happened to be blank), read via `GET /dtwin/metrics/history`
+with a mandatory `version`.
+
+**After:** analytics run history lives on Knowledge Graph → Management →
+Runs, as a second table stacked below the pre-existing build-runs table
+(they share no columns, so they stay separate rather than merging). Both
+tables always show every version, newest first — the page's old
+`runsVersionFilter` dropdown (which only ever scoped the build table) is
+gone rather than kept and widened, since a filter governing one table and
+not the other would be worse than none. `GET /dtwin/metrics/history` now
+takes an optional `version` (omitted = every version) and an optional
+`limit` (default 200, max 1000, up from a fixed 100). A failed analytics run
+renders a red "Failed" badge with dashed-out metric cells instead of the
+zeros the store recorded internally. A Details button opens a modal with
+the full scope (local names + raw URIs), graph metrics, duration, task ID
+and any error text. The two tables fetch and render independently, so one
+endpoint failing never blanks the other. The Analytics page's History tab
+is gone with no in-app pointer to its replacement (Task 5); the equivalent
+dead Runs section on the Domain page is gone too, since that page's menu
+never declared a `runs` item and could never reach it (Task 6). This log's
+Task 7 documents both changes in `docs/user-guide.md`.
+
+**Full change list across all seven tasks:**
+
+- `src/back/objects/registry/store/base.py`
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/registry/RegistryService.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/domain/_domain_runs.html`
+- `src/front/templates/dtwin.html`
+- `src/front/templates/domain.html`
+- `src/front/templates/partials/dtwin/_query_analytics.html` (deleted)
+- `src/front/static/domain/js/domain-runs.js`
+- `src/front/static/domain/js/domain.js`
+- `src/front/static/global/css/permissions.css`
+- `src/back/objects/domain/Domain.py`
+- `docs/user-guide.md`
+- `tests/units/registry/test_registry_store.py`
+- `tests/units/dtwin/test_metrics_history.py` (new)
+- `tests/units/front/test_runs_page.py` (new)
+- `tests/units/api/test_ui_rendering.py`
+- `tests/units/domain/test_domain_service.py`
+
+**Manual verification (post-`make deploy`, not automatable — no JS test
+runner in this repo):** two stacked tables on the Runs page; the analytics
+table spans multiple versions with a per-row Version badge; a failed
+analytics run shows red "Failed" with dashes, not zeros; the Details eye
+opens the modal with scope, metrics, task ID and error text; the Analytics
+page has seven tabs and no History tab. Not performed as part of this task
+— flagged in `.superpowers/sdd/task-7-report.md` as still outstanding.
+
+## Final Test Result
+
+`3819 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.52s`
+— the same baseline the feature closed on after Task 6, confirmed unchanged
+after the Task 7 documentation-only diff.

@@ -481,6 +481,17 @@ Click **Build** in the sidebar to manage your triple store:
 - **Synchronize**: Generates all triples from your mappings and writes them to the Delta view in Unity Catalog and to the configured Graph DB engine (Lakebase Postgres)
 - **Last Updated**: When the table contains data, the status area displays the last modification date and time (for Delta from Unity Catalog metadata; for Lakebase from the Postgres `count_triples` + table metadata)
 
+### Runs (Sidebar)
+
+Click **Runs** in the sidebar (next to **Build**, in the **Management** group) to see the domain's run history. The page shows two independent tables, newest first — **neither has a version filter, so both always span every version of the domain**:
+
+- **Build runs** — one row per synchronize (`Build`) run: ID, date & time, version, status, triple count, and a **Details** button.
+- **Analytics runs** — one row per analysis launched from the **Analytics** page, with 11 columns: Date & Time, Scope, Version, Status, Nodes, Edges, Components, Avg Degree, Density, Duration, and **Details**. **Scope** shows the entity type(s) the run was filtered to, or *All types*. **Version** is shown per row because, with no filter, rows from different domain versions interleave in the same list. A **failed** run shows a red **Failed** badge and dashes in its metric columns instead of the zeros it stored internally — a run that errored out is not the same thing as a graph with zero nodes.
+
+Click **Details** on an analytics row to open a modal with the full scope (entity-type local names plus their raw URIs), the graph metrics, the run duration, the background task ID, and any error text if the run failed.
+
+The two tables load independently: if one fails to fetch, the other still renders normally and only the failing table shows an inline error. The shared **Refresh** button reloads both.
+
 ### Data Quality (Sidebar)
 
 Click **Data Quality** in the sidebar to run SHACL-based quality checks against the triple store:
@@ -574,9 +585,7 @@ Because the job can take a while on large graphs, it runs **asynchronously** in 
 1. (Optional) Select an **entity type** from the dropdown to restrict the analysis to one class (e.g. "Customer"). Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. The filter is pushed down to the graph store, so it also reduces how much is read — this is how you get the full metric set on a graph that is over the in-memory limit. "All types (full graph)" includes every entity.
 2. Click **Run Analysis**. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically: six stat cards appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed) and five interactive charts render below. Each new run replaces the previous stored result for that domain version.
 
-#### History
-
-The **History** tab (after *AI Insights*) lists every analysis launched for the current domain version — newest first — including failed runs. Each row shows when it ran, the scope (a single entity type or *All types*), its status, and the headline metrics (nodes, edges, components, average degree, density) plus the run duration. While the **last** full result is what the other tabs render, this tab keeps a lightweight audit trail of past runs so you can see how the graph evolved over time. The history is capped server-side per domain version.
+> **Looking for past runs?** The Analytics page itself only ever shows the **last** result per domain version. The full run history — every analysis ever launched, across every version, including failed runs — lives on **Knowledge Graph → Management → Runs** as a second table below the build-runs table (see **Runs (Sidebar)** above).
 
 #### Reading the Charts
 
