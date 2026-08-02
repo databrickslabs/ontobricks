@@ -1079,3 +1079,38 @@ Modified files:
 - `tests/e2e/registry/test_registry_flows.py`
 
 Tests: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run pytest -q tests/e2e/registry/test_registry_flows.py::TestRegistryModal::test_confirm_stacks_over_registry_modal` → 1 passed, 1 warning in 5.20s
+
+## Fix stacked confirmation visibility over open modals
+
+Context: Opening Load Domain (or another confirmation) from the Registry modal
+produced a white-on-white confirmation. `showConfirmDialog()` now dims and blurs
+the already-open Bootstrap modal and raises the confirmation and its backdrop
+for the lifetime of the dialog, then restores the parent on cleanup.
+
+Changes:
+
+1. `src/front/static/global/js/utils.js`
+   Detect the topmost visible parent modal and apply/clear the underlying,
+   stacked-confirm, and stacked-backdrop classes.
+2. `src/front/static/global/css/components.css`
+   Dim and blur the underlying modal, raise the stacked confirmation and
+   backdrop, and disable motion under `prefers-reduced-motion`.
+3. `src/front/static/global/css/main.css`
+   Add the shared `--db-dark-rgb` token used by the stacked overlay colors.
+4. `tests/units/front/test_stacked_confirm_modal.py`
+   Add source contracts for stack detection, class cleanup, scoped CSS, and
+   reduced-motion behavior.
+5. `tests/e2e/registry/test_registry_flows.py`
+   Add a Playwright regression for Registry confirmation stacking and cleanup.
+6. `changelogs/v0.7.0/benoitcayladbx_2026-08-02.log`
+   Record the complete feature file list and final non-scenario suite result.
+
+Modified files:
+- `src/front/static/global/js/utils.js`
+- `src/front/static/global/css/components.css`
+- `src/front/static/global/css/main.css`
+- `tests/units/front/test_stacked_confirm_modal.py`
+- `tests/e2e/registry/test_registry_flows.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-02.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3846 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 25.67s
