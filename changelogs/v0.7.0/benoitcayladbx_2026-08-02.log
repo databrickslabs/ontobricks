@@ -719,3 +719,85 @@ page has seven tabs and no History tab. Not performed as part of this task
 `3819 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.52s`
 — the same baseline the feature closed on after Task 6, confirmed unchanged
 after the Task 7 documentation-only diff.
+
+# Final whole-branch review: six findings fixed
+
+## Context
+
+A final whole-branch review of the completed Runs-page feature (Tasks 1-7
+above) returned six findings: two must-fix, four recommended. All six are
+small and independent; fixed together in one pass.
+
+## Changes
+
+1. `src/front/static/domain/js/domain-runs.js` (**must-fix**) —
+   `_loadBuildRuns()` and `_loadAnalyticsRuns()` now return `true` on a
+   successful load (including a genuinely empty result — an empty domain is
+   not a load failure) and `false` from both their `!data.success` branch
+   and their `catch` block. `loadDomainRuns()` sets `_runsLoaded = buildOk
+   && analyticsOk` instead of latching `true` unconditionally, so a load
+   that errored is retried on the next `sidebarSectionChanged` re-entry
+   instead of re-showing a stale error forever. Each loader keeps its own
+   `try` block and its own error element — no `Promise.all`/`allSettled`
+   introduced, isolation stays structural. An empty-but-successful load
+   still latches: "no runs yet" is a real, current answer for that section
+   visit, not a failure that should be retried on every single re-entry
+   (the reviewer flagged the pre-split code's opposite bug — never
+   latching on empty — for exactly this reason).
+2. `docs/user-guide.md` (**must-fix**) — Line 585 no longer claims the
+   entity-type filter is "pushed down to the graph store" or that it works
+   around an "in-memory limit" — both false since the NetworkX/pushdown
+   compute paths were deleted (commit b91b1cf) and contradicted line 567 of
+   the same section. Now says the filter is applied in SQL inside the
+   Lakeflow job against the Delta snapshot, and that there is no in-memory
+   limit to work around.
+3. `src/back/objects/registry/store/base.py`, `DigitalTwin.py`
+   (**recommended**) — Two stale comments referencing the deleted Analytics
+   "History" tab now point to the analytics table on the Runs page
+   (Knowledge Graph → Management → Runs), where this data actually
+   surfaces. Comments only, no logic changed.
+4. `tests/units/front/test_runs_page.py` (**recommended**) —
+   `test_failed_analytics_rows_do_not_show_zeroed_metrics` used to assert
+   only `"_analyticsRunRow" in _js()`, which would pass against a renderer
+   that printed the stored zeros — the exact bug the name claims to guard.
+   Rewritten to extract the function body and assert each numeric metric
+   column is gated `failed ? dash : ...` rather than calling the raw
+   formatter unconditionally.
+5. `tests/units/front/test_runs_page.py` (**recommended**) —
+   `test_the_two_fetches_are_independent`'s `"Promise.all" not in src` was
+   a substring check that also forbade `Promise.allSettled` — the one
+   combinator that would make loader isolation structural. Changed to
+   `"Promise.all(" not in src` and reworded the docstring.
+6. `tests/units/api/test_ui_rendering.py` (**recommended**) —
+   `test_no_dead_runs_section`'s function-local `from pathlib import Path`
+   moved to the module-level imports, matching the rest of the file.
+
+Also added `test_runs_loaded_flag_is_not_latched_unconditionally` and
+`test_loaders_report_failure_on_both_error_paths` (both new) to lock in
+finding 1: the first fails against the pre-fix `_runsLoaded = true;`
+unconditional latch (verified against a standalone copy of the old
+snippet); the second pins that both loaders return `false` from both error
+paths and `true` on success.
+
+## Modified Files
+
+- `src/front/static/domain/js/domain-runs.js`
+- `docs/user-guide.md`
+- `src/back/objects/registry/store/base.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `tests/units/front/test_runs_page.py`
+- `tests/units/api/test_ui_rendering.py`
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3821 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.94s`
+(full suite; +2 from the new must-fix-1 regression tests).
+`node --check src/front/static/domain/js/domain-runs.js` → parses clean.
