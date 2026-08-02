@@ -454,3 +454,131 @@ env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
 (full suite). `tests/units/front/test_runs_page.py`: `28 passed`, confirmed
 failing first — 7 of 8 new tests failed before the deletion (the
 helpers-survive test passed from the start, as expected).
+
+# Task 6: Remove the dead Runs section from the Domain page, plus two related
+# dead-reference cleanups
+
+## Context
+
+Analytics run history moved onto Knowledge Graph → Management → Runs (Tasks
+1-5 above); that work is done. This task is cleanup: the Domain menu
+(`menu_config.json`) never declared a `runs` item, so `domain.html`'s
+`runs-section` (and `domain.js`'s matching hook) could never be opened — only
+the Digital Twin page's menu declares `runs`. Two more dead references
+surfaced during review of the earlier tasks: a stale `#runsVersionFilter`
+selector in `permissions.css` left over from the version dropdown Task 3
+removed, and unconsumed `current_version` / `versions` fields in the
+`/domain/build-runs` payload left over from the same removal.
+
+## Changes
+
+### Part A — dead Runs section on the Domain page
+
+1. `src/front/templates/domain.html` — Deleted the `#runs-section` div (and
+   its `_domain_runs.html` include). Kept the page-level `runDetailsModal`
+   and the `domain-runs.js` `<script>` tag: `domain-audit.js:210-211` calls
+   `window.showRunDetailsObj(run)` to expand build entries in the audit
+   timeline, so both must survive even though the section that used to open
+   the modal from a Runs tab is gone.
+2. `src/front/static/domain/js/domain.js` — Deleted the
+   `section === 'runs'` hook in `SidebarNav.init`'s `onSectionChange`
+   (dead code: the section it loaded no longer exists and could never be
+   navigated to).
+3. `tests/units/api/test_ui_rendering.py` — Removed `"runs-section"` from
+   `TestDomainPage.test_section_div_exists`'s parametrize list; added
+   `test_no_dead_runs_section` (file-read: the id is gone from
+   `domain.html`) and `test_run_details_modal_and_script_survive`
+   (rendered-HTML: `domain-runs.js` and `#runDetailsModal` still ship on
+   `/domain`); added `TestDigitalTwinPage.test_runs_section_present`
+   (rendered-HTML: `#runs-section` exists on `/dtwin/`, the only page whose
+   menu declares it).
+
+### Part B — stale `#runsVersionFilter` CSS selector
+
+4. `src/front/static/global/css/permissions.css` — Removed the
+   `:not(#runsVersionFilter)` clause from the read-only-mode `select`
+   disable rule (line 293) and reworded the doc comment above it (former
+   line 250) to describe only `#auditVersionFilter`, which still backs a
+   real control on Domain → Audit trail. Purely inert today
+   (`:not(#nonexistent-id)` always matches), so this is documentation debt
+   only — the change provably does not alter which elements the rule
+   matches, since removing one `:not()` clause from a selector that already
+   matched everything changes nothing. `#auditVersionFilter` was verified
+   still present (`domain-audit.js`, `_domain_audit.html`) before touching
+   anything and is untouched.
+5. `tests/units/front/test_runs_page.py` — Added `TestPermissionsCssCleanup`:
+   `#runsVersionFilter` is gone from `permissions.css`;
+   `#auditVersionFilter` still is not.
+
+### Part C — dead `current_version` / `versions` fields on `/domain/build-runs`
+
+6. `src/back/objects/domain/Domain.py` — `list_build_runs_result` no longer
+   returns `current_version` or `versions`, and no longer calls
+   `svc.list_versions_sorted(folder)` to build the latter. Both fields
+   existed to populate the build-runs version dropdown that Task 3 already
+   removed from the template; nothing reads them today (see the unconsumed
+   proof below), and `list_versions_sorted` was a registry round-trip paid
+   on every Runs page load for a value nobody used. `audit_trail_result`
+   (a different method, a few lines below) still returns both fields for
+   its own dropdown and was not touched.
+7. `tests/units/domain/test_domain_service.py` — Added `TestListBuildRuns`:
+   the payload has no `current_version` / `versions` keys;
+   `svc.list_versions_sorted` is never called; `version` / `limit` are
+   still passed through to `svc.load_build_runs`; the configured-registry
+   and saved-domain guards still raise. Confirmed the first two fail before
+   the `Domain.py` change and pass after; the other three passed
+   unchanged throughout (proving the removal didn't touch the rest of the
+   contract).
+
+## Unconsumed-fields proof (Part C)
+
+Searched for any reader of `versions` / `current_version` scoped to the
+`/domain/build-runs` response specifically (both are common field names
+reused by other endpoints, so a bare-word search would false-positive):
+
+- `rg "list_build_runs_result|domain/build-runs" src tests changelogs docs`
+  — the only caller is `src/api/routers/internal/domain.py:594`
+  (`GET /domain/build-runs`); the only frontend fetcher of that path is
+  `src/front/static/domain/js/domain-runs.js:175` (`_loadBuildRuns`, out of
+  scope per the task's constraints — not modified, only read).
+- Read `_loadBuildRuns` in full: it destructures only `data.success`,
+  `data.message`, and `data.runs` from the response. No reference to
+  `data.versions` or `data.current_version` anywhere in the file.
+- `rg "runsCache\.versions|data\.versions|data\.current_version" src/front/static/domain/js/domain-runs.js`
+  — no matches.
+- `rg "list_build_runs_result|domain/build-runs" tests` — only
+  `tests/units/front/test_runs_page.py:149` asserts the fetch URL string;
+  no test reads `versions` / `current_version` off this response.
+- Verified `/settings/build-runs/{domain_name}` (`build-analytics.js`,
+  `settings.py`) is a wholly separate endpoint backed by
+  `config_service.get_build_runs_result`, not `Domain.list_build_runs_result`
+  — irrelevant to this removal.
+- Verified `list_versions_sorted` (`RegistryService.py:733`) is a pure
+  read-only registry query with no side effects, so dropping the call has
+  no consequence beyond the removed round-trip.
+
+Conclusion: both fields were genuinely unconsumed by any caller. Removed.
+
+## Modified Files
+
+- `src/front/templates/domain.html`
+- `src/front/static/domain/js/domain.js`
+- `src/front/static/global/css/permissions.css`
+- `src/back/objects/domain/Domain.py`
+- `tests/units/api/test_ui_rendering.py`
+- `tests/units/front/test_runs_page.py`
+- `tests/units/domain/test_domain_service.py`
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3819 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 26.58s`
+(full suite). Each part's new tests were confirmed failing before its source
+change and passing after (see per-part notes above).
