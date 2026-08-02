@@ -271,3 +271,120 @@ already pass).
 - `tests/units/front/test_runs_page.py`
 
 **Test result:** 3797 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 24.85s
+
+# Runs page JS — fetch and render both tables
+
+## Context
+
+Task 3 added the analytics-runs markup and the analytics details modal to the
+Runs page; Task 2 made `GET /dtwin/metrics/history` return every version's
+runs. This change writes the script side: `domain-runs.js` now populates both
+stacked tables and drives the new modal, which makes the feature functional
+end to end. The repository has no JavaScript test runner (no jest, no vitest,
+no `.test.js` anywhere), so the tests read the script as text and assert on
+markers in its source — the established fallback in this repo, precedent
+`tests/units/settings/test_analytics_job_toggle.py`. The runtime-correctness
+checks that no test can perform were done by reading (see below).
+
+## Changes
+
+1. `src/front/static/domain/js/domain-runs.js` — Split loading into two
+   isolated loaders, `_loadBuildRuns()` and `_loadAnalyticsRuns()`, each
+   owning its own loading / empty / error elements and its own `try` block.
+   `loadDomainRuns()` stays the single global entry point (the Refresh
+   button's `onclick` and both bottom-of-file event listeners call it) and
+   now awaits the two loaders sequentially. Sequential awaits rather than a
+   combinator that settles on first rejection: if one endpoint fails the
+   other table must still render.
+2. `src/front/static/domain/js/domain-runs.js` — Added the analytics
+   renderers: `_analyticsRunRow()` emits exactly 11 `<td>` cells matching the
+   markup's 11 headers (Date & Time, Scope, Version, Status, Nodes, Edges,
+   Components, Avg Degree, Density, Duration, Details), and
+   `_renderAnalyticsRunsTable()` fills `#analyticsRunsTableBody` from
+   `_analyticsRunsCache`. Failed runs dash out their metric cells: the store
+   records zeros for a run that died, and printing them would read as a graph
+   with no nodes rather than a run that produced no numbers.
+3. `src/front/static/domain/js/domain-runs.js` — Added
+   `_analyticsStatusBadge()` alongside the existing `_statusBadge()`.
+   Analytics runs report `completed`/`failed` where builds report
+   `success`/`error`/`cancelled`, so overloading one helper would render every
+   analytics row as an unknown-status grey badge.
+4. `src/front/static/domain/js/domain-runs.js` — Added `_runLocalName()`,
+   `_analyticsScope()` and `_fmtMillis()`. The local-name helper carries a
+   `_run` prefix rather than being called `_localName`: this file declares its
+   helpers at global scope and `query-chat.js`, loaded on the same page, has a
+   `_localName` of its own. That one currently sits inside an IIFE so there is
+   no clash today, but the prefix guarantees there never can be.
+5. `src/front/static/domain/js/domain-runs.js` — Added
+   `showAnalyticsRunDetails(idx)` (exported on `window`) rendering the
+   analytics modal into `#analyticsRunDetailsBody`: status/version/when/
+   duration summary, the error alert when present, the full scope URI list,
+   and the graph metrics with the same failed-run dashing as the table.
+6. `src/front/static/domain/js/domain-runs.js` — Deleted
+   `_populateRunsVersions()` and the `_runsVersionSel` module state, and
+   dropped the `data.versions` / `data.current_version` handling from the
+   build loader. The `#runsVersionFilter` dropdown was removed from the
+   template in Task 3, so this wiring was reading a non-existent element and
+   filtering against a value that could never change. `_renderRunsTable()`
+   now reads `_runsCache` directly and its `forEach` index is the cache index
+   (previously it recovered the index via `indexOf`, which was only needed
+   because the filtered row list diverged from the cache).
+7. `tests/units/front/test_runs_page.py` — Added `TestRunsScript` with five
+   source-marker tests: both endpoints are fetched; the two loads are
+   independent (no rejection-combinator, exactly one of each loader); the
+   analytics status badge is its own helper; the version-dropdown wiring is
+   gone; and the failed-row renderer exists.
+
+## Runtime checks performed by reading (no test covers these)
+
+- **Element ids.** Every `document.getElementById(...)` in the file was
+  matched against the committed markup: the six build ids and six analytics
+  ids all exist in `partials/domain/_domain_runs.html`; `runDetailsModal` /
+  `runDetailsBody` and `analyticsRunDetailsModal` / `analyticsRunDetailsBody`
+  all exist at page level in `dtwin.html`; `runs-section` exists in both
+  `dtwin.html` and `domain.html`.
+- **Helper scope.** Every helper called is a top-level function declaration in
+  the same file, so all are hoisted and in scope regardless of call order.
+  `_analyticsRunsCache` is a module-level `let` read only from inside
+  functions, so no temporal-dead-zone hazard.
+- **Global name collisions.** `rg` across `src/` confirms none of the new
+  global names (`_analyticsStatusBadge`, `_runLocalName`, `_analyticsScope`,
+  `_fmtMillis`, `_analyticsRunRow`, `_renderAnalyticsRunsTable`,
+  `_loadBuildRuns`, `_loadAnalyticsRuns`, `showAnalyticsRunDetails`,
+  `_analyticsRunsCache`) is defined anywhere else. The other `_localName`
+  definitions on the same page (`query-chat.js`, the inline script in
+  `partials/dtwin/_query_analytics.html`, lines 379-1552 of which are one
+  IIFE) are all scoped, and the new helper is prefixed anyway.
+- **Dead-reference sweep.** `rg` confirms `_populateRunsVersions` and
+  `_runsVersionSel` had no callers outside this file. `showRunDetailsObj`
+  keeps its name, signature and `window` export, so `domain-audit.js:211`
+  still works.
+- **Cell count.** `_analyticsRunRow` was counted by hand against the markup:
+  11 `<td>` for 11 `<th>`.
+
+## Deviation from the brief
+
+The brief's comment above `loadDomainRuns()` contained the literal string
+`Promise.all`, which its own `test_the_two_fetches_are_independent` asserts is
+absent from the file — copying it verbatim made that test fail. The comment
+was reworded to say the same thing ("a combinator that settles on the first
+rejection") without the forbidden literal.
+
+## Modified Files
+
+- `src/front/static/domain/js/domain-runs.js`
+- `tests/units/front/test_runs_page.py`
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3802 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 24.69s`
+(full suite). `tests/units/front/test_runs_page.py`: `20 passed`, confirmed
+failing first — all five new tests failed before the script was rewritten.

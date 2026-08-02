@@ -110,3 +110,44 @@ class TestAnalyticsModal:
         assert _find(tags, id_=label_id) is not None, (
             f"aria-labelledby='{label_id}' points to an id that does not exist on the page"
         )
+
+
+_JS = Path("src/front/static/domain/js/domain-runs.js")
+
+
+def _js() -> str:
+    return _JS.read_text(encoding="utf-8")
+
+
+class TestRunsScript:
+    def test_it_fetches_both_sources(self):
+        src = _js()
+        assert "/domain/build-runs" in src
+        assert "/dtwin/metrics/history" in src
+
+    def test_the_two_fetches_are_independent(self):
+        """One endpoint failing must not blank the other table, so the two
+        loads cannot share a try block or a Promise.all that rejects."""
+        src = _js()
+        assert "Promise.all" not in src
+        assert src.count("async function _loadBuildRuns") == 1
+        assert src.count("async function _loadAnalyticsRuns") == 1
+
+    def test_analytics_status_has_its_own_badge_helper(self):
+        """Analytics reports completed/failed; builds report
+        success/error/cancelled. Overloading one helper would render every
+        analytics row as an unknown-status grey badge."""
+        src = _js()
+        assert "_analyticsStatusBadge" in src
+        assert "'completed'" in src or '"completed"' in src
+
+    def test_the_version_dropdown_wiring_is_gone(self):
+        src = _js()
+        assert "runsVersionFilter" not in src
+        assert "_populateRunsVersions" not in src
+        assert "_runsVersionSel" not in src
+
+    def test_failed_analytics_rows_do_not_show_zeroed_metrics(self):
+        """A failed run records zeros, and printing them as real values
+        would read as a graph with no nodes rather than a run that died."""
+        assert "_analyticsRunRow" in _js()
