@@ -122,7 +122,8 @@ class GraphAnalyticsRun(TypedDict, total=False):
     Lightweight metadata captured for *every* analysis launched (success
     or failure) on ``(folder, version)`` — unlike
     :class:`GraphAnalyticsResult`, which caches only the last full result.
-    Backs the Analytics page "History" tab. Append-only; capped per tuple.
+    Backs the analytics table on the Runs page (Knowledge Graph →
+    Management → Runs). Append-only; capped per tuple.
     """
 
     id: int                      # row id (0 for stores without a serial PK)

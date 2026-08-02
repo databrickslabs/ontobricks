@@ -2789,8 +2789,9 @@ class DigitalTwin:
         except Exception as exc:  # noqa: BLE001
             logger.exception("Graph metrics task failed: %s", exc)
             # Record the failed run in the history (best-effort) so users can
-            # see it in the Analytics History tab. The last good cached result
-            # is intentionally left untouched.
+            # see it in the analytics table on the Runs page (Knowledge
+            # Graph → Management → Runs). The last good cached result is
+            # intentionally left untouched.
             if folder and version:
                 try:
                     RegistryService.from_context(
