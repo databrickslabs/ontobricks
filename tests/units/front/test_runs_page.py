@@ -23,10 +23,15 @@ pytestmark = pytest.mark.unit
 
 _PARTIAL = Path("src/front/templates/partials/domain/_domain_runs.html")
 _DTWIN = Path("src/front/templates/dtwin.html")
+_ANALYTICS = Path("src/front/templates/partials/dtwin/_query_analytics.html")
 
 
 def _partial() -> str:
     return _PARTIAL.read_text(encoding="utf-8")
+
+
+def _analytics_partial() -> str:
+    return _ANALYTICS.read_text(encoding="utf-8")
 
 
 class TestRunsPartial:
@@ -151,3 +156,69 @@ class TestRunsScript:
         """A failed run records zeros, and printing them as real values
         would read as a graph with no nodes rather than a run that died."""
         assert "_analyticsRunRow" in _js()
+
+
+# =====================================================
+# HISTORY TAB REMOVED FROM THE ANALYTICS PAGE
+# =====================================================
+
+
+class TestHistoryTabRemoved:
+    """Run history lives on the Runs page now, not behind the eighth tab of
+    a page about the current result.
+
+    File-reads prove the source partial is clean of every History-tab
+    marker; a rendered-HTML assertion additionally proves the served
+    ``/dtwin/`` page's tab strip no longer offers a History tab (not just
+    that the string is absent from one file for unrelated reasons)."""
+
+    @pytest.mark.parametrize(
+        "marker",
+        [
+            "atab-btn-history",
+            "atab-history",
+            "analyticsLoadHistory",
+            "analyticsHistoryBody",
+            "analyticsHistoryEmpty",
+        ],
+    )
+    def test_no_trace_of_the_history_tab_in_the_source(self, marker):
+        assert marker not in _analytics_partial()
+
+    def test_helpers_the_other_tabs_still_use_survive(self):
+        """_formatComputedAt and _localName were used by the History rows
+        but are used by other tabs too — deleting them would be over-reach."""
+        src = _analytics_partial()
+        assert "function _formatComputedAt" in src
+        assert "function _localName" in src
+
+    def test_history_tab_button_is_gone_from_the_rendered_page(self, client):
+        """Rendered-HTML: the served /dtwin/ page's tab strip no longer has
+        a button targeting #atab-history — proves the served page actually
+        changed, not merely that the source file was edited."""
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        assert _find(tags, id_="atab-btn-history") is None
+        assert _find(tags, attr=("data-bs-target", "#atab-history")) is None
+        assert _find(tags, id_="atab-history") is None
+
+    def test_the_remaining_analytics_tabs_render_in_order(self, client):
+        """Rendered-HTML: the seven surviving tabs are still there, in
+        their original order, on the served page — guards against
+        accidentally deleting a neighboring tab along with History."""
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        tab_button_ids = [
+            a.get("id")
+            for t, a in tags
+            if t == "button" and (a.get("id") or "").startswith("atab-btn-")
+        ]
+        assert tab_button_ids == [
+            "atab-btn-pagerank",
+            "atab-btn-betweenness",
+            "atab-btn-degree",
+            "atab-btn-closeness",
+            "atab-btn-clustering",
+            "atab-btn-health",
+            "atab-btn-insights",
+        ]

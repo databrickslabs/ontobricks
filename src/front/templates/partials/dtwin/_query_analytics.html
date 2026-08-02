@@ -170,12 +170,6 @@
                     <i class="bi bi-stars me-1 text-warning"></i>AI Insights
                 </button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="atab-btn-history" data-bs-toggle="tab"
-                        data-bs-target="#atab-history" type="button" role="tab">
-                    <i class="bi bi-clock-history me-1 text-secondary"></i>History
-                </button>
-            </li>
         </ul>
 
         <div class="tab-content ob-tab-content" id="analyticsTabContent">
@@ -313,42 +307,6 @@
                     <div id="analyticsInsightsSpinner" class="text-center py-3 d-none">
                         <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
                         <span class="ms-2 small text-muted">Interpreting results…</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ── TAB: History ── -->
-            <div class="tab-pane fade" id="atab-history" role="tabpanel">
-                <div class="card mt-1">
-                    <div class="card-header py-2 small fw-semibold d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-clock-history me-1 text-secondary"></i>Analysis history</span>
-                        <button class="btn btn-link btn-sm p-0 text-muted" onclick="analyticsLoadHistory()" title="Refresh history">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </button>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover align-middle mb-0" style="font-size:0.82rem">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="ps-3">When</th>
-                                        <th>Scope</th>
-                                        <th>Status</th>
-                                        <th class="text-end">Nodes</th>
-                                        <th class="text-end">Edges</th>
-                                        <th class="text-end">Components</th>
-                                        <th class="text-end">Avg Degree</th>
-                                        <th class="text-end">Density</th>
-                                        <th class="text-end pe-3">Duration</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="analyticsHistoryBody"></tbody>
-                            </table>
-                        </div>
-                        <div id="analyticsHistoryEmpty" class="text-center text-muted small py-5 d-none">
-                            <i class="bi bi-clock-history fs-4 d-block mb-2"></i>
-                            No analyses recorded yet — click <strong>Run Analysis</strong> to start one.
-                        </div>
                     </div>
                 </div>
             </div>
@@ -719,9 +677,6 @@
         var auditBtn = document.getElementById('analyticsAuditBtn');
         if (auditBtn) auditBtn.classList.add('d-none');
         _analyticsLastSections = null;
-
-        // Refresh the run-history tab alongside the result.
-        if (typeof window.analyticsLoadHistory === 'function') window.analyticsLoadHistory();
     }
 
     // Load and render the LAST persisted analytics result for this domain.
@@ -748,62 +703,6 @@
             if (spinner) spinner.classList.add('d-none');
             if (spinnerMsg) spinnerMsg.textContent = prevMsg;
         }
-    };
-
-    // ── Run history ────────────────────────────────────────────────────────
-    // Load the analysis run history (newest-first) into the History tab.
-    window.analyticsLoadHistory = async function () {
-        var tbody = document.getElementById('analyticsHistoryBody');
-        var emptyEl = document.getElementById('analyticsHistoryEmpty');
-        if (!tbody) return;
-        var runs = [];
-        try {
-            var resp = await fetch('/dtwin/metrics/history', { credentials: 'same-origin' });
-            var data = await resp.json();
-            if (data && data.success) runs = data.runs || [];
-        } catch (e) {
-            runs = [];
-        }
-
-        tbody.innerHTML = '';
-        if (!runs.length) {
-            if (emptyEl) emptyEl.classList.remove('d-none');
-            return;
-        }
-        if (emptyEl) emptyEl.classList.add('d-none');
-
-        runs.forEach(function (r) {
-            var when = _formatComputedAt(r.computed_at) || '—';
-            var whenFull = r.computed_at ? new Date(r.computed_at).toLocaleString() : '';
-            var scope = (r.class_filter && r.class_filter.length)
-                ? _esc(_localName(r.class_filter[0]))
-                : '<span class="text-muted">All types</span>';
-            var failed = r.status === 'failed';
-            var statusBadge = failed
-                ? '<span class="badge bg-danger-subtle text-danger-emphasis border border-danger" title="' + _esc(r.error || 'Analysis failed') + '"><i class="bi bi-x-circle me-1"></i>failed</span>'
-                : '<span class="badge bg-success-subtle text-success-emphasis border border-success"><i class="bi bi-check-circle me-1"></i>completed</span>';
-            var dash = '<span class="text-muted">—</span>';
-            var nodes = failed ? dash : (r.node_count || 0).toLocaleString();
-            var edges = failed ? dash : (r.edge_count || 0).toLocaleString();
-            var comps = failed ? dash : String(r.connected_components || 0);
-            var avgd  = failed ? dash : (r.avg_degree || 0).toFixed(2);
-            var dens  = failed ? dash : (r.density || 0).toFixed(6);
-            var dur   = (r.duration_ms != null) ? (r.duration_ms + ' ms') : '—';
-
-            tbody.insertAdjacentHTML('beforeend',
-                '<tr>'
-                + '<td class="ps-3" title="' + _esc(whenFull) + '">' + _esc(when) + '</td>'
-                + '<td>' + scope + '</td>'
-                + '<td>' + statusBadge + '</td>'
-                + '<td class="text-end">' + nodes + '</td>'
-                + '<td class="text-end">' + edges + '</td>'
-                + '<td class="text-end">' + comps + '</td>'
-                + '<td class="text-end font-monospace">' + avgd + '</td>'
-                + '<td class="text-end font-monospace">' + dens + '</td>'
-                + '<td class="text-end pe-3">' + dur + '</td>'
-                + '</tr>'
-            );
-        });
     };
 
     // Toggle the "analysis in progress" UI: spinner on/off + button disabled.

@@ -388,3 +388,69 @@ env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
 `3802 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 24.69s`
 (full suite). `tests/units/front/test_runs_page.py`: `20 passed`, confirmed
 failing first — all five new tests failed before the script was rewritten.
+
+# Task 5: Remove the History tab from the Analytics page
+
+## Context
+
+Analytics run history now lives on Knowledge Graph → Management → Runs (Tasks
+1-4 above) as a second table below the build-runs table, wired and working.
+This removes the now-redundant eighth tab on the Analytics page. Pure view
+removal: `GET /dtwin/metrics/history`, the store methods and the recording
+path are untouched — the Runs page consumes them now.
+
+## Changes
+
+1. `src/front/templates/partials/dtwin/_query_analytics.html` — Deleted, in
+   bottom-up order so earlier line numbers stayed valid: the
+   `window.analyticsLoadHistory` function (fetched `/dtwin/metrics/history`
+   and rendered `#analyticsHistoryBody`); the
+   `if (typeof window.analyticsLoadHistory === 'function') …` auto-refresh
+   call (plus its now-meaningless preceding comment) inside
+   `_renderAnalyticsData`; the `#atab-history` tab-pane and its
+   `<!-- TAB: History -->` comment; and the `atab-btn-history` tab trigger
+   `<li>`. Kept `_formatComputedAt` and `_localName` — both are still called
+   from surviving tabs (PageRank table, type-select labels, Graph Viewer
+   drill-down, AI Insights, Data Model Health).
+2. `tests/units/front/test_runs_page.py` — Added `TestHistoryTabRemoved`:
+   the brief's five file-read marker-absence tests plus the
+   helpers-survive test (unchanged from the brief), and two rendered-HTML
+   additions via the existing `client` / `_html` / `_tags` / `_find` stack:
+   the served `/dtwin/` page's tab strip has no `atab-btn-history` button
+   and no element targeting `#atab-history`, and the seven surviving
+   `atab-btn-*` tabs render in their original order (guards against an
+   accidental extra deletion during the bottom-up edit). File-read proves
+   the source is clean; rendered-HTML proves the served page actually
+   changed and nothing else was collaterally removed.
+
+## Orphan sweep
+
+`rg -n "analyticsLoadHistory|atab-history|atab-btn-history|analyticsHistory"
+src/ tests/` returns only the new test's own assertions. Also checked (per
+the brief's warning that a prior task left stale CSS behind for exactly this
+reason): the partial's `<style>` block and every `*.css`/`*.scss` file in the
+repo (no hits), the `shown.bs.tab` chart-resize `keyMap` and the `_METRICS`
+array (History was never enumerated in either), and `query.js` /
+`domain-runs.js` (no reference to History anywhere outside the partial).
+Clean on the first pass — see `.superpowers/sdd/task-5-report.md` for the
+full account.
+
+## Modified Files
+
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `tests/units/front/test_runs_page.py`
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3810 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 29.73s`
+(full suite). `tests/units/front/test_runs_page.py`: `28 passed`, confirmed
+failing first — 7 of 8 new tests failed before the deletion (the
+helpers-survive test passed from the start, as expected).
