@@ -855,7 +855,11 @@ class RegistryService:
     def load_graph_analytics_runs(
         self, folder: str, version: Optional[str] = None, *, limit: int = 100
     ) -> list:
-        """Newest-first analytics run history for *folder*/*version*."""
+        """Newest-first analytics run history for *folder*.
+
+        Spans every version unless *version* is given, in which case
+        the history is scoped to that version only.
+        """
         try:
             return self._store.load_graph_analytics_runs(
                 folder, version, limit=limit

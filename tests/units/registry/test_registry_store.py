@@ -1644,3 +1644,60 @@ class TestLakebaseCollab:
         sql, params = cur.executed[-1]
         assert "SET status = %s" in sql
         assert params[0] == "in_progress"
+
+
+# ---------------------------------------------------------------------
+# Lakebase graph-analytics run history — real SQL code path
+#
+# The in-memory fake above proves the *contract* (version=None spans
+# every version, version="x" scopes to it). These drive the concrete
+# Lakebase implementation to pin down the conditional ``r.version = %s``
+# predicate and, critically, the *order* of the bound params — a
+# reordered ``.append()`` would still "work" against the fake cursor
+# but would silently mis-bind params against a real Postgres query.
+# ---------------------------------------------------------------------
+
+
+def _graph_analytics_runs_store(monkeypatch, cur):
+    """A Lakebase store whose ``_connect`` yields *cur* and whose
+    graph-analytics-runs table is already marked present (skips the
+    lazy DDL probe). Mirrors ``_collab_store``.
+    """
+    from contextlib import contextmanager
+    import back.objects.registry.store.lakebase.store as _store_mod
+
+    store = _make_lakebase_store(monkeypatch)
+    store._registry_id = "rid-1"          # skip registry-id resolution
+    store._graph_analytics_runs_ready = True  # skip the ensure/CREATE probe
+
+    @contextmanager
+    def fake_connect():
+        yield _ScriptedConn(cur)
+
+    monkeypatch.setattr(store, "_connect", fake_connect)
+    monkeypatch.setattr(_store_mod, "_require_psycopg", lambda: (None, None))
+    return store
+
+
+class TestLakebaseGraphAnalyticsRunsSql:
+    def test_load_runs_without_version_omits_predicate(self, monkeypatch):
+        cur = _ScriptedCursor([{"contains": "FROM", "fetchall": []}])
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_graph_analytics_runs("demo", limit=50)
+
+        sql, params = cur.executed[-1]
+        assert "r.version = %s" not in sql
+        assert params == ("rid-1", "demo", 50)
+
+    def test_load_runs_with_version_appends_predicate_and_param_last(
+        self, monkeypatch
+    ):
+        cur = _ScriptedCursor([{"contains": "FROM", "fetchall": []}])
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_graph_analytics_runs("demo", "1", limit=50)
+
+        sql, params = cur.executed[-1]
+        assert "r.version = %s" in sql
+        assert params == ("rid-1", "demo", "1", 50)

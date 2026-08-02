@@ -63,3 +63,53 @@ the four new fake-based tests passed as soon as the fake was updated (before
 `base.py`/`store.py`/`RegistryService.py` were touched), rather than failing
 with the `TypeError` the brief predicted. See
 `.superpowers/sdd/task-1-report.md` for the full account.
+
+# Fix pass 1: code review remediation for commit cb4bddd
+
+## Context
+
+A code review of `cb4bddd` (the task above) raised two Important findings:
+the production Lakebase SQL branch for `load_graph_analytics_runs` had no
+test coverage of its own (only the `_InMemoryStore` fake was exercised), and
+`RegistryService.load_graph_analytics_runs`'s docstring still described the
+old version-scoped-only contract. Both are fixed; no production behaviour
+changed.
+
+## Changes
+
+1. `tests/units/registry/test_registry_store.py` — Added
+   `TestLakebaseGraphAnalyticsRunsSql`, driving the real
+   `LakebaseRegistryStore.load_graph_analytics_runs` via the existing
+   scripted-cursor harness (`_make_lakebase_store` + `_ScriptedCursor` +
+   `_ScriptedConn`, following the `_collab_store` pattern — table-ready flag
+   short-circuited via `_graph_analytics_runs_ready = True`). Two tests
+   assert on the captured `(sql, params)` tuple: `version=None` emits SQL
+   without `r.version = %s` and params `("rid-1", "demo", 50)`; `version="1"`
+   emits SQL with the predicate and params `("rid-1", "demo", "1", 50)`,
+   checked as an exact ordered tuple so a future reordering of the
+   `.append()` calls would be caught. Verified this by temporarily swapping
+   the append order in `store.py` (limit appended before the version
+   predicate) — the new `version="1"` test failed as expected — then
+   reverted the swap (confirmed via `git diff` showing no residual change).
+2. `src/back/objects/registry/RegistryService.py` — Rewrote the
+   `load_graph_analytics_runs` docstring from "Newest-first analytics run
+   history for *folder*/*version*." (wrong once `version` is optional) to
+   state it spans every version unless `version` scopes it.
+
+## Modified Files
+
+- `tests/units/registry/test_registry_store.py`
+- `src/back/objects/registry/RegistryService.py`
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3774 passed, 275 skipped, 5 deselected, 1 xfailed, 0 failed` (full suite);
+`tests/units/registry/test_registry_store.py`: `72 passed`.
