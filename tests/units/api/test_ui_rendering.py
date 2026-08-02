@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pytest
@@ -469,8 +470,6 @@ class TestDomainPage:
         """The Domain menu has no Runs item, so the section was unreachable.
         Left in, it would render analytics history on a page about the
         domain record."""
-        from pathlib import Path
-
         html = Path("src/front/templates/domain.html").read_text(encoding="utf-8")
         assert 'id="runs-section"' not in html
 
