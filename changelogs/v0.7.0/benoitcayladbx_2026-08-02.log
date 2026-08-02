@@ -801,3 +801,84 @@ env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
 `3821 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.94s`
 (full suite; +2 from the new must-fix-1 regression tests).
 `node --check src/front/static/domain/js/domain-runs.js` → parses clean.
+
+---
+
+# Runs page: Build and Analytics histories become tabs
+
+## Context
+
+The Runs page shipped earlier today with the two histories stacked — Build
+runs above, Analytics runs below, both always rendered. With eleven columns
+on the analytics table the page had grown tall enough that reaching the
+second table meant scrolling past the whole of the first. Tabs put both one
+click away and match the tab convention already used on the Analytics page.
+
+This is a layout change only. No element id moved, so the JavaScript
+contract with `domain-runs.js` is untouched and no loader logic changed.
+
+## Changes
+
+1. `src/front/templates/partials/domain/_domain_runs.html` — replaced the two
+   stacked `<h6>`-headed blocks with a `nav nav-tabs ob-tabs` strip and a
+   `tab-content ob-tab-content` body, following the same house convention as
+   the Analytics page tabs. Two panes: `rtab-build` (default, `show active`)
+   and `rtab-analytics`. Every existing element id is preserved verbatim.
+   Added `aria-controls` / `aria-selected` on the buttons and
+   `aria-labelledby` on the panes.
+2. Same file — the analytics pane's loading and empty states moved from
+   `py-4` to `py-5`, matching the build pane. As sibling tabs showing the
+   same kind of state, differing padding was visible when switching between
+   them; the two blocks were only inconsistent because one predated the
+   other.
+3. Same file — the two error alerts gained `m-3`. Inside a bordered
+   `ob-tab-content` body an alert would otherwise sit flush against the
+   pane's edge.
+4. `tests/units/front/test_runs_page.py` — added `TestRunsTabs` (5 tests):
+   both tabs and panes render; each button targets its own pane; exactly one
+   tab is active and it is Build runs; each pane is labelled by its tab; and
+   each table sits inside its own pane. Renamed
+   `test_both_cards_have_their_own_elements` to `..._tabs_...` and updated
+   the module docstring.
+5. `docs/user-guide.md` — the Runs section now describes tabs rather than two
+   stacked tables, notes Build runs is the tab shown first, and states that
+   both panes are populated on section entry so switching never waits on a
+   fetch.
+
+## Design notes
+
+- **Both tabs load on section entry**, rather than lazy-loading the analytics
+  table when its tab is first opened. The two loaders are already independent
+  and `_runsLoaded` already latches per-section-entry, so lazy loading would
+  have added a second caching concern for no benefit. Switching tabs is
+  instant.
+- **The Refresh button stays above the tab strip and reloads both.** It is a
+  property of the section, not of the visible tab.
+- **Build runs is the default** — it was the upper table before, and it is
+  the history that exists for every domain, whereas analytics runs only
+  appear once someone has run an analysis.
+
+## Modified Files
+
+- `src/front/templates/partials/domain/_domain_runs.html`
+- `tests/units/front/test_runs_page.py`
+- `docs/user-guide.md`
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3826 passed, 275 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.89s`
+(full suite; +5 from the new TestRunsTabs cases).
+
+Both new structural assertions were canary-verified: injecting a second
+`show active` pane and re-pointing the analytics button at the build pane
+made `test_build_runs_is_the_default_tab` and
+`test_each_tab_button_targets_its_own_pane` fail as intended, and the
+injected changes were reverted.

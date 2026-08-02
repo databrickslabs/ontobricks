@@ -483,14 +483,14 @@ Click **Build** in the sidebar to manage your triple store:
 
 ### Runs (Sidebar)
 
-Click **Runs** in the sidebar (next to **Build**, in the **Management** group) to see the domain's run history. The page shows two independent tables, newest first — **neither has a version filter, so both always span every version of the domain**:
+Click **Runs** in the sidebar (next to **Build**, in the **Management** group) to see the domain's run history. The page has two tabs, each with its own table, newest first — **neither has a version filter, so both always span every version of the domain**:
 
-- **Build runs** — one row per synchronize (`Build`) run: ID, date & time, version, status, triple count, and a **Details** button.
+- **Build runs** (the tab shown first) — one row per synchronize (`Build`) run: ID, date & time, version, status, triple count, and a **Details** button.
 - **Analytics runs** — one row per analysis launched from the **Analytics** page, with 11 columns: Date & Time, Scope, Version, Status, Nodes, Edges, Components, Avg Degree, Density, Duration, and **Details**. **Scope** shows the entity type(s) the run was filtered to, or *All types*. **Version** is shown per row because, with no filter, rows from different domain versions interleave in the same list. A **failed** run shows a red **Failed** badge and dashes in its metric columns instead of the zeros it stored internally — a run that errored out is not the same thing as a graph with zero nodes.
 
 Click **Details** on an analytics row to open a modal with the full scope (entity-type local names plus their raw URIs), the graph metrics, the run duration, the background task ID, and any error text if the run failed.
 
-The two tables load independently: if one fails to fetch, the other still renders normally and only the failing table shows an inline error. The shared **Refresh** button reloads both.
+Both tabs are filled when you open the section, whichever one is showing, so switching between them never waits on a fetch. The two load independently: if one fails, the other still renders normally and only the failing tab shows an inline error. The **Refresh** button above the tabs reloads both.
 
 ### Data Quality (Sidebar)
 

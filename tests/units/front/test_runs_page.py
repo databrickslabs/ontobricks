@@ -1,8 +1,8 @@
 """Knowledge Graph → Management → Runs renders two independent tables.
 
-Build runs and analytics runs share no columns, so they are stacked rather
-than merged. Each card owns its loading / empty / error elements: a failure
-fetching one must not blank the other.
+Build runs and analytics runs share no columns, so they live in one tab each
+rather than being merged into a single timeline. Each tab owns its loading /
+empty / error elements: a failure fetching one must not blank the other.
 
 Most assertions drive a ``TestClient`` and parse the RENDERED HTML (via the
 ``_html`` / ``_tags`` / ``_find`` helpers from ``test_ui_rendering.py``),
@@ -35,8 +35,74 @@ def _analytics_partial() -> str:
     return _ANALYTICS.read_text(encoding="utf-8")
 
 
+class TestRunsTabs:
+    """The two histories sit in a tab each. Both panes are rendered on page
+    load — only their visibility differs — so the loaders can populate both
+    without waiting for a tab to be opened."""
+
+    def test_there_is_a_tab_for_each_history(self, client):
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        for button_id in ("rtab-btn-build", "rtab-btn-analytics"):
+            assert _find(tags, id_=button_id) is not None
+        for pane_id in ("rtab-build", "rtab-analytics"):
+            assert _find(tags, id_=pane_id) is not None
+
+    def test_each_tab_button_targets_its_own_pane(self, client):
+        """A copy-paste slip here points both buttons at one pane, which
+        looks like a tab that silently does nothing."""
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        for button_id, pane_id in (
+            ("rtab-btn-build", "#rtab-build"),
+            ("rtab-btn-analytics", "#rtab-analytics"),
+        ):
+            btn = _find(tags, id_=button_id)
+            assert btn.get("data-bs-target") == pane_id
+            assert btn.get("data-bs-toggle") == "tab"
+
+    def test_build_runs_is_the_default_tab(self, client):
+        """Exactly one tab may be active and exactly one pane may carry
+        `show active`; two actives renders both panes stacked, none renders
+        an empty section."""
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+
+        active_buttons = [
+            i for i in ("rtab-btn-build", "rtab-btn-analytics")
+            if "active" in (_find(tags, id_=i).get("class") or "")
+        ]
+        active_panes = [
+            i for i in ("rtab-build", "rtab-analytics")
+            if "active" in (_find(tags, id_=i).get("class") or "")
+        ]
+
+        assert active_buttons == ["rtab-btn-build"]
+        assert active_panes == ["rtab-build"]
+        assert "show" in (_find(tags, id_="rtab-build").get("class") or "")
+
+    def test_each_pane_is_labelled_by_its_tab(self, client):
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        for pane_id, button_id in (
+            ("rtab-build", "rtab-btn-build"),
+            ("rtab-analytics", "rtab-btn-analytics"),
+        ):
+            assert _find(tags, id_=pane_id).get("aria-labelledby") == button_id
+
+    def test_each_table_lives_in_its_own_pane(self, client):
+        """The whole point of the split: the analytics table must not be
+        inside the build pane, or switching tabs would show both at once."""
+        html = _html(client, "/dtwin/")
+        build_pane = html.index('id="rtab-build"')
+        analytics_pane = html.index('id="rtab-analytics"')
+
+        assert build_pane < html.index('id="runsTableBody"') < analytics_pane
+        assert analytics_pane < html.index('id="analyticsRunsTableBody"')
+
+
 class TestRunsPartial:
-    """Rendered-HTML assertions: prove both cards' elements actually show up
+    """Rendered-HTML assertions: prove both tabs' elements actually show up
     on the served /dtwin/ page, not merely that the strings exist on disk."""
 
     @pytest.mark.parametrize(
@@ -51,7 +117,7 @@ class TestRunsPartial:
             "analyticsRunsTableWrapper",
         ],
     )
-    def test_both_cards_have_their_own_elements(self, client, element_id):
+    def test_both_tabs_have_their_own_elements(self, client, element_id):
         html = _html(client, "/dtwin/")
         assert _find(_tags(html), id_=element_id) is not None
 
