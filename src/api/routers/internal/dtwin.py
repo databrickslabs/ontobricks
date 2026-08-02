@@ -9,7 +9,7 @@ import os
 import time
 from typing import Any, Optional, Tuple
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Query
 from back.core.logging import get_logger
 from back.core.errors import (
     InfrastructureError,
@@ -698,25 +698,29 @@ async def get_latest_graph_metrics(
 
 @router.get("/metrics/history")
 async def get_graph_metrics_history(
+    version: Optional[str] = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return the analytics run history (newest-first) for this domain/version.
+    """Return the analytics run history (newest-first) for this domain.
 
-    Lightweight metadata per run from the ``graph_analytics_runs`` trace —
-    backs the Analytics page "History" tab.
+    Spans every version unless ``version`` scopes it. Backs the analytics
+    table on Knowledge Graph → Management → Runs, which has no version
+    filter. Guarding on a version here would report an empty history for a
+    domain whose current version is blank, even with rows on file for
+    earlier ones.
     """
     from back.objects.registry.RegistryService import RegistryService
 
     try:
         domain = get_domain(session_mgr)
         folder = getattr(domain, "uc_domain_folder", "") or ""
-        version = str(getattr(domain, "current_version", "") or "")
-        if not folder or not version:
+        if not folder:
             return {"success": True, "runs": []}
 
         svc = RegistryService.from_context(domain, settings)
-        runs = svc.load_graph_analytics_runs(folder, version, limit=100)
+        runs = svc.load_graph_analytics_runs(folder, version, limit=limit)
         return {"success": True, "runs": runs}
 
     except (ValidationError, InfrastructureError, NotFoundError):

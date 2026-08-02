@@ -113,3 +113,70 @@ env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
 
 `3774 passed, 275 skipped, 5 deselected, 1 xfailed, 0 failed` (full suite);
 `tests/units/registry/test_registry_store.py`: `72 passed`.
+
+# Task 2: `/dtwin/metrics/history` spans versions
+
+## Context
+
+Continuing the Task 1 work above: the analytics run-history endpoint backing
+Knowledge Graph → Management → Runs (a page with no version filter) used to
+hard-scope its read to `domain.current_version`, so a domain whose current
+version happened to be blank showed an empty history even with rows on file
+for earlier versions. The endpoint now spans every version by default and
+takes an optional `?version=` to scope back to one, matching the store
+contract Task 1 widened.
+
+## Changes
+
+1. `src/api/routers/internal/dtwin.py` — `GET /metrics/history` rewritten:
+   added `Query` to the `fastapi` import; the handler now takes
+   `version: Optional[str] = Query(default=None)` and
+   `limit: int = Query(default=200, ge=1, le=1000)` (default rises from 100
+   to 200 to match `/domain/build-runs` — the write cap stays 100 per
+   `(domain, version)`, so spanning N versions can yield up to
+   `min(limit, 100 × N)` rows and `limit` is now the real bound); the guard
+   dropped `or not version` (guarding on version reported an empty history
+   whenever `current_version` was blank) and now checks `folder` only; the
+   registry call forwards the query `version` (not `domain.current_version`)
+   and the query `limit`.
+2. `tests/units/dtwin/test_metrics_history.py` (new) — Investigated whether
+   this could be a behavioural test instead of the brief's source-text
+   assertions (its own caveat: exercising the endpoint needs a session with
+   a loaded domain plus a configured registry). Found the existing `client`
+   fixture (`TestClient(shared.fastapi.main.app)`) already drives internal
+   `/dtwin/*` routes with no domain loaded in `tests/units/api/test_routes.py`
+   (`test_neighbors_with_uri_no_domain`), and `get_domain` /
+   `RegistryService.from_context` are the only two seams that need a domain
+   (both plain module-level names, patchable without touching the endpoint's
+   own control flow). Wrote a real behavioural suite driving
+   `GET /dtwin/metrics/history` through the FastAPI test client instead of
+   reading source text: a no-domain-loaded smoke test needs no mocking at
+   all; the domain-loaded cases patch `api.routers.internal.dtwin.get_domain`
+   (returns a tiny `_FakeDomain` with `uc_domain_folder` set and
+   `current_version=""`) and
+   `back.objects.registry.RegistryService.RegistryService.from_context`
+   (returns a `_FakeRegistryService` recording each call, mirroring the
+   brief's `_FakeService`). Covers: omitting `version` forwards `None` to the
+   registry even when `current_version` is blank (the regression this task
+   fixes); an explicit `?version=` is still forwarded; the default `limit` is
+   200 and an explicit `?limit=` is forwarded; `limit` outside `[1, 1000]`
+   is rejected with 422. No source-text assertions were needed or kept.
+
+## Modified Files
+
+- `src/api/routers/internal/dtwin.py`
+- `tests/units/dtwin/test_metrics_history.py` (new)
+
+## Test Result
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u DATABRICKS_CLIENT_ID -u DATABRICKS_CLIENT_SECRET -u LAKEBASE_PROJECT \
+    -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+`3782 passed, 275 skipped, 5 deselected, 1 xfailed, 0 failed` (full suite);
+`tests/units/dtwin/test_metrics_history.py`: `8 passed`;
+`tests/units/dtwin/ tests/units/api/`: `645 passed`.
