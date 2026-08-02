@@ -13,6 +13,7 @@ the analytics modal lives in ``dtwin.html`` (not merged into the partial's
 output by inclusion) or that an id is absent from one specific source file.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -175,6 +176,69 @@ class TestRunsScript:
         """A failed run records zeros, and printing them as real values
         would read as a graph with no nodes rather than a run that died."""
         assert "_analyticsRunRow" in _js()
+
+    def test_runs_loaded_flag_is_not_latched_unconditionally(self):
+        """_runsLoaded must reflect whether the loads actually succeeded, not
+        just that loadDomainRuns() ran.
+
+        Before the fix, the body was:
+            await _loadBuildRuns();
+            await _loadAnalyticsRuns();
+            _runsLoaded = true;
+        which latches even when both loaders hit their catch block or their
+        `!data.success` branch. This asserts the flag assignment is derived
+        from values returned by the two loader calls — a regex that would
+        NOT match the broken `_runsLoaded = true;` form above."""
+        src = _js()
+        match = re.search(
+            r"async function loadDomainRuns\(\) \{(.*?)\n\}",
+            src,
+            re.DOTALL,
+        )
+        assert match is not None, "loadDomainRuns function not found"
+        body = match.group(1)
+
+        assert re.search(r"_runsLoaded\s*=\s*true\s*;", body) is None, (
+            "loadDomainRuns() latches _runsLoaded unconditionally — a "
+            "failed load will never be retried on re-entry"
+        )
+        assert re.search(r"=\s*await\s+_loadBuildRuns\(\)", body) is not None, (
+            "_loadBuildRuns()'s return value must be captured"
+        )
+        assert re.search(r"=\s*await\s+_loadAnalyticsRuns\(\)", body) is not None, (
+            "_loadAnalyticsRuns()'s return value must be captured"
+        )
+        assert re.search(r"_runsLoaded\s*=\s*\w+\s*&&\s*\w+\s*;", body) is not None, (
+            "_runsLoaded must be set from the AND of both loaders' success "
+            "results, not latched regardless of outcome"
+        )
+
+    def test_loaders_report_failure_on_both_error_paths(self):
+        """Each loader must return false from its catch block AND from its
+        `!data.success` branch — either path left returning undefined would
+        make loadDomainRuns() treat that outcome as success (undefined is
+        falsy today, but only by accident; this pins the explicit contract
+        so a future refactor cannot silently drop it)."""
+        src = _js()
+        for name in ("_loadBuildRuns", "_loadAnalyticsRuns"):
+            match = re.search(
+                r"async function " + name + r"\(\) \{(.*?)\n\}",
+                src,
+                re.DOTALL,
+            )
+            assert match is not None, f"{name} function not found"
+            body = match.group(1)
+            error_branch = body[body.index("if (!data.success)"): body.index("catch (err)")]
+            catch_branch = body[body.index("catch (err)"):]
+            assert "return false;" in error_branch, (
+                f"{name}'s `!data.success` branch must return false"
+            )
+            assert "return false;" in catch_branch, (
+                f"{name}'s catch block must return false"
+            )
+            assert "return true;" in body, (
+                f"{name} must return true on a successful load"
+            )
 
 
 # =====================================================

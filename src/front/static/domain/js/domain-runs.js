@@ -159,12 +159,16 @@ function _kindBadge(kind) {
     return '<span class="badge ' + cfg[0] + '"><i class="bi ' + cfg[1] + ' me-1"></i>' + _esc(cfg[2]) + '</span>';
 }
 
+// Returns true iff the fetch produced a renderable result (including a
+// genuinely empty run list — an empty domain is not a load failure), false
+// on any error path. loadDomainRuns() uses this to decide whether the
+// overall load may be latched via _runsLoaded.
 async function _loadBuildRuns() {
     const loading = document.getElementById('runsLoading');
     const empty = document.getElementById('runsEmpty');
     const error = document.getElementById('runsError');
     const wrapper = document.getElementById('runsTableWrapper');
-    if (!loading) return;
+    if (!loading) return false;
 
     loading.style.display = '';
     empty.style.display = 'none';
@@ -180,23 +184,26 @@ async function _loadBuildRuns() {
             document.getElementById('runsErrorMessage').textContent =
                 data.message || 'Failed to load build runs';
             error.style.display = '';
-            return;
+            return false;
         }
         _runsCache = data.runs || [];
         _renderRunsTable();
+        return true;
     } catch (err) {
         loading.style.display = 'none';
         document.getElementById('runsErrorMessage').textContent = err.message;
         error.style.display = '';
+        return false;
     }
 }
 
+// Same success/failure contract as _loadBuildRuns() above.
 async function _loadAnalyticsRuns() {
     const loading = document.getElementById('analyticsRunsLoading');
     const empty = document.getElementById('analyticsRunsEmpty');
     const error = document.getElementById('analyticsRunsError');
     const wrapper = document.getElementById('analyticsRunsTableWrapper');
-    if (!loading) return;
+    if (!loading) return false;
 
     loading.style.display = '';
     empty.style.display = 'none';
@@ -212,24 +219,33 @@ async function _loadAnalyticsRuns() {
             document.getElementById('analyticsRunsErrorMessage').textContent =
                 data.message || 'Failed to load analytics runs';
             error.style.display = '';
-            return;
+            return false;
         }
         _analyticsRunsCache = data.runs || [];
         _renderAnalyticsRunsTable();
+        return true;
     } catch (err) {
         loading.style.display = 'none';
         document.getElementById('analyticsRunsErrorMessage').textContent = err.message;
         error.style.display = '';
+        return false;
     }
 }
 
 // Deliberately sequential awaits rather than a combinator that settles on the
 // first rejection: each loader owns its own error handling, and neither is
 // allowed to blank the other's table.
+//
+// _runsLoaded latches only when BOTH loaders actually succeeded, so the
+// sidebarSectionChanged listener below will retry on re-entry after a
+// failure instead of re-showing a stale error forever. A successful load
+// that happens to return zero rows for one or both tables still latches:
+// "no runs yet" is a real, current answer, not a failure to be retried on
+// every single visit to the section.
 async function loadDomainRuns() {
-    await _loadBuildRuns();
-    await _loadAnalyticsRuns();
-    _runsLoaded = true;
+    const buildOk = await _loadBuildRuns();
+    const analyticsOk = await _loadAnalyticsRuns();
+    _runsLoaded = buildOk && analyticsOk;
 }
 
 function _kv(label, value) {
