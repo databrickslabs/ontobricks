@@ -537,3 +537,37 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.77s
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site scaffold (Task 1)
+--------------------------------------------------------------------------------
+
+Context:
+First task of the GitHub Pages marketing site: scaffold `site/` static assets
+and failing-first structure tests. Later tasks add remaining pages and full
+content. Design: `docs/superpowers/specs/2026-08-03-github-pages-marketing-site-design.md`.
+
+Changes:
+
+1. `tests/units/site/test_marketing_site.py`
+   Source contracts for required pages, CSS tokens, hero/CTA content, relative
+   asset paths, JS nav/motion hooks, about disclaimer, and docs hub links.
+2. `site/assets/css/site.css`
+   Design-token foundation (`--ob-*`) and layout primitives for header, hero,
+   pipeline, feature/doc grids, and responsive nav.
+3. `site/assets/js/site.js`
+   Empty IIFE stub; nav toggle and motion hooks filled in Task 2.
+4. `site/assets/img/ontobricks-icon.svg`
+   Copied from `src/front/static/global/img/ontobricks-icon.svg`.
+5. `site/index.html`
+   Minimal stub linking relative CSS/JS; full home page in Task 3.
+
+Modified files:
+- `tests/units/site/test_marketing_site.py`
+- `site/assets/css/site.css`
+- `site/assets/js/site.js`
+- `site/assets/img/ontobricks-icon.svg`
+- `site/index.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 2 passed, 5 failed in 0.17s (expected: CSS token test green; content/page tests red until later tasks)
