@@ -32,11 +32,8 @@ import string
 import sys
 from pathlib import Path
 
-# This module lives at ``scripts/_internal/_render-app-yaml.py`` (moved here by
-# the scripts/ reorg, commit 2c6ef76), so the repo root is THREE levels up:
-# _internal/ → scripts/ → <repo root>. (Was two levels when the script sat
-# directly under scripts/.)
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# This file lives in scripts/_internal/, so the root is three levels up.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _RENDERS: list[tuple[Path, Path]] = [
     (REPO_ROOT / "app.yaml.template",                     REPO_ROOT / "app.yaml"),

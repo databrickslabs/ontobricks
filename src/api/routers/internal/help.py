@@ -1,6 +1,6 @@
 """In-app Help Center documentation endpoints (internal JSON API).
 
-Serves the Markdown files from the repository's ``docs/`` folder and their
+Serves the Markdown files from the repository's ``documentation/`` folder and their
 referenced images so the Help Center modal can render them client-side with
 marked.js. Markdown remains the single source of truth.
 
@@ -11,7 +11,7 @@ Endpoints (all read-only, JSON/binary):
 
 - ``GET /api/help/docs``                → list of available docs, grouped by category
 - ``GET /api/help/docs/{slug}``         → ``{slug, title, markdown}``
-- ``GET /api/help/docs/images/{name}``  → raw image file from ``docs/images/``
+- ``GET /api/help/docs/images/{name}``  → raw image file from ``documentation/images/``
 
 Access is restricted by a hard-coded allow-list (slug → relative path + title
 + category) and a strict filename regex on image names, to prevent any path
@@ -105,32 +105,32 @@ _IMAGE_NAME_RE = re.compile(r"^[A-Za-z0-9_ .-]+\.(svg|png|jpg|jpeg|gif|webp)$")
 
 
 def _docs_dir() -> str:
-    """Resolve the repository's ``docs/`` directory.
+    """Resolve the repository's ``documentation/`` directory.
 
     The Help Center is served from Markdown files bundled at the repo root.
     This file lives at ``src/api/routers/internal/help.py`` so we climb
-    four ``dirname`` levels to reach ``<repo>/`` and then append ``docs/``.
+    four ``dirname`` levels to reach ``<repo>/`` and then append ``documentation/``.
     """
     here = os.path.dirname(os.path.abspath(__file__))
     # here = <repo>/src/api/routers/internal
     repo_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.dirname(here)))
     )
-    return os.path.join(repo_root, "docs")
+    return os.path.join(repo_root, "documentation")
 
 
 def _audit_docs_on_disk() -> None:
     """Log a loud warning at boot if any catalogued doc is missing on disk.
 
     Prevents the class of bug where ``.databricksignore`` (or any other
-    deploy-time filter) silently drops the ``docs/`` folder and every
+    deploy-time filter) silently drops the ``documentation/`` folder and every
     Help Center entry starts 404'ing in production.
     """
     docs_dir = _docs_dir()
     if not os.path.isdir(docs_dir):
         logger.warning(
             "Help Center docs directory is missing at %s — the deployed "
-            "bundle is likely excluding docs/*.md (check .databricksignore). "
+            "bundle is likely excluding documentation/*.md (check .databricksignore). "
             "All /api/help/docs/* endpoints will return 404.",
             docs_dir,
         )
@@ -179,7 +179,7 @@ _ASSET_SUBDIRS = {"images", "screenshots"}
 
 
 def _serve_doc_asset(subdir: str, name: str) -> FileResponse:
-    """Serve a whitelisted asset file from ``docs/<subdir>/``."""
+    """Serve a whitelisted asset file from ``documentation/<subdir>/``."""
     if subdir not in _ASSET_SUBDIRS:
         raise NotFoundError("Asset not found")
     if not _IMAGE_NAME_RE.match(name):
@@ -198,13 +198,13 @@ def _serve_doc_asset(subdir: str, name: str) -> FileResponse:
 
 @router.get("/docs/images/{name}")
 async def get_doc_image(name: str):
-    """Serve a whitelisted image file from ``docs/images/``."""
+    """Serve a whitelisted image file from ``documentation/images/``."""
     return _serve_doc_asset("images", name)
 
 
 @router.get("/docs/screenshots/{name}")
 async def get_doc_screenshot(name: str):
-    """Serve a whitelisted screenshot file from ``docs/screenshots/``."""
+    """Serve a whitelisted screenshot file from ``documentation/screenshots/``."""
     return _serve_doc_asset("screenshots", name)
 
 

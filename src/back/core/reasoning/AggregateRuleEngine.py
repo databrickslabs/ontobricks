@@ -190,26 +190,26 @@ class AggregateRuleEngine:
 
         if group_prop_uri and agg_prop_uri:
             return (
-                f"SELECT t0.subject AS s, {func}(CAST(t_agg.object AS DOUBLE)) AS agg_val\n"
+                f"SELECT t0.subject AS s, {func}(TRY_CAST(t_agg.object AS DOUBLE)) AS agg_val\n"
                 f"FROM {table} t0\n"
                 f"JOIN {table} t_grp ON t_grp.subject = t0.subject AND t_grp.predicate = '{esc(group_prop_uri)}'\n"
                 f"JOIN {table} t_agg ON t_agg.subject = t_grp.object AND t_agg.predicate = '{esc(agg_prop_uri)}'\n"
                 f"WHERE t0.predicate = '{RDF_TYPE}' AND t0.object = '{esc(target_uri)}'\n"
                 f"GROUP BY t0.subject\n"
-                f"HAVING {func}(CAST(t_agg.object AS DOUBLE)) {sql_op} {threshold}"
+                f"HAVING {func}(TRY_CAST(t_agg.object AS DOUBLE)) {sql_op} {threshold}"
             )
         elif agg_prop_uri:
             return (
-                f"SELECT t0.subject AS s, {func}(CAST(t_agg.object AS DOUBLE)) AS agg_val\n"
+                f"SELECT t0.subject AS s, {func}(TRY_CAST(t_agg.object AS DOUBLE)) AS agg_val\n"
                 f"FROM {table} t0\n"
                 f"JOIN {table} t_agg ON t_agg.subject = t0.subject AND t_agg.predicate = '{esc(agg_prop_uri)}'\n"
                 f"WHERE t0.predicate = '{RDF_TYPE}' AND t0.object = '{esc(target_uri)}'\n"
                 f"GROUP BY t0.subject\n"
-                f"HAVING {func}(CAST(t_agg.object AS DOUBLE)) {sql_op} {threshold}"
+                f"HAVING {func}(TRY_CAST(t_agg.object AS DOUBLE)) {sql_op} {threshold}"
             )
         elif group_prop_uri:
             agg_expr = (
-                f"{func}(CAST(t_grp.object AS DOUBLE))"
+                f"{func}(TRY_CAST(t_grp.object AS DOUBLE))"
                 if func != "COUNT"
                 else "COUNT(t_grp.object)"
             )

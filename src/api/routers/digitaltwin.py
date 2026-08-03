@@ -246,8 +246,12 @@ class DataQualityRequest(BaseModel):
         None, description="Filter shapes by category (e.g. 'cardinality', 'value')"
     )
     backend: str = Field(
-        "graph",
-        description="Backend to run checks against: 'view' (SQL) or 'graph' (in-memory)",
+        "view",
+        deprecated=True,
+        description=(
+            "Deprecated and ignored. Checks always run as SQL against the "
+            "triple-store VIEW, which every graph engine builds."
+        ),
     )
 
 
@@ -996,16 +1000,11 @@ async def dt_dataquality_start(
             + (f" (category={body.category})" if body.category else ""),
         )
 
-    view_table = effective_view_table(domain, settings).strip()
-    graph_name = effective_graph_name(domain)
-    store = get_graphdb(domain, settings)
-    triplestore_table = (
-        effective_graph_query_table(domain, settings, store=store)
-        if body.backend == "graph" and store
-        else view_table
-    )
+    triplestore_table = effective_view_table(domain, settings).strip()
     if not triplestore_table:
-        raise ValidationError("Triple store not configured")
+        raise ValidationError(
+            "The triple-store VIEW is not available. Build the Knowledge Graph first."
+        )
 
     total = len(shapes) + len(swrl_rules)
     domain_snap = DigitalTwin.make_snapshot(domain)
@@ -1017,8 +1016,6 @@ async def dt_dataquality_start(
         steps=[{"name": "running", "description": f"Running {total} quality checks"}],
     )
 
-    requested_backend = body.backend
-
     def _run():
         DigitalTwin.run_data_quality_task(
             tm,
@@ -1027,7 +1024,6 @@ async def dt_dataquality_start(
             domain_snap,
             shapes,
             triplestore_table,
-            requested_backend,
             total,
             swrl_rules=swrl_rules,
             ontology_dict=ontology_dict,
@@ -1040,7 +1036,7 @@ async def dt_dataquality_start(
         success=True,
         task_id=task.id,
         shape_count=total,
-        message=f"Data quality checks started ({total} shapes, backend={body.backend})",
+        message=f"Data quality checks started ({total} shapes)",
     )
 
 

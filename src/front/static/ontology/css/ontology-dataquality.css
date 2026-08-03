@@ -32,6 +32,7 @@
     font-size: 0.8rem;
     background: var(--bs-gray-100);
     resize: vertical;
+    min-height: 22rem;
 }
 
 #dqTabs .nav-link {

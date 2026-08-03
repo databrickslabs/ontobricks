@@ -18,7 +18,7 @@
                 title="Remove rules whose target entity or property no longer exists in the ontology">
             <i class="bi bi-brush me-1"></i> Cleanup
         </button>
-        <button class="btn btn-outline-secondary" onclick="DataQualityModule.toggleShaclPanel()">
+        <button class="btn btn-outline-secondary" onclick="DataQualityModule.openShaclModal()">
             <i class="bi bi-code-slash me-1"></i> SHACL
         </button>
     </div>
@@ -97,25 +97,32 @@
                 <div id="dqListStructural" class="dq-shapes-list"></div>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- SHACL Panel (toggle) -->
-        <div id="dqShaclPanel" class="border-top" style="display:none">
-            <div class="p-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0"><i class="bi bi-code-slash me-1"></i>SHACL Turtle</h6>
+<!-- ═══ SHACL Turtle Modal ═══ -->
+<div class="modal fade" id="dqShaclModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-code-slash me-2"></i>SHACL Turtle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-end mb-2">
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary" onclick="DataQualityModule.refreshTurtle()">
+                        <button type="button" class="btn btn-outline-secondary" onclick="DataQualityModule.refreshTurtle()">
                             <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                         </button>
-                        <button class="btn btn-outline-secondary" onclick="DataQualityModule.exportShacl()">
+                        <button type="button" class="btn btn-outline-secondary" onclick="DataQualityModule.exportShacl()">
                             <i class="bi bi-download me-1"></i>Export
                         </button>
-                        <button class="btn btn-outline-secondary" onclick="DataQualityModule.showImportModal()">
+                        <button type="button" class="btn btn-outline-secondary" onclick="DataQualityModule.showImportModal()">
                             <i class="bi bi-upload me-1"></i>Import
                         </button>
                     </div>
                 </div>
-                <textarea class="form-control font-monospace small" id="dqShaclEditor" rows="12"
+                <textarea class="form-control font-monospace small" id="dqShaclEditor" rows="18"
                           placeholder="SHACL Turtle content will appear here..."></textarea>
             </div>
         </div>
@@ -153,6 +160,33 @@
                     <select class="form-select" id="dqProperty" onchange="DataQualityModule._autoFillMessage()">
                         <option value="">Select property...</option>
                     </select>
+                </div>
+
+                <!-- Optional guard: the rule only applies to matching instances -->
+                <div class="mb-3" id="dqConditionBlock" style="display:none">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="form-label fw-bold mb-0">
+                            IF <span class="text-muted fw-normal small">(optional)</span>
+                        </label>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check" name="dqCondLogic" id="dqCondLogicAnd"
+                                       value="and" checked onchange="DataQualityModule.onConditionLogicChange()">
+                                <label class="btn btn-outline-secondary" for="dqCondLogicAnd">All</label>
+                                <input type="radio" class="btn-check" name="dqCondLogic" id="dqCondLogicOr"
+                                       value="or" onchange="DataQualityModule.onConditionLogicChange()">
+                                <label class="btn btn-outline-secondary" for="dqCondLogicOr">Any</label>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    onclick="DataQualityModule.addCondition()">
+                                <i class="bi bi-plus-lg me-1"></i>Add condition
+                            </button>
+                        </div>
+                    </div>
+                    <div id="dqConditionRows"></div>
+                    <div class="form-text text-muted small" id="dqConditionHint">
+                        Without conditions the rule applies to every instance of the target entity.
+                    </div>
                 </div>
 
                 <!-- Dynamic constraint fields (populated by JS based on category) -->

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>back.core.industry – Industry Standard Ontology Importers &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="back.core.reasoning – OWL 2 RL &amp; SWRL Inference" href="app.core.reasoning.html" />
+    <link rel="prev" title="back.core.graphql – GraphQL Schema Generation" href="app.core.graphql.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Graph Viewer Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/features.html">OntoBricks Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/code_organization.html">OntoBricks code organization (for contributors)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/graphdb-integration.html">Adding a New Graph DB Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/lakebase-graphdb.html">Lakebase as Graph DB — OntoBricks Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/cohort_discovery.html">Cohort Discovery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/sizing.html">OntoBricks Production Sizing Questionnaire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.external.html"><code class="docutils literal notranslate"><span class="pre">back.core.external</span></code> — Vendored / Third-Party Integrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.external.pitfalls.html"><code class="docutils literal notranslate"><span class="pre">back.core.external.pitfalls</span></code> — Ontology Pitfalls Detector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.lakebase.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> — Lakebase Postgres graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.neo4j.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> — Neo4j (Cypher) graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.industry.cdisc.CdiscImportService">CDISC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.industry.fhir.FhirImportService">FHIR</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.industry.fibo.FiboImportService">FIBO</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.industry.iof.IofImportService">IOF</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="app.html">OntoBricks Application Packages</a><ul>
+  <li><a href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a><ul>
+      <li>Previous: <a href="app.core.graphql.html" title="previous chapter"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+      <li>Next: <a href="app.core.reasoning.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="back-core-industry-industry-standard-ontology-importers">
+<h1><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers<a class="headerlink" href="#back-core-industry-industry-standard-ontology-importers" title="Link to this heading">¶</a></h1>
+<section id="module-back.core.industry.cdisc.CdiscImportService">
+<span id="cdisc"></span><h2>CDISC<a class="headerlink" href="#module-back.core.industry.cdisc.CdiscImportService" title="Link to this heading">¶</a></h2>
+<p>CDISC RDF import service.</p>
+<p>Fetches CDISC (Clinical Data Interchange Standards Consortium) foundational
+standards in RDF from the PhUSE GitHub repository, merges them using rdflib,
+and converts them to OntoBricks ontology structures.</p>
+<p>Because CDISC standards use an ISO 11179 meta-model (instances of
+mms:DataElement, mms:Domain, mms:Context, etc.) rather than standard
+owl:Class definitions, a custom mapper transforms the RDF instance data
+into OntoBricks-compatible classes and properties:</p>
+<blockquote>
+<div><p>DomainContext  →  top-level OWL classes  (Events, Findings, …)
+Domain         →  OWL classes            (AE, CM, LB, …)
+DataElement    →  dataProperties          (AETERM, LBTEST, …)</p>
+</div></blockquote>
+<p>Source repository: <a class="reference external" href="https://github.com/phuse-org/rdf.cdisc.org">https://github.com/phuse-org/rdf.cdisc.org</a>
+CDISC Standard:   <a class="reference external" href="https://www.cdisc.org/standards/foundational/rdf/cdisc-standards-rdf">https://www.cdisc.org/standards/foundational/rdf/cdisc-standards-rdf</a></p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.industry.cdisc.CdiscImportService.CdiscImportService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.industry.cdisc.CdiscImportService.</span></span><span class="sig-name descname"><span class="pre">CdiscImportService</span></span><a class="reference internal" href="../_modules/back/core/industry/cdisc/CdiscImportService.html#CdiscImportService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.cdisc.CdiscImportService.CdiscImportService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.industry.cdisc.CdiscImportService.CdiscImportService.CDISC_DOMAINS">
+<span class="sig-name descname"><span class="pre">CDISC_DOMAINS</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'ADaM':</span> <span class="pre">{'color':</span> <span class="pre">'warning',</span> <span class="pre">'description':</span> <span class="pre">'Defines</span> <span class="pre">standards</span> <span class="pre">for</span> <span class="pre">analysis</span> <span class="pre">datasets</span> <span class="pre">derived</span> <span class="pre">from</span> <span class="pre">SDTM</span> <span class="pre">for</span> <span class="pre">statistical</span> <span class="pre">analysis</span> <span class="pre">and</span> <span class="pre">regulatory</span> <span class="pre">submission.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-bar-chart-line',</span> <span class="pre">'modules':</span> <span class="pre">[{'format':</span> <span class="pre">'turtle',</span> <span class="pre">'label':</span> <span class="pre">'ADaM</span> <span class="pre">2.1',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std/adam-2-1.ttl'},</span> <span class="pre">{'format':</span> <span class="pre">'turtle',</span> <span class="pre">'label':</span> <span class="pre">'ADaM</span> <span class="pre">IG</span> <span class="pre">1.0',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std/adamig-1-0.ttl'}],</span> <span class="pre">'name':</span> <span class="pre">'ADaM</span> <span class="pre">(Analysis</span> <span class="pre">Data</span> <span class="pre">Model)',</span> <span class="pre">'required':</span> <span class="pre">False},</span> <span class="pre">'CDASH':</span> <span class="pre">{'color':</span> <span class="pre">'success',</span> <span class="pre">'description':</span> <span class="pre">'Standards</span> <span class="pre">for</span> <span class="pre">clinical</span> <span class="pre">data</span> <span class="pre">acquisition</span> <span class="pre">–</span> <span class="pre">defines</span> <span class="pre">the</span> <span class="pre">basic</span> <span class="pre">recommended</span> <span class="pre">data</span> <span class="pre">collection</span> <span class="pre">fields</span> <span class="pre">for</span> <span class="pre">studies.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-clipboard2-data',</span> <span class="pre">'modules':</span> <span class="pre">[{'format':</span> <span class="pre">'turtle',</span> <span class="pre">'label':</span> <span class="pre">'CDASH</span> <span class="pre">1.1',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std/cdash-1-1.ttl'}],</span> <span class="pre">'name':</span> <span class="pre">'CDASH</span> <span class="pre">(Clinical</span> <span class="pre">Data</span> <span class="pre">Acquisition)',</span> <span class="pre">'required':</span> <span class="pre">False},</span> <span class="pre">'SCHEMAS':</span> <span class="pre">{'color':</span> <span class="pre">'secondary',</span> <span class="pre">'description':</span> <span class="pre">'Core</span> <span class="pre">OWL</span> <span class="pre">schemas:</span> <span class="pre">CDISC</span> <span class="pre">Meta-Model</span> <span class="pre">(ISO</span> <span class="pre">11179</span> <span class="pre">based),</span> <span class="pre">Controlled</span> <span class="pre">Terminology</span> <span class="pre">schema,</span> <span class="pre">and</span> <span class="pre">CDISC</span> <span class="pre">domain-specific</span> <span class="pre">schema.</span> <span class="pre">Required</span> <span class="pre">as</span> <span class="pre">the</span> <span class="pre">foundation</span> <span class="pre">for</span> <span class="pre">all</span> <span class="pre">other</span> <span class="pre">standards.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-diagram-3',</span> <span class="pre">'modules':</span> <span class="pre">[{'format':</span> <span class="pre">'xml',</span> <span class="pre">'label':</span> <span class="pre">'Meta-Model</span> <span class="pre">Schema',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/schemas/meta-model-schema.owl'},</span> <span class="pre">{'format':</span> <span class="pre">'xml',</span> <span class="pre">'label':</span> <span class="pre">'CT</span> <span class="pre">Schema',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/schemas/ct-schema.owl'},</span> <span class="pre">{'format':</span> <span class="pre">'xml',</span> <span class="pre">'label':</span> <span class="pre">'CDISC</span> <span class="pre">Schema',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/schemas/cdisc-schema.owl'}],</span> <span class="pre">'name':</span> <span class="pre">'Schemas</span> <span class="pre">(required)',</span> <span class="pre">'required':</span> <span class="pre">True},</span> <span class="pre">'SDTM':</span> <span class="pre">{'color':</span> <span class="pre">'primary',</span> <span class="pre">'description':</span> <span class="pre">'The</span> <span class="pre">primary</span> <span class="pre">standard</span> <span class="pre">for</span> <span class="pre">organizing</span> <span class="pre">and</span> <span class="pre">submitting</span> <span class="pre">clinical</span> <span class="pre">trial</span> <span class="pre">tabulation</span> <span class="pre">data.</span> <span class="pre">Includes</span> <span class="pre">SDTM</span> <span class="pre">v1.2,</span> <span class="pre">v1.3,</span> <span class="pre">and</span> <span class="pre">Implementation</span> <span class="pre">Guides</span> <span class="pre">3.1.2</span> <span class="pre">&amp;</span> <span class="pre">3.1.3.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-table',</span> <span class="pre">'modules':</span> <span class="pre">[{'format':</span> <span class="pre">'turtle',</span> <span class="pre">'label':</span> <span class="pre">'SDTM</span> <span class="pre">1.2',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std/sdtm-1-2.ttl'},</span> <span class="pre">{'format':</span> <span class="pre">'turtle',</span> <span class="pre">'label':</span> <span class="pre">'SDTM</span> <span class="pre">1.3',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std/sdtm-1-3.ttl'},</span> <span class="pre">{'format':</span> <span class="pre">'turtle',</span> <span class="pre">'label':</span> <span class="pre">'SDTM</span> <span class="pre">IG</span> <span class="pre">3.1.2',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std/sdtmig-3-1-2.ttl'},</span> <span class="pre">{'format':</span> <span class="pre">'turtle',</span> <span class="pre">'label':</span> <span class="pre">'SDTM</span> <span class="pre">IG</span> <span class="pre">3.1.3',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std/sdtmig-3-1-3.ttl'}],</span> <span class="pre">'name':</span> <span class="pre">'SDTM</span> <span class="pre">(Study</span> <span class="pre">Data</span> <span class="pre">Tabulation</span> <span class="pre">Model)',</span> <span class="pre">'required':</span> <span class="pre">False},</span> <span class="pre">'SEND':</span> <span class="pre">{'color':</span> <span class="pre">'info',</span> <span class="pre">'description':</span> <span class="pre">'Standard</span> <span class="pre">for</span> <span class="pre">the</span> <span class="pre">Exchange</span> <span class="pre">of</span> <span class="pre">Nonclinical</span> <span class="pre">Data</span> <span class="pre">–</span> <span class="pre">covers</span> <span class="pre">preclinical/nonclinical</span> <span class="pre">study</span> <span class="pre">data.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-virus',</span> <span class="pre">'modules':</span> <span class="pre">[{'format':</span> <span class="pre">'turtle',</span> <span class="pre">'label':</span> <span class="pre">'SEND</span> <span class="pre">IG</span> <span class="pre">3.0',</span> <span class="pre">'url':</span> <span class="pre">'https://raw.githubusercontent.com/phuse-org/rdf.cdisc.org/master/std/sendig-3-0.ttl'}],</span> <span class="pre">'name':</span> <span class="pre">'SEND</span> <span class="pre">(Nonclinical</span> <span class="pre">Data</span> <span class="pre">Exchange)',</span> <span class="pre">'required':</span> <span class="pre">False}}</span></span><a class="headerlink" href="#back.core.industry.cdisc.CdiscImportService.CdiscImportService.CDISC_DOMAINS" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.cdisc.CdiscImportService.CdiscImportService.get_cdisc_catalog">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_cdisc_catalog</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/cdisc/CdiscImportService.html#CdiscImportService.get_cdisc_catalog"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.cdisc.CdiscImportService.CdiscImportService.get_cdisc_catalog" title="Link to this definition">¶</a></dt>
+<dd><p>Return the CDISC domain catalog for the frontend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.cdisc.CdiscImportService.CdiscImportService.fetch_and_parse_cdisc">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">fetch_and_parse_cdisc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_keys</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/cdisc/CdiscImportService.html#CdiscImportService.fetch_and_parse_cdisc"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.cdisc.CdiscImportService.CdiscImportService.fetch_and_parse_cdisc" title="Link to this definition">¶</a></dt>
+<dd><p>Fetch CDISC modules for the selected domains, merge, and parse.</p>
+<p>For SCHEMAS-only imports, uses the standard OWL parser.
+When standard data files are included (SDTM, CDASH, etc.), uses the
+custom CDISC mapper to transform RDF instances into classes/properties.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>domain_keys</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.industry.fhir.FhirImportService">
+<span id="fhir"></span><h2>FHIR<a class="headerlink" href="#module-back.core.industry.fhir.FhirImportService" title="Link to this heading">¶</a></h2>
+<p>HL7 FHIR R5 import service.</p>
+<p>Fetches the HL7 FHIR R5 ontology (fhir.ttl) from the official HL7 specification
+server, parses it with rdflib, and converts it to OntoBricks ontology structures.</p>
+<dl class="simple">
+<dt>FHIR’s OWL/RDF structure differs from standard OWL ontologies:</dt><dd><ul class="simple">
+<li><p>All resource types are flat subclasses of fhir:Resource or fhir:DomainResource
+(no deep hierarchy beyond two levels).</p></li>
+<li><p>Properties are polymorphic (same predicate name across different resources).</p></li>
+<li><p>Primitive values are wrapped in blank nodes using fhir:v.</p></li>
+</ul>
+</dd>
+</dl>
+<p>Because of the flat hierarchy, the FHIR ontology is loaded as a single Turtle file
+and then filtered by the user’s selected domain groups (CLINICAL, DIAGNOSTICS, etc.)
+using a curated mapping of FHIR resource types to domain buckets.</p>
+<p>Reference: <a class="reference external" href="https://hl7.org/fhir/R5/rdf.html">https://hl7.org/fhir/R5/rdf.html</a>
+OWL file:  <a class="reference external" href="https://hl7.org/fhir/R5/fhir.ttl">https://hl7.org/fhir/R5/fhir.ttl</a></p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.industry.fhir.FhirImportService.FhirImportService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.industry.fhir.FhirImportService.</span></span><span class="sig-name descname"><span class="pre">FhirImportService</span></span><a class="reference internal" href="../_modules/back/core/industry/fhir/FhirImportService.html#FhirImportService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.fhir.FhirImportService.FhirImportService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.industry.fhir.FhirImportService.FhirImportService.FHIR_DOMAINS">
+<span class="sig-name descname"><span class="pre">FHIR_DOMAINS</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'CLINICAL':</span> <span class="pre">{'color':</span> <span class="pre">'danger',</span> <span class="pre">'description':</span> <span class="pre">'Clinical</span> <span class="pre">resources:</span> <span class="pre">Patient,</span> <span class="pre">Practitioner,</span> <span class="pre">Encounter,</span> <span class="pre">Condition,</span> <span class="pre">Procedure,</span> <span class="pre">Observation,</span> <span class="pre">AllergyIntolerance,</span> <span class="pre">Immunization,</span> <span class="pre">CarePlan,</span> <span class="pre">Goal,</span> <span class="pre">Device,</span> <span class="pre">and</span> <span class="pre">more.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-person-heart',</span> <span class="pre">'name':</span> <span class="pre">'Clinical',</span> <span class="pre">'required':</span> <span class="pre">False},</span> <span class="pre">'DIAGNOSTICS':</span> <span class="pre">{'color':</span> <span class="pre">'info',</span> <span class="pre">'description':</span> <span class="pre">'Diagnostic</span> <span class="pre">resources:</span> <span class="pre">DiagnosticReport,</span> <span class="pre">ImagingStudy,</span> <span class="pre">Specimen,</span> <span class="pre">Observation,</span> <span class="pre">MolecularSequence,</span> <span class="pre">DocumentReference,</span> <span class="pre">Composition.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-activity',</span> <span class="pre">'name':</span> <span class="pre">'Diagnostics',</span> <span class="pre">'required':</span> <span class="pre">False},</span> <span class="pre">'FINANCIAL':</span> <span class="pre">{'color':</span> <span class="pre">'warning',</span> <span class="pre">'description':</span> <span class="pre">'Financial</span> <span class="pre">resources:</span> <span class="pre">Claim,</span> <span class="pre">Coverage,</span> <span class="pre">ExplanationOfBenefit,</span> <span class="pre">Invoice,</span> <span class="pre">ChargeItem,</span> <span class="pre">Contract,</span> <span class="pre">Account.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-currency-dollar',</span> <span class="pre">'name':</span> <span class="pre">'Financial',</span> <span class="pre">'required':</span> <span class="pre">False},</span> <span class="pre">'FOUNDATION':</span> <span class="pre">{'color':</span> <span class="pre">'secondary',</span> <span class="pre">'description':</span> <span class="pre">'Core</span> <span class="pre">FHIR</span> <span class="pre">infrastructure</span> <span class="pre">resources:</span> <span class="pre">Resource,</span> <span class="pre">DomainResource,</span> <span class="pre">Bundle,</span> <span class="pre">CapabilityStatement,</span> <span class="pre">StructureDefinition,</span> <span class="pre">OperationOutcome,</span> <span class="pre">and</span> <span class="pre">messaging/subscription</span> <span class="pre">primitives.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-layers',</span> <span class="pre">'name':</span> <span class="pre">'Foundation',</span> <span class="pre">'required':</span> <span class="pre">True},</span> <span class="pre">'MEDICATIONS':</span> <span class="pre">{'color':</span> <span class="pre">'success',</span> <span class="pre">'description':</span> <span class="pre">'Medication</span> <span class="pre">resources:</span> <span class="pre">Medication,</span> <span class="pre">MedicationRequest,</span> <span class="pre">MedicationAdministration,</span> <span class="pre">MedicationDispense,</span> <span class="pre">MedicinalProductDefinition,</span> <span class="pre">Substance.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-capsule',</span> <span class="pre">'name':</span> <span class="pre">'Medications',</span> <span class="pre">'required':</span> <span class="pre">False},</span> <span class="pre">'WORKFLOW':</span> <span class="pre">{'color':</span> <span class="pre">'primary',</span> <span class="pre">'description':</span> <span class="pre">'Workflow</span> <span class="pre">resources:</span> <span class="pre">Task,</span> <span class="pre">Appointment,</span> <span class="pre">Schedule,</span> <span class="pre">RequestOrchestration,</span> <span class="pre">Transport,</span> <span class="pre">SupplyRequest.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-diagram-3',</span> <span class="pre">'name':</span> <span class="pre">'Workflow',</span> <span class="pre">'required':</span> <span class="pre">False}}</span></span><a class="headerlink" href="#back.core.industry.fhir.FhirImportService.FhirImportService.FHIR_DOMAINS" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.industry.fhir.FhirImportService.FhirImportService.FHIR_VERSIONS">
+<span class="sig-name descname"><span class="pre">FHIR_VERSIONS</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'R4':</span> <span class="pre">{'base_url':</span> <span class="pre">'https://hl7.org/fhir/R4',</span> <span class="pre">'label':</span> <span class="pre">'R4</span> <span class="pre">(4.0.1)'},</span> <span class="pre">'R4B':</span> <span class="pre">{'base_url':</span> <span class="pre">'https://hl7.org/fhir/R4B',</span> <span class="pre">'label':</span> <span class="pre">'R4B</span> <span class="pre">(4.3.0)'},</span> <span class="pre">'R5':</span> <span class="pre">{'base_url':</span> <span class="pre">'https://hl7.org/fhir/R5',</span> <span class="pre">'label':</span> <span class="pre">'R5</span> <span class="pre">(5.0.0)'}}</span></span><a class="headerlink" href="#back.core.industry.fhir.FhirImportService.FhirImportService.FHIR_VERSIONS" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.industry.fhir.FhirImportService.FhirImportService.DEFAULT_VERSION">
+<span class="sig-name descname"><span class="pre">DEFAULT_VERSION</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'R5'</span></span><a class="headerlink" href="#back.core.industry.fhir.FhirImportService.FhirImportService.DEFAULT_VERSION" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.fhir.FhirImportService.FhirImportService.get_fhir_catalog">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_fhir_catalog</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/fhir/FhirImportService.html#FhirImportService.get_fhir_catalog"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.fhir.FhirImportService.FhirImportService.get_fhir_catalog" title="Link to this definition">¶</a></dt>
+<dd><p>Return the FHIR domain catalog and supported versions for the frontend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.fhir.FhirImportService.FhirImportService.get_fhir_versions">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_fhir_versions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/fhir/FhirImportService.html#FhirImportService.get_fhir_versions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.fhir.FhirImportService.FhirImportService.get_fhir_versions" title="Link to this definition">¶</a></dt>
+<dd><p>Return supported FHIR versions as <code class="docutils literal notranslate"><span class="pre">[{key,</span> <span class="pre">label,</span> <span class="pre">default}]</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.fhir.FhirImportService.FhirImportService.fetch_and_parse_fhir">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">fetch_and_parse_fhir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'R5'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/fhir/FhirImportService.html#FhirImportService.fetch_and_parse_fhir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.fhir.FhirImportService.FhirImportService.fetch_and_parse_fhir" title="Link to this definition">¶</a></dt>
+<dd><p>Fetch FHIR OWL for the given version, parse it, filter by domain.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain_keys</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – List of domain keys (e.g. [“FOUNDATION”, “CLINICAL”]).</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – FHIR release — one of <code class="docutils literal notranslate"><span class="pre">FHIR_VERSIONS</span></code> keys (default <code class="docutils literal notranslate"><span class="pre">&quot;R5&quot;</span></code>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>success, message, ontology_info, classes, properties,
+constraints, swrl_rules, axioms, expressions, stats, failed.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict with keys</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.industry.fibo.FiboImportService">
+<span id="fibo"></span><h2>FIBO<a class="headerlink" href="#module-back.core.industry.fibo.FiboImportService" title="Link to this heading">¶</a></h2>
+<p>FIBO import service.</p>
+<p>Fetches FIBO (Financial Industry Business Ontology) domain modules from the
+EDM Council specification server, merges them using rdflib, and converts
+them to OntoBricks ontology structures via the existing OWL parser.</p>
+<p>Reference: <a class="reference external" href="https://spec.edmcouncil.org/fibo/">https://spec.edmcouncil.org/fibo/</a></p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.industry.fibo.FiboImportService.FiboImportService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.industry.fibo.FiboImportService.</span></span><span class="sig-name descname"><span class="pre">FiboImportService</span></span><a class="reference internal" href="../_modules/back/core/industry/fibo/FiboImportService.html#FiboImportService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.fibo.FiboImportService.FiboImportService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.industry.fibo.FiboImportService.FiboImportService.FIBO_DOMAINS">
+<span class="sig-name descname"><span class="pre">FIBO_DOMAINS</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'BE':</span> <span class="pre">{'color':</span> <span class="pre">'primary',</span> <span class="pre">'description':</span> <span class="pre">'Legal</span> <span class="pre">entities,</span> <span class="pre">corporations,</span> <span class="pre">partnerships,</span> <span class="pre">government</span> <span class="pre">bodies,</span> <span class="pre">and</span> <span class="pre">ownership</span> <span class="pre">structures.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-building',</span> <span class="pre">'modules':</span> <span class="pre">['BE/LegalEntities/LegalPersons',</span> <span class="pre">'BE/LegalEntities/CorporateBodies',</span> <span class="pre">'BE/LegalEntities/FormalBusinessOrganizations',</span> <span class="pre">'BE/FunctionalEntities/FunctionalEntities',</span> <span class="pre">'BE/FunctionalEntities/Publishers',</span> <span class="pre">'BE/GovernmentEntities/GovernmentEntities',</span> <span class="pre">'BE/OwnershipAndControl/OwnershipParties',</span> <span class="pre">'BE/OwnershipAndControl/ControlParties',</span> <span class="pre">'BE/OwnershipAndControl/CorporateOwnership'],</span> <span class="pre">'name':</span> <span class="pre">'Business</span> <span class="pre">Entities</span> <span class="pre">(BE)'},</span> <span class="pre">'DER':</span> <span class="pre">{'color':</span> <span class="pre">'danger',</span> <span class="pre">'description':</span> <span class="pre">'Options,</span> <span class="pre">futures,</span> <span class="pre">swaps,</span> <span class="pre">and</span> <span class="pre">other</span> <span class="pre">derivative</span> <span class="pre">contracts</span> <span class="pre">and</span> <span class="pre">instruments.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-arrow-left-right',</span> <span class="pre">'modules':</span> <span class="pre">['DER/DerivativesContracts/DerivativesBasics',</span> <span class="pre">'DER/DerivativesContracts/Options',</span> <span class="pre">'DER/DerivativesContracts/FuturesAndForwards',</span> <span class="pre">'DER/DerivativesContracts/Swaps',</span> <span class="pre">'DER/DerivativesContracts/CommoditiesContracts',</span> <span class="pre">'DER/DerivativesContracts/CurrencyContracts'],</span> <span class="pre">'name':</span> <span class="pre">'Derivatives</span> <span class="pre">(DER)'},</span> <span class="pre">'FBC':</span> <span class="pre">{'color':</span> <span class="pre">'success',</span> <span class="pre">'description':</span> <span class="pre">'Financial</span> <span class="pre">products,</span> <span class="pre">services,</span> <span class="pre">intermediaries,</span> <span class="pre">markets,</span> <span class="pre">and</span> <span class="pre">financial</span> <span class="pre">instruments.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-bank',</span> <span class="pre">'modules':</span> <span class="pre">['FBC/ProductsAndServices/FinancialProductsAndServices',</span> <span class="pre">'FBC/ProductsAndServices/ClientsAndAccounts',</span> <span class="pre">'FBC/FunctionalEntities/FinancialServicesEntities',</span> <span class="pre">'FBC/FunctionalEntities/Markets',</span> <span class="pre">'FBC/FunctionalEntities/RegulatoryAgencies',</span> <span class="pre">'FBC/FunctionalEntities/BusinessRegistries',</span> <span class="pre">'FBC/FinancialInstruments/FinancialInstruments',</span> <span class="pre">'FBC/FinancialInstruments/InstrumentPricing'],</span> <span class="pre">'name':</span> <span class="pre">'Financial</span> <span class="pre">Business</span> <span class="pre">&amp;</span> <span class="pre">Commerce</span> <span class="pre">(FBC)'},</span> <span class="pre">'FND':</span> <span class="pre">{'color':</span> <span class="pre">'secondary',</span> <span class="pre">'description':</span> <span class="pre">'Core</span> <span class="pre">building</span> <span class="pre">blocks:</span> <span class="pre">parties,</span> <span class="pre">agreements,</span> <span class="pre">relations,</span> <span class="pre">dates,</span> <span class="pre">organizations,</span> <span class="pre">and</span> <span class="pre">accounting</span> <span class="pre">concepts.</span> <span class="pre">Required</span> <span class="pre">by</span> <span class="pre">all</span> <span class="pre">other</span> <span class="pre">FIBO</span> <span class="pre">domains.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-bricks',</span> <span class="pre">'modules':</span> <span class="pre">['FND/AgentsAndPeople/Agents',</span> <span class="pre">'FND/AgentsAndPeople/People',</span> <span class="pre">'FND/Parties/Parties',</span> <span class="pre">'FND/Relations/Relations',</span> <span class="pre">'FND/Agreements/Agreements',</span> <span class="pre">'FND/Agreements/Contracts',</span> <span class="pre">'FND/DatesAndTimes/FinancialDates',</span> <span class="pre">'FND/DatesAndTimes/BusinessDates',</span> <span class="pre">'FND/Organizations/FormalOrganizations',</span> <span class="pre">'FND/Places/Addresses',</span> <span class="pre">'FND/Places/Facilities',</span> <span class="pre">'FND/Places/VirtualPlaces',</span> <span class="pre">'FND/Accounting/CurrencyAmount',</span> <span class="pre">'FND/Law/LegalCapacity',</span> <span class="pre">'FND/Law/LegalCore'],</span> <span class="pre">'name':</span> <span class="pre">'Foundations</span> <span class="pre">(FND)'},</span> <span class="pre">'LOAN':</span> <span class="pre">{'color':</span> <span class="pre">'warning',</span> <span class="pre">'description':</span> <span class="pre">'Loan</span> <span class="pre">products,</span> <span class="pre">applications,</span> <span class="pre">mortgage</span> <span class="pre">concepts,</span> <span class="pre">and</span> <span class="pre">real</span> <span class="pre">estate</span> <span class="pre">lending.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-cash-coin',</span> <span class="pre">'modules':</span> <span class="pre">['LOAN/LoansGeneral/Loans',</span> <span class="pre">'LOAN/LoansGeneral/LoanApplications',</span> <span class="pre">'LOAN/RealEstateLoans/Mortgages'],</span> <span class="pre">'name':</span> <span class="pre">'Loans</span> <span class="pre">(LOAN)'},</span> <span class="pre">'SEC':</span> <span class="pre">{'color':</span> <span class="pre">'info',</span> <span class="pre">'description':</span> <span class="pre">'Securities</span> <span class="pre">listings,</span> <span class="pre">equities,</span> <span class="pre">bonds,</span> <span class="pre">debt</span> <span class="pre">instruments,</span> <span class="pre">and</span> <span class="pre">investment</span> <span class="pre">funds.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-graph-up-arrow',</span> <span class="pre">'modules':</span> <span class="pre">['SEC/Securities/SecuritiesListings',</span> <span class="pre">'SEC/Securities/SecuritiesClassification',</span> <span class="pre">'SEC/Securities/SecuritiesIssuance',</span> <span class="pre">'SEC/Equities/EquityInstruments',</span> <span class="pre">'SEC/Debt/Bonds',</span> <span class="pre">'SEC/Debt/DebtInstruments',</span> <span class="pre">'SEC/Funds/Funds',</span> <span class="pre">'SEC/Funds/CollectiveInvestmentVehicles'],</span> <span class="pre">'name':</span> <span class="pre">'Securities</span> <span class="pre">(SEC)'}}</span></span><a class="headerlink" href="#back.core.industry.fibo.FiboImportService.FiboImportService.FIBO_DOMAINS" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.fibo.FiboImportService.FiboImportService.get_fibo_catalog">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_fibo_catalog</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/fibo/FiboImportService.html#FiboImportService.get_fibo_catalog"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.fibo.FiboImportService.FiboImportService.get_fibo_catalog" title="Link to this definition">¶</a></dt>
+<dd><p>Return the FIBO domain catalog for the frontend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>Each entry has key, name, description, icon, color,</dt><dd><p>and module_count.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.fibo.FiboImportService.FiboImportService.fetch_and_parse_fibo">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">fetch_and_parse_fibo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_keys</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/fibo/FiboImportService.html#FiboImportService.fetch_and_parse_fibo"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.fibo.FiboImportService.FiboImportService.fetch_and_parse_fibo" title="Link to this definition">¶</a></dt>
+<dd><p>Fetch FIBO modules for the selected domains, merge, and parse.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>domain_keys</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – List of domain keys (e.g. [“FND”, “BE”])</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>success (bool)
+turtle (str) – merged Turtle content
+stats (dict)  – classes, properties counts
+fetched (int) – number of modules successfully loaded
+failed (list)  – module paths that could not be fetched
+message (str)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict with keys</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.industry.iof.IofImportService">
+<span id="iof"></span><h2>IOF<a class="headerlink" href="#module-back.core.industry.iof.IofImportService" title="Link to this heading">¶</a></h2>
+<p>IOF import service.</p>
+<p>Fetches IOF (Industrial Ontologies Foundry) domain ontology modules from the
+IOF GitHub repository, merges them using rdflib, and converts them to
+OntoBricks ontology structures via the existing OWL parser.</p>
+<p>IOF is a suite of OWL ontologies for digital manufacturing published by OAGi.
+All IOF ontologies are based on BFO (Basic Formal Ontology) and share a
+common Core ontology.</p>
+<p>Because IOF ontologies define most relationships through OWL restrictions
+(owl:someValuesFrom / owl:allValuesFrom inside rdfs:subClassOf or
+owl:equivalentClass) rather than explicit rdfs:domain/rdfs:range on
+properties, a post-processing step extracts these restriction-based
+relationships so they appear correctly in OntoBricks.</p>
+<p>Reference: <a class="reference external" href="https://github.com/iofoundry/ontology">https://github.com/iofoundry/ontology</a></p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.industry.iof.IofImportService.IofImportService">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.industry.iof.IofImportService.</span></span><span class="sig-name descname"><span class="pre">IofImportService</span></span><a class="reference internal" href="../_modules/back/core/industry/iof/IofImportService.html#IofImportService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.iof.IofImportService.IofImportService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.industry.iof.IofImportService.IofImportService.IOF_DOMAINS">
+<span class="sig-name descname"><span class="pre">IOF_DOMAINS</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'CORE':</span> <span class="pre">{'color':</span> <span class="pre">'primary',</span> <span class="pre">'description':</span> <span class="pre">'Common</span> <span class="pre">manufacturing</span> <span class="pre">concepts:</span> <span class="pre">agents,</span> <span class="pre">processes,</span> <span class="pre">capabilities,</span> <span class="pre">organizations,</span> <span class="pre">products,</span> <span class="pre">and</span> <span class="pre">business</span> <span class="pre">functions.</span> <span class="pre">Foundation</span> <span class="pre">for</span> <span class="pre">all</span> <span class="pre">other</span> <span class="pre">IOF</span> <span class="pre">domains.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-gear-wide-connected',</span> <span class="pre">'modules':</span> <span class="pre">[{'label':</span> <span class="pre">'Annotation</span> <span class="pre">Vocabulary',</span> <span class="pre">'path':</span> <span class="pre">'core/meta/AnnotationVocabulary.rdf'},</span> <span class="pre">{'label':</span> <span class="pre">'IOF</span> <span class="pre">Core',</span> <span class="pre">'path':</span> <span class="pre">'core/Core.rdf'}],</span> <span class="pre">'name':</span> <span class="pre">'Core',</span> <span class="pre">'required':</span> <span class="pre">True},</span> <span class="pre">'MAINTENANCE':</span> <span class="pre">{'color':</span> <span class="pre">'warning',</span> <span class="pre">'description':</span> <span class="pre">'Maintenance</span> <span class="pre">management,</span> <span class="pre">procedures,</span> <span class="pre">asset</span> <span class="pre">failure</span> <span class="pre">analysis,</span> <span class="pre">and</span> <span class="pre">failure</span> <span class="pre">modes</span> <span class="pre">and</span> <span class="pre">effects</span> <span class="pre">analysis</span> <span class="pre">(FMEA).',</span> <span class="pre">'icon':</span> <span class="pre">'bi-wrench-adjustable',</span> <span class="pre">'modules':</span> <span class="pre">[{'label':</span> <span class="pre">'Maintenance',</span> <span class="pre">'path':</span> <span class="pre">'maintenance/Maintenance.rdf'}],</span> <span class="pre">'name':</span> <span class="pre">'Maintenance',</span> <span class="pre">'required':</span> <span class="pre">False},</span> <span class="pre">'SUPPLYCHAIN':</span> <span class="pre">{'color':</span> <span class="pre">'success',</span> <span class="pre">'description':</span> <span class="pre">'Supply</span> <span class="pre">chain</span> <span class="pre">and</span> <span class="pre">logistics</span> <span class="pre">concepts:</span> <span class="pre">procurement,</span> <span class="pre">transportation,</span> <span class="pre">warehousing,</span> <span class="pre">and</span> <span class="pre">distribution.',</span> <span class="pre">'icon':</span> <span class="pre">'bi-truck',</span> <span class="pre">'modules':</span> <span class="pre">[{'label':</span> <span class="pre">'Supply</span> <span class="pre">Chain',</span> <span class="pre">'path':</span> <span class="pre">'supplychain/SupplyChain.rdf'}],</span> <span class="pre">'name':</span> <span class="pre">'Supply</span> <span class="pre">Chain',</span> <span class="pre">'required':</span> <span class="pre">False}}</span></span><a class="headerlink" href="#back.core.industry.iof.IofImportService.IofImportService.IOF_DOMAINS" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.iof.IofImportService.IofImportService.get_iof_catalog">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_iof_catalog</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/iof/IofImportService.html#IofImportService.get_iof_catalog"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.iof.IofImportService.IofImportService.get_iof_catalog" title="Link to this definition">¶</a></dt>
+<dd><p>Return the IOF domain catalog for the frontend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>Each entry has key, name, description, icon, color,</dt><dd><p>required, and module_count.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.industry.iof.IofImportService.IofImportService.fetch_and_parse_iof">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">fetch_and_parse_iof</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_keys</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/industry/iof/IofImportService.html#IofImportService.fetch_and_parse_iof"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.industry.iof.IofImportService.IofImportService.fetch_and_parse_iof" title="Link to this definition">¶</a></dt>
+<dd><p>Fetch IOF modules for the selected domains, merge, and parse.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>domain_keys</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – List of domain keys (e.g. [“CORE”, “MAINTENANCE”])</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>success (bool)
+turtle (str) – merged Turtle content
+stats (dict)  – classes, properties counts
+fetched (int) – number of modules successfully loaded
+failed (list)  – module labels that could not be fetched
+message (str)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict with keys</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/api/app.core.industry.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

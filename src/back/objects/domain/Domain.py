@@ -547,8 +547,6 @@ class Domain:
                 "success": True,
                 "domain_folder": folder,
                 "version": version,
-                "current_version": self._s.current_version,
-                "versions": svc.list_versions_sorted(folder),
                 "runs": runs,
             }
         except OntoBricksError:

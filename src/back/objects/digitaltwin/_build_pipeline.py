@@ -385,6 +385,9 @@ class _BuildPipeline:
             self._log_phase("create_view", t_phase)
             self._post_create_view_progress()
 
+            if not self._materialize_data_table():
+                return
+
             t_phase = time.time()
             self._announce_apply_step()
 
@@ -663,6 +666,40 @@ class _BuildPipeline:
             self.tm.update_progress(
                 self.task_id, 25, f"VIEW {self.view_table} created"
             )
+
+    def _materialize_data_table(self) -> bool:
+        """Snapshot the R2RML VIEW into ``…_data`` for every engine.
+
+        Analytics reads this table and nothing else, which is what makes the
+        KPIs identical across Lakehouse, Lakebase and Neo4j. It is therefore
+        not optional: a build that skipped it would leave a domain that looks
+        fine and cannot be analysed.
+        """
+        from back.core.graphdb.delta import _table_naming, materialize
+
+        data_table = _table_naming.data_table_fqn(self.domain, self.settings)
+        if not data_table:
+            self.tm.fail_task(
+                self.task_id, "Could not resolve the mapped-triples table name"
+            )
+            return False
+
+        self.tm.update_progress(
+            self.task_id, 30, f"Materializing mapped triples into {data_table}..."
+        )
+        try:
+            materialize.materialize_from_view(
+                self.source_client, self.view_table, data_table
+            )
+        except Exception as exc:  # noqa: BLE001
+            msg = f"Could not materialize {data_table}: {exc}"
+            logger.error("[DT-BUILD %s] %s", self.task_id, msg)
+            self.tm.fail_task(self.task_id, msg)
+            return False
+
+        self.data_table = data_table
+        logger.info("[DT-BUILD %s] materialized %s", self.task_id, data_table)
+        return True
 
     def _announce_apply_step(self) -> None:
         apply_msg = (

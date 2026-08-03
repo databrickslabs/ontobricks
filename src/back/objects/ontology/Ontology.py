@@ -1688,7 +1688,14 @@ class Ontology:
                     except (ValueError, TypeError):
                         return f"{key} must be an integer"
 
-        return None
+        from back.core.w3c.shacl import ShapeConditions
+
+        return ShapeConditions.validate(
+            shape.get("conditions"),
+            shape.get("condition_logic", "and"),
+            category,
+            shape.get("target_class_uri", ""),
+        )
 
     @staticmethod
     def validate_classes(classes: List[Dict[str, Any]]) -> tuple:

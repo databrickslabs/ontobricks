@@ -9,6 +9,7 @@ seam similar to :class:`back.core.reasoning.SWRLEngine`.
 import time
 from typing import Dict
 
+from back.core.helpers import sql_numeric
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
@@ -335,7 +336,7 @@ class DecisionTableEngine:
                 if self._is_numeric(val):
                     v_expr = val
                     lhs = (
-                        f"CAST({alias}.object AS DOUBLE)"
+                        sql_numeric(f"{alias}.object")
                         if op in DT_NUMERIC_OPS
                         else f"{alias}.object"
                     )

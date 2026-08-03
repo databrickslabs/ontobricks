@@ -252,6 +252,10 @@ class DeltaTripleStoreBuildPipeline:
             self._record_build_run("success", message=msg)
             return False
 
+        # This pipeline is a separate entry point from _BuildPipeline — the
+        # /dtwin/databricks-build/start endpoint reaches only this one — so the
+        # snapshot has to be taken here too. The two never run in the same
+        # build, so this is not a second materialisation of the same table.
         try:
             materialize.materialize_from_view(
                 self.source_client, self.view_table, self.data_table

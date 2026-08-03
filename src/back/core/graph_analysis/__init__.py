@@ -3,8 +3,10 @@
 from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
-from back.core.graph_analysis.GraphMetrics import GraphMetrics
+from back.core.graph_analysis.JobMetrics import JobMetrics, resolve_analytics_source
+from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
 from back.core.graph_analysis.models import (
+    MODE_JOB,
     ClusterRequest,
     ClusterResult,
     DetectionResult,
@@ -97,12 +99,15 @@ __all__ = [
     "CohortVocabulary",
     "CommunityDetector",
     "GraphBuilder",
-    "GraphMetrics",
+    "JobMetrics",
+    "LakeflowRunner",
+    "resolve_analytics_source",
     "EntityTypeProfile",
     "MetricsRequest",
     "NodeMetrics",
     "MetricsStats",
     "MetricsResult",
+    "MODE_JOB",
     "ClusterRequest",
     "ClusterResult",
     "DetectionResult",

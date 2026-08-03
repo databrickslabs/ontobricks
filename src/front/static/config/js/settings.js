@@ -17,13 +17,25 @@ document.addEventListener('DOMContentLoaded', function () {
     let graphDbLoaded = false;
     let graphEngineConfigLoaded = false;
     let graphDbHeavyLoaded = false;
+    // Whether the analytics-job checkbox reflects the stored value yet. The
+    // Save handler posts that checkbox from *every* section's Save button, and
+    // its markup default is unchecked, so without this flag a hydration that
+    // failed or had not resolved yet would make the next Save silently write
+    // "off" over an admin's "on" — with no error and nobody touching the box.
+    let analyticsJobHydrated = false;
     // Registry rebuilt on every loadLakebaseObjects call; keyed by domain base name.
     // Avoids embedding JSON in onclick HTML attributes (double quotes break the attribute).
     let _lkDomainRegistry = {};
     // UC/Lakeflow objects keyed by domain base name; populated by loadLakebaseSyncObjects.
     let _lkUCRegistry = {};
+    // UC analytics tables keyed by domain base name; populated by loadLakebaseAnalyticsObjects.
+    let _lkAnalyticsRegistry = {};
+    // Analytics groups matching no domain, keyed by slug; shown as the orphan card.
+    let _lkOrphanRegistry = {};
     // Delta UC objects keyed by domain base name (triplestore_<safe>_V<n>).
     let _dtDomainRegistry = {};
+    // Analytics groups whose slug matches no domain, keyed by that slug.
+    let _dtOrphanRegistry = {};
 
     function escapeHtmlSettings(str) { return escapeHtml(str); }
 
@@ -37,6 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     loadRegistryCacheTtl();
     loadEditLockTtl();
+    loadAnalyticsJobEnabled();
     loadNavbarLogo();
     // Preload the Delta warehouse selection + registry location so the Delta
     // panel reflects the saved SQL warehouse. Also preload graph_engine_config
@@ -386,6 +399,43 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             console.log('Using default edit-lock lease TTL');
+        }
+    }
+
+    async function loadAnalyticsJobEnabled() {
+        const input = document.getElementById('analyticsJobEnabled');
+        if (!input) return;
+        const note = document.getElementById('analyticsJobEnabledSource');
+        // Inert until the stored value arrives, so the unchecked markup default
+        // is never mistaken for a setting the user can act on.
+        analyticsJobHydrated = false;
+        input.disabled = true;
+        try {
+            const resp = await fetch('/settings/analytics-job-enabled', { credentials: 'same-origin' });
+            const result = await resp.json();
+            if (!result.success) return;
+            input.checked = !!result.analytics_job_enabled;
+            analyticsJobHydrated = true;
+            input.disabled = false;
+            // Say where the value came from: an unconfigured toggle tracks the
+            // deployment default, and a bare checkbox would imply someone chose it.
+            if (note) {
+                note.innerHTML = result.source === 'admin'
+                    ? '<i class="bi bi-person-check me-1"></i>Set by an admin.'
+                    : '<i class="bi bi-gear me-1"></i>Not configured — following the deployment '
+                      + 'default (<code>ONTOBRICKS_ANALYTICS_JOB_ENABLED</code> = '
+                      + (result.env_default ? 'true' : 'false') + '). Saving here overrides it.';
+            }
+        } catch (error) {
+            console.log('Could not read the analytics job setting', error);
+        } finally {
+            // A failed read leaves the box disabled and says so, rather than
+            // showing a plausible-looking "off" the next Save would persist.
+            if (!analyticsJobHydrated && note) {
+                note.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>'
+                    + 'Could not read the current setting, so it cannot be changed '
+                    + 'from this page. Reload to try again.';
+            }
         }
     }
 
@@ -1406,9 +1456,23 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const domains = data.domains || [];
+            const orphans = data.orphans || [];
+            const analyticsLocation = data.analytics_location || '';
+            const analyticsByKey = {};
+            (data.analytics || []).forEach(function (grp) {
+                analyticsByKey[grp.key] = grp.items || [];
+            });
             _dtDomainRegistry = {};
-            if (domains.length === 0) {
-                result.innerHTML = '<p class="small text-muted mt-2">No triple-store objects found in this schema.</p>';
+            _dtOrphanRegistry = {};
+
+            const analyticsWarning = data.analytics_message
+                ? '<div class="alert alert-warning small py-2 mt-2">'
+                  + escapeHtmlSettings(data.analytics_message) + '</div>'
+                : '';
+
+            if (domains.length === 0 && orphans.length === 0) {
+                result.innerHTML = analyticsWarning
+                    + '<p class="small text-muted mt-2">No triple-store objects found in this schema.</p>';
                 return;
             }
 
@@ -1437,10 +1501,49 @@ document.addEventListener('DOMContentLoaded', function () {
                     + '</tr>';
             }
 
-            let html = '<div class="lk-domain-cards">';
+            /** Scratch tables from a failed run read differently from real output. */
+            function analyticsBadge(name) {
+                const isWork = /_work(_|$)/.test(name);
+                const cls = isWork
+                    ? 'bg-warning-subtle text-warning-emphasis'
+                    : 'bg-primary-subtle text-primary-emphasis';
+                return '<span class="badge border ' + cls + ' lk-sync-badge">'
+                    + (isWork ? 'work' : 'metrics') + '</span>';
+            }
+
+            function analyticsBlock(items, useFullName) {
+                if (!items.length) return '';
+                let h = '<div class="lk-sync-section border-top">';
+                h += '<div class="lk-sync-header px-3 py-1 d-flex align-items-center gap-2">'
+                    + '<span class="small text-muted fw-semibold" style="letter-spacing:.04em;font-size:.72rem;text-transform:uppercase">'
+                    + '<i class="bi bi-graph-up me-1"></i>Analytics</span>';
+                if (analyticsLocation) {
+                    h += '<span class="badge bg-light border text-muted font-monospace" style="font-size:.68rem">'
+                        + escapeHtmlSettings(analyticsLocation) + '</span>';
+                }
+                h += '</div><table class="table table-sm mb-0 lk-sync-table"><tbody>';
+                items.forEach(function (o) {
+                    h += '<tr>'
+                        + '<td style="width:90px">' + analyticsBadge(o.name) + '</td>'
+                        + '<td class="font-monospace lk-sync-uc-cell text-muted">'
+                        + escapeHtmlSettings(useFullName ? o.full_name : o.name) + '</td>'
+                        + '<td class="text-end" style="width:90px">'
+                        + mkDropBtn(o.full_name, o.kind) + '</td>'
+                        + '</tr>';
+                });
+                h += '</tbody></table></div>';
+                return h;
+            }
+
+            let html = analyticsWarning + '<div class="lk-domain-cards">';
             domains.forEach(function (grp, idx) {
                 const key = grp.base;
-                _dtDomainRegistry[key] = { base: key, sortedItems: grp.items || [] };
+                const analyticsItems = analyticsByKey[grp.key] || [];
+                _dtDomainRegistry[key] = {
+                    base: key,
+                    sortedItems: grp.items || [],
+                    analyticsItems: analyticsItems,
+                };
                 const collapseId = 'dtDomainCollapse_' + idx;
 
                 html += '<div class="lk-domain-card">';
@@ -1452,7 +1555,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '<i class="bi bi-folder2 text-muted" style="font-size:.85rem"></i>';
                 html += '<span class="lk-domain-name">' + escapeHtmlSettings(key) + '</span>';
                 html += '<span class="badge bg-secondary-subtle text-secondary-emphasis border lk-domain-count">'
-                    + (grp.items || []).length + '</span>';
+                    + ((grp.items || []).length + analyticsItems.length) + '</span>';
                 html += '</button>';
                 html += '<button type="button"'
                     + ' class="btn btn-sm btn-outline-danger lk-domain-delete-btn dt-drop-domain-btn"'
@@ -1469,6 +1572,35 @@ document.addEventListener('DOMContentLoaded', function () {
                     html += mkObjectRow(o.kind, o.name, o.full_name);
                 });
                 html += '</tbody></table>';
+                html += analyticsBlock(analyticsItems, false);
+                html += '</div></div>';
+            });
+
+            orphans.forEach(function (grp, idx) {
+                _dtOrphanRegistry[grp.key] = { base: grp.base, sortedItems: grp.items || [] };
+                const collapseId = 'dtOrphanCollapse_' + idx;
+
+                html += '<div class="lk-domain-card">';
+                html += '<div class="lk-domain-header">';
+                html += '<button class="lk-domain-toggle" type="button"'
+                    + ' data-bs-toggle="collapse" data-bs-target="#' + collapseId + '"'
+                    + ' aria-expanded="false" aria-controls="' + collapseId + '">';
+                html += '<i class="bi bi-chevron-right lk-chevron"></i>';
+                html += '<i class="bi bi-exclamation-triangle text-warning" style="font-size:.85rem"></i>';
+                html += '<span class="lk-domain-name">' + escapeHtmlSettings(grp.base) + '</span>';
+                html += '<span class="badge bg-warning-subtle text-warning-emphasis border lk-domain-count">'
+                    + (grp.items || []).length + '</span>';
+                html += '</button>';
+                html += '<button type="button"'
+                    + ' class="btn btn-sm btn-outline-danger lk-domain-delete-btn dt-drop-orphan-btn"'
+                    + ' data-dt-orphan="' + escapeHtmlSettings(grp.key) + '"'
+                    + ' title="Delete these analytics tables">'
+                    + '<i class="bi bi-trash3 me-1"></i>Delete</button>';
+                html += '</div>';
+                html += '<div id="' + collapseId + '" class="collapse lk-domain-body">';
+                html += '<p class="small text-muted px-3 pt-2 mb-0">Analytics tables with no matching '
+                    + 'triple-store objects — left over from a renamed or deleted domain version.</p>';
+                html += analyticsBlock(grp.items || [], true);
                 html += '</div></div>';
             });
             html += '</div>';
@@ -1478,6 +1610,11 @@ document.addEventListener('DOMContentLoaded', function () {
             result.querySelectorAll('.dt-drop-domain-btn').forEach(function (el) {
                 el.addEventListener('click', function () {
                     dropDeltaDomainObjects(this.dataset.dtDomain);
+                });
+            });
+            result.querySelectorAll('.dt-drop-orphan-btn').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    dropDeltaOrphanObjects(this.dataset.dtOrphan);
                 });
             });
             result.querySelectorAll('.dt-drop-obj-btn').forEach(function (el) {
@@ -1600,21 +1737,36 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotification('Domain not found: ' + domainKey, 'danger');
             return;
         }
-        const items = entry.sortedItems || [];
+        // Analytics tables come last: the triple-store drop order (views before
+        // tables) is the one that matters, and these have no dependants.
+        const items = (entry.sortedItems || []).concat(entry.analyticsItems || []);
+        _confirmDropDelta(domainKey, items);
+    }
+
+    function dropDeltaOrphanObjects(orphanKey) {
+        const entry = _dtOrphanRegistry[orphanKey];
+        if (!entry) {
+            showNotification('Analytics group not found: ' + orphanKey, 'danger');
+            return;
+        }
+        _confirmDropDelta(entry.base, entry.sortedItems || []);
+    }
+
+    function _confirmDropDelta(label, items) {
         const count = items.length;
         const listHtml = items.map(function (o) {
             return '<li class="font-monospace small">' + escapeHtmlSettings(o.kind) + ': '
                 + escapeHtmlSettings(o.name) + '</li>';
         }).join('');
         const bodyContent = 'Drop all <strong>' + count + ' object' + (count !== 1 ? 's' : '')
-            + '</strong> for <code>' + escapeHtmlSettings(domainKey) + '</code>?'
+            + '</strong> for <code>' + escapeHtmlSettings(label) + '</code>?'
             + '<ul class="mt-2 mb-0 ps-3">' + listHtml + '</ul>';
 
         const modalEl = document.getElementById('lkDropConfirmModal');
         const bodyEl = document.getElementById('lkDropConfirmModalBody');
         const confirmBtn = document.getElementById('lkDropConfirmBtn');
         if (!modalEl || !bodyEl || !confirmBtn) {
-            if (window.confirm('Drop all ' + count + ' objects for ' + domainKey + '?')) {
+            if (window.confirm('Drop all ' + count + ' objects for ' + label + '?')) {
                 _execDropAllDelta(items);
             }
             return;
@@ -1828,8 +1980,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         html += mkObjectRow(o.kind, o.schemaName, o.name);
                     });
                     html += '</tbody></table>';
-                    // Placeholder filled by loadLakebaseSyncObjects() after the main load
+                    // Placeholders filled after the main load by loadLakebaseSyncObjects()
+                    // and loadLakebaseAnalyticsObjects()
                     html += '<div class="lk-sync-slot" data-lk-base="' + escapeHtmlSettings(key) + '"></div>';
+                    html += '<div class="lk-analytics-slot" data-lk-base="' + escapeHtmlSettings(key) + '"></div>';
                     html += '</div>';
 
                     html += '</div>'; // /.lk-domain-card
@@ -1868,6 +2022,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Best-effort: load UC/Lakeflow sync objects and inject into each domain slot
             loadLakebaseSyncObjects(database, '');
+            loadLakebaseAnalyticsObjects();
         } catch (e) {
             result.innerHTML = '<div class="alert alert-danger small py-2 mt-2">'
                 + escapeHtmlSettings(e.message || 'Network error') + '</div>';
@@ -2121,7 +2276,13 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         const { schema, sortedItems: items } = entry;
-        const ucItems = _lkUCRegistry[domainKey] || [];
+        // Analytics tables drop through the same UC endpoint as the sync objects,
+        // and come last because nothing depends on them.
+        const ucItems = (_lkUCRegistry[domainKey] || []).concat(
+            (_lkAnalyticsRegistry[domainKey] || []).map(function (o) {
+                return { full_name: o.full_name, is_sync: false };
+            })
+        );
         const database   = document.getElementById('lakebaseGraphDb')?.value  || '';
         const branchPath = document.getElementById('lakebaseBranch')?.value   || '';
         const count = items.length + ucItems.length;
@@ -2397,6 +2558,186 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (e) {
             slots.forEach(slot => { slot.innerHTML = ''; });
         }
+    }
+
+    /** Postgres card base "<Domain>_V<n>" → the "<domain>_<n>" analytics slug. */
+    function lkDomainMatchKey(base) {
+        const m = /^(.+)_V([^_]+)$/i.exec(base || '');
+        return m ? (m[1] + '_' + m[2]).toLowerCase() : '';
+    }
+
+    function _lkAnalyticsBlock(items, location, useFullName) {
+        function badge(name) {
+            const isWork = /_work(_|$)/.test(name);
+            const cls = isWork
+                ? 'bg-warning-subtle text-warning-emphasis'
+                : 'bg-primary-subtle text-primary-emphasis';
+            return '<span class="badge border ' + cls + ' lk-sync-badge">'
+                + (isWork ? 'work' : 'metrics') + '</span>';
+        }
+
+        let h = '<div class="lk-sync-section border-top">';
+        h += '<div class="lk-sync-header px-3 py-1 d-flex align-items-center gap-2">'
+            + '<span class="small text-muted fw-semibold" style="letter-spacing:.04em;font-size:.72rem;text-transform:uppercase">'
+            + '<i class="bi bi-graph-up me-1"></i>Analytics (Unity Catalog)</span>';
+        if (location) {
+            h += '<span class="badge bg-light border text-muted font-monospace" style="font-size:.68rem">'
+                + escapeHtmlSettings(location) + '</span>';
+        }
+        h += '</div><table class="table table-sm mb-0 lk-sync-table"><tbody>';
+        items.forEach(function (o) {
+            h += '<tr>'
+                + '<td style="width:90px">' + badge(o.name) + '</td>'
+                + '<td class="font-monospace lk-sync-uc-cell text-muted">'
+                + escapeHtmlSettings(useFullName ? o.full_name : o.name) + '</td>'
+                + '<td class="text-end" style="width:120px">'
+                + '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 lk-drop-uc-btn"'
+                + ' data-lk-full-name="' + escapeHtmlSettings(o.full_name) + '"'
+                + ' data-lk-is-sync="0"'
+                + ' title="Drop ' + escapeHtmlSettings(o.full_name) + '">'
+                + '<i class="bi bi-trash" style="font-size:.75rem"></i></button>'
+                + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        return h;
+    }
+
+    function _wireUCDropButtons(root) {
+        root.querySelectorAll('.lk-drop-uc-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                dropUCObject(this.dataset.lkFullName, this.dataset.lkIsSync === '1');
+            });
+        });
+    }
+
+    /** Fetch UC analytics tables and inject them into each domain's analytics slot.
+     *
+     *  Orphans come from the server, which matches analytics against the UC
+     *  triple-store objects every engine's Build writes. Matching them against
+     *  the Postgres cards on this tab instead would flag every other backend's
+     *  analytics as orphaned. */
+    async function loadLakebaseAnalyticsObjects() {
+        const slots = document.querySelectorAll('.lk-analytics-slot');
+        const result = document.getElementById('lakebaseObjectsResult');
+        if (!slots.length || !result) return;
+
+        _lkAnalyticsRegistry = {};
+        _lkOrphanRegistry = {};
+
+        try {
+            const resp = await fetch('/settings/triple-store/databricks-objects',
+                                     { credentials: 'same-origin' });
+            const data = resp.ok ? await resp.json() : {};
+            if (!data.success) {
+                slots.forEach(function (slot) { slot.innerHTML = ''; });
+                return;
+            }
+
+            const location = data.analytics_location || '';
+            const byKey = {};
+            (data.analytics || []).forEach(function (grp) { byKey[grp.key] = grp.items || []; });
+
+            slots.forEach(function (slot) {
+                const base = slot.dataset.lkBase || '';
+                const items = byKey[lkDomainMatchKey(base)] || [];
+                if (!items.length) {
+                    slot.innerHTML = '';
+                    return;
+                }
+                _lkAnalyticsRegistry[base] = items;
+                slot.innerHTML = _lkAnalyticsBlock(items, location, false);
+                _wireUCDropButtons(slot);
+            });
+
+            const orphans = data.orphans || [];
+            const cards = result.querySelector('.lk-domain-cards');
+            if (!orphans.length || !cards) return;
+
+            let html = '';
+            orphans.forEach(function (grp, idx) {
+                _lkOrphanRegistry[grp.key] = { base: grp.base, items: grp.items || [] };
+                const collapseId = 'lkOrphanCollapse_' + idx;
+                html += '<div class="lk-domain-card lk-orphan-card">';
+                html += '<div class="lk-domain-header">';
+                html += '<button class="lk-domain-toggle" type="button"'
+                    + ' data-bs-toggle="collapse" data-bs-target="#' + collapseId + '"'
+                    + ' aria-expanded="false" aria-controls="' + collapseId + '">';
+                html += '<i class="bi bi-chevron-right lk-chevron"></i>';
+                html += '<i class="bi bi-exclamation-triangle text-warning" style="font-size:.85rem"></i>';
+                html += '<span class="lk-domain-name">' + escapeHtmlSettings(grp.base) + '</span>';
+                html += '<span class="badge bg-warning-subtle text-warning-emphasis border lk-domain-count">'
+                    + (grp.items || []).length + '</span>';
+                html += '</button>';
+                html += '<button type="button"'
+                    + ' class="btn btn-sm btn-outline-danger lk-domain-delete-btn lk-drop-orphan-btn"'
+                    + ' data-lk-orphan="' + escapeHtmlSettings(grp.key) + '"'
+                    + ' title="Delete these analytics tables">'
+                    + '<i class="bi bi-trash3 me-1"></i>Delete</button>';
+                html += '</div>';
+                html += '<div id="' + collapseId + '" class="collapse lk-domain-body">';
+                html += '<p class="small text-muted px-3 pt-2 mb-0">Analytics tables with no matching '
+                    + 'triple-store objects — left over from a renamed or deleted domain version.</p>';
+                html += _lkAnalyticsBlock(grp.items || [], location, true);
+                html += '</div></div>';
+            });
+            cards.insertAdjacentHTML('beforeend', html);
+
+            // Wire only the orphan cards — the domain cards already own their
+            // handlers, and re-wiring their drop buttons would double-fire them.
+            cards.querySelectorAll('.lk-orphan-card').forEach(function (card) {
+                card.querySelectorAll('.lk-drop-orphan-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        dropLakebaseOrphanObjects(this.dataset.lkOrphan);
+                    });
+                });
+                _wireUCDropButtons(card);
+                const collapseEl = card.querySelector('.collapse');
+                if (!collapseEl) return;
+                collapseEl.addEventListener('show.bs.collapse', () => card.classList.add('lk-open'));
+                collapseEl.addEventListener('hide.bs.collapse', () => card.classList.remove('lk-open'));
+            });
+        } catch (e) {
+            slots.forEach(function (slot) { slot.innerHTML = ''; });
+        }
+    }
+
+    /** Confirm, then drop every analytics table of an orphaned group. */
+    function dropLakebaseOrphanObjects(orphanKey) {
+        const entry = _lkOrphanRegistry[orphanKey];
+        if (!entry) {
+            showNotification('Analytics group not found: ' + orphanKey, 'danger');
+            return;
+        }
+        const ucItems = (entry.items || []).map(function (o) {
+            return { full_name: o.full_name, is_sync: false };
+        });
+        const count = ucItems.length;
+        const listHtml = ucItems.map(function (u) {
+            return '<li class="font-monospace small">' + escapeHtmlSettings(u.full_name) + '</li>';
+        }).join('');
+        const bodyContent = 'Drop all <strong>' + count + ' analytics table'
+            + (count !== 1 ? 's' : '') + '</strong> for <code>'
+            + escapeHtmlSettings(entry.base) + '</code>?'
+            + '<ul class="mt-2 mb-0 ps-3">' + listHtml + '</ul>';
+
+        const modalEl = document.getElementById('lkDropConfirmModal');
+        const bodyEl = document.getElementById('lkDropConfirmModalBody');
+        const confirmBtn = document.getElementById('lkDropConfirmBtn');
+        if (!modalEl || !bodyEl || !confirmBtn) {
+            if (window.confirm('Drop all ' + count + ' analytics tables for ' + entry.base + '?')) {
+                _execDropAll([], '', '', '', ucItems);
+            }
+            return;
+        }
+        bodyEl.innerHTML = bodyContent;
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        newBtn.addEventListener('click', function () {
+            modal.hide();
+            _execDropAll([], '', '', '', ucItems);
+        });
+        modal.show();
     }
 
     /** Ask for confirmation, then DROP a Unity Catalog table or Lakeflow synced-table. */
@@ -3169,6 +3510,34 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (!r.success) errors.push('Edit lock lease: ' + r.message);
                 } catch (e) { errors.push('Edit lock lease: ' + e.message); }
             }
+        }
+
+        // 3c. Save the Databricks graph-analytics job toggle. An explicit "off"
+        // is sent as readily as an "on", because unchecking has to persist a
+        // value that overrides the env-var default — but only once the checkbox
+        // is known to hold the stored state. Posting an unhydrated box would
+        // write its unchecked default over an admin's "on", and this handler is
+        // shared by every section's Save button, so that would happen on a save
+        // having nothing to do with analytics.
+        const analyticsJobInput = document.getElementById('analyticsJobEnabled');
+        if (analyticsJobInput && !analyticsJobHydrated) {
+            errors.push(
+                'Analytics job: current value could not be read, so it was left '
+                + 'unchanged. Reload the page and try again.'
+            );
+        }
+        if (analyticsJobInput && analyticsJobHydrated) {
+            try {
+                const resp = await fetch('/settings/save-analytics-job-enabled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ analytics_job_enabled: analyticsJobInput.checked })
+                });
+                const r = await resp.json();
+                if (!r.success) errors.push('Analytics job: ' + r.message);
+                else loadAnalyticsJobEnabled();
+            } catch (e) { errors.push('Analytics job: ' + e.message); }
         }
 
         // 4. Graph DB connection config + Delta warehouse (same tab; top Save only)

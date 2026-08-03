@@ -24,7 +24,7 @@
             </select>
         </div>
         <button type="button" class="btn btn-sm btn-outline-primary" data-dq-action="run-all-checks" id="runDQChecksBtn">
-            <i class="bi bi-play-fill me-1"></i> Run All
+            <i class="bi bi-play-fill me-1"></i> Run
         </button>
         <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
                 title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
@@ -75,22 +75,16 @@
 
             <!-- Options pane -->
             <div class="tab-pane fade show active p-3" id="dq-pane-options" role="tabpanel" aria-labelledby="dq-tab-options">
-                <!-- Backend Selector -->
-                <div class="mb-3 d-flex align-items-center gap-3">
-                    <div class="btn-group btn-group-sm" role="group" id="dqBackendToggle">
-                        <button type="button" class="btn btn-outline-secondary" data-backend="view"
-                                title="Run SHACL checks as SQL against the Triple-Store VIEW via SQL Warehouse">
-                            <i class="bi bi-table me-1"></i>Triple-Store
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary active" data-backend="graph"
-                                title="Run SHACL checks against the graph database">
-                            <i class="bi bi-diagram-3 me-1"></i>Graph
-                        </button>
+                <!-- Execution target: always the triple-store VIEW, built by every graph engine -->
+                <div class="alert alert-light border small mb-3">
+                    <strong><i class="bi bi-database me-1"></i>Source data</strong>
+                    <div class="font-monospace mt-1" id="dqExecTripleStoreTable">Loading...</div>
+                    <div class="text-muted mt-1">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Rules are compiled to SQL and run against this view, which holds the
+                        triples mapped from your source tables. Triples produced by reasoning
+                        are not checked.
                     </div>
-                    <span class="small text-muted">
-                        <i class="bi bi-database me-1"></i>
-                        <span id="dqExecTripleStoreTable">Loading...</span>
-                    </span>
                 </div>
 
                 <!-- Dimension Selection Tiles -->

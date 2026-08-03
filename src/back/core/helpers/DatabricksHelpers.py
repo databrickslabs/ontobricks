@@ -214,6 +214,68 @@ class DatabricksHelpers:
             return True
 
     @staticmethod
+    def resolve_analytics_job_enabled(domain, settings) -> bool:
+        """Resolve whether oversized graphs may use the serverless analytics job.
+
+        Resolution order:
+
+        1. **Settings › Global** — the admin toggle, when an admin has set it.
+        2. ``ONTOBRICKS_ANALYTICS_JOB_ENABLED`` — the deployment default.
+
+        Like :meth:`resolve_use_cloud_fetch` this bypasses
+        ``_resolve_global_setting``, whose ``if val: return val`` would discard
+        an admin's explicit "off". It also relies on the getter's three-state
+        ``None`` so that "never configured" falls through to the env var while
+        a stored ``False`` still overrides an env var that enables the job.
+        """
+        from back.objects.session import global_config_service
+
+        env_default = bool(getattr(settings, "analytics_job_enabled", False))
+
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
+        if not host or not registry_cfg.get("catalog") or not registry_cfg.get(
+            "schema"
+        ):
+            return env_default
+
+        try:
+            configured = global_config_service.get_analytics_job_enabled(
+                host, token, registry_cfg
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort default resolution
+            logger.debug(
+                "Could not resolve the global analytics-job toggle, using the "
+                "deployment default (%s): %s",
+                env_default,
+                exc,
+            )
+            return env_default
+
+        return env_default if configured is None else bool(configured)
+
+    @staticmethod
+    def resolve_analytics_job_name(settings) -> str:
+        """Return the graph-analytics job name, or ``""`` if none can be formed.
+
+        ``ONTOBRICKS_ANALYTICS_JOB_NAME`` wins when set. Otherwise the name is
+        derived from the app name as ``<app>-graph-analytics``, matching what the
+        bundle deploys. The derivation needs ``DATABRICKS_APP_NAME``, which the
+        Apps platform injects but a local dev shell does not, so local runs must
+        set the name explicitly.
+
+        Returning ``""`` is meaningful: it is the one case where job mode is
+        configured but cannot run, so callers gating the UI on availability must
+        treat it as unavailable rather than promising metrics the run will then
+        silently fall back from.
+        """
+        explicit = (getattr(settings, "analytics_job_name", "") or "").strip()
+        if explicit:
+            return explicit
+        app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
+        return f"{app_name}-graph-analytics" if app_name else ""
+
+    @staticmethod
     def get_databricks_client(domain, settings):
         """Get Databricks client from domain session or settings.
 

@@ -166,7 +166,7 @@ function getOrCreateDetailPanel() {
         <div class="panel-footer" id="sharedPanelFooter">
             <button type="button" class="btn btn-secondary btn-sm" id="sharedCancelPanelBtn">Cancel</button>
             <button type="button" class="btn btn-dark btn-sm" id="sharedSavePanelBtn">
-                <i class="bi bi-check-circle"></i> Save
+                <i class="bi bi-check-circle"></i> Apply
             </button>
         </div>
     `;
@@ -247,9 +247,9 @@ function attachDirtyTracking() {
 async function guardedCloseSharedPanel() {
     if (sharedPanelDirty) {
         const save = await showConfirmDialog({
-            title: 'Unsaved Changes',
-            message: 'You have unsaved changes. Do you want to save before closing?',
-            confirmText: 'Save',
+            title: 'Unapplied Changes',
+            message: 'You have unapplied changes. Do you want to apply them before closing?',
+            confirmText: 'Apply',
             cancelText: 'Discard',
             confirmClass: 'btn-primary',
             icon: 'exclamation-triangle'
@@ -320,9 +320,9 @@ function panelGetById(id) {
 async function checkDirtyBeforeSwitch() {
     if (!sharedPanelDirty) return true;
     const save = await showConfirmDialog({
-        title: 'Unsaved Changes',
-        message: 'You have unsaved changes. Do you want to save before continuing?',
-        confirmText: 'Save',
+        title: 'Unapplied Changes',
+        message: 'You have unapplied changes. Do you want to apply them before continuing?',
+        confirmText: 'Apply',
         cancelText: 'Discard',
         confirmClass: 'btn-primary',
         icon: 'exclamation-triangle'

@@ -1,0 +1,1290 @@
+# Conditional SHACL data quality rules (IF guard)
+
+Context: Data Quality rules applied to every instance of their target entity.
+There was no way to say "this constraint only applies when another attribute
+holds a given value" — the only `sh:condition` in the codebase sat on SHACL-AF
+inference rules, not on validation. Conformance and consistency rules can now
+carry an optional list of conditions, built the way decision-table conditions
+are built in Business Rules. Design: `docs/superpowers/specs/2026-08-03-conditional-shacl-rules-design.md`.
+
+Changes:
+
+1. `src/back/core/w3c/shacl/ShapeConditions.py`
+   New module owning the guard: shape-dict accessors, validation, the SQL
+   subject filter, the in-memory subject filter, and the `sh:SPARQLTarget`
+   query. Reuses the decision-table operator maps (`DT_OP_SQL`,
+   `DT_STRING_OPS`, `DT_NUMERIC_OPS`) plus `exists` / `notExists`, so the two
+   rule builders share one operator vocabulary instead of inventing a third.
+2. `src/back/core/w3c/shacl/SHACLService.py`
+   `shape_to_sql()` extracted into `_base_shape_sql()` and now wraps the
+   constraint query in `SELECT v.* FROM (...) v WHERE v.s IN (<guard>)`.
+   Attribute conditions use `LEFT JOIN` so `or` logic cannot drop subjects
+   missing one property; `exists` / `notExists` compile to `EXISTS` subqueries.
+3. `src/back/core/w3c/shacl/SHACLService.py`
+   `evaluate_shape_in_memory()` extracted into `_base_shape_violations()` and
+   now filters its violations down to the guarded subjects. `create_shape()`
+   persists `conditions` / `condition_logic`; `import_shapes_with_report()`
+   added.
+4. `src/back/core/w3c/shacl/SHACLGenerator.py`
+   `_add_conditional_shape()` emits a guarded shape as its own node shape with
+   a `sh:target [ a sh:SPARQLTarget ]`, since its focus nodes are a subset of
+   the class. Unconditional shapes are still grouped one node shape per class.
+   The query uses full IRIs — prefixes inside a `sh:select` resolve from
+   `sh:prefixes`, not from the enclosing document.
+5. `src/back/core/w3c/shacl/SHACLParser.py`
+   `parse_with_report()` counts shapes arriving with a SPARQL target and
+   recovers their target class from the query, so an imported conditional rule
+   keeps a usable constraint instead of landing without a target. Conditions
+   themselves are not reconstructed.
+6. `src/back/objects/ontology/Ontology.py`
+   `validate_shape()` rejects conditions on unsupported dimensions, on a shape
+   with no target entity, with an unknown operator, with no property, or with
+   an empty value on a comparison operator.
+7. `src/api/routers/internal/ontology.py`
+   The save route forwards `conditions` / `condition_logic`; the import route
+   reports how many shapes lost their conditions and now apply to every
+   instance.
+8. `src/front/static/ontology/js/ontology-conditions.js`
+   New `ConditionRowsModule`: reusable property/operator/value rows with
+   `render` / `collect` / `addRow` / `summarize`. Rows live in the DOM, wired by
+   delegation. Selecting a relationship narrows the operators to
+   `exists` / `notExists` and hides the value input.
+9. `src/front/static/ontology/js/ontology-dataquality.js`
+   IF block rendered for conformance and consistency only; conditions collected
+   on save, restored on edit, summarised on the rule card and in the
+   auto-generated message, and previewed as the `sh:SPARQLTarget` the backend
+   will emit. `_localName()` / `_isObjectProperty()` extracted so the condition
+   property list and `_populatePropertySelect()` share one implementation.
+10. `src/front/templates/partials/ontology/_ontology_dataquality.html`
+    `#dqConditionBlock` with an All/Any logic toggle, a rows container and an
+    "Add condition" button, between the property select and the constraint
+    fields.
+11. `src/front/templates/ontology.html`
+    Loads `ontology-conditions.js` before `ontology-dataquality.js`.
+12. `tests/units/ontology/test_dataquality.py`
+    Conditional SQL (wrapping, numeric cast, `NOT EXISTS`, `or` + `LEFT JOIN`,
+    unconditional regression), in-memory filtering (and/or, exists/notExists,
+    incomplete rows ignored), and the `validate_shape` rejection cases.
+13. `tests/back/core/w3c/shacl/test_shacl_generator.py`
+    SPARQL target emission, constraint preserved, no `sh:targetClass` on a
+    guarded shape, plain shapes still grouped, and the import drop report.
+14. `tests/units/front/test_dq_condition_builder.py`
+    Source contracts for the shared builder: exposed API, operator vocabulary,
+    hidden value input, relationship operator narrowing, DOM-aligned collect,
+    dimension restriction, and script load order.
+
+Modified files:
+- `src/back/core/w3c/shacl/ShapeConditions.py` (new)
+- `src/back/core/w3c/shacl/SHACLService.py`
+- `src/back/core/w3c/shacl/SHACLGenerator.py`
+- `src/back/core/w3c/shacl/SHACLParser.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/api/routers/internal/ontology.py`
+- `src/front/static/ontology/js/ontology-conditions.js` (new)
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `src/front/templates/partials/ontology/_ontology_dataquality.html`
+- `src/front/templates/ontology.html`
+- `tests/units/ontology/test_dataquality.py`
+- `tests/back/core/w3c/shacl/test_shacl_generator.py`
+- `tests/units/front/test_dq_condition_builder.py` (new)
+- `docs/superpowers/specs/2026-08-03-conditional-shacl-rules-design.md` (new)
+- `docs/features.md`
+- `docs/user-guide.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3887 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.52s
+
+## Restrict Data Quality rule properties to the selected entity
+
+Context: In the Add Data Quality Rule popup the property dropdown offered
+properties that do not belong to the selected entity. Two causes: the filter
+kept every property whose `domain` was empty (`dom === clsLower || !dom`), so
+un-owned properties appeared under every entity; and it compared `domain` to the
+class name only, so a property whose `domain` holds a full URI — which agent and
+manual ingestion paths produce — never matched its real owner. Inherited
+attributes were also missing outside the attribute-only dimensions. The same
+leak affected the new condition rows.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-dataquality.js`
+   Add `_classChain()`, `_classOwnsProperty()` and `_propertiesForClass()`. A
+   property is owned when its `domain` matches the entity name, its local name,
+   or its URI, walking the parent chain for inherited properties. A property
+   with no `domain` belongs to no entity and is no longer offered.
+2. `src/front/static/ontology/js/ontology-dataquality.js`
+   `_populatePropertySelect()` now filters the resolved list by dimension
+   (relationships for cardinality, attributes for completeness / conformance /
+   uniqueness, both otherwise) instead of scanning `ontologyProperties` inline;
+   the per-call dedupe and class lookup it repeated are gone. A cardinality rule
+   on an entity with no relationship shows a disabled hint rather than an empty
+   list.
+3. `src/front/static/ontology/js/ontology-dataquality.js`
+   `_conditionProperties()` delegates to the same resolver, so the IF rows and
+   the property select always agree; `_selectedClassName()` extracted. The IF
+   hint says when the entity declares no property to build a condition on.
+4. `tests/units/front/test_dq_property_scope.py`
+   New source contracts: domain-less properties are unowned, URI domains
+   resolve, inheritance is walked, both selects share the resolver, and the
+   `|| !dom` filter does not come back.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `tests/units/front/test_dq_property_scope.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3893 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.64s
+
+## Fix empty attribute dropdown for entities without materialised dataProperties
+
+Context: After scoping the Data Quality properties to the selected entity, the
+attribute dropdowns listed attributes for `Customer` but were empty for other
+entities. `Customer` carries its attributes in `class.dataProperties`, which the
+resolver always classifies as attributes. Every other entity relies on the
+top-level `ontology.properties` list, and there `_isObjectProperty()` fell back
+to *relationship* whenever a property declared neither `type` nor `range` —
+exactly the shape the entity panel writes. The attributes-only dimensions then
+filtered all of them out. `ontology-swrl.js` already used the opposite default,
+which is why the SWRL editor listed those attributes correctly.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-dataquality.js`
+   Invert the fallback in `_isObjectProperty()`: a property is a relationship
+   only on positive evidence — an explicit `ObjectProperty` type, or a `range`
+   naming a known entity. A property with no type and no range is an attribute.
+2. `src/front/static/ontology/js/ontology-dataquality.js`
+   Add `_isKnownClassName()`, matching a range against entity names, URIs and
+   URI local names, so an untyped relationship whose range points at an entity
+   stays out of the attribute list.
+3. `src/front/static/ontology/js/ontology-dataquality.js`
+   `_populatePropertySelect()` shows the disabled "No <kind> declared on
+   <Entity>" hint for every dimension, not just cardinality, so a genuinely
+   empty entity is legible instead of silent.
+4. `tests/units/front/test_dq_property_scope.py`
+   Contracts for the new classification: an untyped property is an attribute, a
+   range naming an entity is a relationship, and relationship is no longer the
+   fallback.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `tests/units/front/test_dq_property_scope.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3895 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.53s
+
+## Behavioural test coverage for the Data Quality rule checks
+
+Context: The Data Quality frontend was covered only by source-contract tests
+that grep the JavaScript. That style pins the shape of the code but cannot run
+it, which is why the `_isObjectProperty()` misclassification shipped unnoticed.
+The condition translators in `ShapeConditions` were likewise only reached
+indirectly, through `SHACLService`, leaving the operator vocabulary, the value
+quoting and the SPARQL target untested.
+
+Changes:
+
+1. `tests/units/front/test_dq_property_resolver.py`
+   New module that executes `ontology-dataquality.js` under node against a
+   fixture ontology mixing every ingestion shape: attributes materialised in
+   `dataProperties`, attributes known only as top-level properties (with a name
+   domain and with a URI domain), a typed relationship, an untyped relationship
+   recognisable only by its range, a domain-less property, an entity declaring
+   nothing, and a parent cycle. Covers `_propertiesForClass`, `_isObjectProperty`
+   and the rendered `_populatePropertySelect` options per quality dimension.
+   Skipped when node is unavailable. Reverting the classifier fails 9 of them.
+2. `tests/units/ontology/test_shape_conditions.py`
+   New module unit-testing `ShapeConditions` directly: the shared decision-table
+   operator vocabulary, `get_conditions` dropping unusable rows, every SQL
+   operator including string case folding and quote escaping, LEFT JOIN and
+   existence subquery forms, the in-memory matcher (multi-valued properties,
+   non-numeric objects under a numeric comparison, and/or logic), and the SPARQL
+   target (full IRIs, OPTIONAL under `or`, BIND(EXISTS) under `or`, escaping).
+   A cross-check asserts all three back ends can translate every operator.
+3. `tests/units/ontology/test_dataquality.py`
+   Add `TestConditionPersistence`: a shape is unconditional by default, an
+   unknown logic falls back to `and`, and clearing conditions through
+   `update_shape` restores the unwrapped query.
+
+Modified files:
+- `tests/units/front/test_dq_property_resolver.py`
+- `tests/units/ontology/test_shape_conditions.py`
+- `tests/units/ontology/test_dataquality.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4023 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.13s
+
+## Execute numeric-range and string-length conformance rules
+
+Context: A conformance rule such as "Monthly fee between 1 and 10" ran with a
+warning icon and a green 100% pass rate. The modal offers **Numeric range** and
+**String length** under conformance, and `SHACLGenerator` exports both to
+Turtle, but neither execution engine could translate them: `_base_shape_sql`
+returned `None` ("Cannot translate to SQL", the warning icon) and
+`_base_shape_violations` returned an empty list. The results table then read
+zero violations as a perfect score, so a rule that never ran vouched for the
+data. Any check the engine cannot run had the same problem.
+
+Changes:
+
+1. `src/back/core/w3c/shacl/SHACLService.py`
+   Add `RANGE_OPS` / `LENGTH_OPS` mapping each bound to the comparison a
+   conforming value passes, and translate both with one pair of helpers:
+   `_sql_bounded()` (`TRY_CAST(... AS DOUBLE)` for a range, `LENGTH()` for a
+   length) and `_mem_bounded()`. `sh:minExclusive` / `sh:maxExclusive` are
+   covered too, since the parser can produce them. A value that cannot be
+   measured — a non-numeric value under a range — is a violation, matching what
+   SHACL reports for a non-comparable value node.
+2. `src/back/core/w3c/shacl/SHACLService.py`
+   Dispatch on the bound parameters as well as on `shacl_type`, because an
+   imported shape takes its type from whichever constraint the parser reads
+   first (a `sh:maxInclusive`-only shape is typed `sh:maxInclusive`).
+3. `src/back/core/w3c/shacl/SHACLService.py`
+   Add `supports_in_memory()` and the `IN_MEMORY_TYPES` / `IN_MEMORY_PARAMS`
+   sets behind it: an unsupported shape yields no violations, which the caller
+   cannot tell from a clean result unless it asks first.
+4. `src/back/objects/digitaltwin/DigitalTwin.py`
+   `run_graph_checks()` reports a shape the graph engine cannot evaluate as
+   `info` / "Cannot evaluate on the graph", mirroring what the SQL runner
+   already did for an untranslatable shape.
+5. `src/front/static/query/js/query-dataquality.js`
+   `_renderResultRow()` only infers a 100% pass rate for a check that actually
+   ran (`success` or `error`). A check with `info` or `warning` status shows a
+   muted dash and a "This check did not run" tooltip.
+6. `tests/units/ontology/test_dataquality.py`
+   Add `TestNumericRange`, `TestStringLength` and `TestInMemorySupport`:
+   inclusive and exclusive bounds, a single bound, non-numeric values, the
+   bound values themselves, a range rule combined with an IF guard, and the
+   advertised in-memory set matching what the dispatcher handles.
+7. `tests/units/front/test_dq_result_row.py`
+   New node-executed module asserting a non-executed check never renders a
+   percentage, and that a check that ran still does.
+8. `docs/user-guide.md`
+   Document the range and length constraint types, the non-comparable-value
+   rule, and the fact that an unexecutable check reports no pass rate.
+
+Modified files:
+- `src/back/core/w3c/shacl/SHACLService.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/ontology/test_dataquality.py`
+- `tests/units/front/test_dq_result_row.py`
+- `docs/user-guide.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4075 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.38s
+
+## Honour the selected dimensions for SWRL, decision table and aggregate rules
+
+Context: Running the data quality checks with only **Conformance** ticked still
+executed every SWRL rule, whose results are filed under Structural. SHACL
+shapes have a checkbox each and were filtered correctly, but SWRL rules,
+decision tables and aggregate rules have no checkbox of their own — the route
+collected all of them unconditionally. The frontend made it worse: as soon as a
+domain had any shape it sent `shape_ids` *instead of* `dimensions`, so the
+backend had no selection left to apply to those three families.
+
+Changes:
+
+1. `src/back/core/w3c/shacl/constants.py`
+   Add `SWRL_CATEGORY` and `BUSINESS_RULE_CATEGORY`, naming the dimension each
+   non-SHACL rule family reports under, instead of leaving it implicit in the
+   result dicts the runner builds.
+2. `src/api/routers/internal/dtwin.py`
+   `start_dataquality_checks()` gates the three families on the selected
+   dimensions: SWRL rules need `structural`, decision tables and aggregate
+   rules need `conformance`. A request naming no dimension still runs
+   everything, so external API callers are unaffected.
+3. `src/api/routers/internal/dtwin.py`
+   A selection matching nothing now reports "Nothing to check in the selected
+   dimensions." rather than claiming the domain has no rules at all.
+4. `src/front/static/query/js/query-dataquality.js`
+   `runAllChecks()` always sends `dimensions`, adding `shape_ids` when
+   individual rules are picked, and only refuses to run when both are empty —
+   a dimension holding just SWRL rules can now run on its own.
+5. `tests/units/api/test_dq_run_selection.py`
+   New module driving the route with a stubbed domain and task manager:
+   Conformance excludes the SWRL rules but keeps the business rules, Structural
+   does the reverse, named rules still honour the dimensions, and no selection
+   runs everything. Reverting the gate fails 5 of them.
+6. `tests/units/front/test_dq_run_payload.py`
+   New node-executed module asserting the request carries the dimensions
+   alongside the rule ids.
+
+Modified files:
+- `src/back/core/w3c/shacl/constants.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/api/test_dq_run_selection.py`
+- `tests/units/front/test_dq_run_payload.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4090 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.39s
+
+================================================================================
+Data quality runs on one execution target
+================================================================================
+
+Context:
+The Data Quality page let the user pick between a "Triple-Store" and a "Graph"
+backend. That stopped being an engine choice once the product grew several
+graph engines: the two buttons opened different stores over *different data*.
+"Triple-Store" ran SQL on the Delta VIEW (the triples mapped from the source
+tables), while "Graph" loaded the domain's graph — base plus anything reasoning
+had inferred — into the app process and evaluated the shapes in Python. The
+same rule could therefore return different counts depending on the button, and
+nothing in the UI said so.
+
+The two paths were not equivalent either. The in-memory one could not evaluate
+`sh:datatype` or `sh:sparql` at all, and it was the default. On a Neo4j domain
+it also could not run SWRL rules, decision tables or aggregate rules, because
+those are still pushed as SQL through `execute_query`, which Neo4j refuses.
+And it held every triple in RAM for the duration of the run.
+
+The triple-store VIEW is created by every build whatever graph engine the
+domain uses, so it is the one target every domain has. Checks now always
+compile to SQL and run against it.
+
+Changes:
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   `run_data_quality_task()` drops its `requested_backend` parameter and always
+   opens the `view` store to run `run_sql_checks`.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Removed `run_graph_checks()` and the three rule-family helpers it drove
+   (`_run_swrl_graph_checks`, `_run_dt_graph_checks`, `_run_agg_graph_checks`),
+   plus `_count_class_population_graph` — 537 lines that existed only to serve
+   the removed branch.
+3. `src/api/routers/internal/dtwin.py`
+   New `_dataquality_table()` resolves the VIEW server-side and rejects an
+   unbuilt domain with "Build the Knowledge Graph first." Both
+   `start_dataquality_checks` and `execute_dataquality_check` use it and no
+   longer read `backend` or a client-supplied `triplestore_table`.
+4. `src/api/routers/digitaltwin.py`
+   The public `DataQualityRequest.backend` field is marked deprecated and
+   ignored rather than removed, so existing API clients keep working.
+5. `src/back/objects/digitaltwin/__init__.py`, `src/back/core/reasoning/SWRLEngine.py`
+   Dropped the `run_graph_checks` re-export and the docstring pointing at it.
+6. `src/front/templates/partials/dtwin/_query_dataquality.html`
+   The backend button group is replaced by the resolved table name and a hint
+   that reasoning output is out of scope.
+7. `src/front/static/query/js/query-dataquality.js`
+   Removed `_initBackendToggle` and `_getSelectedBackend`; the request no
+   longer names a backend or a table.
+8. `tests/units/api/test_dq_run_selection.py`
+   New `TestExecutionTarget`: the VIEW is the target, a client-supplied table
+   or backend is ignored, and an unbuilt domain is rejected.
+9. `tests/units/front/test_dq_run_payload.py`
+   New `TestExecutionTarget`: the request carries neither `backend` nor
+   `triplestore_table`, and a domain with a graph but no VIEW cannot run.
+10. `docs/user-guide.md`, `docs/features.md`, `docs/INFO.md`
+   Describe the single execution path. Also corrected the claim that the
+   product validates via PySHACL — it has no production caller; execution has
+   always been the hand-rolled SQL translator.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/digitaltwin/__init__.py`
+- `src/back/core/reasoning/SWRLEngine.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/api/routers/digitaltwin.py`
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/api/test_dq_run_selection.py`
+- `tests/units/front/test_dq_run_payload.py`
+- `tests/units/ontology/test_dataquality.py`
+- `docs/user-guide.md`
+- `docs/features.md`
+- `docs/INFO.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4093 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.69s
+
+--------------------------------------------------------------------------------
+Follow-up: the Data Quality pane states its scope
+--------------------------------------------------------------------------------
+
+Context:
+Removing the backend toggle left the execution target as a bare table name with
+the scope hidden in a tooltip. Which triples a run covers is the first thing a
+reader needs, so it is now on the page.
+
+Changes:
+1. `src/front/templates/partials/dtwin/_query_dataquality.html`
+   The target line becomes a "Source data" panel following the build pane's
+   `alert alert-light border` pattern: the view name in monospace, then a note
+   that rules compile to SQL against the triples mapped from the source tables
+   and that triples produced by reasoning are not checked.
+
+Modified files:
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4093 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 29.37s
+
+================================================================================
+Fix: a run covers the rules that were picked, and only those
+================================================================================
+
+Context:
+Choosing a few rules still ran everything. SHACL shapes have a checkbox each,
+but SWRL rules, decision tables and aggregate rules did not: they had no id to
+be addressed by, so a run pulled them in whole whenever their dimension was
+selected. A dimension counts as selected while it is checked *or*
+indeterminate, so unticking all but one Conformance rule left Conformance
+indeterminate and ran every decision table and aggregate rule, while Structural
+stayed checked and ran every SWRL rule.
+
+They are now selected exactly as shapes are, by the same check id the run
+already reports them under (`swrl:<name>`, `dt:<name>`, `agg:<name>`).
+
+Changes:
+1. `src/back/core/w3c/shacl/constants.py`
+   Added the family id prefixes, `RULE_FAMILY_CATEGORIES` and `rule_check_id()`
+   so the list endpoint, the run selection and the reported result derive the
+   id in one place — if they disagree a rule silently cannot be picked.
+2. `src/api/routers/internal/ontology.py`
+   `/ontology/dataquality/list` gains a `rules` key holding the three families
+   as selectable entries. `shapes` is left untouched because the ontology
+   editor reads the same endpoint and manages actual shapes only.
+3. `src/api/routers/internal/dtwin.py`
+   `start_dataquality_checks()` filters each family by check id when rules are
+   named, falling back to the dimension when they are not, and stamps the
+   resolved `check_id` on each rule it passes on.
+4. `src/back/objects/digitaltwin/DigitalTwin.py`
+   The three family loops resolve their id once through `_rule_check_id()`,
+   which prefers the stamped value: filtering renumbers the list, so an
+   unnamed rule would otherwise report its neighbour's id.
+5. `src/front/static/query/js/query-dataquality.js`
+   `_loadShapes()` merges `rules` into the shape cache, so each one renders a
+   checkbox under its dimension and travels in `shape_ids` when ticked.
+6. `tests/units/api/test_dq_rule_list.py`
+   New module: the families are offered with the ids the runner reports, the
+   shapes list stays free of them, disabled rules are not offered, and the
+   runner agrees with the selector on the id.
+7. `tests/units/api/test_dq_run_selection.py`
+   New `TestRuleSelection` cases: a SWRL rule can be picked on its own,
+   unpicking one rule of a family keeps the others, and a ticked dimension no
+   longer drags its rules in. Replaced the case that asserted the old
+   behaviour.
+8. `tests/units/front/test_dq_rule_checkboxes.py`
+   New node-executed module asserting a SWRL rule and a decision table each
+   render a checkbox under their dimension, and that a response with no
+   `rules` key still works.
+
+Modified files:
+- `src/back/core/w3c/shacl/constants.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/ontology.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/api/test_dq_rule_list.py`
+- `tests/units/api/test_dq_run_selection.py`
+- `tests/units/front/test_dq_rule_checkboxes.py`
+- `tests/units/front/test_dq_run_payload.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4110 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.77s
+
+--------------------------------------------------------------------------------
+Follow-up: a rule says which family it comes from
+--------------------------------------------------------------------------------
+
+Context:
+Making the rule families selectable put them in the dimension lists alongside
+the shapes, with nothing to tell them apart. Conformance then read "10 rules"
+for what is two SHACL shapes plus eight decision tables and aggregate rules,
+which do not appear in Ontology → Data Quality at all because they are authored
+in Business Rules.
+
+Changes:
+1. `src/front/static/query/js/query-dataquality.js`
+   Entries that are not shapes carry a small badge naming their family (SWRL,
+   Decision table, Aggregate) with a tooltip saying where they are defined.
+2. `src/front/static/query/css/query-reasoning.css`
+   `.dq-rule-family` keeps the badge from squeezing the rule label.
+3. `tests/units/front/test_dq_rule_checkboxes.py`
+   Asserts a decision table and a SWRL rule are labelled and a shape is not.
+
+Modified files:
+- `src/front/static/query/js/query-dataquality.js`
+- `src/front/static/query/css/query-reasoning.css`
+- `src/front/templates/partials/dtwin/_query_dataquality.html` (Run All → Run)
+- `tests/units/front/test_dq_rule_checkboxes.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.70s
+
+--------------------------------------------------------------------------------
+Follow-up: shorter Run labels
+--------------------------------------------------------------------------------
+
+Context:
+The Data Quality and Inference buttons repeated the name of the page they sit
+on. "Run All" was also inaccurate once rules became individually selectable.
+
+Changes:
+1. `src/front/templates/partials/dtwin/_query_dataquality.html`
+   "Run All" → "Run".
+2. `src/front/templates/partials/dtwin/_query_reasoning.html`
+   "Run Inference" → "Run".
+3. `src/front/static/query/js/query-reasoning.js`
+   `setRunning()` restores the shortened label when a run finishes.
+
+Modified files:
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/static/query/js/query-reasoning.js`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.77s
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site scaffold (Task 1)
+--------------------------------------------------------------------------------
+
+Context:
+First task of the GitHub Pages marketing site: scaffold `site/` static assets
+and failing-first structure tests. Later tasks add remaining pages and full
+content. Design: `docs/superpowers/specs/2026-08-03-github-pages-marketing-site-design.md`.
+
+Changes:
+
+1. `tests/units/site/test_marketing_site.py`
+   Source contracts for required pages, CSS tokens, hero/CTA content, relative
+   asset paths, JS nav/motion hooks, about disclaimer, and docs hub links.
+2. `site/assets/css/site.css`
+   Design-token foundation (`--ob-*`) and layout primitives for header, hero,
+   pipeline, feature/doc grids, and responsive nav.
+3. `site/assets/js/site.js`
+   Empty IIFE stub; nav toggle and motion hooks filled in Task 2.
+4. `site/assets/img/ontobricks-icon.svg`
+   Copied from `src/front/static/global/img/ontobricks-icon.svg`.
+5. `site/index.html`
+   Minimal stub linking relative CSS/JS; full home page in Task 3.
+
+Modified files:
+- `tests/units/site/test_marketing_site.py`
+- `site/assets/css/site.css`
+- `site/assets/js/site.js`
+- `site/assets/img/ontobricks-icon.svg`
+- `site/index.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 1 passed, 6 failed in 0.16s (expected: CSS token test green; JS hook + content/page tests red until later tasks)
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site shared JS (Task 2)
+--------------------------------------------------------------------------------
+
+Context:
+Task 2 of the GitHub Pages marketing site: implement mobile nav toggle, active
+link marking, and hero motion hooks in `site/assets/js/site.js`. HTML pages
+from Tasks 3+ will consume `[data-nav-toggle]`, `[data-site-nav]`, and `.hero`.
+
+Changes:
+
+1. `site/assets/js/site.js`
+   Mobile nav open/close with `aria-expanded`; closes on link click; sets
+   `aria-current="page"` from pathname; adds `hero.is-ready` via rAF when
+   `prefers-reduced-motion` is not set.
+
+Modified files:
+- `site/assets/js/site.js`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_site_js_has_nav_and_motion_hooks` → 1 passed in 0.10s
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site home page (Task 3)
+--------------------------------------------------------------------------------
+
+Context:
+Task 3 of the GitHub Pages marketing site — replace the stub index with a full
+home page including hero, pipeline strip, and shared header/footer chrome.
+
+Changes:
+
+1. `site/index.html`
+   Full marketing home page with hero, CTAs, pipeline section, and shared site chrome.
+2. `site/assets/css/site.css`
+   Append `.hero__eyebrow` styles (moved from inline).
+
+Modified files:
+- `site/index.html`
+- `site/assets/css/site.css`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_home_has_hero_and_ctas` → 1 passed
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site features page (Task 4)
+--------------------------------------------------------------------------------
+
+Context:
+Task 4 of the GitHub Pages marketing site — add the Features page with five
+capability cards and shared header/footer chrome using nested relative paths.
+
+Changes:
+
+1. `site/features/index.html`
+   Features page with ontology design, R2RML mapping, Delta + Lakebase graph,
+   reasoning (OWL 2 RL / SWRL / SHACL), and GraphQL query sections.
+
+Modified files:
+- `site/features/index.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 3 passed, 4 failed (missing get-started/docs/about/404 — later tasks)
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site get-started page (Task 5)
+--------------------------------------------------------------------------------
+
+Context:
+Task 5 of the GitHub Pages marketing site — add the Get started page with
+prerequisites, clone/sync/start commands, and a link to the full setup guide
+on GitHub.
+
+Changes:
+
+1. `site/get-started/index.html`
+   Get started page with prerequisites, quick-start commands, link to
+   `docs/get-started.md`, and GitHub CTAs; nested `../` chrome.
+
+Modified files:
+- `site/get-started/index.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 3 passed, 4 failed (missing docs/about/404 — later tasks)
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site docs hub (Task 6)
+--------------------------------------------------------------------------------
+
+Context:
+Task 6 of the GitHub Pages marketing site — add the Docs hub page with cards
+linking to Markdown sources on GitHub (`master` branch), not hosted Sphinx HTML.
+
+Changes:
+
+1. `site/docs/index.html`
+   Docs hub with six `.doc-card` anchors (get-started, architecture, features,
+   API, deployment, user guide) under `.doc-grid`; nested `../` chrome.
+
+Modified files:
+- `site/docs/index.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_docs_hub_links_github_markdown` → 1 passed in 0.10s
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site about + 404 (Task 7)
+--------------------------------------------------------------------------------
+
+Context:
+Task 7 of the GitHub Pages marketing site — add the About page with Labs
+AS-IS / SLA disclaimer aligned with README Project Support, a CONTRIBUTORS
+link, and a root-level custom 404 for GitHub Pages.
+
+Changes:
+
+1. `site/about/index.html`
+   About page with README-aligned support disclaimer, GitHub Issues CTA,
+   contributor guidelines link, and nested `../` chrome.
+2. `site/404.html`
+   Minimal custom 404 with root-relative `assets/css/site.css` and home link.
+
+Modified files:
+- `site/about/index.html`
+- `site/404.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 7 passed in 0.11s
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site completion (Task 8)
+--------------------------------------------------------------------------------
+
+Context:
+The static multi-page marketing site is complete under `site/`, with a public
+README link and an operator checklist for the GitHub Pages cutover. Pages must
+not be switched until this branch is merged: after merge, configure `master`
+and `/site` as the Pages source.
+
+Changes:
+
+1. `README.md`
+   Add the public GitHub Pages website URL near the project badges.
+2. `site/`
+   Complete the static marketing site: shared assets and navigation, Home,
+   Features, Get started, Docs, About, and a custom 404 page.
+3. `site/README.md`
+   Document the post-merge Pages cutover: verification API call, `gh api` PUT
+   command, Settings → Pages fallback, and live-site confirmation.
+4. `tests/units/site/test_marketing_site.py`
+   Verify required pages, content, relative assets, and shared site hooks.
+
+Modified files:
+- `README.md`
+- `site/404.html`
+- `site/about/index.html`
+- `site/assets/css/site.css`
+- `site/assets/img/ontobricks-icon.svg`
+- `site/assets/js/site.js`
+- `site/docs/index.html`
+- `site/features/index.html`
+- `site/get-started/index.html`
+- `site/index.html`
+- `site/README.md`
+- `tests/units/site/test_marketing_site.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 7 passed,
+1 warning in 0.15s. `uv run pytest -q -m "not scenario"` was stopped after
+120s while still progressing through unrelated tests (23%; no failures seen).
+
+## Raise dependency security floors
+
+Context: Dependabot reported vulnerable versions of GitPython, MCP, NLTK,
+Pillow, pip, pyasn1, setuptools, and torch in the application and standalone
+MCP lockfiles. The OSV verification pass also found a newer Click advisory.
+Both dependency graphs now resolve to patched releases and retain public PyPI
+artifact URLs required by frozen Databricks App deployments.
+
+Changes:
+
+1. `pyproject.toml`
+   Raise the NLTK optional dependency and add transitive security floors for
+   Click, GitPython, MCP, Pillow, pip, pyasn1, setuptools, and torch.
+2. `uv.lock`
+   Resolve the application graph to patched releases from the public PyPI CDN.
+3. `src/mcp-server/pyproject.toml`
+   Add MCP and pyasn1 security floors to the standalone server project.
+4. `src/mcp-server/uv.lock`
+   Resolve the standalone server graph to MCP 1.28.1 and pyasn1 0.6.4.
+
+Modified files:
+- `pyproject.toml`
+- `uv.lock`
+- `src/mcp-server/pyproject.toml`
+- `src/mcp-server/uv.lock`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.86s; OSV `pip-audit` → no known vulnerabilities in either lockfile export.
+
+--------------------------------------------------------------------------------
+Rename product docs to documentation/; Pages site to docs/
+--------------------------------------------------------------------------------
+
+Context:
+GitHub Pages "Deploy from a branch" only allows `/` or `/docs` as the folder.
+Rename former Markdown/Sphinx `docs/` → `documentation/`, and move the
+marketing site from `site/` → `docs/` so Settings → Pages can select `/docs`.
+
+Changes:
+
+1. `documentation/`
+   Former product docs tree (Markdown, Sphinx, superpowers specs/plans).
+2. `docs/`
+   Marketing site (former `site/`) — GitHub Pages publish root.
+3. `src/api/routers/internal/help.py`, Help Center JS, `databricks.yml`,
+   `.databricksignore`
+   Point Help Center / deploy sync at `documentation/`; exclude Pages `docs/`.
+4. Root README, CONTRIBUTING, CI/Makefile/scripts
+   Update path references.
+
+Modified files:
+- `documentation/**` (renamed from `docs/**`)
+- `docs/**` (moved from `site/**`)
+- `src/api/routers/internal/help.py`
+- `src/front/static/global/js/help-docs.js`
+- `src/front/templates/settings.html`
+- `tests/units/api/test_help_api.py`
+- `tests/units/site/test_marketing_site.py`
+- `tests/e2e/help/test_help_modal_flows.py`
+- `databricks.yml`
+- `.databricksignore`
+- `README.md`, `CONTRIBUTING.md`, `Makefile`, `ci/build_docs.sh`,
+  `.github/workflows/ci.yml`, `pyproject.toml`, deploy scripts
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py tests/units/api/test_help_api.py` → 40 passed, 1 warning in 1.30s
+
+--------------------------------------------------------------------------------
+Mandate --frozen on uv run to stop uv.lock poisoning deploys
+--------------------------------------------------------------------------------
+
+Context:
+A deploy to dev-lakebase-07x crashed ~45s after reporting "App started
+successfully". Root cause: the documented routine test command,
+`uv run pytest -q -m "not scenario"`, omits `--frozen`. A bare `uv run`
+performs an implicit re-resolve against `pypi-proxy.dev.databricks.com` and
+rewrote all 3990 package URLs in `uv.lock`. The git tree was clean at deploy
+pre-flight but was poisoned by the test run that followed, so `make deploy`
+shipped the rewritten lock. In the container, `uv run --frozen` obeyed the proxy
+URLs and timed out fetching `click==8.4.2` (published 2026-06-24, not cached by
+the proxy), killing the app.
+
+`.cursor/09-package-management.mdc` already warned about bare `uv lock` /
+`uv sync` but never named `uv run`, and every other instruction file modelled
+the unsafe form. Fix: make `--frozen` the documented default everywhere and
+name `uv run` explicitly as a lock-rewriting command. The lockfile itself was
+restored with `git checkout -- uv.lock` and redeployed; no source change.
+
+Changes:
+
+1. `.cursor/09-package-management.mdc`
+   Add `uv run` to the list of commands that re-resolve against the proxy, with
+   a note that it syncs implicitly and is the easiest to trip over. Add a rule
+   to re-check `git status` after any `uv` command and before deploying.
+2. `.cursor/08-testing-and-deployment.mdc`
+   Routine/e2e/scenario commands now use `uv run --frozen`; state that the flag
+   is not optional and cross-reference the package-management rule.
+3. `.cursorrules`
+   Both post-change and code-review test commands use `uv run --frozen`.
+4. `.claude/skills/deploy/SKILL.md`
+   Pre-flight test step uses `--frozen`; require re-verifying the lock
+   immediately before `make deploy`; add a post-deploy step to re-check
+   `app_status.state` a minute after success, since a single immediate
+   `/healthz` 200 does not prove health.
+5. `.claude/skills/changelog/SKILL.md`, `code-review/SKILL.md`,
+   `refactoring/SKILL.md`
+   Test commands use `uv run --frozen`.
+6. `README.md`, `CONTRIBUTING.md`
+   Routine, live-integration, and live-e2e commands use `uv run --frozen`, with
+   a short explanation and a new pre-commit check that `uv.lock` is clean.
+
+Modified files:
+- `.cursorrules`
+- `.cursor/08-testing-and-deployment.mdc`
+- `.cursor/09-package-management.mdc`
+- `.claude/skills/deploy/SKILL.md`
+- `.claude/skills/changelog/SKILL.md`
+- `.claude/skills/code-review/SKILL.md`
+- `.claude/skills/refactoring/SKILL.md`
+- `README.md`
+- `CONTRIBUTING.md`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4119 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 36.15s. Deploy verified: ontobricks-07x and mcp-ontobricks-07x RUNNING, /healthz 200 across a 3-minute poll, uv.lock clean (0 proxy URLs).
+
+--------------------------------------------------------------------------------
+Rename Ontology designer right-pane Save → Apply
+--------------------------------------------------------------------------------
+
+Context:
+The entity/relationship detail panel footer button was labeled Save, but it only
+writes the edit into the in-session ontology (`saveConfigToSession`), not to the
+Registry. Rename the visible label to Apply so the UX matches the actual
+semantics (Registry publish remains the durable save).
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Button label Save → Apply. Dirty-close / dirty-switch confirm dialogs now say
+   "Unapplied Changes" / "Apply" / "apply them before …" for consistency.
+2. `documentation/user-guide.md`
+   Entity add/edit, dashboard assign, and class-action steps now say Apply and
+   note that the write is session-scoped until the domain is published.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `documentation/user-guide.md`
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/api/test_ui_rendering.py` → 123 passed, 1 warning in 2.73s
+
+--------------------------------------------------------------------------------
+Rename Mapping Designer/Manual bottom-pane Save → Apply
+--------------------------------------------------------------------------------
+
+Context:
+Same semantics as the Ontology panel rename: the Mapping Designer (and shared
+Manual) bottom-pane Save button only writes the mapping into the session via
+`/mapping/save` / entity|relationship add endpoints. Rename the visible label to
+Apply so it does not imply a Registry publish.
+
+Changes:
+
+1. `src/front/templates/partials/mapping/_mapping_design.html`
+   Designer footer Save → Apply.
+2. `src/front/templates/partials/mapping/_mapping_manual.html`
+   Manual footer Save → Apply (same panel UX).
+3. `src/front/static/mapping/js/mapping-design.js`
+   Exclusion-hint toasts now say "click Apply to persist".
+4. `src/front/static/mapping/js/mapping-manual.js`
+   Success toast: "Mapping applied".
+5. `documentation/user-guide.md`
+   Mapping Designer / Manual Save steps → Apply.
+
+Modified files:
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/templates/partials/mapping/_mapping_manual.html`
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/static/mapping/js/mapping-manual.js`
+- `documentation/user-guide.md`
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/api/test_ui_rendering.py` → 123 passed, 1 warning in 2.63s
+
+--------------------------------------------------------------------------------
+Grant the app service principal CAN_MANAGE_RUN on the graph analytics job
+--------------------------------------------------------------------------------
+
+Context:
+Running the KG analysis in the deployed app failed with "Databricks job
+'ontobricks-07x-graph-analytics' was not found. Deploy the bundle (make deploy)
+so the graph analytics job exists." — but the bundle had deployed the job
+correctly (`[dev benoit_cayla] ontobricks-07x-graph-analytics`, id
+334933950622420).
+
+Root cause: the job ACL only contained the owner (benoit.cayla) and `admins`.
+`LakeflowRunner.resolve_job_id()` locates the job with `jobs.list()`, which is
+ACL-filtered, so the app's service principal (dde41394-…) saw no job at all and
+the lookup reported "not found". `scripts/bootstrap/app-permissions.sh` grants
+app-self CAN_MANAGE, cross-app CAN_USE and UC schema ALL_PRIVILEGES, but never
+granted anything on the analytics job — so every fresh deploy hit this. The
+grant cannot be declared in DAB because the app service principal only exists
+after the app is created, hence the post-deploy bootstrap step.
+
+Changes:
+
+1. `scripts/bootstrap/app-permissions.sh`
+   New step: resolve the analytics job by name (exact, then the `[dev <user>] `
+   prefixed form DAB produces in development mode) and grant CAN_MANAGE_RUN to
+   both app service principals. Skips with a clear message when the job does
+   not exist yet; prints the manual command on failure, matching the UC step.
+2. `src/back/core/graph_analysis/LakeflowRunner.py`
+   The NotFoundError blamed the deploy only. It now names both causes (not
+   deployed, or missing CAN_MANAGE_RUN) and points at `make bootstrap-perms`.
+   Docstring records that `jobs.list()` is ACL-filtered.
+3. `tests/units/core/test_lakeflow_runner.py`
+   New test asserting the message names the permission cause, alongside the
+   existing "make deploy" assertion.
+
+Modified files:
+- `scripts/bootstrap/app-permissions.sh`
+- `src/back/core/graph_analysis/LakeflowRunner.py`
+- `tests/units/core/test_lakeflow_runner.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/core/test_lakeflow_runner.py` → 28 passed, 1 warning in 1.86s
+Workspace: CAN_MANAGE_RUN granted to both app SPs on job 334933950622420 (unblocks the running deployment without a redeploy).
+
+--------------------------------------------------------------------------------
+Wire analytics-job CAN_MANAGE_RUN into every make deploy
+--------------------------------------------------------------------------------
+
+Context:
+The previous fix added the grant to ``app-permissions.sh``, but the job name
+was taken from ``$APP_NAME`` (default ``ontobricks-030``) even when deploy
+passed a different app as a positional argument. Failure to grant was a soft
+warning that did not bump the bootstrap exit status. Harden so every
+``make deploy`` / ``make bootstrap-perms`` reliably grants on the right job
+and surfaces failures.
+
+Changes:
+
+1. `scripts/bootstrap/app-permissions.sh`
+   Resolve the job against the bootstrapped main app (``FIRST_APP`` /
+   ``APP_FOR_CAN_USE``), not the env default. Count grant failures (and the
+   "no SP resolved" case) into ``FAILED`` so deploy prints the non-zero
+   bootstrap warning. Verified live: grants on
+   ``ontobricks-07x-graph-analytics`` (334933950622420) for both SPs.
+2. `scripts/deploy.sh`
+   Step-10 comment documents the analytics-job grant (already invoked via
+   ``app-permissions.sh "$APP_NAME" "$MCP_APP_NAME"``).
+3. `Makefile`
+   ``bootstrap-perms`` help text mentions CAN_MANAGE_RUN on the analytics job.
+4. `tests/units/settings/test_bundle_job_resource.py`
+   New ``TestAnalyticsJobPermissionBootstrap`` contracts: script grants
+   CAN_MANAGE_RUN, resolves DAB ``[dev <user>] `` prefixes, uses
+   ``FIRST_APP`` / ``_MAIN_APP``, and ``deploy.sh`` invokes the bootstrap.
+
+Modified files:
+- `scripts/bootstrap/app-permissions.sh`
+- `scripts/deploy.sh`
+- `Makefile`
+- `tests/units/settings/test_bundle_job_resource.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/settings/test_bundle_job_resource.py tests/units/core/test_lakeflow_runner.py` → 44 passed, 1 warning in 2.15s. Live: `make bootstrap-perms` granted CAN_MANAGE_RUN on ontobricks-07x-graph-analytics (334933950622420) to both app SPs.
+
+================================================================================
+Rule SQL: TRY_CAST so one non-numeric value cannot fail a whole rule
+================================================================================
+
+Context:
+
+Running the "Monthly fee between 1 and 10" rule on the deployed app reported
+"Query execution failed for this decision table", with no way to see why.
+
+Every object in the triple store is a string, so any numeric comparison has to
+cast. All the rule SQL builders emitted a bare ``CAST(... AS DOUBLE)``.
+Databricks warehouses run with ANSI mode on, where a bare CAST aborts the whole
+statement on the first value it cannot convert — so a single ``"free"`` in a fee
+column takes down the entire rule instead of simply not matching it. This became
+reachable for every engine once data quality standardised on SQL against the
+VIEW earlier today (previously some of this ran in memory or on Lakebase).
+
+The generic failure message compounded it: the cause was only in the server log,
+so a broken rule and a warehouse problem looked identical in the UI.
+
+Changes:
+
+1. `src/back/core/helpers/SQLHelpers.py`
+   New ``sql_numeric(expr, sql_type="DOUBLE")`` emitting ``TRY_CAST``, with the
+   ANSI-mode rationale stated once. Exported from `back.core.helpers`.
+2. `src/back/core/reasoning/DecisionTableEngine.py`
+   Numeric condition cells use ``sql_numeric`` — this is the reported failure.
+3. `src/back/core/reasoning/AggregateRuleEngine.py`
+   All five aggregate/HAVING casts are now ``TRY_CAST``.
+4. `src/back/core/reasoning/SPARQLRuleEngine.py`
+   Numeric FILTER comparisons use ``sql_numeric``.
+5. `src/back/core/reasoning/SWRLBuiltinRegistry.py`
+   16 SQL templates switched to ``TRY_CAST`` (comparison, math, date built-ins).
+   Cypher templates untouched.
+6. `src/back/core/w3c/shacl/ShapeConditions.py`
+   Conditional IF-block numeric guards use ``sql_numeric``; they shipped this
+   morning with the same defect.
+7. `src/back/objects/digitaltwin/DigitalTwin.py`
+   New ``_sql_error_detail`` / ``_failed_check_result``: a failed check now
+   reports the engine's message (one line, capped at 300 chars) and keeps its
+   SQL so the UI's code button works. Replaces the four near-identical
+   "Query execution failed for this X." blocks (shape, SWRL, DT, aggregate).
+8. `src/front/static/query/js/query-dataquality.js`
+   Message cell carries the full text as a tooltip.
+9. `src/front/static/query/css/query-reasoning.css`
+   ``.dq-col-msg`` clamps to two lines so a long engine error stays scannable.
+
+Tests:
+
+10. `tests/units/ontology/test_business_rules.py`
+    Decision-table numeric cells and aggregate SUM emit ``TRY_CAST`` and no bare
+    ``CAST``.
+11. `tests/units/ontology/test_swrl_engine.py`
+    New ``TestBuiltinNumericCasts``: no registered built-in emits a bare CAST.
+12. `tests/units/ontology/test_shape_conditions.py`
+    Numeric condition assertion tightened to ``TRY_CAST``.
+13. `tests/units/ontology/test_dataquality.py`
+    New ``TestFailedCheckReporting``: engine message reaches the row, SQL is
+    kept, multi-line errors collapse, long errors truncate, silent exceptions
+    still name themselves.
+
+Modified files:
+- `src/back/core/helpers/SQLHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/core/reasoning/DecisionTableEngine.py`
+- `src/back/core/reasoning/AggregateRuleEngine.py`
+- `src/back/core/reasoning/SPARQLRuleEngine.py`
+- `src/back/core/reasoning/SWRLBuiltinRegistry.py`
+- `src/back/core/w3c/shacl/ShapeConditions.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/static/query/js/query-dataquality.js`
+- `src/front/static/query/css/query-reasoning.css`
+- `tests/units/ontology/test_business_rules.py`
+- `tests/units/ontology/test_swrl_engine.py`
+- `tests/units/ontology/test_shape_conditions.py`
+- `tests/units/ontology/test_dataquality.py`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4133 passed, 276 skipped,
+5 deselected, 1 xfailed in 31.60s.
+
+## Add SWRL text pane on Business Rules
+
+Context: Data Quality already has a header SHACL button that toggles an inline
+Turtle pane with Refresh / Export / Import. Business Rules had no equivalent for
+SWRL — rules were only editable via the graph modal or card list. Added a
+matching **SWRL** button and OntoBricks SWRL text interchange (append import).
+
+Changes:
+
+1. `src/back/core/reasoning/SWRLTextCodec.py` (new)
+   Serialize / parse OntoBricks SWRL text (`# Rule:` / `# Description:` /
+   `antecedent -> consequent`); fail closed on malformed blocks.
+2. `src/back/core/reasoning/__init__.py`
+   Export `serialize_swrl_text` / `parse_swrl_text`.
+3. `src/api/routers/internal/ontology.py`
+   `GET /ontology/swrl/text`, `GET /ontology/swrl/export`, `POST /ontology/swrl/import`
+   (always append).
+4. `src/front/templates/partials/ontology/_ontology_business_rules.html`
+   SWRL header button, `#brSwrlPanel` editor, `#brSwrlImportModal`.
+5. `src/front/static/ontology/js/ontology-swrl.js`
+   `toggleSwrlPanel` / `refreshSwrlText` / `exportSwrl` / import helpers;
+   refreshes list + badges after import.
+6. `src/front/static/ontology/css/ontology-business-rules.css`
+   `#brSwrlEditor` styles (mirror SHACL editor).
+7. `tests/units/ontology/test_swrl_text_codec.py` (new)
+   Round-trip, synthesize name, fail-closed, append semantics.
+8. `tests/units/front/test_swrl_text_pane.py` (new)
+   Template + JS source contracts.
+9. `documentation/features.md`, `documentation/user-guide.md`
+   Document the SWRL text pane.
+10. `documentation/superpowers/specs/2026-08-03-swrl-text-pane-design.md` (new)
+    Design spec.
+11. `documentation/superpowers/plans/2026-08-03-swrl-text-pane.md` (new)
+    Implementation plan.
+
+Modified files:
+- `src/back/core/reasoning/SWRLTextCodec.py` (new)
+- `src/back/core/reasoning/__init__.py`
+- `src/api/routers/internal/ontology.py`
+- `src/front/templates/partials/ontology/_ontology_business_rules.html`
+- `src/front/static/ontology/js/ontology-swrl.js`
+- `src/front/static/ontology/css/ontology-business-rules.css`
+- `tests/units/ontology/test_swrl_text_codec.py` (new)
+- `tests/units/front/test_swrl_text_pane.py` (new)
+- `documentation/features.md`
+- `documentation/user-guide.md`
+- `documentation/superpowers/specs/2026-08-03-swrl-text-pane-design.md` (new)
+- `documentation/superpowers/plans/2026-08-03-swrl-text-pane.md` (new)
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4142 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 36.74s
+
+## Open SHACL Turtle in a modal on Data Quality
+
+Context: Ontology → Data Quality SHACL button toggled an inline bottom Turtle
+pane under the dimension tabs. That competed with the rule cards. The button
+now opens a Bootstrap modal-xl with the same Refresh / Export / Import viewer.
+
+Changes:
+
+1. `src/front/templates/partials/ontology/_ontology_dataquality.html`
+   Removed `#dqShaclPanel`; added `#dqShaclModal` (modal-xl) with the Turtle
+   editor and actions; SHACL button calls `openShaclModal()`.
+2. `src/front/static/ontology/js/ontology-dataquality.js`
+   Replaced `toggleShaclPanel` / `_shaclPanelOpen` with `openShaclModal()`.
+3. `src/front/static/ontology/css/ontology-dataquality.css`
+   Min-height on `#dqShaclEditor` for a taller modal textarea.
+4. `documentation/superpowers/specs/2026-08-03-shacl-turtle-modal-design.md` (new)
+   Design spec.
+5. `documentation/superpowers/plans/2026-08-03-shacl-turtle-modal.md` (new)
+   Implementation plan.
+
+Modified files:
+- `src/front/templates/partials/ontology/_ontology_dataquality.html`
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `src/front/static/ontology/css/ontology-dataquality.css`
+- `documentation/superpowers/specs/2026-08-03-shacl-turtle-modal-design.md` (new)
+- `documentation/superpowers/plans/2026-08-03-shacl-turtle-modal.md` (new)
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4142 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.62s
+
+## Open SWRL text in a modal on Business Rules
+
+Context: Business Rules SWRL button toggled an inline bottom text pane, while
+Data Quality SHACL already opens a modal-xl. Align SWRL to the same pattern.
+
+Changes:
+
+1. `src/front/templates/partials/ontology/_ontology_business_rules.html`
+   Removed `#brSwrlPanel`; added `#brSwrlModal` (modal-xl); SWRL button calls
+   `openSwrlModal()`.
+2. `src/front/static/ontology/js/ontology-swrl.js`
+   Replaced `toggleSwrlPanel` / `_swrlPanelOpen` with `openSwrlModal()`; always
+   refresh editor after import.
+3. `src/front/static/ontology/css/ontology-business-rules.css`
+   Min-height on `#brSwrlEditor` for the modal textarea.
+4. `tests/units/front/test_swrl_text_pane.py`
+   Source contracts updated for modal markup/helpers.
+5. `documentation/superpowers/specs/2026-08-03-swrl-text-modal-design.md` (new)
+   Design spec.
+6. `documentation/superpowers/plans/2026-08-03-swrl-text-modal.md` (new)
+   Implementation plan.
+
+Modified files:
+- `src/front/templates/partials/ontology/_ontology_business_rules.html`
+- `src/front/static/ontology/js/ontology-swrl.js`
+- `src/front/static/ontology/css/ontology-business-rules.css`
+- `tests/units/front/test_swrl_text_pane.py`
+- `documentation/superpowers/specs/2026-08-03-swrl-text-modal-design.md` (new)
+- `documentation/superpowers/plans/2026-08-03-swrl-text-modal.md` (new)
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4142 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.13s
+
+## Use TRY_CAST for DQ numeric SQL and surface engine errors
+
+Context: ANSI-mode warehouses abort a whole data-quality statement on the
+first non-numeric triple value when rules use bare CAST. Failed checks also
+only reported a generic message, so users needed the server log to diagnose.
+Numeric rule SQL now uses TRY_CAST, and failed checks carry the engine error
+(and SQL) in the result row.
+
+Changes:
+
+1. `src/back/core/helpers/SQLHelpers.py`
+   Added `sql_numeric()` helper wrapping `TRY_CAST(... AS DOUBLE)`.
+2. `src/back/core/helpers/__init__.py`
+   Re-export `sql_numeric`.
+3. `src/back/core/reasoning/SWRLBuiltinRegistry.py`
+   SWRL builtin SQL templates use TRY_CAST for numeric/date casts.
+4. `src/back/core/reasoning/DecisionTableEngine.py`
+   Numeric decision-table conditions use `sql_numeric()`.
+5. `src/back/core/reasoning/SPARQLRuleEngine.py`
+   Numeric FILTER comparisons use `sql_numeric()`.
+6. `src/back/core/reasoning/AggregateRuleEngine.py`
+   Aggregate numeric casts use TRY_CAST.
+7. `src/back/core/w3c/shacl/ShapeConditions.py`
+   Conditional SHACL numeric guards use `sql_numeric()`.
+8. `src/back/objects/digitaltwin/DigitalTwin.py`
+   `_failed_check_result` / `_sql_error_detail` surface the engine message on
+   failed DQ checks (SHACL, SWRL, DT, aggregate).
+9. `src/front/static/query/css/query-reasoning.css`
+   Clamp long DQ result messages to two lines (full text on tooltip).
+10. `src/front/static/query/js/query-dataquality.js`
+    Minor alignment with failed-check message display.
+11. `tests/units/ontology/test_business_rules.py`
+    Assert TRY_CAST in DT/aggregate SQL.
+12. `tests/units/ontology/test_swrl_engine.py`
+    Assert no bare CAST in SWRL builtin SQL templates.
+13. `tests/units/ontology/test_shape_conditions.py`
+    Expect TRY_CAST for numeric condition SQL.
+14. `tests/units/ontology/test_dataquality.py`
+    Cover failed-check reporting helpers.
+
+Modified files:
+- `src/back/core/helpers/SQLHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/core/reasoning/SWRLBuiltinRegistry.py`
+- `src/back/core/reasoning/DecisionTableEngine.py`
+- `src/back/core/reasoning/SPARQLRuleEngine.py`
+- `src/back/core/reasoning/AggregateRuleEngine.py`
+- `src/back/core/w3c/shacl/ShapeConditions.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/static/query/css/query-reasoning.css`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/ontology/test_business_rules.py`
+- `tests/units/ontology/test_swrl_engine.py`
+- `tests/units/ontology/test_shape_conditions.py`
+- `tests/units/ontology/test_dataquality.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: previously verified with suite at 4142 passed; this commit is the remaining TRY_CAST / failed-check WIP from that run.
+
+## Resolve PR #128 merge conflicts with develop
+
+Context: PR #128 (Neo4j typed property-graph) was CONFLICTING against
+develop (~101 commits ahead). Dry-merge showed only 3 comment-level
+conflicts in deploy helpers; develop already contained the PR's
+substantive fixes for those files. Also relocated neo4j-requirements.md
+out of the GitHub Pages `docs/` marketing root into `documentation/`.
+
+Changes:
+
+1. app.yaml.template
+   Kept develop wording (no `--extra neo4j`; Bolt driver is core).
+2. scripts/_internal/_deploy-preflight.sh
+   Kept develop `_PREFLIGHT_DIR` / BASH_SOURCE comment + body.
+3. scripts/_internal/_render-app-yaml.py
+   Kept develop `Path(...).parents[2]` REPO_ROOT resolution.
+4. documentation/neo4j-requirements.md
+   Moved from docs/neo4j-requirements.md (Pages site root collision).
+5. src/front/templates/settings.html
+   Updated Neo4j requirements link to documentation/ path.
+
+Modified files:
+- app.yaml.template
+- scripts/_internal/_deploy-preflight.sh
+- scripts/_internal/_render-app-yaml.py
+- documentation/neo4j-requirements.md
+- src/front/templates/settings.html
+- changelogs/v0.7.0/benoitcayladbx_2026-08-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units/graphdb tests/units/domain/test_domain_session.py tests/units/core/test_graphdb_factory.py → 168 passed, 0 failed in 0.94s. Full `not scenario` suite hung mid-run in tests/units/core/test_health.py (0% CPU lock wait; killed); not attributed to this merge.

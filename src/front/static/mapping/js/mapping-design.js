@@ -2086,7 +2086,7 @@ function saveEntityPanelMapping() {
             });
         }
         autoSaveMappings();
-        showNotification('Attribute selections saved', 'success', 2000);
+        showNotification('Attribute selections applied', 'success', 2000);
         closeMappingPanel();
         refreshMappingDesign();
         return;
@@ -2151,7 +2151,7 @@ function saveRelPanelMapping() {
             });
         }
         autoSaveMappings();
-        showNotification('Attribute selections saved', 'success', 2000);
+        showNotification('Attribute selections applied', 'success', 2000);
         closeMappingPanel();
         refreshMappingDesign();
         return;
@@ -2336,7 +2336,7 @@ function toggleAllEntityAttrs() {
     _updateEntityAttrToggleBtn();
     const classUri = document.getElementById('panelEntityClass')?.value;
     _syncEntityAttrExclusions(classUri);
-    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded — click Save to persist`;
+    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded — click Apply to persist`;
     showNotification(msg, 'info', 2000);
 }
 
@@ -2388,7 +2388,7 @@ function toggleAllRelAttrs() {
     _updateRelAttrToggleBtn();
     const propertyUri = RelPanelState.propertyUri;
     _syncRelAttrExclusions(propertyUri);
-    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded — click Save to persist`;
+    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded — click Apply to persist`;
     showNotification(msg, 'info', 2000);
 }
 
@@ -2424,7 +2424,7 @@ function autoExcludeUnmappedEntityAttrs() {
     });
     _updateEntityAttrToggleBtn();
     if (changed > 0) {
-        showNotification(`${changed} unmapped attribute(s) excluded — click Save to persist`, 'info', 2500);
+        showNotification(`${changed} unmapped attribute(s) excluded — click Apply to persist`, 'info', 2500);
     } else {
         showNotification('No unmapped attributes to exclude', 'info', 2000);
     }
@@ -2457,7 +2457,7 @@ function autoExcludeUnmappedRelAttrs() {
     });
     _updateRelAttrToggleBtn();
     if (changed > 0) {
-        showNotification(`${changed} unmapped attribute(s) excluded — click Save to persist`, 'info', 2500);
+        showNotification(`${changed} unmapped attribute(s) excluded — click Apply to persist`, 'info', 2500);
     } else {
         showNotification('No unmapped attributes to exclude', 'info', 2000);
     }

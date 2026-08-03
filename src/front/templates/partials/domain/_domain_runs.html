@@ -1,65 +1,135 @@
 <!-- JS: /static/domain/js/domain-runs.js -->
-<!-- Domain Build Runs Section -->
+<!-- Domain Runs Section: build runs and analytics runs, one tab each.
+     The two share no columns, so they are separate tables rather than one
+     merged timeline, and each owns its loading/empty/error elements so a
+     failure fetching one never blanks the other. Both tabs are populated on
+     section entry regardless of which is showing, so switching tabs never
+     waits on a fetch. -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-list-check me-2"></i>Runs</h4>
-            <p class="text-muted mb-0 small">Build history recorded for this domain (newest first)</p>
+            <p class="text-muted mb-0 small">Build and analytics history for this domain (newest first)</p>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <select class="form-select form-select-sm" id="runsVersionFilter"
-                    style="width:auto;" title="Filter by version" aria-label="Filter by version">
-                <option value="">All versions</option>
-            </select>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadRuns"
-                    onclick="loadDomainRuns()" title="Reload build runs from the registry">
+                    onclick="loadDomainRuns()" title="Reload runs from the registry">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Refresh
             </button>
         </div>
     </div>
 
-    <!-- Loading state -->
-    <div id="runsLoading" class="text-center py-5" style="display:none;">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
+    <ul class="nav nav-tabs ob-tabs" id="runsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="rtab-btn-build" data-bs-toggle="tab"
+                    data-bs-target="#rtab-build" type="button" role="tab"
+                    aria-controls="rtab-build" aria-selected="true">
+                <i class="bi bi-hammer me-1 text-primary"></i>Build runs
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="rtab-btn-analytics" data-bs-toggle="tab"
+                    data-bs-target="#rtab-analytics" type="button" role="tab"
+                    aria-controls="rtab-analytics" aria-selected="false">
+                <i class="bi bi-graph-up-arrow me-1 text-success"></i>Analytics runs
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content ob-tab-content" id="runsTabContent">
+
+        <!-- ── TAB: Build runs ── -->
+        <div class="tab-pane fade show active" id="rtab-build" role="tabpanel"
+             aria-labelledby="rtab-btn-build">
+
+            <div id="runsLoading" class="text-center py-5" style="display:none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 small">Loading build runs from registry&hellip;</p>
+            </div>
+
+            <div id="runsEmpty" class="text-center py-5" style="display:none;">
+                <i class="bi bi-list-check text-muted fs-1"></i>
+                <p class="text-muted mt-2 mb-1">No build runs found</p>
+                <p class="text-muted small">Build the domain (Management &rarr; Build) to start recording runs.</p>
+            </div>
+
+            <div id="runsError" class="alert alert-warning m-3" role="alert" style="display:none;">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <span id="runsErrorMessage"></span>
+            </div>
+
+            <div id="runsTableWrapper" style="display:none;">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-end" style="width:8%;">ID</th>
+                                <th style="width:24%;">Date &amp; Time</th>
+                                <th class="text-center" style="width:16%;">Version</th>
+                                <th class="text-center" style="width:18%;">Status</th>
+                                <th class="text-end" style="width:18%;">Triples</th>
+                                <th class="text-center" style="width:16%;">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="runsTableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-        <p class="text-muted mt-2 small">Loading build runs from registry&hellip;</p>
-    </div>
 
-    <!-- Empty state -->
-    <div id="runsEmpty" class="text-center py-5" style="display:none;">
-        <i class="bi bi-list-check text-muted fs-1"></i>
-        <p class="text-muted mt-2 mb-1">No build runs found</p>
-        <p class="text-muted small">Build the domain (Management &rarr; Build) to start recording runs.</p>
-    </div>
+        <!-- ── TAB: Analytics runs ── -->
+        <div class="tab-pane fade" id="rtab-analytics" role="tabpanel"
+             aria-labelledby="rtab-btn-analytics">
 
-    <!-- Error state -->
-    <div id="runsError" class="alert alert-warning" role="alert" style="display:none;">
-        <i class="bi bi-exclamation-triangle me-1"></i>
-        <span id="runsErrorMessage"></span>
-    </div>
+            <div id="analyticsRunsLoading" class="text-center py-5" style="display:none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 small">Loading analytics runs from registry&hellip;</p>
+            </div>
 
-    <!-- Runs list -->
-    <div id="runsTableWrapper" style="display:none;">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th class="text-end" style="width:8%;">ID</th>
-                        <th style="width:24%;">Date &amp; Time</th>
-                        <th class="text-center" style="width:16%;">Version</th>
-                        <th class="text-center" style="width:18%;">Status</th>
-                        <th class="text-end" style="width:18%;">Triples</th>
-                        <th class="text-center" style="width:16%;">Details</th>
-                    </tr>
-                </thead>
-                <tbody id="runsTableBody">
-                    <!-- Populated by JS -->
-                </tbody>
-            </table>
+            <div id="analyticsRunsEmpty" class="text-center py-5" style="display:none;">
+                <i class="bi bi-graph-up-arrow text-muted fs-1"></i>
+                <p class="text-muted mt-2 mb-1">No analytics runs found</p>
+                <p class="text-muted small">Run an analysis (Insight &rarr; Analytics) to start recording runs.</p>
+            </div>
+
+            <div id="analyticsRunsError" class="alert alert-warning m-3" role="alert" style="display:none;">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <span id="analyticsRunsErrorMessage"></span>
+            </div>
+
+            <div id="analyticsRunsTableWrapper" style="display:none;">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size:0.85rem">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date &amp; Time</th>
+                                <th>Scope</th>
+                                <th class="text-center">Version</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-end">Nodes</th>
+                                <th class="text-end">Edges</th>
+                                <th class="text-end">Components</th>
+                                <th class="text-end">Avg Degree</th>
+                                <th class="text-end">Density</th>
+                                <th class="text-end">Duration</th>
+                                <th class="text-center">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analyticsRunsTableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-<!-- NOTE: the run-details modal is rendered at page level in domain.html so it
-     works from any section (it must not live inside a hidden .sidebar-section,
-     otherwise the backdrop shows but the dialog stays invisible). -->
+<!-- NOTE: both run-details modals are rendered at page level in dtwin.html so
+     they work from any section (a modal inside a hidden .sidebar-section shows
+     its backdrop but leaves the dialog invisible). -->

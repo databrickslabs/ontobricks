@@ -7,9 +7,9 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 from dataclasses import dataclass
 import os
 import time
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Query
 from back.core.logging import get_logger
 from back.core.errors import (
     InfrastructureError,
@@ -21,8 +21,19 @@ from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
+from back.core.w3c.shacl.constants import (
+    AGGREGATE_ID_PREFIX,
+    DECISION_TABLE_ID_PREFIX,
+    RULE_FAMILY_CATEGORIES,
+    SWRL_ID_PREFIX,
+    rule_check_id,
+)
 from back.core.databricks import DatabricksClient, is_databricks_app
 from back.core.graphdb import get_graphdb
+from back.core.graph_analysis import (
+    MODE_JOB,
+    resolve_analytics_source,
+)
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 from back.objects.domain import HomeService, Domain
 from back.core.helpers import (
@@ -35,6 +46,8 @@ from back.core.helpers import (
     get_databricks_host_and_token,
     make_volume_file_service,
     is_uri,
+    resolve_analytics_job_enabled,
+    resolve_analytics_job_name,
     run_blocking,
 )
 
@@ -57,6 +70,23 @@ def _graph_query_table(
         include_inferred=include_inferred,
         store=store,
     )
+
+
+def _dataquality_table(domain, settings) -> str:
+    """Resolve the single execution target for data quality checks.
+
+    Checks always compile to SQL and run against the triple-store VIEW. The
+    build creates it whatever graph engine the domain uses, so it is the one
+    target that is guaranteed to exist. Note it carries the mapped source
+    triples only — triples added by reasoning live in the graph store and are
+    deliberately out of scope for data quality.
+    """
+    table = effective_view_table(domain, settings).strip()
+    if not table:
+        raise ValidationError(
+            "The triple-store VIEW is not available. Build the Knowledge Graph first."
+        )
+    return table
 
 # Canonical rdf:type predicate. Neighbour expansion must preserve type
 # triples so the knowledge graph can group/colour expanded nodes by their
@@ -461,6 +491,91 @@ async def detect_clusters(
 # ===========================================
 
 
+def _data_table_has_rows(domain, settings, table: str) -> Optional[bool]:
+    """Whether the mapped snapshot exists and holds at least one triple.
+
+    A ``…_data`` that is absent and one that is empty have the same remedy —
+    build the domain — so they are one check. ``None`` means the probe could not
+    reach the warehouse at all, which is a different situation entirely: telling
+    someone to rebuild a domain because the warehouse was asleep sends them off
+    to fix something that was never broken.
+    """
+    from back.core.helpers import (
+        get_databricks_host_and_token,
+        resolve_delta_warehouse_id,
+    )
+
+    try:
+        host, token = get_databricks_host_and_token(domain, settings)
+        client = DatabricksClient(
+            host=host,
+            token=token,
+            warehouse_id=resolve_delta_warehouse_id(domain, settings),
+        )
+        rows = client.execute_query(f"SELECT 1 AS ok FROM {table} LIMIT 1")
+        return bool(rows)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("mapped-snapshot probe failed for %s: %s", table, exc)
+        return None
+
+
+def _analytics_job_configured(domain, settings) -> Tuple[bool, str]:
+    """Return ``(configured, reason_it_is_not)`` without touching the warehouse.
+
+    The three checks that cost nothing: the admin toggle, a resolvable job name,
+    and a resolvable snapshot table. Callers that only need to know whether
+    analytics *could* run — the stats payload, which renders on every page —
+    stop here rather than paying a SQL round-trip on a possibly cold warehouse.
+
+    The reason is empty whenever the toggle is off, because then nothing is
+    broken: not using the job is the configured behaviour.
+    """
+    if not resolve_analytics_job_enabled(domain, settings):
+        return False, ""
+
+    if not resolve_analytics_job_name(settings):
+        return False, (
+            "No Databricks job name could be determined. Set "
+            "ONTOBRICKS_ANALYTICS_JOB_NAME, or deploy the bundle so the name can "
+            "be derived from the app name."
+        )
+
+    source, reason = resolve_analytics_source(domain, settings)
+    if not source:
+        return False, reason or (
+            "No mapped-triples table could be resolved for this domain."
+        )
+
+    return True, ""
+
+
+def _analytics_job_status(domain, settings) -> Tuple[bool, str]:
+    """Return ``(analytics_available, reason_it_is_not)`` for this domain.
+
+    :func:`_analytics_job_configured` plus a probe that the snapshot actually
+    holds triples. The probe costs a warehouse round-trip, so this is for the
+    caller about to spend far more than that on a job run.
+    """
+    configured, reason = _analytics_job_configured(domain, settings)
+    if not configured:
+        return False, reason
+
+    source, _ = resolve_analytics_source(domain, settings)
+    has_rows = _data_table_has_rows(domain, settings, source)
+    if has_rows is None:
+        return False, (
+            f"The mapped-triples table {source} could not be reached. The SQL "
+            f"warehouse may be starting up — retry in a moment."
+        )
+    if not has_rows:
+        return False, (
+            f"The mapped-triples table {source} is missing or empty. Run "
+            f"Knowledge Graph → Build to materialise it, then retry."
+        )
+
+    return True, ""
+
+
 def _load_stored_metrics(domain, settings) -> Optional[dict]:
     """Return the cached ``graph_analytics`` row for the active domain/version.
 
@@ -506,8 +621,6 @@ async def compute_graph_metrics(
             data = {}
         predicate_filter = data.get("predicate_filter")
         class_filter = data.get("class_filter")
-        max_triples = int(data.get("max_triples", settings.analytics_max_triples))
-        max_nodes_betweenness = int(data.get("max_nodes_betweenness", 2_000))
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
@@ -515,20 +628,17 @@ async def compute_graph_metrics(
         if not graph_name:
             raise ValidationError("Graph name is not configured")
 
-        # Fail fast on graphs too large for in-memory analysis — the triple
-        # count is already known, so reject here instead of spawning a
-        # background task that would only fail after loading everything.
-        try:
-            total_triples = int(store.get_aggregate_stats(graph_name).get("total", 0))
-        except Exception:  # noqa: BLE001
-            total_triples = 0
-        if total_triples and total_triples > max_triples:
+        # One compute path. When it cannot run, say why instead of quietly
+        # returning a thinner metric set.
+        job_available, blocked_reason = _analytics_job_status(domain, settings)
+        if not job_available:
             raise ValidationError(
-                f"This Knowledge Graph has {total_triples:,} triples, which "
-                f"exceeds the analytics limit of {max_triples:,}. In-memory "
-                f"centrality/structure analysis is disabled for graphs this "
-                f"large — reduce the synced graph (exclude entity types in "
-                f"KG → Sync) or raise ONTOBRICKS_ANALYTICS_MAX_TRIPLES."
+                blocked_reason
+                or (
+                    "Graph analytics runs on Databricks, which is not enabled "
+                    "for this workspace. Enable 'Compute large-graph metrics on "
+                    "Databricks' in Settings."
+                )
             )
 
         tm = get_task_manager()
@@ -547,12 +657,10 @@ async def compute_graph_metrics(
                 task.id,
                 domain,
                 settings,
-                store,
                 graph_name,
                 predicate_filter=predicate_filter,
                 class_filter=class_filter,
-                max_triples=max_triples,
-                max_nodes_betweenness=max_nodes_betweenness,
+                top_n=settings.analytics_top_n,
             )
 
         thread = threading.Thread(target=run_metrics, daemon=True)
@@ -561,7 +669,8 @@ async def compute_graph_metrics(
         return {
             "success": True,
             "task_id": task.id,
-            "message": "Analysis started",
+            "mode": MODE_JOB,
+            "message": "Analysis started (running on Databricks)",
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -591,6 +700,8 @@ async def get_latest_graph_metrics(
         if not stored:
             return {"success": True, "has_result": False}
 
+        # Rows stored before analytics became job-only carry mode="in_memory" or
+        # "pushdown". Nothing branches on mode, so they still render.
         result = stored.get("result") or {}
         return {
             "success": True,
@@ -611,25 +722,29 @@ async def get_latest_graph_metrics(
 
 @router.get("/metrics/history")
 async def get_graph_metrics_history(
+    version: Optional[str] = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return the analytics run history (newest-first) for this domain/version.
+    """Return the analytics run history (newest-first) for this domain.
 
-    Lightweight metadata per run from the ``graph_analytics_runs`` trace —
-    backs the Analytics page "History" tab.
+    Spans every version unless ``version`` scopes it. Backs the analytics
+    table on Knowledge Graph → Management → Runs, which has no version
+    filter. Guarding on a version here would report an empty history for a
+    domain whose current version is blank, even with rows on file for
+    earlier ones.
     """
     from back.objects.registry.RegistryService import RegistryService
 
     try:
         domain = get_domain(session_mgr)
         folder = getattr(domain, "uc_domain_folder", "") or ""
-        version = str(getattr(domain, "current_version", "") or "")
-        if not folder or not version:
+        if not folder:
             return {"success": True, "runs": []}
 
         svc = RegistryService.from_context(domain, settings)
-        runs = svc.load_graph_analytics_runs(folder, version, limit=100)
+        runs = svc.load_graph_analytics_runs(folder, version, limit=limit)
         return {"success": True, "runs": runs}
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -1413,10 +1528,17 @@ async def triplestore_stats(
             if cached:
                 preds = cached.get("top_predicates") or []
                 has_kind = preds and "kind" in preds[0]
-                if has_kind:
+                # A payload predating a field would otherwise be served until the
+                # cache expired, hiding a setting the user just changed.
+                has_job_reason = "analytics_job_blocked_reason" in cached
+                if has_kind and has_job_reason:
                     logger.debug("Returning cached graph stats")
                     return cached
-                logger.debug("Stale stats cache (missing 'kind'); refreshing")
+                logger.debug(
+                    "Stale stats cache (kind=%s, job_reason=%s); refreshing",
+                    has_kind,
+                    has_job_reason,
+                )
 
         store = _require_graph_store(domain, settings)
 
@@ -1436,6 +1558,8 @@ async def triplestore_stats(
 
         classified = DigitalTwin(domain).classify_predicates(top_predicates)
 
+        job_available, job_blocked_reason = _analytics_job_configured(domain, settings)
+
         result = {
             "success": True,
             "total_triples": total_count,
@@ -1449,10 +1573,13 @@ async def triplestore_stats(
             "type_assertion_count": type_count,
             "relationship_count": max(relationship_count, 0),
             "inferred_triples": inferred_count,
-            # Effective KG-analytics safety limit, so the Analytics page can
-            # warn up-front when total_triples exceeds it (in-memory NetworkX
-            # guard; see Settings.analytics_max_triples).
-            "analytics_max_triples": settings.analytics_max_triples,
+            # Whether the Databricks analytics job can run for this domain.
+            "analytics_job_available": job_available,
+            # Why it is not, when an admin has turned it on and therefore expects
+            # it to work. ``resolve_analytics_source`` writes these for the person
+            # reading them, and every cause is a configuration problem only they
+            # can fix, so discarding them just moves the diagnosis into the logs.
+            "analytics_job_blocked_reason": job_blocked_reason,
         }
         DigitalTwin(domain).set_ts_cache("stats", result)
         return result
@@ -1476,43 +1603,21 @@ async def execute_dataquality_check(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Execute a single SHACL shape check against the triple store."""
+    """Execute a single SHACL shape check against the triple-store VIEW."""
     try:
         data = await request.json()
         shape = data.get("shape", {})
-        backend = data.get("backend", "view").strip()
         domain = get_domain(session_mgr)
-        if backend == "graph":
-            triplestore_table = _graph_query_table(domain, settings).strip()
-        else:
-            triplestore_table = data.get("triplestore_table", "").strip()
+        triplestore_table = _dataquality_table(domain, settings)
 
-        if not triplestore_table:
-            raise ValidationError("Triple store table is not specified.")
         if not shape:
             raise ValidationError("No shape was provided.")
 
         from back.core.w3c import SHACLService
 
-        store = get_graphdb(
-            domain, settings, engine=(None if backend == "graph" else backend)
-        )
+        store = get_graphdb(domain, settings, engine="view")
         if not store:
-            raise InfrastructureError(f"Could not initialize {backend} backend")
-
-        if backend == "graph":
-            graph_name = triplestore_table or _graph_query_table(domain, settings)
-            triples = await run_blocking(store.query_triples, graph_name)
-            if not triples:
-                raise ValidationError(f"Graph '{graph_name}' is empty. Build first.")
-            violations = SHACLService.evaluate_shape_in_memory(shape, triples)
-            return {
-                "success": True,
-                "violations": violations,
-                "count": len(violations),
-                "sql": "",
-                "engine": "in-memory",
-            }
+            raise InfrastructureError("Could not reach the SQL warehouse")
 
         sql = SHACLService.shape_to_sql(shape, triplestore_table)
         if not sql:
@@ -1546,19 +1651,12 @@ async def start_dataquality_checks(
     data = await request.json()
     dimensions = data.get("dimensions") or []
     shape_ids = data.get("shape_ids") or []
-    requested_backend = data.get("backend", "").strip() or "view"
     violation_limit = int(data.get("violation_limit", 10))
     if violation_limit <= 0:
         violation_limit = None
 
     domain = get_domain(session_mgr)
-    if requested_backend == "graph":
-        triplestore_table = _graph_query_table(domain, settings).strip()
-    else:
-        triplestore_table = data.get("triplestore_table", "").strip()
-
-    if not triplestore_table:
-        raise ValidationError("Triple store table is not specified.")
+    triplestore_table = _dataquality_table(domain, settings)
     shapes = domain.shacl_shapes
     if shape_ids:
         shape_ids_set = set(shape_ids)
@@ -1567,22 +1665,47 @@ async def start_dataquality_checks(
         shapes = [s for s in shapes if s.get("category") in dimensions]
     shapes = [s for s in shapes if s.get("enabled", True)]
 
-    swrl_rules = domain.swrl_rules or []
     ontology_dict = getattr(domain, "ontology", None)
     if not isinstance(ontology_dict, dict):
         ontology_dict = (
             domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
         )
-    decision_tables = [
-        dt for dt in ontology_dict.get("decision_tables", []) if dt.get("enabled", True)
-    ]
-    aggregate_rules = [
-        r for r in ontology_dict.get("aggregate_rules", []) if r.get("enabled", True)
-    ]
+
+    # SWRL rules, decision tables and aggregate rules are selected the same way
+    # shapes are: by check id when the user picked individual rules, otherwise
+    # by the dimension their results are filed under.
+    selected_ids = set(shape_ids)
+
+    def _selected_rules(prefix: str, family: list) -> list:
+        if (
+            not selected_ids
+            and dimensions
+            and RULE_FAMILY_CATEGORIES[prefix] not in dimensions
+        ):
+            return []
+        selected = []
+        for index, rule in enumerate(family or []):
+            if not rule.get("enabled", True):
+                continue
+            check_id = rule_check_id(prefix, rule, index)
+            if selected_ids and check_id not in selected_ids:
+                continue
+            selected.append({**rule, "check_id": check_id})
+        return selected
+
+    swrl_rules = _selected_rules(SWRL_ID_PREFIX, domain.swrl_rules)
+    decision_tables = _selected_rules(
+        DECISION_TABLE_ID_PREFIX, ontology_dict.get("decision_tables", [])
+    )
+    aggregate_rules = _selected_rules(
+        AGGREGATE_ID_PREFIX, ontology_dict.get("aggregate_rules", [])
+    )
 
     if not shapes and not swrl_rules and not decision_tables and not aggregate_rules:
         raise ValidationError(
-            "No enabled shapes, SWRL rules, decision tables or aggregate rules to check."
+            "Nothing to check in the selected dimensions."
+            if dimensions or shape_ids
+            else "No enabled shapes, SWRL rules, decision tables or aggregate rules to check."
         )
 
     total = len(shapes) + len(swrl_rules) + len(decision_tables) + len(aggregate_rules)
@@ -1602,7 +1725,6 @@ async def start_dataquality_checks(
             domain_snap,
             shapes,
             triplestore_table,
-            requested_backend,
             total,
             swrl_rules=swrl_rules,
             ontology_dict=ontology_dict,

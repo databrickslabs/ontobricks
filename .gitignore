@@ -14,8 +14,11 @@ build/
 venv/
 ENV/
 
-# Environment variables
+# Environment variables. The .bak/.local variants matter as much as .env
+# itself: they are copies of a file holding a live PAT.
 .env
+.env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -81,6 +84,8 @@ mlartifacts/
 # never the rendered outputs.
 /app.yaml
 /src/mcp-server/app.yaml
+# Per-INSTANCE_ID DAB target written by _ensure-instance-target.sh
+/resources/_generated_instance_target.yml
 
 # Cookie jars / curl session dumps (may contain live session + CSRF tokens)
 cookies*.txt
@@ -98,3 +103,4 @@ syncs/
 
 # Superpowers brainstorming visual-companion session files
 .superpowers/
+.worktrees/

@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>back.core.graphdb – Pluggable Graph Database Backends &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="back.core.graphql – GraphQL Schema Generation" href="app.core.graphql.html" />
+    <link rel="prev" title="back.core.graph_analysis – Community Detection &amp; Clustering" href="app.core.graph_analysis.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Graph Viewer Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/features.html">OntoBricks Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/code_organization.html">OntoBricks code organization (for contributors)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/import-export.html">Registry Import / Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/graphdb-integration.html">Adding a New Graph DB Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/lakebase-graphdb.html">Lakebase as Graph DB — OntoBricks Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/cohort_discovery.html">Cohort Discovery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/sizing.html">OntoBricks Production Sizing Questionnaire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.external.html"><code class="docutils literal notranslate"><span class="pre">back.core.external</span></code> — Vendored / Third-Party Integrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.external.pitfalls.html"><code class="docutils literal notranslate"><span class="pre">back.core.external.pitfalls</span></code> — Ontology Pitfalls Detector</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.graphdb">Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.graphdb.constants">Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#abstract-base">Abstract Base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.graphdb.GraphDBFactory">Factory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-back.core.graphdb.delta.DeltaFlatStore">Delta (Unity Catalog) backend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#lakebase-postgres-subpackage">Lakebase (Postgres) subpackage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#neo4j-cypher-subpackage">Neo4j (Cypher) subpackage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-a-new-engine">Adding a new engine</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.lakebase.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> — Lakebase Postgres graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphdb.neo4j.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> — Neo4j (Cypher) graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="app.html">OntoBricks Application Packages</a><ul>
+  <li><a href="app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a><ul>
+      <li>Previous: <a href="app.core.graph_analysis.html" title="previous chapter"><code class="docutils literal notranslate"><span class="pre">back.core.graph_analysis</span></code> – Community Detection &amp; Clustering</a></li>
+      <li>Next: <a href="app.core.graphql.html" title="next chapter"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="back-core-graphdb-pluggable-graph-database-backends">
+<h1><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends<a class="headerlink" href="#back-core-graphdb-pluggable-graph-database-backends" title="Link to this heading">¶</a></h1>
+<section id="module-back.core.graphdb">
+<span id="package"></span><h2>Package<a class="headerlink" href="#module-back.core.graphdb" title="Link to this heading">¶</a></h2>
+<p>Graph database backend abstraction.</p>
+<p>The single triple-store / graph DB layer for OntoBricks.  All backends operate
+on the <code class="docutils literal notranslate"><span class="pre">(subject,</span> <span class="pre">predicate,</span> <span class="pre">object)</span></code> model and subclass
+<a class="reference internal" href="#module-back.core.graphdb.GraphDBBackend" title="back.core.graphdb.GraphDBBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">GraphDBBackend</span></code></a>.  Engines are pluggable under
+<code class="docutils literal notranslate"><span class="pre">back/core/graphdb/&lt;engine&gt;/</span></code> — the default is Lakebase Postgres
+(<code class="docutils literal notranslate"><span class="pre">lakebase</span></code>), with a Databricks Delta engine (<code class="docutils literal notranslate"><span class="pre">delta</span></code>) and a raw read-only
+view store (<code class="docutils literal notranslate"><span class="pre">view</span></code>).  See <code class="docutils literal notranslate"><span class="pre">_starter_kit/</span></code> for a copy-paste template.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.graphdb.get_graphdb">
+<span class="sig-prename descclassname"><span class="pre">back.core.graphdb.</span></span><span class="sig-name descname"><span class="pre">get_graphdb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#back.core.graphdb.get_graphdb" title="Link to this definition">¶</a></dt>
+<dd><p>Convenience wrapper using the package singleton factory instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>engine</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>engine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-back.core.graphdb.constants">
+<span id="constants"></span><h2>Constants<a class="headerlink" href="#module-back.core.graphdb.constants" title="Link to this heading">¶</a></h2>
+<p>Graph DB package constants.</p>
+</section>
+<section id="abstract-base">
+<h2>Abstract Base<a class="headerlink" href="#abstract-base" title="Link to this heading">¶</a></h2>
+<p>The single triple-store / graph DB abstraction. Every backend — Lakebase
+Postgres (SQL), Delta / Unity Catalog (SQL), and Neo4j (Cypher) — subclasses
+<a class="reference internal" href="#module-back.core.graphdb.GraphDBBackend" title="back.core.graphdb.GraphDBBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">GraphDBBackend</span></code></a>. The concrete engine is selected
+<strong>per domain</strong> via <code class="docutils literal notranslate"><span class="pre">graph_backend</span></code> (<code class="docutils literal notranslate"><span class="pre">lakebase</span></code> | <code class="docutils literal notranslate"><span class="pre">databricks</span></code> |
+<code class="docutils literal notranslate"><span class="pre">neo4j</span></code>); see <a class="reference internal" href="#module-back.core.graphdb.GraphDBFactory" title="back.core.graphdb.GraphDBFactory"><code class="xref py py-class docutils literal notranslate"><span class="pre">back.core.graphdb.GraphDBFactory</span></code></a>.</p>
+<p id="module-back.core.graphdb.GraphDBBackend">Abstract base class for graph database backends.</p>
+<p>A graph DB backend is a graph-capable triple store (e.g. Lakebase Postgres,
+Databricks Delta, or any future Cypher / Gremlin engine plugged in via
+<code class="docutils literal notranslate"><span class="pre">_starter_kit/</span></code>) operating on the <code class="docutils literal notranslate"><span class="pre">(subject,</span> <span class="pre">predicate,</span> <span class="pre">object)</span></code> triple
+model.  It is the single storage abstraction used across OntoBricks for
+querying, reasoning, graph traversal, and analytics.</p>
+<p><code class="docutils literal notranslate"><span class="pre">GraphDBBackend</span></code> provides:</p>
+<ul class="simple">
+<li><p>the core CRUD abstract methods every backend must implement;</p></li>
+<li><p>a large set of named query / reasoning methods with default SQL
+implementations (SQL-based backends inherit these; non-SQL engines such as
+Cypher or Gremlin override with native queries);</p></li>
+<li><p>graph-specific concerns — connection management, schema introspection, sync
+to/from remote storage, capability flags, and query-translator selection.</p></li>
+</ul>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.GraphDBBackend.</span></span><span class="sig-name descname"><span class="pre">GraphDBBackend</span></span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
+<p>Abstract base for graph DB engines (Lakebase Postgres, Delta, KuzuDB, …).</p>
+<p>Subclasses must implement the core CRUD abstract methods <strong>plus</strong> the
+graph-specific abstract methods (<code class="docutils literal notranslate"><span class="pre">get_connection</span></code> / <code class="docutils literal notranslate"><span class="pre">close</span></code>).</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.create_table">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.create_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.create_table" title="Link to this definition">¶</a></dt>
+<dd><p>Create the (subject, predicate, object) table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.drop_table">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">drop_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.drop_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.drop_table" title="Link to this definition">¶</a></dt>
+<dd><p>Drop if exists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.insert_triples">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">insert_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.insert_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.insert_triples" title="Link to this definition">¶</a></dt>
+<dd><p>Batch insert triples, returns count inserted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>triples</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>on_progress</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em><em>, </em><em>None</em><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.delete_triples">
+<span class="sig-name descname"><span class="pre">delete_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.delete_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.delete_triples" title="Link to this definition">¶</a></dt>
+<dd><p>Remove specific triples from the store. Returns count deleted.</p>
+<p>Default implementation raises NotImplementedError.
+Backends that support incremental sync should override this.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>triples</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>on_progress</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em><em>, </em><em>None</em><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.synced_table_name">
+<span class="sig-name descname"><span class="pre">synced_table_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.synced_table_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.synced_table_name" title="Link to this definition">¶</a></dt>
+<dd><p>Return the table name that contains only synced (non-materialized) triples.</p>
+<p>For backends that separate synced bulk data from app-written/inferred data
+(e.g. LakebaseFlatStore with its <code class="docutils literal notranslate"><span class="pre">_sync</span></code> / <code class="docutils literal notranslate"><span class="pre">__app</span></code> companion layout),
+this returns the synced-only side so callers can query without materialised
+triples.  The default returns <em>table_name</em> unchanged (no distinction).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.query_triples">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">query_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.query_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.query_triples" title="Link to this definition">¶</a></dt>
+<dd><p>SELECT all triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.count_triples">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">count_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.count_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.count_triples" title="Link to this definition">¶</a></dt>
+<dd><p>Count triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.table_exists">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">table_exists</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.table_exists"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.table_exists" title="Link to this definition">¶</a></dt>
+<dd><p>Check if table exists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_status">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_status"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_status" title="Link to this definition">¶</a></dt>
+<dd><p>Return dict with count, last_modified, etc.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.optimize_table">
+<span class="sig-name descname"><span class="pre">optimize_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.optimize_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.optimize_table" title="Link to this definition">¶</a></dt>
+<dd><p>Run backend-specific optimization after bulk writes.</p>
+<p>Default is a no-op; backends that benefit from post-write
+optimization (e.g. Delta OPTIMIZE) should override this.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.execute_query">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">execute_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.execute_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.execute_query" title="Link to this definition">¶</a></dt>
+<dd><p>Execute arbitrary SQL and return results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>query</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.sql_table_reference">
+<span class="sig-name descname"><span class="pre">sql_table_reference</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.sql_table_reference"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.sql_table_reference" title="Link to this definition">¶</a></dt>
+<dd><p>Stable identifier for translators (SWRL, SPARQL, aggregate/DT SQL).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>graph_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_inferred_triple_count">
+<span class="sig-name descname"><span class="pre">get_inferred_triple_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_inferred_triple_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_inferred_triple_count" title="Link to this definition">¶</a></dt>
+<dd><p>Return the count of inferred/app-written triples for <em>table_name</em>.</p>
+<p>Backends that separate bulk-synced data from reasoning output
+(e.g. <code class="xref py py-class docutils literal notranslate"><span class="pre">LakebaseFlatStore</span></code>) override this to query only the
+writable companion table.  The default returns 0 (no distinction
+between synced and inferred triples in this backend).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_aggregate_stats">
+<span class="sig-name descname"><span class="pre">get_aggregate_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_aggregate_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_aggregate_stats" title="Link to this definition">¶</a></dt>
+<dd><p>Return aggregate triple-store statistics in a single query.</p>
+<dl class="simple">
+<dt>Keys: total, distinct_subjects, distinct_predicates,</dt><dd><p>type_assertion_count, label_count.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_type_distribution">
+<span class="sig-name descname"><span class="pre">get_type_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_type_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_type_distribution" title="Link to this definition">¶</a></dt>
+<dd><p>Return count per <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> value, ordered descending.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_graph_structure_stats">
+<span class="sig-name descname"><span class="pre">get_graph_structure_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">excluded_predicates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_graph_structure_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_graph_structure_stats" title="Link to this definition">¶</a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">edge_count</span></code>, <code class="docutils literal notranslate"><span class="pre">graph_node_count</span></code> and <code class="docutils literal notranslate"><span class="pre">node_count</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">graph_node_count</span></code> counts nodes with at least one entity-entity
+edge.  <code class="docutils literal notranslate"><span class="pre">node_count</span></code> is the number of nodes the analysis reports:
+the same value unfiltered, or the full instance count of the
+selected classes (isolated instances included) when <em>class_filter</em>
+is given.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>excluded_predicates</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>class_filter</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_top_nodes_by_degree">
+<span class="sig-name descname"><span class="pre">get_top_nodes_by_degree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">excluded_predicates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_top_nodes_by_degree"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_top_nodes_by_degree" title="Link to this definition">¶</a></dt>
+<dd><p>Return the <em>top_n</em> highest-degree nodes with label and type.</p>
+<p>The label/type join is applied <strong>after</strong> the <code class="docutils literal notranslate"><span class="pre">LIMIT</span></code> so it only
+touches the returned rows.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>excluded_predicates</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>class_filter</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>top_n</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_type_edge_stats">
+<span class="sig-name descname"><span class="pre">get_type_edge_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">excluded_predicates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_type_edge_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_type_edge_stats" title="Link to this definition">¶</a></dt>
+<dd><p>Return per-class <code class="docutils literal notranslate"><span class="pre">connected_count</span></code> and <code class="docutils literal notranslate"><span class="pre">degree_sum</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">connected_count</span></code> is the number of instances of the class that
+have at least one entity-entity edge; <code class="docutils literal notranslate"><span class="pre">degree_sum</span></code> is the total of
+their raw degrees.  The caller turns these into a mean degree
+centrality by dividing by <code class="docutils literal notranslate"><span class="pre">graph_node_count</span> <span class="pre">-</span> <span class="pre">1</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>excluded_predicates</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>class_filter</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_type_predicate_pairs">
+<span class="sig-name descname"><span class="pre">get_type_predicate_pairs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">excluded_predicates</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_type_predicate_pairs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_type_predicate_pairs" title="Link to this definition">¶</a></dt>
+<dd><p>Return the distinct <code class="docutils literal notranslate"><span class="pre">(type_uri,</span> <span class="pre">predicate)</span></code> pairs used by nodes.</p>
+<p>A predicate counts for a node whether the node is the subject or the
+(URI-valued) object, mirroring the in-memory profile builder.  Rows
+are aggregated in Python so no engine-specific array function is
+needed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>excluded_predicates</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>class_filter</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.query_triples_for_analysis">
+<span class="sig-name descname"><span class="pre">query_triples_for_analysis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicate_filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.query_triples_for_analysis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.query_triples_for_analysis" title="Link to this definition">¶</a></dt>
+<dd><p>Return only the triples a filtered graph analysis actually needs.</p>
+<p>Without filters this is exactly <a class="reference internal" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.query_triples" title="back.core.graphdb.GraphDBBackend.GraphDBBackend.query_triples"><code class="xref py py-meth docutils literal notranslate"><span class="pre">query_triples()</span></code></a>.  With a
+<em>class_filter</em> the returned set is scoped to the instances of those
+classes <strong>plus their direct neighbours</strong> — every triple whose subject
+is in that scope.  That is enough to rebuild the same NetworkX graph
+the unfiltered path would build and then restrict: edges among the
+scope, and the <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> / <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code> triples of both the
+selected instances and their neighbours.</p>
+<p>This is what makes a filtered analysis viable on a large graph: the
+volume read scales with the selected subgraph rather than the whole
+store.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> and <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code> are always retained regardless of
+<em>predicate_filter</em>, because the analysis needs them to resolve node
+types and display labels even though they never become graph edges.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>class_filter</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>predicate_filter</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_predicate_distribution">
+<span class="sig-name descname"><span class="pre">get_predicate_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_predicate_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_predicate_distribution" title="Link to this definition">¶</a></dt>
+<dd><p>Return count per predicate URI, ordered descending.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.find_subjects_by_type">
+<span class="sig-name descname"><span class="pre">find_subjects_by_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.find_subjects_by_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.find_subjects_by_type" title="Link to this definition">¶</a></dt>
+<dd><p>Return distinct subject URIs that are <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> <em>type_uri</em>.</p>
+<p>When <em>search</em> is given, matches against all literal values for the
+subject (label, data properties, etc.) — not just <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>type_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>search</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.resolve_subject_by_id">
+<span class="sig-name descname"><span class="pre">resolve_subject_by_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">id_fragment</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.resolve_subject_by_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.resolve_subject_by_id" title="Link to this definition">¶</a></dt>
+<dd><p>Find a subject URI by type and trailing local-name fragment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>type_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>id_fragment</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_entity_metadata">
+<span class="sig-name descname"><span class="pre">get_entity_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subjects</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_entity_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_entity_metadata" title="Link to this definition">¶</a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> and <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code> for each subject.</p>
+<p>Returns a list of dicts with keys <code class="docutils literal notranslate"><span class="pre">uri</span></code>, <code class="docutils literal notranslate"><span class="pre">type</span></code> (full URI),
+and <code class="docutils literal notranslate"><span class="pre">label</span></code> (literal value or empty string).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>subjects</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_triples_for_subjects">
+<span class="sig-name descname"><span class="pre">get_triples_for_subjects</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subjects</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_triples_for_subjects"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_triples_for_subjects" title="Link to this definition">¶</a></dt>
+<dd><p>Return all triples whose subject is in <em>subjects</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>subjects</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_predicates_for_type">
+<span class="sig-name descname"><span class="pre">get_predicates_for_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_predicates_for_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_predicates_for_type" title="Link to this definition">¶</a></dt>
+<dd><p>Return distinct predicates used by instances of <em>type_uri</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>type_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.paginated_triples">
+<span class="sig-name descname"><span class="pre">paginated_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conditions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.paginated_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.paginated_triples" title="Link to this definition">¶</a></dt>
+<dd><p>Return triples matching <em>conditions</em> with LIMIT/OFFSET pagination.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>conditions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.paginated_count">
+<span class="sig-name descname"><span class="pre">paginated_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conditions</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.paginated_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.paginated_count" title="Link to this definition">¶</a></dt>
+<dd><p>Return count of triples matching <em>conditions</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>conditions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.bfs_traversal">
+<span class="sig-name descname"><span class="pre">bfs_traversal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed_where</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.bfs_traversal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.bfs_traversal" title="Link to this definition">¶</a></dt>
+<dd><p>BFS traversal from seed entities.</p>
+<p><em>seed_where</em> is a SQL WHERE clause (including the <code class="docutils literal notranslate"><span class="pre">WHERE</span></code> keyword)
+applied to the seed subquery.  Used by SQL-based backends.</p>
+<p><em>search</em> and <em>entity_type</em> are structured parameters for future
+non-SQL backends (Cypher, Gremlin) that cannot use raw SQL fragments.</p>
+<p>Returns rows with <code class="docutils literal notranslate"><span class="pre">entity</span></code> and <code class="docutils literal notranslate"><span class="pre">min_lvl</span></code> columns.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>seed_where</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>search</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>entity_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.find_seed_subjects">
+<span class="sig-name descname"><span class="pre">find_seed_subjects</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'any'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'contains'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.find_seed_subjects"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.find_seed_subjects" title="Link to this definition">¶</a></dt>
+<dd><p>Return distinct subjects matching type and/or value criteria.</p>
+<p><em>field</em> is <code class="docutils literal notranslate"><span class="pre">&quot;label&quot;</span></code> (match on <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code>), <code class="docutils literal notranslate"><span class="pre">&quot;id&quot;</span></code> (match on
+the subject URI itself), or <code class="docutils literal notranslate"><span class="pre">&quot;any&quot;</span></code> (match either).
+<em>match_type</em> is <code class="docutils literal notranslate"><span class="pre">&quot;contains&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;exact&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;starts&quot;</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">&quot;ends&quot;</span></code>. <code class="docutils literal notranslate"><span class="pre">limit</span></code> (when &gt; 0) caps returned subjects for responsive
+preview queries.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>entity_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>field</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>match_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Set" title="(in Python v3.14)"><em>Set</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.find_subjects_by_patterns">
+<span class="sig-name descname"><span class="pre">find_subjects_by_patterns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">like_patterns</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.find_subjects_by_patterns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.find_subjects_by_patterns" title="Link to this definition">¶</a></dt>
+<dd><p>Return subjects matching any of the given SQL LIKE patterns.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>like_patterns</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Set" title="(in Python v3.14)"><em>Set</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.transitive_closure">
+<span class="sig-name descname"><span class="pre">transitive_closure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicate_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.transitive_closure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.transitive_closure" title="Link to this definition">¶</a></dt>
+<dd><p>Compute transitive closure along <em>predicate_uri</em>.</p>
+<p>Returns triples <code class="docutils literal notranslate"><span class="pre">(subject,</span> <span class="pre">predicate,</span> <span class="pre">object)</span></code> reachable through
+transitive chains not already present as direct assertions.
+Default uses a recursive CTE (Databricks SQL / Spark SQL).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>predicate_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>start_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>max_depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.symmetric_expand">
+<span class="sig-name descname"><span class="pre">symmetric_expand</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predicate_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.symmetric_expand"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.symmetric_expand" title="Link to this definition">¶</a></dt>
+<dd><p>Find missing symmetric counterparts for <em>predicate_uri</em>.</p>
+<p>For every <code class="docutils literal notranslate"><span class="pre">(a,</span> <span class="pre">P,</span> <span class="pre">b)</span></code> where <code class="docutils literal notranslate"><span class="pre">(b,</span> <span class="pre">P,</span> <span class="pre">a)</span></code> does not exist,
+returns the missing <code class="docutils literal notranslate"><span class="pre">(b,</span> <span class="pre">P,</span> <span class="pre">a)</span></code> triple.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>predicate_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.shortest_path">
+<span class="sig-name descname"><span class="pre">shortest_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.shortest_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.shortest_path" title="Link to this definition">¶</a></dt>
+<dd><p>Find shortest path between two entities.</p>
+<p>Default SQL implementation returns an empty list — shortest-path
+is expensive in SQL.  Graph backends override with native
+algorithms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>source_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>target_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>max_depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.delete_cohort_triples">
+<span class="sig-name descname"><span class="pre">delete_cohort_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cohort_uri_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_cohort_predicate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.delete_cohort_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.delete_cohort_triples" title="Link to this definition">¶</a></dt>
+<dd><p>Remove all triples produced by a cohort rule (idempotent).</p>
+<p>A cohort rule materialises two kinds of triples:</p>
+<ul class="simple">
+<li><p>Cohort-entity triples whose <strong>subject</strong> starts with
+<em>cohort_uri_prefix</em> (<code class="docutils literal notranslate"><span class="pre">rdf:type</span></code>, <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code>, <code class="docutils literal notranslate"><span class="pre">fromRule</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cohortSize</span></code>).</p></li>
+<li><p>Membership triples whose <strong>predicate</strong> is <em>in_cohort_predicate</em>
+and whose <strong>object</strong> starts with <em>cohort_uri_prefix</em>.</p></li>
+</ul>
+<p>Default implementation issues a single SQL <code class="docutils literal notranslate"><span class="pre">DELETE</span></code> covering
+both cases.  Future Cypher backends would override with a
+<code class="docutils literal notranslate"><span class="pre">MATCH</span> <span class="pre">...</span> <span class="pre">DELETE</span></code> pair.  Returns the number of rows deleted
+(best-effort).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>cohort_uri_prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>in_cohort_predicate</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.expand_entity_neighbors">
+<span class="sig-name descname"><span class="pre">expand_entity_neighbors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entity_uris</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.expand_entity_neighbors"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.expand_entity_neighbors" title="Link to this definition">¶</a></dt>
+<dd><p>Expand one BFS level: find typed neighbors of <em>entity_uris</em>.</p>
+<p>Only returns URIs that have an <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> assertion (real entity
+instances, not class or property URIs).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>entity_uris</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Set" title="(in Python v3.14)"><em>Set</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Set" title="(in Python v3.14)"><em>Set</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.supports_cypher">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">supports_cypher</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.supports_cypher" title="Link to this definition">¶</a></dt>
+<dd><p>Whether this backend speaks Cypher (vs SQL).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.supports_graph_model">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">supports_graph_model</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.supports_graph_model" title="Link to this definition">¶</a></dt>
+<dd><p>Whether this backend uses a typed graph schema (node/rel tables).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.query_dialect">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">query_dialect</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.query_dialect" title="Link to this definition">¶</a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">'sql'</span></code>, <code class="docutils literal notranslate"><span class="pre">'cypher'</span></code>, or another dialect identifier.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.is_cypher_backend">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_cypher_backend</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.is_cypher_backend"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.is_cypher_backend" title="Link to this definition">¶</a></dt>
+<dd><p>Check if <em>store</em> is a Cypher-capable graph DB backend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_connection">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_connection" title="Link to this definition">¶</a></dt>
+<dd><p>Return (and lazily open) the native database connection.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.close">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.close"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.close" title="Link to this definition">¶</a></dt>
+<dd><p>Release the database connection and any related resources.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_node_table">
+<span class="sig-name descname"><span class="pre">get_node_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_node_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_node_table" title="Link to this definition">¶</a></dt>
+<dd><p>Return the node-table identifier for <em>table_name</em>.</p>
+<p>Default returns <em>table_name</em> unchanged.  Backends with naming
+constraints (reserved words, character restrictions) should override.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_graph_schema">
+<span class="sig-name descname"><span class="pre">get_graph_schema</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_graph_schema"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_graph_schema" title="Link to this definition">¶</a></dt>
+<dd><p>Return the graph schema object, or <em>None</em> if not available.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.sync_to_remote">
+<span class="sig-name descname"><span class="pre">sync_to_remote</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">volume_service</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.sync_to_remote"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.sync_to_remote" title="Link to this definition">¶</a></dt>
+<dd><p>Upload local DB to remote storage.  No-op by default.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>uc_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>volume_service</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.sync_from_remote">
+<span class="sig-name descname"><span class="pre">sync_from_remote</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">volume_service</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.sync_from_remote"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.sync_from_remote" title="Link to this definition">¶</a></dt>
+<dd><p>Download DB from remote storage.  No-op by default.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>uc_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>volume_service</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.local_path">
+<span class="sig-name descname"><span class="pre">local_path</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.local_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.local_path" title="Link to this definition">¶</a></dt>
+<dd><p>Return the local file/directory path, or <em>None</em> for remote-only.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.remote_archive_path">
+<span class="sig-name descname"><span class="pre">remote_archive_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uc_domain_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.remote_archive_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.remote_archive_path" title="Link to this definition">¶</a></dt>
+<dd><p>Return the remote archive path for sync, or <em>None</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>uc_domain_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBBackend.GraphDBBackend.get_query_translator">
+<span class="sig-name descname"><span class="pre">get_query_translator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBBackend.html#GraphDBBackend.get_query_translator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend.get_query_translator" title="Link to this definition">¶</a></dt>
+<dd><p>Return the appropriate SWRL/rule query translator for this backend.</p>
+<p>SQL-based backends should return an <code class="docutils literal notranslate"><span class="pre">SWRLSQLTranslator</span></code>.
+Cypher-based backends should return the matching Cypher translator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.graphdb.GraphDBFactory">
+<span id="factory"></span><h2>Factory<a class="headerlink" href="#module-back.core.graphdb.GraphDBFactory" title="Link to this heading">¶</a></h2>
+<p>Factory for creating graph database backends from domain session configuration.</p>
+<p>A single entry point (<a class="reference internal" href="#back.core.graphdb.GraphDBFactory.GraphDBFactory.create" title="back.core.graphdb.GraphDBFactory.GraphDBFactory.create"><code class="xref py py-meth docutils literal notranslate"><span class="pre">GraphDBFactory.create()</span></code></a> / <code class="xref py py-func docutils literal notranslate"><span class="pre">get_graphdb()</span></code>)
+constructs the graph DB backend for a domain:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">engine=None</span></code> — auto-resolve the engine from global/registry config
+(<code class="docutils literal notranslate"><span class="pre">lakebase</span></code> by default, <code class="docutils literal notranslate"><span class="pre">delta</span></code> when <code class="docutils literal notranslate"><span class="pre">triple_store_backend</span></code> is
+<code class="docutils literal notranslate"><span class="pre">databricks</span></code>).  This is the common path callers use.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">engine=&quot;lakebase&quot;</span></code> — flat triple tables on Lakebase Postgres.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">engine=&quot;delta&quot;</span></code> — materialized Delta triple tables in Unity Catalog.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">engine=&quot;view&quot;</span></code> — a raw, read-only Delta store bound to a SQL warehouse
+(health probes against a UC view/table).</p></li>
+</ul>
+<p>New engines are pluggable — copy <code class="docutils literal notranslate"><span class="pre">_starter_kit/</span></code> into
+<code class="docutils literal notranslate"><span class="pre">back/core/graphdb/&lt;engine&gt;/</span></code> and register a <code class="docutils literal notranslate"><span class="pre">_create_&lt;engine&gt;</span></code> branch.
+The <em>engine_config</em> JSON is engine-specific (admin: Settings → Graph DB).</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBFactory.normalize_graph_backend">
+<span class="sig-prename descclassname"><span class="pre">back.core.graphdb.GraphDBFactory.</span></span><span class="sig-name descname"><span class="pre">normalize_graph_backend</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBFactory.html#normalize_graph_backend"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBFactory.normalize_graph_backend" title="Link to this definition">¶</a></dt>
+<dd><p>Return a valid per-domain graph backend, defaulting to <code class="docutils literal notranslate"><span class="pre">lakebase</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBFactory.GraphDBFactory">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.GraphDBFactory.</span></span><span class="sig-name descname"><span class="pre">GraphDBFactory</span></span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBFactory.html#GraphDBFactory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBFactory.GraphDBFactory" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Construct graph DB backend instances from domain session configuration.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBFactory.GraphDBFactory.LAKEBASE_AVAILABLE">
+<span class="sig-name descname"><span class="pre">LAKEBASE_AVAILABLE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></span><a class="headerlink" href="#back.core.graphdb.GraphDBFactory.GraphDBFactory.LAKEBASE_AVAILABLE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBFactory.GraphDBFactory.NEO4J_AVAILABLE">
+<span class="sig-name descname"><span class="pre">NEO4J_AVAILABLE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></span><a class="headerlink" href="#back.core.graphdb.GraphDBFactory.GraphDBFactory.NEO4J_AVAILABLE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBFactory.GraphDBFactory.create">
+<span class="sig-name descname"><span class="pre">create</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBFactory.html#GraphDBFactory.create"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBFactory.GraphDBFactory.create" title="Link to this definition">¶</a></dt>
+<dd><p>Create a graph DB backend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Domain session with info and databricks config.</p></li>
+<li><p><strong>settings</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>) – Optional application settings.</p></li>
+<li><p><strong>engine</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>) – One of <code class="docutils literal notranslate"><span class="pre">None</span></code> (auto-resolve from config), <code class="docutils literal notranslate"><span class="pre">&quot;lakebase&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&quot;delta&quot;</span></code>, or <code class="docutils literal notranslate"><span class="pre">&quot;view&quot;</span></code> (raw read-only Delta store).</p></li>
+<li><p><strong>engine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>) – Engine-specific JSON configuration set by the
+admin in Settings &gt; Graph DB.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>GraphDBBackend instance or <em>None</em> if configuration is incomplete.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.GraphDBFactory.GraphDBFactory.get_graphdb">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_graphdb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/GraphDBFactory.html#GraphDBFactory.get_graphdb"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.GraphDBFactory.GraphDBFactory.get_graphdb" title="Link to this definition">¶</a></dt>
+<dd><p>Convenience wrapper using the package singleton factory instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>domain</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>engine</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>engine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-back.core.graphdb.delta.DeltaFlatStore">
+<span id="delta-unity-catalog-backend"></span><h2>Delta (Unity Catalog) backend<a class="headerlink" href="#module-back.core.graphdb.delta.DeltaFlatStore" title="Link to this heading">¶</a></h2>
+<p>Delta (Unity Catalog) flat triple store on Databricks SQL Warehouse.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.delta.DeltaFlatStore.</span></span><span class="sig-name descname"><span class="pre">DeltaFlatStore</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">client</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#back.core.graphdb.GraphDBBackend.GraphDBBackend" title="back.core.graphdb.GraphDBBackend.GraphDBBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">GraphDBBackend</span></code></a></p>
+<p>GraphDB backend that queries materialized Delta triple tables in UC.</p>
+<p>With a bound <em>domain</em> it routes app writes through an inferred companion
+table and a union graph VIEW.  Constructed with <code class="docutils literal notranslate"><span class="pre">domain=None</span></code> it behaves
+as a raw store against the exact table FQNs passed in — used for read-only
+health probes (the <code class="docutils literal notranslate"><span class="pre">&quot;view&quot;</span></code> engine) and direct materialisation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>client</strong> (<em>Any</em>)</p></li>
+<li><p><strong>domain</strong> (<em>Any</em>)</p></li>
+<li><p><strong>settings</strong> (<em>Any</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.query_dialect">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">query_dialect</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.query_dialect" title="Link to this definition">¶</a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">'sql'</span></code>, <code class="docutils literal notranslate"><span class="pre">'cypher'</span></code>, or another dialect identifier.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.get_connection">
+<span class="sig-name descname"><span class="pre">get_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.get_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.get_connection" title="Link to this definition">¶</a></dt>
+<dd><p>Return (and lazily open) the native database connection.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.close"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.close" title="Link to this definition">¶</a></dt>
+<dd><p>Release the database connection and any related resources.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.physical_table_id">
+<span class="sig-name descname"><span class="pre">physical_table_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.physical_table_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.physical_table_id" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve logical graph name (<code class="docutils literal notranslate"><span class="pre">Domain_V5</span></code>) to a UC FQN for SQL.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>graph_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.synced_table_name">
+<span class="sig-name descname"><span class="pre">synced_table_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.synced_table_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.synced_table_name" title="Link to this definition">¶</a></dt>
+<dd><p>Base data table without inferred companion rows.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.create_table">
+<span class="sig-name descname"><span class="pre">create_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.create_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.create_table" title="Link to this definition">¶</a></dt>
+<dd><p>Create the (subject, predicate, object) Delta table with Liquid Clustering.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.drop_table">
+<span class="sig-name descname"><span class="pre">drop_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.drop_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.drop_table" title="Link to this definition">¶</a></dt>
+<dd><p>Drop table if exists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.insert_triples">
+<span class="sig-name descname"><span class="pre">insert_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.insert_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.insert_triples" title="Link to this definition">¶</a></dt>
+<dd><p>Insert triples, routing app writes to the inferred companion table.</p>
+<p>In raw mode (<code class="docutils literal notranslate"><span class="pre">domain</span> <span class="pre">is</span> <span class="pre">None</span></code>) writes go directly to <em>table_name</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>triples</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em>)</p></li>
+<li><p><strong>batch_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>on_progress</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em><em>, </em><em>None</em><em>] </em><em>| </em><em>None</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.optimize_inferred_companion">
+<span class="sig-name descname"><span class="pre">optimize_inferred_companion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.optimize_inferred_companion"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.optimize_inferred_companion" title="Link to this definition">¶</a></dt>
+<dd><p>Compact and re-cluster the inferred companion after app writes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.query_triples">
+<span class="sig-name descname"><span class="pre">query_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.query_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.query_triples" title="Link to this definition">¶</a></dt>
+<dd><p>SELECT all triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.count_triples">
+<span class="sig-name descname"><span class="pre">count_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.count_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.count_triples" title="Link to this definition">¶</a></dt>
+<dd><p>Count triples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.table_exists">
+<span class="sig-name descname"><span class="pre">table_exists</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.table_exists"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.table_exists" title="Link to this definition">¶</a></dt>
+<dd><p>Check if table exists by trying count, catch TABLE_OR_VIEW_NOT_FOUND.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.get_status">
+<span class="sig-name descname"><span class="pre">get_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.get_status"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.get_status" title="Link to this definition">¶</a></dt>
+<dd><p>Return dict with count, last_modified, etc.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.optimize_table">
+<span class="sig-name descname"><span class="pre">optimize_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.optimize_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.optimize_table" title="Link to this definition">¶</a></dt>
+<dd><p>Run OPTIMIZE to trigger Liquid Clustering compaction.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.execute_query">
+<span class="sig-name descname"><span class="pre">execute_query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.execute_query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.execute_query" title="Link to this definition">¶</a></dt>
+<dd><p>Execute arbitrary SQL and return results.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>query</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.get_inferred_triple_count">
+<span class="sig-name descname"><span class="pre">get_inferred_triple_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/delta/DeltaFlatStore.html#DeltaFlatStore.get_inferred_triple_count"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore.get_inferred_triple_count" title="Link to this definition">¶</a></dt>
+<dd><p>Return the count of inferred/app-written triples for <em>table_name</em>.</p>
+<p>Backends that separate bulk-synced data from reasoning output
+(e.g. <code class="xref py py-class docutils literal notranslate"><span class="pre">LakebaseFlatStore</span></code>) override this to query only the
+writable companion table.  The default returns 0 (no distinction
+between synced and inferred triples in this backend).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="lakebase-postgres-subpackage">
+<h2>Lakebase (Postgres) subpackage<a class="headerlink" href="#lakebase-postgres-subpackage" title="Link to this heading">¶</a></h2>
+<p>See <a class="reference internal" href="app.core.graphdb.lakebase.html"><span class="doc">back.core.graphdb.lakebase — Lakebase Postgres graph engine</span></a> for <code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> (flat triple
+tables on the App-bound Lakebase Postgres instance).</p>
+</section>
+<section id="neo4j-cypher-subpackage">
+<h2>Neo4j (Cypher) subpackage<a class="headerlink" href="#neo4j-cypher-subpackage" title="Link to this heading">¶</a></h2>
+<p>See <a class="reference internal" href="app.core.graphdb.neo4j.html"><span class="doc">back.core.graphdb.neo4j — Neo4j (Cypher) graph engine</span></a> for <code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> (Bolt-based
+Cypher engine on Neo4j Aura or self-hosted Neo4j).</p>
+</section>
+<section id="adding-a-new-engine">
+<h2>Adding a new engine<a class="headerlink" href="#adding-a-new-engine" title="Link to this heading">¶</a></h2>
+<p>A copy-paste template for new engines lives at
+<code class="docutils literal notranslate"><span class="pre">src/back/core/graphdb/_starter_kit/ExampleStore.py</span></code>. Implement the
+<a class="reference internal" href="#module-back.core.graphdb.GraphDBBackend" title="back.core.graphdb.GraphDBBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">back.core.graphdb.GraphDBBackend</span></code></a> contract, register the engine in
+<a class="reference internal" href="#module-back.core.graphdb.GraphDBFactory" title="back.core.graphdb.GraphDBFactory"><code class="xref py py-class docutils literal notranslate"><span class="pre">back.core.graphdb.GraphDBFactory</span></code></a>, and add it to
+<code class="docutils literal notranslate"><span class="pre">ALLOWED_GRAPH_ENGINES</span></code> in
+<a class="reference internal" href="app.objects.session.html#module-back.objects.session.GlobalConfigService" title="back.objects.session.GlobalConfigService"><code class="xref py py-mod docutils literal notranslate"><span class="pre">back.objects.session.GlobalConfigService</span></code></a>. See <code class="docutils literal notranslate"><span class="pre">docs/graphdb-integration.md</span></code>
+for the full integration walkthrough.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+      |
+      <a href="../_sources/api/app.core.graphdb.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

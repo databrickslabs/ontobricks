@@ -690,7 +690,7 @@
                         Graph) needs a multi-database flavor (<strong>Enterprise / Aura</strong>); on
                         Community Edition it falls back to the single <code>neo4j</code> database.
                         OntoBricks assumes it <em>owns</em> the connected database. APOC is not required.
-                        See the <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/neo4j-requirements.md" target="_blank" rel="noopener">Neo4j requirements guide</a>.
+                        See the <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/neo4j-requirements.md" target="_blank" rel="noopener">Neo4j requirements guide</a>.
                     </div>
 
                     <form id="neo4jConfigForm" autocomplete="off">
@@ -747,12 +747,12 @@
                                 <div class="form-text small text-muted">
                                     {% if neo4j_password_from_secret %}
                                     Managed by the <code>neo4j-password</code> Databricks Apps secret resource. See
-                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
+                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
                                     {% else %}
                                     Stored in registry <code>graph_engine_config</code> for local development.
                                     For production, bind the <code>neo4j-password</code> secret resource in
                                     <strong>Apps → Resources</strong> instead — see
-                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
+                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
                                     {% endif %}
                                 </div>
                             </div>
@@ -921,6 +921,30 @@
                         <small class="text-muted">
                             <i class="bi bi-info-circle"></i> How long a DRAFT single-editor lock survives with no keep-alive (a crashed / closed tab) before another user can reclaim it. The editor's browser auto-renews while open. Set to <strong>0</strong> to disable the lease (a lock is then held until the editor closes the domain or an admin force-unlocks it).
                         </small>
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            Knowledge-Graph Analytics
+                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                            </span>
+                        </label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="analyticsJobEnabled">
+                            <label class="form-check-label" for="analyticsJobEnabled">
+                                Compute large-graph metrics on Databricks
+                            </label>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            <i class="bi bi-info-circle"></i> Graph analytics runs entirely in a serverless Databricks job, which computes counts, average degree, density, degree centrality, the entity-type profiles, <strong>PageRank</strong>, the <strong>clustering coefficient</strong> and the <strong>component count</strong> exactly, plus <strong>betweenness</strong> and <strong>closeness</strong> as sampled estimates. This is the only way analytics runs, so leaving it off disables the Analytics page.
+                        </small>
+                        <small class="text-muted d-block mt-1">
+                            <i class="bi bi-exclamation-triangle"></i> Requires the Databricks bundle to have been deployed, so that the job exists, and the domain to have been built at least once. The job reads the mapped-triples snapshot every Build materialises, so it works the same on the Delta engine, on Lakebase in either mode, and on Neo4j. When a prerequisite is missing the Analytics page says which one rather than falling back to a different calculation. Runs take minutes rather than seconds.
+                        </small>
+                        <small id="analyticsJobEnabledSource" class="text-muted d-block mt-1"></small>
                     </div>
 
                     <hr>

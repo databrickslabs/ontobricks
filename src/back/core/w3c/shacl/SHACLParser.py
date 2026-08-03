@@ -4,8 +4,9 @@ Reads SHACL Turtle (or other RDF serialisations) and extracts internal
 shape dicts compatible with ``SHACLService``.
 """
 
+import re
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from rdflib import Graph
 from rdflib.namespace import RDF
@@ -14,6 +15,9 @@ from back.core.logging import get_logger
 from back.core.w3c.shacl.constants import PARAM_CATEGORY_HINTS, SEVERITY_REVERSE, SH
 
 logger = get_logger(__name__)
+
+#: Recovers the target class from the SPARQL target of a conditional shape.
+_SPARQL_TARGET_CLASS_RE = re.compile(r"\$this\s+a\s+<([^>]+)>")
 
 
 class SHACLParser:
@@ -26,23 +30,36 @@ class SHACLParser:
         return extract_local_name(uri)
 
     def parse(self, turtle_content: str, format: str = "turtle") -> List[Dict]:
-        """Parse SHACL Turtle and return a list of shape dicts.
+        """Parse SHACL Turtle and return a list of shape dicts."""
+        shapes, _ = self.parse_with_report(turtle_content, format)
+        return shapes
+
+    def parse_with_report(
+        self, turtle_content: str, format: str = "turtle"
+    ) -> Tuple[List[Dict], Dict]:
+        """Parse SHACL Turtle into shape dicts plus an import report.
+
+        The report carries ``conditions_dropped``: the number of shapes that
+        arrived with a SPARQL target.  Conditions are not reconstructed from
+        the query — the constraint is imported unguarded, so the caller must
+        surface the count to the user.
 
         Args:
             turtle_content: SHACL serialised as Turtle (or another RDF format).
             format: RDFLib parse format (default ``turtle``).
 
         Returns:
-            List of internal shape dicts.
+            ``(shapes, report)``.
         """
         g = Graph()
         try:
             g.parse(data=turtle_content, format=format)
         except Exception as exc:
             logger.error("Failed to parse SHACL content: %s", exc)
-            return []
+            return [], {"conditions_dropped": 0}
 
         shapes: List[Dict] = []
+        conditions_dropped = 0
 
         for node_shape in g.subjects(RDF.type, SH.NodeShape):
             target_class_uri = ""
@@ -51,6 +68,17 @@ class SHACLParser:
                 target_class_uri = str(tc)
                 target_class = self._local_name(target_class_uri)
                 break
+
+            if not target_class_uri:
+                target_class_uri = self._target_class_from_sparql_target(g, node_shape)
+                if target_class_uri:
+                    target_class = self._local_name(target_class_uri)
+                    conditions_dropped += 1
+                    logger.warning(
+                        "Shape %s has a SPARQL target; importing its constraint "
+                        "without the condition",
+                        node_shape,
+                    )
 
             for ps in g.objects(node_shape, SH.property):
                 shape = self._parse_property_shape(
@@ -88,7 +116,16 @@ class SHACLParser:
                     }
                 )
 
-        return shapes
+        return shapes, {"conditions_dropped": conditions_dropped}
+
+    def _target_class_from_sparql_target(self, g: Graph, node_shape) -> str:
+        """Recover the focus class from a ``sh:target`` SPARQL query."""
+        for target in g.objects(node_shape, SH.target):
+            for select in g.objects(target, SH.select):
+                match = _SPARQL_TARGET_CLASS_RE.search(str(select))
+                if match:
+                    return match.group(1)
+        return ""
 
     def _parse_property_shape(
         self,

@@ -501,6 +501,19 @@ function showValidationSuccessModal(stats) {
 
 // Reset all mappings
 async function confirmResetMappings() {
+    // View / viewer / lock mode: CSS already greys the button; refuse here
+    // so a synthetic click or a race before the body class lands cannot wipe
+    // mappings on a non-editable version.
+    if (window.OB && typeof window.OB.canEditOntology === 'function'
+            && !window.OB.canEditOntology()) {
+        if (typeof showNotification === 'function') {
+            showNotification(
+                'Unmap all is unavailable — this version is read-only.',
+                'warning'
+            );
+        }
+        return;
+    }
     const confirmed = await showConfirmDialog({
         title: 'Unmap All',
         message: 'This will delete <strong>all entity and relationship mappings</strong>.<br><br>Are you sure you want to continue?',

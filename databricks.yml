@@ -43,6 +43,15 @@
 bundle:
   name: ontobricks_dev_bundle
 
+# Resource definitions kept out of this file. Currently the serverless graph
+# analytics job (``resources/graph_analytics.job.yml``); the two apps are still
+# declared inline below. Per-instance targets (``dev-lakebase-<id>``)
+# are written to ``resources/_generated_instance_target.yml``
+# by ``scripts/deploy.sh`` from ``DEFAULT_INSTANCE_ID`` — that file is
+# gitignored and also matched by the include below.
+include:
+  - resources/*.yml
+
 workspace:
   # Sandbox path — distinct from any other ``ontobricks*`` bundle so
   # we cannot share/clobber sync state with the production apps.
@@ -55,8 +64,8 @@ sync:
     # uploads the rendered file on every `databricks bundle deploy` run.
     - app.yaml
     - src/mcp-server/app.yaml
-    # Help Center serves markdown from docs/ at runtime (/api/help/docs/*).
-    - docs/**
+    # Help Center serves markdown from documentation/ at runtime (/api/help/docs/*).
+    - documentation/**
   exclude:
     - tests/
     - data/
@@ -75,7 +84,7 @@ sync:
     - scripts/
     - Makefile
     - CHANGELOG.md
-    # Help Center ships docs/*.md; exclude root/repo meta markdown only.
+    # Help Center ships documentation/*.md; exclude root/repo meta markdown only.
     - README.md
     - CONTRIBUTING.md
     - AGENTS.md
@@ -83,8 +92,10 @@ sync:
     - SECURITY.md
     - releases/
     - .claude/
-    - docs/sphinx/_build/
-    - docs/sphinx/.doctrees/
+    - documentation/sphinx/_build/
+    - documentation/sphinx/.doctrees/
+    # GitHub Pages marketing site (not needed in the Databricks App bundle)
+    - docs/
 
 variables:
   # ── App names ──────────────────────────────────────────────────────
@@ -110,6 +121,14 @@ variables:
   registry_volume:
     description: "Volume name for the domain registry"
     default: "registry"
+
+  # Workspace secret scope holding ``neo4j-password``. A scope that does not
+  # exist fails ``terraform apply`` on the app resource, so keep this pointed at
+  # a real scope (``databricks secrets list-scopes``) or drop the overlay in the
+  # target below.
+  neo4j_secret_scope:
+    description: "Workspace secret scope holding the Neo4j Bolt password"
+    default: "ontobricks-secrets"
 
   # ── Lakebase resource binding (Autoscaling-only) ────────────────
   # OntoBricks targets **Lakebase Autoscaling** exclusively (the
@@ -228,6 +247,12 @@ resources:
             permission: WRITE_VOLUME
 
 targets:
+  # Legacy unsuffixed targets — still valid via
+  # ``DAB_TARGET=dev-lakebase make deploy``. New instances use
+  # ``dev-lakebase-<INSTANCE_ID>`` generated into
+  # ``resources/_generated_instance_target.yml`` so each instance keeps
+  # a separate ``.databricks/bundle/<target>/`` Terraform state.
+
   # Default sandbox: Volume-only registry backend.
   dev:
     mode: development
@@ -259,11 +284,11 @@ targets:
             # Customer admins can switch to manual UI binding by removing
             # this overlay (the resource declaration still lives in
             # ``app.yaml.template``, unbound by default).
-            # See docs/pr47-neo4j-demo/secret-configuration.md.
+            # See documentation/pr47-neo4j-demo/secret-configuration.md.
             - name: neo4j-password
               description: "Databricks Apps secret holding the Neo4j Bolt password"
               secret:
-                scope: ontobricks
+                scope: ${var.neo4j_secret_scope}
                 key: neo4j-password
                 permission: READ
         mcp_ontobricks_app:

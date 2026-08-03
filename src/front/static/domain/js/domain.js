@@ -58,10 +58,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (section === 'versions' && typeof loadVersionsList === 'function') {
                 loadVersionsList();
             }
-            // Load build runs when switching to runs section
-            if (section === 'runs' && typeof loadDomainRuns === 'function') {
-                loadDomainRuns();
-            }
             // Load the unified audit trail when switching to audit section
             if (section === 'audit' && typeof window.loadDomainAudit === 'function') {
                 window.loadDomainAudit();

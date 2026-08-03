@@ -124,6 +124,24 @@
     </div>
 </div>
 
+<!-- Analytics run details (page level: see the note in _domain_runs.html) -->
+<div class="modal fade" id="analyticsRunDetailsModal" tabindex="-1" aria-labelledby="analyticsRunDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="analyticsRunDetailsModalLabel">
+                    <i class="bi bi-graph-up-arrow me-2"></i>Analytics run details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="analyticsRunDetailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- All scripts use defer: page paints immediately, scripts run in order after HTML parsing.
      CDN libs (D3, Graphology, Sigma, GraphiQL) are lazy-loaded on first use by their modules. -->
 <script defer src="{{ url_for('static', filename='query/js/query.js') }}?v={{ asset_version }}"></script>

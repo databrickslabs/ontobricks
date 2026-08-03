@@ -40,6 +40,30 @@ QUALITY_CATEGORIES = (
     "structural",
 )
 
+#: A data quality run also executes rule families that are not SHACL shapes.
+#: Their results are filed under these dimensions, so a run must honour the
+#: same dimension selection the shapes do.
+SWRL_CATEGORY = "structural"
+BUSINESS_RULE_CATEGORY = "conformance"
+
+#: Non-SHACL rules have no shape id, so a run addresses them by a synthetic
+#: one. The list endpoint, the run selection and the reported result must all
+#: derive it the same way or a rule becomes unselectable.
+SWRL_ID_PREFIX = "swrl"
+DECISION_TABLE_ID_PREFIX = "dt"
+AGGREGATE_ID_PREFIX = "agg"
+
+RULE_FAMILY_CATEGORIES = {
+    SWRL_ID_PREFIX: SWRL_CATEGORY,
+    DECISION_TABLE_ID_PREFIX: BUSINESS_RULE_CATEGORY,
+    AGGREGATE_ID_PREFIX: BUSINESS_RULE_CATEGORY,
+}
+
+
+def rule_check_id(prefix: str, rule: Dict, index: int) -> str:
+    """Return the check id a non-SHACL *rule* is selected and reported under."""
+    return f"{prefix}:{rule.get('name', index)}"
+
 SEVERITY_MAP = {
     "sh:Violation": SH.Violation,
     "sh:Warning": SH.Warning,
