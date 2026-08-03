@@ -194,7 +194,7 @@ const ReasoningModule = {
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Running inference…';
         } else {
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> Run Inference';
+            btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> Run';
         }
         checkboxes.forEach(el => {
             el.disabled = running;

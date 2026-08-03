@@ -513,3 +513,27 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.70s
+
+--------------------------------------------------------------------------------
+Follow-up: shorter Run labels
+--------------------------------------------------------------------------------
+
+Context:
+The Data Quality and Inference buttons repeated the name of the page they sit
+on. "Run All" was also inaccurate once rules became individually selectable.
+
+Changes:
+1. `src/front/templates/partials/dtwin/_query_dataquality.html`
+   "Run All" → "Run".
+2. `src/front/templates/partials/dtwin/_query_reasoning.html`
+   "Run Inference" → "Run".
+3. `src/front/static/query/js/query-reasoning.js`
+   `setRunning()` restores the shortened label when a run finishes.
+
+Modified files:
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/static/query/js/query-reasoning.js`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 30.77s
