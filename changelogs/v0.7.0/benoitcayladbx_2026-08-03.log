@@ -635,3 +635,24 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 3 passed, 4 failed (missing get-started/docs/about/404 — later tasks)
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site get-started page (Task 5)
+--------------------------------------------------------------------------------
+
+Context:
+Task 5 of the GitHub Pages marketing site — add the Get started page with
+prerequisites, clone/sync/start commands, and a link to the full setup guide
+on GitHub.
+
+Changes:
+
+1. `site/get-started/index.html`
+   Get started page with prerequisites, quick-start commands, link to
+   `docs/get-started.md`, and GitHub CTAs; nested `../` chrome.
+
+Modified files:
+- `site/get-started/index.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 3 passed, 4 failed (missing docs/about/404 — later tasks)
