@@ -15,7 +15,6 @@ window.DQExecModule = {
     ],
 
     init() {
-        this._initBackendToggle();
         this._updateTripleStoreLabel();
         this._bindTemplateUiOnce();
         this._loadShapes();
@@ -75,7 +74,10 @@ window.DQExecModule = {
             const resp = await fetch('/ontology/dataquality/list', { credentials: 'same-origin' });
             const data = await resp.json();
             if (!data.success) return;
-            this._shapesCache = data.shapes || [];
+            // SWRL rules, decision tables and aggregate rules run alongside the
+            // shapes, so they get a checkbox of their own or picking a few
+            // rules would still run every one of them.
+            this._shapesCache = [...(data.shapes || []), ...(data.rules || [])];
             this._renderShapeCheckboxes();
         } catch (e) {
             console.error('[DQExec] Failed to load shapes:', e);
@@ -108,6 +110,7 @@ window.DQExecModule = {
                            title="${this._escAttr(s.id)}">
                         ${this._escHtml(s.label || s.id)}
                     </label>
+                    ${this._familyBadge(s.family)}
                 </div>
             `).join('');
 
@@ -115,6 +118,21 @@ window.DQExecModule = {
                 cb.addEventListener('change', () => this._onRuleCheckChange(cat));
             });
         });
+    },
+
+    // A dimension mixes SHACL shapes with rules authored elsewhere, so the
+    // ones that are not shapes say where they come from.
+    RULE_FAMILIES: {
+        swrl: { label: 'SWRL', title: 'SWRL rule, defined in Ontology → Rules' },
+        dt: { label: 'Decision table', title: 'Decision table, defined in Business Rules' },
+        agg: { label: 'Aggregate', title: 'Aggregate rule, defined in Business Rules' },
+    },
+
+    _familyBadge(family) {
+        const meta = this.RULE_FAMILIES[family];
+        if (!meta) return '';
+        return `<span class="badge bg-secondary bg-opacity-25 text-body-secondary fw-normal dq-rule-family"
+                      title="${this._escAttr(meta.title)}">${this._escHtml(meta.label)}</span>`;
     },
 
     _toggleRuleList(dim) {
@@ -195,68 +213,23 @@ window.DQExecModule = {
         document.querySelectorAll('.dq-rules-toggle').forEach(el => { el.disabled = disabled; });
     },
 
-    _initBackendToggle() {
-        const group = document.getElementById('dqBackendToggle');
-        if (!group) return;
-        const cfg = window.__TRIPLESTORE_CONFIG || {};
-        const viewBtn = group.querySelector('[data-backend="view"]');
-        const graphBtn = group.querySelector('[data-backend="graph"]');
-
-        if (!cfg.view_table && viewBtn) {
-            viewBtn.classList.add('disabled');
-            viewBtn.setAttribute('title', 'No Delta VIEW configured');
-        }
-        if (!cfg.graph_name && graphBtn) {
-            graphBtn.classList.add('disabled');
-            graphBtn.setAttribute('title', 'No Graph DB available');
-        }
-
-        if (!cfg.graph_name && cfg.view_table) {
-            graphBtn.classList.remove('active');
-            viewBtn.classList.add('active');
-        }
-
-        group.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (btn.classList.contains('disabled')) return;
-                group.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this._updateTripleStoreLabel();
-            });
-        });
-    },
-
-    _getSelectedBackend() {
-        const active = document.querySelector('#dqBackendToggle button.active');
-        return active ? active.dataset.backend : 'view';
-    },
-
     _updateTripleStoreLabel() {
         const el = document.getElementById('dqExecTripleStoreTable');
         if (!el) return;
-        const cfg = window.__TRIPLESTORE_CONFIG || {};
-        const backend = this._getSelectedBackend();
-        if (backend === 'view') {
-            el.textContent = cfg.view_table || 'Not configured';
-        } else {
-            el.textContent = cfg.graph_name || 'Not configured';
-        }
+        el.textContent = this._getTripleStoreTable() || 'Not configured';
     },
 
+    // Checks always run as SQL against the triple-store VIEW, which the build
+    // creates whatever graph engine the domain uses.
     _getTripleStoreTable() {
-        const cfg = window.__TRIPLESTORE_CONFIG || {};
-        const backend = this._getSelectedBackend();
-        return backend === 'view' ? (cfg.view_table || '') : (cfg.graph_name || '');
+        return (window.__TRIPLESTORE_CONFIG || {}).view_table || '';
     },
 
     async runAllChecks() {
-        const backend = this._getSelectedBackend();
         const table = this._getTripleStoreTable();
         if (!table) {
             showNotification(
-                backend === 'view'
-                    ? 'Delta VIEW is not configured. Set it up in Domain Settings and build first.'
-                    : 'Graph DB is not available. Build the Knowledge Graph first.',
+                'The triple-store VIEW is not available. Build the Knowledge Graph first.',
                 'warning'
             );
             return;
@@ -265,13 +238,11 @@ window.DQExecModule = {
         const shapeIds = this._getSelectedShapeIds();
         const dimensions = this._getSelectedDimensions();
 
-        if (this._shapesLoaded && this._shapesCache && this._shapesCache.length > 0) {
-            if (!shapeIds.length) {
-                showNotification('Select at least one rule to run.', 'warning');
-                return;
-            }
-        } else if (!dimensions.length) {
-            showNotification('Select at least one data quality dimension to run.', 'warning');
+        // A dimension with no shape of its own may still carry SWRL rules,
+        // decision tables or aggregate rules, so either selection can stand
+        // alone.
+        if (!shapeIds.length && !dimensions.length) {
+            showNotification('Select at least one rule or dimension to run.', 'warning');
             return;
         }
 
@@ -285,14 +256,13 @@ window.DQExecModule = {
         document.getElementById('dqExecProgressStep').textContent = 'Starting data quality checks...';
 
         const payload = {
-            triplestore_table: table,
-            backend,
             violation_limit: parseInt(document.getElementById('dqViolationLimit')?.value || '10'),
         };
+        // The dimensions travel even when individual rules are picked: they
+        // are what selects the rule families that have no checkbox.
+        payload.dimensions = dimensions;
         if (shapeIds.length > 0) {
             payload.shape_ids = shapeIds;
-        } else {
-            payload.dimensions = dimensions;
         }
 
         try {
@@ -406,12 +376,16 @@ window.DQExecModule = {
             ? `<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" data-dq-result="viol" data-shape-id="${sidEnc}" title="View violations"><i class="bi bi-list-ul"></i> ${violCount}</button>`
             : '';
 
+        // A check that could not run reports no violations, which must not be
+        // read as a clean bill of health.
+        const executed = r.status === 'success' || r.status === 'error';
         const hasPop = r.pass_pct != null && r.total_population > 0;
-        const pct = hasPop ? r.pass_pct : (violCount === 0 ? 100 : null);
+        const pct = hasPop ? r.pass_pct : (executed && violCount === 0 ? 100 : null);
         const pctDisplay = pct != null ? `${pct}%` : '-';
         const pctClass = pct == null ? 'text-muted' : pct === 100 ? 'text-success' : pct >= 80 ? 'text-warning fw-bold' : 'text-danger fw-bold';
         const goodCount = r.total_population > 0 ? (r.total_population - violCount) : 0;
-        const pctTitle = (r.total_population > 0) ? `${goodCount} of ${r.total_population} entities pass (${violCount} violation${violCount !== 1 ? 's' : ''})` : '';
+        const pctTitle = !executed ? 'This check did not run'
+            : (r.total_population > 0) ? `${goodCount} of ${r.total_population} entities pass (${violCount} violation${violCount !== 1 ? 's' : ''})` : '';
 
         return `<tr class="dq-row-${r.status}" data-shape-id="${shapeId}">
             <td class="dq-col-pct ${pctClass}" title="${pctTitle}">${pctDisplay}</td>

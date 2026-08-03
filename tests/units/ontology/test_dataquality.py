@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from back.core.w3c.shacl.SHACLService import SHACLService
 from back.core.w3c.shacl.constants import QUALITY_CATEGORIES
 from back.objects.digitaltwin import DigitalTwin
+from back.objects.ontology.Ontology import Ontology
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +495,442 @@ class TestEvaluateShapeInMemory:
 
 
 # ===========================================================================
+# Conditional shapes — the optional IF guard
+# ===========================================================================
+
+STATUS_URI = "http://test.org/ontology/status"
+ORDER_URI = "http://test.org/ontology/hasOrder"
+
+
+def _conditional_pattern_shape(conditions, logic="and"):
+    """A conformance rule on email, guarded by *conditions*."""
+    return _make_shape(
+        category="conformance",
+        shacl_type="sh:pattern",
+        parameters={"sh:pattern": "^[A-Z]"},
+        conditions=conditions,
+        condition_logic=logic,
+    )
+
+
+class TestConditionalShapeToSQL:
+    def test_conditions_wrap_the_base_query(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"}]
+        )
+        sql = SHACLService.shape_to_sql(shape, TABLE)
+        assert sql is not None
+        assert sql.startswith("SELECT v.* FROM (")
+        assert "WHERE v.s IN (" in sql
+        # The constraint half is untouched
+        assert "NOT t2.object RLIKE '^[A-Z]'" in sql
+        # The guard filters on the condition property
+        assert STATUS_URI in sql
+        assert "LOWER(c0.object) = 'active'" in sql
+
+    def test_numeric_condition_casts_to_double(self):
+        shape = _conditional_pattern_shape(
+            [{
+                "property": "amount",
+                "property_uri": "http://test.org/ontology/amount",
+                "op": "gt",
+                "value": "1000",
+            }]
+        )
+        sql = SHACLService.shape_to_sql(shape, TABLE)
+        assert "CAST(c0.object AS DOUBLE) > 1000" in sql
+
+    def test_not_exists_condition_uses_subquery_not_join(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "hasOrder", "property_uri": ORDER_URI, "op": "notExists", "value": ""}]
+        )
+        sql = SHACLService.shape_to_sql(shape, TABLE)
+        assert "NOT EXISTS (SELECT 1" in sql
+        assert f"LEFT JOIN {TABLE} c0" not in sql
+
+    def test_or_logic_left_joins_and_ors_the_predicates(self):
+        shape = _conditional_pattern_shape(
+            [
+                {"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"},
+                {
+                    "property": "amount",
+                    "property_uri": "http://test.org/ontology/amount",
+                    "op": "gt",
+                    "value": "1000",
+                },
+            ],
+            logic="or",
+        )
+        sql = SHACLService.shape_to_sql(shape, TABLE)
+        guard = sql.split("WHERE v.s IN (")[1]
+        assert " OR " in guard
+        # LEFT JOIN, otherwise a subject missing one property could never match
+        # the other branch.
+        assert guard.count("LEFT JOIN") == 2
+        assert "INNER JOIN" not in guard
+
+    def test_unconditional_shape_sql_is_unchanged(self):
+        """Regression: a shape without conditions must not be wrapped."""
+        guarded = _conditional_pattern_shape([])
+        plain = dict(guarded)
+        plain.pop("conditions")
+        plain.pop("condition_logic")
+        assert SHACLService.shape_to_sql(guarded, TABLE) == SHACLService.shape_to_sql(
+            plain, TABLE
+        )
+        assert "SELECT v.*" not in SHACLService.shape_to_sql(plain, TABLE)
+
+    def test_untranslatable_constraint_stays_untranslatable(self):
+        shape = _make_shape(
+            category="conformance",
+            shacl_type="sh:closed",
+            conditions=[
+                {"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"}
+            ],
+        )
+        shape["parameters"] = {}
+        assert SHACLService.shape_to_sql(shape, TABLE) is None
+
+
+class TestConditionalShapeInMemory:
+    def test_guard_filters_violations(self):
+        """Both c1 and c2 fail the pattern; only c1 is active."""
+        shape = _conditional_pattern_shape(
+            [{"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"}]
+        )
+        violations = SHACLService.evaluate_shape_in_memory(shape, _sample_triples())
+        assert [v["s"] for v in violations] == ["http://test.org/data/c1"]
+
+    def test_without_conditions_all_violations_are_kept(self):
+        shape = _conditional_pattern_shape([])
+        violations = SHACLService.evaluate_shape_in_memory(shape, _sample_triples())
+        assert len(violations) == 2
+
+    def test_exists_condition_on_a_relationship(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "hasOrder", "property_uri": ORDER_URI, "op": "exists", "value": ""}]
+        )
+        violations = SHACLService.evaluate_shape_in_memory(shape, _sample_triples())
+        assert [v["s"] for v in violations] == ["http://test.org/data/c1"]
+
+    def test_not_exists_condition_on_a_relationship(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "hasOrder", "property_uri": ORDER_URI, "op": "notExists", "value": ""}]
+        )
+        violations = SHACLService.evaluate_shape_in_memory(shape, _sample_triples())
+        assert [v["s"] for v in violations] == ["http://test.org/data/c2"]
+
+    def test_and_requires_every_condition(self):
+        shape = _conditional_pattern_shape(
+            [
+                {"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"},
+                {"property": "hasOrder", "property_uri": ORDER_URI, "op": "notExists", "value": ""},
+            ]
+        )
+        assert SHACLService.evaluate_shape_in_memory(shape, _sample_triples()) == []
+
+    def test_or_requires_a_single_condition(self):
+        shape = _conditional_pattern_shape(
+            [
+                {"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"},
+                {"property": "hasOrder", "property_uri": ORDER_URI, "op": "notExists", "value": ""},
+            ],
+            logic="or",
+        )
+        violations = SHACLService.evaluate_shape_in_memory(shape, _sample_triples())
+        assert {v["s"] for v in violations} == {
+            "http://test.org/data/c1",
+            "http://test.org/data/c2",
+        }
+
+    def test_incomplete_condition_is_ignored(self):
+        """A half-filled row must not silently narrow the rule."""
+        shape = _conditional_pattern_shape([{"property": "status", "op": "eq", "value": "active"}])
+        violations = SHACLService.evaluate_shape_in_memory(shape, _sample_triples())
+        assert len(violations) == 2
+
+
+# ===========================================================================
+# Numeric range and string length — the conformance types the modal offers
+# ===========================================================================
+
+
+def _range_shape(**params):
+    return _make_shape(
+        category="conformance", shacl_type="sh:minInclusive", parameters=params
+    )
+
+
+def _length_shape(**params):
+    return _make_shape(
+        category="conformance", shacl_type="sh:minLength", parameters=params
+    )
+
+
+def _fee_triples(*values):
+    """One Customer per value, each carrying it on the shape's property."""
+    triples = []
+    for i, value in enumerate(values):
+        subject = f"http://test.org/data/f{i}"
+        triples.append(
+            {
+                "subject": subject,
+                "predicate": RDF_TYPE,
+                "object": "http://test.org/ontology#Customer",
+            }
+        )
+        triples.append(
+            {
+                "subject": subject,
+                "predicate": "http://test.org/ontology/email",
+                "object": value,
+            }
+        )
+    return triples
+
+
+class TestNumericRange:
+    """"Monthly fee between 1 and 10" — a rule the modal offers under
+    conformance, which reported 100% pass because it had no translation."""
+
+    def test_a_range_shape_is_translatable(self):
+        shape = _range_shape(**{"sh:minInclusive": 1, "sh:maxInclusive": 10})
+        assert SHACLService.shape_to_sql(shape, TABLE) is not None
+
+    def test_both_bounds_must_hold(self):
+        sql = SHACLService.shape_to_sql(
+            _range_shape(**{"sh:minInclusive": 1, "sh:maxInclusive": 10}), TABLE
+        )
+        assert "TRY_CAST(t2.object AS DOUBLE) >= 1.0" in sql
+        assert "TRY_CAST(t2.object AS DOUBLE) <= 10.0" in sql
+        assert "AND NOT (" in sql
+
+    def test_a_single_bound_is_enough(self):
+        sql = SHACLService.shape_to_sql(_range_shape(**{"sh:minInclusive": 1}), TABLE)
+        assert ">= 1.0" in sql
+        assert "<=" not in sql
+
+    def test_exclusive_bounds_are_supported(self):
+        sql = SHACLService.shape_to_sql(
+            _range_shape(**{"sh:minExclusive": 0, "sh:maxExclusive": 100}), TABLE
+        )
+        assert "> 0.0" in sql
+        assert "< 100.0" in sql
+
+    def test_a_shape_with_no_bound_is_untranslatable(self):
+        shape = _make_shape(category="conformance", shacl_type="sh:minInclusive")
+        shape["parameters"] = {}
+        assert SHACLService.shape_to_sql(shape, TABLE) is None
+
+    def test_a_shape_named_by_its_only_bound_is_translatable(self):
+        """An imported shape takes its type from its first constraint."""
+        shape = _make_shape(
+            category="conformance",
+            shacl_type="sh:maxInclusive",
+            parameters={"sh:maxInclusive": 10},
+        )
+        assert SHACLService.shape_to_sql(shape, TABLE) is not None
+
+    @pytest.mark.parametrize("value", ["0", "0.99", "10.01", "11"])
+    def test_a_value_outside_the_range_is_a_violation(self, value):
+        shape = _range_shape(**{"sh:minInclusive": 1, "sh:maxInclusive": 10})
+        violations = SHACLService.evaluate_shape_in_memory(shape, _fee_triples(value))
+        assert [v["val"] for v in violations] == [value]
+
+    @pytest.mark.parametrize("value", ["1", "5.5", "10"])
+    def test_a_value_inside_the_range_passes(self, value):
+        shape = _range_shape(**{"sh:minInclusive": 1, "sh:maxInclusive": 10})
+        assert SHACLService.evaluate_shape_in_memory(shape, _fee_triples(value)) == []
+
+    def test_a_non_numeric_value_is_a_violation(self):
+        """SHACL reports a value node it cannot compare."""
+        shape = _range_shape(**{"sh:minInclusive": 1, "sh:maxInclusive": 10})
+        violations = SHACLService.evaluate_shape_in_memory(shape, _fee_triples("free"))
+        assert [v["val"] for v in violations] == ["free"]
+
+    def test_the_bound_itself_is_inside_an_inclusive_range(self):
+        shape = _range_shape(**{"sh:minInclusive": 1, "sh:maxInclusive": 10})
+        assert SHACLService.evaluate_shape_in_memory(shape, _fee_triples("1", "10")) == []
+
+    def test_the_bound_itself_is_outside_an_exclusive_range(self):
+        shape = _range_shape(**{"sh:minExclusive": 1, "sh:maxExclusive": 10})
+        violations = SHACLService.evaluate_shape_in_memory(shape, _fee_triples("1", "10"))
+        assert {v["val"] for v in violations} == {"1", "10"}
+
+    def test_only_the_offending_entities_are_reported(self):
+        shape = _range_shape(**{"sh:minInclusive": 1, "sh:maxInclusive": 10})
+        violations = SHACLService.evaluate_shape_in_memory(
+            shape, _fee_triples("5", "42", "7")
+        )
+        assert [v["val"] for v in violations] == ["42"]
+
+    def test_a_range_rule_can_be_guarded_by_conditions(self):
+        shape = _range_shape(**{"sh:minInclusive": 1, "sh:maxInclusive": 10})
+        shape["conditions"] = [
+            {"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"}
+        ]
+        sql = SHACLService.shape_to_sql(shape, TABLE)
+        assert sql.startswith("SELECT v.* FROM (")
+        assert "TRY_CAST(t2.object AS DOUBLE)" in sql
+
+
+class TestStringLength:
+    def test_a_length_shape_is_translatable(self):
+        sql = SHACLService.shape_to_sql(
+            _length_shape(**{"sh:minLength": 3, "sh:maxLength": 8}), TABLE
+        )
+        assert "LENGTH(t2.object) >= 3" in sql
+        assert "LENGTH(t2.object) <= 8" in sql
+
+    @pytest.mark.parametrize("value", ["ab", "abcdefghi"])
+    def test_a_value_of_the_wrong_length_is_a_violation(self, value):
+        shape = _length_shape(**{"sh:minLength": 3, "sh:maxLength": 8})
+        violations = SHACLService.evaluate_shape_in_memory(shape, _fee_triples(value))
+        assert [v["val"] for v in violations] == [value]
+
+    @pytest.mark.parametrize("value", ["abc", "abcdefgh"])
+    def test_a_value_of_an_allowed_length_passes(self, value):
+        shape = _length_shape(**{"sh:minLength": 3, "sh:maxLength": 8})
+        assert SHACLService.evaluate_shape_in_memory(shape, _fee_triples(value)) == []
+
+    def test_an_empty_value_violates_a_minimum(self):
+        shape = _length_shape(**{"sh:minLength": 1})
+        assert len(SHACLService.evaluate_shape_in_memory(shape, _fee_triples(""))) == 1
+
+
+class TestInMemorySupport:
+    """A check the graph engine cannot run must not be reported as passing."""
+
+    @pytest.mark.parametrize(
+        "shacl_type,params",
+        [
+            ("sh:minCount", {"sh:minCount": 1}),
+            ("sh:maxCount", {"sh:maxCount": 1}),
+            ("sh:pattern", {"sh:pattern": "^a"}),
+            ("sh:hasValue", {"sh:hasValue": "x"}),
+            ("sh:class", {"sh:class": "http://test.org/ontology/Order"}),
+            ("sh:minInclusive", {"sh:minInclusive": 1}),
+            ("sh:maxInclusive", {"sh:maxInclusive": 1}),
+            ("sh:minExclusive", {"sh:minExclusive": 1}),
+            ("sh:maxExclusive", {"sh:maxExclusive": 1}),
+            ("sh:minLength", {"sh:minLength": 1}),
+            ("sh:maxLength", {"sh:maxLength": 1}),
+        ],
+    )
+    def test_supported_kinds(self, shacl_type, params):
+        shape = _make_shape(shacl_type=shacl_type, parameters=params)
+        assert SHACLService.supports_in_memory(shape) is True
+
+    @pytest.mark.parametrize("shacl_type", ["sh:closed", "sh:sparql", "sh:datatype"])
+    def test_unsupported_kinds(self, shacl_type):
+        shape = _make_shape(shacl_type=shacl_type)
+        shape["parameters"] = {}
+        assert SHACLService.supports_in_memory(shape) is False
+
+    @pytest.mark.parametrize("shacl_type", ["sh:closed", "sh:sparql", "sh:datatype"])
+    def test_an_unsupported_kind_yields_no_violations(self, shacl_type):
+        """Which is why the runner must ask supports_in_memory first."""
+        shape = _make_shape(shacl_type=shacl_type)
+        shape["parameters"] = {}
+        assert SHACLService.evaluate_shape_in_memory(shape, _fee_triples("1")) == []
+
+    def test_every_supported_kind_is_reachable(self):
+        """The advertised set must not drift from what the dispatcher handles."""
+        from back.core.w3c.shacl.SHACLService import IN_MEMORY_TYPES
+
+        for shacl_type in IN_MEMORY_TYPES:
+            shape = _make_shape(shacl_type=shacl_type)
+            shape["parameters"] = {}
+            assert SHACLService.supports_in_memory(shape) is True, shacl_type
+
+
+class TestConditionPersistence:
+    def test_a_shape_is_unconditional_by_default(self):
+        shape = _make_shape()
+        assert shape["conditions"] == []
+        assert shape["condition_logic"] == "and"
+
+    def test_conditions_are_stored_on_the_shape(self):
+        condition = {
+            "property": "status",
+            "property_uri": STATUS_URI,
+            "op": "eq",
+            "value": "active",
+        }
+        shape = _conditional_pattern_shape([condition], logic="or")
+        assert shape["conditions"] == [condition]
+        assert shape["condition_logic"] == "or"
+
+    def test_an_unknown_logic_falls_back_to_and(self):
+        assert _conditional_pattern_shape([], logic="xor")["condition_logic"] == "and"
+
+    def test_conditions_can_be_cleared_by_an_update(self):
+        shapes = [
+            _conditional_pattern_shape(
+                [{"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "a"}]
+            )
+        ]
+        updated = SHACLService.update_shape(shapes, shapes[0]["id"], {"conditions": []})
+        assert updated[0]["conditions"] == []
+        assert SHACLService.shape_to_sql(updated[0], TABLE) == SHACLService.shape_to_sql(
+            _make_shape(
+                category="conformance",
+                shacl_type="sh:pattern",
+                parameters={"sh:pattern": "^[A-Z]"},
+            ),
+            TABLE,
+        )
+
+
+class TestConditionValidation:
+    def test_conditions_are_accepted_on_conformance(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"}]
+        )
+        assert Ontology.validate_shape(shape) is None
+
+    def test_conditions_are_rejected_on_completeness(self):
+        shape = _make_shape(
+            conditions=[
+                {"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"}
+            ]
+        )
+        assert "conformance and consistency" in Ontology.validate_shape(shape)
+
+    def test_condition_without_a_property_is_rejected(self):
+        shape = _conditional_pattern_shape([{"op": "eq", "value": "active"}])
+        assert Ontology.validate_shape(shape) == "Each condition needs a property"
+
+    def test_comparison_without_a_value_is_rejected(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": ""}]
+        )
+        assert "needs a value" in Ontology.validate_shape(shape)
+
+    def test_existence_operator_needs_no_value(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "hasOrder", "property_uri": ORDER_URI, "op": "exists", "value": ""}]
+        )
+        assert Ontology.validate_shape(shape) is None
+
+    def test_unknown_operator_is_rejected(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "status", "property_uri": STATUS_URI, "op": "matches", "value": "x"}]
+        )
+        assert "Unknown condition operator" in Ontology.validate_shape(shape)
+
+    def test_conditions_need_a_target_entity(self):
+        shape = _conditional_pattern_shape(
+            [{"property": "status", "property_uri": STATUS_URI, "op": "eq", "value": "active"}]
+        )
+        shape["target_class_uri"] = ""
+        assert Ontology.validate_shape(shape) == "A rule with conditions must target an entity"
+
+    def test_unconditional_shape_still_validates(self):
+        assert Ontology.validate_shape(_make_shape()) is None
+
+
+# ===========================================================================
 # Turtle generation & parsing round-trip
 # ===========================================================================
 
@@ -602,35 +1039,6 @@ class TestLegacyMigration:
 
 
 class TestPopulationHelpers:
-    def test_count_class_population_graph_dicts(self):
-        triples = _sample_triples()
-        count = DigitalTwin._count_class_population_graph(
-            triples, "http://test.org/ontology#Customer"
-        )
-        assert count == 3
-
-    def test_count_class_population_graph_tuples(self):
-        triples = [
-            ("http://test.org/data/c1", RDF_TYPE, "http://test.org/ontology#Customer"),
-            ("http://test.org/data/c2", RDF_TYPE, "http://test.org/ontology#Customer"),
-        ]
-        count = DigitalTwin._count_class_population_graph(
-            triples, "http://test.org/ontology#Customer"
-        )
-        assert count == 2
-
-    def test_count_class_population_graph_caching(self):
-        triples = _sample_triples()
-        cache = {}
-        DigitalTwin._count_class_population_graph(
-            triples, "http://test.org/ontology#Customer", cache
-        )
-        assert "http://test.org/ontology#Customer" in cache
-        assert cache["http://test.org/ontology#Customer"] == 3
-
-    def test_count_class_population_graph_empty_uri(self):
-        assert DigitalTwin._count_class_population_graph([], "") is None
-
     def test_count_class_population_sql(self):
         store = MagicMock()
         store.execute_query.return_value = [{"cnt": 42}]

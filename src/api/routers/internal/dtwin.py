@@ -21,6 +21,13 @@ from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
+from back.core.w3c.shacl.constants import (
+    AGGREGATE_ID_PREFIX,
+    DECISION_TABLE_ID_PREFIX,
+    RULE_FAMILY_CATEGORIES,
+    SWRL_ID_PREFIX,
+    rule_check_id,
+)
 from back.core.databricks import DatabricksClient, is_databricks_app
 from back.core.graphdb import get_graphdb
 from back.core.graph_analysis import (
@@ -63,6 +70,23 @@ def _graph_query_table(
         include_inferred=include_inferred,
         store=store,
     )
+
+
+def _dataquality_table(domain, settings) -> str:
+    """Resolve the single execution target for data quality checks.
+
+    Checks always compile to SQL and run against the triple-store VIEW. The
+    build creates it whatever graph engine the domain uses, so it is the one
+    target that is guaranteed to exist. Note it carries the mapped source
+    triples only — triples added by reasoning live in the graph store and are
+    deliberately out of scope for data quality.
+    """
+    table = effective_view_table(domain, settings).strip()
+    if not table:
+        raise ValidationError(
+            "The triple-store VIEW is not available. Build the Knowledge Graph first."
+        )
+    return table
 
 # Canonical rdf:type predicate. Neighbour expansion must preserve type
 # triples so the knowledge graph can group/colour expanded nodes by their
@@ -1579,43 +1603,21 @@ async def execute_dataquality_check(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Execute a single SHACL shape check against the triple store."""
+    """Execute a single SHACL shape check against the triple-store VIEW."""
     try:
         data = await request.json()
         shape = data.get("shape", {})
-        backend = data.get("backend", "view").strip()
         domain = get_domain(session_mgr)
-        if backend == "graph":
-            triplestore_table = _graph_query_table(domain, settings).strip()
-        else:
-            triplestore_table = data.get("triplestore_table", "").strip()
+        triplestore_table = _dataquality_table(domain, settings)
 
-        if not triplestore_table:
-            raise ValidationError("Triple store table is not specified.")
         if not shape:
             raise ValidationError("No shape was provided.")
 
         from back.core.w3c import SHACLService
 
-        store = get_graphdb(
-            domain, settings, engine=(None if backend == "graph" else backend)
-        )
+        store = get_graphdb(domain, settings, engine="view")
         if not store:
-            raise InfrastructureError(f"Could not initialize {backend} backend")
-
-        if backend == "graph":
-            graph_name = triplestore_table or _graph_query_table(domain, settings)
-            triples = await run_blocking(store.query_triples, graph_name)
-            if not triples:
-                raise ValidationError(f"Graph '{graph_name}' is empty. Build first.")
-            violations = SHACLService.evaluate_shape_in_memory(shape, triples)
-            return {
-                "success": True,
-                "violations": violations,
-                "count": len(violations),
-                "sql": "",
-                "engine": "in-memory",
-            }
+            raise InfrastructureError("Could not reach the SQL warehouse")
 
         sql = SHACLService.shape_to_sql(shape, triplestore_table)
         if not sql:
@@ -1649,19 +1651,12 @@ async def start_dataquality_checks(
     data = await request.json()
     dimensions = data.get("dimensions") or []
     shape_ids = data.get("shape_ids") or []
-    requested_backend = data.get("backend", "").strip() or "view"
     violation_limit = int(data.get("violation_limit", 10))
     if violation_limit <= 0:
         violation_limit = None
 
     domain = get_domain(session_mgr)
-    if requested_backend == "graph":
-        triplestore_table = _graph_query_table(domain, settings).strip()
-    else:
-        triplestore_table = data.get("triplestore_table", "").strip()
-
-    if not triplestore_table:
-        raise ValidationError("Triple store table is not specified.")
+    triplestore_table = _dataquality_table(domain, settings)
     shapes = domain.shacl_shapes
     if shape_ids:
         shape_ids_set = set(shape_ids)
@@ -1670,22 +1665,47 @@ async def start_dataquality_checks(
         shapes = [s for s in shapes if s.get("category") in dimensions]
     shapes = [s for s in shapes if s.get("enabled", True)]
 
-    swrl_rules = domain.swrl_rules or []
     ontology_dict = getattr(domain, "ontology", None)
     if not isinstance(ontology_dict, dict):
         ontology_dict = (
             domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
         )
-    decision_tables = [
-        dt for dt in ontology_dict.get("decision_tables", []) if dt.get("enabled", True)
-    ]
-    aggregate_rules = [
-        r for r in ontology_dict.get("aggregate_rules", []) if r.get("enabled", True)
-    ]
+
+    # SWRL rules, decision tables and aggregate rules are selected the same way
+    # shapes are: by check id when the user picked individual rules, otherwise
+    # by the dimension their results are filed under.
+    selected_ids = set(shape_ids)
+
+    def _selected_rules(prefix: str, family: list) -> list:
+        if (
+            not selected_ids
+            and dimensions
+            and RULE_FAMILY_CATEGORIES[prefix] not in dimensions
+        ):
+            return []
+        selected = []
+        for index, rule in enumerate(family or []):
+            if not rule.get("enabled", True):
+                continue
+            check_id = rule_check_id(prefix, rule, index)
+            if selected_ids and check_id not in selected_ids:
+                continue
+            selected.append({**rule, "check_id": check_id})
+        return selected
+
+    swrl_rules = _selected_rules(SWRL_ID_PREFIX, domain.swrl_rules)
+    decision_tables = _selected_rules(
+        DECISION_TABLE_ID_PREFIX, ontology_dict.get("decision_tables", [])
+    )
+    aggregate_rules = _selected_rules(
+        AGGREGATE_ID_PREFIX, ontology_dict.get("aggregate_rules", [])
+    )
 
     if not shapes and not swrl_rules and not decision_tables and not aggregate_rules:
         raise ValidationError(
-            "No enabled shapes, SWRL rules, decision tables or aggregate rules to check."
+            "Nothing to check in the selected dimensions."
+            if dimensions or shape_ids
+            else "No enabled shapes, SWRL rules, decision tables or aggregate rules to check."
         )
 
     total = len(shapes) + len(swrl_rules) + len(decision_tables) + len(aggregate_rules)
@@ -1705,7 +1725,6 @@ async def start_dataquality_checks(
             domain_snap,
             shapes,
             triplestore_table,
-            requested_backend,
             total,
             swrl_rules=swrl_rules,
             ontology_dict=ontology_dict,

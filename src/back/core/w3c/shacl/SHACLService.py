@@ -6,9 +6,10 @@ are internal implementation details.
 """
 
 import hashlib
+import operator
 import re
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
@@ -18,10 +19,44 @@ from back.core.w3c.shacl.constants import (
     RDFS_LABEL,
     XSD_TO_SPARK_TYPE,
 )
+from back.core.w3c.shacl import ShapeConditions
 from back.core.w3c.shacl.SHACLGenerator import SHACLGenerator
 from back.core.w3c.shacl.SHACLParser import SHACLParser
 
 logger = get_logger(__name__)
+
+#: Value-range constraints, mapped to the comparison a conforming value passes.
+RANGE_OPS = {
+    "sh:minInclusive": ">=",
+    "sh:maxInclusive": "<=",
+    "sh:minExclusive": ">",
+    "sh:maxExclusive": "<",
+}
+
+#: String-length constraints, same convention.
+LENGTH_OPS = {"sh:minLength": ">=", "sh:maxLength": "<="}
+
+BOUND_COMPARATORS = {
+    ">=": operator.ge,
+    "<=": operator.le,
+    ">": operator.gt,
+    "<": operator.lt,
+}
+
+#: Constraint kinds :meth:`SHACLService.evaluate_shape_in_memory` can check.
+#: A shape outside this set is reported as not evaluated rather than passing —
+#: an engine that cannot run a rule must not vouch for the data.
+IN_MEMORY_TYPES = frozenset(
+    {"sh:minCount", "sh:maxCount", "sh:pattern", "sh:hasValue", "sh:class"}
+    | set(RANGE_OPS)
+    | set(LENGTH_OPS)
+)
+
+#: Parameters that select an in-memory check on their own, for shapes whose
+#: ``shacl_type`` names only the first of several constraints.
+IN_MEMORY_PARAMS = frozenset(
+    {"sh:minCount", "sh:maxCount"} | set(RANGE_OPS) | set(LENGTH_OPS)
+)
 
 
 class SHACLService:
@@ -54,6 +89,8 @@ class SHACLService:
         label: str = "",
         enabled: bool = True,
         shape_id: Optional[str] = None,
+        conditions: Optional[List[Dict]] = None,
+        condition_logic: str = "and",
     ) -> Dict:
         """Build a new shape dict (not yet persisted).
 
@@ -61,6 +98,9 @@ class SHACLService:
         which is correct for user-created shapes.  Callers that need a
         **deterministic** ID (e.g. legacy-constraint migration) should
         pass an explicit *shape_id*.
+
+        *conditions* guards the constraint: the shape then only applies to the
+        instances matching them.  See :mod:`back.core.w3c.shacl.ShapeConditions`.
         """
         cat = category if category in QUALITY_CATEGORIES else "conformance"
         safe_cls = re.sub(r"[^a-zA-Z0-9_]", "", target_class or "global")
@@ -84,6 +124,10 @@ class SHACLService:
             "severity": severity,
             "message": message,
             "enabled": enabled,
+            "conditions": conditions or [],
+            "condition_logic": (
+                condition_logic if condition_logic in ("and", "or") else "and"
+            ),
         }
 
     @staticmethod
@@ -148,6 +192,16 @@ class SHACLService:
     def import_shapes(self, turtle_content: str, fmt: str = "turtle") -> List[Dict]:
         """Parse SHACL Turtle and return shape dicts."""
         return self._parser.parse(turtle_content, format=fmt)
+
+    def import_shapes_with_report(
+        self, turtle_content: str, fmt: str = "turtle"
+    ) -> tuple:
+        """Parse SHACL Turtle, returning ``(shapes, report)``.
+
+        The report's ``conditions_dropped`` counts shapes whose guard could not
+        be reconstructed; see :meth:`SHACLParser.parse_with_report`.
+        """
+        return self._parser.parse_with_report(turtle_content, format=fmt)
 
     # ------------------------------------------------------------------
     # SHACL-AF Rule Inference (sh:rule)
@@ -1034,6 +1088,90 @@ class SHACLService:
         )
 
     @staticmethod
+    def _numeric_bounds(params: Dict) -> List[Tuple[str, float]]:
+        """The ``(operator, limit)`` pairs a value must satisfy, in a stable order."""
+        bounds: List[Tuple[str, float]] = []
+        for key, op in RANGE_OPS.items():
+            raw = params.get(key)
+            if raw is None or raw == "":
+                continue
+            try:
+                bounds.append((op, float(raw)))
+            except (TypeError, ValueError):
+                continue
+        return bounds
+
+    @staticmethod
+    def _length_bounds(params: Dict) -> List[Tuple[str, int]]:
+        bounds: List[Tuple[str, int]] = []
+        for key, op in LENGTH_OPS.items():
+            raw = params.get(key)
+            if raw is None or raw == "":
+                continue
+            try:
+                bounds.append((op, int(raw)))
+            except (TypeError, ValueError):
+                continue
+        return bounds
+
+    @staticmethod
+    def _sql_bounded(
+        table: str,
+        cls_uri: str,
+        prop_uri: str,
+        bounds: Sequence[Tuple[str, float]],
+        measure: str,
+        rdf_type: str,
+        esc,
+    ) -> Optional[str]:
+        """Find values whose *measure* falls outside *bounds*.
+
+        A value that cannot be measured — an unparseable number for a range
+        check — violates the constraint, which is what SHACL reports for a
+        non-comparable value node.
+        """
+        if not bounds or not cls_uri or not prop_uri:
+            return None
+        satisfied = " AND ".join(f"{measure} {op} {limit}" for op, limit in bounds)
+        return (
+            f"SELECT t1.subject AS s, t2.object AS val\n"
+            f"FROM {table} t1\n"
+            f"JOIN {table} t2 ON t1.subject = t2.subject AND t2.predicate = '{esc(prop_uri)}'\n"
+            f"WHERE t1.predicate = '{rdf_type}' AND t1.object = '{esc(cls_uri)}'\n"
+            f"  AND NOT ({measure} IS NOT NULL AND {satisfied})"
+        )
+
+    @staticmethod
+    def _mem_bounded(
+        cls_uri: str,
+        prop_uri: str,
+        bounds: Sequence[Tuple[str, float]],
+        measure: Callable[[str], Optional[float]],
+        _class_instances,
+        subj_by_pred: Dict[str, Dict[str, List[str]]],
+    ) -> List[Dict[str, str]]:
+        """In-memory counterpart of :meth:`_sql_bounded`."""
+        if not bounds or not cls_uri or not prop_uri:
+            return []
+        prop_vals = subj_by_pred.get(prop_uri, {})
+        violations = []
+        for s in _class_instances(cls_uri):
+            for val in prop_vals.get(s, []):
+                measured = measure(val)
+                if measured is None or not all(
+                    BOUND_COMPARATORS[op](measured, limit) for op, limit in bounds
+                ):
+                    violations.append({"s": s, "val": val})
+        return violations
+
+    @staticmethod
+    def _as_number(value: str) -> Optional[float]:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
     def _sql_datatype(
         table: str,
         cls_uri: str,
@@ -1124,9 +1262,35 @@ class SHACLService:
         The SQL checks against a triple store table with columns
         ``(subject, predicate, object)``.
 
+        A shape carrying conditions keeps its constraint query unchanged and
+        has it restricted to the subjects matching the guard.
+
         Returns:
             SQL string, or ``None`` if the shape cannot be translated.
         """
+        base_sql = SHACLService._base_shape_sql(shape, table)
+        if not base_sql:
+            return None
+
+        conditions = ShapeConditions.get_conditions(shape)
+        if not conditions:
+            return base_sql
+
+        condition_sql = ShapeConditions.subject_sql(
+            conditions,
+            ShapeConditions.get_logic(shape),
+            shape.get("target_class_uri", ""),
+            table,
+            lambda v: v.replace("'", "''"),
+            SHACLService._normalize_prop_uri,
+        )
+        if not condition_sql:
+            return base_sql
+        return ShapeConditions.wrap_sql(base_sql, condition_sql)
+
+    @staticmethod
+    def _base_shape_sql(shape: Dict, table: str) -> Optional[str]:
+        """Translate the constraint half of a shape, ignoring its conditions."""
         shacl_type = shape.get("shacl_type", "")
         params = shape.get("parameters", {})
         cls_uri = shape.get("target_class_uri", "")
@@ -1152,6 +1316,28 @@ class SHACLService:
                 f"JOIN {table} t2 ON t1.subject = t2.subject AND t2.predicate = '{esc(prop_uri)}'\n"
                 f"WHERE t1.predicate = '{RDF_TYPE}' AND t1.object = '{esc(cls_uri)}'\n"
                 f"  AND NOT t2.object RLIKE '{esc(pattern)}'"
+            )
+
+        if shacl_type in RANGE_OPS or any(k in params for k in RANGE_OPS):
+            return SHACLService._sql_bounded(
+                table,
+                cls_uri,
+                prop_uri,
+                SHACLService._numeric_bounds(params),
+                "TRY_CAST(t2.object AS DOUBLE)",
+                RDF_TYPE,
+                esc,
+            )
+
+        if shacl_type in LENGTH_OPS or any(k in params for k in LENGTH_OPS):
+            return SHACLService._sql_bounded(
+                table,
+                cls_uri,
+                prop_uri,
+                SHACLService._length_bounds(params),
+                "LENGTH(t2.object)",
+                RDF_TYPE,
+                esc,
             )
 
         if shacl_type == "sh:hasValue":
@@ -1195,6 +1381,19 @@ class SHACLService:
         return None
 
     @staticmethod
+    def supports_in_memory(shape: Dict) -> bool:
+        """Whether :meth:`evaluate_shape_in_memory` can check *shape*.
+
+        An unsupported shape yields no violations, which is indistinguishable
+        from a clean result — callers must ask first and report the check as
+        not run.
+        """
+        if shape.get("shacl_type", "") in IN_MEMORY_TYPES:
+            return True
+        params = shape.get("parameters", {}) or {}
+        return any(key in params for key in IN_MEMORY_PARAMS)
+
+    @staticmethod
     def evaluate_shape_in_memory(
         shape: Dict,
         triples: List[Dict[str, str]],
@@ -1203,12 +1402,10 @@ class SHACLService:
 
         Each triple is ``{"subject": ..., "predicate": ..., "object": ...}``.
         Returns a list of violation dicts (empty if no violations).
-        """
-        shacl_type = shape.get("shacl_type", "")
-        params = shape.get("parameters", {})
-        cls_uri = shape.get("target_class_uri", "")
-        prop_uri = shape.get("property_uri", "")
 
+        A shape carrying conditions is evaluated exactly as an unconditional
+        one, then its violations are filtered down to the guarded subjects.
+        """
         subj_by_pred: Dict[str, Dict[str, List[str]]] = {}
         type_map: Dict[str, set] = {}
         for t in triples:
@@ -1219,12 +1416,43 @@ class SHACLService:
             if p == RDF_TYPE:
                 type_map.setdefault(s, set()).add(o)
 
-        # Resolve property URI against actual predicates in the graph
-        # (handles #/slash mismatch between ontology and triplestore)
-        prop_uri = SHACLService.resolve_prop_uri(prop_uri, set(subj_by_pred.keys()))
-
         def _class_instances(c_uri: str) -> set:
             return {s for s, types in type_map.items() if c_uri in types}
+
+        violations = SHACLService._base_shape_violations(
+            shape, subj_by_pred, _class_instances
+        )
+
+        conditions = ShapeConditions.get_conditions(shape)
+        if not violations or not conditions:
+            return violations
+
+        predicates = set(subj_by_pred.keys())
+        guarded = ShapeConditions.matching_subjects(
+            conditions,
+            ShapeConditions.get_logic(shape),
+            {v.get("s", "") for v in violations},
+            subj_by_pred,
+            lambda u: SHACLService.resolve_prop_uri(u, predicates),
+        )
+        return [v for v in violations if v.get("s") in guarded]
+
+    @staticmethod
+    def _base_shape_violations(
+        shape: Dict,
+        subj_by_pred: Dict[str, Dict[str, List[str]]],
+        _class_instances,
+    ) -> List[Dict[str, str]]:
+        """Evaluate the constraint half of a shape against indexed triples."""
+        shacl_type = shape.get("shacl_type", "")
+        params = shape.get("parameters", {})
+        cls_uri = shape.get("target_class_uri", "")
+
+        # Resolve property URI against actual predicates in the graph
+        # (handles #/slash mismatch between ontology and triplestore)
+        prop_uri = SHACLService.resolve_prop_uri(
+            shape.get("property_uri", ""), set(subj_by_pred.keys())
+        )
 
         if shacl_type in ("sh:minCount", "sh:maxCount") or (
             "sh:minCount" in params or "sh:maxCount" in params
@@ -1253,6 +1481,26 @@ class SHACLService:
                     if not regex.search(val):
                         violations.append({"s": s, "val": val})
             return violations
+
+        if shacl_type in RANGE_OPS or any(k in params for k in RANGE_OPS):
+            return SHACLService._mem_bounded(
+                cls_uri,
+                prop_uri,
+                SHACLService._numeric_bounds(params),
+                SHACLService._as_number,
+                _class_instances,
+                subj_by_pred,
+            )
+
+        if shacl_type in LENGTH_OPS or any(k in params for k in LENGTH_OPS):
+            return SHACLService._mem_bounded(
+                cls_uri,
+                prop_uri,
+                SHACLService._length_bounds(params),
+                len,
+                _class_instances,
+                subj_by_pred,
+            )
 
         if shacl_type == "sh:hasValue":
             expected = str(params.get("sh:hasValue", ""))

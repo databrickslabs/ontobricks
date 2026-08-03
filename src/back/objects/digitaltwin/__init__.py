@@ -24,7 +24,6 @@ __all__ = [
     "is_owlrl_available",
     "run_build_task",
     "run_data_quality_task",
-    "run_graph_checks",
     "run_inference_task",
     "run_sql_checks",
     "set_ts_cache",
@@ -80,10 +79,6 @@ def run_build_task(*a, **kw):
 
 def run_data_quality_task(*a, **kw):
     return DigitalTwin.run_data_quality_task(*a, **kw)
-
-
-def run_graph_checks(*a, **kw):
-    return DigitalTwin.run_graph_checks(*a, **kw)
 
 
 def run_inference_task(*a, **kw):

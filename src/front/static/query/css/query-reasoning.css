@@ -163,3 +163,9 @@
     cursor: pointer;
     color: var(--bs-body-color);
 }
+
+.dq-rule-item .dq-rule-family {
+    flex-shrink: 0;
+    font-size: .6rem;
+    padding: .1rem .3rem;
+}

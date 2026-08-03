@@ -205,18 +205,28 @@ Click **Data Quality** in the sidebar to define data quality rules using W3C SHA
 | **Cardinality** | Correct number of values | `sh:maxCount 3` — at most 3 phone numbers |
 | **Uniqueness** | Values are unique | `sh:hasValue` — specific value required |
 | **Consistency** | Type-correct references | `sh:class` — target must be of correct type |
-| **Conformance** | Format compliance | `sh:pattern` — email must match regex |
+| **Conformance** | Format compliance | `sh:pattern` — email must match regex; `sh:minInclusive` / `sh:maxInclusive` — monthly fee between 1 and 10; `sh:minLength` / `sh:maxLength` — code is 3 to 8 characters |
 | **Structural** | Graph structure rules | `sh:closed` — no unexpected properties |
 
 3. Select the **Target Class** and **Property** to constrain
 4. Choose the **SHACL Constraint Type** (minCount, maxCount, pattern, datatype, class, hasValue, etc.)
 5. Configure constraint-specific parameters
-6. Set **Severity** (Violation, Warning, Info) and an optional **Message**
-7. Click **Save**
+6. Optionally add **conditions** (conformance and consistency rules only) — see below
+7. Set **Severity** (Violation, Warning, Info) and an optional **Message**
+8. Click **Save**
 
-**Import/Export**: Shapes can be exported as W3C-compliant SHACL Turtle and imported from existing SHACL files.
+**Conditional rules (the IF block)**: a conformance or consistency rule can be
+guarded so it only applies to the instances matching a set of conditions —
+*IF `status` = active AND `amount` > 1000, THEN `email` must match the pattern*.
+Each condition is a property, an operator and a value, built the same way as a
+decision-table condition in Business Rules. The **All / Any** toggle combines
+the rows with AND or OR. Conditions may reference any attribute of the target
+entity, or a relationship with the `exists` / `does not exist` operators. A rule
+with no conditions applies to every instance, exactly as before.
 
-**Validation**: Shapes are executed against the triple store in the Knowledge Graph → Data Quality section, either via SQL compilation or PySHACL in-memory validation.
+**Import/Export**: Shapes can be exported as W3C-compliant SHACL Turtle and imported from existing SHACL files. A guarded rule is exported as its own node shape with a SHACL-AF `sh:target [ a sh:SPARQLTarget ]`. Conditions are not reconstructed on import: the constraint comes back unguarded and the import result reports how many rules lost their conditions.
+
+**Validation**: Shapes are executed in the Knowledge Graph → Data Quality section. Every check is compiled to SQL and run against the triple-store VIEW, which the build creates whatever graph engine the domain uses, so a rule gives the same answer on Lakebase, Delta and Neo4j domains. The VIEW carries the triples mapped from your source tables; triples added by reasoning live in the graph store and are deliberately outside the scope of data quality. A numeric-range rule also reports a value that is not a number at all, since SHACL treats a value it cannot compare as a violation. A rule that cannot be compiled to SQL is listed with an info icon and no pass rate rather than counted as passing.
 
 ### Dashboard Mapping
 
@@ -1456,7 +1466,7 @@ Define fine-grained rules using the W3C SHACL standard (Ontology > Data Quality 
 | **sh:class** | Object must be of a specific type |
 | **sh:sparql** | Custom SPARQL-based rules (e.g., no orphans, unique IDs) |
 
-SHACL shapes are compiled to **Spark SQL** for Delta execution and to **Postgres SQL** for the Lakebase Graph DB. Results show violations, pass rates, and per-entity details.
+SHACL shapes are compiled to **Spark SQL** and executed on the SQL warehouse against the triple-store VIEW, whatever graph engine the domain uses. Results show violations, pass rates, and per-entity details.
 
 1. Click **Run All Checks** to execute all applicable checks, or run individual checks.
 

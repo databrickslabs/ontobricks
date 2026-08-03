@@ -117,7 +117,7 @@ Explore your graph viewer — search, filter, and navigate entities and relation
 - **🗺️ Ontology Designer Viewer**: Read-only D3.js ontology model accessible from Graph Viewer and GraphQL sections — frozen force-directed graph with pan/zoom in a fullscreen modal
 - **📊 Dashboard Integration**: Embed Databricks dashboards with parameter mapping to entities
 - **✅ Async Quality Checks**: Validate data against ontology constraints with background processing and progress tracking
-- **📏 SHACL Data Quality**: Run SHACL-based validation against the triple store — shapes defined in the ontology are compiled to SQL for execution, with violation reporting and PySHACL in-memory validation support
+- **📏 SHACL Data Quality**: Run SHACL-based validation against the triple store — shapes defined in the ontology are compiled to SQL and executed against the triple-store VIEW, with violation reporting and pass rates
 - **📖 API Documentation**: Built-in REST API reference and schema introspection (SDL) for external integrations
 - **🕒 Last Updated Timestamp**: Triple store status shows the last modification date from Unity Catalog metadata
 

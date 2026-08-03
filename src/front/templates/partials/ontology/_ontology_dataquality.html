@@ -155,6 +155,33 @@
                     </select>
                 </div>
 
+                <!-- Optional guard: the rule only applies to matching instances -->
+                <div class="mb-3" id="dqConditionBlock" style="display:none">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="form-label fw-bold mb-0">
+                            IF <span class="text-muted fw-normal small">(optional)</span>
+                        </label>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check" name="dqCondLogic" id="dqCondLogicAnd"
+                                       value="and" checked onchange="DataQualityModule.onConditionLogicChange()">
+                                <label class="btn btn-outline-secondary" for="dqCondLogicAnd">All</label>
+                                <input type="radio" class="btn-check" name="dqCondLogic" id="dqCondLogicOr"
+                                       value="or" onchange="DataQualityModule.onConditionLogicChange()">
+                                <label class="btn btn-outline-secondary" for="dqCondLogicOr">Any</label>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    onclick="DataQualityModule.addCondition()">
+                                <i class="bi bi-plus-lg me-1"></i>Add condition
+                            </button>
+                        </div>
+                    </div>
+                    <div id="dqConditionRows"></div>
+                    <div class="form-text text-muted small" id="dqConditionHint">
+                        Without conditions the rule applies to every instance of the target entity.
+                    </div>
+                </div>
+
                 <!-- Dynamic constraint fields (populated by JS based on category) -->
                 <div id="dqConstraintFields"></div>
 

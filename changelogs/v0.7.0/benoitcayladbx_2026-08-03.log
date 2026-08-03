@@ -1,0 +1,515 @@
+# Conditional SHACL data quality rules (IF guard)
+
+Context: Data Quality rules applied to every instance of their target entity.
+There was no way to say "this constraint only applies when another attribute
+holds a given value" — the only `sh:condition` in the codebase sat on SHACL-AF
+inference rules, not on validation. Conformance and consistency rules can now
+carry an optional list of conditions, built the way decision-table conditions
+are built in Business Rules. Design: `docs/superpowers/specs/2026-08-03-conditional-shacl-rules-design.md`.
+
+Changes:
+
+1. `src/back/core/w3c/shacl/ShapeConditions.py`
+   New module owning the guard: shape-dict accessors, validation, the SQL
+   subject filter, the in-memory subject filter, and the `sh:SPARQLTarget`
+   query. Reuses the decision-table operator maps (`DT_OP_SQL`,
+   `DT_STRING_OPS`, `DT_NUMERIC_OPS`) plus `exists` / `notExists`, so the two
+   rule builders share one operator vocabulary instead of inventing a third.
+2. `src/back/core/w3c/shacl/SHACLService.py`
+   `shape_to_sql()` extracted into `_base_shape_sql()` and now wraps the
+   constraint query in `SELECT v.* FROM (...) v WHERE v.s IN (<guard>)`.
+   Attribute conditions use `LEFT JOIN` so `or` logic cannot drop subjects
+   missing one property; `exists` / `notExists` compile to `EXISTS` subqueries.
+3. `src/back/core/w3c/shacl/SHACLService.py`
+   `evaluate_shape_in_memory()` extracted into `_base_shape_violations()` and
+   now filters its violations down to the guarded subjects. `create_shape()`
+   persists `conditions` / `condition_logic`; `import_shapes_with_report()`
+   added.
+4. `src/back/core/w3c/shacl/SHACLGenerator.py`
+   `_add_conditional_shape()` emits a guarded shape as its own node shape with
+   a `sh:target [ a sh:SPARQLTarget ]`, since its focus nodes are a subset of
+   the class. Unconditional shapes are still grouped one node shape per class.
+   The query uses full IRIs — prefixes inside a `sh:select` resolve from
+   `sh:prefixes`, not from the enclosing document.
+5. `src/back/core/w3c/shacl/SHACLParser.py`
+   `parse_with_report()` counts shapes arriving with a SPARQL target and
+   recovers their target class from the query, so an imported conditional rule
+   keeps a usable constraint instead of landing without a target. Conditions
+   themselves are not reconstructed.
+6. `src/back/objects/ontology/Ontology.py`
+   `validate_shape()` rejects conditions on unsupported dimensions, on a shape
+   with no target entity, with an unknown operator, with no property, or with
+   an empty value on a comparison operator.
+7. `src/api/routers/internal/ontology.py`
+   The save route forwards `conditions` / `condition_logic`; the import route
+   reports how many shapes lost their conditions and now apply to every
+   instance.
+8. `src/front/static/ontology/js/ontology-conditions.js`
+   New `ConditionRowsModule`: reusable property/operator/value rows with
+   `render` / `collect` / `addRow` / `summarize`. Rows live in the DOM, wired by
+   delegation. Selecting a relationship narrows the operators to
+   `exists` / `notExists` and hides the value input.
+9. `src/front/static/ontology/js/ontology-dataquality.js`
+   IF block rendered for conformance and consistency only; conditions collected
+   on save, restored on edit, summarised on the rule card and in the
+   auto-generated message, and previewed as the `sh:SPARQLTarget` the backend
+   will emit. `_localName()` / `_isObjectProperty()` extracted so the condition
+   property list and `_populatePropertySelect()` share one implementation.
+10. `src/front/templates/partials/ontology/_ontology_dataquality.html`
+    `#dqConditionBlock` with an All/Any logic toggle, a rows container and an
+    "Add condition" button, between the property select and the constraint
+    fields.
+11. `src/front/templates/ontology.html`
+    Loads `ontology-conditions.js` before `ontology-dataquality.js`.
+12. `tests/units/ontology/test_dataquality.py`
+    Conditional SQL (wrapping, numeric cast, `NOT EXISTS`, `or` + `LEFT JOIN`,
+    unconditional regression), in-memory filtering (and/or, exists/notExists,
+    incomplete rows ignored), and the `validate_shape` rejection cases.
+13. `tests/back/core/w3c/shacl/test_shacl_generator.py`
+    SPARQL target emission, constraint preserved, no `sh:targetClass` on a
+    guarded shape, plain shapes still grouped, and the import drop report.
+14. `tests/units/front/test_dq_condition_builder.py`
+    Source contracts for the shared builder: exposed API, operator vocabulary,
+    hidden value input, relationship operator narrowing, DOM-aligned collect,
+    dimension restriction, and script load order.
+
+Modified files:
+- `src/back/core/w3c/shacl/ShapeConditions.py` (new)
+- `src/back/core/w3c/shacl/SHACLService.py`
+- `src/back/core/w3c/shacl/SHACLGenerator.py`
+- `src/back/core/w3c/shacl/SHACLParser.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/api/routers/internal/ontology.py`
+- `src/front/static/ontology/js/ontology-conditions.js` (new)
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `src/front/templates/partials/ontology/_ontology_dataquality.html`
+- `src/front/templates/ontology.html`
+- `tests/units/ontology/test_dataquality.py`
+- `tests/back/core/w3c/shacl/test_shacl_generator.py`
+- `tests/units/front/test_dq_condition_builder.py` (new)
+- `docs/superpowers/specs/2026-08-03-conditional-shacl-rules-design.md` (new)
+- `docs/features.md`
+- `docs/user-guide.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3887 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.52s
+
+## Restrict Data Quality rule properties to the selected entity
+
+Context: In the Add Data Quality Rule popup the property dropdown offered
+properties that do not belong to the selected entity. Two causes: the filter
+kept every property whose `domain` was empty (`dom === clsLower || !dom`), so
+un-owned properties appeared under every entity; and it compared `domain` to the
+class name only, so a property whose `domain` holds a full URI — which agent and
+manual ingestion paths produce — never matched its real owner. Inherited
+attributes were also missing outside the attribute-only dimensions. The same
+leak affected the new condition rows.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-dataquality.js`
+   Add `_classChain()`, `_classOwnsProperty()` and `_propertiesForClass()`. A
+   property is owned when its `domain` matches the entity name, its local name,
+   or its URI, walking the parent chain for inherited properties. A property
+   with no `domain` belongs to no entity and is no longer offered.
+2. `src/front/static/ontology/js/ontology-dataquality.js`
+   `_populatePropertySelect()` now filters the resolved list by dimension
+   (relationships for cardinality, attributes for completeness / conformance /
+   uniqueness, both otherwise) instead of scanning `ontologyProperties` inline;
+   the per-call dedupe and class lookup it repeated are gone. A cardinality rule
+   on an entity with no relationship shows a disabled hint rather than an empty
+   list.
+3. `src/front/static/ontology/js/ontology-dataquality.js`
+   `_conditionProperties()` delegates to the same resolver, so the IF rows and
+   the property select always agree; `_selectedClassName()` extracted. The IF
+   hint says when the entity declares no property to build a condition on.
+4. `tests/units/front/test_dq_property_scope.py`
+   New source contracts: domain-less properties are unowned, URI domains
+   resolve, inheritance is walked, both selects share the resolver, and the
+   `|| !dom` filter does not come back.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `tests/units/front/test_dq_property_scope.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3893 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.64s
+
+## Fix empty attribute dropdown for entities without materialised dataProperties
+
+Context: After scoping the Data Quality properties to the selected entity, the
+attribute dropdowns listed attributes for `Customer` but were empty for other
+entities. `Customer` carries its attributes in `class.dataProperties`, which the
+resolver always classifies as attributes. Every other entity relies on the
+top-level `ontology.properties` list, and there `_isObjectProperty()` fell back
+to *relationship* whenever a property declared neither `type` nor `range` —
+exactly the shape the entity panel writes. The attributes-only dimensions then
+filtered all of them out. `ontology-swrl.js` already used the opposite default,
+which is why the SWRL editor listed those attributes correctly.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-dataquality.js`
+   Invert the fallback in `_isObjectProperty()`: a property is a relationship
+   only on positive evidence — an explicit `ObjectProperty` type, or a `range`
+   naming a known entity. A property with no type and no range is an attribute.
+2. `src/front/static/ontology/js/ontology-dataquality.js`
+   Add `_isKnownClassName()`, matching a range against entity names, URIs and
+   URI local names, so an untyped relationship whose range points at an entity
+   stays out of the attribute list.
+3. `src/front/static/ontology/js/ontology-dataquality.js`
+   `_populatePropertySelect()` shows the disabled "No <kind> declared on
+   <Entity>" hint for every dimension, not just cardinality, so a genuinely
+   empty entity is legible instead of silent.
+4. `tests/units/front/test_dq_property_scope.py`
+   Contracts for the new classification: an untyped property is an attribute, a
+   range naming an entity is a relationship, and relationship is no longer the
+   fallback.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `tests/units/front/test_dq_property_scope.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3895 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.53s
+
+## Behavioural test coverage for the Data Quality rule checks
+
+Context: The Data Quality frontend was covered only by source-contract tests
+that grep the JavaScript. That style pins the shape of the code but cannot run
+it, which is why the `_isObjectProperty()` misclassification shipped unnoticed.
+The condition translators in `ShapeConditions` were likewise only reached
+indirectly, through `SHACLService`, leaving the operator vocabulary, the value
+quoting and the SPARQL target untested.
+
+Changes:
+
+1. `tests/units/front/test_dq_property_resolver.py`
+   New module that executes `ontology-dataquality.js` under node against a
+   fixture ontology mixing every ingestion shape: attributes materialised in
+   `dataProperties`, attributes known only as top-level properties (with a name
+   domain and with a URI domain), a typed relationship, an untyped relationship
+   recognisable only by its range, a domain-less property, an entity declaring
+   nothing, and a parent cycle. Covers `_propertiesForClass`, `_isObjectProperty`
+   and the rendered `_populatePropertySelect` options per quality dimension.
+   Skipped when node is unavailable. Reverting the classifier fails 9 of them.
+2. `tests/units/ontology/test_shape_conditions.py`
+   New module unit-testing `ShapeConditions` directly: the shared decision-table
+   operator vocabulary, `get_conditions` dropping unusable rows, every SQL
+   operator including string case folding and quote escaping, LEFT JOIN and
+   existence subquery forms, the in-memory matcher (multi-valued properties,
+   non-numeric objects under a numeric comparison, and/or logic), and the SPARQL
+   target (full IRIs, OPTIONAL under `or`, BIND(EXISTS) under `or`, escaping).
+   A cross-check asserts all three back ends can translate every operator.
+3. `tests/units/ontology/test_dataquality.py`
+   Add `TestConditionPersistence`: a shape is unconditional by default, an
+   unknown logic falls back to `and`, and clearing conditions through
+   `update_shape` restores the unwrapped query.
+
+Modified files:
+- `tests/units/front/test_dq_property_resolver.py`
+- `tests/units/ontology/test_shape_conditions.py`
+- `tests/units/ontology/test_dataquality.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4023 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.13s
+
+## Execute numeric-range and string-length conformance rules
+
+Context: A conformance rule such as "Monthly fee between 1 and 10" ran with a
+warning icon and a green 100% pass rate. The modal offers **Numeric range** and
+**String length** under conformance, and `SHACLGenerator` exports both to
+Turtle, but neither execution engine could translate them: `_base_shape_sql`
+returned `None` ("Cannot translate to SQL", the warning icon) and
+`_base_shape_violations` returned an empty list. The results table then read
+zero violations as a perfect score, so a rule that never ran vouched for the
+data. Any check the engine cannot run had the same problem.
+
+Changes:
+
+1. `src/back/core/w3c/shacl/SHACLService.py`
+   Add `RANGE_OPS` / `LENGTH_OPS` mapping each bound to the comparison a
+   conforming value passes, and translate both with one pair of helpers:
+   `_sql_bounded()` (`TRY_CAST(... AS DOUBLE)` for a range, `LENGTH()` for a
+   length) and `_mem_bounded()`. `sh:minExclusive` / `sh:maxExclusive` are
+   covered too, since the parser can produce them. A value that cannot be
+   measured — a non-numeric value under a range — is a violation, matching what
+   SHACL reports for a non-comparable value node.
+2. `src/back/core/w3c/shacl/SHACLService.py`
+   Dispatch on the bound parameters as well as on `shacl_type`, because an
+   imported shape takes its type from whichever constraint the parser reads
+   first (a `sh:maxInclusive`-only shape is typed `sh:maxInclusive`).
+3. `src/back/core/w3c/shacl/SHACLService.py`
+   Add `supports_in_memory()` and the `IN_MEMORY_TYPES` / `IN_MEMORY_PARAMS`
+   sets behind it: an unsupported shape yields no violations, which the caller
+   cannot tell from a clean result unless it asks first.
+4. `src/back/objects/digitaltwin/DigitalTwin.py`
+   `run_graph_checks()` reports a shape the graph engine cannot evaluate as
+   `info` / "Cannot evaluate on the graph", mirroring what the SQL runner
+   already did for an untranslatable shape.
+5. `src/front/static/query/js/query-dataquality.js`
+   `_renderResultRow()` only infers a 100% pass rate for a check that actually
+   ran (`success` or `error`). A check with `info` or `warning` status shows a
+   muted dash and a "This check did not run" tooltip.
+6. `tests/units/ontology/test_dataquality.py`
+   Add `TestNumericRange`, `TestStringLength` and `TestInMemorySupport`:
+   inclusive and exclusive bounds, a single bound, non-numeric values, the
+   bound values themselves, a range rule combined with an IF guard, and the
+   advertised in-memory set matching what the dispatcher handles.
+7. `tests/units/front/test_dq_result_row.py`
+   New node-executed module asserting a non-executed check never renders a
+   percentage, and that a check that ran still does.
+8. `docs/user-guide.md`
+   Document the range and length constraint types, the non-comparable-value
+   rule, and the fact that an unexecutable check reports no pass rate.
+
+Modified files:
+- `src/back/core/w3c/shacl/SHACLService.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/ontology/test_dataquality.py`
+- `tests/units/front/test_dq_result_row.py`
+- `docs/user-guide.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4075 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.38s
+
+## Honour the selected dimensions for SWRL, decision table and aggregate rules
+
+Context: Running the data quality checks with only **Conformance** ticked still
+executed every SWRL rule, whose results are filed under Structural. SHACL
+shapes have a checkbox each and were filtered correctly, but SWRL rules,
+decision tables and aggregate rules have no checkbox of their own — the route
+collected all of them unconditionally. The frontend made it worse: as soon as a
+domain had any shape it sent `shape_ids` *instead of* `dimensions`, so the
+backend had no selection left to apply to those three families.
+
+Changes:
+
+1. `src/back/core/w3c/shacl/constants.py`
+   Add `SWRL_CATEGORY` and `BUSINESS_RULE_CATEGORY`, naming the dimension each
+   non-SHACL rule family reports under, instead of leaving it implicit in the
+   result dicts the runner builds.
+2. `src/api/routers/internal/dtwin.py`
+   `start_dataquality_checks()` gates the three families on the selected
+   dimensions: SWRL rules need `structural`, decision tables and aggregate
+   rules need `conformance`. A request naming no dimension still runs
+   everything, so external API callers are unaffected.
+3. `src/api/routers/internal/dtwin.py`
+   A selection matching nothing now reports "Nothing to check in the selected
+   dimensions." rather than claiming the domain has no rules at all.
+4. `src/front/static/query/js/query-dataquality.js`
+   `runAllChecks()` always sends `dimensions`, adding `shape_ids` when
+   individual rules are picked, and only refuses to run when both are empty —
+   a dimension holding just SWRL rules can now run on its own.
+5. `tests/units/api/test_dq_run_selection.py`
+   New module driving the route with a stubbed domain and task manager:
+   Conformance excludes the SWRL rules but keeps the business rules, Structural
+   does the reverse, named rules still honour the dimensions, and no selection
+   runs everything. Reverting the gate fails 5 of them.
+6. `tests/units/front/test_dq_run_payload.py`
+   New node-executed module asserting the request carries the dimensions
+   alongside the rule ids.
+
+Modified files:
+- `src/back/core/w3c/shacl/constants.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/api/test_dq_run_selection.py`
+- `tests/units/front/test_dq_run_payload.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4090 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.39s
+
+================================================================================
+Data quality runs on one execution target
+================================================================================
+
+Context:
+The Data Quality page let the user pick between a "Triple-Store" and a "Graph"
+backend. That stopped being an engine choice once the product grew several
+graph engines: the two buttons opened different stores over *different data*.
+"Triple-Store" ran SQL on the Delta VIEW (the triples mapped from the source
+tables), while "Graph" loaded the domain's graph — base plus anything reasoning
+had inferred — into the app process and evaluated the shapes in Python. The
+same rule could therefore return different counts depending on the button, and
+nothing in the UI said so.
+
+The two paths were not equivalent either. The in-memory one could not evaluate
+`sh:datatype` or `sh:sparql` at all, and it was the default. On a Neo4j domain
+it also could not run SWRL rules, decision tables or aggregate rules, because
+those are still pushed as SQL through `execute_query`, which Neo4j refuses.
+And it held every triple in RAM for the duration of the run.
+
+The triple-store VIEW is created by every build whatever graph engine the
+domain uses, so it is the one target every domain has. Checks now always
+compile to SQL and run against it.
+
+Changes:
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   `run_data_quality_task()` drops its `requested_backend` parameter and always
+   opens the `view` store to run `run_sql_checks`.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Removed `run_graph_checks()` and the three rule-family helpers it drove
+   (`_run_swrl_graph_checks`, `_run_dt_graph_checks`, `_run_agg_graph_checks`),
+   plus `_count_class_population_graph` — 537 lines that existed only to serve
+   the removed branch.
+3. `src/api/routers/internal/dtwin.py`
+   New `_dataquality_table()` resolves the VIEW server-side and rejects an
+   unbuilt domain with "Build the Knowledge Graph first." Both
+   `start_dataquality_checks` and `execute_dataquality_check` use it and no
+   longer read `backend` or a client-supplied `triplestore_table`.
+4. `src/api/routers/digitaltwin.py`
+   The public `DataQualityRequest.backend` field is marked deprecated and
+   ignored rather than removed, so existing API clients keep working.
+5. `src/back/objects/digitaltwin/__init__.py`, `src/back/core/reasoning/SWRLEngine.py`
+   Dropped the `run_graph_checks` re-export and the docstring pointing at it.
+6. `src/front/templates/partials/dtwin/_query_dataquality.html`
+   The backend button group is replaced by the resolved table name and a hint
+   that reasoning output is out of scope.
+7. `src/front/static/query/js/query-dataquality.js`
+   Removed `_initBackendToggle` and `_getSelectedBackend`; the request no
+   longer names a backend or a table.
+8. `tests/units/api/test_dq_run_selection.py`
+   New `TestExecutionTarget`: the VIEW is the target, a client-supplied table
+   or backend is ignored, and an unbuilt domain is rejected.
+9. `tests/units/front/test_dq_run_payload.py`
+   New `TestExecutionTarget`: the request carries neither `backend` nor
+   `triplestore_table`, and a domain with a graph but no VIEW cannot run.
+10. `docs/user-guide.md`, `docs/features.md`, `docs/INFO.md`
+   Describe the single execution path. Also corrected the claim that the
+   product validates via PySHACL — it has no production caller; execution has
+   always been the hand-rolled SQL translator.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/digitaltwin/__init__.py`
+- `src/back/core/reasoning/SWRLEngine.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/api/routers/digitaltwin.py`
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/api/test_dq_run_selection.py`
+- `tests/units/front/test_dq_run_payload.py`
+- `tests/units/ontology/test_dataquality.py`
+- `docs/user-guide.md`
+- `docs/features.md`
+- `docs/INFO.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4093 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.69s
+
+--------------------------------------------------------------------------------
+Follow-up: the Data Quality pane states its scope
+--------------------------------------------------------------------------------
+
+Context:
+Removing the backend toggle left the execution target as a bare table name with
+the scope hidden in a tooltip. Which triples a run covers is the first thing a
+reader needs, so it is now on the page.
+
+Changes:
+1. `src/front/templates/partials/dtwin/_query_dataquality.html`
+   The target line becomes a "Source data" panel following the build pane's
+   `alert alert-light border` pattern: the view name in monospace, then a note
+   that rules compile to SQL against the triples mapped from the source tables
+   and that triples produced by reasoning are not checked.
+
+Modified files:
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4093 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 29.37s
+
+================================================================================
+Fix: a run covers the rules that were picked, and only those
+================================================================================
+
+Context:
+Choosing a few rules still ran everything. SHACL shapes have a checkbox each,
+but SWRL rules, decision tables and aggregate rules did not: they had no id to
+be addressed by, so a run pulled them in whole whenever their dimension was
+selected. A dimension counts as selected while it is checked *or*
+indeterminate, so unticking all but one Conformance rule left Conformance
+indeterminate and ran every decision table and aggregate rule, while Structural
+stayed checked and ran every SWRL rule.
+
+They are now selected exactly as shapes are, by the same check id the run
+already reports them under (`swrl:<name>`, `dt:<name>`, `agg:<name>`).
+
+Changes:
+1. `src/back/core/w3c/shacl/constants.py`
+   Added the family id prefixes, `RULE_FAMILY_CATEGORIES` and `rule_check_id()`
+   so the list endpoint, the run selection and the reported result derive the
+   id in one place — if they disagree a rule silently cannot be picked.
+2. `src/api/routers/internal/ontology.py`
+   `/ontology/dataquality/list` gains a `rules` key holding the three families
+   as selectable entries. `shapes` is left untouched because the ontology
+   editor reads the same endpoint and manages actual shapes only.
+3. `src/api/routers/internal/dtwin.py`
+   `start_dataquality_checks()` filters each family by check id when rules are
+   named, falling back to the dimension when they are not, and stamps the
+   resolved `check_id` on each rule it passes on.
+4. `src/back/objects/digitaltwin/DigitalTwin.py`
+   The three family loops resolve their id once through `_rule_check_id()`,
+   which prefers the stamped value: filtering renumbers the list, so an
+   unnamed rule would otherwise report its neighbour's id.
+5. `src/front/static/query/js/query-dataquality.js`
+   `_loadShapes()` merges `rules` into the shape cache, so each one renders a
+   checkbox under its dimension and travels in `shape_ids` when ticked.
+6. `tests/units/api/test_dq_rule_list.py`
+   New module: the families are offered with the ids the runner reports, the
+   shapes list stays free of them, disabled rules are not offered, and the
+   runner agrees with the selector on the id.
+7. `tests/units/api/test_dq_run_selection.py`
+   New `TestRuleSelection` cases: a SWRL rule can be picked on its own,
+   unpicking one rule of a family keeps the others, and a ticked dimension no
+   longer drags its rules in. Replaced the case that asserted the old
+   behaviour.
+8. `tests/units/front/test_dq_rule_checkboxes.py`
+   New node-executed module asserting a SWRL rule and a decision table each
+   render a checkbox under their dimension, and that a response with no
+   `rules` key still works.
+
+Modified files:
+- `src/back/core/w3c/shacl/constants.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/ontology.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/api/test_dq_rule_list.py`
+- `tests/units/api/test_dq_run_selection.py`
+- `tests/units/front/test_dq_rule_checkboxes.py`
+- `tests/units/front/test_dq_run_payload.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4110 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.77s
+
+--------------------------------------------------------------------------------
+Follow-up: a rule says which family it comes from
+--------------------------------------------------------------------------------
+
+Context:
+Making the rule families selectable put them in the dimension lists alongside
+the shapes, with nothing to tell them apart. Conformance then read "10 rules"
+for what is two SHACL shapes plus eight decision tables and aggregate rules,
+which do not appear in Ontology → Data Quality at all because they are authored
+in Business Rules.
+
+Changes:
+1. `src/front/static/query/js/query-dataquality.js`
+   Entries that are not shapes carry a small badge naming their family (SWRL,
+   Decision table, Aggregate) with a tooltip saying where they are defined.
+2. `src/front/static/query/css/query-reasoning.css`
+   `.dq-rule-family` keeps the badge from squeezing the rule label.
+3. `tests/units/front/test_dq_rule_checkboxes.py`
+   Asserts a decision table and a SWRL rule are labelled and a shape is not.
+
+Modified files:
+- `src/front/static/query/js/query-dataquality.js`
+- `src/front/static/query/css/query-reasoning.css`
+- `src/front/templates/partials/dtwin/_query_dataquality.html` (Run All → Run)
+- `tests/units/front/test_dq_rule_checkboxes.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.70s

@@ -18,6 +18,9 @@ window.DataQualityModule = {
         { id: 'structural',   label: 'Structural',    icon: 'bi-diagram-3',    badge: 'bg-dark' },
     ],
 
+    /** Dimensions where a rule may be guarded by conditions. */
+    CONDITION_CATEGORIES: ['conformance', 'consistency'],
+
     CONSTRAINT_FIELDS: {
         completeness: `
             <div class="alert alert-light small py-2 mb-3">
@@ -199,6 +202,11 @@ window.DataQualityModule = {
         const cat = this.CATEGORIES.find(c => c.id === shape.category) || this.CATEGORIES[0];
         const enabled = shape.enabled !== false;
         const opacity = enabled ? '' : 'opacity-50';
+        const conditions = shape.conditions || [];
+        const guard = conditions.length
+            ? `<div class="text-muted small mt-1"><span class="badge bg-secondary bg-opacity-25 text-body-secondary">IF</span>
+                   ${this._escHtml(ConditionRowsModule.summarize(conditions, shape.condition_logic))}</div>`
+            : '';
 
         return `
         <div class="dq-shape-card ${opacity} mb-2" data-shape-id="${shape.id}">
@@ -212,6 +220,7 @@ window.DataQualityModule = {
                         ${shape.property_path ? `<span class="text-muted small">· ${shape.property_path}</span>` : ''}
                     </div>
                     <div class="small fw-medium">${this._escHtml(shape.label || shape.message || shape.id)}</div>
+                    ${guard}
                     <div class="text-muted small mt-1">
                         <code>${shape.shacl_type}</code>
                         ${shape.parameters ? ' — ' + this._escHtml(JSON.stringify(shape.parameters).slice(0, 80)) : ''}
@@ -255,8 +264,11 @@ window.DataQualityModule = {
             '<i class="bi bi-shield-plus me-2"></i>Add Data Quality Rule';
         document.getElementById('dqCategory').value = category;
         document.getElementById('dqMessage').value = '';
+        const andRadio = document.getElementById('dqCondLogicAnd');
+        if (andRadio) andRadio.checked = true;
         this.onCategoryChange();
         this._populateTargetClassSelect();
+        this._renderConditions([]);
         this._updateShaclPreview();
         new bootstrap.Modal(document.getElementById('dqShapeModal')).show();
     },
@@ -273,9 +285,15 @@ window.DataQualityModule = {
         this.onCategoryChange();
         this._populateTargetClassSelect(shape.target_class_uri);
 
+        const logicRadio = document.getElementById(
+            shape.condition_logic === 'or' ? 'dqCondLogicOr' : 'dqCondLogicAnd'
+        );
+        if (logicRadio) logicRadio.checked = true;
+
         setTimeout(() => {
             this._populatePropertySelect(shape.target_class, shape.property_uri);
             this._fillParamsFromShape(shape);
+            this._renderConditions(shape.conditions || []);
             this._updateShaclPreview();
         }, 100);
 
@@ -313,6 +331,7 @@ window.DataQualityModule = {
         const clsOpt = clsSel.options[clsSel.selectedIndex];
         const clsName = clsOpt ? (clsOpt.dataset.name || '') : '';
         this._populatePropertySelect(clsName);
+        this._renderConditions(this._currentConditions());
 
         this._bindParamChangeListeners();
         this._autoFillMessage();
@@ -323,7 +342,253 @@ window.DataQualityModule = {
         const opt = sel.options[sel.selectedIndex];
         const clsName = opt ? opt.dataset.name : '';
         this._populatePropertySelect(clsName);
+        this._renderConditions(this._currentConditions());
         this._autoFillMessage();
+    },
+
+    // --- Conditions (the optional IF guard) ---
+
+    _conditionsSupported(category) {
+        return this.CONDITION_CATEGORIES.includes(category);
+    },
+
+    _localName(uri) {
+        if (!uri) return '';
+        const i = Math.max(uri.lastIndexOf('#'), uri.lastIndexOf('/'));
+        return i >= 0 ? uri.substring(i + 1) : uri;
+    },
+
+    _isKnownClassName(value) {
+        const target = String(value || '').toLowerCase();
+        if (!target) return false;
+        return this.ontologyClasses.some(cls =>
+            [cls.name, cls.uri, this._localName(cls.uri || '')]
+                .filter(Boolean)
+                .some(key => String(key).toLowerCase() === target)
+        );
+    },
+
+    /**
+     * Whether `p` is a relationship rather than an attribute.
+     *
+     * Properties added through the entity panel carry neither `type` nor
+     * `range`, so an ambiguous property is treated as an attribute: only an
+     * explicit object-property type or a range naming another entity makes it
+     * a relationship. Relationships always declare one or the other.
+     */
+    _isObjectProperty(p) {
+        const type = String(p.type || '');
+        if (type) return type === 'ObjectProperty' || type === 'owl:ObjectProperty';
+
+        const range = String(p.range || '').toLowerCase();
+        if (!range) return false;
+        if (range.startsWith('xsd:') || range.includes('string') || range.includes('integer') ||
+            range.includes('decimal') || range.includes('date') || range.includes('boolean') ||
+            range.includes('float') || range.includes('double') || range.includes('time')) return false;
+        return this._isKnownClassName(range);
+    },
+
+    /** Attributes and relationships a condition may reference on the target entity. */
+    _conditionProperties() {
+        return this._propertiesForClass(this._selectedClassName());
+    },
+
+    _selectedClassName() {
+        const sel = document.getElementById('dqTargetClass');
+        const opt = sel ? sel.options[sel.selectedIndex] : null;
+        return opt ? (opt.dataset.name || '') : '';
+    },
+
+    // --- Property ownership ---
+
+    /** The class and its ancestors, resolved by name, URI, or local name. */
+    _classChain(className) {
+        const byKey = new Map();
+        this.ontologyClasses.forEach(cls => {
+            [cls.name, cls.uri, this._localName(cls.uri || '')].forEach(key => {
+                if (key) byKey.set(String(key).toLowerCase(), cls);
+            });
+        });
+
+        const chain = [];
+        const seen = new Set();
+        let ref = className;
+        while (ref) {
+            const key = String(ref).toLowerCase();
+            if (seen.has(key)) break;
+            seen.add(key);
+            const cls = byKey.get(key);
+            chain.push({ name: ref, cls });
+            ref = cls ? cls.parent : '';
+        }
+        return chain;
+    },
+
+    /**
+     * Whether `prop` is declared on the class of `entry`.
+     *
+     * `domain` may hold a class name or a full URI depending on how the
+     * ontology was ingested, so both are compared. A property with no domain
+     * belongs to no entity in particular and is never claimed by one.
+     */
+    _classOwnsProperty(prop, entry) {
+        const domain = String(prop.domain || '').toLowerCase();
+        if (!domain) return false;
+        const candidates = [entry.name, entry.cls && entry.cls.name, entry.cls && entry.cls.uri]
+            .filter(Boolean)
+            .map(v => String(v).toLowerCase());
+        return candidates.includes(domain) || candidates.includes(this._localName(domain));
+    },
+
+    /**
+     * Properties of `className`, own and inherited, as
+     * `{uri, name, isRelationship}`. Properties of other entities — and
+     * properties with no declared domain — are excluded.
+     */
+    _propertiesForClass(className) {
+        if (!className) return [];
+
+        const properties = [];
+        const seen = new Set();
+        const add = (uri, name, isRelationship) => {
+            const label = name || this._localName(uri);
+            const key = (label || '').toLowerCase();
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            properties.push({ uri: uri || label, name: label, isRelationship });
+        };
+
+        this._classChain(className).forEach(entry => {
+            const dataProperties = (entry.cls && entry.cls.dataProperties) || [];
+            dataProperties.forEach(dp => {
+                add(dp.uri || dp.name || dp.localName,
+                    dp.name || dp.localName || this._localName(dp.uri), false);
+            });
+            this.ontologyProperties.forEach(p => {
+                if (!this._classOwnsProperty(p, entry)) return;
+                add(p.uri || p.name, p.name, this._isObjectProperty(p));
+            });
+        });
+
+        return properties;
+    },
+
+    _conditionRowsContainer() {
+        return document.getElementById('dqConditionRows');
+    },
+
+    _conditionOptions() {
+        return {
+            properties: this._conditionProperties(),
+            onChange: () => this._autoFillMessage(),
+        };
+    },
+
+    _currentConditions() {
+        const container = this._conditionRowsContainer();
+        return container ? ConditionRowsModule.collect(container) : [];
+    },
+
+    _conditionLogic() {
+        const or = document.getElementById('dqCondLogicOr');
+        return or && or.checked ? 'or' : 'and';
+    },
+
+    _renderConditions(rows) {
+        const block = document.getElementById('dqConditionBlock');
+        const container = this._conditionRowsContainer();
+        if (!block || !container) return;
+
+        const supported = this._conditionsSupported(document.getElementById('dqCategory').value);
+        block.style.display = supported ? '' : 'none';
+        if (!supported) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const options = this._conditionOptions();
+        ConditionRowsModule.render(container, rows || [], options);
+
+        const hint = document.getElementById('dqConditionHint');
+        if (hint) {
+            const entity = this._selectedClassName();
+            hint.textContent = entity && !options.properties.length
+                ? `${entity} declares no property to build a condition on.`
+                : 'Without conditions the rule applies to every instance of the target entity.';
+        }
+    },
+
+    addCondition() {
+        ConditionRowsModule.addRow(this._conditionRowsContainer(), this._conditionOptions());
+        this._autoFillMessage();
+    },
+
+    onConditionLogicChange() {
+        this._autoFillMessage();
+    },
+
+    /** Conditions ready to persist — incomplete rows are dropped. */
+    _collectConditions(category) {
+        if (!this._conditionsSupported(category)) return [];
+        return this._currentConditions().filter(c => c.property_uri && c.op);
+    },
+
+    /**
+     * Preview of the SPARQL target the backend generates for a guarded shape.
+     * Mirrors `ShapeConditions.sparql_target`, including its use of full IRIs.
+     */
+    _conditionSparql(conditions, clsUri) {
+        const isNumeric = (v) => v !== '' && !isNaN(Number(v));
+        const literal = (v) => `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+        const XSD_DOUBLE = '<http://www.w3.org/2001/XMLSchema#double>';
+        const STRING_OPS = ['eq', 'neq', 'startsWith', 'endsWith', 'contains'];
+        const useOr = this._conditionLogic() === 'or';
+
+        const patterns = [`$this a <${clsUri}> .`];
+        const filters = [];
+        const expressions = [];
+
+        conditions.forEach((c, i) => {
+            if (ConditionRowsModule.isExistenceOp(c.op)) {
+                const block = `{ $this <${c.property_uri}> ?x${i} }`;
+                if (useOr) {
+                    patterns.push(`BIND(EXISTS ${block} AS ?e${i})`);
+                    expressions.push(c.op === 'exists' ? `?e${i}` : `!?e${i}`);
+                } else {
+                    filters.push(`FILTER ${c.op === 'exists' ? 'EXISTS' : 'NOT EXISTS'} ${block}`);
+                }
+                return;
+            }
+
+            const variable = `?c${i}`;
+            let left, right;
+            if (isNumeric(c.value)) {
+                left = `${XSD_DOUBLE}(${variable})`;
+                right = c.value;
+            } else if (STRING_OPS.includes(c.op)) {
+                left = `LCASE(STR(${variable}))`;
+                right = literal(String(c.value).toLowerCase());
+            } else {
+                left = `STR(${variable})`;
+                right = literal(c.value);
+            }
+
+            const symbols = { eq: '=', neq: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=' };
+            const functions = { startsWith: 'STRSTARTS', endsWith: 'STRENDS', contains: 'CONTAINS' };
+            const expression = symbols[c.op]
+                ? `${left} ${symbols[c.op]} ${right}`
+                : functions[c.op] ? `${functions[c.op]}(${left}, ${right})` : '';
+            if (!expression) return;
+
+            const triple = `$this <${c.property_uri}> ${variable} .`;
+            patterns.push(useOr ? `OPTIONAL { ${triple} }` : triple);
+            expressions.push(`(${expression})`);
+        });
+
+        if (expressions.length) {
+            filters.unshift(`FILTER(${expressions.join(useOr ? ' || ' : ' && ')})`);
+        }
+        return `SELECT $this WHERE {\n    ${patterns.concat(filters).join('\n    ')}\n}`;
     },
 
     onConsistencyTypeChange() {
@@ -422,8 +687,16 @@ window.DataQualityModule = {
             lines.push(`        sh:severity ${severity}`);
             lines.push(`    ] .`);
         } else {
+            const conditions = this._collectConditions(cat);
             lines.push(`:${shapeLocal}Shape a sh:NodeShape ;`);
-            lines.push(`    sh:targetClass <${clsUri}> ;`);
+            if (conditions.length) {
+                lines.push(`    sh:target [`);
+                lines.push(`        a sh:SPARQLTarget ;`);
+                lines.push(`        sh:select """${this._conditionSparql(conditions, clsUri)}""" ;`);
+                lines.push(`    ] ;`);
+            } else {
+                lines.push(`    sh:targetClass <${clsUri}> ;`);
+            }
             lines.push(`    sh:property [`);
             if (propUri) lines.push(`        sh:path <${propUri}> ;`);
             else if (propName) lines.push(`        sh:path :${propName} ;`);
@@ -514,6 +787,11 @@ window.DataQualityModule = {
                 : 'Every entity must have at least one relationship (no orphans)';
         }
 
+        const guard = ConditionRowsModule.summarize(
+            this._collectConditions(cat), this._conditionLogic()
+        );
+        if (msg && guard) msg = `When ${guard}, ${msg[0].toLowerCase()}${msg.slice(1)}`;
+
         document.getElementById('dqMessage').value = msg;
         this._updateShaclPreview();
     },
@@ -557,87 +835,32 @@ window.DataQualityModule = {
                 : '2. Property';
         }
 
-        const localName = (uri) => {
-            if (!uri) return '';
-            const i = Math.max(uri.lastIndexOf('#'), uri.lastIndexOf('/'));
-            return i >= 0 ? uri.substring(i + 1) : uri;
-        };
         const matchUri = (a, b) => {
             if (!a || !b) return false;
             if (a === b) return true;
-            return localName(a).toLowerCase() === localName(b).toLowerCase();
+            return this._localName(a).toLowerCase() === this._localName(b).toLowerCase();
         };
-
-        const seenNames = new Set();
-        const seenUris  = new Set();
         const addProp = (uri, name) => {
-            const nameKey = (name || '').toLowerCase();
-            const uriKey  = (uri  || '').toLowerCase();
-            const localKey = localName(uriKey).toLowerCase();
-            if (nameKey && seenNames.has(nameKey)) return;
-            if (localKey && seenNames.has(localKey)) return;
-            if (uriKey && seenUris.has(uriKey)) return;
-            if (nameKey) seenNames.add(nameKey);
-            if (localKey && localKey !== nameKey) seenNames.add(localKey);
-            if (uriKey) seenUris.add(uriKey);
             const selected = selectedUri && matchUri(uri, selectedUri) ? 'selected' : '';
             sel.innerHTML += `<option value="${uri}" data-name="${name}" ${selected}>${name}</option>`;
         };
 
-        const clsLower = (className || '').toLowerCase();
+        const owned = this._propertiesForClass(className);
+        const properties = relationshipsOnly ? owned.filter(p => p.isRelationship)
+            : attributesOnly ? owned.filter(p => !p.isRelationship)
+            : owned;
+        properties.forEach(p => addProp(p.uri, p.name));
 
-        const isObjectProp = (p) => {
-            if (p.type) return p.type === 'ObjectProperty' || p.type === 'owl:ObjectProperty';
-            if (p.range) {
-                const r = p.range.toLowerCase();
-                if (r.startsWith('xsd:') || r.includes('string') || r.includes('integer') ||
-                    r.includes('decimal') || r.includes('date') || r.includes('boolean') ||
-                    r.includes('float') || r.includes('double') || r.includes('time')) return false;
-            }
-            return true;
-        };
-
-        const allProps = this.ontologyProperties.filter(p => {
-            if (!className) return true;
-            const dom = (p.domain || '').toLowerCase();
-            return dom === clsLower || !dom;
-        });
-
-        if (attributesOnly) {
-            if (className) {
-                const cls = this.ontologyClasses.find(c =>
-                    (c.name || '').toLowerCase() === clsLower ||
-                    localName(c.uri || '').toLowerCase() === clsLower
-                );
-                if (cls && cls.dataProperties) {
-                    cls.dataProperties.forEach(dp => {
-                        addProp(dp.uri || dp.name || dp.localName, dp.name || dp.localName || localName(dp.uri));
-                    });
-                }
-            }
+        if (!relationshipsOnly) {
             addProp('http://www.w3.org/2000/01/rdf-schema#label', 'rdfs:label');
-        } else if (relationshipsOnly) {
-            allProps.filter(isObjectProp).forEach(p => addProp(p.uri || p.name, p.name));
-        } else {
-            allProps.forEach(p => addProp(p.uri || p.name, p.name));
-
-            if (className) {
-                const cls = this.ontologyClasses.find(c =>
-                    (c.name || '').toLowerCase() === clsLower ||
-                    localName(c.uri || '').toLowerCase() === clsLower
-                );
-                if (cls && cls.dataProperties) {
-                    cls.dataProperties.forEach(dp => {
-                        addProp(dp.uri || dp.name || dp.localName, dp.name || dp.localName || localName(dp.uri));
-                    });
-                }
-            }
-
-            addProp('http://www.w3.org/2000/01/rdf-schema#label', 'rdfs:label');
+        }
+        if (className && !properties.length) {
+            const kind = relationshipsOnly ? 'relationship' : attributesOnly ? 'attribute' : 'property';
+            sel.innerHTML += `<option value="" disabled>No ${kind} declared on ${className}</option>`;
         }
 
         if (selectedUri && sel.selectedIndex <= 0) {
-            const fallbackName = localName(selectedUri);
+            const fallbackName = this._localName(selectedUri);
             sel.innerHTML += `<option value="${selectedUri}" data-name="${fallbackName}" selected>${fallbackName}</option>`;
         }
     },
@@ -725,6 +948,8 @@ window.DataQualityModule = {
         const { shacl_type, parameters } = this._collectParams(category);
         shape.shacl_type = shacl_type;
         shape.parameters = parameters;
+        shape.conditions = this._collectConditions(category);
+        shape.condition_logic = this._conditionLogic();
         shape.label = shape.message || `${shacl_type} on ${shape.target_class}.${shape.property_path}`;
 
         try {
