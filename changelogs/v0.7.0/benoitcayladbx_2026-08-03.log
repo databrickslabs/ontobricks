@@ -615,3 +615,23 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_home_has_hero_and_ctas` → 1 passed
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site features page (Task 4)
+--------------------------------------------------------------------------------
+
+Context:
+Task 4 of the GitHub Pages marketing site — add the Features page with five
+capability cards and shared header/footer chrome using nested relative paths.
+
+Changes:
+
+1. `site/features/index.html`
+   Features page with ontology design, R2RML mapping, Delta + Lakebase graph,
+   reasoning (OWL 2 RL / SWRL / SHACL), and GraphQL query sections.
+
+Modified files:
+- `site/features/index.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 3 passed, 4 failed (missing get-started/docs/about/404 — later tasks)
