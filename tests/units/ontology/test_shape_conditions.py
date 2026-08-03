@@ -119,8 +119,10 @@ class TestSubjectSQL:
         "op,symbol", [("gt", ">"), ("gte", ">="), ("lt", "<"), ("lte", "<=")]
     )
     def test_numeric_operators_cast_the_object(self, op, symbol):
+        # TRY_CAST, not CAST: warehouses run with ANSI mode on, where one
+        # non-numeric object would abort the query instead of failing to match.
         sql = _sql([_cond(op, "1000", prop_uri=AMOUNT, name="amount")])
-        assert f"CAST(c0.object AS DOUBLE) {symbol} 1000" in sql
+        assert f"TRY_CAST(c0.object AS DOUBLE) {symbol} 1000" in sql
 
     def test_a_numeric_equality_is_not_cast(self):
         """`eq` compares text; casting would fail on a non-numeric object."""

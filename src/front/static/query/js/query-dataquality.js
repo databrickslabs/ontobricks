@@ -391,7 +391,7 @@ window.DQExecModule = {
             <td class="dq-col-pct ${pctClass}" title="${pctTitle}">${pctDisplay}</td>
             <td class="dq-col-status"><i class="bi ${icon}"></i></td>
             <td class="dq-col-name small fw-medium">${this._escHtml(r.name || 'Check')}</td>
-            <td class="dq-col-msg text-muted small">${this._escHtml(r.message || '')}</td>
+            <td class="dq-col-msg text-muted small" title="${this._escAttr(r.message || '')}">${this._escHtml(r.message || '')}</td>
             <td class="dq-col-actions text-end text-nowrap">${sqlBtn} ${violBtn}</td>
         </tr>`;
     },

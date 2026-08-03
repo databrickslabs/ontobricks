@@ -1497,6 +1497,34 @@ class DigitalTwin:
             )
         return shape
 
+    #: A failed check used to report only that it failed, which left the reader
+    #: no way to tell a broken rule from a warehouse problem without the server
+    #: log. Long enough for the engine's error code and its first sentence.
+    _SQL_ERROR_MAX_CHARS = 300
+
+    @staticmethod
+    def _sql_error_detail(exc: Exception) -> str:
+        """Return the engine's message as a single line fit for a result row."""
+        detail = " ".join(str(exc).split())
+        if len(detail) > DigitalTwin._SQL_ERROR_MAX_CHARS:
+            detail = detail[: DigitalTwin._SQL_ERROR_MAX_CHARS].rstrip() + "…"
+        return detail or exc.__class__.__name__
+
+    @staticmethod
+    def _failed_check_result(
+        name: str, category: str, check_id, sql: str, exc: Exception
+    ) -> dict:
+        """Report a check whose query failed, carrying the cause and the SQL."""
+        return {
+            "name": name,
+            "category": category,
+            "shape_id": check_id,
+            "status": "warning",
+            "message": f"Query failed: {DigitalTwin._sql_error_detail(exc)}",
+            "violations": [],
+            "sql": sql,
+        }
+
     @staticmethod
     def _rule_check_id(prefix: str, rule: dict, index: int) -> str:
         """Return the check id for a non-SHACL *rule*.
@@ -1626,15 +1654,9 @@ class DigitalTwin:
                     return
                 logger.exception("SQL DQ check '%s' failed: %s", label, exc)
                 results.append(
-                    {
-                        "name": label,
-                        "category": cat,
-                        "shape_id": shape.get("id"),
-                        "status": "warning",
-                        "message": "Query execution failed for this check.",
-                        "violations": [],
-                        "sql": sql,
-                    }
+                    DigitalTwin._failed_check_result(
+                        label, cat, shape.get("id"), sql, exc
+                    )
                 )
 
         DigitalTwin._run_swrl_sql_checks(
@@ -1772,15 +1794,9 @@ class DigitalTwin:
             except Exception as exc:
                 logger.exception("SWRL DQ check '%s' SQL failed: %s", label, exc)
                 results.append(
-                    {
-                        "name": label,
-                        "category": "structural",
-                        "shape_id": check_id,
-                        "status": "warning",
-                        "message": "Query execution failed for this rule.",
-                        "violations": [],
-                        "sql": "",
-                    }
+                    DigitalTwin._failed_check_result(
+                        label, "structural", check_id, sql, exc
+                    )
                 )
 
     @staticmethod
@@ -1871,15 +1887,9 @@ class DigitalTwin:
                     "Decision table DQ check '%s' SQL failed: %s", dt_name, exc
                 )
                 results.append(
-                    {
-                        "name": dt_name,
-                        "category": "conformance",
-                        "shape_id": check_id,
-                        "status": "warning",
-                        "message": "Query execution failed for this decision table.",
-                        "violations": [],
-                        "sql": "",
-                    }
+                    DigitalTwin._failed_check_result(
+                        dt_name, "conformance", check_id, sql, exc
+                    )
                 )
 
     @staticmethod
@@ -1972,15 +1982,9 @@ class DigitalTwin:
                     "Aggregate rule DQ check '%s' SQL failed: %s", agg_name, exc
                 )
                 results.append(
-                    {
-                        "name": agg_name,
-                        "category": "conformance",
-                        "shape_id": check_id,
-                        "status": "warning",
-                        "message": "Query execution failed for this aggregate rule.",
-                        "violations": [],
-                        "sql": "",
-                    }
+                    DigitalTwin._failed_check_result(
+                        agg_name, "conformance", check_id, sql, exc
+                    )
                 )
 
     # ------------------------------------------------------------------

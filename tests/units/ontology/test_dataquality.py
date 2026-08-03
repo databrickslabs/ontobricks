@@ -1038,6 +1038,44 @@ class TestLegacyMigration:
 # ===========================================================================
 
 
+class TestFailedCheckReporting:
+    """A check whose query failed must say why, in the row the user is looking at.
+
+    Reporting only "query execution failed" forced the reader into the server
+    log to tell a broken rule from a warehouse problem.
+    """
+
+    def test_the_engine_message_reaches_the_result(self):
+        result = DigitalTwin._failed_check_result(
+            "Monthly fee between 1 and 10",
+            "conformance",
+            "dt:fees",
+            "SELECT 1",
+            Exception("[CAST_INVALID_INPUT] The value 'free' cannot be cast to DOUBLE"),
+        )
+        assert result["status"] == "warning"
+        assert "CAST_INVALID_INPUT" in result["message"]
+        assert result["violations"] == []
+
+    def test_the_failing_sql_is_kept_for_inspection(self):
+        result = DigitalTwin._failed_check_result(
+            "Rule", "conformance", "dt:1", "SELECT DISTINCT t0.subject", Exception("x")
+        )
+        assert result["sql"] == "SELECT DISTINCT t0.subject"
+
+    def test_a_multiline_error_becomes_one_line(self):
+        detail = DigitalTwin._sql_error_detail(Exception("line one\n  line two"))
+        assert detail == "line one line two"
+
+    def test_a_long_error_is_truncated(self):
+        detail = DigitalTwin._sql_error_detail(Exception("x" * 900))
+        assert len(detail) <= DigitalTwin._SQL_ERROR_MAX_CHARS + 1
+        assert detail.endswith("…")
+
+    def test_a_silent_exception_still_names_itself(self):
+        assert DigitalTwin._sql_error_detail(TimeoutError()) == "TimeoutError"
+
+
 class TestPopulationHelpers:
     def test_count_class_population_sql(self):
         store = MagicMock()

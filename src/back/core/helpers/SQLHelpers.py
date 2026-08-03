@@ -24,6 +24,20 @@ class SQLHelpers:
         return str(value).replace("\\", "\\\\").replace("'", "''")
 
     @staticmethod
+    def sql_numeric(expr: str, sql_type: str = "DOUBLE") -> str:
+        """Cast a triple-store value to a number without failing the query.
+
+        Every object in the triple store is stored as a string, so a numeric
+        comparison has to cast. A plain ``CAST`` aborts the whole statement on
+        the first value that is not a number, and Databricks warehouses run
+        with ANSI mode on, so one ``"free"`` in a fee column takes the entire
+        rule down. ``TRY_CAST`` yields NULL instead, which makes the
+        comparison false — the value does not satisfy the condition, which is
+        what the reader means.
+        """
+        return f"TRY_CAST({expr} AS {sql_type})"
+
+    @staticmethod
     def validate_uc_identifier(name: str, *, role: str = "identifier") -> str:
         from back.core.databricks.uc.identifiers import validate_uc_identifier
 

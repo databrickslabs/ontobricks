@@ -1198,3 +1198,62 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4142 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.13s
+
+## Use TRY_CAST for DQ numeric SQL and surface engine errors
+
+Context: ANSI-mode warehouses abort a whole data-quality statement on the
+first non-numeric triple value when rules use bare CAST. Failed checks also
+only reported a generic message, so users needed the server log to diagnose.
+Numeric rule SQL now uses TRY_CAST, and failed checks carry the engine error
+(and SQL) in the result row.
+
+Changes:
+
+1. `src/back/core/helpers/SQLHelpers.py`
+   Added `sql_numeric()` helper wrapping `TRY_CAST(... AS DOUBLE)`.
+2. `src/back/core/helpers/__init__.py`
+   Re-export `sql_numeric`.
+3. `src/back/core/reasoning/SWRLBuiltinRegistry.py`
+   SWRL builtin SQL templates use TRY_CAST for numeric/date casts.
+4. `src/back/core/reasoning/DecisionTableEngine.py`
+   Numeric decision-table conditions use `sql_numeric()`.
+5. `src/back/core/reasoning/SPARQLRuleEngine.py`
+   Numeric FILTER comparisons use `sql_numeric()`.
+6. `src/back/core/reasoning/AggregateRuleEngine.py`
+   Aggregate numeric casts use TRY_CAST.
+7. `src/back/core/w3c/shacl/ShapeConditions.py`
+   Conditional SHACL numeric guards use `sql_numeric()`.
+8. `src/back/objects/digitaltwin/DigitalTwin.py`
+   `_failed_check_result` / `_sql_error_detail` surface the engine message on
+   failed DQ checks (SHACL, SWRL, DT, aggregate).
+9. `src/front/static/query/css/query-reasoning.css`
+   Clamp long DQ result messages to two lines (full text on tooltip).
+10. `src/front/static/query/js/query-dataquality.js`
+    Minor alignment with failed-check message display.
+11. `tests/units/ontology/test_business_rules.py`
+    Assert TRY_CAST in DT/aggregate SQL.
+12. `tests/units/ontology/test_swrl_engine.py`
+    Assert no bare CAST in SWRL builtin SQL templates.
+13. `tests/units/ontology/test_shape_conditions.py`
+    Expect TRY_CAST for numeric condition SQL.
+14. `tests/units/ontology/test_dataquality.py`
+    Cover failed-check reporting helpers.
+
+Modified files:
+- `src/back/core/helpers/SQLHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/core/reasoning/SWRLBuiltinRegistry.py`
+- `src/back/core/reasoning/DecisionTableEngine.py`
+- `src/back/core/reasoning/SPARQLRuleEngine.py`
+- `src/back/core/reasoning/AggregateRuleEngine.py`
+- `src/back/core/w3c/shacl/ShapeConditions.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/static/query/css/query-reasoning.css`
+- `src/front/static/query/js/query-dataquality.js`
+- `tests/units/ontology/test_business_rules.py`
+- `tests/units/ontology/test_swrl_engine.py`
+- `tests/units/ontology/test_shape_conditions.py`
+- `tests/units/ontology/test_dataquality.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: previously verified with suite at 4142 passed; this commit is the remaining TRY_CAST / failed-check WIP from that run.

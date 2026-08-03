@@ -17,6 +17,7 @@ Operators are the decision-table vocabulary (``DT_OP_SQL``) plus ``exists`` /
 from typing import Callable, Dict, List, Optional, Sequence, Set
 
 from back.core.graphdb.constants import RDF_TYPE
+from back.core.helpers import sql_numeric
 from back.core.reasoning.constants import (
     DT_NUMERIC_OPS,
     DT_OP_SQL,
@@ -155,7 +156,7 @@ def subject_sql(
         value = str(cond.get("value", ""))
         if _is_numeric(value):
             left = (
-                f"CAST({alias}.object AS DOUBLE)"
+                sql_numeric(f"{alias}.object")
                 if op in DT_NUMERIC_OPS
                 else f"{alias}.object"
             )

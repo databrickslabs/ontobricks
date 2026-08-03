@@ -50,7 +50,7 @@ class SWRLBuiltinRegistry:
                 "greaterThan",
                 2,
                 "comparison",
-                "CAST({0} AS DOUBLE) > CAST({1} AS DOUBLE)",
+                "TRY_CAST({0} AS DOUBLE) > TRY_CAST({1} AS DOUBLE)",
                 "CAST({0} AS DOUBLE) > CAST({1} AS DOUBLE)",
                 cast_numeric=True,
             )
@@ -60,7 +60,7 @@ class SWRLBuiltinRegistry:
                 "lessThan",
                 2,
                 "comparison",
-                "CAST({0} AS DOUBLE) < CAST({1} AS DOUBLE)",
+                "TRY_CAST({0} AS DOUBLE) < TRY_CAST({1} AS DOUBLE)",
                 "CAST({0} AS DOUBLE) < CAST({1} AS DOUBLE)",
                 cast_numeric=True,
             )
@@ -70,7 +70,7 @@ class SWRLBuiltinRegistry:
                 "greaterThanOrEqual",
                 2,
                 "comparison",
-                "CAST({0} AS DOUBLE) >= CAST({1} AS DOUBLE)",
+                "TRY_CAST({0} AS DOUBLE) >= TRY_CAST({1} AS DOUBLE)",
                 "CAST({0} AS DOUBLE) >= CAST({1} AS DOUBLE)",
                 cast_numeric=True,
             )
@@ -80,7 +80,7 @@ class SWRLBuiltinRegistry:
                 "lessThanOrEqual",
                 2,
                 "comparison",
-                "CAST({0} AS DOUBLE) <= CAST({1} AS DOUBLE)",
+                "TRY_CAST({0} AS DOUBLE) <= TRY_CAST({1} AS DOUBLE)",
                 "CAST({0} AS DOUBLE) <= CAST({1} AS DOUBLE)",
                 cast_numeric=True,
             )
@@ -94,7 +94,7 @@ class SWRLBuiltinRegistry:
                 "add",
                 3,
                 "math",
-                "CAST({0} AS DOUBLE) + CAST({1} AS DOUBLE)",
+                "TRY_CAST({0} AS DOUBLE) + TRY_CAST({1} AS DOUBLE)",
                 "CAST({0} AS DOUBLE) + CAST({1} AS DOUBLE)",
                 cast_numeric=True,
             )
@@ -104,7 +104,7 @@ class SWRLBuiltinRegistry:
                 "subtract",
                 3,
                 "math",
-                "CAST({0} AS DOUBLE) - CAST({1} AS DOUBLE)",
+                "TRY_CAST({0} AS DOUBLE) - TRY_CAST({1} AS DOUBLE)",
                 "CAST({0} AS DOUBLE) - CAST({1} AS DOUBLE)",
                 cast_numeric=True,
             )
@@ -114,7 +114,7 @@ class SWRLBuiltinRegistry:
                 "multiply",
                 3,
                 "math",
-                "CAST({0} AS DOUBLE) * CAST({1} AS DOUBLE)",
+                "TRY_CAST({0} AS DOUBLE) * TRY_CAST({1} AS DOUBLE)",
                 "CAST({0} AS DOUBLE) * CAST({1} AS DOUBLE)",
                 cast_numeric=True,
             )
@@ -124,7 +124,7 @@ class SWRLBuiltinRegistry:
                 "divide",
                 3,
                 "math",
-                "CAST({0} AS DOUBLE) / NULLIF(CAST({1} AS DOUBLE), 0)",
+                "TRY_CAST({0} AS DOUBLE) / NULLIF(TRY_CAST({1} AS DOUBLE), 0)",
                 "CASE WHEN CAST({1} AS DOUBLE) = 0 THEN null ELSE CAST({0} AS DOUBLE) / CAST({1} AS DOUBLE) END",
                 cast_numeric=True,
             )
@@ -134,7 +134,7 @@ class SWRLBuiltinRegistry:
                 "mod",
                 3,
                 "math",
-                "MOD(CAST({0} AS BIGINT), CAST({1} AS BIGINT))",
+                "MOD(TRY_CAST({0} AS BIGINT), TRY_CAST({1} AS BIGINT))",
                 "CAST({0} AS INT64) % CAST({1} AS INT64)",
                 cast_numeric=True,
             )
@@ -144,7 +144,7 @@ class SWRLBuiltinRegistry:
                 "abs",
                 2,
                 "math",
-                "ABS(CAST({0} AS DOUBLE))",
+                "ABS(TRY_CAST({0} AS DOUBLE))",
                 "abs(CAST({0} AS DOUBLE))",
                 cast_numeric=True,
             )
@@ -154,7 +154,7 @@ class SWRLBuiltinRegistry:
                 "round",
                 2,
                 "math",
-                "ROUND(CAST({0} AS DOUBLE))",
+                "ROUND(TRY_CAST({0} AS DOUBLE))",
                 "round(CAST({0} AS DOUBLE), 0)",
                 cast_numeric=True,
             )
@@ -164,7 +164,7 @@ class SWRLBuiltinRegistry:
                 "ceiling",
                 2,
                 "math",
-                "CEIL(CAST({0} AS DOUBLE))",
+                "CEIL(TRY_CAST({0} AS DOUBLE))",
                 "ceil(CAST({0} AS DOUBLE))",
                 cast_numeric=True,
             )
@@ -174,7 +174,7 @@ class SWRLBuiltinRegistry:
                 "floor",
                 2,
                 "math",
-                "FLOOR(CAST({0} AS DOUBLE))",
+                "FLOOR(TRY_CAST({0} AS DOUBLE))",
                 "floor(CAST({0} AS DOUBLE))",
                 cast_numeric=True,
             )
@@ -219,7 +219,7 @@ class SWRLBuiltinRegistry:
                 "before",
                 2,
                 "date",
-                "CAST({0} AS TIMESTAMP) < CAST({1} AS TIMESTAMP)",
+                "TRY_CAST({0} AS TIMESTAMP) < TRY_CAST({1} AS TIMESTAMP)",
                 "datetime({0}) < datetime({1})",
             )
         )
@@ -228,7 +228,7 @@ class SWRLBuiltinRegistry:
                 "after",
                 2,
                 "date",
-                "CAST({0} AS TIMESTAMP) > CAST({1} AS TIMESTAMP)",
+                "TRY_CAST({0} AS TIMESTAMP) > TRY_CAST({1} AS TIMESTAMP)",
                 "datetime({0}) > datetime({1})",
             )
         )
@@ -237,7 +237,7 @@ class SWRLBuiltinRegistry:
                 "dateDiff",
                 3,
                 "date",
-                "DATEDIFF(CAST({0} AS DATE), CAST({1} AS DATE))",
+                "DATEDIFF(TRY_CAST({0} AS DATE), TRY_CAST({1} AS DATE))",
                 "duration.between(datetime({1}), datetime({0})).days",
             )
         )
