@@ -149,6 +149,14 @@ img {
   padding: 4.5rem 0 3rem;
 }
 
+.hero__eyebrow {
+  color: var(--ob-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  margin: 0 0 0.75rem;
+}
+
 .hero__brand {
   font-family: var(--ob-font-display);
   font-size: clamp(2.6rem, 6vw, 4.2rem);
