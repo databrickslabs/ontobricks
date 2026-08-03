@@ -250,6 +250,14 @@ window.SwrlModule = {
             const config = await this._getOntologyConfig();
             const layout = await this._fetchMapLayout();
 
+            // The editor can open long after init(), so re-seed the attribute
+            // source from the very config the graph is built on — otherwise
+            // conditions would resolve attributes against a stale ontology.
+            if (config && Array.isArray(config.classes)) {
+                this._rawClasses = config.classes;
+                this._rawProperties = config.properties || [];
+            }
+
             container.querySelector('.swrl-graph-loading')?.remove();
 
             if (!config || !config.classes || config.classes.length === 0) {
@@ -986,20 +994,43 @@ window.SwrlModule = {
 
     // ── Attribute conditions ─────────────────────────────
 
+    // Class plus its ancestors, tolerating the flattened parent casing some
+    // saved ontologies carry (same leniency as the graph builder).
+    _classChain(nodeId) {
+        const byLower = new Map(
+            (this._rawClasses || []).map(c => [String(c.name || c.uri || '').toLowerCase(), c])
+        );
+        const chain = [];
+        const seen = new Set();
+        let ref = nodeId;
+        while (ref) {
+            const key = String(ref).toLowerCase();
+            if (seen.has(key)) break;
+            seen.add(key);
+            const cls = byLower.get(key);
+            chain.push({ name: ref, cls });
+            ref = cls ? cls.parent : null;
+        }
+        return chain;
+    },
+
     _dataPropsForClass(nodeId) {
         const names = new Set();
-        const cls = (this._rawClasses || []).find(c => (c.name || c.uri) === nodeId);
-        if (cls && Array.isArray(cls.dataProperties)) {
-            cls.dataProperties.forEach(dp => { const n = dp.name || dp.localName; if (n) names.add(n); });
-        }
-        // Also surface global datatype properties whose domain is this class.
         const classNames = new Set((this._rawClasses || []).map(c => String(c.name || c.uri || '').toLowerCase()));
-        (this._rawProperties || []).forEach(p => {
-            if (String(p.domain || '').toLowerCase() !== String(nodeId).toLowerCase()) return;
-            const rng = String(p.range || '').toLowerCase();
-            if (rng && classNames.has(rng)) return; // object property → not an attribute
-            const n = p.name || p.localName;
-            if (n) names.add(n);
+        // Inherited attributes are eligible too: an ontology may keep them on
+        // the ancestor only instead of flattening them onto the child.
+        this._classChain(nodeId).forEach(({ name, cls }) => {
+            if (cls && Array.isArray(cls.dataProperties)) {
+                cls.dataProperties.forEach(dp => { const n = dp.name || dp.localName; if (n) names.add(n); });
+            }
+            // Also surface global datatype properties whose domain is this class.
+            (this._rawProperties || []).forEach(p => {
+                if (String(p.domain || '').toLowerCase() !== String(name).toLowerCase()) return;
+                const rng = String(p.range || '').toLowerCase();
+                if (rng && classNames.has(rng)) return; // object property → not an attribute
+                const n = p.name || p.localName;
+                if (n) names.add(n);
+            });
         });
         return [...names];
     },
@@ -1040,8 +1071,10 @@ window.SwrlModule = {
 
     addConditionRow() {
         if (this._readOnly) return;
-        // Default the subject to the first IF entity that has data properties.
-        const subject = [...this.ifNodes].find(id => this._dataPropsForClass(id).length) || '';
+        // Default to the first IF entity exposing attributes, but fall back to
+        // any IF entity so the row is never left without a subject.
+        const ifIds = [...this.ifNodes];
+        const subject = ifIds.find(id => this._dataPropsForClass(id).length) || ifIds[0] || '';
         this.conditions.push({ subjectNodeId: subject, property: '', op: 'greaterThanOrEqual', value: '' });
         this._updateRulePane();
     },
@@ -1066,13 +1099,15 @@ window.SwrlModule = {
         const wrap = document.getElementById('swrlConditions');
         if (!wrap) return;
         const ro = this._readOnly;
-        // Entities eligible as a condition subject: IF entities with attributes.
-        const entIds = [...this.ifNodes].filter(id => this._dataPropsForClass(id).length);
+        // Every IF entity is a legal condition subject, so the dropdown mirrors
+        // the graph selection instead of silently dropping entities whose
+        // attributes cannot be resolved.
+        const entIds = [...this.ifNodes];
 
         if (!this.conditions.length) {
             wrap.innerHTML = entIds.length
                 ? '<div class="text-muted small fst-italic">No attribute conditions</div>'
-                : '<div class="text-muted small fst-italic">Add an IF entity that has attributes to define conditions</div>';
+                : '<div class="text-muted small fst-italic">Select an IF entity to define conditions</div>';
             return;
         }
 
@@ -1088,7 +1123,8 @@ window.SwrlModule = {
 
             const props = this._dataPropsForClass(c.subjectNodeId);
             if (c.property && !props.includes(c.property)) props.unshift(c.property);
-            const propOpts = ['<option value="">attribute\u2026</option>'].concat(
+            const propPlaceholder = (c.subjectNodeId && !props.length) ? 'no attribute' : 'attribute\u2026';
+            const propOpts = [`<option value="">${propPlaceholder}</option>`].concat(
                 props.map(p => `<option value="${this._esc(p)}"${p === c.property ? ' selected' : ''}>${this._esc(p)}</option>`)
             ).join('');
 

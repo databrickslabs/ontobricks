@@ -1114,3 +1114,39 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-02.log`
 
 Tests: `uv run pytest -q -m "not scenario"` → 3846 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 25.67s
+
+## Fix SWRL attribute conditions dropping selected IF entities
+
+Context: Selecting 3 entities as IF in the SWRL rule editor only proposed 2 of
+them as subjects of an "Attribute conditions" row. The subject dropdown filtered
+IF entities on whether attributes could be resolved, and that resolution was
+unreliable: it ignored inherited attributes and read a class snapshot captured at
+`init()` rather than the config the graph is built from.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-swrl.js`
+   `_renderConditions()` now offers every IF entity as a condition subject
+   instead of filtering on attribute presence; the empty state asks for an IF
+   selection rather than an IF entity "that has attributes".
+2. `src/front/static/ontology/js/ontology-swrl.js`
+   `addConditionRow()` falls back to any IF entity when none exposes attributes,
+   so a new row is never created without a subject.
+3. `src/front/static/ontology/js/ontology-swrl.js`
+   Add `_classChain()` and use it in `_dataPropsForClass()` so inherited
+   attributes (own + global datatype properties along the parent chain) are
+   offered, with case-tolerant parent resolution and cycle protection.
+4. `src/front/static/ontology/js/ontology-swrl.js`
+   `_openEditor()` re-seeds `_rawClasses` / `_rawProperties` from the graph
+   config, and the attribute dropdown shows "no attribute" when a subject has
+   none.
+5. `tests/units/front/test_swrl_attribute_conditions.py`
+   New source contracts: subjects are not filtered, row subject falls back,
+   attribute lookup walks the parent chain, editor re-seeds its class source.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-swrl.js`
+- `tests/units/front/test_swrl_attribute_conditions.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-02.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 3850 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 29.33s
