@@ -676,3 +676,27 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_docs_hub_links_github_markdown` → 1 passed in 0.10s
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site about + 404 (Task 7)
+--------------------------------------------------------------------------------
+
+Context:
+Task 7 of the GitHub Pages marketing site — add the About page with Labs
+AS-IS / SLA disclaimer aligned with README Project Support, a CONTRIBUTORS
+link, and a root-level custom 404 for GitHub Pages.
+
+Changes:
+
+1. `site/about/index.html`
+   About page with README-aligned support disclaimer, GitHub Issues CTA,
+   contributor guidelines link, and nested `../` chrome.
+2. `site/404.html`
+   Minimal custom 404 with root-relative `assets/css/site.css` and home link.
+
+Modified files:
+- `site/about/index.html`
+- `site/404.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 7 passed in 0.11s
