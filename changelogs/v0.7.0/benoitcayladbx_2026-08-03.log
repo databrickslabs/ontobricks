@@ -700,3 +700,45 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 7 passed in 0.11s
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site completion (Task 8)
+--------------------------------------------------------------------------------
+
+Context:
+The static multi-page marketing site is complete under `site/`, with a public
+README link and an operator checklist for the GitHub Pages cutover. Pages must
+not be switched until this branch is merged: after merge, configure `master`
+and `/site` as the Pages source.
+
+Changes:
+
+1. `README.md`
+   Add the public GitHub Pages website URL near the project badges.
+2. `site/`
+   Complete the static marketing site: shared assets and navigation, Home,
+   Features, Get started, Docs, About, and a custom 404 page.
+3. `site/README.md`
+   Document the post-merge Pages cutover: verification API call, `gh api` PUT
+   command, Settings → Pages fallback, and live-site confirmation.
+4. `tests/units/site/test_marketing_site.py`
+   Verify required pages, content, relative assets, and shared site hooks.
+
+Modified files:
+- `README.md`
+- `site/404.html`
+- `site/about/index.html`
+- `site/assets/css/site.css`
+- `site/assets/img/ontobricks-icon.svg`
+- `site/assets/js/site.js`
+- `site/docs/index.html`
+- `site/features/index.html`
+- `site/get-started/index.html`
+- `site/index.html`
+- `site/README.md`
+- `tests/units/site/test_marketing_site.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 7 passed,
+1 warning in 0.15s. `uv run pytest -q -m "not scenario"` was stopped after
+120s while still progressing through unrelated tests (23%; no failures seen).
