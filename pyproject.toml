@@ -65,15 +65,8 @@ lakebase = [
 pitfalls = [
     "sentence-transformers>=3.0.0",
     "scikit-learn>=1.3.0",
-    # TODO: bump to nltk>=3.10.0 once the stable release is on PyPI (currently
-    # only a 3.10.0-rc1 GitHub tag exists; upstream + proxy top out at 3.9.4).
-    # GHSA-p4gq-832x-fm9v (CVE-2026-54293): URL-encoded path traversal in
-    # nltk.data.load() via %2f/%2e%2e — decode-after-check bypass, fixed in
-    # 3.10.0. Until then the flaw is made unreachable in-code by the guard in
-    # ``ensure_nltk_resource`` (back/core/external/pitfalls/utils.py), which
-    # rejects percent-encoded/traversal/absolute resource paths, and by the
-    # fact that we only ever pass hardcoded resource names — never user input.
-    "nltk>=3.9.4",
+    # nltk 3.10.0 fixes five path-traversal and unsafe-deserialization advisories.
+    "nltk>=3.10.0",
     "scipy>=1.11.0",
 ]
 
@@ -123,11 +116,17 @@ constraint-dependencies = [
     # CVE-2026-44307 / GHSA-2h4p-vjrc-8xpq (TemplateLookup path traversal on Windows).
     "mako>=1.3.12",
     "pygments>=2.20.0",
-    # GitPython: path traversal / config_writer newline injection (GHSA-v87r-6q3f-2j67,
-    # GHSA-mv93-w799-cj2w, GHSA-r4m4-rvvq-cwh7) and config_writer() section-param newline
-    # injection bypass that re-enables RCE via core.hooksPath (bypass of CVE-2026-42215).
-    # Fixed in 3.1.50. Pulled in transitively by mlflow-skinny.
-    "gitpython>=3.1.50",
+    # GitPython 3.1.55 includes the complete fixes for the path/config injection
+    # advisory series. Pulled in transitively by mlflow-skinny.
+    "gitpython>=3.1.55",
+    # Security floors for transitive dependencies reported by Dependabot.
+    "click>=8.3.3",
+    "mcp>=1.28.1",
+    "pillow>=12.3.0",
+    "pip>=26.1.2",
+    "pyasn1>=0.6.4",
+    "setuptools>=83.0.0",
+    "torch>=2.13.0",
     # urllib3 2.7.0 fixes two high-severity issues:
     #   GHSA-mf9v-mfxr-j63j  decompression-bomb bypasses in streaming API parts
     #   GHSA-qccp-gfcp-xxvc  sensitive headers forwarded in proxied low-level redirects

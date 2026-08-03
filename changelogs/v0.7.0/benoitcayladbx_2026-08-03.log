@@ -742,3 +742,32 @@ Modified files:
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 7 passed,
 1 warning in 0.15s. `uv run pytest -q -m "not scenario"` was stopped after
 120s while still progressing through unrelated tests (23%; no failures seen).
+
+## Raise dependency security floors
+
+Context: Dependabot reported vulnerable versions of GitPython, MCP, NLTK,
+Pillow, pip, pyasn1, setuptools, and torch in the application and standalone
+MCP lockfiles. The OSV verification pass also found a newer Click advisory.
+Both dependency graphs now resolve to patched releases and retain public PyPI
+artifact URLs required by frozen Databricks App deployments.
+
+Changes:
+
+1. `pyproject.toml`
+   Raise the NLTK optional dependency and add transitive security floors for
+   Click, GitPython, MCP, Pillow, pip, pyasn1, setuptools, and torch.
+2. `uv.lock`
+   Resolve the application graph to patched releases from the public PyPI CDN.
+3. `src/mcp-server/pyproject.toml`
+   Add MCP and pyasn1 security floors to the standalone server project.
+4. `src/mcp-server/uv.lock`
+   Resolve the standalone server graph to MCP 1.28.1 and pyasn1 0.6.4.
+
+Modified files:
+- `pyproject.toml`
+- `uv.lock`
+- `src/mcp-server/pyproject.toml`
+- `src/mcp-server/uv.lock`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.86s; OSV `pip-audit` → no known vulnerabilities in either lockfile export.
