@@ -571,3 +571,25 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 1 passed, 6 failed in 0.16s (expected: CSS token test green; JS hook + content/page tests red until later tasks)
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site shared JS (Task 2)
+--------------------------------------------------------------------------------
+
+Context:
+Task 2 of the GitHub Pages marketing site: implement mobile nav toggle, active
+link marking, and hero motion hooks in `site/assets/js/site.js`. HTML pages
+from Tasks 3+ will consume `[data-nav-toggle]`, `[data-site-nav]`, and `.hero`.
+
+Changes:
+
+1. `site/assets/js/site.js`
+   Mobile nav open/close with `aria-expanded`; closes on link click; sets
+   `aria-current="page"` from pathname; adds `hero.is-ready` via rAF when
+   `prefers-reduced-motion` is not set.
+
+Modified files:
+- `site/assets/js/site.js`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_site_js_has_nav_and_motion_hooks` → 1 passed in 0.10s
