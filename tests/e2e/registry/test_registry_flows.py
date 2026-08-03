@@ -29,3 +29,36 @@ class TestRegistryModal:
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
         assert page.locator("a.navbar-brand").is_visible()
+
+    def test_confirm_stacks_over_registry_modal(self, page, live_server):
+        """Confirm over Registry must mark the Registry as underlying and
+        clean up after cancel — covers white-on-white stacking."""
+        page.goto(live_server)
+        page.wait_for_load_state("domcontentloaded")
+
+        page.locator("#registryModalToggle").click()
+        page.wait_for_selector("#registryModal.show", state="visible")
+
+        page.evaluate(
+            """() => {
+                window.__obConfirmPromise = showConfirmDialog({
+                    title: 'Load Domain',
+                    message: 'Load <strong>fibo</strong> version <strong>v1</strong>?',
+                    confirmText: 'Load',
+                    cancelText: 'Cancel',
+                });
+            }"""
+        )
+
+        page.wait_for_selector(".modal.ob-modal-stacked.show", state="visible")
+        assert page.locator("#registryModal.ob-modal-underlying").count() == 1
+        assert page.locator(".modal-backdrop.ob-modal-stacked-backdrop").count() >= 1
+
+        page.locator(".modal.ob-modal-stacked .btn-secondary").click()
+        page.wait_for_selector(".modal.ob-modal-stacked", state="detached")
+        page.wait_for_selector(
+            ".modal-backdrop.ob-modal-stacked-backdrop", state="detached"
+        )
+
+        assert page.locator("#registryModal.show").count() == 1
+        assert page.locator("#registryModal.ob-modal-underlying").count() == 0

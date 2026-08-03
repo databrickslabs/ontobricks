@@ -395,6 +395,46 @@ class GlobalConfigService:
             host, token, registry_cfg, {"edit_lock_ttl_s": max(0, int(ttl_s))}
         )
 
+    def get_analytics_job_enabled(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> Optional[bool]:
+        """Return the admin's graph-analytics job setting, or ``None`` if unset.
+
+        Three-state on purpose, following :meth:`get_edit_lock_ttl_s`: ``None``
+        means "no admin has expressed an opinion", so the caller falls back to
+        the ``ONTOBRICKS_ANALYTICS_JOB_ENABLED`` deployment default. A plain
+        ``bool`` return would make "admin turned it off" indistinguishable from
+        "never configured", and the off case has to be able to override an env
+        var that enables it. Deliberately absent from :meth:`_empty` so a failed
+        or unconfigured load yields ``None`` rather than masking that fallback.
+        """
+        raw = self.load(host, token, registry_cfg).get("analytics_job_enabled", None)
+        if raw is None or raw == "":
+            return None
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, (int, float)):
+            return bool(raw)
+        if isinstance(raw, str):
+            token_ = raw.strip().lower()
+            if token_ in {"1", "true", "yes", "on"}:
+                return True
+            if token_ in {"0", "false", "no", "off"}:
+                return False
+        return None
+
+    def set_analytics_job_enabled(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        enabled: bool,
+    ) -> Tuple[bool, str]:
+        """Persist the admin's graph-analytics job on/off toggle."""
+        return self._save(
+            host, token, registry_cfg, {"analytics_job_enabled": bool(enabled)}
+        )
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

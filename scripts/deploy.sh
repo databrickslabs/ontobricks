@@ -43,9 +43,9 @@ set -euo pipefail
 #   scripts/deploy.sh --no-bootstrap      # skip the perm/Lakebase bootstrap steps
 #   scripts/deploy.sh --skip-app-yaml     # skip the app.yaml render (use the existing file as-is)
 #
-# Targets (declared in `databricks.yml`):
-#   - `dev`           Volume-only registry backend
-#   - `dev-lakebase`  Volume + Lakebase Autoscaling Postgres binding (default)
+# Targets:
+#   - `dev-lakebase-<INSTANCE_ID>`  default — separate state per id (Lakebase registry)
+#   - `dev` / `dev-lakebase`        legacy unsuffixed (static in databricks.yml)
 #
 # Prerequisites:
 #   - Databricks CLI >= 0.250.0
@@ -116,6 +116,8 @@ CONFIG_FILE="scripts/deploy.config.sh"
 require_file "$CONFIG_FILE" "the deploy configuration (single source of truth)"
 # shellcheck disable=SC1090
 . "$CONFIG_FILE"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/_internal/_ensure-instance-target.sh"
 
 # Local CLI flags — override (don't pollute) what the config exported.
 TARGET="$DAB_TARGET"
@@ -141,6 +143,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Per-INSTANCE_ID target (``dev-lakebase-<id>``) → write the
+# generated DAB target so Terraform state lives under a fresh directory and
+# cannot destroy an app tracked by another instance's target.
+ensure_instance_target "$TARGET" \
+    || die "failed to materialise DAB target '${TARGET}' (check DEFAULT_INSTANCE_ID)"
+
 IS_LAKEBASE=false
 [[ "$TARGET" == *lakebase* ]] && IS_LAKEBASE=true
 
@@ -155,6 +163,7 @@ _dab_var_overrides=(
     "--var=registry_catalog=${REGISTRY_CATALOG}"
     "--var=registry_schema=${REGISTRY_SCHEMA}"
     "--var=registry_volume=${REGISTRY_VOLUME}"
+    "--var=neo4j_secret_scope=${NEO4J_SECRET_SCOPE}"
     "--var=lakebase_project=${LAKEBASE_PROJECT}"
     "--var=lakebase_branch=${LAKEBASE_BRANCH}"
     "--var=lakebase_database_resource_segment=${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
@@ -168,6 +177,7 @@ EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATAB
 echo "${_C_BLU}=== OntoBricks Deployment (DAB) ===${_C_RST}"
 echo "Config  : $CONFIG_FILE"
 [[ -n "${DATABRICKS_CONFIG_PROFILE:-}" ]] && echo "Profile : $DATABRICKS_CONFIG_PROFILE"
+echo "Instance: ${INSTANCE_ID:-?}"
 echo "Target  : $TARGET"
 echo "App     : $APP_NAME ($APP_RESOURCE_KEY)"
 echo "MCP app : $MCP_APP_NAME ($MCP_APP_RESOURCE_KEY)"
@@ -361,6 +371,41 @@ if $IS_LAKEBASE && $DO_BOOTSTRAP; then
             info "preflight passed with ${_PREFLIGHT_WARNINGS} warning(s) — review messages above."
         else
             ok "bootstrap-lakebase-perms.sh and registry migrations ready"
+        fi
+    fi
+fi
+
+# ── 2d. Destructive-change + app secret preflight ────────────────────
+# Runs before anything is rendered or uploaded, because both failures it looks
+# for are unrecoverable once `terraform apply` starts: renaming an app destroys
+# it, and a missing secret scope then blocks the replacement from being created.
+begin_step "Destructive-change preflight"
+_PREFLIGHT_FAILED=0
+_PREFLIGHT_WARNINGS=0
+
+# A dry run should report the replacement, not interrogate the operator about it.
+if $DRY_RUN; then
+    ALLOW_APP_RENAME=1 _preflight_check_app_rename "$TARGET" "$APP_RESOURCE_KEY" "$APP_NAME" || true
+else
+    _preflight_check_app_rename "$TARGET" "$APP_RESOURCE_KEY" "$APP_NAME" \
+        || die "aborted before any change was made — nothing was destroyed."
+fi
+
+# Only the target that actually binds the secret should be held to it.
+_target_binds_neo4j_secret() {
+    awk -v want="  ${TARGET}:" '
+        $0 == want { inblock = 1; next }
+        inblock && /^  [a-zA-Z]/ { inblock = 0 }
+        inblock && /key: neo4j-password/ { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' databricks.yml
+}
+if _target_binds_neo4j_secret; then
+    if ! _preflight_check_secret_scope "${NEO4J_SECRET_SCOPE:-}" "neo4j-password"; then
+        if $DRY_RUN; then
+            warn "secret binding preflight failed — the app resource would fail to deploy."
+        else
+            die "the app binds a secret that cannot be read — fix it above, or remove the neo4j-password overlay from the '${TARGET}' target in databricks.yml."
         fi
     fi
 fi

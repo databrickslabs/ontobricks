@@ -668,6 +668,32 @@ async def save_edit_lock_ttl(
     )
 
 
+@router.get("/analytics-job-enabled")
+async def get_analytics_job_enabled(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get whether oversized graphs may use the serverless analytics job."""
+    return config_service.get_analytics_job_enabled_result(session_mgr, settings)
+
+
+@router.post("/save-analytics-job-enabled")
+async def save_analytics_job_enabled(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save the serverless analytics job toggle (admin only, global)."""
+    data = await request.json()
+    enabled = bool(data.get("analytics_job_enabled", False))
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_analytics_job_enabled_result(
+        enabled, email, user_token, session_mgr, settings
+    )
+
+
 # ===========================================
 # Permissions Management
 # ===========================================

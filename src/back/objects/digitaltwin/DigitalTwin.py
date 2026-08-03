@@ -708,6 +708,21 @@ class DigitalTwin:
         ts["_ts_cache_timestamp"] = time.time()
         self._domain.save()
 
+    def clear_ts_cache(self, section: str) -> None:
+        """Drop a cached triplestore section so the next read recomputes it.
+
+        The TTL alone cannot cover a setting that changes what a section
+        *reports*: ``stats`` carries the analytics job availability, so an admin
+        flipping the Settings → Global toggle would otherwise keep reading the
+        pre-change answer until the entry expired.
+        """
+        ts = self._domain.triplestore or {}
+        stats = ts.get("stats")
+        if not isinstance(stats, dict) or section not in stats:
+            return
+        del stats[section]
+        self._domain.save()
+
     async def get_or_fetch_graph_status(self, settings) -> Dict[str, Any]:
         """Return graph triplestore status from session cache, or fetch live and cache."""
         cached = self.get_ts_cache("status")
@@ -2673,17 +2688,15 @@ class DigitalTwin:
         task_id: str,
         domain,
         settings,
-        store: Any,
         graph_name: str,
         *,
         predicate_filter: Optional[List[str]] = None,
         class_filter: Optional[List[str]] = None,
-        max_triples: int = 500_000,
-        max_nodes_betweenness: int = 2_000,
+        top_n: int = 100,
     ) -> None:
         """Compute graph metrics in a worker thread and persist the LAST result.
 
-        Runs the same NetworkX pipeline as the synchronous
+        Runs the same pipeline as the synchronous
         :meth:`compute_graph_metrics`, then UPSERTs the result into the
         registry ``graph_analytics`` cache keyed by ``(folder, version)``
         so the Analytics page and the Domain Validation cockpit can render
@@ -2702,16 +2715,20 @@ class DigitalTwin:
         t0 = _time.time()
         try:
             tm.start_task(task_id, "Computing knowledge graph metrics...")
-            tm.update_progress(task_id, 20, "Running centrality analysis")
+            tm.update_progress(
+                task_id, 20, "Starting the Databricks graph analytics job"
+            )
 
             dt = DigitalTwin(domain)
             result = dt.compute_graph_metrics(
-                store,
                 graph_name,
                 predicate_filter=predicate_filter,
                 class_filter=class_filter,
-                max_triples=max_triples,
-                max_nodes_betweenness=max_nodes_betweenness,
+                top_n=top_n,
+                settings=settings,
+                # A job run takes minutes, so forward its state to the tracker
+                # the front-end is already polling.
+                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
             )
 
             tm.update_progress(task_id, 85, "Storing analytics result")
@@ -2759,14 +2776,22 @@ class DigitalTwin:
             node_count = stats.get("node_count", 0)
             tm.complete_task(
                 task_id,
-                result={"node_count": node_count, "duration_ms": duration_ms},
-                message=f"Analysis done: {node_count} nodes in {duration_ms} ms",
+                result={
+                    "node_count": node_count,
+                    "duration_ms": duration_ms,
+                    "mode": "job",
+                },
+                message=(
+                    f"Analysis done: {node_count:,} nodes in {duration_ms} ms"
+                    " (computed on Databricks)"
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Graph metrics task failed: %s", exc)
             # Record the failed run in the history (best-effort) so users can
-            # see it in the Analytics History tab. The last good cached result
-            # is intentionally left untouched.
+            # see it in the analytics table on the Runs page (Knowledge
+            # Graph → Management → Runs). The last good cached result is
+            # intentionally left untouched.
             if folder and version:
                 try:
                     RegistryService.from_context(
@@ -3346,67 +3371,117 @@ class DigitalTwin:
 
     def compute_graph_metrics(
         self,
-        store: Any,
         graph_name: str,
         predicate_filter: Optional[List[str]] = None,
         class_filter: Optional[List[str]] = None,
-        max_triples: int = 500_000,
-        max_nodes_betweenness: int = 2_000,
+        top_n: int = 100,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """Compute centrality and structural metrics on the full knowledge graph.
+        """Compute centrality and structural metrics on the mapped graph.
 
-        Delegates to :class:`GraphMetrics` from ``back.core.graph_analysis``.
+        There is one compute path: the Databricks analytics job, reading the
+        ``…_data`` snapshot the Build materialises from the R2RML VIEW. That is
+        deliberate — the same domain must produce the same KPIs whatever engine
+        holds its graph, and at any size.
+
+        Raises rather than degrading when the job cannot run: a run that
+        silently returns fewer metrics is exactly what this path replaced.
+
+        *graph_name* names the output table only; the data comes from the
+        resolved source. *on_progress* receives ``(percent, message)``.
+
         Returns a JSON-serializable dict matching the API contract.
         """
-        from back.core.graph_analysis import GraphMetrics, MetricsRequest
+        from back.core.graph_analysis import MetricsRequest, resolve_analytics_source
 
-        request = MetricsRequest(
-            predicate_filter=predicate_filter,
-            class_filter=class_filter,
-            max_triples=max_triples,
-            max_nodes_betweenness=max_nodes_betweenness,
+        source_table, reason = resolve_analytics_source(self._domain, settings)
+        if not source_table:
+            raise InfrastructureError(
+                "The graph analytics job cannot read this domain", detail=reason
+            )
+
+        job_metrics = DigitalTwin.build_job_metrics(
+            self._domain,
+            settings,
+            source_table=source_table,
+            graph_name=graph_name,
+            top_n=top_n,
         )
-        service = GraphMetrics(store, graph_name)
-        result = service.compute(request)
+        request = MetricsRequest(
+            predicate_filter=predicate_filter, class_filter=class_filter
+        )
+        return job_metrics.compute(request, on_progress=on_progress).to_dict()
 
-        return {
-            "nodes": {
-                uri: {
-                    "degree": m.degree,
-                    "pagerank": m.pagerank,
-                    "betweenness": m.betweenness,
-                    "closeness": m.closeness,
-                    "clustering": m.clustering,
-                }
-                for uri, m in result.nodes.items()
-            },
-            "stats": {
-                "node_count": result.stats.node_count,
-                "graph_node_count": result.stats.graph_node_count,
-                "edge_count": result.stats.edge_count,
-                "connected_components": result.stats.connected_components,
-                "avg_degree": result.stats.avg_degree,
-                "density": result.stats.density,
-                "elapsed_ms": result.stats.elapsed_ms,
-            },
-            "top_pagerank": result.top_pagerank,
-            "node_types": result.node_types,
-            "node_labels": result.node_labels,
-            "entity_type_profiles": {
-                k: {
-                    "uri": v.uri,
-                    "count": v.count,
-                    "avg_degree": v.avg_degree,
-                    "avg_clustering": v.avg_clustering,
-                    "avg_betweenness": v.avg_betweenness,
-                    "distinct_predicates": v.distinct_predicates,
-                    "has_temporal_predicates": v.has_temporal_predicates,
-                    "is_flat": v.is_flat,
-                    "flat_reasons": v.flat_reasons,
-                }
-                for k, v in result.entity_type_profiles.items()
-            },
-        }
+    @staticmethod
+    def build_job_metrics(
+        domain: Any,
+        settings: Any,
+        *,
+        source_table: str,
+        graph_name: str,
+        top_n: int = 100,
+    ) -> Any:
+        """Wire a :class:`JobMetrics` from domain credentials and settings.
+
+        *graph_name* is used only to name the output table, not to read data:
+        the job reads *source_table*, which is always the mapped snapshot.
+        """
+        from back.core.graph_analysis import JobMetrics, LakeflowRunner
+        from back.core.databricks import DatabricksClient
+        from back.core.helpers import (
+            get_databricks_host_and_token,
+            resolve_analytics_job_name,
+            resolve_delta_warehouse_id,
+        )
+        from back.objects.registry import RegistryCfg
+
+        host, token = get_databricks_host_and_token(domain, settings)
+        warehouse_id = resolve_delta_warehouse_id(domain, settings)
+        client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+
+        job_name = resolve_analytics_job_name(settings)
+
+        runner = LakeflowRunner(
+            job_name,
+            timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
+        )
+
+        output_schema = (
+            getattr(settings, "analytics_job_output_schema", "") or ""
+        ).strip()
+        if not output_schema:
+            rcfg = RegistryCfg.from_domain(domain, settings)
+            output_schema = f"{rcfg.catalog}.{rcfg.schema}"
+
+        return JobMetrics(
+            source_table,
+            runner=runner,
+            query=client.execute_query,
+            output_table=DigitalTwin.analytics_output_table(
+                output_schema, domain, graph_name
+            ),
+            top_n=top_n,
+            pagerank_iterations=int(
+                getattr(settings, "analytics_job_pagerank_iterations", 20) or 20
+            ),
+            pivots=int(getattr(settings, "analytics_job_pivots", 64) or 0),
+            max_depth=int(getattr(settings, "analytics_job_max_depth", 32) or 32),
+        )
+
+    @staticmethod
+    def analytics_output_table(output_schema: str, domain: Any, graph_name: str) -> str:
+        """Build the per-version output table name for the analytics job.
+
+        Only ``[A-Za-z0-9_]`` survives, because the name is interpolated into
+        generated SQL unquoted on both the job and the read-back side.
+        """
+        import re
+
+        folder = str(getattr(domain, "uc_domain_folder", "") or "") or graph_name
+        version = str(getattr(domain, "current_version", "") or "")
+        slug = re.sub(r"[^A-Za-z0-9_]+", "_", f"{folder}_{version}").strip("_").lower()
+        return f"{output_schema}.graph_metrics_{slug or 'default'}"
 
     def interpret_graph_metrics(
         self,

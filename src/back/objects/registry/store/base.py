@@ -122,7 +122,8 @@ class GraphAnalyticsRun(TypedDict, total=False):
     Lightweight metadata captured for *every* analysis launched (success
     or failure) on ``(folder, version)`` — unlike
     :class:`GraphAnalyticsResult`, which caches only the last full result.
-    Backs the Analytics page "History" tab. Append-only; capped per tuple.
+    Backs the analytics table on the Runs page (Knowledge Graph →
+    Management → Runs). Append-only; capped per tuple.
     """
 
     id: int                      # row id (0 for stores without a serial PK)
@@ -493,11 +494,14 @@ class RegistryStore(ABC):
         """
 
     def load_graph_analytics_runs(
-        self, folder: str, version: str, *, limit: int = 100
+        self, folder: str, version: Optional[str] = None, *, limit: int = 100
     ) -> List[GraphAnalyticsRun]:
-        """Newest-first analytics run history for ``(folder, version)``,
-        capped at *limit* rows. Empty list on any error. Default is an
-        empty list for stores without a run-history table.
+        """Newest-first analytics run history for *folder*, capped at *limit*.
+
+        ``version=None`` spans every version of the folder, which is what
+        the Runs page asks for; pass a version to scope to one. Empty list
+        on any error. Default is an empty list for stores without a
+        run-history table.
         """
         return []
 

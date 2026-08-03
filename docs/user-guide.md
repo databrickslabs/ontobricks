@@ -481,6 +481,17 @@ Click **Build** in the sidebar to manage your triple store:
 - **Synchronize**: Generates all triples from your mappings and writes them to the Delta view in Unity Catalog and to the configured Graph DB engine (Lakebase Postgres)
 - **Last Updated**: When the table contains data, the status area displays the last modification date and time (for Delta from Unity Catalog metadata; for Lakebase from the Postgres `count_triples` + table metadata)
 
+### Runs (Sidebar)
+
+Click **Runs** in the sidebar (next to **Build**, in the **Management** group) to see the domain's run history. The page has two tabs, each with its own table, newest first — **neither has a version filter, so both always span every version of the domain**:
+
+- **Build runs** (the tab shown first) — one row per synchronize (`Build`) run: ID, date & time, version, status, triple count, and a **Details** button.
+- **Analytics runs** — one row per analysis launched from the **Analytics** page, with 11 columns: Date & Time, Scope, Version, Status, Nodes, Edges, Components, Avg Degree, Density, Duration, and **Details**. **Scope** shows the entity type(s) the run was filtered to, or *All types*. **Version** is shown per row because, with no filter, rows from different domain versions interleave in the same list. A **failed** run shows a red **Failed** badge and dashes in its metric columns instead of the zeros it stored internally — a run that errored out is not the same thing as a graph with zero nodes.
+
+Click **Details** on an analytics row to open a modal with the full scope (entity-type local names plus their raw URIs), the graph metrics, the run duration, the background task ID, and any error text if the run failed.
+
+Both tabs are filled when you open the section, whichever one is showing, so switching between them never waits on a fetch. The two load independently: if one fails, the other still renders normally and only the failing tab shows an inline error. The **Refresh** button above the tabs reloads both.
+
 ### Data Quality (Sidebar)
 
 Click **Data Quality** in the sidebar to run SHACL-based quality checks against the triple store:
@@ -553,20 +564,28 @@ The cluster panel also displays:
 
 ### Analytics (Sidebar)
 
-Click **Analytics** in the sidebar to compute and visualise centrality and structural metrics for the entities in your knowledge graph. Analytics runs a server-side NetworkX computation — no sampling is needed for typical graphs.
+Click **Analytics** in the sidebar to compute and visualise centrality and structural metrics for the entities in your knowledge graph. Analytics always runs on a **serverless Databricks Lakeflow job** — there is no in-memory or SQL-pushdown fallback.
 
-Because this computation can take a while on large graphs, it runs **asynchronously** in the background. The **last** result is persisted in the registry (the `graph_analytics` table), so re-opening the Analytics page (or the Domain Validation cockpit) shows the previously computed result immediately without recomputing — a "Last computed …" line marks when it was produced.
+Because the job can take a while on large graphs, it runs **asynchronously** in the background. The **last** result is persisted in the registry (the `graph_analytics` table), so re-opening the Analytics page (or the Domain Validation cockpit) shows the previously computed result immediately without recomputing — a "Last computed …" line marks when it was produced.
 
-> **Graph-size limit.** The analysis loads the full triple set into memory (NetworkX), so it is capped at `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` triples (default **500,000**). Because the triple count is already known, the Analytics page warns and disables **Run Analysis** up-front when the graph is over the limit — you never wait for a background job only to see it fail. Class/predicate filters narrow the *charts*, not the load, so they do **not** lift this limit; reduce the synced graph (exclude entity types in **KG → Sync**) or raise the setting.
+> **Prerequisites.** Three conditions must all be met before a run can start; the Analytics panel tells you which one is missing if any of them fails:
+>
+> 1. **Admin toggle on** — an admin must enable *Compute large-graph metrics on Databricks* in **Settings → Global**. `ONTOBRICKS_ANALYTICS_JOB_ENABLED` sets the *initial* value for a new deployment; once an admin uses the checkbox their choice wins (including an explicit "off").
+> 2. **Bundle deployed** — the Lakeflow job (`resources/graph_analytics.job.yml`) must be deployed via `make deploy`. OntoBricks resolves the job by name (suffix-matching so `[dev <user>]` prefixes work automatically).
+> 3. **Domain built** — the domain must have been built at least once after this version of OntoBricks was deployed. Build unconditionally materialises a Delta snapshot of the R2RML-mapped triples (`catalog.schema.triplestore_<domain>_V<n>_data`). If that snapshot is absent or empty, the panel names this requirement and the remedy is a rebuild. Domains built before upgrading to this version need one rebuild.
+>
+> **What the job scores.** Analytics reads the mapped-triple snapshot — the same table regardless of whether your backend is Lakehouse, Lakebase or Neo4j. Inferred and cohort triples are out of scope; reasoning does not affect the KPIs.
+>
+> **Betweenness and closeness are estimates.** The job samples `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` source nodes (default **64**) and runs a breadth-first search from each (the Brandes–Pich approach). Both charts carry an "Estimate" note. Treat them as a ranking of the clear leaders, not as absolute values. If the BFS hits the depth cap (`ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH`, default **32**) before the graph is fully explored, betweenness and closeness are withheld entirely — reported as unavailable rather than as numbers — because truncated distance sums would be biased. Raise `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` and re-run to resolve this. Set pivots to `0` to skip both metrics and make the job cheaper; setting pivots at or above the node count makes them exact.
+>
+> **Entity-type counts.** The *Instances* column in the entity-type profile table shows the full population of each class in the mapped graph, including isolated nodes (instances with no relationships). This is a more complete number than earlier releases, which showed only the connected instances on unfiltered runs — types that have isolated nodes will show higher counts.
 
 #### Running an Analysis
 
-1. (Optional) Select an **entity type** from the dropdown to restrict the analysis to one class (e.g. "Customer"). Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. "All types (full graph)" includes every entity.
+1. (Optional) Select an **entity type** from the dropdown to restrict the analysis to one class (e.g. "Customer"). Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. The filter is applied in SQL inside the Lakeflow job, against the Delta snapshot — not by the graph store — so there is no in-memory limit to work around. "All types (full graph)" includes every entity.
 2. Click **Run Analysis**. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically: six stat cards appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed) and five interactive charts render below. Each new run replaces the previous stored result for that domain version.
 
-#### History
-
-The **History** tab (after *AI Insights*) lists every analysis launched for the current domain version — newest first — including failed runs. Each row shows when it ran, the scope (a single entity type or *All types*), its status, and the headline metrics (nodes, edges, components, average degree, density) plus the run duration. While the **last** full result is what the other tabs render, this tab keeps a lightweight audit trail of past runs so you can see how the graph evolved over time. The history is capped server-side per domain version.
+> **Looking for past runs?** The Analytics page itself only ever shows the **last** result per domain version. The full run history — every analysis ever launched, across every version, including failed runs — lives on **Knowledge Graph → Management → Runs** as a second table below the build-runs table (see **Runs (Sidebar)** above).
 
 #### Reading the Charts
 

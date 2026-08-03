@@ -578,3 +578,268 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
 
 Tests: uv run pytest -q -m "not scenario" → 3462 passed, 275 skipped, 5 deselected in 23.40s
+
+================================================================================
+Approximate betweenness & closeness in the Databricks analytics job
+================================================================================
+
+Context: after the serverless graph-analytics job landed (PageRank, clustering
+coefficient, connected components), betweenness and closeness were still the
+only two metrics with no engine-side path — an oversized graph could get three
+of the five per-node metrics and had to fall back to an entity-type filter for
+the other two. Computing them exactly needs shortest paths from every node to
+every other node (O(V*E)), which is not viable at the sizes the job exists for,
+so they are now estimated with Brandes-Pich pivot sampling and clearly labelled
+as estimates rather than presented as exact values.
+
+The design decision that makes this trustworthy: the pivot set is an *input*,
+not a hard-coded sample. Both estimators are written so that "pivots = every
+node" reduces algebraically to the exact textbook definition, which means the
+SQL can be checked against NetworkX for an exact match before any approximation
+is involved. Verified: betweenness and closeness match nx.betweenness_centrality
+and nx.closeness_centrality to 1e-9 on four graph fixtures, including a
+disconnected graph and a 4-cycle where two shortest paths tie.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Added a fifth stage to the generated SQL. `build_pivots` samples k nodes
+   deterministically (`ORDER BY md5(n)` — md5 rather than a plain hash because
+   it exists in both Spark and Postgres; ordering by the URI would sample one
+   entity type on a real KG). `bfs_init`/`bfs_iteration` run a *single*
+   multi-source breadth-first search in which all pivots advance together,
+   carrying both distance and sigma (shortest-path counts), so the loop runs
+   for the graph diameter rather than k * diameter. `delta_init`/
+   `delta_iteration` implement Brandes' backward dependency accumulation.
+   `build_centrality_rollups` reduces per-pivot results to one row per node.
+   `write_output` gained `betweenness`/`closeness` columns and the two
+   estimators; the summary gained `pivot_count` and `bfs_complete`. New
+   `--pivots` / `--max-depth` arguments; new `_run_pivot_centrality` driver.
+2. src/back/core/graph_analysis/models.py
+   `MetricsResult` gained `approximate_metrics` and `pivot_count`, kept
+   separate from `unavailable_metrics` so the UI can distinguish "sampled" from
+   "not computed" — conflating them would either hide real numbers or present
+   estimates as exact.
+3. src/back/core/graph_analysis/JobMetrics.py
+   Read-back extended to the new columns and summary fields; top-nodes query now
+   also unions the top-k by betweenness and by closeness. Job mode now reports
+   nothing unavailable when pivots were sampled. Estimates are *withheld*
+   (reported unavailable, not written onto nodes) when no pivots were sampled or
+   when the BFS hit its depth cap, since a truncated search biases the distance
+   sums — a wrong number is worse than a missing one.
+4. src/back/core/graph_analysis/LakeflowRunner.py
+   `submit`/`run_and_wait` pass a `pivots` job parameter.
+5. resources/graph_analytics.job.yml
+   New `pivots` job parameter (default 64) wired to `--pivots`.
+6. src/shared/config/settings.py
+   New `analytics_job_pivots` / `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` (default 64),
+   documented as the job's dominant cost.
+7. src/back/objects/digitaltwin/DigitalTwin.py
+   `build_job_metrics` passes the pivot setting through.
+8. src/front/templates/partials/dtwin/_query_analytics.html
+   Approximate metrics render normally but carry a standing "Estimate" note
+   stating the pivot count and warning that adjacent ranks can swap. The blue
+   over-limit banner now says betweenness/closeness are estimated rather than
+   unavailable. The amber (pushdown-only) banner now mentions that the
+   serverless job exists and names the flag that enables it — its silence about
+   that option was what made the feature undiscoverable.
+9. tests/units/core/test_graph_analytics_job_sql.py
+   New TestBetweennessAndClosenessParity: exact parity against NetworkX with a
+   full pivot set on four fixtures; disconnected-component handling; sigma
+   correctness on a 4-cycle; error decreasing as k grows (proves the n/k
+   rescaling); determinism across runs; pivots=0 skipping both; depth-cap
+   truncation reported. Dialect coverage extended to all new statements.
+10. tests/units/core/test_job_metrics.py
+   Output/summary fixtures carry the new columns; new tests for the two
+   withholding paths and for estimates landing on nodes only when available.
+11. docs/user-guide.md, docs/get-started.md
+   Documented that job-mode betweenness/closeness are estimates, how to trade
+   pivot count against cost, and that pivots >= node count makes them exact.
+
+Note on accuracy (measured, karate club, 34 nodes): with a full pivot set both
+metrics are exact. With k=8 the top betweenness node is still identified but
+its value reads 0.328 vs a true 0.438, and closeness ranks n33 above n0 when
+the truth is the reverse. Hence the UI wording: use these to find the leaders,
+not as absolute values.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/LakeflowRunner.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/shared/config/settings.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- resources/graph_analytics.job.yml
+- tests/units/core/test_graph_analytics_job_sql.py
+- tests/units/core/test_job_metrics.py
+- docs/user-guide.md
+- docs/get-started.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3616 passed, 275 skipped,
+5 deselected in 30.35s
+
+================================================================================
+Expose the analytics tunables in app.yaml.template
+================================================================================
+
+Context: closing out the Lakeflow graph-analytics plan. Every plan item was
+already implemented and committed except one gap in the final "settings and
+tests" item: `app.yaml.template` declared only
+`ONTOBRICKS_ANALYTICS_JOB_ENABLED`, so a deployed app had no visible knob for
+the other analytics settings and silently took whatever the code defaulted to.
+
+Changes:
+
+1. app.yaml.template
+   Declared the remaining analytics env vars with literal defaults mirroring
+   settings.py: `ONTOBRICKS_ANALYTICS_MAX_TRIPLES`,
+   `..._PUSHDOWN_ENABLED`, `..._TOP_N`, `..._JOB_NAME`,
+   `..._JOB_PAGERANK_ITERATIONS`, `..._JOB_PIVOTS`. Literals rather than
+   `${APP_*}` placeholders because the deploy script uses
+   `string.Template.substitute`, so every placeholder must exist in the
+   environment or the render fails. `JOB_NAME` is deliberately empty, which
+   means "derive `<app>-graph-analytics`" and matches the bundle — a
+   hard-coded name would break every renamed deploy.
+2. tests/units/settings/test_app_yaml_template.py
+   New contract tests. The template now duplicates the analytics defaults, and
+   duplication rots silently: a default changed in one place and not the other
+   makes a deployed app behave differently from a local one with nothing to
+   signal it. These assert the template renders under the same strict
+   substitution the deploy script uses, has no duplicated env names, and that
+   each analytics value *parses* to the same thing the corresponding `Settings`
+   field defaults to (comparing parsed values, not raw strings, so `"true"` vs
+   `"True"` is not a false failure). Also pins the job toggle to opt-in, since
+   job mode needs a deployed bundle and Spark-readable data.
+
+   Verified the drift test is not vacuous: changing the template's TOP_N to 250
+   fails exactly that parametrised case, and only that one.
+
+Deliberate deviation from the plan, for the record: plan todo 2 mentions "with
+a Neo4j Cypher override" for the SQL aggregations, but the plan body (B5 and
+"What genuinely cannot be saved") specifies that Neo4j is unsupported for
+pushdown and stays on the in-app path with the cap. The implementation follows
+the body — `supports_pushdown` returns False for any non-SQL dialect — so there
+is no Cypher override, and the docs say oversized Neo4j graphs are still
+rejected. The per-type rollups are also split across `get_type_edge_stats` +
+`get_type_predicate_pairs` composed in `PushdownMetrics._build_type_profiles`
+rather than a single `get_type_profiles`, which is the same SQL work under a
+different decomposition.
+
+Also note: betweenness and closeness now ship as pivot-sampled estimates
+(previous entry), which the plan had recommended against. That was an explicit
+later decision by the user; the estimates are labelled as such in the UI and
+are exact when the pivot count reaches the node count, which is how they are
+tested.
+
+Modified files:
+- app.yaml.template
+- tests/units/settings/test_app_yaml_template.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3634 passed, 275 skipped,
+5 deselected in 24.08s
+
+================================================================================
+Admin toggle for the Databricks graph-analytics job (Settings → Global)
+================================================================================
+
+Context: job mode was reachable only via the `ONTOBRICKS_ANALYTICS_JOB_ENABLED`
+env var, which meant a redeploy to turn the feature on or off. That is the wrong
+control surface for something an admin should own at runtime, and it made the
+feature effectively undiscoverable — a user hitting the over-limit banner had no
+way to act on it. Now there is a checkbox in Settings → Global, and the env var
+becomes the deployment default it overrides.
+
+Followed the existing `edit_lock_ttl_s` precedence pattern (admin global-config
+value beats env var) and the `use_cloud_fetch` shape for boolean handling.
+
+Changes:
+
+1. src/back/objects/session/GlobalConfigService.py
+   New `get_analytics_job_enabled` / `set_analytics_job_enabled`. The getter is
+   deliberately three-state (`Optional[bool]`): `None` means "no admin has
+   expressed an opinion" so the caller falls back to the env var, while a stored
+   `False` still overrides an env var that enables the job. A plain `bool` would
+   make "admin turned it off" indistinguishable from "never configured". Also
+   parses "false"/"off"/"0" strings, since JSON round-trips through a text
+   column on some backends and a bare truthiness check would read those as True.
+   Kept out of `_empty()` so a failed load yields `None` rather than masking the
+   env fallback.
+2. src/back/core/helpers/DatabricksHelpers.py
+   New `resolve_analytics_job_enabled(domain, settings)`. Bypasses
+   `_resolve_global_setting` for the documented reason `resolve_use_cloud_fetch`
+   does: its `if val: return val` short-circuit would discard an admin's
+   explicit "off". Falls back to the env default when the registry is
+   unconfigured or the lookup raises, so a registry hiccup cannot silently flip
+   the feature either way. Re-exported from `back.core.helpers`.
+3. src/api/routers/internal/dtwin.py
+   Both `settings.analytics_job_enabled` read sites (the `/metrics/compute` mode
+   decision and `analytics_job_available` in `/dtwin/sync/stats`) now go through
+   the resolver.
+4. src/back/objects/domain/SettingsService.py
+   New `get_analytics_job_enabled_result` / `save_analytics_job_enabled_result`,
+   the latter gated by `require_admin_error`. The read result carries `source`
+   ("admin" | "default") and `env_default`, because an unconfigured toggle
+   silently tracks the env var and a bare checkbox would imply somebody had
+   chosen that state.
+5. src/api/routers/internal/settings.py
+   `GET /settings/analytics-job-enabled` and
+   `POST /settings/save-analytics-job-enabled`.
+6. src/front/templates/settings.html
+   Checkbox in the Global section with the admin-only badge, what each compute
+   mode produces, and the prerequisites (deployed bundle; Delta or Lakebase
+   `managed_synced`, not `app_managed`/Neo4j), plus a line showing whether the
+   current value came from an admin or the deployment default.
+7. src/front/static/config/js/settings.js
+   `loadAnalyticsJobEnabled()` hydrates on page load; the shared
+   `.btn-save-settings` handler POSTs it. Sent unconditionally rather than only
+   when checked — a `if (checked)` guard would make the toggle one-way, unable
+   to store an "off" that overrides a `true` env var.
+8. src/front/templates/partials/dtwin/_query_analytics.html
+   The over-limit banner now points at Settings → Global instead of naming an
+   env var the reader cannot set.
+9. docs/user-guide.md, docs/get-started.md, app.yaml.template,
+   src/shared/config/settings.py
+   Documented that the env var is the initial value only and that the admin
+   toggle wins once used; the settings docstring points readers at the resolver
+   rather than the raw field.
+10. tests/units/core/test_helpers.py
+   `TestResolveAnalyticsJobEnabled`: admin-on beats env-off, admin-off beats
+   env-on (the regression the `if val` idiom would cause), unset falls through
+   in both directions, unconfigured registry and lookup failure both use the env
+   default, and a Settings object missing the field defaults off.
+11. tests/units/settings/test_analytics_job_toggle.py
+   New file: getter three-state and string parsing, absence from `_empty()`,
+   setter coercion, service read provenance, admin gating (verifying the setter
+   is *not* called when authorization fails), explicit-off persistence, store
+   failure raising, and the UI wiring including the one-way-toggle guard.
+
+Verified against the running dev server, not just in tests: GET reported
+`{"analytics_job_enabled": false, "source": "default"}`, POST true returned
+`source: "admin"`, and a follow-up GET confirmed the persisted override. The
+registry was then reset to false so the instance is left as found — job mode
+should be switched on from the UI after `make deploy`, not before, or the banner
+promises Databricks and the run falls back to engine-side aggregation.
+
+Modified files:
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/shared/config/settings.py
+- app.yaml.template
+- docs/user-guide.md
+- docs/get-started.md
+- tests/units/core/test_helpers.py
+- tests/units/settings/test_analytics_job_toggle.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3673 passed, 275 skipped,
+5 deselected in 29.87s

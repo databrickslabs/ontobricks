@@ -1,0 +1,48 @@
+"""Tests for the analytics preflight check and compute endpoint.
+
+These cover the new three-prerequisite preflight (toggle, job name, mapped
+snapshot) and the fourth check (snapshot has rows).  The computation path
+itself is covered by tests/units/dtwin/test_dtwin_analytics.py.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+pytestmark = pytest.mark.unit
+
+
+def test_preflight_reports_each_prerequisite_in_order(monkeypatch):
+    """Each failure names its own remedy; the toggle being off names none."""
+    from api.routers.internal import dtwin
+
+    monkeypatch.setattr(dtwin, "resolve_analytics_job_enabled", lambda d, s: False)
+    assert dtwin._analytics_job_status(object(), object()) == (False, "")
+
+    monkeypatch.setattr(dtwin, "resolve_analytics_job_enabled", lambda d, s: True)
+    monkeypatch.setattr(dtwin, "resolve_analytics_job_name", lambda s: "")
+    ok, reason = dtwin._analytics_job_status(object(), object())
+    assert ok is False and "ONTOBRICKS_ANALYTICS_JOB_NAME" in reason
+
+    monkeypatch.setattr(dtwin, "resolve_analytics_job_name", lambda s: "job")
+    monkeypatch.setattr(
+        dtwin, "resolve_analytics_source", lambda d, s: ("", "no table")
+    )
+    ok, reason = dtwin._analytics_job_status(object(), object())
+    assert ok is False and reason == "no table"
+
+
+def test_preflight_requires_a_non_empty_data_table(monkeypatch):
+    """A resolvable but empty …_data means 'Build first', not 'unsupported'."""
+    from api.routers.internal import dtwin
+
+    monkeypatch.setattr(dtwin, "resolve_analytics_job_enabled", lambda d, s: True)
+    monkeypatch.setattr(dtwin, "resolve_analytics_job_name", lambda s: "job")
+    monkeypatch.setattr(
+        dtwin, "resolve_analytics_source", lambda d, s: ("cat.sch.t_data", "")
+    )
+    monkeypatch.setattr(dtwin, "_data_table_has_rows", lambda d, s, t: False)
+
+    ok, reason = dtwin._analytics_job_status(object(), object())
+    assert ok is False
+    assert "Build" in reason

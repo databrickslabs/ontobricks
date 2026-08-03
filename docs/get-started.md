@@ -503,7 +503,15 @@ the workspace token (locally) or the SP token (in Apps).
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` | Max triples loaded into memory for the NetworkX centrality/structure analysis. Graphs larger than this are rejected up-front (the Analytics page warns and disables **Run Analysis** using the known triple count). Class/predicate filters narrow the charts, not the load, so they don't lift this limit. | `500000` |
+| `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` | Max triples loaded into memory for community detection (`POST /clusters/detect`). Not used by graph analytics, which always runs on the Lakeflow job. | `500000` |
+| `ONTOBRICKS_ANALYTICS_TOP_N` | How many top-ranked nodes per metric the job returns per output table. Keeps the persisted payload bounded on very large graphs; must stay above the Analytics page "Top N" selector maximum (50). | `100` |
+| `ONTOBRICKS_ANALYTICS_JOB_ENABLED` | **Initial value only** — admins override this in Settings → Global (*Compute large-graph metrics on Databricks*), and their choice wins, including an explicit "off". Enables the serverless Lakeflow job that computes all graph KPIs. Requires the bundle to be deployed and the domain to have been built (which materialises the `…_data` Delta snapshot the job reads). | `false` |
+| `ONTOBRICKS_ANALYTICS_JOB_NAME` | Deployed name of that job. Empty derives `<app name>-graph-analytics`, matching the bundle. A bundle deployed in development mode prefixes the name with `[dev <user>] `, which is matched automatically. | *(derived)* |
+| `ONTOBRICKS_ANALYTICS_JOB_OUTPUT_SCHEMA` | `catalog.schema` holding the job's per-node output tables (one per domain version). Empty uses the registry catalog/schema. | *(registry)* |
+| `ONTOBRICKS_ANALYTICS_JOB_TIMEOUT_S` | How long to follow a job run before giving up waiting. The run itself is not cancelled. | `3600` |
+| `ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS` | PageRank power iterations the job runs. 20 fixes the top-N ordering; raise for converged absolute scores. | `20` |
+| `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` | Source nodes sampled for the betweenness/closeness estimates. Dominant cost of the job — the intermediate search holds one row per (pivot, reachable node). `0` skips both metrics; a value at or above the node count makes them exact. | `64` |
+| `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` | How many levels the pivot breadth-first search may explore. A runaway guard, not a tuning knob: the search stops as soon as it runs out of frontier, so headroom costs nothing on a shallow graph. Hitting the cap withholds betweenness and closeness rather than reporting truncated values, so raise this if the Analytics page reports them as unavailable. | `32` |
 
 #### Databricks Runtime Detection
 
@@ -533,7 +541,9 @@ DATABRICKS_APP_PORT=8000
 LOG_FORMAT=json                        # Structured JSON logging (default: text)
 LOG_LEVEL=INFO                         # DEBUG, INFO, WARNING, ERROR, CRITICAL
 ONTOBRICKS_THREAD_POOL_SIZE=20         # Max threads for blocking I/O
-ONTOBRICKS_ANALYTICS_MAX_TRIPLES=500000  # KG analytics in-memory triple cap
+ONTOBRICKS_ANALYTICS_MAX_TRIPLES=500000  # Community detection in-memory triple cap
+ONTOBRICKS_ANALYTICS_TOP_N=100           # Top nodes per metric returned by the Lakeflow job
+ONTOBRICKS_ANALYTICS_JOB_ENABLED=false   # Initial value; admins override it in Settings → Global
 ```
 
 #### Shell Export

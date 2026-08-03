@@ -17,7 +17,7 @@ in the gated ``tests/integration/`` suite.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
@@ -53,7 +53,10 @@ class _InMemoryStore(RegistryStore):
         self._history: Dict[str, List[ScheduleHistoryEntry]] = {}
         self._build_runs: Dict[str, List[Dict[str, Any]]] = {}
         self._graph_analytics: Dict[Tuple[str, str], Dict[str, Any]] = {}
-        self._graph_analytics_runs: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        self._graph_analytics_runs: Dict[Tuple[str, str], List[Any]] = {}
+        # Stands in for ``computed_at`` so a cross-version read can order
+        # newest-first the way the real store's ORDER BY does.
+        self._graph_analytics_seq = 0
         self._review_events: List[Dict[str, Any]] = []
         self._change_events: List[Dict[str, Any]] = []
         self._comments: List[Dict[str, Any]] = []
@@ -235,16 +238,26 @@ class _InMemoryStore(RegistryStore):
     def record_graph_analytics_run(
         self, folder: str, version: str, entry: Dict[str, Any]
     ) -> None:
-        # Append-only run history (newest stored first on read).
+        # Append-only run history, tagged with a sequence number so reads
+        # can order newest-first across versions.
+        self._graph_analytics_seq += 1
+        row = dict(entry)
+        row.setdefault("version", version)
         self._graph_analytics_runs.setdefault((folder, version), []).append(
-            dict(entry)
+            (self._graph_analytics_seq, row)
         )
 
     def load_graph_analytics_runs(
-        self, folder: str, version: str, *, limit: int = 100
+        self, folder: str, version: Optional[str] = None, *, limit: int = 100
     ):
-        rows = list(reversed(self._graph_analytics_runs.get((folder, version), [])))
-        return [dict(r) for r in rows[:limit]]
+        pairs = [
+            (seq, row)
+            for (f, v), entries in self._graph_analytics_runs.items()
+            if f == folder and (version is None or v == version)
+            for seq, row in entries
+        ]
+        pairs.sort(key=lambda p: p[0], reverse=True)
+        return [dict(row) for _, row in pairs[:limit]]
 
     def record_review_event(
         self,
@@ -719,6 +732,37 @@ class TestStoreContract:
         store.record_graph_analytics_run("demo", "2", {"node_count": 9})
         assert len(store.load_graph_analytics_runs("demo", "1")) == 1
         assert store.load_graph_analytics_runs("demo", "2")[0]["node_count"] == 9
+
+    def test_graph_analytics_runs_span_versions_when_no_version_given(self, store):
+        """The Runs page shows every version at once, so omitting the
+        version must return the whole folder's history, newest-first."""
+        store.record_graph_analytics_run("demo", "1", {"node_count": 1})
+        store.record_graph_analytics_run("demo", "2", {"node_count": 2})
+        store.record_graph_analytics_run("demo", "1", {"node_count": 3})
+
+        runs = store.load_graph_analytics_runs("demo")
+
+        assert [r["node_count"] for r in runs] == [3, 2, 1]
+
+    def test_graph_analytics_runs_carry_their_version(self, store):
+        """With no filter the table interleaves versions, so each row has
+        to say which version it belongs to."""
+        store.record_graph_analytics_run("demo", "7", {"node_count": 1})
+        assert store.load_graph_analytics_runs("demo")[0]["version"] == "7"
+
+    def test_graph_analytics_runs_limit_applies_across_versions(self, store):
+        store.record_graph_analytics_run("demo", "1", {"node_count": 1})
+        store.record_graph_analytics_run("demo", "2", {"node_count": 2})
+        store.record_graph_analytics_run("demo", "3", {"node_count": 3})
+
+        runs = store.load_graph_analytics_runs("demo", limit=2)
+
+        assert [r["node_count"] for r in runs] == [3, 2]
+
+    def test_graph_analytics_runs_ignores_other_folders(self, store):
+        store.record_graph_analytics_run("demo", "1", {"node_count": 1})
+        store.record_graph_analytics_run("other", "1", {"node_count": 99})
+        assert [r["node_count"] for r in store.load_graph_analytics_runs("demo")] == [1]
 
     def test_review_events_round_trip_oldest_first(self, store):
         store.record_review_event(
@@ -1600,3 +1644,60 @@ class TestLakebaseCollab:
         sql, params = cur.executed[-1]
         assert "SET status = %s" in sql
         assert params[0] == "in_progress"
+
+
+# ---------------------------------------------------------------------
+# Lakebase graph-analytics run history — real SQL code path
+#
+# The in-memory fake above proves the *contract* (version=None spans
+# every version, version="x" scopes to it). These drive the concrete
+# Lakebase implementation to pin down the conditional ``r.version = %s``
+# predicate and, critically, the *order* of the bound params — a
+# reordered ``.append()`` would still "work" against the fake cursor
+# but would silently mis-bind params against a real Postgres query.
+# ---------------------------------------------------------------------
+
+
+def _graph_analytics_runs_store(monkeypatch, cur):
+    """A Lakebase store whose ``_connect`` yields *cur* and whose
+    graph-analytics-runs table is already marked present (skips the
+    lazy DDL probe). Mirrors ``_collab_store``.
+    """
+    from contextlib import contextmanager
+    import back.objects.registry.store.lakebase.store as _store_mod
+
+    store = _make_lakebase_store(monkeypatch)
+    store._registry_id = "rid-1"          # skip registry-id resolution
+    store._graph_analytics_runs_ready = True  # skip the ensure/CREATE probe
+
+    @contextmanager
+    def fake_connect():
+        yield _ScriptedConn(cur)
+
+    monkeypatch.setattr(store, "_connect", fake_connect)
+    monkeypatch.setattr(_store_mod, "_require_psycopg", lambda: (None, None))
+    return store
+
+
+class TestLakebaseGraphAnalyticsRunsSql:
+    def test_load_runs_without_version_omits_predicate(self, monkeypatch):
+        cur = _ScriptedCursor([{"contains": "FROM", "fetchall": []}])
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_graph_analytics_runs("demo", limit=50)
+
+        sql, params = cur.executed[-1]
+        assert "r.version = %s" not in sql
+        assert params == ("rid-1", "demo", 50)
+
+    def test_load_runs_with_version_appends_predicate_and_param_last(
+        self, monkeypatch
+    ):
+        cur = _ScriptedCursor([{"contains": "FROM", "fetchall": []}])
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_graph_analytics_runs("demo", "1", limit=50)
+
+        sql, params = cur.executed[-1]
+        assert "r.version = %s" in sql
+        assert params == ("rid-1", "demo", "1", 50)

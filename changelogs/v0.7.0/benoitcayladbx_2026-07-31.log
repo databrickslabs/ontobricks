@@ -1,0 +1,480 @@
+# Task 5: resolve_analytics_source replaces resolve_spark_source
+
+## Context
+
+Analytics source resolution used to branch per engine (Delta, Lakebase managed_synced, Lakebase app_managed, Neo4j/Cypher) and refused Neo4j and app_managed Lakebase outright. The new design reads only the R2RML-mapped `…_data` Unity Catalog table that the Build step materialises for every backend. Engine type is irrelevant to analytics.
+
+## Changes
+
+1. `src/back/core/graph_analysis/JobMetrics.py` — Deleted `resolve_spark_source` and `_lakebase_uc_source`; added `resolve_analytics_source(domain, settings)` which delegates to `SQLHelpers.effective_databricks_table`; added `domain`/`settings` kwargs to `JobMetrics.__init__`; updated `compute` to call new resolver; updated module docstring.
+2. `src/back/core/graph_analysis/__init__.py` — Swapped `resolve_spark_source` → `resolve_analytics_source` in both import and `__all__`.
+3. `src/api/routers/internal/dtwin.py` — Replaced `resolve_spark_source(store, graph_name)` call in `_analytics_job_status` with `resolve_analytics_source(domain, settings)`; updated import and comments.
+4. `tests/units/core/test_job_metrics.py` — Added two new TDD tests; deleted `TestResolveSparkSource` class and 10 tests for removed functionality; deleted `test_unreachable_graph_raises_with_the_reason`; added `_patch_source` autouse fixture to `TestJobMetricsCompute`.
+5. `tests/units/dtwin/test_analytics_job_status.py` — Updated `resolve_spark_source` patch targets to `resolve_analytics_source`.
+
+## Modified Files
+
+- `src/back/core/graph_analysis/JobMetrics.py`
+- `src/back/core/graph_analysis/__init__.py`
+- `src/api/routers/internal/dtwin.py`
+- `tests/units/core/test_job_metrics.py`
+- `tests/units/dtwin/test_analytics_job_status.py`
+
+## Test Result
+
+`uv run pytest tests/units -q` → **3422 passed, 1 warning** (pre-existing Starlette deprecation only)
+
+---
+
+# Task 5 review fix + Task 6: JobMetrics becomes a read-back assembler
+
+## Context
+
+Two things landed here. First, the Task 5 review found the `InfrastructureError`
+guard for an unresolvable analytics source had no test — the autouse fixture in
+`TestJobMetricsCompute` resolved a source for every test in the class, so the
+refusal branch was unreachable. Second, and the substance of Task 6: `JobMetrics`
+still called `PushdownMetrics` to build a "base" result and merged the job's
+per-node scores onto it. That hybrid contradicts the decision that the Lakeflow
+job is the only compute path, so `JobMetrics` now assembles `MetricsResult`
+purely from the job's four output tables and no longer takes a store at all.
+
+The only computation left in the app is the pure-Python flat/temporal labelling
+in `profiles.py`, which turns `(instance_count, distinct_predicates)` into a
+human-readable verdict — string heuristics over predicate names, not graph maths.
+
+## Changes
+
+1. `tests/units/core/test_job_metrics.py` — Added the missing coverage for the
+   source refusal: the "run a Build" remedy text, backtick normalisation of the
+   resolved FQN, and a compute-level test placed outside `TestJobMetricsCompute`
+   so the autouse fixture cannot mask the branch. Then rewrote the suite for the
+   new constructor: added the `_query_for` fake that dispatches on the table
+   being read, plus tests for summary-driven stats, type-profile assembly, and
+   per-node `type_uri`/`label`.
+2. `src/back/core/graph_analysis/JobMetrics.py` — New constructor
+   `JobMetrics(source_table, *, runner, query, output_table, …)`: no `store`, no
+   `graph_name`, no `domain`/`settings` scaffolding. Replaced the read-back SQL
+   with `summary_query`, `top_nodes_query`, `type_profiles_query` and
+   `type_predicates_query`; dropped `metrics_for_nodes_query`,
+   `type_clustering_query` and the `RDF_TYPE` constant. `compute` now triggers
+   the job and assembles the result from `_read_summary`, `_read_nodes` and
+   `_read_type_profiles`. `stats.node_count` carries the total entity population
+   from `total_node_count` while `graph_node_count` carries the scored count, and
+   `avg_degree`/`density` derive from the scored count only.
+3. `src/back/core/graph_analysis/profiles.py` — Docstring corrected; it claimed
+   two callers that this plan removes.
+4. `src/back/objects/digitaltwin/DigitalTwin.py` — `build_job_metrics` takes
+   `(domain, settings, *, source_table, graph_name, top_n)`; the `MODE_JOB`
+   branch of `compute_graph_metrics` resolves the source and fails with the
+   remedy before building anything. The surviving pushdown fallback in that
+   branch is Task 8's to delete and is pinned in the plan.
+5. `tests/units/dtwin/test_dtwin_analytics.py` — New file covering the guard at
+   its new home: an unresolvable source must raise before a Lakeflow run is
+   launched, asserted by `build_job_metrics` never being called.
+6. `docs/superpowers/plans/2026-07-31-analytics-lakeflow-only.md` — Recorded the
+   fallback removal as a requirement of Task 8 rather than a side effect.
+
+## Modified Files
+
+- `src/back/core/graph_analysis/JobMetrics.py`
+- `src/back/core/graph_analysis/profiles.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `tests/units/core/test_job_metrics.py`
+- `tests/units/dtwin/test_dtwin_analytics.py` (new)
+- `docs/superpowers/plans/2026-07-31-analytics-lakeflow-only.md`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3798 passed, 275 skipped, 0 failed**
+(3797 after Task 6's obsolete-test deletions, plus the new guard test).
+
+Tests must run with the local Databricks/Lakebase env vars unset, or the SDK
+reaches for a real workspace:
+
+```bash
+env -u DATABRICKS_HOST -u DATABRICKS_TOKEN -u DATABRICKS_CONFIG_PROFILE \
+    -u LAKEBASE_PROJECT -u LAKEBASE_BRANCH -u LAKEBASE_DATABASE \
+    -u LAKEBASE_DATABASE_RESOURCE_SEGMENT -u LAKEBASE_SCHEMA \
+    .venv/bin/pytest -q -m "not scenario"
+```
+
+---
+
+# Task 7: every Build materialises the mapped snapshot
+
+## Context
+
+`…_data` is the contract between Build and Analytics: the Lakeflow job reads
+that Delta snapshot of the R2RML-mapped triples and nothing else, which is what
+makes a KPI identical on Lakehouse, Lakebase and Neo4j. Until now only the Delta
+build produced it, so a Lakebase or Neo4j domain built cleanly and then could not
+be analysed at all. The materialisation moves into the shared build pipeline, and
+failing to take the snapshot now fails the build rather than leaving a domain
+that looks green and is unanalysable.
+
+One correction to the plan landed here. The plan called the materialisation
+inside `DeltaTripleStoreBuildPipeline` a duplicate to be removed. It is not:
+that class is reached only from `POST /dtwin/databricks-build/start`, never from
+`_BuildPipeline`, so the two are alternative entry points that never both fire
+for one build. Deleting it left that endpoint producing a domain with no `…_data`.
+It has been restored, and both pipelines now materialise for the builds they own.
+
+## Changes
+
+1. `src/back/objects/digitaltwin/_build_pipeline.py` — Added
+   `_materialize_data_table()`, called from `run()` between
+   `_post_create_view_progress` and `_apply_full_rebuild`, so every engine takes
+   the snapshot. An unresolvable table name or a failed materialisation fails the
+   task, following the `fail_task` + `return False` convention the neighbouring
+   phases already use.
+2. `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py` — Materialisation
+   restored after the plan's "duplicate" premise proved wrong, with a comment
+   recording why both pipelines need it.
+3. `tests/units/objects/test_build_pipeline_materialize.py` — New file: a Lakebase
+   build materialises, a failed materialisation fails the build with the
+   underlying message, the shared pipeline materialises exactly once, and the
+   `/dtwin/databricks-build/start` pipeline still materialises on its own.
+4. `docs/superpowers/plans/2026-07-31-analytics-lakeflow-only.md` — Struck the
+   incorrect "now-duplicate" instruction and recorded why the step stays in both
+   pipelines.
+
+## Modified Files
+
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+- `tests/units/objects/test_build_pipeline_materialize.py` (new)
+- `docs/superpowers/plans/2026-07-31-analytics-lakeflow-only.md`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3802 passed, 275 skipped, 0 failed**
+
+---
+
+# Task 8: one compute path, and a preflight that stays cheap
+
+## Context
+
+This is where "the Lakeflow job is the only compute path" becomes true in the
+code rather than just in the design. The `mode` argument, the `store` parameter,
+`max_triples` and `allow_pushdown_fallback` are gone from
+`compute_graph_metrics` and `run_metrics_task`, and so is the fallback Task 6
+left behind: a failed job run used to answer with SQL-pushdown numbers, which is
+the worst possible outcome — the user sees plausible figures computed by a
+different algorithm and has no way to tell. A failed run now raises.
+
+The review of the first pass caught two problems with the new snapshot probe.
+It ran from the stats payload, which renders on every page, so every uncached
+page view paid a SQL round-trip that can take tens of seconds against a cold
+warehouse. And it swallowed every exception into "the table is missing or empty.
+Run Build", sending someone off to rebuild a domain when the real cause was a
+sleeping warehouse or a permissions gap. Both are fixed below.
+
+## Changes
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py` — `compute_graph_metrics` and
+   `run_metrics_task` lost `store`, `mode`, `max_triples`,
+   `max_nodes_betweenness` and `allow_pushdown_fallback`. The pushdown fallback
+   is deleted; the method is now resolve-source → build → compute, and any
+   failure propagates.
+2. `src/api/routers/internal/dtwin.py` — Split the preflight in two.
+   `_analytics_job_configured` is the three checks that cost nothing (toggle, job
+   name, resolvable snapshot) and is what the stats payload calls;
+   `_analytics_job_status` adds the warehouse probe and is called only where a job
+   run is about to be launched. `_data_table_has_rows` now returns `None` when the
+   probe itself failed, which produces a "retry in a moment" reason instead of
+   blaming the Build, and logs at WARNING so an operator can see it. The
+   `POST /metrics/compute` endpoint lost its mode selection and oversized branch;
+   the stats payload lost `analytics_max_triples` and
+   `analytics_pushdown_available`.
+3. `tests/units/dtwin/test_analytics_job_status.py` — Added the unreachable-probe
+   case (must not say "Build"), and two tests pinning that the cheap check never
+   probes and that the stats endpoint is the caller using it.
+4. `tests/units/dtwin/test_dtwin_analytics.py`, `tests/units/api/test_dtwin_analytics.py`
+   — Tests that a failed job run propagates rather than degrading, and that the
+   source table is wired through to the runner.
+
+## Modified Files
+
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `tests/units/dtwin/test_analytics_job_status.py`
+- `tests/units/dtwin/test_dtwin_analytics.py`
+- `tests/units/api/test_dtwin_analytics.py` (new)
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3809 passed, 275 skipped, 0 failed**
+
+---
+
+# Tasks 9 and 10: delete the dead paths, then make the UI stop describing them
+
+## Context
+
+With every metric computed by the Lakeflow job, `GraphMetrics` (NetworkX) and
+`PushdownMetrics` (engine SQL) were two complete metric implementations no code
+path could reach — the kind of thing that gets accidentally revived or silently
+diverges from the job's definition of the same number. They are gone, along with
+`MODE_IN_MEMORY`, `MODE_PUSHDOWN` and `Settings.analytics_pushdown_enabled`.
+
+The UI was then the last place still telling the user a story that was no longer
+true: a banner about in-memory size caps, a field the stats payload no longer
+sends, and — worst — a message saying betweenness could not be computed and to
+"pick an Entity Type above to analyse a subgraph in memory", an instruction that
+had become impossible to follow. The settings help text was equally stale: it
+claimed Lakebase `app_managed` and Neo4j were unsupported and that a missing
+prerequisite "degrades to engine-side aggregation instead of failing". Both
+statements were the opposite of the truth after Tasks 5 and 8.
+
+Deleting the two test modules also silently dropped the only coverage of
+`profiles.py`, which survives and is now the only analytics computation left in
+the app. Pinning it directly turned up a pre-existing false positive in
+`has_temporal_predicates`, recorded as a strict xfail rather than changed —
+fixing it alters what the UI reports for existing domains, so it is a decision
+rather than a cleanup.
+
+## Changes
+
+1. `src/back/core/graph_analysis/` — `GraphMetrics.py` and `PushdownMetrics.py`
+   deleted, with `supports_pushdown` and the two mode constants; `models.py` now
+   defaults `MetricsResult.mode` to `MODE_JOB` and notes why a single-valued
+   constant still exists.
+2. `src/shared/config/settings.py`, `app.yaml.template` —
+   `analytics_pushdown_enabled` removed. `analytics_max_triples` stays; cluster
+   detection still uses it.
+3. `tests/units/core/test_profiles.py` — New file covering `local_name`,
+   `has_temporal_predicates` and `flat_reasons` directly, including a strict
+   xfail for the short-keyword false positive (`assignedTo` reads as temporal
+   because "dt" appears inside it).
+4. `src/front/templates/partials/dtwin/_query_analytics.html` — Dropped the
+   over-limit banner, the size-cap wording and the removed
+   `analytics_pushdown_available` field. Run Analysis is gated on
+   `analytics_job_available`; a blocked job shows its specific reason. The
+   in-memory escape hatch in the unavailable-metric copy is replaced with the
+   remedy that actually exists: raise the job's max depth and re-run.
+5. `src/front/templates/settings.html` — Rewrote both help paragraphs for the
+   single path: analytics runs only in the job, works identically on every
+   backend because it reads the snapshot each Build materialises, and names the
+   missing prerequisite instead of falling back.
+6. `src/api/routers/internal/dtwin.py` — Legacy stored results still render; the
+   guarantee is the absence of a mode gate, so the stored dict is spread through
+   untouched rather than routed via a no-op helper.
+7. `tests/units/settings/test_analytics_job_toggle.py`,
+   `tests/units/dtwin/test_analytics_job_status.py` — Help-text assertions
+   updated to the true prerequisites, plus one that the copy never promises a
+   fallback, and one that the latest-metrics read path never compares a stored
+   mode against `MODE_JOB`.
+
+## Modified Files
+
+- `src/back/core/graph_analysis/GraphMetrics.py` (deleted)
+- `src/back/core/graph_analysis/PushdownMetrics.py` (deleted)
+- `src/back/core/graph_analysis/__init__.py`, `models.py`, `GraphBuilder.py`
+- `src/shared/config/settings.py`, `app.yaml.template`, `src/jobs/graph_analytics_job.py`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `src/front/templates/settings.html`
+- `src/api/routers/internal/dtwin.py`
+- `tests/units/core/test_graph_metrics.py`, `tests/units/core/test_pushdown_metrics.py` (deleted)
+- `tests/units/core/test_profiles.py` (new)
+- `tests/units/core/test_job_metrics.py`
+- `tests/units/dtwin/test_analytics_job_status.py`
+- `tests/units/settings/test_analytics_job_toggle.py`, `test_app_yaml_template.py`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3760 passed, 275 skipped, 1 xfailed, 0 failed**
+
+---
+
+# Final whole-branch review fixes
+
+## Context
+
+The whole-branch review of the Lakeflow-only analytics work found two things the
+eleven per-task reviews could not, because each is a seam between tasks rather
+than a defect inside one.
+
+The first is a silent wrong-number bug. Before this work, the app always passed
+`exclude_predicates=None`, so the job fell back to its own defaults —
+`rdf:type`, `rdfs:label`, `rdfs:comment`, `rdfs:seeAlso`, the predicates that
+never form an entity-entity edge. Task 6 started forwarding
+`MetricsRequest.predicate_filter`, and the job treated a non-empty list as the
+complete set rather than as an addition. So a user excluding one noisy predicate
+would promote `rdf:type` into an edge, wiring every instance to its class node
+and inflating every degree and PageRank in the run. Nothing would fail; the
+numbers would just be wrong.
+
+The second is stale operator-facing copy in `app.yaml.template`, which still
+described the pre-change world: a triple cap that switched between NetworkX and
+engine-side SQL, Neo4j and `app_managed` Lakebase as unsupported, and the claim
+that turning the toggle on is "safe even if the prerequisites are not met"
+because a run degrades rather than failing. All three are now the opposite of
+the truth, and an operator reads this file to decide how to configure a deploy.
+
+## Changes
+
+1. `src/jobs/graph_analytics_job.py` — Extracted
+   `merge_excluded_predicates(raw)`, which unions the caller's
+   `--exclude-predicates` with `DEFAULT_EXCLUDED_PREDICATES` and de-duplicates,
+   and called it from `main()`. Pulling it out of `main()` also makes it testable:
+   `main()` needs a live `SparkSession`, so the merge had no unit coverage where
+   it sat.
+2. `tests/units/core/test_graph_analytics_job_exit.py` — Four tests: no filter
+   yields exactly the defaults, a caller predicate is added to rather than
+   replacing them, naming a default does not duplicate it, and blank entries are
+   ignored.
+3. `app.yaml.template` — Rewrote the three analytics comment blocks for the
+   single path: the triple cap belongs to community detection, the job computes
+   every KPI and is the only thing that does, and every backend behaves
+   identically because the job reads the snapshot each Build materialises.
+
+## Modified Files
+
+- `src/jobs/graph_analytics_job.py`
+- `tests/units/core/test_graph_analytics_job_exit.py`
+- `app.yaml.template`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3764 passed, 275 skipped, 1 xfailed, 0 failed**
+
+---
+
+# Deploy and end-to-end verification of Lakeflow-only analytics
+
+## Context
+
+The Lakeflow-only analytics work replaced three compute paths with one, so the
+only verification that means anything is a real run against a real graph. Unit
+tests assert the SQL a given input produces; they cannot tell us the job's own
+`bfs_complete` flag flips on the graph that originally reported it false, nor
+that the two new output tables agree with the source data.
+
+The subject is the domain that produced the original bug report:
+`benoit_cayla.ontobricks.triplestore_bigcustomers_v1_data` — 7,641,879 triples
+over 1,350,051 subjects.
+
+## Changes
+
+No code changes. `make deploy` shipped the app, the MCP server and the job
+bundle; the rest of this entry is the verification record.
+
+1. Deploy — both apps returned to `RUNNING`, Lakebase and UC grants reapplied,
+   registry migrations idempotent.
+2. Job definition — the deployed job carries the two new parameters with the
+   intended defaults (`max_depth = 32`, `class_filter = ''`) and forwards both
+   to `spark_python_task` as `--max-depth` / `--class-filter`.
+3. Deployed script — the workspace copy of `src/jobs/graph_analytics_job.py`
+   contains `merge_excluded_predicates`, `type_profiles`, `type_predicates`,
+   `node_label_select`, `total_node_count` and `DEFAULT_MAX_DEPTH = 32`, so the
+   bundle shipped this branch and not a cached earlier build.
+4. Full run (`run_id 1073016770999708`, ~12 min, SUCCESS) — **`bfs_complete =
+   true`**, the original defect fixed: 460,811 nodes with non-zero betweenness
+   and 1,305,748 with non-zero closeness, where both were withheld before.
+5. `clustering = 0` is correct, not a second bug. A triangle count run directly
+   against the source data — independent of the job's own output — returns 0,
+   so the graph is genuinely triangle-free and zero is the right answer.
+6. New output tables cross-check against the source. The eight type populations
+   in `_type_profiles` sum to exactly 1,350,051, matching `total_node_count`.
+   `Customer` reports 100,000 instances but 99,151 connected, and that 849 gap
+   equals `total_node_count - node_count` exactly. `Agent` (51 nodes) carries
+   the highest average betweenness, which is what the 224,860 interactions it
+   handles should produce. `_type_predicates` lists per-type outgoing predicates.
+7. `class_filter` run (`run_id 96951766871503`, ~7 min, SUCCESS) — the induced
+   subgraph over Customer/Interaction/Agent scores 341,817 nodes and 399,860
+   edges, the latter matching `Interaction.degree_sum` from the unfiltered run.
+   `_type_profiles` narrows to exactly the three requested types, and
+   `Customer.connected_count` drops 99,151 → 91,766 as customers reachable only
+   through contracts and claims fall out of the subgraph.
+8. `total_node_count` stayed 1,350,051 across both runs, confirming live the
+   design decision that the denominator is stable under per-run filters.
+9. Scratch output tables (`graph_metrics_verify_1*`, `graph_metrics_verify_cf*`)
+   dropped; the app's live `graph_metrics_bigcustomers_1*` was never touched.
+
+## Observations for follow-up
+
+Domains built before this version have no `…_data` snapshot — of the domains in
+`benoit_cayla.ontobricks`, only `bigcustomers_v1` and `cust360auto_v5` have one.
+Analytics hard-fails on the others with the banner naming a rebuild as the
+remedy, which is the documented and intended migration.
+
+## Modified Files
+
+- `changelogs/v0.7.0/benoitcayladbx_2026-07-31.log`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3764 passed, 275 skipped, 1 xfailed, 0 failed**
+(unchanged; no code changed in this step)
+
+Live: 2 job runs, both SUCCESS. `bfs_complete = true`. Betweenness and closeness
+populated where they were previously withheld.
+
+---
+
+# Guarantee work-table cleanup in the graph analytics job
+
+## Context
+
+Reviewing leftover `graph_metrics_cust360auto_5_work_*` tables in Unity Catalog
+surfaced that cleanup was the last statement of `run_analysis` and was not
+protected, so it was skipped on two paths:
+
+1. **A stage that raises.** No `try/finally`, so any failure — most likely the
+   BFS/Brandes phase, the longest and most memory-hungry stage — stranded all
+   seventeen intermediates.
+2. **The empty-graph early return.** Even on a completely successful run,
+   `return stats` for a graph with no edges skipped the drop, leaking the
+   `_edges`, `_bi` and `_deg` tables that `build_edges` had just created.
+
+This matters more than the storage it wastes. The work tables are named after
+the output table (`<output>_work_<stage>`), so a stranded set is exactly what an
+operator sees when they go looking for the results of the run that just failed —
+which is how this was found.
+
+Cancellation is covered by the same fix: Databricks cancels a run by raising in
+the driver, and `finally` runs for `KeyboardInterrupt` and `SystemExit` too.
+A hard OOM kill of the driver can still strand tables, but that self-heals —
+every work table is created with `DROP IF EXISTS` + `CREATE`, and the next
+successful run of the same domain drops all seventeen unconditionally.
+
+## Changes
+
+1. `src/jobs/graph_analytics_job.py` — Split `run_analysis` into a thin wrapper
+   that owns a `try/finally` and `_run_analysis_stages` holding the pipeline
+   unchanged. Cleanup now covers every exit path. `cleanup=False`
+   (`--keep-work-tables`) deliberately still wins, since its purpose is to
+   leave the evidence in place after a failure.
+2. `src/jobs/graph_analytics_job.py` — Added `_drop_work_tables(execute,
+   builder)`, which drops statement by statement and swallows per-statement
+   failures with a `WARNING`. Called from a `finally`, it must never raise:
+   an exception there would replace the real diagnosis with a misleading
+   "could not drop table" and discard the stack that matters. Dropping one
+   table at a time also stops a single undroppable table stranding the rest.
+3. `src/jobs/graph_analytics_job.py` — Removed the now-superseded trailing
+   `if cleanup:` block.
+4. `tests/units/core/test_graph_analytics_job_sql.py` — Four tests, two of
+   which reproduced the leaks before the fix: cleanup runs when a stage
+   raises, a failing drop does not mask the original error, `keep_work_tables`
+   holds on the failure path, and the empty-graph return also cleans up.
+
+## Verification
+
+The stranded `cust360auto_5` set was not in fact orphaned — a run launched from
+the UI at 18:35 was still in flight. It completed SUCCESS after 8 minutes and
+dropped all fifteen, leaving exactly the four output tables per domain and no
+`_work_*` anywhere in `benoit_cayla`. That same run also confirms the analytics
+path works end-to-end through the UI on a second domain.
+
+## Modified Files
+
+- `src/jobs/graph_analytics_job.py`
+- `tests/units/core/test_graph_analytics_job_sql.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-07-31.log`
+
+## Test Result
+
+`pytest -q -m "not scenario"` → **3768 passed, 275 skipped, 1 xfailed, 0 failed**
+(+4 from the new cleanup tests)
