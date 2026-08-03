@@ -771,3 +771,40 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q -m "not scenario"` → 4112 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.86s; OSV `pip-audit` → no known vulnerabilities in either lockfile export.
+
+--------------------------------------------------------------------------------
+Rename product docs to documentation/; Pages site to docs/
+--------------------------------------------------------------------------------
+
+Context:
+GitHub Pages "Deploy from a branch" only allows `/` or `/docs` as the folder.
+Rename former Markdown/Sphinx `docs/` → `documentation/`, and move the
+marketing site from `site/` → `docs/` so Settings → Pages can select `/docs`.
+
+Changes:
+
+1. `documentation/`
+   Former product docs tree (Markdown, Sphinx, superpowers specs/plans).
+2. `docs/`
+   Marketing site (former `site/`) — GitHub Pages publish root.
+3. `src/api/routers/internal/help.py`, Help Center JS, `databricks.yml`,
+   `.databricksignore`
+   Point Help Center / deploy sync at `documentation/`; exclude Pages `docs/`.
+4. Root README, CONTRIBUTING, CI/Makefile/scripts
+   Update path references.
+
+Modified files:
+- `documentation/**` (renamed from `docs/**`)
+- `docs/**` (moved from `site/**`)
+- `src/api/routers/internal/help.py`
+- `src/front/static/global/js/help-docs.js`
+- `src/front/templates/settings.html`
+- `tests/units/api/test_help_api.py`
+- `tests/units/site/test_marketing_site.py`
+- `tests/e2e/help/test_help_modal_flows.py`
+- `databricks.yml`
+- `.databricksignore`
+- `README.md`, `CONTRIBUTING.md`, `Makefile`, `ci/build_docs.sh`,
+  `.github/workflows/ci.yml`, `pyproject.toml`, deploy scripts
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py tests/units/api/test_help_api.py` → 40 passed, 1 warning in 1.30s

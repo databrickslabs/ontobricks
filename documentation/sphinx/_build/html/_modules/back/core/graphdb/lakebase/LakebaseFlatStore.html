@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.graphdb.lakebase.LakebaseFlatStore &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Graph Viewer Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/features.html">OntoBricks Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/code_organization.html">OntoBricks code organization (for contributors)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/import-export.html">Registry Import / Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/graphdb-integration.html">Adding a New Graph DB Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/lakebase-graphdb.html">Lakebase as Graph DB — OntoBricks Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/cohort_discovery.html">Cohort Discovery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/sizing.html">OntoBricks Production Sizing Questionnaire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.html"><code class="docutils literal notranslate"><span class="pre">back.core.external</span></code> — Vendored / Third-Party Integrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.pitfalls.html"><code class="docutils literal notranslate"><span class="pre">back.core.external.pitfalls</span></code> — Ontology Pitfalls Detector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.lakebase.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> — Lakebase Postgres graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.neo4j.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> — Neo4j (Cypher) graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.graphdb.lakebase.LakebaseFlatStore</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Lakebase Postgres flat triple store (single subject/predicate/object table per graph).</span>
+
+<span class="sd">Two operating modes are supported:</span>
+
+<span class="sd">* ``app_managed`` (default) -- the app owns one writable PG table per graph</span>
+<span class="sd">  version. All inserts / deletes go through the FastAPI process via psycopg</span>
+<span class="sd">  (small ``executemany`` payloads) or ``COPY FROM STDIN`` (bulk).</span>
+
+<span class="sd">* ``managed_synced`` -- the bulk R2RML data movement is delegated to a</span>
+<span class="sd">  Lakeflow synced-table pipeline (Databricks data plane only). The PG layout</span>
+<span class="sd">  becomes a triad: a read-only ``_sync`` table owned by Lakeflow, a writable</span>
+<span class="sd">  ``__app`` companion that absorbs reasoning + cohort writes, and a UNION</span>
+<span class="sd">  view (named after the legacy single-table) that readers query. Direct</span>
+<span class="sd">  writes through this class always target the companion; reads always go</span>
+<span class="sd">  through the union view, so callers stay unchanged.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">InfrastructureError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase</span><span class="w"> </span><span class="kn">import</span> <span class="n">_companion_ddl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.LakebaseBase</span><span class="w"> </span><span class="kn">import</span> <span class="n">LakebaseBase</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.SyncedTableManager</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DEFAULT_TIMEOUT_S</span> <span class="k">as</span> <span class="n">_SYNC_DEFAULT_TIMEOUT_S</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_table_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="n">_BULK_INSERT_THRESHOLD</span> <span class="o">=</span> <span class="mi">50</span>
+<span class="n">_BULK_DELETE_THRESHOLD</span> <span class="o">=</span> <span class="mi">50</span>
+
+<span class="n">_COPY_INSERT_TEMP</span> <span class="o">=</span> <span class="s2">&quot;_ob_copy_stage&quot;</span>
+<span class="n">_COPY_DELETE_TEMP</span> <span class="o">=</span> <span class="s2">&quot;_ob_del_stage&quot;</span>
+
+<span class="c1"># Postgres btree version-4 index entry limit (bytes).</span>
+<span class="n">_PG_BTREE_INDEX_MAX_BYTES</span> <span class="o">=</span> <span class="mi">2704</span>
+
+<span class="n">SYNC_MODE_APP</span> <span class="o">=</span> <span class="s2">&quot;app_managed&quot;</span>
+<span class="n">SYNC_MODE_MANAGED</span> <span class="o">=</span> <span class="s2">&quot;managed_synced&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_index_row_size_error</span><span class="p">(</span><span class="n">exc</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">msg</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">if</span> <span class="s2">&quot;index row size&quot;</span> <span class="ow">in</span> <span class="n">msg</span> <span class="ow">and</span> <span class="s2">&quot;btree&quot;</span> <span class="ow">in</span> <span class="n">msg</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="n">exc</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;ProgramLimitExceeded&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_long_literal_detail</span><span class="p">(</span><span class="n">batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">worst</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span>
+        <span class="n">batch</span><span class="p">,</span>
+        <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="nb">len</span><span class="p">((</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)),</span>
+    <span class="p">)</span>
+    <span class="n">obj_bytes</span> <span class="o">=</span> <span class="nb">len</span><span class="p">((</span><span class="n">worst</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span>
+    <span class="n">predicate</span> <span class="o">=</span> <span class="n">worst</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;?&quot;</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;predicate=</span><span class="si">{</span><span class="n">predicate</span><span class="si">!r}</span><span class="s2">, object_size=</span><span class="si">{</span><span class="n">obj_bytes</span><span class="si">}</span><span class="s2"> bytes&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_reraise_lakebase_index_limit</span><span class="p">(</span>
+    <span class="n">exc</span><span class="p">:</span> <span class="ne">BaseException</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_index_row_size_error</span><span class="p">(</span><span class="n">exc</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">exc</span>
+    <span class="n">detail</span> <span class="o">=</span> <span class="n">_long_literal_detail</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+        <span class="s2">&quot;Lakebase triple insert failed: a literal object exceeds the Postgres &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;btree index size limit (</span><span class="si">{</span><span class="n">detail</span><span class="si">}</span><span class="s2">). Run a full Knowledge Graph rebuild &quot;</span>
+        <span class="s2">&quot;to apply the object_hash schema, or exclude very long text columns &quot;</span>
+        <span class="s2">&quot;from mapping.&quot;</span>
+    <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LakebaseFlatStore</span><span class="p">(</span><span class="n">LakebaseBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Flat-model triple store on Lakebase Postgres.</span>
+
+<span class="sd">    In ``app_managed`` mode, one physical table per logical graph name lives</span>
+<span class="sd">    under the configured Postgres *schema* and the app drives every write.</span>
+
+<span class="sd">    In ``managed_synced`` mode, that same logical name resolves to a UNION</span>
+<span class="sd">    view fronting the Lakeflow-managed ``_sync`` table and the app-owned</span>
+<span class="sd">    ``__app`` companion. Direct writes go to the companion; the synced side</span>
+<span class="sd">    is populated by the Databricks data plane via</span>
+<span class="sd">    :class:`SyncedTableManager`.</span>
+
+<span class="sd">    ``search_path`` is set on every pooled connection so generated SQL from</span>
+<span class="sd">    :class:`GraphDBBackend` helpers resolves correctly.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">auth</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">database_override</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">sync_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">SYNC_MODE_APP</span><span class="p">,</span>
+        <span class="n">sync_table_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;snapshot&quot;</span><span class="p">,</span>
+        <span class="n">sync_timeout_s</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">_SYNC_DEFAULT_TIMEOUT_S</span><span class="p">,</span>
+        <span class="n">sync_uc_catalog</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">sync_uc_schema</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">synced_manager</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">auth</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">database_override</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sync_mode</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">sync_mode</span> <span class="k">if</span> <span class="n">sync_mode</span> <span class="ow">in</span> <span class="p">(</span><span class="n">SYNC_MODE_APP</span><span class="p">,</span> <span class="n">SYNC_MODE_MANAGED</span><span class="p">)</span> <span class="k">else</span> <span class="n">SYNC_MODE_APP</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sync_table_mode</span> <span class="o">=</span> <span class="n">sync_table_mode</span> <span class="ow">or</span> <span class="s2">&quot;snapshot&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sync_timeout_s</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sync_timeout_s</span><span class="p">)</span> <span class="k">if</span> <span class="n">sync_timeout_s</span> <span class="k">else</span> <span class="n">_SYNC_DEFAULT_TIMEOUT_S</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sync_uc_catalog</span> <span class="o">=</span> <span class="n">sync_uc_catalog</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="c1"># UC schema segment for the synced-table FQN. Normally set to the</span>
+        <span class="c1"># registry Volume schema so the Lakeflow object lives in the same UC</span>
+        <span class="c1"># namespace as registry artefacts. Falls back to the Postgres graph</span>
+        <span class="c1"># schema when the registry is unreachable.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sync_uc_schema</span> <span class="o">=</span> <span class="n">sync_uc_schema</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_synced_manager</span> <span class="o">=</span> <span class="n">synced_manager</span>
+
+    <span class="c1"># -- Mode introspection ------------------------------------------------</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sync_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sync_mode</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_synced</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sync_mode</span> <span class="o">==</span> <span class="n">SYNC_MODE_MANAGED</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sync_table_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sync_table_mode</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sync_timeout_s</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sync_timeout_s</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sync_uc_catalog</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sync_uc_catalog</span>
+
+<div class="viewcode-block" id="LakebaseFlatStore.synced_manager">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.synced_manager">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">synced_manager</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_synced_manager</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+                <span class="s2">&quot;managed_synced mode active but no SyncedTableManager was wired — &quot;</span>
+                <span class="s2">&quot;check GraphDBFactory configuration&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_synced_manager</span></div>
+
+
+    <span class="c1"># -- Table-name resolution --------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_writable_table_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the Postgres table that direct app writes target.</span>
+
+<span class="sd">        Both ``app_managed`` and ``managed_synced`` use the companion table</span>
+<span class="sd">        (``*__app``) for reasoning and cohort writes so that bulk warehouse</span>
+<span class="sd">        data in ``*_sync`` is never modified by the app post-build.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_readable_table_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the table / view that direct reads should query.&quot;&quot;&quot;</span>
+        <span class="c1"># Both modes resolve to the same identifier — in synced mode it is the</span>
+        <span class="c1"># union view name (which equals the legacy table name).</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">physical_table_id</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+<div class="viewcode-block" id="LakebaseFlatStore.synced_table_name">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.synced_table_name">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">synced_table_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the ``_sync`` table name so callers can query without materialised triples.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.get_inferred_triple_count">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.get_inferred_triple_count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_inferred_triple_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the count of triples in the companion (reasoning / app-written) table.</span>
+
+<span class="sd">        Queries ``*__app`` directly so callers can determine whether any</span>
+<span class="sd">        inferred data exists independently of the union view total.</span>
+<span class="sd">        Returns 0 on any error (e.g. companion table not yet created).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">companion</span> <span class="o">=</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">count_triples</span><span class="p">(</span><span class="n">companion</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.synced_phy">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.synced_phy">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">synced_phy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Postgres table name for the read-only synced side (managed_synced only).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.companion_phy">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.companion_phy">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">companion_phy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Postgres table name for the writable companion (managed_synced only).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.synced_uc_name">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.synced_uc_name">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">synced_uc_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fallback_catalog</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build the UC fully-qualified name for the synced table.</span>
+
+<span class="sd">        ``fallback_catalog`` is consulted when ``sync_uc_catalog`` is not set</span>
+<span class="sd">        in ``engine_config``. Prefer passing the result of</span>
+<span class="sd">        :func:`resolve_sync_uc_fallback_catalog` so the default UC catalog follows</span>
+<span class="sd">        Settings → Registry rather than only ``domain.delta``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">catalog</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sync_uc_catalog</span> <span class="ow">or</span> <span class="n">fallback_catalog</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">catalog</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+                <span class="s2">&quot;Cannot build synced UC name: no catalog configured &quot;</span>
+                <span class="s2">&quot;(set graph_engine_config.sync_uc_catalog or pass a Delta catalog)&quot;</span>
+            <span class="p">)</span>
+        <span class="n">uc_schema</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sync_uc_schema</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">uc_schema</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+
+    <span class="c1"># -- Companion + union view DDL --------------------------------------</span>
+
+<div class="viewcode-block" id="LakebaseFlatStore.ensure_synced_companion">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.ensure_synced_companion">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ensure_synced_companion</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create Postgres schema + writable companion before the ``_sync`` table exists.</span>
+
+<span class="sd">        Lakeflow creates the read-only ``_sync`` table only after the first snapshot</span>
+<span class="sd">        progresses; the union view references both sides and must run **after** sync.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_synced</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">companion</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">ensure_companion</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.drop_app_owned_sync_artifacts_if_present">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.drop_app_owned_sync_artifacts_if_present">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">drop_app_owned_sync_artifacts_if_present</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove a user-owned ``_sync`` table (and union view) before Lakeflow sync.</span>
+
+<span class="sd">        A leftover ``_sync`` table from an ``app_managed`` build (or a partial</span>
+<span class="sd">        ``managed_synced`` attempt) is owned by the app user. Lakeflow&#39;s</span>
+<span class="sd">        ``databricks_writer_*`` principal must own the table; otherwise the</span>
+<span class="sd">        snapshot pipeline fails with ``must be owner of table …_sync``.</span>
+
+<span class="sd">        Returns ``True`` when view and/or sync artifacts were dropped.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_synced</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">synced</span> <span class="o">=</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">view_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">bare_synced</span> <span class="o">=</span> <span class="n">synced</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+        <span class="n">dropped</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<span class="w">                </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                SELECT pg_get_userbyid(c.relowner) AS owner</span>
+<span class="sd">                FROM pg_class c</span>
+<span class="sd">                JOIN pg_namespace n ON n.oid = c.relnamespace</span>
+<span class="sd">                WHERE n.nspname = ANY(current_schemas(false))</span>
+<span class="sd">                  AND c.relname = %s</span>
+<span class="sd">                  AND c.relkind = &#39;r&#39;</span>
+<span class="sd">                &quot;&quot;&quot;</span><span class="p">,</span>
+                <span class="p">(</span><span class="n">bare_synced</span><span class="p">,),</span>
+            <span class="p">)</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">row</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="n">owner</span> <span class="o">=</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;owner&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">is_lakeflow_sync_owner</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">owner</span><span class="p">)):</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Dropping app-owned sync artifacts for </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2"> (owner=</span><span class="si">%s</span><span class="s2">) &quot;</span>
+                <span class="s2">&quot;so Lakeflow can recreate the _sync table&quot;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span>
+                <span class="n">bare_synced</span><span class="p">,</span>
+                <span class="n">owner</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">drop_view</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">view</span><span class="p">)</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">drop_synced</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">synced</span><span class="p">)</span>
+            <span class="n">dropped</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">dropped</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.ensure_synced_union_view">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.ensure_synced_union_view">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ensure_synced_union_view</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">wait_s</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">poll_interval_s</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
+        <span class="n">synced_phy_override</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create the union view once the ``_sync`` table exists (after Lakeflow snapshot).</span>
+
+<span class="sd">        The ``_sync`` table is placed by Lakebase in the Postgres schema that</span>
+<span class="sd">        corresponds to the UC schema segment of the synced-table FQN</span>
+<span class="sd">        (``_sync_uc_schema``). When that differs from the Postgres graph schema</span>
+<span class="sd">        (e.g. registry schema ``ontobricks`` vs graph schema ``ontobricks_graph``),</span>
+<span class="sd">        the ``_sync`` reference is schema-qualified so the DDL is independent of</span>
+<span class="sd">        the active ``search_path``.</span>
+
+<span class="sd">        After the Lakeflow pipeline reaches ONLINE there can be a short lag before</span>
+<span class="sd">        the Postgres ``_sync`` table becomes visible.  This method polls for the</span>
+<span class="sd">        table&#39;s existence up to *wait_s* seconds before giving up with a clear</span>
+<span class="sd">        error (rather than silently proceeding and hitting a Postgres</span>
+<span class="sd">        &quot;relation does not exist&quot; at view-creation time).</span>
+
+<span class="sd">        *wait_s* defaults to the ``ONTOBRICKS_SYNC_VIEW_WAIT_S`` env var</span>
+<span class="sd">        (default 300s).  ``poll_interval_s`` can be overridden via</span>
+<span class="sd">        ``ONTOBRICKS_SYNC_VIEW_POLL_S`` (default 5s).</span>
+
+<span class="sd">        *synced_phy_override* lets callers supply the actual Postgres table name</span>
+<span class="sd">        when ``SyncedTableManager.ensure()`` used a ghost-state fallback suffix</span>
+<span class="sd">        (e.g. ``cust360auto_v4_sync_b`` instead of ``cust360auto_v4_sync``).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">time</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_time</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_synced</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="n">wait_s</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">wait_s</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ONTOBRICKS_SYNC_VIEW_WAIT_S&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">300</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">poll_interval_s</span> <span class="o">==</span> <span class="mf">5.0</span><span class="p">:</span>
+            <span class="n">poll_interval_s</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ONTOBRICKS_SYNC_VIEW_POLL_S&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mf">5.0</span>
+            <span class="p">)</span>
+
+        <span class="n">companion</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">synced_bare</span> <span class="o">=</span> <span class="n">synced_phy_override</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readable_table_id</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">sync_pg_schema</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_sync_uc_schema</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">synced</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="n">sync_pg_schema</span><span class="si">}</span><span class="s1">&quot;.</span><span class="si">{</span><span class="n">synced_bare</span><span class="si">}</span><span class="s1">&#39;</span>
+            <span class="k">if</span> <span class="n">sync_pg_schema</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span>
+            <span class="k">else</span> <span class="n">synced_bare</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Poll until the _sync table is visible in Postgres (propagation lag after ONLINE).</span>
+        <span class="n">deadline</span> <span class="o">=</span> <span class="n">_time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">+</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">wait_s</span><span class="p">))</span>
+        <span class="n">attempt</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">attempt</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+                <span class="n">exists</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sync_table_exists</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">sync_pg_schema</span><span class="p">,</span> <span class="n">synced_bare</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">exists</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">attempt</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">&quot;ensure_synced_union_view: _sync table </span><span class="si">%r</span><span class="s2"> visible &quot;</span>
+                        <span class="s2">&quot;after </span><span class="si">%d</span><span class="s2"> attempt(s)&quot;</span><span class="p">,</span>
+                        <span class="n">synced_bare</span><span class="p">,</span>
+                        <span class="n">attempt</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">break</span>
+            <span class="n">remaining</span> <span class="o">=</span> <span class="n">deadline</span> <span class="o">-</span> <span class="n">_time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">remaining</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;_sync table </span><span class="si">{</span><span class="n">synced_bare</span><span class="si">!r}</span><span class="s2"> not found in Postgres schema &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">sync_pg_schema</span><span class="si">!r}</span><span class="s2"> after </span><span class="si">{</span><span class="n">wait_s</span><span class="si">}</span><span class="s2">s. &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;The Lakeflow pipeline reported ONLINE but Lakebase has not &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;yet materialised the Postgres table. &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;Set ONTOBRICKS_SYNC_VIEW_WAIT_S to a higher value if this &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;workspace consistently needs more time.&quot;</span>
+                <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;ensure_synced_union_view: _sync table </span><span class="si">%r</span><span class="s2"> not yet visible &quot;</span>
+                <span class="s2">&quot;(attempt </span><span class="si">%d</span><span class="s2">, </span><span class="si">%.0f</span><span class="s2">s remaining) — retrying in </span><span class="si">%.1f</span><span class="s2">s&quot;</span><span class="p">,</span>
+                <span class="n">synced_bare</span><span class="p">,</span>
+                <span class="n">attempt</span><span class="p">,</span>
+                <span class="n">remaining</span><span class="p">,</span>
+                <span class="nb">min</span><span class="p">(</span><span class="n">poll_interval_s</span><span class="p">,</span> <span class="n">remaining</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">_time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">poll_interval_s</span><span class="p">,</span> <span class="n">remaining</span><span class="p">))</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="c1"># managed_synced: Lakeflow creates the _sync table. Re-apply index</span>
+            <span class="c1"># DDL idempotently so BFS and neighbour traversals stay performant</span>
+            <span class="c1"># even if the physical _sync table was recreated upstream.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">ensure_graph_indexes</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">synced</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;ensure_synced_union_view: could not ensure indexes on </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">synced</span><span class="p">,</span>
+                    <span class="n">exc</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">ensure_union_view</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">synced</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sync_table_exists</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True if *schema.table* is visible to the current Postgres session.&quot;&quot;&quot;</span>
+        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;SELECT 1 FROM information_schema.tables &quot;</span>
+            <span class="s2">&quot;WHERE table_schema = </span><span class="si">%s</span><span class="s2"> AND table_name = </span><span class="si">%s</span><span class="s2"> LIMIT 1&quot;</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">table</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="LakebaseFlatStore.ensure_synced_layout">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.ensure_synced_layout">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ensure_synced_layout</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create the writable companion and the union view if they do not exist.</span>
+
+<span class="sd">        For builds, prefer :meth:`ensure_synced_companion` before Lakeflow sync and</span>
+<span class="sd">        :meth:`ensure_synced_union_view` after — the ``_sync`` table does not exist until the</span>
+<span class="sd">        snapshot pipeline materializes it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ensure_synced_companion</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ensure_synced_union_view</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.truncate_companion">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.truncate_companion">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">truncate_companion</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Truncate the companion table (used on full rebuild in synced mode).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_synced</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">companion</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">truncate_companion</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_idx_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">phy</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">suffix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">base</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;g_</span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">base</span><span class="p">[:</span><span class="mi">63</span><span class="p">]</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_literal_meta</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Normalize optional RDF literal metadata for storage (NULL when absent).&quot;&quot;&quot;</span>
+        <span class="n">dt</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;datatype&quot;</span><span class="p">)</span>
+        <span class="n">lang</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lang&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">lang</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">lang</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">lang</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">lang</span><span class="p">)</span>
+        <span class="n">dt_val</span> <span class="o">=</span> <span class="p">(</span><span class="n">dt</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="kc">None</span>
+        <span class="n">lang_val</span> <span class="o">=</span> <span class="p">(</span><span class="n">lang</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">dt_val</span><span class="p">,</span> <span class="n">lang_val</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_row_to_triple</span><span class="p">(</span><span class="n">row</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;predicate&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;object&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="n">dt</span> <span class="o">=</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;datatype&quot;</span><span class="p">)</span>
+        <span class="n">lang</span> <span class="o">=</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lang&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dt</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;datatype&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">lang</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;lang&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">lang</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ensure_legacy_columns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">phy</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Add ``datatype`` / ``lang`` when upgrading tables created before those columns.&quot;&quot;&quot;</span>
+        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;ALTER TABLE </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2"> ADD COLUMN IF NOT EXISTS datatype TEXT&quot;</span>
+        <span class="p">)</span>
+        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ALTER TABLE </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2"> ADD COLUMN IF NOT EXISTS lang TEXT&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_warn_legacy_object_pk</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">phy</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_warn_legacy_object_pk</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">phy</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log when an existing table still keys on full ``object`` text.&quot;&quot;&quot;</span>
+        <span class="n">bare</span> <span class="o">=</span> <span class="n">phy</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            SELECT 1</span>
+<span class="sd">            FROM information_schema.columns</span>
+<span class="sd">            WHERE table_schema = ANY(current_schemas(false))</span>
+<span class="sd">              AND table_name = %s</span>
+<span class="sd">              AND column_name = &#39;object_hash&#39;</span>
+<span class="sd">            LIMIT 1</span>
+<span class="sd">            &quot;&quot;&quot;</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">bare</span><span class="p">,),</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Lakebase table </span><span class="si">%s</span><span class="s2"> uses the legacy PRIMARY KEY (subject, predicate, object) &quot;</span>
+                <span class="s2">&quot;and cannot store literal objects longer than </span><span class="si">%d</span><span class="s2"> bytes. &quot;</span>
+                <span class="s2">&quot;Run a full Knowledge Graph rebuild to migrate to object_hash.&quot;</span><span class="p">,</span>
+                <span class="n">phy</span><span class="p">,</span>
+                <span class="n">_PG_BTREE_INDEX_MAX_BYTES</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_require_pg</span><span class="p">():</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.pool</span><span class="w"> </span><span class="kn">import</span> <span class="n">_require_psycopg</span>
+
+        <span class="k">return</span> <span class="n">_require_psycopg</span><span class="p">()</span>
+
+<div class="viewcode-block" id="LakebaseFlatStore.execute_query">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.execute_query">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute_query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">dict_row</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_require_pg</span><span class="p">()</span>
+        <span class="n">pool</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pool</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">pool</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">(</span><span class="n">row_factory</span><span class="o">=</span><span class="n">dict_row</span><span class="p">)</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+                <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;SET search_path TO &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="si">}</span><span class="s1">&quot;, public&#39;</span><span class="p">)</span>
+                <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">cur</span><span class="o">.</span><span class="n">description</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()]</span>
+                <span class="k">return</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.find_subjects_by_patterns">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.find_subjects_by_patterns">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_subjects_by_patterns</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">like_patterns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Optimized alias expansion for Lakebase Postgres.</span>
+
+<span class="sd">        ``describe_entity`` may pass hundreds or thousands of ``%/&lt;local-id&gt;``</span>
+<span class="sd">        patterns when expanding URI aliases. Building one giant OR-LIKE chain</span>
+<span class="sd">        performs poorly and can hit statement timeouts.</span>
+
+<span class="sd">        For fixed suffix patterns (``%/&lt;id&gt;``), group IDs by suffix length and</span>
+<span class="sd">        build a single SQL statement with one ``RIGHT(subject, k) = ANY(...)``</span>
+<span class="sd">        clause per distinct suffix length. This scales with distinct suffix</span>
+<span class="sd">        lengths (typically 1-3), not with total pattern count, while keeping</span>
+<span class="sd">        the lookup to a single round-trip.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">like_patterns</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="n">rel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sql_relation</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">by_suffix_len</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="n">generic_patterns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">raw</span> <span class="ow">in</span> <span class="n">like_patterns</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">p</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;%/&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="s2">&quot;%&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">p</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span> <span class="ow">and</span> <span class="p">(</span><span class="s2">&quot;_&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">p</span><span class="p">[</span><span class="mi">2</span><span class="p">:]):</span>
+                <span class="n">local_id</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span>
+                <span class="n">suffix_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">local_id</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">by_suffix_len</span><span class="p">[</span><span class="n">suffix_len</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">local_id</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">generic_patterns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+
+        <span class="n">out</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">by_suffix_len</span><span class="p">:</span>
+            <span class="n">or_clauses</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">suffix_len</span><span class="p">,</span> <span class="n">ids</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">by_suffix_len</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+                <span class="n">array_literals</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;&#39;/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_sql_escape</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+                    <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">({</span><span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">ids</span> <span class="k">if</span> <span class="n">value</span><span class="p">})</span>
+                <span class="p">)</span>
+                <span class="n">or_clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;RIGHT(subject, </span><span class="si">{</span><span class="n">suffix_len</span><span class="si">}</span><span class="s2">) = ANY(ARRAY[</span><span class="si">{</span><span class="n">array_literals</span><span class="si">}</span><span class="s2">])&quot;</span>
+                <span class="p">)</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT subject FROM </span><span class="si">{</span><span class="n">rel</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="s1">&#39; OR &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">or_clauses</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">generic_patterns</span><span class="p">:</span>
+            <span class="n">like_clauses</span> <span class="o">=</span> <span class="s2">&quot; OR &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;subject LIKE &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_sql_escape</span><span class="p">(</span><span class="n">p</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">generic_patterns</span>
+            <span class="p">)</span>
+            <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT subject FROM </span><span class="si">{</span><span class="n">rel</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">like_clauses</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.create_table">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.create_table">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_synced</span><span class="p">:</span>
+            <span class="c1"># In managed_synced mode the *_sync table is provisioned by Lakebase/</span>
+            <span class="c1"># Lakeflow via SyncedTableManager. The companion and union view are</span>
+            <span class="c1"># created by ensure_synced_companion / ensure_synced_union_view at</span>
+            <span class="c1"># the appropriate points in _apply_via_synced_pipeline.</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;create_table </span><span class="si">%s</span><span class="s2"> is a no-op in managed_synced mode &quot;</span>
+                <span class="s2">&quot;(provisioning deferred to SyncedTableManager)&quot;</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span>
+        <span class="c1"># app_managed: create the full 3-object layout so reasoning / materialise</span>
+        <span class="c1"># can write to the companion while bulk warehouse data lives in *_sync.</span>
+        <span class="n">synced</span> <span class="o">=</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">companion</span> <span class="o">=</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">ensure_synced</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span> <span class="n">synced</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_legacy_columns</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">synced</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">_col_err</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Table &#39;</span><span class="si">{</span><span class="n">synced</span><span class="si">}</span><span class="s2">&#39; exists but is owned by a different database role &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;— cannot add missing columns. &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;Fix: connect to Lakebase with a superuser and run: &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;DROP TABLE IF EXISTS </span><span class="se">\&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="si">}</span><span class="se">\&quot;</span><span class="s2">.</span><span class="se">\&quot;</span><span class="si">{</span><span class="n">synced</span><span class="si">}</span><span class="se">\&quot;</span><span class="s2"> CASCADE;&quot;</span>
+                <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">_col_err</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">ensure_companion</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_legacy_columns</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">ensure_union_view</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">view</span><span class="p">,</span> <span class="n">synced</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Lakebase graph layout ready: </span><span class="si">%s</span><span class="s2">.[</span><span class="si">%s</span><span class="s2"> | </span><span class="si">%s</span><span class="s2"> | view </span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span>
+            <span class="n">synced</span><span class="p">,</span>
+            <span class="n">companion</span><span class="p">,</span>
+            <span class="n">view</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.drop_table">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.drop_table">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">drop_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_synced</span><span class="p">:</span>
+            <span class="n">view</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+            <span class="n">companion</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+                <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">drop_view</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">view</span><span class="p">)</span>
+                <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">drop_companion</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">mgr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">synced_manager</span><span class="p">()</span>
+                <span class="n">synced_uc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">synced_uc_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+                <span class="n">mgr</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">synced_uc</span><span class="p">,</span> <span class="n">purge_data</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">InfrastructureError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="c1"># No catalog configured / SDK unavailable -- best-effort cleanup</span>
+                <span class="c1"># so callers can still drop the PG side without aborting.</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;drop_table </span><span class="si">%s</span><span class="s2">: synced-table delete skipped (</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="n">table_name</span><span class="p">,</span>
+                    <span class="n">exc</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Dropped Lakebase synced trio for </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span> <span class="n">table_name</span>
+            <span class="p">)</span>
+            <span class="k">return</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">companion</span> <span class="o">=</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">synced</span> <span class="o">=</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">drop_view</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">view</span><span class="p">)</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">drop_companion</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span>
+            <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">drop_synced</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">synced</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Dropped Lakebase graph layout </span><span class="si">%s</span><span class="s2">.[</span><span class="si">%s</span><span class="s2"> | </span><span class="si">%s</span><span class="s2"> | view </span><span class="si">%s</span><span class="s2">]&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span>
+            <span class="n">synced</span><span class="p">,</span>
+            <span class="n">companion</span><span class="p">,</span>
+            <span class="n">view</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="nd">@contextmanager</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_txn_cursor</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Yield ``(conn, cur)`` inside an explicit transaction.</span>
+
+<span class="sd">        The pool runs connections with ``autocommit=True`` so that read paths</span>
+<span class="sd">        and small DDL/DML stay round-trip-cheap. Bulk paths that rely on</span>
+<span class="sd">        ``ON COMMIT DROP`` temp tables (COPY-based insert / delete) need an</span>
+<span class="sd">        explicit transaction boundary to keep the staging table alive across</span>
+<span class="sd">        the COPY → INSERT/DELETE steps and ensure it is released when the</span>
+<span class="sd">        block exits.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.pool</span><span class="w"> </span><span class="kn">import</span> <span class="n">_require_psycopg</span>
+
+        <span class="n">_</span><span class="p">,</span> <span class="n">dict_row</span> <span class="o">=</span> <span class="n">_require_psycopg</span><span class="p">()</span>
+        <span class="n">pool</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pool</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">pool</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">transaction</span><span class="p">():</span>
+                <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">(</span><span class="n">row_factory</span><span class="o">=</span><span class="n">dict_row</span><span class="p">)</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+                    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;SET search_path TO &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="si">}</span><span class="s1">&quot;, public&#39;</span><span class="p">)</span>
+                    <span class="k">yield</span> <span class="n">conn</span><span class="p">,</span> <span class="n">cur</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_copy_insert_batch_phy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">phy</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;COPY *batch* into a temp staging table then ``INSERT … ON CONFLICT DO NOTHING``.</span>
+
+<span class="sd">        Takes the resolved physical Postgres table name directly so callers can</span>
+<span class="sd">        target either the writable companion (``*__app``) or the bulk-data sync</span>
+<span class="sd">        table (``*_sync``) without going through ``_writable_table_id``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">batch</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_txn_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">cur</span><span class="p">):</span>
+                <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;CREATE TEMP TABLE </span><span class="si">{</span><span class="n">_COPY_INSERT_TEMP</span><span class="si">}</span><span class="s2"> (&quot;</span>
+                    <span class="s2">&quot;subject TEXT, predicate TEXT, object TEXT, &quot;</span>
+                    <span class="s2">&quot;datatype TEXT, lang TEXT) ON COMMIT DROP&quot;</span>
+                <span class="p">)</span>
+                <span class="n">copy_sql</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;COPY </span><span class="si">{</span><span class="n">_COPY_INSERT_TEMP</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="s2">&quot;(subject, predicate, object, datatype, lang) FROM STDIN&quot;</span>
+                <span class="p">)</span>
+                <span class="k">with</span> <span class="n">cur</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">copy_sql</span><span class="p">)</span> <span class="k">as</span> <span class="n">cp</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">:</span>
+                        <span class="n">dt</span><span class="p">,</span> <span class="n">lg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_literal_meta</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+                        <span class="n">cp</span><span class="o">.</span><span class="n">write_row</span><span class="p">(</span>
+                            <span class="p">(</span>
+                                <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                                <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                                <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                                <span class="n">dt</span><span class="p">,</span>
+                                <span class="n">lg</span><span class="p">,</span>
+                            <span class="p">)</span>
+                        <span class="p">)</span>
+                <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;INSERT INTO </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2"> (subject, predicate, object, datatype, lang) &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;SELECT subject, predicate, object, datatype, lang &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">_COPY_INSERT_TEMP</span><span class="si">}</span><span class="s2"> ON CONFLICT DO NOTHING&quot;</span>
+                <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">_reraise_lakebase_index_limit</span><span class="p">(</span><span class="n">exc</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_copy_insert_batch</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Route a COPY batch to the writable companion table for *table_name*.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">batch</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_copy_insert_batch_phy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_writable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span> <span class="n">batch</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_copy_delete_batch</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;COPY *batch* into a temp staging table then ``DELETE … USING`` join.</span>
+
+<span class="sd">        Replaces the per-row ``DELETE`` loop on the incremental remove path:</span>
+<span class="sd">        the join executes server-side in Postgres so the app does not pay a</span>
+<span class="sd">        round-trip per triple to be removed. In ``managed_synced`` mode the</span>
+<span class="sd">        target is the writable companion (the synced side is immutable).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">batch</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">phy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_txn_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">cur</span><span class="p">):</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;CREATE TEMP TABLE </span><span class="si">{</span><span class="n">_COPY_DELETE_TEMP</span><span class="si">}</span><span class="s2"> (&quot;</span>
+                <span class="s2">&quot;subject TEXT, predicate TEXT, object TEXT) ON COMMIT DROP&quot;</span>
+            <span class="p">)</span>
+            <span class="n">copy_sql</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;COPY </span><span class="si">{</span><span class="n">_COPY_DELETE_TEMP</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="s2">&quot;(subject, predicate, object) FROM STDIN&quot;</span>
+            <span class="p">)</span>
+            <span class="k">with</span> <span class="n">cur</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">copy_sql</span><span class="p">)</span> <span class="k">as</span> <span class="n">cp</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">:</span>
+                    <span class="n">cp</span><span class="o">.</span><span class="n">write_row</span><span class="p">(</span>
+                        <span class="p">(</span>
+                            <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                            <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                            <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;DELETE FROM </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2"> USING </span><span class="si">{</span><span class="n">_COPY_DELETE_TEMP</span><span class="si">}</span><span class="s2"> d &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WHERE </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2">.subject = d.subject &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2">.predicate = d.predicate &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2">.object = d.object&quot;</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">cur</span><span class="o">.</span><span class="n">rowcount</span> <span class="k">if</span> <span class="n">cur</span><span class="o">.</span><span class="n">rowcount</span> <span class="ow">and</span> <span class="n">cur</span><span class="o">.</span><span class="n">rowcount</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_insert_triples_executemany</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Insert rows with ``executemany`` (small-payload fallback, &lt; ``_BULK_INSERT_THRESHOLD``).&quot;&quot;&quot;</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">phy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;INSERT INTO </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2"> (subject, predicate, object, datatype, lang) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING&quot;</span>
+        <span class="p">)</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span> <span class="n">batch_size</span><span class="p">):</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="n">triples</span><span class="p">[</span><span class="n">i</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">]</span>
+                <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">:</span>
+                    <span class="n">dt</span><span class="p">,</span> <span class="n">lg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_literal_meta</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+                    <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">(</span>
+                            <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                            <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                            <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                            <span class="n">dt</span><span class="p">,</span>
+                            <span class="n">lg</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+                <span class="n">cur</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">rows</span><span class="p">)</span>
+                <span class="n">total</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+                    <span class="n">on_progress</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Inserted </span><span class="si">%d</span><span class="s2"> triple rows into </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span> <span class="n">phy</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">total</span>
+
+<div class="viewcode-block" id="LakebaseFlatStore.insert_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.insert_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">insert_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">_BULK_INSERT_THRESHOLD</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">bulk_insert_iter</span><span class="p">(</span>
+                <span class="n">table_name</span><span class="p">,</span>
+                <span class="nb">iter</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
+                <span class="n">on_progress</span><span class="o">=</span><span class="n">on_progress</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_insert_triples_executemany</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span> <span class="n">triples</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">on_progress</span><span class="o">=</span><span class="n">on_progress</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.bulk_insert_iter">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.bulk_insert_iter">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bulk_insert_iter</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triple_iterator</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Insert triples from an iterator in fixed-size batches via ``COPY FROM STDIN``.</span>
+
+<span class="sd">        Bounded memory: only one ``batch_size`` window is held in RAM at any</span>
+<span class="sd">        time. Each batch is its own transaction (COPY into ``_ob_copy_stage``</span>
+<span class="sd">        then ``INSERT … ON CONFLICT DO NOTHING``) so progress callbacks fire</span>
+<span class="sd">        per-batch and a single bad batch does not abort the entire load.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">triple_iterator</span><span class="p">:</span>
+            <span class="n">batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">batch_size</span><span class="p">:</span>
+                <span class="n">total</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_copy_insert_batch</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+                    <span class="n">on_progress</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">total</span><span class="p">)</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">batch</span><span class="p">:</span>
+            <span class="n">total</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_copy_insert_batch</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+                <span class="n">on_progress</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">total</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">total</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;COPY-inserted </span><span class="si">%d</span><span class="s2"> triple rows into </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">total</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">physical_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">total</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.bulk_load_into_sync">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.bulk_load_into_sync">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bulk_load_into_sync</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triple_iterator</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Bulk-load warehouse data into the ``*_sync`` table for *table_name*.</span>
+
+<span class="sd">        Used by the ``app_managed`` full-rebuild path where the app streams</span>
+<span class="sd">        triples from the Delta warehouse view directly into the sync table,</span>
+<span class="sd">        mirroring what Lakeflow does automatically in ``managed_synced`` mode.</span>
+
+<span class="sd">        Writes target ``synced_phy(table_name)`` (``*_sync``) so that</span>
+<span class="sd">        post-build app writes (reasoning / materialise) continue to use the</span>
+<span class="sd">        companion (``*__app``) via :meth:`_writable_table_id` and are not</span>
+<span class="sd">        mixed with the warehouse snapshot.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">sync_phy</span> <span class="o">=</span> <span class="n">_companion_ddl</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">triple_iterator</span><span class="p">:</span>
+            <span class="n">batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">batch_size</span><span class="p">:</span>
+                <span class="n">total</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_copy_insert_batch_phy</span><span class="p">(</span><span class="n">sync_phy</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+                    <span class="n">on_progress</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">total</span><span class="p">)</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">batch</span><span class="p">:</span>
+            <span class="n">total</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_copy_insert_batch_phy</span><span class="p">(</span><span class="n">sync_phy</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+                <span class="n">on_progress</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">total</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">total</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;COPY-loaded </span><span class="si">%d</span><span class="s2"> triple rows into </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2"> (sync table)&quot;</span><span class="p">,</span>
+                <span class="n">total</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span>
+                <span class="n">sync_phy</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">total</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.bulk_delete_iter">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.bulk_delete_iter">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bulk_delete_iter</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triple_iterator</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Delete triples from an iterator in fixed-size batches via temp-table JOIN.</span>
+
+<span class="sd">        Mirror of :meth:`bulk_insert_iter` for the incremental remove path.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">batch</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">deleted</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">triple_iterator</span><span class="p">:</span>
+            <span class="n">batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">batch_size</span><span class="p">:</span>
+                <span class="n">deleted</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_copy_delete_batch</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+                    <span class="n">on_progress</span><span class="p">(</span><span class="n">deleted</span><span class="p">,</span> <span class="n">deleted</span><span class="p">)</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">batch</span><span class="p">:</span>
+            <span class="n">deleted</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_copy_delete_batch</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+                <span class="n">on_progress</span><span class="p">(</span><span class="n">deleted</span><span class="p">,</span> <span class="n">deleted</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">deleted</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Bulk-deleted </span><span class="si">%d</span><span class="s2"> triple rows from </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">deleted</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">physical_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">deleted</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.delete_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.delete_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">_BULK_DELETE_THRESHOLD</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">bulk_delete_iter</span><span class="p">(</span>
+                <span class="n">table_name</span><span class="p">,</span>
+                <span class="nb">iter</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span>
+                <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
+                <span class="n">on_progress</span><span class="o">=</span><span class="n">on_progress</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">phy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;DELETE FROM </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2"> WHERE subject = %s AND predicate = %s AND object = %s&quot;</span>
+        <span class="n">deleted</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">triples</span><span class="p">:</span>
+                <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="n">sql</span><span class="p">,</span>
+                    <span class="p">(</span>
+                        <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                        <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                        <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="p">),</span>
+                <span class="p">)</span>
+                <span class="n">deleted</span> <span class="o">+=</span> <span class="n">cur</span><span class="o">.</span><span class="n">rowcount</span> <span class="k">if</span> <span class="n">cur</span><span class="o">.</span><span class="n">rowcount</span> <span class="ow">and</span> <span class="n">cur</span><span class="o">.</span><span class="n">rowcount</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
+                <span class="n">on_progress</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deleted </span><span class="si">%d</span><span class="s2"> triple rows from </span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">deleted</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span> <span class="n">phy</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">deleted</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.query_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.query_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">query_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">phy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;SELECT subject, predicate, object, datatype, lang FROM </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;ORDER BY subject, predicate&quot;</span>
+            <span class="p">)</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_row_to_triple</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.iter_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.iter_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">iter_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5000</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Yield triple rows in sort order without loading the full graph into memory.&quot;&quot;&quot;</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">phy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+                <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;SELECT subject, predicate, object, datatype, lang FROM </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2"> &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;ORDER BY subject, predicate &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;LIMIT %s OFFSET %s&quot;</span><span class="p">,</span>
+                    <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">offset</span><span class="p">),</span>
+                <span class="p">)</span>
+                <span class="n">rows</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="n">_row_to_triple</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="n">offset</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">batch_size</span><span class="p">:</span>
+                <span class="k">break</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.count_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.count_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">phy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT COUNT(*) AS cnt FROM </span><span class="si">{</span><span class="n">phy</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">row</span> <span class="o">=</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">row</span> <span class="k">else</span> <span class="mi">0</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.table_exists">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.table_exists">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">table_exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">table_name</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">table_name</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">phy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_readable_table_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="c1"># In synced mode the readable target is a VIEW; check both</span>
+            <span class="c1"># ``information_schema.tables`` and ``information_schema.views``</span>
+            <span class="c1"># so the existence probe works in either mode.</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<span class="w">                </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                SELECT 1 FROM information_schema.tables</span>
+<span class="sd">                WHERE table_schema = current_schema() AND table_name = %s</span>
+<span class="sd">                UNION ALL</span>
+<span class="sd">                SELECT 1 FROM information_schema.views</span>
+<span class="sd">                WHERE table_schema = current_schema() AND table_name = %s</span>
+<span class="sd">                LIMIT 1</span>
+<span class="sd">                &quot;&quot;&quot;</span><span class="p">,</span>
+                <span class="p">(</span><span class="n">phy</span><span class="p">,</span> <span class="n">phy</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="LakebaseFlatStore.get_status">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.get_status">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">count_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">count</span><span class="p">,</span>
+            <span class="s2">&quot;last_modified&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;lakebase&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;schema&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="p">,</span>
+            <span class="s2">&quot;database&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_effective_database_display</span><span class="p">(),</span>
+            <span class="s2">&quot;sync_mode&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sync_mode</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_effective_database_display</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_database_override</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_database_override</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_auth</span><span class="o">.</span><span class="n">database</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+<div class="viewcode-block" id="LakebaseFlatStore.optimize_table">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.LakebaseFlatStore.optimize_table">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">optimize_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">validate_table_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="c1"># managed_synced: vacuum the companion only (*_sync is Lakeflow-managed).</span>
+        <span class="c1"># app_managed: vacuum *_sync (just bulk-loaded) and the companion.</span>
+        <span class="n">companion</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">companion_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_synced</span><span class="p">:</span>
+                <span class="n">synced</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">synced_phy</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+                <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;VACUUM ANALYZE </span><span class="si">{</span><span class="n">synced</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;VACUUM ANALYZE </span><span class="si">{</span><span class="n">companion</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="resolve_lakebase_graph_schema">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.resolve_lakebase_graph_schema">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">resolve_lakebase_graph_schema</span><span class="p">(</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
+    <span class="n">config_schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Postgres / UC schema segment for Lakebase triple tables.</span>
+
+<span class="sd">    When **Settings → Registry** resolves to a non-empty Unity Catalog **Volume**</span>
+<span class="sd">    schema (``RegistryCfg.schema``, the middle part of ``catalog.schema.volume``),</span>
+<span class="sd">    that value **always** wins over ``graph_engine_config.schema``. Managed-synced</span>
+<span class="sd">    tables must register in UC as ``catalog.schema.table`` where ``schema`` matches</span>
+<span class="sd">    the Lakebase Postgres schema; aligning with the registry Volume keeps graph</span>
+<span class="sd">    triples and synced metadata under the same UC namespace as artefacts.</span>
+
+<span class="sd">    Falls back to *config_schema* (validated) when the registry triplet has no</span>
+<span class="sd">    schema or resolution fails.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.LakebaseBase</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+        <span class="n">DEFAULT_GRAPH_SCHEMA</span><span class="p">,</span>
+        <span class="n">validate_graph_schema</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">raw</span> <span class="o">=</span> <span class="p">(</span><span class="n">config_schema</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">raw</span><span class="p">:</span>
+        <span class="c1"># Explicit schema configured in graph_engine_config — always honour it.</span>
+        <span class="k">return</span> <span class="n">validate_graph_schema</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+
+    <span class="c1"># No explicit schema: derive from the Registry Volume middle segment so</span>
+    <span class="c1"># managed-sync UC names stay aligned with the registry UC namespace.</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+
+        <span class="n">rc</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">reg_schema</span> <span class="o">=</span> <span class="p">(</span><span class="n">rc</span><span class="o">.</span><span class="n">schema</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">reg_schema</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">validated</span> <span class="o">=</span> <span class="n">validate_graph_schema</span><span class="p">(</span><span class="n">reg_schema</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Registry Volume schema </span><span class="si">%r</span><span class="s2"> is not a valid Lakebase identifier (</span><span class="si">%s</span><span class="s2">) — &quot;</span>
+                    <span class="s2">&quot;falling back to default graph schema&quot;</span><span class="p">,</span>
+                    <span class="n">reg_schema</span><span class="p">,</span>
+                    <span class="n">exc</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;Lakebase graph schema=</span><span class="si">%s</span><span class="s2"> from Registry Volume triplet &quot;</span>
+                    <span class="s2">&quot;(graph_engine_config.schema was not set)&quot;</span><span class="p">,</span>
+                    <span class="n">validated</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="n">validated</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;resolve_lakebase_graph_schema: registry unavailable: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">exc</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">validate_graph_schema</span><span class="p">(</span><span class="n">DEFAULT_GRAPH_SCHEMA</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="resolve_sync_uc_fallback_catalog">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase.resolve_sync_uc_fallback_catalog">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">resolve_sync_uc_fallback_catalog</span><span class="p">(</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
+    <span class="n">delta_cfg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Unity Catalog name for synced-table registration when ``sync_uc_catalog`` is unset.</span>
+
+<span class="sd">    Resolution order:</span>
+
+<span class="sd">    1. Environment variable ``ONTOBRICKS_SYNC_UC_CATALOG`` — optional deployment-</span>
+<span class="sd">       wide pin so every domain falls back to the same UC catalog (e.g. a shared</span>
+<span class="sd">       ``main`` catalog) when the JSON config leaves ``sync_uc_catalog`` empty.</span>
+<span class="sd">       The legacy spelling ``ONTBRICKS_SYNC_UC_CATALOG`` (without the ``O``) is</span>
+<span class="sd">       still honoured for backwards compatibility but is deprecated.</span>
+<span class="sd">    2. ``RegistryCfg.from_domain`` — the catalog from **Settings → Registry**</span>
+<span class="sd">       (the Volume / registry UC triplet). This matches where operators expect</span>
+<span class="sd">       managed assets to live.</span>
+<span class="sd">    3. ``domain.delta[&quot;catalog&quot;]`` — per-domain Delta triple-store catalog</span>
+<span class="sd">       (often a personal or workspace-default catalog).</span>
+
+<span class="sd">    ``LakebaseFlatStore.synced_uc_name`` still prefers ``graph_engine_config.sync_uc_catalog``</span>
+<span class="sd">    when set; this helper supplies *fallback_catalog* only.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+    <span class="n">pin</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;ONTOBRICKS_SYNC_UC_CATALOG&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">pin</span><span class="p">:</span>
+        <span class="c1"># Backwards-compat with the original (typoed) env var name. Warn so</span>
+        <span class="c1"># operators migrate away from it.</span>
+        <span class="n">legacy</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;ONTBRICKS_SYNC_UC_CATALOG&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">legacy</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Using deprecated env var ONTBRICKS_SYNC_UC_CATALOG=</span><span class="si">%r</span><span class="s2"> — &quot;</span>
+                <span class="s2">&quot;rename to ONTOBRICKS_SYNC_UC_CATALOG (added &#39;O&#39;).&quot;</span><span class="p">,</span>
+                <span class="n">legacy</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">pin</span> <span class="o">=</span> <span class="n">legacy</span>
+    <span class="k">if</span> <span class="n">pin</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;resolve_sync_uc_fallback_catalog: using ONTOBRICKS_SYNC_UC_CATALOG=</span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">pin</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">pin</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+
+        <span class="n">rc</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">cat</span> <span class="o">=</span> <span class="p">(</span><span class="n">rc</span><span class="o">.</span><span class="n">catalog</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">cat</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;resolve_sync_uc_fallback_catalog: using registry catalog </span><span class="si">%r</span><span class="s2"> &quot;</span>
+                <span class="s2">&quot;(no ONTOBRICKS_SYNC_UC_CATALOG set)&quot;</span><span class="p">,</span>
+                <span class="n">cat</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">cat</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;resolve_sync_uc_fallback_catalog: registry catalog unavailable: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">exc</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="n">dc</span> <span class="o">=</span> <span class="n">delta_cfg</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">fallback</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">dc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">fallback</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;resolve_sync_uc_fallback_catalog: using domain.delta catalog </span><span class="si">%r</span><span class="s2"> &quot;</span>
+            <span class="s2">&quot;(no env var or registry catalog available)&quot;</span><span class="p">,</span>
+            <span class="n">fallback</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">fallback</span></div>
+
+
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

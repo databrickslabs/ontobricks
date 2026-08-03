@@ -112,7 +112,7 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 > principals) as an async job with live progress. It automates
 > `scripts/bootstrap/setup-lakebase.sh` + `scripts/bootstrap/lakebase-perms.sh` (which
 > remain the fallback when the app SP lacks instance-creation rights). See
-> `docs/lakebase-graphdb.md` §3.1b.
+> `documentation/lakebase-graphdb.md` §3.1b.
 
 > **Lakebase deploy targets.** Pick a Databricks Lakebase Autoscaling
 > project + branch and a Postgres database, then set the
@@ -135,7 +135,7 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 
 > **First deploy only:** `make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically, which grants each app's service principal `CAN_MANAGE` on itself. Without that grant the middleware cannot read the app's own ACL and every first-time visitor — including the deploying `CAN_MANAGE` user — lands on the access-denied page. If you deploy via `databricks bundle deploy` directly, run `make bootstrap-perms` once afterwards (it is idempotent).
 
-See [Deployment Guide](docs/deployment.md) for the full checklist including resource configuration and permissions.
+See [Deployment Guide](documentation/deployment.md) for the full checklist including resource configuration and permissions.
 
 ## Testing
 
@@ -190,7 +190,7 @@ The **graph** triple-store backend is pluggable (`GraphDBFactory` / `GraphDBBack
 
 The backend *selection* is stored per-domain in `DomainSession.info['graph_backend']` and versioned with the domain. Switching a domain's backend after a build requires **rebuilding** the Knowledge Graph — graph artifacts are not migrated between engines.
 
-Engine *connection* config remains **workspace-global** and is configured under **Settings → Back end** (Lakebase / Lakehouse / Neo4j sections). Engine-specific options are stored as global JSON (`graph_engine_config`). For Lakebase the supported keys are **`database`** (optional override of `PGDATABASE`), **`schema`** (optional, default `ontobricks_graph`), **`sync_mode`** (`app_managed` default, or `managed_synced` to delegate bulk ingest to a Databricks Lakeflow snapshot pipeline), **`sync_table_mode`** (`snapshot` / `triggered` / `continuous` — `snapshot` is the recommended mode), **`sync_timeout_s`** (default 600), **`sync_uc_catalog`** (UC catalog the synced table is registered in; defaults to the snapshot Delta catalog when unset), and **`sync_uc_schema`** (UC schema segment for the synced-table FQN; defaults to the registry UC schema so the Lakeflow object lands in the same UC namespace as other registry artefacts). See `docs/lakebase-graphdb.md` for the full reference.
+Engine *connection* config remains **workspace-global** and is configured under **Settings → Back end** (Lakebase / Lakehouse / Neo4j sections). Engine-specific options are stored as global JSON (`graph_engine_config`). For Lakebase the supported keys are **`database`** (optional override of `PGDATABASE`), **`schema`** (optional, default `ontobricks_graph`), **`sync_mode`** (`app_managed` default, or `managed_synced` to delegate bulk ingest to a Databricks Lakeflow snapshot pipeline), **`sync_table_mode`** (`snapshot` / `triggered` / `continuous` — `snapshot` is the recommended mode), **`sync_timeout_s`** (default 600), **`sync_uc_catalog`** (UC catalog the synced table is registered in; defaults to the snapshot Delta catalog when unset), and **`sync_uc_schema`** (UC schema segment for the synced-table FQN; defaults to the registry UC schema so the Lakeflow object lands in the same UC namespace as other registry artefacts). See `documentation/lakebase-graphdb.md` for the full reference.
 
 > **Lakebase permission grants.** The app service principal needs `USAGE + DML` on each Postgres schema it touches — granted by `scripts/bootstrap/lakebase-perms.sh`:
 >
@@ -203,7 +203,7 @@ Engine *connection* config remains **workspace-global** and is configured under 
 
 > **Lakebase build performance.** When the active engine is Lakebase, the Knowledge Graph build streams warehouse rows in `fetchmany` batches (`SQLWarehouse.iter_rows`) and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING` (and the symmetrical `DELETE … USING` for incremental removes). The FastAPI process never holds the full graph or the full diff: snapshot CTAS and `EXCEPT` execution stay warehouse-side, the app pipes one batch at a time. There is no Volume archive thread — Postgres is the system of record for the graph.
 
-> **Lakebase managed-synced mode.** When `graph_engine_config.sync_mode = "managed_synced"`, the bulk R2RML data movement is moved entirely off the app: a Databricks Lakeflow snapshot pipeline keeps a Postgres synced table in lock-step with the R2RML view, and the FastAPI process only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`). Reasoning + cohort writes stay on the direct PG path through a writable companion table; readers see both via a UNION view (back-compat name). PG layout per graph version: `g_<dom>_v<n>_sync` (Lakeflow), `g_<dom>_v<n>__app` (app), `g_<dom>_v<n>` (UNION view). See `docs/graphdb-integration.md §9` for the full architecture.
+> **Lakebase managed-synced mode.** When `graph_engine_config.sync_mode = "managed_synced"`, the bulk R2RML data movement is moved entirely off the app: a Databricks Lakeflow snapshot pipeline keeps a Postgres synced table in lock-step with the R2RML view, and the FastAPI process only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`). Reasoning + cohort writes stay on the direct PG path through a writable companion table; readers see both via a UNION view (back-compat name). PG layout per graph version: `g_<dom>_v<n>_sync` (Lakeflow), `g_<dom>_v<n>__app` (app), `g_<dom>_v<n>` (UNION view). See `documentation/graphdb-integration.md §9` for the full architecture.
 
 ### Manual Workflow
 
@@ -219,9 +219,9 @@ Engine *connection* config remains **workspace-global** and is configured under 
 - **Configurable search depth** — control the maximum traversal depth and entity cap for graph expansion
 - **Right-click "Expand neighbours"** — enrich the current graph in place with N-hop neighbours of any selected node (depth follows the right-pane Depth slider, default 2); newly added entities are highlighted and the camera zooms to frame them, with a non-blocking spinner in the canvas top-right while the request runs
 - **Bridge navigation** — follow cross-domain bridges to automatically switch domains and focus on the target entity in the graph viewer
-- **Class actions (Unity Catalog functions)** — bind any number of UC functions to an ontology class (**Ontology → Designer → External**), then run them on a node from the details pane or its right-click menu and read the result in a popup. Each function takes exactly one argument, the entity's ID, and only functions declared on the node's class can be invoked. The same actions are exposed to the MCP server via `get_entity_context` and `invoke_entity_action`. See [`docs/user-guide.md`](docs/user-guide.md#class-actions-unity-catalog-functions).
+- **Class actions (Unity Catalog functions)** — bind any number of UC functions to an ontology class (**Ontology → Designer → External**), then run them on a node from the details pane or its right-click menu and read the result in a popup. Each function takes exactly one argument, the entity's ID, and only functions declared on the node's class can be invoked. The same actions are exposed to the MCP server via `get_entity_context` and `invoke_entity_action`. See [`documentation/user-guide.md`](documentation/user-guide.md#class-actions-unity-catalog-functions).
 - **Data cluster detection** — detect communities in the graph viewer using Louvain, Label Propagation, or Greedy Modularity algorithms; available client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; cluster results can be visualized with color-by-cluster mode and collapsed into super-nodes
-- **Cohort discovery** — group entities that travel together using rule-based linkage (shared resources via predicates) and compatibility constraints (same-value, value-equals, value-in, value-range); deterministic, explainable cohorts with live counters, why/why-not explainers, and idempotent materialisation as graph triples (`:inCohort`) or Unity Catalog Delta tables. See [`docs/cohort_discovery.md`](docs/cohort_discovery.md).
+- **Cohort discovery** — group entities that travel together using rule-based linkage (shared resources via predicates) and compatibility constraints (same-value, value-equals, value-in, value-range); deterministic, explainable cohorts with live counters, why/why-not explainers, and idempotent materialisation as graph triples (`:inCohort`) or Unity Catalog Delta tables. See [`documentation/cohort_discovery.md`](documentation/cohort_discovery.md).
 - **Data quality violation limits** — cap the number of violations displayed per rule (configurable via dropdown, default 10) for faster quality checks
 - **Per-rule progress tracking** — SWRL inference and data quality checks report progress for each individual rule
 
@@ -255,7 +255,7 @@ For automated promotion pipelines use the
 `scripts/registry_transfer.sh` command-line tool — export a curated subset
 of domains/versions from a source registry into a `.zip`, then preview and
 commit it into the target registry. See
-[Registry Import / Export](docs/import-export.md) for the full reference,
+[Registry Import / Export](documentation/import-export.md) for the full reference,
 examples, and a comparison of the OBX UI vs CLI approaches.
 
 ### Ontology Pitfalls Detector
@@ -271,4 +271,4 @@ uv sync --extra pitfalls
 
 ### Documentation
 
-Full documentation is available in [`docs/`](docs/README.md). For a comprehensive feature list and architecture details, see [INFO.md](docs/INFO.md).
+Full documentation is available in [`documentation/`](documentation/README.md). For a comprehensive feature list and architecture details, see [INFO.md](documentation/INFO.md).

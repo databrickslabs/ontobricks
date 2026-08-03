@@ -103,3 +103,4 @@ syncs/
 
 # Superpowers brainstorming visual-companion session files
 .superpowers/
+.worktrees/

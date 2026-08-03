@@ -54,7 +54,7 @@ help:
 	@echo "    make bootstrap-perms     - Grant the app SP CAN_MANAGE on itself (first-run fix)"
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
 	@echo "    make bundle-validate     - Validate the bundle config (Lakebase target)"
-	@echo "    make deploy-check      - Read-only deploy prerequisite check (see docs/DEPLOY_CHECKLIST.md)"
+	@echo "    make deploy-check      - Read-only deploy prerequisite check (see documentation/DEPLOY_CHECKLIST.md)"
 	@echo ""
 	@echo "  Maintenance:"
 	@echo "    make clean        - Remove generated files"
@@ -196,7 +196,7 @@ bundle-summary:
 	@echo "Bundle summary (target: dev-lakebase)..."
 	databricks bundle summary -t dev-lakebase
 
-# Check deployment prerequisites (read-only — see docs/DEPLOY_CHECKLIST.md)
+# Check deployment prerequisites (read-only — see documentation/DEPLOY_CHECKLIST.md)
 deploy-check:
 	@chmod +x scripts/deploy.sh
 	@scripts/deploy.sh --dry-run

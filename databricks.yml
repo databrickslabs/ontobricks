@@ -64,8 +64,8 @@ sync:
     # uploads the rendered file on every `databricks bundle deploy` run.
     - app.yaml
     - src/mcp-server/app.yaml
-    # Help Center serves markdown from docs/ at runtime (/api/help/docs/*).
-    - docs/**
+    # Help Center serves markdown from documentation/ at runtime (/api/help/docs/*).
+    - documentation/**
   exclude:
     - tests/
     - data/
@@ -84,7 +84,7 @@ sync:
     - scripts/
     - Makefile
     - CHANGELOG.md
-    # Help Center ships docs/*.md; exclude root/repo meta markdown only.
+    # Help Center ships documentation/*.md; exclude root/repo meta markdown only.
     - README.md
     - CONTRIBUTING.md
     - AGENTS.md
@@ -92,8 +92,10 @@ sync:
     - SECURITY.md
     - releases/
     - .claude/
-    - docs/sphinx/_build/
-    - docs/sphinx/.doctrees/
+    - documentation/sphinx/_build/
+    - documentation/sphinx/.doctrees/
+    # GitHub Pages marketing site (not needed in the Databricks App bundle)
+    - docs/
 
 variables:
   # ── App names ──────────────────────────────────────────────────────
@@ -282,7 +284,7 @@ targets:
             # Customer admins can switch to manual UI binding by removing
             # this overlay (the resource declaration still lives in
             # ``app.yaml.template``, unbound by default).
-            # See docs/pr47-neo4j-demo/secret-configuration.md.
+            # See documentation/pr47-neo4j-demo/secret-configuration.md.
             - name: neo4j-password
               description: "Databricks Apps secret holding the Neo4j Bolt password"
               secret:

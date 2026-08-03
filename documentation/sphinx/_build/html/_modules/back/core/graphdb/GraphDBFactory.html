@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.graphdb.GraphDBFactory &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Graph Viewer Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/features.html">OntoBricks Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/code_organization.html">OntoBricks code organization (for contributors)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/import-export.html">Registry Import / Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/graphdb-integration.html">Adding a New Graph DB Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/lakebase-graphdb.html">Lakebase as Graph DB — OntoBricks Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/cohort_discovery.html">Cohort Discovery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/sizing.html">OntoBricks Production Sizing Questionnaire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.external.html"><code class="docutils literal notranslate"><span class="pre">back.core.external</span></code> — Vendored / Third-Party Integrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.external.pitfalls.html"><code class="docutils literal notranslate"><span class="pre">back.core.external.pitfalls</span></code> — Ontology Pitfalls Detector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.lakebase.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> — Lakebase Postgres graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphdb.neo4j.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> — Neo4j (Cypher) graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.graphdb.GraphDBFactory</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Factory for creating graph database backends from domain session configuration.</span>
+
+<span class="sd">A single entry point (:meth:`GraphDBFactory.create` / :func:`get_graphdb`)</span>
+<span class="sd">constructs the graph DB backend for a domain:</span>
+
+<span class="sd">* ``engine=None`` — auto-resolve the engine from global/registry config</span>
+<span class="sd">  (``lakebase`` by default, ``delta`` when ``triple_store_backend`` is</span>
+<span class="sd">  ``databricks``).  This is the common path callers use.</span>
+<span class="sd">* ``engine=&quot;lakebase&quot;`` — flat triple tables on Lakebase Postgres.</span>
+<span class="sd">* ``engine=&quot;delta&quot;`` — materialized Delta triple tables in Unity Catalog.</span>
+<span class="sd">* ``engine=&quot;view&quot;`` — a raw, read-only Delta store bound to a SQL warehouse</span>
+<span class="sd">  (health probes against a UC view/table).</span>
+
+<span class="sd">New engines are pluggable — copy ``_starter_kit/`` into</span>
+<span class="sd">``back/core/graphdb/&lt;engine&gt;/`` and register a ``_create_&lt;engine&gt;`` branch.</span>
+<span class="sd">The *engine_config* JSON is engine-specific (admin: Settings → Graph DB).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1"># Unified per-domain graph backend vocabulary.  A domain stores exactly one of</span>
+<span class="c1"># these in ``DomainSession.info[&#39;graph_backend&#39;]`` (mandatory).  Each value maps</span>
+<span class="c1"># to a ``triple_store_backend`` + ``graph_engine`` pair used internally by the</span>
+<span class="c1"># factory:</span>
+<span class="c1">#   ``lakebase``   -&gt; triple_store_backend=lakebase,  graph_engine=lakebase</span>
+<span class="c1">#   ``databricks`` -&gt; triple_store_backend=databricks (Delta)</span>
+<span class="c1">#   ``neo4j``      -&gt; triple_store_backend=lakebase,  graph_engine=neo4j</span>
+<span class="n">GRAPH_BACKENDS</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;lakebase&quot;</span><span class="p">,</span> <span class="s2">&quot;databricks&quot;</span><span class="p">,</span> <span class="s2">&quot;neo4j&quot;</span><span class="p">)</span>
+<span class="n">DEFAULT_GRAPH_BACKEND</span> <span class="o">=</span> <span class="s2">&quot;lakebase&quot;</span>
+
+
+<div class="viewcode-block" id="normalize_graph_backend">
+<a class="viewcode-back" href="../../../../api/app.core.graphdb.html#back.core.graphdb.normalize_graph_backend">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">normalize_graph_backend</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a valid per-domain graph backend, defaulting to ``lakebase``.&quot;&quot;&quot;</span>
+    <span class="n">v</span> <span class="o">=</span> <span class="p">(</span><span class="n">value</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">v</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">GRAPH_BACKENDS</span> <span class="k">else</span> <span class="n">DEFAULT_GRAPH_BACKEND</span></div>
+
+
+
+<div class="viewcode-block" id="GraphDBFactory">
+<a class="viewcode-back" href="../../../../api/app.core.graphdb.html#back.core.graphdb.GraphDBFactory">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GraphDBFactory</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Construct graph DB backend instances from domain session configuration.&quot;&quot;&quot;</span>
+
+    <span class="n">LAKEBASE_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">NEO4J_AVAILABLE</span> <span class="o">=</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="GraphDBFactory.create">
+<a class="viewcode-back" href="../../../../api/app.core.graphdb.html#back.core.graphdb.GraphDBFactory.create">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">engine</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">engine_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a graph DB backend.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            domain: Domain session with info and databricks config.</span>
+<span class="sd">            settings: Optional application settings.</span>
+<span class="sd">            engine: One of ``None`` (auto-resolve from config), ``&quot;lakebase&quot;``,</span>
+<span class="sd">                    ``&quot;delta&quot;``, or ``&quot;view&quot;`` (raw read-only Delta store).</span>
+<span class="sd">            engine_config: Engine-specific JSON configuration set by the</span>
+<span class="sd">                           admin in Settings &gt; Graph DB.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            GraphDBBackend instance or *None* if configuration is incomplete.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">engine</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_auto</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;view&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_delta_view</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">engine_config</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">engine_config</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.engine_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">lakebase_section</span><span class="p">,</span> <span class="n">neo4j_section</span>
+
+        <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;lakebase&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_lakebase</span><span class="p">(</span>
+                <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine_config</span><span class="o">=</span><span class="n">lakebase_section</span><span class="p">(</span><span class="n">engine_config</span><span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;neo4j&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_neo4j</span><span class="p">(</span>
+                <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine_config</span><span class="o">=</span><span class="n">neo4j_section</span><span class="p">(</span><span class="n">engine_config</span><span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;delta&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_delta</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Unknown graph DB engine: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">engine</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_neo4j</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">engine_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Instantiate :class:`Neo4jStore` against the configured Bolt endpoint.</span>
+
+<span class="sd">        Reads ``uri``, ``database``, ``auth_method`` and credentials from</span>
+<span class="sd">        ``engine_config``. See :class:`back.core.graphdb.neo4j.Neo4jStore`</span>
+<span class="sd">        for the recognised keys.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEO4J_AVAILABLE</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jStore</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jStore</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_GRAPH_NAME</span>
+        <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Neo4j graph engine requires the &#39;neo4j&#39; driver: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">NEO4J_AVAILABLE</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Neo4j graph backend unavailable (neo4j driver not installed)&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">cfg</span> <span class="o">=</span> <span class="n">engine_config</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">base_name</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span>
+        <span class="n">version</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;current_version&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;1&quot;</span>
+        <span class="n">db_name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">_V</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">base_name</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">Neo4jStore</span><span class="p">(</span><span class="n">db_name</span><span class="o">=</span><span class="n">db_name</span><span class="p">,</span> <span class="n">engine_config</span><span class="o">=</span><span class="n">cfg</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">NotImplementedError</span><span class="p">)</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Neo4jStore configuration error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to create Neo4jStore: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_auto</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the engine from global/registry config and dispatch.</span>
+
+<span class="sd">        Mirrors the former ``TripleStoreFactory`` ``backend=&quot;graph&quot;`` behaviour.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ts_backend</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_triple_store_backend</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ts_backend</span> <span class="o">==</span> <span class="s2">&quot;databricks&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;delta&quot;</span><span class="p">,</span> <span class="n">engine_config</span><span class="o">=</span><span class="p">{})</span>
+
+        <span class="n">engine</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_graph_engine</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;lakebase&quot;</span>
+        <span class="n">engine_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_graph_engine_config</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+            <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="n">engine</span><span class="p">,</span> <span class="n">engine_config</span><span class="o">=</span><span class="n">engine_config</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Config resolution (formerly on TripleStoreFactory)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read_global_config</span><span class="p">(</span><span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">accessor</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Call *accessor(global_config_service, host, token, registry_cfg)*.</span>
+
+<span class="sd">        Returns ``None`` on any error (registry not configured, etc.).</span>
+
+<span class="sd">        When *force* is ``True`` the ``GlobalConfigService`` in-memory cache is</span>
+<span class="sd">        bypassed and a fresh read is performed against the backing store.  This</span>
+<span class="sd">        is important for build-time resolution: the cache may hold the empty</span>
+<span class="sd">        template (``_empty()``) from a cold-start race where Lakebase was</span>
+<span class="sd">        briefly unavailable, while the Settings UI correctly shows the saved</span>
+<span class="sd">        value because it always uses ``force=True``.  Without bypassing the</span>
+<span class="sd">        cache the build would silently fall back to ``app_managed`` even though</span>
+<span class="sd">        ``managed_synced`` is configured.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session.GlobalConfigService</span><span class="w"> </span><span class="kn">import</span> <span class="n">global_config_service</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_host_and_token</span>
+
+            <span class="k">if</span> <span class="n">settings</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">db</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;databricks&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">host</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">token</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryCfg</span>
+
+            <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">RegistryCfg</span><span class="o">.</span><span class="n">from_domain</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">force</span><span class="p">:</span>
+                <span class="n">global_config_service</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">accessor</span><span class="p">(</span><span class="n">global_config_service</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not read global config: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_graph_backend</span><span class="p">(</span><span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the mandatory per-domain graph backend.</span>
+
+<span class="sd">        The choice lives in ``DomainSession.info[&#39;graph_backend&#39;]`` (set from the</span>
+<span class="sd">        Domain Information -&gt; Knowledge Graph tab) and is versioned with the</span>
+<span class="sd">        domain.  Missing/invalid values default to ``lakebase`` so pre-existing</span>
+<span class="sd">        domains keep working.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">normalize_graph_backend</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph_backend&quot;</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not read per-domain graph_backend: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">DEFAULT_GRAPH_BACKEND</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_graph_engine</span><span class="p">(</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the graph engine from the per-domain backend choice.</span>
+
+<span class="sd">        ``settings``/``force`` are accepted for call-site compatibility but no</span>
+<span class="sd">        longer consulted — the selection is purely per-domain now.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="n">GraphDBFactory</span><span class="o">.</span><span class="n">_resolve_graph_backend</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;neo4j&quot;</span> <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;neo4j&quot;</span> <span class="k">else</span> <span class="s2">&quot;lakebase&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_triple_store_backend</span><span class="p">(</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the triple-store backend from the per-domain backend choice.&quot;&quot;&quot;</span>
+        <span class="n">backend</span> <span class="o">=</span> <span class="n">GraphDBFactory</span><span class="o">.</span><span class="n">_resolve_graph_backend</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;databricks&quot;</span> <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;databricks&quot;</span> <span class="k">else</span> <span class="s2">&quot;lakebase&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_graph_engine_config</span><span class="p">(</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">force</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Read the engine-specific connection JSON config from ``GlobalConfigService``.</span>
+
+<span class="sd">        Engine *connection* configuration (Neo4j Bolt creds, Lakebase schema /</span>
+<span class="sd">        sync options) remains workspace-global — only the backend *selection*</span>
+<span class="sd">        moved per-domain.  Pass *force=True* to bypass the in-memory cache.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">GraphDBFactory</span><span class="o">.</span><span class="n">_read_global_config</span><span class="p">(</span>
+            <span class="n">domain</span><span class="p">,</span>
+            <span class="n">settings</span><span class="p">,</span>
+            <span class="k">lambda</span> <span class="n">gcs</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">r</span><span class="p">:</span> <span class="n">gcs</span><span class="o">.</span><span class="n">get_graph_engine_config</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">r</span><span class="p">),</span>
+            <span class="n">force</span><span class="o">=</span><span class="n">force</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">raw</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Engine constructors</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_delta_view</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Instantiate a raw, read-only :class:`DeltaFlatStore` on a SQL warehouse.</span>
+
+<span class="sd">        Bound with ``domain=None`` so it operates directly on the FQNs passed in</span>
+<span class="sd">        (health probes against a UC view/table).  Formerly ``backend=&quot;view&quot;``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span><span class="p">,</span> <span class="n">is_databricks_app</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                <span class="n">get_databricks_host_and_token</span><span class="p">,</span>
+                <span class="n">resolve_delta_warehouse_id</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.delta.DeltaFlatStore</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeltaFlatStore</span>
+
+            <span class="k">if</span> <span class="n">settings</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+                <span class="n">warehouse_id</span> <span class="o">=</span> <span class="n">resolve_delta_warehouse_id</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">db</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">databricks</span> <span class="ow">or</span> <span class="p">{}</span>
+                <span class="n">host</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">token</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="n">warehouse_id</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_databricks_app</span><span class="p">():</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Delta view store: missing host&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_databricks_app</span><span class="p">():</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Delta view store: missing token&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">warehouse_id</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Delta view store: missing sql_warehouse_id&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">DatabricksClient</span><span class="p">(</span>
+                <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
+                <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
+                <span class="n">warehouse_id</span><span class="o">=</span><span class="n">warehouse_id</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">DeltaFlatStore</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to create Delta view store: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_lakebase</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">engine_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase</span><span class="w"> </span><span class="kn">import</span> <span class="n">LAKEBASE_AVAILABLE</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.LakebaseBase</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                <span class="n">resolve_postgres_database_override</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.LakebaseFlatStore</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                <span class="n">LakebaseFlatStore</span><span class="p">,</span>
+                <span class="n">SYNC_MODE_APP</span><span class="p">,</span>
+                <span class="n">SYNC_MODE_MANAGED</span><span class="p">,</span>
+                <span class="n">resolve_lakebase_graph_schema</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.SyncedTableManager</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                <span class="n">DEFAULT_TIMEOUT_S</span> <span class="k">as</span> <span class="n">_SYNC_DEFAULT_TIMEOUT_S</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_lakebase_auth</span>
+        <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Lakebase graph engine requires psycopg: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">LAKEBASE_AVAILABLE</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Lakebase graph backend unavailable (psycopg not installed)&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">cfg</span> <span class="o">=</span> <span class="n">engine_config</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">schema_raw</span> <span class="o">=</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">database_override</span> <span class="o">=</span> <span class="n">resolve_postgres_database_override</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+        <span class="n">sync_mode</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sync_mode&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">SYNC_MODE_APP</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="n">SYNC_MODE_APP</span>
+        <span class="k">if</span> <span class="n">sync_mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="n">SYNC_MODE_APP</span><span class="p">,</span> <span class="n">SYNC_MODE_MANAGED</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Unknown sync_mode </span><span class="si">%r</span><span class="s2"> in graph_engine_config — falling back to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">sync_mode</span><span class="p">,</span>
+                <span class="n">SYNC_MODE_APP</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">sync_mode</span> <span class="o">=</span> <span class="n">SYNC_MODE_APP</span>
+        <span class="n">sync_table_mode</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sync_table_mode&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;snapshot&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;snapshot&quot;</span>
+        <span class="n">sync_timeout_s</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sync_timeout_s&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">_SYNC_DEFAULT_TIMEOUT_S</span><span class="p">)</span>
+        <span class="n">sync_uc_catalog</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sync_uc_catalog&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">sync_uc_schema_override</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sync_uc_schema&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">schema</span> <span class="o">=</span> <span class="n">resolve_lakebase_graph_schema</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">schema_raw</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Invalid lakebase graph schema: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="c1"># UC schema segment for the synced-table FQN.</span>
+        <span class="c1"># Priority:</span>
+        <span class="c1">#   1. Explicit graph_engine_config.sync_uc_schema (user override via Settings UI)</span>
+        <span class="c1">#   2. Postgres graph schema — Lakebase places the _sync foreign table in the</span>
+        <span class="c1">#      Postgres schema that matches this UC segment, so it must equal the graph</span>
+        <span class="c1">#      schema where all other graph tables live.</span>
+        <span class="n">sync_uc_schema</span> <span class="o">=</span> <span class="n">sync_uc_schema_override</span> <span class="ow">or</span> <span class="n">schema</span>
+
+        <span class="n">branch_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;lakebase_branch&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">branch_path</span><span class="p">:</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.lakebase</span><span class="w"> </span><span class="kn">import</span> <span class="n">BranchLakebaseAuth</span>
+
+                <span class="n">auth</span> <span class="o">=</span> <span class="n">BranchLakebaseAuth</span><span class="p">(</span><span class="n">branch_path</span><span class="p">,</span> <span class="n">database_override</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;Graph engine using explicit branch </span><span class="si">%r</span><span class="s2"> (database=</span><span class="si">%r</span><span class="s2">)&quot;</span><span class="p">,</span>
+                    <span class="n">branch_path</span><span class="p">,</span>
+                    <span class="n">database_override</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">auth</span> <span class="o">=</span> <span class="n">get_lakebase_auth</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Lakebase auth unavailable for graph engine: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">auth</span><span class="p">,</span> <span class="s2">&quot;is_available&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Lakebase graph engine selected but PGHOST/PGUSER are not configured&quot;</span>
+                <span class="s2">&quot; (branch=</span><span class="si">%r</span><span class="s2">)&quot;</span><span class="p">,</span>
+                <span class="n">branch_path</span> <span class="ow">or</span> <span class="s2">&quot;&lt;bound&gt;&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">synced_manager</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">sync_mode</span> <span class="o">==</span> <span class="n">SYNC_MODE_MANAGED</span><span class="p">:</span>
+            <span class="n">synced_manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_synced_manager</span><span class="p">(</span>
+                <span class="n">auth</span><span class="p">,</span> <span class="n">database_override</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">synced_manager</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;managed_synced requested but SyncedTableManager could not be built — &quot;</span>
+                    <span class="s2">&quot;falling back to app_managed for this store&quot;</span>
+                <span class="p">)</span>
+                <span class="n">sync_mode</span> <span class="o">=</span> <span class="n">SYNC_MODE_APP</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">LakebaseFlatStore</span><span class="p">(</span>
+                <span class="n">auth</span><span class="p">,</span>
+                <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span>
+                <span class="n">database_override</span><span class="o">=</span><span class="n">database_override</span><span class="p">,</span>
+                <span class="n">sync_mode</span><span class="o">=</span><span class="n">sync_mode</span><span class="p">,</span>
+                <span class="n">sync_table_mode</span><span class="o">=</span><span class="n">sync_table_mode</span><span class="p">,</span>
+                <span class="n">sync_timeout_s</span><span class="o">=</span><span class="n">sync_timeout_s</span><span class="p">,</span>
+                <span class="n">sync_uc_catalog</span><span class="o">=</span><span class="n">sync_uc_catalog</span><span class="p">,</span>
+                <span class="n">sync_uc_schema</span><span class="o">=</span><span class="n">sync_uc_schema</span><span class="p">,</span>
+                <span class="n">synced_manager</span><span class="o">=</span><span class="n">synced_manager</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to create Lakebase graph store: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_delta</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Instantiate :class:`DeltaFlatStore` on SQL Warehouse.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.delta.DeltaBase</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_databricks_client</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.delta.DeltaFlatStore</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeltaFlatStore</span>
+        <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Delta graph engine unavailable: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">create_databricks_client</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">DeltaFlatStore</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="n">settings</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to create DeltaFlatStore: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_synced_manager</span><span class="p">(</span><span class="n">auth</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">database_override</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a SyncedTableManager with Autoscaling project + branch targeting.</span>
+
+<span class="sd">        Passes ``database_project`` + ``database_branch`` (not</span>
+<span class="sd">        ``database_instance_name``) so the Lakebase control-plane creates the</span>
+<span class="sd">        synced table in the exact branch the catalog is connected to (e.g.</span>
+<span class="sd">        ``demo``) rather than the project&#39;s default/production branch.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase.SyncedTableManager</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                <span class="n">SyncedTableManager</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">project_name</span> <span class="o">=</span> <span class="n">auth</span><span class="o">.</span><span class="n">instance_name</span>  <span class="c1"># e.g. &quot;ontobricks-app&quot;</span>
+            <span class="n">branch_name</span> <span class="o">=</span> <span class="n">auth</span><span class="o">.</span><span class="n">branch_name</span>      <span class="c1"># e.g. &quot;demo&quot;</span>
+            <span class="n">logical_db</span> <span class="o">=</span> <span class="p">(</span><span class="n">database_override</span> <span class="ow">or</span> <span class="n">auth</span><span class="o">.</span><span class="n">database</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Building SyncedTableManager for project=</span><span class="si">%r</span><span class="s2"> branch=</span><span class="si">%r</span><span class="s2"> logical_db=</span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">project_name</span><span class="p">,</span>
+                <span class="n">branch_name</span><span class="p">,</span>
+                <span class="n">logical_db</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">SyncedTableManager</span><span class="p">(</span>
+                <span class="n">project_name</span><span class="o">=</span><span class="n">project_name</span><span class="p">,</span>
+                <span class="n">branch_name</span><span class="o">=</span><span class="n">branch_name</span><span class="p">,</span>
+                <span class="n">logical_db</span><span class="o">=</span><span class="n">logical_db</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Could not build SyncedTableManager (</span><span class="si">%s</span><span class="s2">) — managed_synced disabled &quot;</span>
+                <span class="s2">&quot;for this store&quot;</span><span class="p">,</span>
+                <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="GraphDBFactory.get_graphdb">
+<a class="viewcode-back" href="../../../../api/app.core.graphdb.html#back.core.graphdb.GraphDBFactory.get_graphdb">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_graphdb</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">engine</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">engine_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convenience wrapper using the package singleton factory instance.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">_get_factory_singleton</span><span class="p">()</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+            <span class="n">domain</span><span class="p">,</span>
+            <span class="n">settings</span><span class="o">=</span><span class="n">settings</span><span class="p">,</span>
+            <span class="n">engine</span><span class="o">=</span><span class="n">engine</span><span class="p">,</span>
+            <span class="n">engine_config</span><span class="o">=</span><span class="n">engine_config</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<span class="n">_factory_singleton</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">GraphDBFactory</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_factory_singleton</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">GraphDBFactory</span><span class="p">:</span>
+    <span class="k">global</span> <span class="n">_factory_singleton</span>
+    <span class="k">if</span> <span class="n">_factory_singleton</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_factory_singleton</span> <span class="o">=</span> <span class="n">GraphDBFactory</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_factory_singleton</span>
+
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.lakebase</span><span class="w"> </span><span class="kn">import</span> <span class="n">LAKEBASE_AVAILABLE</span> <span class="k">as</span> <span class="n">_LB_AVAIL</span>  <span class="c1"># noqa: F401</span>
+
+    <span class="n">GraphDBFactory</span><span class="o">.</span><span class="n">LAKEBASE_AVAILABLE</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_LB_AVAIL</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Lakebase graph backends not available (optional dependency)&quot;</span><span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j</span><span class="w"> </span><span class="kn">import</span> <span class="n">NEO4J_AVAILABLE</span> <span class="k">as</span> <span class="n">_NEO4J_AVAIL</span>  <span class="c1"># noqa: F401</span>
+
+    <span class="n">GraphDBFactory</span><span class="o">.</span><span class="n">NEO4J_AVAILABLE</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_NEO4J_AVAIL</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Neo4j graph backend not available (optional dependency)&quot;</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

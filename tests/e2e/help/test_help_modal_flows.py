@@ -71,7 +71,7 @@ class TestHelpDocsApi:
 
         doc = page.request.get(f"{live_server}/api/help/docs/{slug}")
         assert doc.status == 200, (
-            f"/api/help/docs/{slug} must return 200 when docs/ is shipped"
+            f"/api/help/docs/{slug} must return 200 when documentation/ is shipped"
         )
         body = json.loads(doc.body())
         assert body["slug"] == slug

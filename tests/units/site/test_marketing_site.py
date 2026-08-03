@@ -1,9 +1,9 @@
-"""Source contracts for the GitHub Pages marketing site under site/."""
+"""Source contracts for the GitHub Pages marketing site under docs/."""
 
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-SITE = REPO / "site"
+SITE = REPO / "docs"
 
 REQUIRED_PAGES = [
     "index.html",
@@ -65,4 +65,5 @@ def test_about_has_labs_disclaimer():
 def test_docs_hub_links_github_markdown():
     html = (SITE / "docs/index.html").read_text(encoding="utf-8")
     assert "github.com/databrickslabs/ontobricks/blob/" in html
+    assert "documentation/" in html
     assert "architecture.md" in html or "features.md" in html
