@@ -134,6 +134,7 @@ make bootstrap-perms
 |-------------|-----|
 | **Apps exist** | Resolves each app's service principal |
 | **CAN_MANAGE on both apps** | Your user must grant CAN_MANAGE to each app's own SP |
+| **CAN_MANAGE_RUN on graph-analytics job** | App SP must list/trigger `${app_name}-graph-analytics` (ACL-filtered `jobs.list`) |
 | **UC schema ALL_PRIVILEGES** | SPs need CREATE OR REPLACE on registry objects |
 
 ---

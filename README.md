@@ -133,13 +133,13 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 > permissions, schedules, global config) into Lakebase. Binary
 > artefacts on the Volume are left untouched.
 
-> **First deploy only:** `make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically, which grants each app's service principal `CAN_MANAGE` on itself. Without that grant the middleware cannot read the app's own ACL and every first-time visitor — including the deploying `CAN_MANAGE` user — lands on the access-denied page. If you deploy via `databricks bundle deploy` directly, run `make bootstrap-perms` once afterwards (it is idempotent).
+> **First deploy only:** `make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically, which grants each app's service principal `CAN_MANAGE` on itself and `CAN_MANAGE_RUN` on the graph-analytics job. Without the app grant the middleware cannot read the app's own ACL and every first-time visitor — including the deploying `CAN_MANAGE` user — lands on the access-denied page. Without the job grant, KG analysis cannot list or trigger the serverless job. If you deploy via `databricks bundle deploy` directly, run `make bootstrap-perms` once afterwards (it is idempotent).
 
 See [Deployment Guide](documentation/deployment.md) for the full checklist including resource configuration and permissions.
 
 ## Testing
 
-- **Routine / CI:** `uv run pytest -q -m "not scenario"` — the fast in-process suite (the opt-in live scenarios are excluded).
+- **Routine / CI:** `uv run --frozen pytest -q -m "not scenario"` — the fast in-process suite (the opt-in live scenarios are excluded). Keep `--frozen`: a bare `uv run` re-resolves dependencies against the internal pypi proxy and rewrites `uv.lock`, which breaks the next deploy.
 - **Live scenario campaign:** `make scenario-campaign` — an ordered, billable end-to-end journey (import → generate → collaborate → rules/analysis → validate) against a **running** app, writing reports to `artifacts/scenarios/`. See [`tests/e2e/scenarios/README.md`](tests/e2e/scenarios/README.md) for env vars, chaining, isolation, and how to add a scenario.
 
 ## Releasing the Project

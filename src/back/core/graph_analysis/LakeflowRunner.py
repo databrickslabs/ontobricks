@@ -89,8 +89,11 @@ class LakeflowRunner:
 
         Prefers an exact name match, then a ``[dev <user>] `` prefixed match,
         which is what a bundle deployed in development mode produces. Raises
-        :class:`NotFoundError` when nothing matches — usually because the
-        bundle has not been deployed since the job was added.
+        :class:`NotFoundError` when nothing matches — either the bundle has not
+        been deployed since the job was added, or the caller cannot see it:
+        ``jobs.list()`` is ACL-filtered, and the app's service principal needs
+        an explicit ``CAN_MANAGE_RUN`` grant on the job (applied post-deploy by
+        ``scripts/bootstrap/app-permissions.sh``).
         """
         if self._job_id is not None:
             return self._job_id
@@ -121,9 +124,14 @@ class LakeflowRunner:
 
         match = (exact or suffixed)
         if not match:
+            # jobs.list() is ACL-filtered, so an invisible job and a missing one
+            # are indistinguishable here. Name both causes: the permission case
+            # is the common one and used to read as a failed deploy.
             raise NotFoundError(
-                f"Databricks job {self._job_name!r} was not found. Deploy the "
-                f"bundle (make deploy) so the graph analytics job exists."
+                f"Databricks job {self._job_name!r} was not found. Either the "
+                f"bundle has not been deployed (make deploy), or this app's "
+                f"service principal lacks CAN_MANAGE_RUN on the job — rerun "
+                f"make bootstrap-perms to grant it."
             )
         if len(match) > 1:
             logger.warning(

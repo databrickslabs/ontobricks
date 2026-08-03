@@ -144,3 +144,38 @@ class TestDeployScriptPathResolution:
 
     def test_sourced_sibling_actually_exists(self):
         assert (REPO_ROOT / "scripts/_internal/_lakebase-diag.sh").is_file()
+
+
+class TestAnalyticsJobPermissionBootstrap:
+    """The app SP must get CAN_MANAGE_RUN on the analytics job at deploy time.
+
+    ``jobs.list()`` is ACL-filtered, so without this grant LakeflowRunner
+    reports the job as missing even when the bundle deployed it correctly.
+    DAB cannot declare the grant (the app SP only exists after the app is
+    created), so ``make deploy`` relies on ``app-permissions.sh`` for it.
+    """
+
+    @pytest.fixture(scope="class")
+    def bootstrap_script(self) -> str:
+        return (REPO_ROOT / "scripts/bootstrap/app-permissions.sh").read_text()
+
+    def test_bootstrap_grants_can_manage_run_on_the_analytics_job(self, bootstrap_script):
+        assert "CAN_MANAGE_RUN" in bootstrap_script
+        assert "permissions update jobs" in bootstrap_script
+        assert "graph-analytics" in bootstrap_script
+
+    def test_bootstrap_resolves_dev_mode_prefixed_job_names(self, bootstrap_script):
+        # DAB development mode prefixes the name with '[dev <user>] '.
+        assert "] " in bootstrap_script
+        assert "endswith" in bootstrap_script
+
+    def test_bootstrap_uses_the_bootstrapped_app_not_the_env_default(self, bootstrap_script):
+        # Positional ``./app-permissions.sh ontobricks-07x …`` must grant on
+        # that app's job, not the hard-coded ``ontobricks-030`` default.
+        assert "FIRST_APP" in bootstrap_script
+        assert "_MAIN_APP=" in bootstrap_script
+
+    def test_deploy_invokes_app_permissions_bootstrap(self):
+        deploy = (REPO_ROOT / "scripts/deploy.sh").read_text()
+        assert "scripts/bootstrap/app-permissions.sh" in deploy
+        assert 'app-permissions.sh "$APP_NAME" "$MCP_APP_NAME"' in deploy

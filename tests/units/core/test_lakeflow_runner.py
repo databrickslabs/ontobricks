@@ -114,6 +114,17 @@ class TestResolveJobId:
             _runner(client).resolve_job_id()
         assert "make deploy" in str(exc.value)
 
+    def test_missing_job_also_names_the_permission_cause(self):
+        # jobs.list() is ACL-filtered, so a job the app SP cannot see is
+        # indistinguishable from a missing one. The message must offer both
+        # causes — blaming only the deploy sends people down the wrong path.
+        client = _Client([_Job(1, "unrelated")])
+        with pytest.raises(NotFoundError) as exc:
+            _runner(client).resolve_job_id()
+        message = str(exc.value)
+        assert "CAN_MANAGE_RUN" in message
+        assert "bootstrap-perms" in message
+
     def test_empty_configured_name_is_rejected(self):
         with pytest.raises(NotFoundError):
             _runner(_Client([]), name="").resolve_job_id()

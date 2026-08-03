@@ -647,7 +647,7 @@ window.ManualModule = {
             // Refresh the tree to reflect changes
             this.refresh();
             
-            showNotification('Mapping saved successfully', 'success', 2000);
+            showNotification('Mapping applied', 'success', 2000);
         } catch (error) {
             showNotification('Error: ' + error.message, 'error');
         } finally {

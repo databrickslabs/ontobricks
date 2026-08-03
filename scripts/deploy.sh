@@ -749,6 +749,9 @@ fi
 # middleware can read the ACL to resolve admin/app-user roles.
 # The MCP app service principal also needs CAN_USE on the main app so
 # MCP tool calls can reach /api/v1/* without 401.
+# Both SPs also need CAN_MANAGE_RUN on the graph-analytics job so the
+# app can list/trigger it (jobs.list is ACL-filtered; without the grant
+# the UI reports a misleading "job not found").
 # Idempotent — safe to re-run. The bootstrap script reads APP_NAME /
 # MCP_APP_NAME from the env we exported via deploy.config.sh.
 begin_step "App self-permissions"

@@ -51,7 +51,7 @@ help:
 	@echo "    make deploy-volume       - Deploy + start the dev sandbox app (Volume-only backend)"
 	@echo "    make deploy-no-run       - Deploy without starting the app (Lakebase target)"
 	@echo "    make render-app-yaml     - Re-render app.yaml from template + config"
-	@echo "    make bootstrap-perms     - Grant the app SP CAN_MANAGE on itself (first-run fix)"
+	@echo "    make bootstrap-perms     - Grant app SP CAN_MANAGE on itself + CAN_MANAGE_RUN on the analytics job"
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
 	@echo "    make bundle-validate     - Validate the bundle config (Lakebase target)"
 	@echo "    make deploy-check      - Read-only deploy prerequisite check (see documentation/DEPLOY_CHECKLIST.md)"

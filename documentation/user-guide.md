@@ -112,7 +112,7 @@ All changes in the Design view are automatically saved. You'll see a brief "Savi
    - **Icon**: Select an emoji/icon for visualization
    - **Description**: Brief description of the entity
 4. **Add Attributes**: Use the attributes section to add data properties
-5. Click **Add** to save the class
+5. Click **Apply** to write the class into the session
 
 **Example Classes:**
 - 👤 Person (represents people in your organization)
@@ -129,7 +129,7 @@ All changes in the Design view are automatically saved. You'll see a brief "Savi
    - **Range**: Select target entity from dropdown
    - **Direction**: Choose Forward, Reverse, or Bidirectional
 4. **Add Attributes**: Add relationship properties if needed
-5. Click **Add** to save
+5. Click **Apply** to write the relationship into the session
 
 **Example Relationships:**
 - worksIn (Person → Department)
@@ -240,7 +240,7 @@ You can assign Databricks dashboards to entity types for embedded visualization 
 6. If the dashboard has parameters, map them to entity attributes:
    - **Entity ID**: Maps the parameter to the entity's unique identifier
    - **Attribute Name**: Maps the parameter to a specific entity attribute
-7. Click **Save**
+7. Click **Apply** (writes into the session; publish the domain to persist)
 
 **Parameter Mapping:**
 When a dashboard has filter parameters (e.g., customer_id, meter_id), you can map them to:
@@ -260,7 +260,7 @@ or from an MCP client.
 3. Click **Add** to open the function picker, then choose a catalog and schema
 4. Pick a function and type a **description** — the description is what the LLM
    and the end user see, so make it explicit about what the action does
-5. Click **Save**
+5. Click **Apply** (writes into the session; publish the domain to persist)
 
 > **One-parameter contract**: the selected Unity Catalog function must accept
 > **exactly one parameter — the ID of the entity to act on**. OntoBricks passes
@@ -377,9 +377,9 @@ Click **Designer** in the sidebar to use the visual mapping interface. This view
    - Click column headers to assign them as ID, Label, or specific attributes
    - Use the **Limit** input to control how many preview rows are shown
    - Click **Refresh** to re-run the query with the current limit
-6. Click **Save** in the panel footer
+6. Click **Apply** in the panel footer (writes into the session; publish the domain to persist)
 
-> **Note**: The SQL query is stored without a `LIMIT` clause. The preview limit only affects the grid display and is not part of the saved mapping.
+> **Note**: The SQL query is stored without a `LIMIT` clause. The preview limit only affects the grid display and is not part of the applied mapping.
 
 **Example SQL Query:**
 ```sql
@@ -392,7 +392,7 @@ FROM main.default.person
 1. Click on any relationship line in the graph
 2. The same panel opens with Wizard, SQL, and Mapping tabs
 3. Assign **Source ID** and **Target ID** columns from query results
-4. Click **Save**
+4. Click **Apply**
 
 #### Writing SQL Queries for Relationships
 
@@ -433,7 +433,7 @@ To exclude attributes:
 1. Open an entity panel (click a node on the canvas).
 2. Select the **Status** tab.
 3. Uncheck any attributes you do not want to map.
-4. Click **Save** — exclusions are persisted immediately.
+4. Click **Apply** — exclusions are written into the session immediately.
 
 Two bulk-action buttons are available at the top of the attributes table:
 

@@ -808,3 +808,198 @@ Modified files:
   `.github/workflows/ci.yml`, `pyproject.toml`, deploy scripts
 
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py tests/units/api/test_help_api.py` → 40 passed, 1 warning in 1.30s
+
+--------------------------------------------------------------------------------
+Mandate --frozen on uv run to stop uv.lock poisoning deploys
+--------------------------------------------------------------------------------
+
+Context:
+A deploy to dev-lakebase-07x crashed ~45s after reporting "App started
+successfully". Root cause: the documented routine test command,
+`uv run pytest -q -m "not scenario"`, omits `--frozen`. A bare `uv run`
+performs an implicit re-resolve against `pypi-proxy.dev.databricks.com` and
+rewrote all 3990 package URLs in `uv.lock`. The git tree was clean at deploy
+pre-flight but was poisoned by the test run that followed, so `make deploy`
+shipped the rewritten lock. In the container, `uv run --frozen` obeyed the proxy
+URLs and timed out fetching `click==8.4.2` (published 2026-06-24, not cached by
+the proxy), killing the app.
+
+`.cursor/09-package-management.mdc` already warned about bare `uv lock` /
+`uv sync` but never named `uv run`, and every other instruction file modelled
+the unsafe form. Fix: make `--frozen` the documented default everywhere and
+name `uv run` explicitly as a lock-rewriting command. The lockfile itself was
+restored with `git checkout -- uv.lock` and redeployed; no source change.
+
+Changes:
+
+1. `.cursor/09-package-management.mdc`
+   Add `uv run` to the list of commands that re-resolve against the proxy, with
+   a note that it syncs implicitly and is the easiest to trip over. Add a rule
+   to re-check `git status` after any `uv` command and before deploying.
+2. `.cursor/08-testing-and-deployment.mdc`
+   Routine/e2e/scenario commands now use `uv run --frozen`; state that the flag
+   is not optional and cross-reference the package-management rule.
+3. `.cursorrules`
+   Both post-change and code-review test commands use `uv run --frozen`.
+4. `.claude/skills/deploy/SKILL.md`
+   Pre-flight test step uses `--frozen`; require re-verifying the lock
+   immediately before `make deploy`; add a post-deploy step to re-check
+   `app_status.state` a minute after success, since a single immediate
+   `/healthz` 200 does not prove health.
+5. `.claude/skills/changelog/SKILL.md`, `code-review/SKILL.md`,
+   `refactoring/SKILL.md`
+   Test commands use `uv run --frozen`.
+6. `README.md`, `CONTRIBUTING.md`
+   Routine, live-integration, and live-e2e commands use `uv run --frozen`, with
+   a short explanation and a new pre-commit check that `uv.lock` is clean.
+
+Modified files:
+- `.cursorrules`
+- `.cursor/08-testing-and-deployment.mdc`
+- `.cursor/09-package-management.mdc`
+- `.claude/skills/deploy/SKILL.md`
+- `.claude/skills/changelog/SKILL.md`
+- `.claude/skills/code-review/SKILL.md`
+- `.claude/skills/refactoring/SKILL.md`
+- `README.md`
+- `CONTRIBUTING.md`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4119 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 36.15s. Deploy verified: ontobricks-07x and mcp-ontobricks-07x RUNNING, /healthz 200 across a 3-minute poll, uv.lock clean (0 proxy URLs).
+
+--------------------------------------------------------------------------------
+Rename Ontology designer right-pane Save → Apply
+--------------------------------------------------------------------------------
+
+Context:
+The entity/relationship detail panel footer button was labeled Save, but it only
+writes the edit into the in-session ontology (`saveConfigToSession`), not to the
+Registry. Rename the visible label to Apply so the UX matches the actual
+semantics (Registry publish remains the durable save).
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Button label Save → Apply. Dirty-close / dirty-switch confirm dialogs now say
+   "Unapplied Changes" / "Apply" / "apply them before …" for consistency.
+2. `documentation/user-guide.md`
+   Entity add/edit, dashboard assign, and class-action steps now say Apply and
+   note that the write is session-scoped until the domain is published.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `documentation/user-guide.md`
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/api/test_ui_rendering.py` → 123 passed, 1 warning in 2.73s
+
+--------------------------------------------------------------------------------
+Rename Mapping Designer/Manual bottom-pane Save → Apply
+--------------------------------------------------------------------------------
+
+Context:
+Same semantics as the Ontology panel rename: the Mapping Designer (and shared
+Manual) bottom-pane Save button only writes the mapping into the session via
+`/mapping/save` / entity|relationship add endpoints. Rename the visible label to
+Apply so it does not imply a Registry publish.
+
+Changes:
+
+1. `src/front/templates/partials/mapping/_mapping_design.html`
+   Designer footer Save → Apply.
+2. `src/front/templates/partials/mapping/_mapping_manual.html`
+   Manual footer Save → Apply (same panel UX).
+3. `src/front/static/mapping/js/mapping-design.js`
+   Exclusion-hint toasts now say "click Apply to persist".
+4. `src/front/static/mapping/js/mapping-manual.js`
+   Success toast: "Mapping applied".
+5. `documentation/user-guide.md`
+   Mapping Designer / Manual Save steps → Apply.
+
+Modified files:
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/templates/partials/mapping/_mapping_manual.html`
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/static/mapping/js/mapping-manual.js`
+- `documentation/user-guide.md`
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/api/test_ui_rendering.py` → 123 passed, 1 warning in 2.63s
+
+--------------------------------------------------------------------------------
+Grant the app service principal CAN_MANAGE_RUN on the graph analytics job
+--------------------------------------------------------------------------------
+
+Context:
+Running the KG analysis in the deployed app failed with "Databricks job
+'ontobricks-07x-graph-analytics' was not found. Deploy the bundle (make deploy)
+so the graph analytics job exists." — but the bundle had deployed the job
+correctly (`[dev benoit_cayla] ontobricks-07x-graph-analytics`, id
+334933950622420).
+
+Root cause: the job ACL only contained the owner (benoit.cayla) and `admins`.
+`LakeflowRunner.resolve_job_id()` locates the job with `jobs.list()`, which is
+ACL-filtered, so the app's service principal (dde41394-…) saw no job at all and
+the lookup reported "not found". `scripts/bootstrap/app-permissions.sh` grants
+app-self CAN_MANAGE, cross-app CAN_USE and UC schema ALL_PRIVILEGES, but never
+granted anything on the analytics job — so every fresh deploy hit this. The
+grant cannot be declared in DAB because the app service principal only exists
+after the app is created, hence the post-deploy bootstrap step.
+
+Changes:
+
+1. `scripts/bootstrap/app-permissions.sh`
+   New step: resolve the analytics job by name (exact, then the `[dev <user>] `
+   prefixed form DAB produces in development mode) and grant CAN_MANAGE_RUN to
+   both app service principals. Skips with a clear message when the job does
+   not exist yet; prints the manual command on failure, matching the UC step.
+2. `src/back/core/graph_analysis/LakeflowRunner.py`
+   The NotFoundError blamed the deploy only. It now names both causes (not
+   deployed, or missing CAN_MANAGE_RUN) and points at `make bootstrap-perms`.
+   Docstring records that `jobs.list()` is ACL-filtered.
+3. `tests/units/core/test_lakeflow_runner.py`
+   New test asserting the message names the permission cause, alongside the
+   existing "make deploy" assertion.
+
+Modified files:
+- `scripts/bootstrap/app-permissions.sh`
+- `src/back/core/graph_analysis/LakeflowRunner.py`
+- `tests/units/core/test_lakeflow_runner.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/core/test_lakeflow_runner.py` → 28 passed, 1 warning in 1.86s
+Workspace: CAN_MANAGE_RUN granted to both app SPs on job 334933950622420 (unblocks the running deployment without a redeploy).
+
+--------------------------------------------------------------------------------
+Wire analytics-job CAN_MANAGE_RUN into every make deploy
+--------------------------------------------------------------------------------
+
+Context:
+The previous fix added the grant to ``app-permissions.sh``, but the job name
+was taken from ``$APP_NAME`` (default ``ontobricks-030``) even when deploy
+passed a different app as a positional argument. Failure to grant was a soft
+warning that did not bump the bootstrap exit status. Harden so every
+``make deploy`` / ``make bootstrap-perms`` reliably grants on the right job
+and surfaces failures.
+
+Changes:
+
+1. `scripts/bootstrap/app-permissions.sh`
+   Resolve the job against the bootstrapped main app (``FIRST_APP`` /
+   ``APP_FOR_CAN_USE``), not the env default. Count grant failures (and the
+   "no SP resolved" case) into ``FAILED`` so deploy prints the non-zero
+   bootstrap warning. Verified live: grants on
+   ``ontobricks-07x-graph-analytics`` (334933950622420) for both SPs.
+2. `scripts/deploy.sh`
+   Step-10 comment documents the analytics-job grant (already invoked via
+   ``app-permissions.sh "$APP_NAME" "$MCP_APP_NAME"``).
+3. `Makefile`
+   ``bootstrap-perms`` help text mentions CAN_MANAGE_RUN on the analytics job.
+4. `tests/units/settings/test_bundle_job_resource.py`
+   New ``TestAnalyticsJobPermissionBootstrap`` contracts: script grants
+   CAN_MANAGE_RUN, resolves DAB ``[dev <user>] `` prefixes, uses
+   ``FIRST_APP`` / ``_MAIN_APP``, and ``deploy.sh`` invokes the bootstrap.
+
+Modified files:
+- `scripts/bootstrap/app-permissions.sh`
+- `scripts/deploy.sh`
+- `Makefile`
+- `tests/units/settings/test_bundle_job_resource.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/settings/test_bundle_job_resource.py tests/units/core/test_lakeflow_runner.py` → 44 passed, 1 warning in 2.15s. Live: `make bootstrap-perms` granted CAN_MANAGE_RUN on ontobricks-07x-graph-analytics (334933950622420) to both app SPs.
