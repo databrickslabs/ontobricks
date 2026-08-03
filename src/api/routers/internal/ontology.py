@@ -919,6 +919,79 @@ async def validate_swrl_rule(request: Request):
     return {"success": True, "valid": True, "message": "Rule syntax is valid"}
 
 
+@router.get("/swrl/text")
+async def get_swrl_text(session_mgr: SessionManager = Depends(get_session_manager)):
+    """Serialize all SWRL rules as OntoBricks SWRL text."""
+    from back.core.reasoning.SWRLTextCodec import serialize_rules
+
+    domain = get_domain(session_mgr)
+    return {"success": True, "text": serialize_rules(domain.swrl_rules)}
+
+
+@router.get("/swrl/export")
+async def export_swrl(session_mgr: SessionManager = Depends(get_session_manager)):
+    """Download SWRL rules as an OntoBricks SWRL text file."""
+    from fastapi.responses import Response
+    from back.core.reasoning.SWRLTextCodec import serialize_rules
+
+    domain = get_domain(session_mgr)
+    text = serialize_rules(domain.swrl_rules)
+    export_name = (
+        domain._data.get("domain", domain._data.get("project", {}))
+        .get("info", {})
+        .get("name", DEFAULT_GRAPH_NAME)
+    )
+    filename = f"{export_name}_swrl_rules.swrl"
+    return Response(
+        content=text,
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/swrl/import")
+async def import_swrl(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
+    """Import SWRL rules from OntoBricks SWRL text (always append)."""
+    from back.core.reasoning.SWRLTextCodec import parse_rules
+
+    with map_route_errors("SWRL import failed", logger):
+        data = await request.json()
+        text = data.get("text", "")
+        if not text or not str(text).strip():
+            raise ValidationError("No SWRL text provided")
+        try:
+            imported = parse_rules(text)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        if not imported:
+            raise ValidationError("No valid SWRL rules found in the provided text")
+        for rule in imported:
+            errors = Ontology.validate_swrl_rule(rule)
+            if errors:
+                raise ValidationError(
+                    f"Invalid rule '{rule.get('name', '')}': {'; '.join(errors)}"
+                )
+        domain = get_domain(session_mgr)
+        rules = list(domain.swrl_rules)
+        rules.extend(imported)
+        domain.swrl_rules = rules
+        domain.record_change(
+            "swrl_added",
+            entity_type="swrl",
+            entity_ref=f"{len(imported)} imported",
+            summary=f"Imported {len(imported)} SWRL rule(s)",
+        )
+        domain.save()
+        return {
+            "success": True,
+            "message": f"Imported {len(imported)} rules",
+            "rules": rules,
+            "imported_count": len(imported),
+        }
+
+
 # ===========================================
 # Business Rules — Generic CRUD for new rule types
 # (decision_tables, sparql_rules, aggregate_rules)

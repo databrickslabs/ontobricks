@@ -157,6 +157,12 @@ Click **Business Rules** in the sidebar to define inference rules using SWRL (Se
 5. Enter a **Rule Name** and optional **Description**
 6. Click **Save Rule**
 
+**Import/Export**: Click the header **SWRL** button to open a modal
+(same pattern as Data Quality → SHACL). Refresh shows the current rules as
+OntoBricks SWRL text (`# Rule:` / optional `# Description:` /
+`antecedent -> consequent`). Export downloads a `.swrl` file; Import appends
+parsed rules to the existing list (duplicate names are allowed).
+
 **Example SWRL Rules:**
 
 ```

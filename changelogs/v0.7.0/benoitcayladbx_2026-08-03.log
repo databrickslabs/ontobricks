@@ -1003,3 +1003,198 @@ Modified files:
 - `tests/units/settings/test_bundle_job_resource.py`
 
 Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/settings/test_bundle_job_resource.py tests/units/core/test_lakeflow_runner.py` → 44 passed, 1 warning in 2.15s. Live: `make bootstrap-perms` granted CAN_MANAGE_RUN on ontobricks-07x-graph-analytics (334933950622420) to both app SPs.
+
+================================================================================
+Rule SQL: TRY_CAST so one non-numeric value cannot fail a whole rule
+================================================================================
+
+Context:
+
+Running the "Monthly fee between 1 and 10" rule on the deployed app reported
+"Query execution failed for this decision table", with no way to see why.
+
+Every object in the triple store is a string, so any numeric comparison has to
+cast. All the rule SQL builders emitted a bare ``CAST(... AS DOUBLE)``.
+Databricks warehouses run with ANSI mode on, where a bare CAST aborts the whole
+statement on the first value it cannot convert — so a single ``"free"`` in a fee
+column takes down the entire rule instead of simply not matching it. This became
+reachable for every engine once data quality standardised on SQL against the
+VIEW earlier today (previously some of this ran in memory or on Lakebase).
+
+The generic failure message compounded it: the cause was only in the server log,
+so a broken rule and a warehouse problem looked identical in the UI.
+
+Changes:
+
+1. `src/back/core/helpers/SQLHelpers.py`
+   New ``sql_numeric(expr, sql_type="DOUBLE")`` emitting ``TRY_CAST``, with the
+   ANSI-mode rationale stated once. Exported from `back.core.helpers`.
+2. `src/back/core/reasoning/DecisionTableEngine.py`
+   Numeric condition cells use ``sql_numeric`` — this is the reported failure.
+3. `src/back/core/reasoning/AggregateRuleEngine.py`
+   All five aggregate/HAVING casts are now ``TRY_CAST``.
+4. `src/back/core/reasoning/SPARQLRuleEngine.py`
+   Numeric FILTER comparisons use ``sql_numeric``.
+5. `src/back/core/reasoning/SWRLBuiltinRegistry.py`
+   16 SQL templates switched to ``TRY_CAST`` (comparison, math, date built-ins).
+   Cypher templates untouched.
+6. `src/back/core/w3c/shacl/ShapeConditions.py`
+   Conditional IF-block numeric guards use ``sql_numeric``; they shipped this
+   morning with the same defect.
+7. `src/back/objects/digitaltwin/DigitalTwin.py`
+   New ``_sql_error_detail`` / ``_failed_check_result``: a failed check now
+   reports the engine's message (one line, capped at 300 chars) and keeps its
+   SQL so the UI's code button works. Replaces the four near-identical
+   "Query execution failed for this X." blocks (shape, SWRL, DT, aggregate).
+8. `src/front/static/query/js/query-dataquality.js`
+   Message cell carries the full text as a tooltip.
+9. `src/front/static/query/css/query-reasoning.css`
+   ``.dq-col-msg`` clamps to two lines so a long engine error stays scannable.
+
+Tests:
+
+10. `tests/units/ontology/test_business_rules.py`
+    Decision-table numeric cells and aggregate SUM emit ``TRY_CAST`` and no bare
+    ``CAST``.
+11. `tests/units/ontology/test_swrl_engine.py`
+    New ``TestBuiltinNumericCasts``: no registered built-in emits a bare CAST.
+12. `tests/units/ontology/test_shape_conditions.py`
+    Numeric condition assertion tightened to ``TRY_CAST``.
+13. `tests/units/ontology/test_dataquality.py`
+    New ``TestFailedCheckReporting``: engine message reaches the row, SQL is
+    kept, multi-line errors collapse, long errors truncate, silent exceptions
+    still name themselves.
+
+Modified files:
+- `src/back/core/helpers/SQLHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/core/reasoning/DecisionTableEngine.py`
+- `src/back/core/reasoning/AggregateRuleEngine.py`
+- `src/back/core/reasoning/SPARQLRuleEngine.py`
+- `src/back/core/reasoning/SWRLBuiltinRegistry.py`
+- `src/back/core/w3c/shacl/ShapeConditions.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/static/query/js/query-dataquality.js`
+- `src/front/static/query/css/query-reasoning.css`
+- `tests/units/ontology/test_business_rules.py`
+- `tests/units/ontology/test_swrl_engine.py`
+- `tests/units/ontology/test_shape_conditions.py`
+- `tests/units/ontology/test_dataquality.py`
+
+Tests: `uv run pytest -q -m "not scenario"` → 4133 passed, 276 skipped,
+5 deselected, 1 xfailed in 31.60s.
+
+## Add SWRL text pane on Business Rules
+
+Context: Data Quality already has a header SHACL button that toggles an inline
+Turtle pane with Refresh / Export / Import. Business Rules had no equivalent for
+SWRL — rules were only editable via the graph modal or card list. Added a
+matching **SWRL** button and OntoBricks SWRL text interchange (append import).
+
+Changes:
+
+1. `src/back/core/reasoning/SWRLTextCodec.py` (new)
+   Serialize / parse OntoBricks SWRL text (`# Rule:` / `# Description:` /
+   `antecedent -> consequent`); fail closed on malformed blocks.
+2. `src/back/core/reasoning/__init__.py`
+   Export `serialize_swrl_text` / `parse_swrl_text`.
+3. `src/api/routers/internal/ontology.py`
+   `GET /ontology/swrl/text`, `GET /ontology/swrl/export`, `POST /ontology/swrl/import`
+   (always append).
+4. `src/front/templates/partials/ontology/_ontology_business_rules.html`
+   SWRL header button, `#brSwrlPanel` editor, `#brSwrlImportModal`.
+5. `src/front/static/ontology/js/ontology-swrl.js`
+   `toggleSwrlPanel` / `refreshSwrlText` / `exportSwrl` / import helpers;
+   refreshes list + badges after import.
+6. `src/front/static/ontology/css/ontology-business-rules.css`
+   `#brSwrlEditor` styles (mirror SHACL editor).
+7. `tests/units/ontology/test_swrl_text_codec.py` (new)
+   Round-trip, synthesize name, fail-closed, append semantics.
+8. `tests/units/front/test_swrl_text_pane.py` (new)
+   Template + JS source contracts.
+9. `documentation/features.md`, `documentation/user-guide.md`
+   Document the SWRL text pane.
+10. `documentation/superpowers/specs/2026-08-03-swrl-text-pane-design.md` (new)
+    Design spec.
+11. `documentation/superpowers/plans/2026-08-03-swrl-text-pane.md` (new)
+    Implementation plan.
+
+Modified files:
+- `src/back/core/reasoning/SWRLTextCodec.py` (new)
+- `src/back/core/reasoning/__init__.py`
+- `src/api/routers/internal/ontology.py`
+- `src/front/templates/partials/ontology/_ontology_business_rules.html`
+- `src/front/static/ontology/js/ontology-swrl.js`
+- `src/front/static/ontology/css/ontology-business-rules.css`
+- `tests/units/ontology/test_swrl_text_codec.py` (new)
+- `tests/units/front/test_swrl_text_pane.py` (new)
+- `documentation/features.md`
+- `documentation/user-guide.md`
+- `documentation/superpowers/specs/2026-08-03-swrl-text-pane-design.md` (new)
+- `documentation/superpowers/plans/2026-08-03-swrl-text-pane.md` (new)
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4142 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 36.74s
+
+## Open SHACL Turtle in a modal on Data Quality
+
+Context: Ontology → Data Quality SHACL button toggled an inline bottom Turtle
+pane under the dimension tabs. That competed with the rule cards. The button
+now opens a Bootstrap modal-xl with the same Refresh / Export / Import viewer.
+
+Changes:
+
+1. `src/front/templates/partials/ontology/_ontology_dataquality.html`
+   Removed `#dqShaclPanel`; added `#dqShaclModal` (modal-xl) with the Turtle
+   editor and actions; SHACL button calls `openShaclModal()`.
+2. `src/front/static/ontology/js/ontology-dataquality.js`
+   Replaced `toggleShaclPanel` / `_shaclPanelOpen` with `openShaclModal()`.
+3. `src/front/static/ontology/css/ontology-dataquality.css`
+   Min-height on `#dqShaclEditor` for a taller modal textarea.
+4. `documentation/superpowers/specs/2026-08-03-shacl-turtle-modal-design.md` (new)
+   Design spec.
+5. `documentation/superpowers/plans/2026-08-03-shacl-turtle-modal.md` (new)
+   Implementation plan.
+
+Modified files:
+- `src/front/templates/partials/ontology/_ontology_dataquality.html`
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `src/front/static/ontology/css/ontology-dataquality.css`
+- `documentation/superpowers/specs/2026-08-03-shacl-turtle-modal-design.md` (new)
+- `documentation/superpowers/plans/2026-08-03-shacl-turtle-modal.md` (new)
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4142 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.62s
+
+## Open SWRL text in a modal on Business Rules
+
+Context: Business Rules SWRL button toggled an inline bottom text pane, while
+Data Quality SHACL already opens a modal-xl. Align SWRL to the same pattern.
+
+Changes:
+
+1. `src/front/templates/partials/ontology/_ontology_business_rules.html`
+   Removed `#brSwrlPanel`; added `#brSwrlModal` (modal-xl); SWRL button calls
+   `openSwrlModal()`.
+2. `src/front/static/ontology/js/ontology-swrl.js`
+   Replaced `toggleSwrlPanel` / `_swrlPanelOpen` with `openSwrlModal()`; always
+   refresh editor after import.
+3. `src/front/static/ontology/css/ontology-business-rules.css`
+   Min-height on `#brSwrlEditor` for the modal textarea.
+4. `tests/units/front/test_swrl_text_pane.py`
+   Source contracts updated for modal markup/helpers.
+5. `documentation/superpowers/specs/2026-08-03-swrl-text-modal-design.md` (new)
+   Design spec.
+6. `documentation/superpowers/plans/2026-08-03-swrl-text-modal.md` (new)
+   Implementation plan.
+
+Modified files:
+- `src/front/templates/partials/ontology/_ontology_business_rules.html`
+- `src/front/static/ontology/js/ontology-swrl.js`
+- `src/front/static/ontology/css/ontology-business-rules.css`
+- `tests/units/front/test_swrl_text_pane.py`
+- `documentation/superpowers/specs/2026-08-03-swrl-text-modal-design.md` (new)
+- `documentation/superpowers/plans/2026-08-03-swrl-text-modal.md` (new)
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4142 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.13s

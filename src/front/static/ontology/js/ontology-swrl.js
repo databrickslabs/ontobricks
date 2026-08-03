@@ -1398,6 +1398,83 @@ window.SwrlModule = {
         }
     },
 
+    // ── SWRL text modal (view / export / import) ──────────
+
+    openSwrlModal() {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('brSwrlModal')).show();
+        this.refreshSwrlText();
+    },
+
+    async refreshSwrlText() {
+        try {
+            const resp = await fetch('/ontology/swrl/text', { credentials: 'same-origin' });
+            const data = await resp.json();
+            if (data.success) {
+                const el = document.getElementById('brSwrlEditor');
+                if (el) el.value = data.text || '';
+            }
+        } catch (e) {
+            console.error('[SWRL] Text refresh error:', e);
+        }
+    },
+
+    exportSwrl() {
+        window.location.href = '/ontology/swrl/export';
+    },
+
+    showSwrlImportModal() {
+        const file = document.getElementById('brSwrlImportFile');
+        const text = document.getElementById('brSwrlImportText');
+        if (file) file.value = '';
+        if (text) text.value = '';
+        new bootstrap.Modal(document.getElementById('brSwrlImportModal')).show();
+    },
+
+    async doSwrlImport() {
+        let text = (document.getElementById('brSwrlImportText')?.value || '').trim();
+        const fileInput = document.getElementById('brSwrlImportFile');
+        if (fileInput?.files?.length > 0 && !text) {
+            text = await fileInput.files[0].text();
+        }
+        if (!text) {
+            if (typeof showNotification === 'function')
+                showNotification('Please provide SWRL text', 'warning');
+            return;
+        }
+        try {
+            const resp = await fetch('/ontology/swrl/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ text }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.success) {
+                const msg = data.detail || data.message || 'Import failed';
+                if (typeof showNotification === 'function')
+                    showNotification(msg, 'error');
+                return;
+            }
+            this.rules = data.rules || [];
+            this.renderRulesList();
+            if (typeof OntologyState !== 'undefined' && OntologyState.config) {
+                OntologyState.config.swrl_rules = this.rules;
+            }
+            if (typeof BusinessRulesModule !== 'undefined') {
+                BusinessRulesModule._refreshAllBadges();
+            }
+            if (typeof autoGenerateOwl === 'function') autoGenerateOwl();
+            bootstrap.Modal.getInstance(document.getElementById('brSwrlImportModal'))?.hide();
+            if (typeof showNotification === 'function')
+                showNotification('Imported ' + (data.imported_count || 0) + ' rules', 'success');
+            this.refreshSwrlText();
+        } catch (e) {
+            console.error('[SWRL] Import error:', e);
+            if (typeof showNotification === 'function')
+                showNotification('Error importing SWRL: ' + (e.message || e), 'error');
+        }
+    },
+
     _esc(s) { return typeof escapeHtml === 'function' ? escapeHtml(s || '') : (s || ''); }
 };
 

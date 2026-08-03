@@ -6,7 +6,6 @@ window.DataQualityModule = {
     shapes: [],
     ontologyClasses: [],
     ontologyProperties: [],
-    _shaclPanelOpen: false,
     _suggestions: [],
 
     CATEGORIES: [
@@ -1092,12 +1091,11 @@ window.DataQualityModule = {
         }
     },
 
-    // --- SHACL panel ---
+    // --- SHACL modal ---
 
-    toggleShaclPanel() {
-        this._shaclPanelOpen = !this._shaclPanelOpen;
-        document.getElementById('dqShaclPanel').style.display = this._shaclPanelOpen ? '' : 'none';
-        if (this._shaclPanelOpen) this.refreshTurtle();
+    openShaclModal() {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('dqShaclModal')).show();
+        this.refreshTurtle();
     },
 
     async refreshTurtle() {
