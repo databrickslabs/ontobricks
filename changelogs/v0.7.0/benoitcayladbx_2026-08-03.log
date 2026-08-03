@@ -593,3 +593,25 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_site_js_has_nav_and_motion_hooks` → 1 passed in 0.10s
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site home page (Task 3)
+--------------------------------------------------------------------------------
+
+Context:
+Task 3 of the GitHub Pages marketing site — replace the stub index with a full
+home page including hero, pipeline strip, and shared header/footer chrome.
+
+Changes:
+
+1. `site/index.html`
+   Full marketing home page with hero, CTAs, pipeline section, and shared site chrome.
+2. `site/assets/css/site.css`
+   Append `.hero__eyebrow` styles (moved from inline).
+
+Modified files:
+- `site/index.html`
+- `site/assets/css/site.css`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_home_has_hero_and_ctas` → 1 passed
