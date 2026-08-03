@@ -570,4 +570,4 @@ Modified files:
 - `site/index.html`
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
-Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 2 passed, 5 failed in 0.17s (expected: CSS token test green; content/page tests red until later tasks)
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 1 passed, 6 failed in 0.16s (expected: CSS token test green; JS hook + content/page tests red until later tasks)
