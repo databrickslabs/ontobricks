@@ -1,4 +1,4 @@
 (function () {
   "use strict";
-  // Filled in Task 2: data-nav-toggle, prefers-reduced-motion, hero.is-ready
+  // Task 2 fills nav toggle and motion hooks
 })();
