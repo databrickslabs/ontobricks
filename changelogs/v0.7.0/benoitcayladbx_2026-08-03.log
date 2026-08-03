@@ -656,3 +656,23 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: `uv run pytest -q tests/units/site/test_marketing_site.py` → 3 passed, 4 failed (missing docs/about/404 — later tasks)
+
+--------------------------------------------------------------------------------
+GitHub Pages marketing site docs hub (Task 6)
+--------------------------------------------------------------------------------
+
+Context:
+Task 6 of the GitHub Pages marketing site — add the Docs hub page with cards
+linking to Markdown sources on GitHub (`master` branch), not hosted Sphinx HTML.
+
+Changes:
+
+1. `site/docs/index.html`
+   Docs hub with six `.doc-card` anchors (get-started, architecture, features,
+   API, deployment, user guide) under `.doc-grid`; nested `../` chrome.
+
+Modified files:
+- `site/docs/index.html`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
+
+Tests: `uv run pytest -q tests/units/site/test_marketing_site.py::test_docs_hub_links_github_markdown` → 1 passed in 0.10s
