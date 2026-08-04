@@ -263,3 +263,23 @@ Modified files:
 
 Tests: `uv run --frozen pytest tests/units/core/test_job_metrics.py -q` → 40
 passed, 1 warning in 1.07s
+
+## Strengthen distribution-strip source assertions
+
+Context: Two `TestDistributionStrip` tests passed even when the behaviour they
+claim to protect was broken: the median-approximation test matched `&asymp;` in
+the unrelated badge template, and the empty-state guard test did not require the
+leading `!dist ||` that protects legacy payloads with no `distributions` key.
+
+Changes:
+
+1. `tests/units/front/test_analytics_dashboard.py`
+   Pin the approximation marker to the `caption.innerHTML` median line via regex,
+   and assert `!dist ||` precedes `!dist.bins` in the guard.
+
+Modified files:
+- `tests/units/front/test_analytics_dashboard.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+Tests: `uv run --frozen pytest tests/units/front/test_analytics_dashboard.py -q`
+→ 44 passed, 1 warning in 0.14s

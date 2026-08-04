@@ -181,6 +181,12 @@ class TestDistributionStrip:
         fn = _fn(js, "_renderDistributionStrip")
         assert "Re-run the analysis" in fn
         assert "Not computed for this run" in fn
+        # Legacy cached results omit distributions entirely, so dist is
+        # undefined on first load. The !dist || check must run before
+        # !dist.bins or every metric throws on that path.
+        undefined_guard_at = fn.index("!dist ||")
+        bins_guard_at = fn.index("!dist.bins")
+        assert undefined_guard_at < bins_guard_at
         # The guard must return before any chart is constructed.
         guard_at = fn.index("!dist.bins")
         assert guard_at < fn.index("new Chart")
@@ -196,10 +202,17 @@ class TestDistributionStrip:
         assert "asymp" in fn or "estimate" in fn.lower()
 
     def test_the_median_is_labelled_as_approximate(self, js):
-        """Interpolated from bins; presenting it as exact would overstate it."""
+        """Interpolated from bins; accurate to one bin width, so the caption
+        must not present the median as an exact figure."""
         fn = _fn(js, "_renderDistributionStrip")
-        assert "median" in fn.lower()
-        assert "asymp" in fn or "~" in fn
+        caption_line = next(
+            line for line in fn.splitlines()
+            if "caption.innerHTML" in line and "median" in line.lower()
+        )
+        assert re.search(r"median\s+(&asymp;|~)", caption_line), (
+            "the approximation marker must sit on the median caption line, "
+            "not only in the unrelated approximate-metric badge"
+        )
 
     def test_selecting_a_tile_redraws_the_ranking_chart(self, js):
         fn = _fn(js, "_selectMetric")
