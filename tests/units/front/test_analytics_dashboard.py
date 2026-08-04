@@ -217,3 +217,36 @@ class TestDistributionStrip:
     def test_selecting_a_tile_redraws_the_ranking_chart(self, js):
         fn = _fn(js, "_selectMetric")
         assert "_renderRankingChart" in fn
+
+
+class TestRankingCard:
+    def test_one_ranking_chart_is_rendered_for_the_selected_metric(self, js):
+        assert "function _renderRankingChart" in js
+        assert "analyticsRankingChart" in js
+
+    def test_the_segmented_control_offers_all_five_metrics(self, js):
+        fn = _fn(js, "_renderRankingChart")
+        assert "rankSeg_" in fn
+
+    def test_clicking_a_segment_selects_that_metric(self, js):
+        fn = _fn(js, "_renderRankingChart")
+        assert "_selectMetric" in fn
+
+    def test_click_through_to_the_graph_viewer_survives(self, js):
+        fn = _fn(js, "_renderRankingChart")
+        assert "_navigateToGraph" in fn
+
+    def test_the_top_n_input_still_drives_the_chart(self, js):
+        assert "analyticsTopN" in js
+
+    def test_the_estimate_notice_survives(self, js):
+        assert "Estimate." in js
+
+    def test_the_all_zero_notice_survives(self, js):
+        assert "All values are 0." in js
+
+    def test_the_not_computed_notice_survives(self, js):
+        assert "Not computed for this graph." in js
+
+    def test_the_detail_table_is_still_rendered(self, js):
+        assert "_renderPagerankTable" in js

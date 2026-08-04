@@ -84,13 +84,6 @@
         modal.show();
     };
 
-    var _METRICS = [
-        { key: 'betweenness', canvasId: 'chartBetweenness', color: 'rgba(220, 53, 69, 0.75)',  tabId: 'atab-btn-betweenness' },
-        { key: 'degree',      canvasId: 'chartDegree',      color: 'rgba(25, 135, 84, 0.75)',  tabId: 'atab-btn-degree'      },
-        { key: 'closeness',   canvasId: 'chartCloseness',   color: 'rgba(13, 202, 240, 0.75)', tabId: 'atab-btn-closeness'   },
-        { key: 'clustering',  canvasId: 'chartClustering',  color: 'rgba(255, 193, 7, 0.85)',  tabId: 'atab-btn-clustering'  },
-    ];
-
     // Every metric, in display order, with its presentation metadata. PageRank
     // was previously absent from this list because its tab held a table rather
     // than a chart; the dashboard charts all five.
@@ -522,169 +515,187 @@
 
     window.analyticsRenderCharts = function () {
         if (!_analyticsData) return;
-        var topN       = Math.max(3, parseInt(document.getElementById('analyticsTopN')?.value) || 10);
-        var nodeTypes  = _analyticsData.node_types  || {};
-        var nodeLabels = _analyticsData.node_labels || {};
-        var allNodes   = _analyticsData.nodes;
-        var candidateUris = Object.keys(allNodes);
-        // Metrics the run could not compute — charted as zeros, so label them
-        // rather than showing a flat bar chart.
+        _renderRankingChart();
+        var topN = _topN();
+        _renderPagerankTable(
+            Object.keys(_analyticsData.nodes || {}),
+            _analyticsData.nodes || {},
+            _analyticsData.node_types || {},
+            topN
+        );
+    };
+
+    function _topN() {
+        var el = document.getElementById('analyticsTopN');
+        return Math.max(3, parseInt(el && el.value, 10) || 10);
+    }
+
+    function _renderRankingChart() {
+        var host = document.getElementById('analyticsRankingCard');
+        if (!host || !_analyticsData) return;
+
+        var meta = _ALL_METRICS.filter(function (m) {
+            return m.key === _selectedMetric;
+        })[0] || _ALL_METRICS[0];
+
         var unavailable = _analyticsData.unavailable_metrics || [];
-        // Metrics that *were* computed but only from a sample of source nodes.
-        // Charted normally, but badged so the numbers are never read as exact.
         var approximate = _analyticsData.approximate_metrics || [];
-        var pivotCount  = _analyticsData.pivot_count || 0;
+        var pivotCount = _analyticsData.pivot_count || 0;
 
-        _METRICS.forEach(function (m) {
-            var sorted = candidateUris
-                .sort(function (a, b) { return (allNodes[b][m.key] || 0) - (allNodes[a][m.key] || 0); })
-                .slice(0, topN);
+        var segments = _ALL_METRICS.map(function (m) {
+            return '<button type="button" class="analytics-rank-seg'
+                + (m.key === _selectedMetric ? ' selected' : '') + '"'
+                + ' id="rankSeg_' + m.key + '" data-metric="' + m.key + '"'
+                + ' aria-pressed="' + (m.key === _selectedMetric) + '">'
+                + '<i class="bi ' + m.icon + ' me-1"></i>' + m.label
+                + '</button>';
+        }).join('');
 
-            var labels = sorted.map(function (uri) {
-                return _displayName(uri);
-            });
-            var values = sorted.map(function (uri) {
-                return +(allNodes[uri][m.key] || 0).toFixed(6);
-            });
+        host.innerHTML = ''
+            + '<div class="card mt-2">'
+            + '  <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">'
+            + '    <span class="small fw-semibold">'
+            + '      <i class="bi ' + meta.icon + ' me-1"></i>Top nodes by ' + meta.label
+            + '      <button class="btn btn-link btn-sm p-0 text-muted ms-1"'
+            + '              onclick="_showMetricInfo(\'' + meta.key + '\')"'
+            + '              title="What is ' + meta.label + '?">'
+            + '        <i class="bi bi-question-circle"></i></button>'
+            + '    </span>'
+            + '    <span class="analytics-rank-segs">' + segments + '</span>'
+            + '  </div>'
+            + '  <div class="card-body">'
+            + '    <div id="analyticsRankingNotice"></div>'
+            + '    <div class="analytics-rank-canvas-wrap">'
+            + '      <canvas id="analyticsRankingChart"></canvas>'
+            + '    </div>'
+            + '  </div>'
+            + '</div>';
 
-            var canvas = document.getElementById(m.canvasId);
-            if (!canvas) return;
-
-            if (_charts[m.key]) { _charts[m.key].destroy(); }
-
-            // Show a notice instead of a flat zero chart
-            var allZero = values.every(function (v) { return v === 0; });
-            var zeroNoticeId = m.canvasId + '_zeroNotice';
-            var existing = document.getElementById(zeroNoticeId);
-            if (existing) existing.remove();
-            if (allZero) {
-                var reason;
-                if (unavailable.indexOf(m.key) !== -1) {
-                    var name = m.key.charAt(0).toUpperCase() + m.key.slice(1);
-                    reason = '<strong>Not computed for this graph.</strong> '
-                        + name + ' is estimated from a sample of source nodes, and this run '
-                        + 'could not produce a sample it can stand behind — either no '
-                        + 'pivots were sampled or the breadth-first search hit its depth cap. '
-                        + 'Raise the analytics job\'s max depth in Settings and re-run.';
-                } else if (m.key === 'clustering') {
-                    reason = '<strong>All values are 0.</strong> '
-                        + 'Clustering coefficient is 0 when none of a node\'s neighbors are connected to each other — typical for KGs with a bipartite structure (e.g. Customer → Order → Product). Triangles are rare unless entities of the same type link directly.';
-                } else {
-                    reason = '<strong>All values are 0.</strong> '
-                        + 'No ' + m.key + ' scores could be computed for the current graph / filter.';
-                }
-                var notice = document.createElement('div');
-                notice.id = zeroNoticeId;
-                notice.className = 'alert alert-light border small text-muted mb-0';
-                notice.innerHTML = '<i class="bi bi-info-circle me-1"></i>' + reason;
-                canvas.parentNode.insertBefore(notice, canvas);
-                canvas.style.display = 'none';
-                return;   // skip chart rendering for this metric
-            }
-            canvas.style.display = '';
-
-            // Estimated metrics get a standing note above the chart. Ranking is
-            // reliable for the clear leaders; adjacent values can swap, so the
-            // note says that rather than letting the bars imply precision.
-            var estNoticeId = m.canvasId + '_estNotice';
-            var oldEst = document.getElementById(estNoticeId);
-            if (oldEst) oldEst.remove();
-            if (approximate.indexOf(m.key) !== -1) {
-                var estName = m.key.charAt(0).toUpperCase() + m.key.slice(1);
-                var est = document.createElement('div');
-                est.id = estNoticeId;
-                est.className = 'alert alert-warning border small py-1 px-2 mb-2';
-                est.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>'
-                    + '<strong>Estimate.</strong> ' + estName + ' is sampled from '
-                    + pivotCount + ' source node' + (pivotCount === 1 ? '' : 's')
-                    + ' rather than all of them, because the exact computation is '
-                    + 'quadratic in the graph size. Use it to rank nodes, not as an '
-                    + 'absolute value — nodes with similar scores may be ordered '
-                    + 'wrongly. Analyse a single Entity Type for exact values.';
-                canvas.parentNode.insertBefore(est, canvas);
-            }
-
-            _charts[m.key] = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: m.key.charAt(0).toUpperCase() + m.key.slice(1),
-                        data: values,
-                        backgroundColor: m.color,
-                        borderRadius: 4,
-                        borderSkipped: false,
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    onClick: (function (capturedSorted) {
-                        return function (event, elements) {
-                            if (!elements || !elements.length) return;
-                            var idx = elements[0].index;
-                            var uri = capturedSorted[idx];
-                            if (uri) _navigateToGraph(uri);
-                        };
-                    })(sorted.slice()),
-                    onHover: function (event) {
-                        event.native.target.style.cursor =
-                            event.chart.getElementsAtEventForMode(event.native, 'nearest', { intersect: true }, true).length
-                                ? 'pointer' : 'default';
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                title: function (items) {
-                                    var idx  = items[0].dataIndex;
-                                    var uri  = sorted[idx];
-                                    var type = nodeTypes[uri];
-                                    var typeLabel = type ? _localName(type) : null;
-                                    return typeLabel ? uri + '  [' + typeLabel + ']' : uri;
-                                },
-                                beforeBody: function (items) {
-                                    var idx = items[0].dataIndex;
-                                    var uri = sorted[idx];
-                                    var nm  = allNodes[uri] || {};
-                                    return [
-                                        'PageRank    : ' + (nm.pagerank    || 0).toFixed(6),
-                                        'Degree      : ' + (nm.degree      || 0).toFixed(6),
-                                        'Betweenness : ' + (nm.betweenness || 0).toFixed(6),
-                                        'Closeness   : ' + (nm.closeness   || 0).toFixed(6),
-                                        'Clustering  : ' + (nm.clustering  || 0).toFixed(6),
-                                        '──────────────────────────',
-                                    ];
-                                },
-                                label: function (item) {
-                                    return '► ' + item.dataset.label + ' : ' + item.formattedValue;
-                                },
-                                afterLabel: function () { return '\nClick to open in Graph Viewer'; }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            ticks: { font: { size: 11 } },
-                            grid: { color: 'rgba(0,0,0,0.05)' }
-                        },
-                        y: {
-                            ticks: {
-                                font: { size: 11 },
-                                callback: function (val, idx) {
-                                    var lbl = labels[idx];
-                                    return lbl.length > 28 ? lbl.slice(0, 27) + '…' : lbl;
-                                }
-                            },
-                            grid: { display: false }
-                        }
-                    }
-                }
+        host.querySelectorAll('.analytics-rank-seg').forEach(function (el) {
+            el.addEventListener('click', function () {
+                _selectMetric(el.getAttribute('data-metric'));
             });
         });
-        _renderPagerankTable(candidateUris, allNodes, nodeTypes, topN);
-    };
+
+        var notice = document.getElementById('analyticsRankingNotice');
+        var canvas = document.getElementById('analyticsRankingChart');
+        if (!canvas || !notice) return;
+
+        var allNodes = _analyticsData.nodes || {};
+        var sorted = Object.keys(allNodes).sort(function (a, b) {
+            return (allNodes[b][meta.key] || 0) - (allNodes[a][meta.key] || 0);
+        }).slice(0, _topN());
+        var values = sorted.map(function (uri) {
+            return +(allNodes[uri][meta.key] || 0).toFixed(6);
+        });
+
+        if (_charts.ranking) { _charts.ranking.destroy(); _charts.ranking = null; }
+
+        // A flat zero chart would imply a measurement of zero. Explain instead.
+        if (!values.length || values.every(function (v) { return v === 0; })) {
+            canvas.style.display = 'none';
+            notice.innerHTML = '<div class="alert alert-light border small text-muted mb-0">'
+                + '<i class="bi bi-info-circle me-1"></i>'
+                + _zeroReason(meta.key, unavailable) + '</div>';
+            return;
+        }
+        canvas.style.display = '';
+
+        notice.innerHTML = approximate.indexOf(meta.key) !== -1
+            ? '<div class="alert alert-warning border small py-1 px-2 mb-2">'
+              + '<i class="bi bi-exclamation-triangle me-1"></i><strong>Estimate.</strong> '
+              + meta.label + ' is sampled from ' + pivotCount + ' source node'
+              + (pivotCount === 1 ? '' : 's') + ' rather than all of them, because the '
+              + 'exact computation is quadratic in the graph size. Use it to rank nodes, '
+              + 'not as an absolute value — nodes with similar scores may be ordered '
+              + 'wrongly. Analyse a single Entity Type for exact values.</div>'
+            : '';
+
+        var labels = sorted.map(_displayName);
+        _charts.ranking = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: meta.label,
+                    data: values,
+                    backgroundColor: meta.color,
+                    borderRadius: 4,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: function (event, elements) {
+                    if (!elements || !elements.length) return;
+                    var uri = sorted[elements[0].index];
+                    if (uri) _navigateToGraph(uri);
+                },
+                onHover: function (event) {
+                    event.native.target.style.cursor =
+                        event.chart.getElementsAtEventForMode(
+                            event.native, 'nearest', { intersect: true }, true
+                        ).length ? 'pointer' : 'default';
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: function (items) {
+                                var uri = sorted[items[0].dataIndex];
+                                var type = (_analyticsData.node_types || {})[uri];
+                                return type ? uri + '  [' + _localName(type) + ']' : uri;
+                            },
+                            beforeBody: function (items) {
+                                var nm = allNodes[sorted[items[0].dataIndex]] || {};
+                                return _ALL_METRICS.map(function (m) {
+                                    return m.label + ' : ' + (nm[m.key] || 0).toFixed(6);
+                                }).concat(['──────────────────────────']);
+                            },
+                            label: function (item) {
+                                return '► ' + item.dataset.label + ' : ' + item.formattedValue;
+                            },
+                            afterLabel: function () { return '\nClick to open in Graph Viewer'; }
+                        }
+                    }
+                },
+                scales: {
+                    x: { beginAtZero: true, ticks: { font: { size: 11 } },
+                         grid: { color: 'rgba(0,0,0,0.05)' } },
+                    y: { ticks: { font: { size: 11 },
+                                  callback: function (val, idx) {
+                                      var l = labels[idx];
+                                      return l.length > 40 ? l.slice(0, 39) + '…' : l;
+                                  } },
+                         grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // Why a metric charts as all zeros. Kept as one function so the three
+    // explanations cannot drift apart.
+    function _zeroReason(key, unavailable) {
+        var label = key.charAt(0).toUpperCase() + key.slice(1);
+        if (unavailable.indexOf(key) !== -1) {
+        return '<strong>Not computed for this graph.</strong> ' + label
+            + ' is estimated from a sample of source nodes, and this run could '
+            + 'not produce a sample it can stand behind — either no pivots were '
+            + 'sampled or the breadth-first search hit its depth cap. '
+            + 'Raise the analytics job\'s max depth in Settings and re-run.';
+        }
+        if (key === 'clustering') {
+            return '<strong>All values are 0.</strong> Clustering coefficient is 0 '
+                + 'when none of a node\'s neighbors are connected to each other — '
+                + 'typical for KGs with a bipartite structure (e.g. Customer → Order '
+                + '→ Product). Triangles are rare unless entities of the same type '
+                + 'link directly.';
+        }
+        return '<strong>All values are 0.</strong> No ' + key + ' scores could be '
+            + 'computed for the current graph / filter.';
+    }
 
     // Explain what the table is ranked by and which columns are missing or
     // sampled, so the numbers cannot be read as more precise than they are.

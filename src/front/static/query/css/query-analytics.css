@@ -106,3 +106,44 @@
     font-size: 0.65rem;
     color: var(--db-text-muted);
 }
+
+/* --- Dashboard: ranking card -------------------------------------------- */
+
+.analytics-rank-segs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    border: 1px solid var(--db-border);
+    border-radius: var(--bs-border-radius);
+    overflow: hidden;
+}
+
+.analytics-rank-seg {
+    padding: 0.15rem 0.5rem;
+    font-size: 0.72rem;
+    color: var(--db-text-secondary);
+    background: #fff;
+    border: 0;
+    border-right: 1px solid var(--db-border);
+    transition: var(--db-transition-fast);
+}
+
+.analytics-rank-seg:last-child { border-right: 0; }
+
+/* Hover: use --db-primary-light (rgba(73,80,87,0.1)) so the effect is visible
+   against the white background without introducing hard-coded colours. */
+.analytics-rank-seg:hover { background: var(--db-primary-light); }
+
+/* Selected: match Task 7's dist-tile treatment — --db-primary underline +
+   --db-primary-rgb ring — so both controls speak the same visual language. */
+.analytics-rank-seg.selected {
+    font-weight: 600;
+    color: var(--db-text);
+    background: var(--db-primary-light);
+    box-shadow: inset 0 -2px 0 var(--db-primary);
+}
+
+/* Sized so a top-50 ranking scrolls inside the card rather than stretching it. */
+.analytics-rank-canvas-wrap {
+    position: relative;
+    height: 420px;
+}
