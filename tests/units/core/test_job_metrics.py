@@ -539,3 +539,52 @@ def test_failed_run_raises_with_the_run_url():
     with pytest.raises(InfrastructureError) as exc:
         jm.compute(MetricsRequest())
     assert "example/run/1" in str(exc.value.detail)
+
+
+# ---------------------------------------------------------------------------
+# MetricDistribution model
+# ---------------------------------------------------------------------------
+
+
+def _distribution(**overrides):
+    from back.core.graph_analysis.models import MetricDistribution
+
+    base = dict(
+        bins=[4, 2, 1, 0], bin_count=4,
+        lo=0.0, hi=1.0, mean=0.25, median=0.125, p90=0.55,
+    )
+    base.update(overrides)
+    return MetricDistribution(**base)
+
+
+def test_distribution_to_dict_round_trips_every_field():
+    d = _distribution().to_dict()
+    assert d["bins"] == [4, 2, 1, 0]
+    assert d["bin_count"] == 4
+    assert d["lo"] == 0.0
+    assert d["hi"] == 1.0
+    assert d["mean"] == 0.25
+    assert d["median"] == 0.125
+    assert d["p90"] == 0.55
+
+
+def test_distribution_to_dict_copies_the_bin_list():
+    """A shared list would let a caller mutate the stored payload."""
+    d = _distribution()
+    payload = d.to_dict()
+    payload["bins"].append(99)
+    assert d.bins == [4, 2, 1, 0]
+
+
+def test_metrics_result_defaults_to_no_distributions():
+    """Absent, not empty-per-metric: the UI distinguishes the two."""
+    assert MetricsResult().distributions == {}
+    assert MetricsResult().to_dict()["distributions"] == {}
+
+
+def test_metrics_result_to_dict_serialises_distributions():
+    result = MetricsResult()
+    result.distributions["pagerank"] = _distribution()
+    payload = result.to_dict()
+    assert payload["distributions"]["pagerank"]["bins"] == [4, 2, 1, 0]
+    assert payload["distributions"]["pagerank"]["bin_count"] == 4
