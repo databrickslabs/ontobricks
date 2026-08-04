@@ -1257,3 +1257,34 @@ Modified files:
 - `changelogs/v0.7.0/benoitcayladbx_2026-08-03.log`
 
 Tests: previously verified with suite at 4142 passed; this commit is the remaining TRY_CAST / failed-check WIP from that run.
+
+## Resolve PR #128 merge conflicts with develop
+
+Context: PR #128 (Neo4j typed property-graph) was CONFLICTING against
+develop (~101 commits ahead). Dry-merge showed only 3 comment-level
+conflicts in deploy helpers; develop already contained the PR's
+substantive fixes for those files. Also relocated neo4j-requirements.md
+out of the GitHub Pages `docs/` marketing root into `documentation/`.
+
+Changes:
+
+1. app.yaml.template
+   Kept develop wording (no `--extra neo4j`; Bolt driver is core).
+2. scripts/_internal/_deploy-preflight.sh
+   Kept develop `_PREFLIGHT_DIR` / BASH_SOURCE comment + body.
+3. scripts/_internal/_render-app-yaml.py
+   Kept develop `Path(...).parents[2]` REPO_ROOT resolution.
+4. documentation/neo4j-requirements.md
+   Moved from docs/neo4j-requirements.md (Pages site root collision).
+5. src/front/templates/settings.html
+   Updated Neo4j requirements link to documentation/ path.
+
+Modified files:
+- app.yaml.template
+- scripts/_internal/_deploy-preflight.sh
+- scripts/_internal/_render-app-yaml.py
+- documentation/neo4j-requirements.md
+- src/front/templates/settings.html
+- changelogs/v0.7.0/benoitcayladbx_2026-08-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units/graphdb tests/units/domain/test_domain_session.py tests/units/core/test_graphdb_factory.py → 168 passed, 0 failed in 0.94s. Full `not scenario` suite hung mid-run in tests/units/core/test_health.py (0% CPU lock wait; killed); not attributed to this merge.

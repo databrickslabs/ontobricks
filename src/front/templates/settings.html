@@ -643,12 +643,54 @@
                         <span class="text-muted small">Loading Neo4j settings…</span>
                     </div>
 
+                    <!-- Tab strip (parity with the Lakebase panel) -->
+                    <ul class="nav nav-tabs ob-tabs" id="neo4jTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="n4tab-connection" data-bs-toggle="tab"
+                                    data-bs-target="#n4pane-connection" type="button" role="tab"
+                                    aria-controls="n4pane-connection" aria-selected="true">
+                                <i class="bi bi-plug me-1"></i> Connection
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="n4tab-objects" data-bs-toggle="tab"
+                                    data-bs-target="#n4pane-objects" type="button" role="tab"
+                                    aria-controls="n4pane-objects" aria-selected="false">
+                                <i class="bi bi-bezier2 me-1"></i> Objects
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="n4tab-health" data-bs-toggle="tab"
+                                    data-bs-target="#n4pane-health" type="button" role="tab"
+                                    aria-controls="n4pane-health" aria-selected="false">
+                                <i class="bi bi-heart-pulse me-1"></i> Health
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content ob-tab-content" id="neo4jTabContent">
+
+                    <!-- ── TAB 1 · Connection ── -->
+                    <div class="tab-pane fade show active" id="n4pane-connection" role="tabpanel" aria-labelledby="n4tab-connection">
+
                     <!-- Architecture note (mirrors the Lakebase one) -->
                     <div class="alert alert-info border-0 mb-3 small">
                         <strong>Architecture note:</strong> when Neo4j is the active engine,
-                        OntoBricks writes triples via Bolt at build time using the configured
-                        credentials. All ontology validation runs upstream in the build pipeline
-                        (C2 safeguard) — no raw Cypher entry point is exposed to users.
+                        OntoBricks writes a <strong>typed property graph</strong> via Bolt at build
+                        time — each entity URI becomes a node, <code>rdf:type</code> becomes a label,
+                        object properties become real relationships. All ontology validation runs
+                        upstream in the build pipeline (C2 safeguard) — no raw Cypher entry point is
+                        exposed to users.
+                    </div>
+
+                    <!-- Server-requirements note (multi-flavor portability, first release) -->
+                    <div class="alert alert-warning border-0 mb-3 small">
+                        <strong>Requirements:</strong> Neo4j <strong>server 5.x</strong> (Aura, Enterprise,
+                        or Community). The per-domain <em>database</em> selector (Domain Info → Knowledge
+                        Graph) needs a multi-database flavor (<strong>Enterprise / Aura</strong>); on
+                        Community Edition it falls back to the single <code>neo4j</code> database.
+                        OntoBricks assumes it <em>owns</em> the connected database. APOC is not required.
+                        See the <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/neo4j-requirements.md" target="_blank" rel="noopener">Neo4j requirements guide</a>.
                     </div>
 
                     <form id="neo4jConfigForm" autocomplete="off">
@@ -663,9 +705,12 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label for="neo4jDatabase" class="form-label small fw-semibold mb-1">Database</label>
+                                <label for="neo4jDatabase" class="form-label small fw-semibold mb-1">Default database</label>
                                 <input type="text" class="form-control form-control-sm" id="neo4jDatabase" placeholder="neo4j">
-                                <div class="form-text small text-muted">Default <code>neo4j</code>.</div>
+                                <div class="form-text small text-muted">
+                                    Default <code>neo4j</code>. Global default for every domain's graph; a domain can
+                                    override it in <em>Domain → Information</em> (Enterprise/Aura multi-database only).
+                                </div>
                             </div>
 
                             <div class="col-md-6">
@@ -735,6 +780,40 @@
 
                         <div id="neo4jTestResult" class="alert d-none mt-3 small" role="status" aria-live="polite"></div>
                     </form>
+                    </div><!-- /#n4pane-connection -->
+
+                    <!-- ── TAB 2 · Objects ── -->
+                    <div class="tab-pane fade" id="n4pane-objects" role="tabpanel" aria-labelledby="n4tab-objects">
+                        <p class="small text-muted mb-3">
+                            Every materialised graph in the connected Neo4j database, with node and
+                            relationship counts. A graph is one domain version (marker label
+                            <code>&lt;Domain&gt;_V&lt;n&gt;</code>). The <strong>Drop</strong> button
+                            deletes all of a graph's nodes, relationships, its uniqueness constraint,
+                            and its schema map.
+                            <strong>OntoBricks assumes it owns this database</strong> — graphs from other
+                            deployments pointing at the same instance appear here too.
+                        </p>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mb-3" id="btnLoadNeo4jLabels">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Load graphs
+                        </button>
+                        <div id="neo4jLabelsResult"></div>
+                    </div><!-- /#n4pane-objects -->
+
+                    <!-- ── TAB 3 · Health ── -->
+                    <div class="tab-pane fade" id="n4pane-health" role="tabpanel" aria-labelledby="n4tab-health">
+                        <p class="small text-muted mb-3">
+                            Read-only Bolt handshake against the <strong>saved</strong> connection
+                            (use <strong>Save</strong> after edits). Confirms the app reaches the
+                            configured Neo4j server and database.
+                        </p>
+                        <div id="neo4jHealthMessage" class="small mb-2" style="display:none;"></div>
+                        <dl class="row small mb-2" id="neo4jHealthDl"></dl>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshNeo4jHealth" title="Refresh health probe">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Refresh health
+                        </button>
+                    </div><!-- /#n4pane-health -->
+
+                    </div><!-- /#neo4jTabContent -->
                 </div>
             </div>
 

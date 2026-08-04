@@ -1013,6 +1013,16 @@ class DigitalTwin:
             "triple_count": 0,
         }
 
+        # --- Neo4j engine: no SQL VIEW / UC-sync / Postgres — probe the graph
+        #     directly over Bolt and return engine-specific fields. The Neo4j
+        #     path writes a typed property graph, so there is no view_table /
+        #     synced-UC bridge to check; the "Triple Store" card still shows the
+        #     source Delta view name for context but its existence is N/A. ---
+        if graph_engine == "neo4j":
+            return await self._fetch_neo4j_existence(
+                settings, result, graph_name, run_blocking
+            )
+
         # --- Resolve config without needing a Postgres connection (sync) ---
         lk_sync_mode = "app_managed"
         lk_schema = ""
@@ -1178,6 +1188,70 @@ class DigitalTwin:
             # FQN discovered live via Postgres — confirm with a follow-up probe.
             result["lakebase_synced_uc_exists"] = await _uc_probe(lk_synced_uc)
 
+        return result
+
+    async def _fetch_neo4j_existence(
+        self, settings, result: Dict[str, Any], graph_name: str, run_blocking
+    ) -> Dict[str, Any]:
+        """Neo4j existence probe for the Build page (typed property graph).
+
+        Populates ``neo4j_*`` fields: whether the graph's marker label exists,
+        the reconstructed triple count, the configured database, and a display
+        FQN ``<database> · <marker>``. No SQL VIEW / UC-sync / Postgres probes
+        run on this path (Neo4j writes over Bolt at build time).
+        """
+        from back.core.graphdb import get_graphdb
+
+        domain = self._domain
+        result["neo4j_graph_exists"] = None
+        result["neo4j_database"] = str(
+            (domain.info or {}).get("neo4j_database") or ""
+        ).strip()
+        result["neo4j_check_error"] = None
+        # The SQL VIEW existence is not part of the Neo4j path; mark N/A so the
+        # UI does not show a misleading "Not found".
+        result["view_exists"] = None
+
+        try:
+            # Use the AUTO path (engine=None): it resolves the engine from the
+            # per-domain backend AND loads the saved connection config from
+            # GlobalConfigService. Passing engine="neo4j" explicitly would hand
+            # _create_neo4j an empty engine_config (no URI) → None, which is why
+            # this previously reported "Neo4j backend unavailable" even though
+            # the connection (Settings → Neo4j → Test/Health) works.
+            store = get_graphdb(domain, settings)
+            if store is None or store.__class__.__name__ != "Neo4jStore":
+                result["neo4j_check_error"] = (
+                    "Neo4j backend unavailable (check the connection in Settings → Neo4j)."
+                )
+                return result
+            try:
+                exists = await run_blocking(store.table_exists, graph_name)
+                result["neo4j_graph_exists"] = exists
+                if not result["neo4j_database"]:
+                    # Fall back to the connection's effective database.
+                    result["neo4j_database"] = getattr(store, "_database", "") or ""
+                if exists:
+                    cnt = await run_blocking(store.count_triples, graph_name)
+                    result["triple_count"] = int(cnt or 0)
+                    result["graph_has_data"] = result["triple_count"] > 0
+                else:
+                    result["graph_has_data"] = False
+            finally:
+                try:
+                    store.close()
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as e:  # noqa: BLE001
+            logger.warning("DT existence: neo4j graph check failed: %s", e)
+            result["neo4j_check_error"] = str(e)
+
+        from back.core.graphdb.neo4j.Neo4jWriteOps import sanitise_label
+
+        marker = sanitise_label(graph_name) if graph_name else ""
+        db = result["neo4j_database"]
+        result["neo4j_marker_label"] = marker
+        result["graph_display"] = " · ".join([p for p in (db, marker) if p]) or marker
         return result
 
     # ------------------------------------------------------------------

@@ -5,6 +5,43 @@
 
 let currentDomainFolder = null;
 
+// Show the Neo4j database selector only when the backend is Neo4j.
+function toggleNeo4jDatabaseSection() {
+    const backend = (document.getElementById('domainGraphBackend') || {}).value;
+    const section = document.getElementById('neo4jDatabaseSection');
+    if (!section) return;
+    section.classList.toggle('d-none', backend !== 'neo4j');
+}
+
+// Populate the Neo4j database dropdown from the server (SHOW DATABASES).
+async function loadNeo4jDatabases() {
+    const select = document.getElementById('domainNeo4jDatabase');
+    const help = document.getElementById('neo4jDatabaseHelp');
+    if (!select) return;
+    const saved = select.dataset.savedValue || select.value || '';
+    if (help) help.innerHTML = '<span class="text-muted">Loading databases…</span>';
+    try {
+        const resp = await fetch('/settings/graph-engine/neo4j-databases', { credentials: 'same-origin' });
+        const data = await resp.json();
+        if (!data || !data.success) throw new Error((data && data.error) || 'request failed');
+        const names = data.databases || [];
+        select.innerHTML = '';
+        select.add(new Option('— use configured default —', ''));
+        names.forEach(n => select.add(new Option(n, n)));
+        if (saved && names.indexOf(saved) === -1) {
+            select.add(new Option(saved + ' (saved)', saved));
+        }
+        select.value = saved;
+        if (help) {
+            help.innerHTML = names.length
+                ? '<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + names.length + ' database(s) on ' + (data.configured || 'server') + '</span>'
+                : '<span class="text-muted">Server did not expose a database list; using configured default (' + (data.configured || 'neo4j') + ').</span>';
+        }
+    } catch (e) {
+        if (help) help.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>' + (e.message || 'Could not list databases') + '</span>';
+    }
+}
+
 // Load available LLM endpoints
 async function loadLlmEndpoints() {
     const select = document.getElementById('domainLlmEndpoint');
@@ -315,6 +352,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         const graphBackendEl = document.getElementById('domainGraphBackend');
         if (graphBackendEl) {
             graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
+            graphBackendEl.addEventListener('change', toggleNeo4jDatabaseSection);
+        }
+        // Neo4j database selector: toggle visibility + lazy-load on demand.
+        toggleNeo4jDatabaseSection();
+        const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
+        if (refreshDbBtn) {
+            refreshDbBtn.addEventListener('click', loadNeo4jDatabases);
         }
 
         // Load LLM endpoints and version status in parallel
@@ -348,6 +392,16 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (graphBackendEl && infoData.info && infoData.info.graph_backend) {
                 graphBackendEl.value = infoData.info.graph_backend;
             }
+            const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
+            if (neo4jDbEl && infoData.info && infoData.info.neo4j_database) {
+                const saved = infoData.info.neo4j_database;
+                if (![...neo4jDbEl.options].some(o => o.value === saved)) {
+                    neo4jDbEl.add(new Option(saved, saved, true, true));
+                }
+                neo4jDbEl.value = saved;
+                neo4jDbEl.dataset.savedValue = saved;
+            }
+            toggleNeo4jDatabaseSection();
         }
 
         // The DT panel reads catalog/schema from the dropdown rendering of

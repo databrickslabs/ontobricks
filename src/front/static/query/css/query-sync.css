@@ -203,6 +203,11 @@
 }
 .dt-arch-sub-item .dt-arch-name { margin-top: 0; }
 .dt-arch-build-note {
+    /* Force onto its own flex row below the arch cards. Bootstrap `w-100`
+       only sets width:100%, which under `flex-wrap` still shrinks and stays
+       inline — stealing horizontal space and collapsing the Sync/Graph DB
+       card titles to one character per line. flex-basis:100% guarantees a wrap. */
+    flex-basis: 100%;
     margin-top: 0.5rem;
     padding-top: 0.5rem;
     border-top: 1px solid #f0f0f0;

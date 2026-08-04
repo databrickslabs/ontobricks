@@ -2084,6 +2084,133 @@ class SettingsService:
         }
 
     @staticmethod
+    def _neo4j_connection_from_config(session_mgr, settings):
+        """Build a :class:`Neo4jConnection` from the persisted Neo4j engine config.
+
+        Shared by the Neo4j admin endpoints (databases list, objects list,
+        health, drop). Returns ``(conn, gcfg)`` or raises the mapped error.
+        """
+        from back.core.graphdb.engine_config import neo4j_section
+        from back.core.graphdb.neo4j.Neo4jConnection import (
+            Neo4jConnection,
+            resolve_neo4j_database,
+        )
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        global_config_service.load(host, token, registry_cfg, force=True)
+        gcfg = neo4j_section(
+            global_config_service.get_graph_engine_config(host, token, registry_cfg)
+        )
+        if not isinstance(gcfg, dict) or not gcfg.get("uri"):
+            raise ValidationError(
+                "Neo4j engine_config is empty — set the Bolt URI/Username and Save first."
+            )
+        conn = Neo4jConnection(
+            uri=str(gcfg["uri"]).strip(),
+            database=resolve_neo4j_database(gcfg),
+            auth_method=str(gcfg.get("auth_method") or "basic").strip() or "basic",
+            engine_config=gcfg,
+            encrypted=bool(gcfg.get("encrypted", True)),
+        )
+        return conn, gcfg
+
+    @staticmethod
+    def graph_engine_neo4j_databases_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List Neo4j databases on the server for the Domain Info DB selector (P4)."""
+        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+
+        conn, gcfg = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        try:
+            names = Neo4jReadOps(conn).list_databases()
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        # Always include the configured database so the selector is never empty.
+        configured = conn.database
+        if configured and configured not in names:
+            names = [configured] + names
+        return {"success": True, "databases": names, "configured": configured}
+
+    @staticmethod
+    def graph_engine_neo4j_labels_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List materialised Neo4j graphs (marker labels) + counts for the admin Objects tab (P5)."""
+        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+
+        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        try:
+            labels = Neo4jReadOps(conn).list_labels()
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return {"success": True, "graphs": labels, "database": conn.database}
+
+    @staticmethod
+    def graph_engine_neo4j_health_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Bolt health probe for the Neo4j admin Health tab (P5)."""
+        import time as _time
+
+        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        t0 = _time.monotonic()
+        try:
+            conn.get_driver().verify_connectivity()
+            conn.run("RETURN 1 AS probe")
+            ok, err = True, None
+        except Exception as exc:  # noqa: BLE001
+            ok, err = False, "%s: %s" % (type(exc).__name__, exc)
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "success": True,
+            "ok": ok,
+            "error": err,
+            "uri": conn.uri,
+            "database": conn.database,
+            "latency_ms": round((_time.monotonic() - t0) * 1000.0, 1),
+        }
+
+    @staticmethod
+    def graph_engine_neo4j_drop_label_result(
+        label: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Drop one Neo4j graph (marker label): its nodes, rels, constraint, schema map (P5)."""
+        from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps, sanitise_label
+
+        clean = (label or "").strip()
+        if not clean:
+            raise ValidationError("No graph label provided to drop.")
+        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        try:
+            # drop_table sanitises internally; pass the label through unchanged
+            # (it already equals the sanitised marker as listed by list_labels).
+            Neo4jWriteOps(conn).drop_table(clean)
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return {"success": True, "dropped": sanitise_label(clean)}
+
+    @staticmethod
     def graph_engine_uc_catalogs_result(
         session_mgr: SessionManager,
         settings: Settings,

@@ -394,6 +394,41 @@ class TestExportImport:
         assert loaded["actions"] == actions
         assert loaded["bridges"][0]["label"] == "Owns"
 
+    def test_export_includes_neo4j_database(self, domain_session):
+        """Per-domain Neo4j database must survive UC export alongside graph_backend."""
+        domain_session.info["graph_backend"] = "neo4j"
+        domain_session.info["neo4j_database"] = "insurbricks"
+        export = domain_session.export_for_save()
+        assert export["info"]["neo4j_database"] == "insurbricks"
+
+    def test_neo4j_database_round_trip(self, domain_session):
+        domain_session.info["name"] = "RoundTrip"
+        domain_session.info["graph_backend"] = "neo4j"
+        domain_session.info["neo4j_database"] = "insurbricks"
+        export = domain_session.export_for_save()
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.info["neo4j_database"] == "insurbricks"
+
+    def test_neo4j_database_defaults_empty_on_import(self, domain_session):
+        """A legacy export without neo4j_database imports as empty (no crash)."""
+        domain_data = {
+            "info": {"name": "Legacy", "graph_backend": "neo4j"},
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "O", "base_uri": "http://x#", "classes": [],
+                        "properties": [], "constraints": [], "swrl_rules": [],
+                        "axioms": [], "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                }
+            },
+        }
+        domain_session.import_from_file(domain_data)
+        assert domain_session.info["neo4j_database"] == ""
+
     def test_import_from_file(self, domain_session):
         domain_data = {
             "info": {"name": "Imported", "description": "Test import"},

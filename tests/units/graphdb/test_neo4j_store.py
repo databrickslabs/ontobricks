@@ -79,7 +79,7 @@ class TestCapabilityFlags:
 
     def test_supports_graph_model(self):
         s = _store()
-        assert s.supports_graph_model is False  # flat-triple model in v1
+        assert s.supports_graph_model is True  # typed property-graph model
 
     def test_query_dialect(self):
         s = _store()
@@ -141,14 +141,14 @@ class TestGetNodeTable:
 
 class TestCRUDCypher:
     def test_create_table_creates_constraint(self):
+        # Typed-node model: uniqueness is on node identity (uri), not the SPO tuple.
         s = _store()
         s.create_table("dom_V1")
         cypher = s._run.call_args.args[0]
         assert "CREATE CONSTRAINT" in cypher
-        assert "triple_dom_V1_spo" in cypher
-        # Neo4j 5+ rejects multi-label CREATE CONSTRAINT; single backtick label.
-        assert "(t:`dom_V1`)" in cypher
-        assert "(t.subject, t.predicate, t.object) IS UNIQUE" in cypher
+        assert "node_dom_V1_uri" in cypher
+        assert "(n:`dom_V1`)" in cypher
+        assert "n.uri IS UNIQUE" in cypher
 
     def test_drop_table_drops_constraint_and_nodes(self):
         s = _store()
@@ -158,43 +158,51 @@ class TestCRUDCypher:
         assert any("DETACH DELETE" in c for c in cyphers)
 
     def test_insert_triples_uses_unwind_merge(self):
+        # Typed-node model: nodes MERGE on uri, URI-objects become relationships.
         s = _store()
+        base = "https://databricks-ontology.com/dom/"
         triples = [
-            {"subject": "ex:a", "predicate": "ex:p", "object": "ex:b"},
-            {"subject": "ex:b", "predicate": "ex:q", "object": "ex:c"},
+            {"subject": f"{base}A/a", "predicate": f"{base}p", "object": f"{base}B/b"},
+            {"subject": f"{base}B/b", "predicate": f"{base}q", "object": f"{base}C/c"},
         ]
         count = s.insert_triples("dom_V1", triples)
         assert count == 2
-        cypher = s._run.call_args.args[0]
-        assert "UNWIND $rows" in cypher
-        assert "MERGE" in cypher
-        # Verify the rows parameter shape
-        rows = s._run.call_args.kwargs.get("rows", [])
-        assert len(rows) == 2
-        assert rows[0]["subject"] == "ex:a"
+        all_cypher = " ".join(c.args[0] for c in s._run.call_args_list if c.args)
+        # nodes merged on uri under the graph marker label
+        assert "MERGE (n:`dom_V1` {uri: r.uri})" in all_cypher
+        assert "UNWIND $rows" in all_cypher
+        # URI-object predicate p became a relationship, not a property
+        assert "MERGE (s)-[:`p`]->(o)" in all_cypher
 
     def test_insert_triples_empty_returns_zero(self):
         s = _store()
         assert s.insert_triples("dom_V1", []) == 0
         s._run.assert_not_called()
 
-    def test_count_triples_emits_count_cypher(self):
+    def test_count_triples_sums_types_props_rels(self):
+        # Typed model: count = type-labels + literal props(+name) + relationships.
         s = _store()
-        s._run.return_value = [{"cnt": 42}]
-        assert s.count_triples("dom_V1") == 42
-        cypher = s._run.call_args.args[0]
-        assert "count(t) AS cnt" in cypher
+        # node-stats query, then rel-count query
+        s._run.side_effect = [
+            [{"type_triples": 25, "prop_triples": 60, "nodes": 30}],
+            [{"rels": 15}],
+        ]
+        assert s.count_triples("dom_V1") == 25 + 60 + 15
 
     def test_table_exists_via_show_constraints(self):
         s = _store()
-        s._run.return_value = [{"name": "triple_dom_V1_spo"}]
+        s._run.return_value = [{"name": "node_dom_V1_uri"}]
         assert s.table_exists("dom_V1") is True
         cypher = s._run.call_args.args[0]
         assert "SHOW CONSTRAINTS" in cypher
 
     def test_get_status_reports_format(self):
         s = _store()
-        s._run.return_value = [{"cnt": 7}]
+        # get_status → count_triples (node-stats + rel-count)
+        s._run.side_effect = [
+            [{"type_triples": 3, "prop_triples": 4, "nodes": 3}],
+            [{"rels": 0}],
+        ]
         status = s.get_status("dom_V1")
         assert status["format"] == "neo4j"
         assert status["count"] == 7
@@ -211,31 +219,40 @@ class TestCRUDCypher:
 # ---------------------------------------------------------------------------
 
 class TestNamedQueriesEmitCypher:
-    def test_get_aggregate_stats_runs_cypher(self):
+    def test_get_aggregate_stats_reconstructs_from_graph(self):
+        # Typed model: node-stats query, rel-stats query, has-labels query.
         s = _store()
-        s._run.return_value = [
-            {
-                "total": 100,
+        s._run.side_effect = [
+            [{  # node stats
                 "distinct_subjects": 30,
-                "distinct_predicates": 8,
                 "type_assertion_count": 25,
                 "label_count": 12,
-            }
+                "prop_triples": 60,
+                "prop_key_sets": [["city", "country"], ["line"]],
+                "_ignore": 0,
+            }],
+            [{"rels": 15, "rel_types": ["holds", "filedBy"]}],  # rel stats
+            [{"c": 30}],  # has labels
         ]
         stats = s.get_aggregate_stats("dom_V1")
-        assert stats["total"] == 100
         assert stats["distinct_subjects"] == 30
-        cypher = s._run.call_args.args[0]
-        assert "MATCH (t:`dom_V1`)" in cypher
-        assert "count(t) AS total" in cypher
+        assert stats["type_assertion_count"] == 25
+        assert stats["total"] == 25 + 60 + 15
+        # distinct predicates: {city,country,line} + {holds,filedBy} + rdf:type
+        assert stats["distinct_predicates"] == 3 + 2 + 1
 
     def test_find_subjects_by_type_paginates(self):
         s = _store()
-        s._run.return_value = [{"subject": "ex:a"}, {"subject": "ex:b"}]
-        result = s.find_subjects_by_type("dom_V1", "ex:Class", limit=10, offset=5)
-        assert result == ["ex:a", "ex:b"]
+        base = "https://databricks-ontology.com/dom/"
+        # 1st run: schema-map load (empty → derives label from uri local name);
+        # 2nd run: the paginated node query.
+        s._run.side_effect = [
+            [],  # schema load
+            [{"subject": f"{base}C/a"}, {"subject": f"{base}C/b"}],
+        ]
+        result = s.find_subjects_by_type("dom_V1", f"{base}Class", limit=10, offset=5)
+        assert result == [f"{base}C/a", f"{base}C/b"]
         kwargs = s._run.call_args.kwargs
-        assert kwargs["type_uri"] == "ex:Class"
         assert kwargs["limit"] == 10
         assert kwargs["offset"] == 5
 
@@ -277,6 +294,35 @@ class TestFactoryDispatch:
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         assert GraphDBFactory.NEO4J_AVAILABLE is True
+
+    def test_domain_neo4j_database_overrides_config(self):
+        # Per-domain info.neo4j_database wins over the global config database (P4).
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        factory = GraphDBFactory()
+        domain = MagicMock()
+        domain.info = {"name": "dom", "neo4j_database": "insurbricks"}
+        domain.current_version = "1"
+        store = factory.create(
+            domain, settings=None, engine="neo4j",
+            engine_config=_basic_config(database="neo4j"),
+        )
+        assert store is not None
+        assert store._database == "insurbricks"
+
+    def test_empty_domain_database_keeps_configured_default(self):
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        factory = GraphDBFactory()
+        domain = MagicMock()
+        domain.info = {"name": "dom", "neo4j_database": ""}
+        domain.current_version = "1"
+        store = factory.create(
+            domain, settings=None, engine="neo4j",
+            engine_config=_basic_config(database="neo4j"),
+        )
+        assert store is not None
+        assert store._database == "neo4j"
 
 
 # ---------------------------------------------------------------------------
@@ -429,13 +475,20 @@ class TestCypherLogging:
         # ``ontobricks.core.graphdb.neo4j.Neo4jConnection``.
         # LogManager.setup() sets propagate=False on the ontobricks tree, so
         # attach caplog's handler directly (same pattern as TaskManager tests).
+        # Replicate that propagate=False here: unit tests don't run
+        # LogManager.setup(), so the logger still propagates to the root, where
+        # pytest's caplog handler also lives — leaving propagation on would
+        # double-capture the single emitted record (once on target, once on root).
         target = logging.getLogger("ontobricks.core.graphdb.neo4j.Neo4jConnection")
+        prev_propagate = target.propagate
+        target.propagate = False
         target.addHandler(caplog.handler)
         target.setLevel(logging.INFO)
         try:
             rows = s._run("MATCH (t:`X`) WHERE t.subject = $s RETURN t", s="ex:a")
         finally:
             target.removeHandler(caplog.handler)
+            target.propagate = prev_propagate
 
         assert len(rows) == 2
         info_records = [r for r in caplog.records if r.levelname == "INFO"]

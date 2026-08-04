@@ -222,12 +222,34 @@ function _applyBuildGraphEngineUi(dtExist) {
             if (boltRow) boltRow.classList.remove('d-none');
             if (lkBuild) lkBuild.classList.add('d-none');
             if (lkIcon) lkIcon.classList.add('d-none');
-            if (graphFn) graphFn.textContent = (cfg.graph_name || 'Knowledge Graph');
+            // Neo4j Graph DB card: show the marker label (or FQN display) and a
+            // Neo4j-specific build note. No Postgres/UC concepts apply here.
+            if (graphFn) {
+                var neoName = dt.graph_display
+                    || dt.neo4j_marker_label
+                    || cfg.graph_name
+                    || 'Knowledge Graph';
+                if (dt.neo4j_graph_exists == null && dt.pending) {
+                    graphFn.innerHTML = _archSpinnerName();
+                } else {
+                    graphFn.textContent = neoName;
+                }
+            }
+            var neoBuild = document.getElementById('dtNeo4jBuildNote');
+            if (neoBuild) {
+                neoBuild.classList.remove('d-none');
+                var neoDbEl = document.getElementById('fnNeo4jDatabase');
+                var neoLblEl = document.getElementById('fnNeo4jLabel');
+                if (neoDbEl) neoDbEl.textContent = dt.neo4j_database || cfg.neo4j_database || 'neo4j';
+                if (neoLblEl) neoLblEl.textContent = dt.neo4j_marker_label || cfg.graph_name || '…';
+            }
         } else {
             if (syncRow) syncRow.classList.remove('d-none');
             if (boltRow) boltRow.classList.add('d-none');
             if (lkBuild) lkBuild.classList.remove('d-none');
             if (lkIcon) lkIcon.classList.remove('d-none');
+            var neoBuild2 = document.getElementById('dtNeo4jBuildNote');
+            if (neoBuild2) neoBuild2.classList.add('d-none');
         }
     }
     _renderEngineUi(eng);
@@ -325,9 +347,16 @@ function _applyDtExistence(data) {
     }
 
     var pending = data && data.pending === true;
+    var viewIsNeo4j = (data.graph_engine === 'neo4j')
+        || ((window.__TRIPLESTORE_CONFIG || {}).graph_engine === 'neo4j');
     var viewEl = document.getElementById('dtExistView');
     if (viewEl) {
-        if (pending || (data.view_exists == null && !data.view_check_error && data.view_table)) {
+        if (viewIsNeo4j) {
+            // The SQL VIEW is not part of the Neo4j build path (triples go
+            // straight to the graph over Bolt) — show N/A, never a stuck spinner.
+            viewEl.innerHTML = _badge(null, 'Exists', 'Not found', 'N/A');
+            viewEl.title = 'Not used on the Neo4j path — the graph is written directly over Bolt.';
+        } else if (pending || (data.view_exists == null && !data.view_check_error && data.view_table)) {
             viewEl.innerHTML = _archSpinnerBadge('Loading');
             viewEl.title = '';
         } else {
@@ -352,11 +381,38 @@ function _applyDtExistence(data) {
         else if (data.view_exists === false) zcCard.classList.add('border-danger');
     }
 
+    var isNeo4j = (data.graph_engine === 'neo4j')
+        || ((window.__TRIPLESTORE_CONFIG || {}).graph_engine === 'neo4j');
+    // Graph DB existence flag is engine-specific: Neo4j marker-label presence
+    // vs Lakebase Postgres table presence.
+    var graphExists = isNeo4j ? data.neo4j_graph_exists : data.lakebase_table_exists;
+
     var graphCard = document.getElementById('dtGraphCard');
     if (graphCard) {
         graphCard.classList.remove('border-success', 'border-danger');
-        if (data.lakebase_table_exists === true) graphCard.classList.add('border-success');
-        else if (data.lakebase_table_exists === false) graphCard.classList.add('border-danger');
+        if (graphExists === true) graphCard.classList.add('border-success');
+        else if (graphExists === false) graphCard.classList.add('border-danger');
+    }
+
+    // Neo4j: paint the Graph DB card's existence badge (Lakebase paints its own
+    // #dtLakebaseTableExists inside _applyBuildGraphEngineUi).
+    if (isNeo4j) {
+        var neoBadge = document.getElementById('dtLakebaseTableExists');
+        if (neoBadge) {
+            if (pending && graphExists == null && !data.neo4j_check_error) {
+                neoBadge.innerHTML = _archSpinnerBadge('Loading');
+            } else if (graphExists === true) {
+                neoBadge.innerHTML = _badge(true, 'Exists', 'Not found', 'N/A');
+            } else if (graphExists === false) {
+                neoBadge.innerHTML = _badge(false, 'Exists', 'Not built', 'N/A');
+            } else {
+                neoBadge.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning" style="font-size:.65rem;"><i class="bi bi-question-circle me-1"></i>Unable to check</span>';
+                var nsp = neoBadge.querySelector('span');
+                if (nsp) nsp.title = data.neo4j_check_error
+                    ? String(data.neo4j_check_error)
+                    : 'Could not reach Neo4j to verify the graph.';
+            }
+        }
     }
 
     // Global info: last update & last built
@@ -420,11 +476,17 @@ async function initSyncSection() {
 
         const di = payload && (payload.domain_info || payload.project_info);
         if (di && di.success && di.info) {
-            const prevEng = cfg.graph_engine || 'lakebase';
+            // Prefer the authoritative per-domain backend from /domain/info
+            // (``graph_backend``: lakebase | databricks | neo4j) over whatever the
+            // pre-existence seed left in cfg — otherwise a Neo4j domain paints as
+            // Lakebase until (and unless) dt_existence later corrects it.
+            const backend = di.info.graph_backend || di.info.graph_engine || '';
+            const prevEng = backend || cfg.graph_engine || 'lakebase';
             cfg = {
                 view_table: di.info.view_table || '',
                 graph_name: di.info.graph_name || '',
                 graph_engine: prevEng,
+                neo4j_database: di.info.neo4j_database || '',
                 cache: {},
             };
             window.__TRIPLESTORE_CONFIG = cfg;

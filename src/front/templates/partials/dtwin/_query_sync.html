@@ -198,6 +198,15 @@
                                 (<code id="fnLkDatabase2">…</code>.<code id="fnLkSchema2">…</code>.<code id="fnLkTable2">…</code>)<span id="fnLkSyncNote" class="d-none"> and registers a Lakeflow synced table as <code id="fnLkSyncedUc2"></code></span>.
                             </div>
 
+                            <!-- Neo4j build note (engine=neo4j; JS toggles vs the Lakebase one) -->
+                            <div class="dt-arch-build-note w-100 d-none" id="dtNeo4jBuildNote">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Build writes a typed property graph to Neo4j over Bolt — nodes
+                                (keyed on entity URI), <code>rdf:type</code> labels, and relationships —
+                                into database <code id="fnNeo4jDatabase">neo4j</code> under marker label
+                                <code id="fnNeo4jLabel">…</code>. No SQL view or UC-synced table is used on this path.
+                            </div>
+
                             <!-- Hidden: individual fields + compat elements -->
                             <code id="dtLakebaseDatabase" class="d-none"></code>
                             <code id="dtLakebaseSchema" class="d-none"></code>

@@ -81,6 +81,10 @@ def get_empty_domain() -> Dict[str, Any]:
                 "review_quorum": 1,
                 # Mandatory per-domain graph backend: lakebase | databricks | neo4j.
                 "graph_backend": "lakebase",
+                # Per-domain Neo4j database override (empty → use the workspace
+                # global connection default). Only meaningful when
+                # graph_backend == "neo4j" on a multi-database Neo4j flavor.
+                "neo4j_database": "",
             },
             "triplestore": {
                 "stats": {},
@@ -1342,6 +1346,9 @@ class DomainSession:
             "graph_backend": normalize_graph_backend(
                 self._data["domain"]["info"].get("graph_backend")
             ),
+            "neo4j_database": str(
+                self._data["domain"]["info"].get("neo4j_database", "") or ""
+            ).strip(),
             "last_update": self._data["domain"].get("last_update", ""),
             "last_build": self._data["domain"].get("last_build", ""),
         }
@@ -1447,6 +1454,9 @@ class DomainSession:
             self._data["domain"]["info"]["graph_backend"] = normalize_graph_backend(
                 info.get("graph_backend")
             )
+            self._data["domain"]["info"]["neo4j_database"] = str(
+                info.get("neo4j_database", "") or ""
+            ).strip()
             self._data["domain"]["last_update"] = info.get("last_update", "")
             self._data["domain"]["last_build"] = info.get("last_build", "")
             ts = self._data["domain"].setdefault(

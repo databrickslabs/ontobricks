@@ -3234,6 +3234,210 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // =====================================================================
+    //  NEO4J ADMIN — Objects (list + drop graphs) & Health (Bolt probe), P5
+    //  Mirrors the Lakebase Objects / Health tabs. Reuses the shared
+    //  #lkDropConfirmModal drop-confirmation modal.
+    // =====================================================================
+
+    // Graphs listed by the last loadNeo4jLabels() call, keyed by marker label,
+    // so the per-row Drop handler looks up the item without embedding it in the
+    // DOM (matches the _lkDomainRegistry pattern for Lakebase objects).
+    let _neo4jLabelRegistry = {};
+
+    async function loadNeo4jLabels() {
+        const btn    = document.getElementById('btnLoadNeo4jLabels');
+        const result = document.getElementById('neo4jLabelsResult');
+        if (!result) return;
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Loading…';
+        }
+        result.innerHTML = '';
+        _neo4jLabelRegistry = {};
+
+        try {
+            const resp = await fetch('/settings/graph-engine/neo4j-labels', { credentials: 'same-origin' });
+            const data = resp.ok ? await resp.json() : {};
+            if (!data.success) {
+                result.innerHTML = '<div class="alert alert-warning small py-2 mt-2">'
+                    + escapeHtmlSettings(data.detail || data.message || 'Failed to load graphs') + '</div>';
+                return;
+            }
+
+            const graphs = data.graphs || [];
+            const database = data.database || '';
+            if (graphs.length === 0) {
+                result.innerHTML = '<p class="small text-muted mt-2">No OntoBricks graphs found in database <code>'
+                    + escapeHtmlSettings(database) + '</code>.</p>';
+                return;
+            }
+
+            let html = '<p class="small text-muted mt-2 mb-3">Database: <code>'
+                + escapeHtmlSettings(database) + '</code> · '
+                + graphs.length + ' graph' + (graphs.length === 1 ? '' : 's') + '.</p>';
+            html += '<table class="table table-sm table-hover ob-table mb-0">'
+                + '<thead class="table-light"><tr>'
+                + '<th>Graph</th>'
+                + '<th class="text-end">Nodes</th>'
+                + '<th class="text-end">Relationships</th>'
+                + '<th class="text-end">Action</th>'
+                + '</tr></thead><tbody>';
+            graphs.forEach(g => {
+                _neo4jLabelRegistry[g.label] = g;
+                html += '<tr>'
+                    + '<td class="font-monospace small"><i class="bi bi-bezier2 me-1 text-primary"></i>'
+                    + escapeHtmlSettings(g.label) + '</td>'
+                    + '<td class="text-end">' + Number(g.nodes || 0).toLocaleString() + '</td>'
+                    + '<td class="text-end">' + Number(g.edges || 0).toLocaleString() + '</td>'
+                    + '<td class="text-end">'
+                    + '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 n4-drop-graph-btn"'
+                    + ' data-n4-label="' + escapeHtmlSettings(g.label) + '" title="Drop graph">'
+                    + '<i class="bi bi-trash3"></i></button>'
+                    + '</td></tr>';
+            });
+            html += '</tbody></table>';
+            result.innerHTML = html;
+
+            result.querySelectorAll('.n4-drop-graph-btn').forEach(b => {
+                b.addEventListener('click', () => dropNeo4jLabel(b.getAttribute('data-n4-label')));
+            });
+        } catch (e) {
+            result.innerHTML = '<div class="alert alert-danger small py-2 mt-2">'
+                + escapeHtmlSettings(e.message || 'Network error') + '</div>';
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Load graphs';
+            }
+        }
+    }
+
+    function dropNeo4jLabel(label) {
+        const g = _neo4jLabelRegistry[label] || { label: label, nodes: 0, edges: 0 };
+        const modalEl    = document.getElementById('lkDropConfirmModal');
+        const bodyEl     = document.getElementById('lkDropConfirmModalBody');
+        const confirmBtn = document.getElementById('lkDropConfirmBtn');
+        const detail = '<br><small class="text-muted">Deletes all '
+            + Number(g.nodes || 0).toLocaleString() + ' node(s), '
+            + Number(g.edges || 0).toLocaleString() + ' relationship(s), the uniqueness '
+            + 'constraint and the schema map.</small>';
+        if (!modalEl || !bodyEl || !confirmBtn) {
+            if (window.confirm('Drop graph "' + label + '"? This deletes all its nodes and relationships.')) {
+                _execDropNeo4jLabel(label);
+            }
+            return;
+        }
+        bodyEl.innerHTML = 'Drop graph <code>' + escapeHtmlSettings(label) + '</code>?' + detail;
+        // Replace the button to clear any previously-stacked listener.
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        newBtn.addEventListener('click', function () {
+            modal.hide();
+            _execDropNeo4jLabel(label);
+        });
+        modal.show();
+    }
+
+    async function _execDropNeo4jLabel(label) {
+        const result = document.getElementById('neo4jLabelsResult');
+        if (result) {
+            result.insertAdjacentHTML('afterbegin',
+                '<div class="alert alert-info small py-2 mb-2" id="n4DropSpinner">'
+                + '<span class="spinner-border spinner-border-sm me-1"></span> Dropping <code>'
+                + escapeHtmlSettings(label) + '</code>…</div>');
+        }
+        try {
+            const resp = await fetch('/settings/graph-engine/neo4j-drop-label', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ label: label }),
+            });
+            let data = {};
+            try { data = await resp.json(); } catch (_) {}
+            if (data.success) {
+                if (typeof showNotification === 'function') {
+                    showNotification('Dropped graph ' + (data.dropped || label), 'success');
+                }
+                await loadNeo4jLabels();
+            } else {
+                const msg = data.detail || data.message || ('HTTP ' + resp.status);
+                if (result) {
+                    const sp = document.getElementById('n4DropSpinner');
+                    if (sp) sp.remove();
+                    result.insertAdjacentHTML('afterbegin',
+                        '<div class="alert alert-danger small py-2 mb-2">' + escapeHtmlSettings(msg) + '</div>');
+                }
+            }
+        } catch (e) {
+            const sp = document.getElementById('n4DropSpinner');
+            if (sp) sp.remove();
+            if (result) {
+                result.insertAdjacentHTML('afterbegin',
+                    '<div class="alert alert-danger small py-2 mb-2">' + escapeHtmlSettings(e.message || 'Network error') + '</div>');
+            }
+        }
+    }
+
+    async function loadNeo4jHealth() {
+        const msgEl = document.getElementById('neo4jHealthMessage');
+        const dl    = document.getElementById('neo4jHealthDl');
+        const btn   = document.getElementById('btnRefreshNeo4jHealth');
+        if (!msgEl || !dl) return;
+
+        if (btn) btn.disabled = true;
+        dl.innerHTML = '';
+        msgEl.style.display = '';
+        msgEl.className = 'small mb-2 text-muted';
+        msgEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Checking Neo4j…';
+
+        function row(label, value) {
+            return '<dt class="col-sm-4 text-muted">' + escapeHtmlSettings(label) + '</dt>'
+                + '<dd class="col-sm-8 font-monospace text-break">' + value + '</dd>';
+        }
+
+        try {
+            const resp = await fetch('/settings/graph-engine/neo4j-health', { credentials: 'same-origin' });
+            const data = resp.ok ? await resp.json() : {};
+            if (!data.success) {
+                msgEl.className = 'small mb-2 text-warning';
+                msgEl.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>'
+                    + escapeHtmlSettings(data.detail || data.message || 'Health check failed');
+                return;
+            }
+            msgEl.className = 'small mb-2 ' + (data.ok ? 'text-success' : 'text-danger');
+            msgEl.innerHTML = '<i class="bi bi-' + (data.ok ? 'check-circle' : 'x-circle') + ' me-1"></i>'
+                + (data.ok ? 'Bolt handshake OK' : escapeHtmlSettings(data.error || 'Unreachable'));
+            dl.innerHTML = (
+                row('Bolt URI', escapeHtmlSettings(String(data.uri || '')))
+                + row('Database', escapeHtmlSettings(String(data.database || '')))
+                + row('Latency', escapeHtmlSettings(String(data.latency_ms != null ? data.latency_ms + ' ms' : '')))
+                + (data.ok ? '' : row('Error', escapeHtmlSettings(String(data.error || ''))))
+            );
+        } catch (e) {
+            msgEl.className = 'small mb-2 text-danger';
+            msgEl.innerHTML = '<i class="bi bi-x-circle me-1"></i>' + escapeHtmlSettings(e.message || 'Network error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    document.getElementById('btnLoadNeo4jLabels')?.addEventListener('click', loadNeo4jLabels);
+    document.getElementById('btnRefreshNeo4jHealth')?.addEventListener('click', loadNeo4jHealth);
+
+    // Lazy-load each admin tab the first time it is shown (parity with Lakebase).
+    document.getElementById('n4tab-objects')?.addEventListener('shown.bs.tab', function () {
+        if (!_neo4jLabelRegistry || Object.keys(_neo4jLabelRegistry).length === 0) {
+            loadNeo4jLabels();
+        }
+    });
+    document.getElementById('n4tab-health')?.addEventListener('shown.bs.tab', function () {
+        loadNeo4jHealth();
+    });
+
     document.querySelectorAll('.btn-save-settings').forEach(saveBtn => saveBtn.addEventListener('click', async function () {
         const btn = this;
         btn.disabled = true;

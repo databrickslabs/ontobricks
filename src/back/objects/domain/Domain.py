@@ -171,6 +171,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
+            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -306,6 +307,13 @@ class Domain:
                         self._s.info.get("graph_backend"),
                     )
                 ),
+                "neo4j_database": str(
+                    data.get(
+                        "neo4j_database",
+                        self._s.info.get("neo4j_database", ""),
+                    )
+                    or ""
+                ).strip(),
             }
         )
 
@@ -342,6 +350,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
+            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
         }
 
     @staticmethod
@@ -438,6 +447,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
+            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
             "delta": delta,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,
