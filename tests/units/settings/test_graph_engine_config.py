@@ -268,6 +268,112 @@ class TestGlobalConfigGraphEngineConfig:
 
 
 # ---------------------------------------------------------------
+#  Bulk loading sync_mode — registry round-trip (regression)
+#
+#  Settings → Lakebase → Bulk loading persists App-managed /
+#  Managed sync under graph_engine_config.lakebase.sync_mode in the
+#  Lakebase registry global_config JSONB. Existing tests mock _save and
+#  only assert the write payload; this class exercises set → store → get.
+# ---------------------------------------------------------------
+
+
+class _FakeGlobalConfigStore:
+    """Minimal store mirroring Lakebase ``global_config`` JSONB merge."""
+
+    backend = "lakebase"
+
+    def __init__(self) -> None:
+        self._global: dict = {}
+
+    def load_global_config(self) -> dict:
+        return dict(self._global)
+
+    def save_global_config(self, updates: dict) -> tuple:
+        data = self.load_global_config()
+        data.update(updates or {})
+        self._global = data
+        return True, "ok"
+
+
+class TestBulkLoadingSyncModeRegistryRoundTrip:
+    """App-managed ↔ Managed sync must survive set → store → get."""
+
+    def _svc_with_store(self):
+        svc = GlobalConfigService()
+        store = _FakeGlobalConfigStore()
+        return svc, store
+
+    def test_sync_mode_round_trips_app_managed_and_managed_synced(self):
+        svc, store = self._svc_with_store()
+        with patch.object(svc, "_store_for", return_value=store):
+            # 1) Persist Managed sync (+ options)
+            ok, _ = svc.set_graph_engine_config(
+                "h",
+                "t",
+                REGISTRY_CFG,
+                {
+                    "lakebase": {
+                        "schema": "ontobricks_graph",
+                        "database": "analytics",
+                        "sync_mode": "managed_synced",
+                        "sync_table_mode": "snapshot",
+                        "sync_timeout_s": 900,
+                        "sync_uc_catalog": "main",
+                    }
+                },
+            )
+            assert ok
+            lb = svc.get_graph_engine_config("h", "t", REGISTRY_CFG)["lakebase"]
+            assert lb["sync_mode"] == "managed_synced"
+            assert lb["sync_table_mode"] == "snapshot"
+            assert lb["sync_timeout_s"] == 900
+            assert lb["sync_uc_catalog"] == "main"
+            assert lb["schema"] == "ontobricks_graph"
+
+            # 2) Flip to App-managed (UI clears managed-only keys)
+            ok, _ = svc.set_graph_engine_config(
+                "h",
+                "t",
+                REGISTRY_CFG,
+                {
+                    "lakebase": {
+                        "schema": "ontobricks_graph",
+                        "database": "analytics",
+                        "sync_mode": "app_managed",
+                    }
+                },
+            )
+            assert ok
+            lb = svc.get_graph_engine_config("h", "t", REGISTRY_CFG)["lakebase"]
+            assert lb["sync_mode"] == "app_managed"
+            assert "sync_uc_catalog" not in lb
+            assert "sync_table_mode" not in lb
+
+            # 3) Flip back to Managed sync
+            ok, _ = svc.set_graph_engine_config(
+                "h",
+                "t",
+                REGISTRY_CFG,
+                {
+                    "lakebase": {
+                        "schema": "ontobricks_graph",
+                        "database": "analytics",
+                        "sync_mode": "managed_synced",
+                        "sync_table_mode": "triggered",
+                        "sync_timeout_s": 600,
+                        "sync_uc_catalog": "main",
+                    }
+                },
+            )
+            assert ok
+            lb = svc.get_graph_engine_config("h", "t", REGISTRY_CFG)["lakebase"]
+            assert lb["sync_mode"] == "managed_synced"
+            assert lb["sync_table_mode"] == "triggered"
+            assert lb["sync_timeout_s"] == 600
+            assert lb["sync_uc_catalog"] == "main"
+
+
+# ---------------------------------------------------------------
 #  SettingsService – graph engine config orchestration
 # ---------------------------------------------------------------
 

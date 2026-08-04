@@ -746,3 +746,28 @@ Modified files:
 - src/front/static/domain/js/domain-information.js
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4476 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.39s
+
+## Regression: Bulk loading sync_mode registry round-trip
+
+Context: Settings → Lakebase → Bulk loading (App-managed / Managed sync) was
+verified live against the Lakebase registry; unit tests only mocked `_save`
+and did not assert set → store → get. Lock the contract with an in-memory
+store round-trip so mode flips cannot silently regress.
+
+Changes:
+
+1. `tests/units/settings/test_graph_engine_config.py`
+   `TestBulkLoadingSyncModeRegistryRoundTrip` — fake Lakebase-style
+   `global_config` store; asserts `managed_synced` → `app_managed` →
+   `managed_synced` via `set_graph_engine_config` / `get_graph_engine_config`.
+2. `documentation/superpowers/specs/2026-08-04-lakebase-bulk-loading-sync-mode-registry-design.md`
+   Design note for the regression.
+3. `documentation/superpowers/plans/2026-08-04-lakebase-bulk-loading-sync-mode-registry.md`
+   Implementation plan.
+
+Modified files:
+- tests/units/settings/test_graph_engine_config.py
+- documentation/superpowers/specs/2026-08-04-lakebase-bulk-loading-sync-mode-registry-design.md
+- documentation/superpowers/plans/2026-08-04-lakebase-bulk-loading-sync-mode-registry.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4483 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.58s
