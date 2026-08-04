@@ -68,7 +68,8 @@ JobMetrics read-back (DatabricksClient.execute_query, SQL warehouse)
   ├── top_nodes_query        (unchanged — still the bounded top-N union)
   ├── type_profiles_query    (unchanged)
   ├── type_predicates_query  (unchanged)
-  └── distributions_query    ← NEW: 20 bin counts + min/max/mean per metric
+  ├── distribution_bounds_query  ← NEW: min/max/mean per metric
+  └── distributions_query        ← NEW: 20 bin counts per metric
                     ↓
 MetricsResult.distributions → to_dict() → graph_analytics.result (jsonb)
                     ↓
@@ -84,41 +85,60 @@ concern that should not become a fifth job output table.
 
 ## Components
 
-### 1. `distributions_query` — `back/core/graph_analysis/JobMetrics.py`
+### 1. Distribution read-back SQL — `back/core/graph_analysis/JobMetrics.py`
 
-A new module-level query builder alongside the four existing ones, taking
-`(output_table, bins)` and returning one row per `(metric, bin_index)` plus the
-per-metric `min`, `max` and `mean`.
+Two new module-level query builders alongside the four existing ones:
+
+- `distribution_bounds_query(output_table)` — one row carrying `MIN`, `MAX` and
+  `AVG` for each of the five metrics.
+- `distributions_query(output_table, bins)` — one row per
+  `(metric, bin_index)` with a node count.
+
+Two statements rather than one: combining them forces the bounds into either a
+repeated `CASE` expression in the `GROUP BY` or a constant-ordinal `GROUP BY`,
+and the portable spelling of each differs across the three engines below. Two
+plain aggregates are individually obvious and individually testable, and the
+extra warehouse round trip is irrelevant next to a job that takes minutes.
 
 `bins` is a parameter of the builder so the SQLite tests can exercise a small bin
 count, but it has exactly one production call site and a module-level default of
 20. It is deliberately **not** plumbed through to `Settings` or the UI.
 
-**The SQL must be SQLite-portable.** `tests/units/core/test_job_metrics.py`
-executes the read-back SQL for real against an in-memory SQLite database, which
-is what makes the read-back verifiable without a warehouse. That rules out
-`width_bucket`, `percentile_approx`, `histogram_numeric` and lateral `UNNEST`.
+**The SQL must be portable across SQLite, Spark and Postgres.**
+`tests/units/core/test_job_metrics.py` executes the read-back SQL for real
+against an in-memory SQLite database *and* asserts every read-back statement
+parses under all three sqlglot dialects. That rules out `width_bucket`,
+`percentile_approx`, `histogram_numeric` and lateral `UNNEST`.
 
-The shape that survives both engines: a CTE computing `MIN`/`MAX`/`AVG` per
-metric, then bucket assignment by explicit arithmetic, with the five metrics
-stacked by `UNION ALL`:
+It also rules out `least` / `greatest`: the *job* test harness registers those as
+custom SQLite functions, but the read-back harness (`_OutputDB`) does not, and
+adding them there would weaken the portability guarantee this query needs. The
+clamp is therefore written as a `CASE` expression, which every engine has.
+
+Bucket assignment per metric, grouped inside a subquery so the `GROUP BY` targets
+a plain column name:
 
 ```sql
-CAST((value - lo) / width AS INTEGER)   -- width = (hi - lo) / bins
+CASE
+  WHEN b.hi <= b.lo    THEN 0
+  WHEN t.<m> >= b.hi   THEN <bins - 1>
+  ELSE CAST((t.<m> - b.lo) * <bins> / (b.hi - b.lo) AS INTEGER)
+END AS bin_index
 ```
 
-Two edge cases the builder must handle explicitly, because both are common
-rather than exotic:
+The three branches are the two edge cases plus the general one, and all three are
+common rather than exotic:
 
-- **`hi == lo`** (every node scores identically — a fully regular graph, or a
-  metric that came back all-zero). `width` is 0 and the expression divides by
-  zero. Collapse to a single populated bin 0.
-- **The top bin.** A node at exactly `hi` computes bin index `bins`, one past
-  the last. Clamp with `LEAST(..., bins - 1)`, mirroring how
-  `graph_analytics_job.py` already sticks to `least`/`greatest` for portability.
+- **`hi == lo`** — every node scores identically, which happens on a fully
+  regular graph and on any metric that came back all-zero. The general
+  expression would divide by zero, so this collapses to a single populated bin.
+- **A node at exactly `hi`** would compute bin index `bins`, one past the last.
+- The general branch relies on every metric being **non-negative**, which makes
+  `CAST(... AS INTEGER)` truncation equivalent to `floor`. That is true of all
+  five metrics by construction and is why no `floor` function is needed.
 
-Bins with no nodes must be present in the payload as `0`, not absent — the
-front end indexes bins positionally.
+Bins with no nodes must be present in the payload as `0`, not absent — the front
+end indexes bins positionally.
 
 ### 2. `MetricDistribution` — `back/core/graph_analysis/models.py`
 
@@ -178,9 +198,7 @@ duplicates it.
 **b. Distribution strip.** Five tiles in a responsive grid, one per metric, each
 with:
 
-- the metric name, its existing colour, and the existing `?` help button
-  wired to `_showMetricInfo` (unchanged — the `_METRIC_INFO` copy is good and
-  stays)
+- the metric name in its existing colour
 - a compact Chart.js bar chart of `bins`
 - a caption: `median ≈ <v>` and `max <v>`
 - an `≈ estimate` badge when the metric is in `approximate_metrics`
@@ -190,6 +208,12 @@ visible selected state; selection is keyboard-reachable, so the tiles are
 `<button>`s rather than click-handled `<div>`s. **PageRank is selected on load**,
 matching which tab was active before this change. Selection is per-visit state —
 not persisted to `localStorage` or the URL.
+
+The `?` help button that opens `_showMetricInfo` lives on the **ranking card
+header** (§4c), not on the tile: a tile is itself a `<button>`, and nesting a
+button inside one is invalid HTML that browsers resolve unpredictably. Since the
+selected tile and the ranking card always name the same metric, one help affordance
+covers both. The `_METRIC_INFO` copy behind the modal is good and stays unchanged.
 
 A metric with **no** distribution entry (unavailable, or a legacy stored payload)
 renders the tile as an explanatory empty state, never as an empty chart frame.
