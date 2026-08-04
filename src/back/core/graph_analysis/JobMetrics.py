@@ -165,8 +165,9 @@ def _bin_index_expression(metric: str, bins: int) -> str:
 
     Written as a ``CASE`` rather than with ``least`` / ``greatest``: the *job*
     test harness registers those as custom SQLite functions, but this read-back
-    is verified against a plain SQLite connection and under three sqlglot
-    dialects, so it must stick to constructs every engine has natively.
+    executes on SQLite (tests) and Databricks/Spark (production), parses under
+    all three sqlglot dialects, and would need the ``ROUND`` argument cast to
+    ``numeric`` to execute on Postgres.
 
     The three branches are the two degenerate cases plus the general one:
 
@@ -175,9 +176,16 @@ def _bin_index_expression(metric: str, bins: int) -> str:
       zero, so everything collapses into bin 0.
     * ``value >= hi`` — the top-scoring node would otherwise compute ``bins``,
       one index past the last bucket.
-    * otherwise, scale into ``[0, bins)``. Every metric is non-negative by
-      construction, which is what makes ``CAST(... AS INTEGER)`` truncation
-      equivalent to ``floor`` and saves needing a ``floor`` function.
+    * otherwise, scale into ``[0, bins)`` via ``CAST(ROUND(..., 10) AS INTEGER)``.
+      Every metric is non-negative by construction, which is what makes integer
+      truncation equivalent to ``floor`` and saves needing a ``floor`` function.
+
+    The ``ROUND(..., 10)`` is load-bearing. A value sitting exactly on a bin
+    boundary is common — any metric quantised to a few distinct values, which
+    ``clustering`` and ``degree`` routinely are — and binary64 puts the scaled
+    result a few parts in 10^16 below the integer it should equal, so bare
+    truncation drops it into the bin below. Rounding at the tenth decimal
+    absorbs that while leaving genuine fractional positions untouched.
     """
     return (
         f"CASE\n"
@@ -201,6 +209,7 @@ def distributions_query(
 
     Bins containing no nodes produce no row; the caller pads them to zero.
     """
+    # zero bins would divide by zero in _bin_index_expression's general branch.
     bins = max(1, int(bins))
     parts = [
         f"SELECT '{metric}' AS metric, bin_index, COUNT(*) AS node_count\n"

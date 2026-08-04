@@ -239,3 +239,27 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4323 passed, 276
 skipped, 5 deselected, 1 xfailed, 23 warnings in 33.13s
+
+## Correct distribution bin docstrings after review
+
+Context: Review of `_bin_index_expression` found the docstring describing bare
+`CAST(... AS INTEGER)` truncation while the code emits `CAST(ROUND(..., 10) AS
+INTEGER)` — the ROUND is load-bearing for binary64 boundary values and was
+unexplained. The portability claim overstated Postgres execute support, and the
+`bins` floor guard had no comment tying it to divide-by-zero in the general
+branch.
+
+Changes:
+
+1. `src/back/core/graph_analysis/JobMetrics.py`
+   Align the third docstring bullet with the emitted SQL, document why
+   `ROUND(..., 10)` is required, soften the engine guarantee to SQLite +
+   Databricks/Spark execute with sqlglot parse-only Postgres, and note the
+   zero-bins precondition on `distributions_query`.
+
+Modified files:
+- `src/back/core/graph_analysis/JobMetrics.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+Tests: `uv run --frozen pytest tests/units/core/test_job_metrics.py -q` → 40
+passed, 1 warning in 1.07s
