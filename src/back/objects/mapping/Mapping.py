@@ -21,6 +21,7 @@ from back.core.databricks import VolumeFileService
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.errors import InfrastructureError, ValidationError
+from back.objects.session import is_valid_session_id
 
 logger = get_logger(__name__)
 
@@ -1147,6 +1148,13 @@ class Mapping:
     ) -> None:
         if not session_id:
             logger.warning("save_mappings_to_session: no session_id — skipping")
+            return
+        if not is_valid_session_id(session_id):
+            logger.warning(
+                "save_mappings_to_session: malformed session_id (%d chars, starts %r) — skipping",
+                len(session_id),
+                session_id[:8],
+            )
             return
 
         settings = get_settings()

@@ -98,6 +98,24 @@ class TestSessionIdsAreStable:
         assert _SESSION_ID_RE.fullmatch(sid)
         assert list(tmp_path.iterdir()) == []
 
+    def test_traversal_cookie_on_write_creates_no_file_outside_session_dir(
+        self, tmp_path
+    ):
+        """The arbitrary-file-write exploit is closed: a traversal-shaped cookie
+        sent to a route that marks the session modified must not create or
+        overwrite any file outside ``session_dir``.
+        """
+        client = TestClient(_app_with_sessions(tmp_path))
+        client.cookies.set("session", "../evil")
+        resp = client.get("/write")
+        assert resp.status_code == 200
+        # Nothing escaped the session directory.
+        assert not (tmp_path.parent / "evil").exists()
+        # The session was saved under a fresh valid id inside session_dir.
+        files = list(tmp_path.iterdir())
+        assert len(files) == 1
+        assert _SESSION_ID_RE.fullmatch(files[0].name)
+
 
 class TestSessionFilesAreTouchedOnUse:
     def _aged_file(self, tmp_path, seconds_old):
@@ -321,10 +339,32 @@ class TestReapExpiredSessions:
         os.utime(path, (stamp, stamp))
         return path
 
+    # The reaper cutoff is max_age + _SESSION_TOUCH_INTERVAL (90_000 for the
+    # defaults 86_400 + 3_600).  Files aged beyond that threshold are deleted;
+    # files inside it survive — including those in the grace window that would
+    # have been wrongly reaped by the old `now - max_age` cutoff.
+
     def test_an_expired_session_file_is_removed(self, tmp_path):
-        expired = self._aged(tmp_path / ("a" * 32), 90_000)
+        # 100_000 > 86_400 + 3_600 = 90_000 — genuinely beyond the grace window.
+        expired = self._aged(tmp_path / ("a" * 32), 100_000)
         assert reap_expired_sessions(str(tmp_path), 86_400) == 1
         assert not expired.exists()
+
+    def test_a_session_in_the_grace_window_survives(self, tmp_path):
+        """A file whose mtime is between max_age and max_age+_SESSION_TOUCH_INTERVAL
+        must not be deleted — its cookie may still be valid.
+
+        This is the case the old ``now - max_age`` cutoff got wrong.
+        """
+        from back.objects.session.FileSessionMiddleware import _SESSION_TOUCH_INTERVAL
+
+        # Age the file to max_age + half the touch interval: mtime looks
+        # "expired" by the old logic, but the session may have been used
+        # _SESSION_TOUCH_INTERVAL/2 seconds ago.
+        age = 86_400 + _SESSION_TOUCH_INTERVAL // 2
+        grace = self._aged(tmp_path / ("f" * 32), age)
+        assert reap_expired_sessions(str(tmp_path), 86_400) == 0
+        assert grace.exists()
 
     def test_a_recent_session_file_survives(self, tmp_path):
         fresh = self._aged(tmp_path / ("b" * 32), 60)
@@ -332,19 +372,20 @@ class TestReapExpiredSessions:
         assert fresh.exists()
 
     def test_an_unrelated_old_file_is_left_alone(self, tmp_path):
-        other = self._aged(tmp_path / "notes.txt", 90_000)
+        other = self._aged(tmp_path / "notes.txt", 100_000)
         assert reap_expired_sessions(str(tmp_path), 86_400) == 0
         assert other.exists()
 
     def test_a_near_miss_name_is_left_alone(self, tmp_path):
         """31 hex chars — a sloppier pattern would match this."""
-        near = self._aged(tmp_path / ("c" * 31), 90_000)
+        near = self._aged(tmp_path / ("c" * 31), 100_000)
         assert reap_expired_sessions(str(tmp_path), 86_400) == 0
         assert near.exists()
 
     def test_one_undeletable_file_does_not_stop_the_sweep(self, tmp_path):
-        stuck = self._aged(tmp_path / ("d" * 32), 90_000)
-        other = self._aged(tmp_path / ("e" * 32), 90_000)
+        # 100_000 > 90_000 grace window — both files are genuinely expired.
+        stuck = self._aged(tmp_path / ("d" * 32), 100_000)
+        other = self._aged(tmp_path / ("e" * 32), 100_000)
         real_unlink = Path.unlink
 
         def flaky_unlink(self, *args, **kwargs):
@@ -359,3 +400,67 @@ class TestReapExpiredSessions:
 
     def test_a_missing_directory_returns_zero(self, tmp_path):
         assert reap_expired_sessions(str(tmp_path / "nope"), 86_400) == 0
+
+    def test_a_dangling_symlink_is_reaped_not_warned_forever(self, tmp_path):
+        """A dangling symlink with a valid name must be removed, not skipped.
+
+        Before the fix, entry.stat() followed the link, raised
+        FileNotFoundError on every boot, and the link was never unlinked.
+        entry.stat(follow_symlinks=False) sees the link itself, so it ages
+        normally and is unlinked.
+        """
+        link = tmp_path / ("0" * 32)
+        target = tmp_path / "gone_target"
+        link.symlink_to(target)  # target does not exist — dangling
+        stamp = time.time() - 100_000
+        os.utime(link, (stamp, stamp), follow_symlinks=False)
+        assert reap_expired_sessions(str(tmp_path), 86_400) == 1
+        assert not link.exists()
+
+    def test_a_directory_named_with_32_hex_chars_survives(self, tmp_path):
+        """A directory whose name matches the session pattern must not raise.
+
+        unlink() on a directory raises IsADirectoryError (Linux) or
+        PermissionError (macOS) — both OSError subclasses — so the per-entry
+        handler logs and continues.  Assert on outcome, not exception type.
+        """
+        dir_entry = tmp_path / ("9" * 32)
+        dir_entry.mkdir()
+        stamp = time.time() - 100_000
+        os.utime(dir_entry, (stamp, stamp))
+        # Must not raise, and must leave the directory intact.
+        reap_expired_sessions(str(tmp_path), 86_400)
+        assert dir_entry.exists() and dir_entry.is_dir()
+
+
+class TestLifespanWiresReaper:
+    """Ensure reap_expired_sessions is called during app startup.
+
+    Entering the real lifespan pulls in setup_tracing() and the build
+    scheduler, so we patch the function and assert it was called with the
+    expected arguments.  This is weaker than an integration test, but it
+    directly encodes the contract: if the wiring is removed, this test fails.
+    """
+
+    def test_reaper_is_called_at_startup_with_session_settings(self, tmp_path):
+        import asyncio
+        from unittest.mock import patch, call
+        from shared.config.settings import get_settings
+
+        settings = get_settings()
+
+        with patch(
+            "shared.fastapi.main.reap_expired_sessions", return_value=0
+        ) as mock_reap:
+            # Import here so the patch is in place when the lifespan runs.
+            from shared.fastapi.main import lifespan, app
+
+            async def run():
+                async with lifespan(app):
+                    pass
+
+            asyncio.run(run())
+
+        mock_reap.assert_called_once_with(
+            settings.session_dir, settings.session_max_age
+        )

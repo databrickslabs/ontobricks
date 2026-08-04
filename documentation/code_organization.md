@@ -150,7 +150,7 @@ api/
 1. **Middleware stack** (order matters; Starlette runs *last added* first on the way *in*):  
    - **CORS** — allows credentials for local dev.  
    - **PermissionMiddleware** — when running as a Databricks App, resolves the user role from registry permissions and blocks viewers from mutating HTTP methods; bypasses `/static/`, `/api/`, `/graphql/`, OpenAPI, health, etc. Local dev behaves as admin.  
-   - **FileSessionMiddleware** — cookie-backed **file sessions** (JSON on disk under `settings.session_dir`); skips static, docs, health, and `/tasks/*` so task polling does not churn session I/O. The cookie must be 32 lowercase hex characters, since it is used as a filename; anything else mints a fresh ID. Files are written only once a session is actually modified, their mtime tracks last use, and `reap_expired_sessions()` clears ones older than `settings.session_max_age` at startup.
+   - **FileSessionMiddleware** — cookie-backed **file sessions** (JSON on disk under `settings.session_dir`); skips static, docs, health, and `/tasks/*` so task polling does not churn session I/O. The cookie must be 32 lowercase hex characters, since it is used as a filename; anything else mints a fresh ID. Files are written only once a session is actually modified, their mtime records last use (refreshed at most hourly), and `reap_expired_sessions()` clears ones older than `settings.session_max_age` at startup.
 
 2. **Static files** are mounted at `/static` from `src/front/static/` (with a fallback path for unusual layouts).
 

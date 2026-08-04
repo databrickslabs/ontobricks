@@ -48,6 +48,17 @@ _SESSION_ID_RE = re.compile(r"[0-9a-f]{32}")
 _SESSION_TOUCH_INTERVAL = 3600
 
 
+def is_valid_session_id(value: str) -> bool:
+    """Return ``True`` iff *value* has the shape a generated session id has.
+
+    A session id is exactly 32 lowercase hex characters — the format
+    ``str(uuid.uuid4()).replace("-", "")`` produces.  Centralising the check
+    here means there is one source of truth for the pattern wherever a
+    caller-supplied id is used as a filesystem path.
+    """
+    return bool(_SESSION_ID_RE.fullmatch(value))
+
+
 class FileSessionMiddleware(BaseHTTPMiddleware):
     """File-based session middleware for FastAPI.
 
@@ -87,7 +98,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         cookie_value = request.cookies.get(self.session_cookie)
         if not cookie_value:
             return None
-        if not _SESSION_ID_RE.fullmatch(cookie_value):
+        if not is_valid_session_id(cookie_value):
             logger.debug(
                 "Rejected malformed session cookie (%d chars, starts %r)",
                 len(cookie_value),
@@ -178,19 +189,20 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             # disk hit, and neither — so file presence is not our concern, and
             # deferring to it keeps a live cached session that lost its file.
             session_data = self._load_session(session_id)
-            pd = session_data.get("domain_data") or session_data.get(
-                "project_data", {}
-            )
-            ontology_classes = len(pd.get("ontology", {}).get("classes", []))
-            mapping_entities = len(pd.get("assignment", {}).get("entities", []))
-            mapping_rels = len(pd.get("assignment", {}).get("relationships", []))
-            logger.debug(
-                "Session %s...: %d classes, %d entity mappings, %d rel mappings",
-                session_id[:8],
-                ontology_classes,
-                mapping_entities,
-                mapping_rels,
-            )
+            if session_data:
+                pd = session_data.get("domain_data") or session_data.get(
+                    "project_data", {}
+                )
+                ontology_classes = len(pd.get("ontology", {}).get("classes", []))
+                mapping_entities = len(pd.get("assignment", {}).get("entities", []))
+                mapping_rels = len(pd.get("assignment", {}).get("relationships", []))
+                logger.debug(
+                    "Session %s...: %d classes, %d entity mappings, %d rel mappings",
+                    session_id[:8],
+                    ontology_classes,
+                    mapping_entities,
+                    mapping_rels,
+                )
 
         # Attach session to request state
         request.state.session = session_data
@@ -242,11 +254,19 @@ def reap_expired_sessions(session_dir: str, max_age: int) -> int:
     shared with whatever else lands there, and a reaper that deletes purely by
     age eventually deletes something it did not create.
 
+    The cutoff includes a grace window of :data:`_SESSION_TOUCH_INTERVAL` because
+    ``_touch_session`` only refreshes a file's mtime at most once per interval.
+    A file whose mtime is ``max_age`` old may have been used up to
+    ``_SESSION_TOUCH_INTERVAL`` seconds ago — exactly within the cookie's
+    remaining lifetime.  Using ``max_age + _SESSION_TOUCH_INTERVAL`` as the
+    threshold guarantees a file is not deleted while its cookie is still valid,
+    regardless of the configured ``max_age``.
+
     Returns the number of files removed. Never raises: this runs during app
     startup, and a sweep failure must not stop the app from booting.
     """
     directory = Path(session_dir)
-    cutoff = time.time() - max_age
+    cutoff = time.time() - max_age - _SESSION_TOUCH_INTERVAL
     removed = 0
 
     try:
@@ -256,10 +276,10 @@ def reap_expired_sessions(session_dir: str, max_age: int) -> int:
         return 0
 
     for entry in entries:
-        if not _SESSION_ID_RE.fullmatch(entry.name):
+        if not is_valid_session_id(entry.name):
             continue
         try:
-            if entry.stat().st_mtime >= cutoff:
+            if entry.stat(follow_symlinks=False).st_mtime >= cutoff:
                 continue
             entry.unlink()
             removed += 1
