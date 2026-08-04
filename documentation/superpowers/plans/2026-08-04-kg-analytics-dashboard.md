@@ -363,15 +363,22 @@ def _bin_index_expression(metric: str, bins: int) -> str:
     * ``value >= hi`` — the top-scoring node would otherwise compute ``bins``,
       one index past the last bucket.
     * otherwise, scale into ``[0, bins)``. Every metric is non-negative by
-      construction, which is what makes ``CAST(... AS INTEGER)`` truncation
-      equivalent to ``floor`` and saves needing a ``floor`` function.
+      construction, which is what makes truncation equivalent to ``floor`` and
+      saves needing a ``floor`` function.
+
+    The ``ROUND(..., 10)`` is load-bearing. A value sitting exactly on a bin
+    boundary is common — any metric quantised to a few distinct values, which
+    ``clustering`` and ``degree`` routinely are — and binary64 puts the scaled
+    result a few parts in 10^16 below the integer it should equal, so bare
+    truncation drops it into the bin below. Rounding at the tenth decimal
+    absorbs that while leaving genuine fractional positions untouched.
     """
     return (
         f"CASE\n"
         f"      WHEN b.hi <= b.lo THEN 0\n"
         f"      WHEN t.{metric} >= b.hi THEN {int(bins) - 1}\n"
-        f"      ELSE CAST((t.{metric} - b.lo) * {int(bins)}"
-        f" / (b.hi - b.lo) AS INTEGER)\n"
+        f"      ELSE CAST(ROUND((t.{metric} - b.lo) * {int(bins)}"
+        f" / (b.hi - b.lo), 10) AS INTEGER)\n"
         f"    END"
     )
 

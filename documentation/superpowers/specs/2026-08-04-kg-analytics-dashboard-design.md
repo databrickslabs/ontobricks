@@ -122,7 +122,7 @@ a plain column name:
 CASE
   WHEN b.hi <= b.lo    THEN 0
   WHEN t.<m> >= b.hi   THEN <bins - 1>
-  ELSE CAST((t.<m> - b.lo) * <bins> / (b.hi - b.lo) AS INTEGER)
+  ELSE CAST(ROUND((t.<m> - b.lo) * <bins> / (b.hi - b.lo), 10) AS INTEGER)
 END AS bin_index
 ```
 
@@ -134,8 +134,17 @@ common rather than exotic:
   expression would divide by zero, so this collapses to a single populated bin.
 - **A node at exactly `hi`** would compute bin index `bins`, one past the last.
 - The general branch relies on every metric being **non-negative**, which makes
-  `CAST(... AS INTEGER)` truncation equivalent to `floor`. That is true of all
-  five metrics by construction and is why no `floor` function is needed.
+  truncation equivalent to `floor`. That is true of all five metrics by
+  construction and is why no `floor` function is needed.
+
+The `ROUND(..., 10)` is load-bearing, not defensive noise. A value sitting
+exactly on a bin boundary is common — a metric quantised to a few distinct
+values, which `clustering` and `degree` routinely are — and binary64 puts the
+scaled result a few parts in 10^16 *below* the integer it should equal. Bare
+truncation then drops it into the bin below. Rounding at the tenth decimal
+absorbs that error while leaving any genuine fractional position untouched:
+only a value within 5×10^-11 of a boundary is affected, and for those either bin
+is equally defensible. `ROUND` is available in all three engines.
 
 Bins with no nodes must be present in the payload as `0`, not absent — the front
 end indexes bins positionally.
