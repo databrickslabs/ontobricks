@@ -43,8 +43,9 @@ _SESSION_BYPASS_PREFIXES = (
 _SESSION_ID_RE = re.compile(r"[0-9a-f]{32}")
 
 # How stale a session file's mtime must be before a read refreshes it. Bounds
-# the metadata writes to one per session per interval; must stay well below
-# Settings.session_max_age or reap_expired_sessions would delete live sessions.
+# the metadata writes to at most one per session per interval. The reaper adds
+# this same interval to its cutoff to compensate for the resulting mtime lag, so
+# the constraint is safe for any configured session_max_age.
 _SESSION_TOUCH_INTERVAL = 3600
 
 

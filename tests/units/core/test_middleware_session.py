@@ -415,7 +415,7 @@ class TestReapExpiredSessions:
         stamp = time.time() - 100_000
         os.utime(link, (stamp, stamp), follow_symlinks=False)
         assert reap_expired_sessions(str(tmp_path), 86_400) == 1
-        assert not link.exists()
+        assert not link.is_symlink()
 
     def test_a_directory_named_with_32_hex_chars_survives(self, tmp_path):
         """A directory whose name matches the session pattern must not raise.
@@ -429,29 +429,38 @@ class TestReapExpiredSessions:
         stamp = time.time() - 100_000
         os.utime(dir_entry, (stamp, stamp))
         # Must not raise, and must leave the directory intact.
-        reap_expired_sessions(str(tmp_path), 86_400)
+        assert reap_expired_sessions(str(tmp_path), 86_400) == 0
         assert dir_entry.exists() and dir_entry.is_dir()
 
 
 class TestLifespanWiresReaper:
     """Ensure reap_expired_sessions is called during app startup.
 
-    Entering the real lifespan pulls in setup_tracing() and the build
-    scheduler, so we patch the function and assert it was called with the
-    expected arguments.  This is weaker than an integration test, but it
-    directly encodes the contract: if the wiring is removed, this test fails.
+    The test enters the real lifespan but patches its three heavy
+    collaborators — reap_expired_sessions, setup_tracing (imported locally
+    inside lifespan from agents.tracing), and get_scheduler (imported locally
+    from back.objects.registry) — so only the wiring between them is
+    exercised.  If the reap_expired_sessions call block is removed from
+    lifespan, this test fails.
     """
 
-    def test_reaper_is_called_at_startup_with_session_settings(self, tmp_path):
+    def test_reaper_is_called_at_startup_with_session_settings(self):
         import asyncio
-        from unittest.mock import patch, call
         from shared.config.settings import get_settings
 
         settings = get_settings()
 
+        mock_scheduler = MagicMock()
+        mock_scheduler.start = MagicMock()
+        mock_scheduler.stop = MagicMock()
+
         with patch(
             "shared.fastapi.main.reap_expired_sessions", return_value=0
-        ) as mock_reap:
+        ) as mock_reap, patch(
+            "agents.tracing.setup_tracing"
+        ), patch(
+            "back.objects.registry.get_scheduler", return_value=mock_scheduler
+        ):
             # Import here so the patch is in place when the lifespan runs.
             from shared.fastapi.main import lifespan, app
 

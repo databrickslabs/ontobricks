@@ -871,9 +871,11 @@ periodic sweep would first have to deal with the reaper knowing nothing about
 
 **Tests.** `uv run --frozen pytest -q -m "not scenario"` — 4510 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.31s
 
-# Final review fixes for session-file-lifecycle branch
+---
 
-Context: Eight findings from the whole-branch code review of `fix/session-file-lifecycle`
+## Final review fixes for session-file-lifecycle branch
+
+**Context.** Eight findings from the whole-branch code review of `fix/session-file-lifecycle`
 were addressed. The changes harden the reaper cutoff against the touch-throttle
 interaction, add tests that would have caught each finding, close a second
 path-sink in `Mapping.save_mappings_to_session`, introduce a single predicate
