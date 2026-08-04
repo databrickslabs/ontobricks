@@ -147,3 +147,7 @@
     position: relative;
     height: 420px;
 }
+
+.analytics-logscale-switch .form-check-label {
+    cursor: pointer;
+}

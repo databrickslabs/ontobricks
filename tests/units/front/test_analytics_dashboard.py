@@ -250,3 +250,30 @@ class TestRankingCard:
 
     def test_the_detail_table_is_still_rendered(self, js):
         assert "_renderPagerankTable" in js
+
+
+class TestLogScaleToggle:
+    def test_the_toggle_exists_in_the_section_header(self, panel):
+        header = panel[: panel.index('id="analyticsSpinner"')]
+        assert 'id="analyticsLogScale"' in header
+
+    def test_the_toggle_is_labelled(self, panel):
+        assert "Log scale" in panel
+
+    def test_the_toggle_redraws_the_strip(self, js):
+        fn = _fn(js, "analyticsToggleLogScale")
+        assert "_renderDistributionStrip" in fn
+
+    def test_it_defaults_to_linear(self, js):
+        assert "_logScale = false" in js
+
+    def test_the_axis_type_follows_the_flag(self, js):
+        assert "'logarithmic'" in js
+        assert "_logScale ? 'logarithmic' : 'linear'" in js
+
+    def test_the_caption_states_when_log_is_active(self, js):
+        """Bar heights stop being proportional to counts; an unlabelled log
+        chart misleads."""
+        fn = _fn(js, "_renderDistributionStrip")
+        assert "_logScale" in fn
+        assert "log" in fn

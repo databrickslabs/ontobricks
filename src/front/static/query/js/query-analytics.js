@@ -1023,6 +1023,15 @@
         }
     })();
 
+    // Applies to all five distribution tiles at once. Per-visit state: a
+    // persisted axis choice would silently change how a colleague reads a
+    // shared screenshot.
+    window.analyticsToggleLogScale = function analyticsToggleLogScale() {
+        var el = document.getElementById('analyticsLogScale');
+        _logScale = !!(el && el.checked);
+        _renderDistributionStrip();
+    };
+
     window.analyticsInterpret = async function () {
         if (!_analyticsData) return;
 

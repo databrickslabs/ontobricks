@@ -20,6 +20,14 @@
                        onchange="analyticsRenderCharts()" title="Top N nodes per chart">
                 <span class="small text-muted">nodes</span>
             </div>
+            <div class="form-check form-switch form-check-inline mb-0 analytics-logscale-switch">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       id="analyticsLogScale" onchange="analyticsToggleLogScale()">
+                <label class="form-check-label small text-muted" for="analyticsLogScale"
+                       title="Draw the distribution counts on a logarithmic axis — makes the heavy tail visible">
+                    Log scale
+                </label>
+            </div>
             <button type="button" class="btn btn-sm btn-outline-primary" id="analyticsComputeBtn" onclick="analyticsCompute()">
                 <i class="bi bi-arrow-clockwise me-1"></i>Run Analysis
             </button>
