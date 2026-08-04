@@ -6,6 +6,9 @@ It stores session data as JSON files in a configurable directory.
 """
 
 import json
+import os
+import re
+import time
 import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -31,6 +34,30 @@ _SESSION_BYPASS_PREFIXES = (
     "/api/openapi.json",
     "/favicon.ico",
 )
+
+# A session ID becomes a filename under ``session_dir``, so a value arriving in
+# a cookie is only trusted when it has the exact shape _generate_session_id
+# produces. Matched with fullmatch, never with ^...$: Python's ``$`` also
+# matches immediately before a trailing newline, which would let a 33-character
+# value through and resolve to a different file than the one validated.
+_SESSION_ID_RE = re.compile(r"[0-9a-f]{32}")
+
+# How stale a session file's mtime must be before a read refreshes it. Bounds
+# the metadata writes to at most one per session per interval. The reaper adds
+# this same interval to its cutoff to compensate for the resulting mtime lag, so
+# the constraint is safe for any configured session_max_age.
+_SESSION_TOUCH_INTERVAL = 3600
+
+
+def is_valid_session_id(value: str) -> bool:
+    """Return ``True`` iff *value* has the shape a generated session id has.
+
+    A session id is exactly 32 lowercase hex characters — the format
+    ``str(uuid.uuid4()).replace("-", "")`` produces.  Centralising the check
+    here means there is one source of truth for the pattern wherever a
+    caller-supplied id is used as a filesystem path.
+    """
+    return bool(_SESSION_ID_RE.fullmatch(value))
 
 
 class FileSessionMiddleware(BaseHTTPMiddleware):
@@ -63,9 +90,21 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         self.session_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_session_id_from_cookie(self, request: Request) -> Optional[str]:
-        """Extract and validate session ID from cookie."""
+        """Return the session ID from the cookie, or ``None`` if unusable.
+
+        A malformed value is reported as no cookie at all, which makes the
+        caller mint a fresh ID — the same outcome a user with a corrupted
+        cookie already got, so nothing legitimate regresses.
+        """
         cookie_value = request.cookies.get(self.session_cookie)
         if not cookie_value:
+            return None
+        if not is_valid_session_id(cookie_value):
+            logger.debug(
+                "Rejected malformed session cookie (%d chars, starts %r)",
+                len(cookie_value),
+                cookie_value[:8],
+            )
             return None
         return cookie_value
 
@@ -98,6 +137,26 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             logger.exception("Error saving session %s: %s", session_id, e)
 
+    def _touch_session(self, session_id: str) -> None:
+        """Refresh a session file's mtime so it records last *use*, not last edit.
+
+        ``reap_expired_sessions`` deletes by mtime, and the session cookie is
+        renewed on every response — so without this a session that is read for
+        days but never modified would be reaped while its cookie is still
+        valid, and the user would silently land on an empty session.
+
+        Never creates the file: ``Path.touch()`` would, ``os.utime`` on a
+        missing path raises ``FileNotFoundError`` and is swallowed below. That
+        also covers the file being unlinked between the stat and the utime.
+        """
+        session_file = self.session_dir / session_id
+        try:
+            if time.time() - session_file.stat().st_mtime < _SESSION_TOUCH_INTERVAL:
+                return
+            os.utime(session_file, None)
+        except OSError as e:
+            logger.debug("Could not touch session %s...: %s", session_id[:8], e)
+
     def _generate_session_id(self) -> str:
         """Generate a new session ID."""
         return str(uuid.uuid4()).replace("-", "")
@@ -114,34 +173,24 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             request.state.session_modified = False
             return await call_next(request)
 
-        # Get or create session ID
         session_id = self._get_session_id_from_cookie(request)
-        is_new_session = False
 
         if not session_id:
+            # No file is written here. A session that is never modified never
+            # reaches disk, which is what stops cookie-less traffic from
+            # littering session_dir with empty {} files.
             session_id = self._generate_session_id()
-            is_new_session = True
             session_data = {}
-            # Create empty session file immediately
-            self._save_session(session_id, session_data)
             logger.info("NEW session created: %s...", session_id[:8])
         else:
-            # Check if session file exists
-            session_file = self.session_dir / session_id
-            if not session_file.exists():
-                # Session cookie exists but file is missing - create new session
-                session_id = self._generate_session_id()
-                is_new_session = True
-                session_data = {}
-                # Create empty session file immediately
-                self._save_session(session_id, session_data)
-                logger.info(
-                    "Old session file not found, created NEW session: %s...",
-                    session_id[:8],
-                )
-            else:
-                # Load existing session (served from in-memory cache after first hit)
-                session_data = self._load_session(session_id)
+            self._touch_session(session_id)
+            # The ID is reused even when its file is missing. Minting a
+            # replacement here made N concurrent requests carrying the same
+            # cookie produce N sessions. _load_session resolves cache hit,
+            # disk hit, and neither — so file presence is not our concern, and
+            # deferring to it keeps a live cached session that lost its file.
+            session_data = self._load_session(session_id)
+            if session_data:
                 pd = session_data.get("domain_data") or session_data.get(
                     "project_data", {}
                 )
@@ -197,6 +246,48 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         )
 
         return response
+
+
+def reap_expired_sessions(session_dir: str, max_age: int) -> int:
+    """Delete session files unused for longer than ``max_age`` seconds.
+
+    Only names matching :data:`_SESSION_ID_RE` are considered — the directory is
+    shared with whatever else lands there, and a reaper that deletes purely by
+    age eventually deletes something it did not create.
+
+    The cutoff includes a grace window of :data:`_SESSION_TOUCH_INTERVAL` because
+    ``_touch_session`` only refreshes a file's mtime at most once per interval.
+    A file whose mtime is ``max_age`` old may have been used up to
+    ``_SESSION_TOUCH_INTERVAL`` seconds ago — exactly within the cookie's
+    remaining lifetime.  Using ``max_age + _SESSION_TOUCH_INTERVAL`` as the
+    threshold guarantees a file is not deleted while its cookie is still valid,
+    regardless of the configured ``max_age``.
+
+    Returns the number of files removed. Never raises: this runs during app
+    startup, and a sweep failure must not stop the app from booting.
+    """
+    directory = Path(session_dir)
+    cutoff = time.time() - max_age - _SESSION_TOUCH_INTERVAL
+    removed = 0
+
+    try:
+        entries = list(directory.iterdir())
+    except OSError as e:
+        logger.warning("Could not scan session dir %s: %s", session_dir, e)
+        return 0
+
+    for entry in entries:
+        if not is_valid_session_id(entry.name):
+            continue
+        try:
+            if entry.stat(follow_symlinks=False).st_mtime >= cutoff:
+                continue
+            entry.unlink()
+            removed += 1
+        except OSError as e:
+            logger.warning("Could not remove expired session %s: %s", entry.name, e)
+
+    return removed
 
 
 def get_session(request: Request) -> Dict[str, Any]:

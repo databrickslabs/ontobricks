@@ -806,3 +806,123 @@ Modified files:
 - documentation/superpowers/plans/2026-08-04-lakebase-bulk-loading-sync-mode-registry.md
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4483 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.58s
+
+---
+
+## Stop session files from accumulating, and stop trusting the cookie as a path
+
+**Context.** `settings.session_dir` had grown to 327 MB across 82,200 files on a
+development machine, which is what made `make clean` fail with
+`rm: fastapi_session: Directory not empty`. The count was not explained by user
+count: `dispatch` wrote a 2-byte `{}` file for every minted ID, a cookie whose
+file was missing was answered with a brand new ID rather than reusing the one the
+client held (so N concurrent requests produced N sessions), and nothing ever
+expired. Tracing that surfaced a second problem — the cookie value was used
+verbatim as a filename, so a cookie of `../../../../etc/foo` would have had
+session JSON written over that path on any request that modified the session.
+
+**Changes.**
+
+1. `src/back/objects/session/FileSessionMiddleware.py` — added `_SESSION_ID_RE`
+   and made `_get_session_id_from_cookie` enforce it with `fullmatch`, so a
+   cookie is only used as a filename when it is exactly 32 lowercase hex
+   characters. A malformed value is treated as no cookie, which mints a fresh ID
+   — the same outcome a corrupted cookie already produced. `fullmatch` rather
+   than `^...$` because Python's `$` also matches before a trailing newline.
+2. `src/back/objects/session/FileSessionMiddleware.py` — `dispatch` no longer
+   writes on mint, and no longer replaces an ID whose file is missing. It now
+   defers to `_load_session`, which already resolves cache hit, disk hit, and
+   neither, so a live cached session that lost its file is preserved instead of
+   reset. Files are born only on the existing `session_modified` save path.
+   Removed the unused `is_new_session` local.
+3. `src/back/objects/session/FileSessionMiddleware.py` — added `_touch_session`,
+   which refreshes a session file's mtime on read when it is already older than
+   an hour, so expiry means "idle" rather than "not edited". Necessary because
+   the cookie's `max_age` is renewed on every response while the file's mtime is
+   not, so a user browsing read-only for a day would otherwise be reaped while
+   still holding a valid cookie.
+4. `src/back/objects/session/FileSessionMiddleware.py` — added
+   `reap_expired_sessions(session_dir, max_age)`, which deletes files older than
+   `max_age`, considers only names matching the session-ID pattern, logs and
+   skips per-file failures, and never raises.
+5. `src/back/objects/session/__init__.py` — exported `reap_expired_sessions`.
+6. `src/shared/fastapi/main.py` — the lifespan runs the sweep after creating the
+   session directory, wrapped so a failure logs a warning and startup continues.
+7. `tests/units/core/test_middleware_session.py` — repointed
+   `test_get_session_id_from_cookie`, which asserted that a cookie of `"abc123"`
+   was accepted as a session ID, and added coverage for validation, lazy
+   creation, ID stability, the touch throttle, and the reaper.
+8. `documentation/code_organization.md` — described the new lifecycle.
+
+**Not addressed.** The in-memory `_session_cache` still grows unbounded for the
+process lifetime. The cookie remains unsigned, so this narrows the blast radius
+of a forged cookie to guessing another user's random 122-bit ID rather than
+removing forgery as a category. The sweep runs at startup only, so a deployment
+that never restarts does not reclaim disk from sessions that did expire — a
+periodic sweep would first have to deal with the reaper knowing nothing about
+`_session_cache`.
+
+**Modified files.**
+- `src/back/objects/session/FileSessionMiddleware.py`
+- `src/back/objects/session/__init__.py`
+- `src/shared/fastapi/main.py`
+- `tests/units/core/test_middleware_session.py`
+- `documentation/code_organization.md`
+
+**Tests.** `uv run --frozen pytest -q -m "not scenario"` — 4510 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.31s
+
+---
+
+## Final review fixes for session-file-lifecycle branch
+
+**Context.** Eight findings from the whole-branch code review of `fix/session-file-lifecycle`
+were addressed. The changes harden the reaper cutoff against the touch-throttle
+interaction, add tests that would have caught each finding, close a second
+path-sink in `Mapping.save_mappings_to_session`, introduce a single predicate
+(`is_valid_session_id`) as the canonical shape check, and make minor log and
+documentation improvements.
+
+1. `src/back/objects/session/FileSessionMiddleware.py` — changed reaper cutoff
+   from `now - max_age` to `now - max_age - _SESSION_TOUCH_INTERVAL` so a
+   session last used inside the touch-throttle window is never reaped while
+   its cookie is still valid; updated the docstring to state the relationship.
+   Added `is_valid_session_id(value: str) -> bool` public predicate built on
+   `_SESSION_ID_RE` so the shape check has one source of truth.  Used it in
+   `_get_session_id_from_cookie` and `reap_expired_sessions` (replacing direct
+   `_SESSION_ID_RE.fullmatch` calls).  Changed `entry.stat()` to
+   `entry.stat(follow_symlinks=False)` so dangling 32-hex symlinks are aged
+   and removed rather than logged at warning level on every boot.  Guarded
+   the debug-log block with `if session_data:` so it only fires when there is
+   content to describe.
+2. `src/back/objects/session/__init__.py` — exported `is_valid_session_id`.
+3. `src/back/objects/mapping/Mapping.py` — imported `is_valid_session_id`; added
+   a shape-validation guard in `save_mappings_to_session` after the empty-id
+   check, logging a warning and returning without touching the filesystem when
+   the id is malformed.
+4. `tests/units/core/test_middleware_session.py` — re-fixtured
+   `test_an_expired_session_file_is_removed`, `test_an_unrelated_old_file_is_left_alone`,
+   `test_a_near_miss_name_is_left_alone`, and `test_one_undeletable_file_does_not_stop_the_sweep`
+   to use age 100_000 (> the new 90_000 grace window).  Added
+   `test_a_session_in_the_grace_window_survives` (the case the old cutoff got
+   wrong), `TestLifespanWiresReaper.test_reaper_is_called_at_startup_with_session_settings`
+   (patches `reap_expired_sessions` and asserts it is called with the correct
+   arguments from the lifespan), `test_traversal_cookie_on_write_creates_no_file_outside_session_dir`
+   (end-to-end regression for the arbitrary-file-write exploit),
+   `test_a_dangling_symlink_is_reaped_not_warned_forever`, and
+   `test_a_directory_named_with_32_hex_chars_survives`.
+5. `tests/units/mapping/test_pge_session_extras_retention.py` — updated the
+   session_id from `"sess-pge-cap"` to a valid 32-hex id; added
+   `test_save_mappings_to_session_rejects_traversal_id`.
+6. `documentation/code_organization.md` — rewrote "their mtime tracks last use"
+   to "their mtime records last use (refreshed at most hourly)" to reflect the
+   throttle.
+
+**Modified files.**
+- `src/back/objects/session/FileSessionMiddleware.py`
+- `src/back/objects/session/__init__.py`
+- `src/back/objects/mapping/Mapping.py`
+- `tests/units/core/test_middleware_session.py`
+- `tests/units/mapping/test_pge_session_extras_retention.py`
+- `documentation/code_organization.md`
+
+**Tests.** `uv run --frozen pytest -q -m "not scenario"` — 4516 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 41.26s
