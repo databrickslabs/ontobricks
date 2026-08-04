@@ -325,6 +325,103 @@ class TestInterpretPayloadExcludesDistributions:
         assert "metrics_payload" in near or "prompt" in near.lower()
 
 
+class TestScopeIsAskedForAtLaunch:
+    """Entity type only takes effect when a run starts, so it is collected in a
+    modal instead of sitting in the toolbar between runs, where it could be
+    changed without re-running and misdescribe the result on screen."""
+
+    @staticmethod
+    def _modal(panel: str) -> str:
+        start = panel.index('id="analyticsScopeModal"')
+        return panel[start: panel.index("Metric explanation modal", start)]
+
+    @staticmethod
+    def _toolbar(panel: str) -> str:
+        return panel[: panel.index('id="analyticsResults"')]
+
+    def test_the_select_is_no_longer_in_the_toolbar(self, panel):
+        assert "analyticsTypeSelect" not in self._toolbar(panel)
+
+    def test_the_select_lives_in_the_scope_modal(self, panel):
+        """Moved rather than duplicated, so _loadEntityTypes still finds it."""
+        assert panel.count('id="analyticsTypeSelect"') == 1
+        assert 'id="analyticsTypeSelect"' in self._modal(panel)
+
+    def test_run_analysis_opens_the_modal_instead_of_computing(self, panel):
+        toolbar = self._toolbar(panel)
+        assert 'onclick="analyticsOpenScope()"' in toolbar
+        assert 'onclick="analyticsCompute()"' not in toolbar
+
+    def test_the_modal_offers_run_and_cancel(self, panel):
+        modal = self._modal(panel)
+        assert 'onclick="analyticsCompute()"' in modal
+        assert 'data-bs-dismiss="modal"' in modal
+        assert "Cancel" in modal
+
+    def test_the_modal_resets_to_the_full_graph_on_open(self, js):
+        """An inherited scope is easy to miss in a dialog you dismiss with Run."""
+        fn = _fn(js, "analyticsOpenScope")
+        assert "sel.value = ''" in fn
+        assert ".show()" in fn
+        assert fn.index("sel.value = ''") < fn.index(".show()")
+
+    def test_the_modal_does_not_open_when_the_job_cannot_run(self, js):
+        fn = _fn(js, "analyticsOpenScope")
+        assert "_jobAvailable" in fn
+        assert fn.index("_jobAvailable") < fn.index(".show()")
+
+    def test_the_scope_is_read_before_the_modal_is_dismissed(self, js):
+        """Reading the select after hiding risks Bootstrap having reset it."""
+        body = js[js.index("window.analyticsCompute"):]
+        body = body[: body.index("\n    window.")]
+        assert body.index("_getSelectedTypes()") < body.index(".hide()")
+
+    def test_the_run_sends_the_scope_that_was_picked(self, js):
+        body = js[js.index("window.analyticsCompute"):]
+        body = body[: body.index("\n    window.")]
+        assert "class_filter: requested" in body
+
+
+class TestResultScopeDescribesWhatIsDisplayed:
+    """Three consumers used to read the live select, so changing it without
+    re-running made them describe a scope nobody had computed."""
+
+    def test_the_scope_comes_from_the_rendered_result(self, js):
+        assert "_resultScope = (meta.class_filter && meta.class_filter.length)" in js
+
+    def test_a_full_graph_result_clears_the_scope(self, js):
+        """Without the else-null, a full-graph re-run keeps advertising the
+        previous run's entity type."""
+        start = js.index("_resultScope = (meta.class_filter")
+        assert ": null" in js[start: start + 200]
+
+    def test_the_subtitle_reads_the_result_scope(self, js):
+        fn = _fn(js, "_renderAnalyticsData")
+        assert "_scopeLabel(_resultScope)" in fn
+        assert "_selEl.options[_selEl.selectedIndex]" not in fn
+
+    def test_data_model_health_reads_the_result_scope(self, js):
+        assert "_renderTypeProfiles(data.entity_type_profiles, !!_resultScope)" in js
+
+    def test_interpret_sends_the_result_scope(self, js):
+        assert "class_filter: _resultScope ? [_resultScope] : null" in js
+
+    def test_nothing_but_the_run_request_reads_the_live_select(self, js):
+        """_getSelectedTypes is the request being composed; anything that
+        describes the displayed result must use _resultScope."""
+        readers = [ln for ln in js.splitlines()
+                   if "_getSelectedTypes()" in ln and "function" not in ln]
+        assert len(readers) == 1, readers
+        assert "requested" in readers[0]
+
+    def test_the_dropdown_and_the_subtitle_share_one_label_format(self, js):
+        """Two copies of the label expression drift; the subtitle would then
+        disagree with the option the user picked."""
+        assert "function _typeLabel" in js
+        assert "_typeLabel(t)" in _fn(js, "_populateTypeSelect")
+        assert "_typeLabel(match)" in _fn(js, "_scopeLabel")
+
+
 class TestAllFiveTilesStayVisible:
     """All five tiles must be reachable at any usable window width."""
 

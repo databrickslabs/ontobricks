@@ -600,8 +600,9 @@ Because the job can take a while on large graphs, it runs **asynchronously** in 
 
 #### Running an Analysis
 
-1. (Optional) Select an **entity type** from the dropdown to restrict the analysis to one class (e.g. "Customer"). Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. The filter is applied in SQL inside the Lakeflow job, against the Delta snapshot — not by the graph store — so there is no in-memory limit to work around. "All types (full graph)" includes every entity.
-2. Click **Run Analysis**. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically on the **Dashboard** tab: six KPI tiles appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed), a distribution strip of five histogram tiles, and one full-width ranking chart for the selected metric. Each new run replaces the previous stored result for that domain version.
+1. Click **Run Analysis**. An **Analysis scope** dialog opens, because entity type only takes effect at launch — it is asked for here rather than left in the toolbar, where it could be changed after a run and no longer describe the result on screen.
+2. (Optional) Pick an **entity type** to restrict the analysis to one class (e.g. "Customer"). The scope resets to **All types (full graph)** every time the dialog opens, so each run is a deliberate choice. Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. The filter is applied in SQL inside the Lakeflow job, against the Delta snapshot — not by the graph store — so there is no in-memory limit to work around. **Cancel** closes the dialog without running.
+3. Click **Run Analysis** in the dialog to launch. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows on the page behind while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically on the **Dashboard** tab: six KPI tiles appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed), a distribution strip of five histogram tiles, and one full-width ranking chart for the selected metric. Each new run replaces the previous stored result for that domain version.
 
 > **Looking for past runs?** The Analytics page itself only ever shows the **last** result per domain version. The full run history — every analysis ever launched, across every version, including failed runs — lives on **Knowledge Graph → Management → Runs** as a second table below the build-runs table (see **Runs (Sidebar)** above).
 
@@ -649,7 +650,7 @@ The AI Interpretation agent also mentions flat types in its Key Findings and Rec
 
 #### Adjusting the Top-N and Resetting
 
-Use the **Top N** input at the top of the results section to control how many entities the ranking chart and detail table show. Change the entity type dropdown to re-run the analysis on a different class.
+Use the **Top N** input at the top of the results section to control how many entities the ranking chart and detail table show. To analyse a different class, click **Run Analysis** again and pick the entity type in the **Analysis scope** dialog. The funnel line above the results names the scope the displayed result was computed with.
 
 #### AI Interpretation
 

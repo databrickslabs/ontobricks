@@ -457,3 +457,71 @@ No markup or JS change: the tile order already matched the requested grouping.
 `uv run --frozen pytest -q -m "not scenario"`
 4427 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 33.56s
 (4421 before, plus the 6 new tests)
+
+---
+
+## Ask for the analysis scope at launch instead of parking it in the toolbar
+
+## Context
+
+The Entity Type dropdown sat in the Analytics toolbar but only took effect when
+a run started — it had no `onchange` and changing it redrew nothing. That made
+it possible for the toolbar to contradict the screen: run across all types,
+then pick "Customer" without re-running, and Interpret posted
+`class_filter: ["Customer"]` for full-graph data while the subtitle still said
+all types. The agent would then describe a scope nobody had computed.
+
+Three consumers read the live select (Interpret's payload, the funnel subtitle,
+and the Data Model Health "was filtered" flag), so the dropdown was acting as
+the app's record of what was on screen while simultaneously being an editable
+control. Moving it into a launch dialog separates those two roles.
+
+## Changes
+
+1. `src/front/templates/partials/dtwin/_query_analytics.html` — removed the
+   Entity Type label and select from the toolbar and added
+   `#analyticsScopeModal`, following the `analyticsMetricModal` pattern already
+   in the file. The select is *moved*, not duplicated, so `_loadEntityTypes`
+   and `_populateTypeSelect` still find it by id. Footer is Cancel plus a
+   primary Run Analysis. The toolbar button now calls `analyticsOpenScope()`.
+2. `src/front/static/query/js/query-analytics.js` — added `_resultScope`, the
+   class URI the displayed result was computed with, derived from
+   `meta.class_filter` (and cleared when absent, so a full-graph re-run stops
+   advertising the previous type). Repointed the subtitle, Interpret and Data
+   Model Health to it. `_getSelectedTypes()` now has exactly one reader: the
+   compute request, which is the scope being *requested*.
+3. Same file — `analyticsOpenScope` resets the select to the full graph on
+   every open, refuses to open when the job is unavailable, and awaits
+   `_loadEntityTypes()` rather than firing it off unawaited as the old fallback
+   did, so the dialog cannot appear offering only "All types".
+4. Same file — extracted `_typeLabel` so the dropdown option and the subtitle
+   share one label format, and `_scopeLabel` to resolve a URI back to that
+   label (the subtitle holds a URI now, not the option's text).
+5. `tests/units/front/test_analytics_dashboard.py` — added
+   `TestScopeIsAskedForAtLaunch` and `TestResultScopeDescribesWhatIsDisplayed`
+   (15 tests). Each was verified to fail when the behaviour it pins is
+   reverted, including mutations that restore the live-select read in Interpret,
+   drop the else-null that clears a stale scope, and put the select back in the
+   toolbar.
+6. `documentation/user-guide.md`, `documentation/features.md` — rewrote the
+   "Running an Analysis" steps and the Graph Analytics summary for the dialog.
+
+Not moved: Top N and Log scale act on what is already rendered, so they stay in
+the toolbar rather than a pre-run dialog.
+
+## Modified files
+
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `src/front/static/query/js/query-analytics.js`
+- `tests/units/front/test_analytics_dashboard.py`
+- `documentation/user-guide.md`
+- `documentation/features.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+## Test result
+
+`uv run --frozen pytest -q -m "not scenario"`
+4442 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.97s
+(4427 before, plus the 15 new tests)
+
+`node --check` passes. Modal rendered in headless Chrome to confirm layout.

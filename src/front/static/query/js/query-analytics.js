@@ -12,6 +12,13 @@
     var _jobAvailable = false;       // Databricks analytics job can run for this domain
     var _jobBlockedReason = '';      // why not, when an admin has enabled it and expects it to work
 
+    // The class URI the on-screen result was actually computed with (null =
+    // full graph). Deliberately separate from the scope modal's select: that
+    // select is a request being composed, this is a fact about what is
+    // displayed. Reading the select instead let the two disagree — pick a type
+    // without re-running and Interpret would describe a scope nobody computed.
+    var _resultScope = null;
+
     // ------------------------------------------------------------------
     // Metric explanations — shown in popup when user clicks ? on a card
     // ------------------------------------------------------------------
@@ -230,15 +237,27 @@
         }
     }
 
+    function _typeLabel(t) {
+        var uri = t.uri || t.name;
+        return (t.name || _localName(uri)) + (t.count ? '  (' + t.count + ')' : '');
+    }
+
+    // The subtitle names the scope of the displayed result, which is a URI, so
+    // it needs the same label the dropdown showed. Falls back to the local name
+    // when the type list has not loaded or no longer contains the type.
+    function _scopeLabel(uri) {
+        var match = _allTypes.filter(function (t) { return (t.uri || t.name) === uri; })[0];
+        return match ? _typeLabel(match) : _localName(uri);
+    }
+
     function _populateTypeSelect(sel) {
         var prev = sel.value;   // remember current selection across reloads
         sel.innerHTML = '<option value="">All types (full graph)</option>';
         _allTypes.forEach(function (t) {
             var uri   = t.uri || t.name;
-            var label = (t.name || _localName(uri)) + (t.count ? '  (' + t.count + ')' : '');
             var opt   = document.createElement('option');
             opt.value = uri;
-            opt.textContent = label;
+            opt.textContent = _typeLabel(t);
             opt.title = uri;
             sel.appendChild(opt);
         });
@@ -289,23 +308,19 @@
         meta = meta || {};
         _analyticsData = data;
 
-        // Restore the entity-type filter selection from a stored result so
-        // the subtitle and re-runs reflect what was actually computed.
-        var _selEl = document.getElementById('analyticsTypeSelect');
-        if (meta.class_filter && meta.class_filter.length && _selEl) {
-            var wanted = meta.class_filter[0];
-            if (Array.from(_selEl.options).some(function (o) { return o.value === wanted; })) {
-                _selEl.value = wanted;
-            }
-        }
+        // ``meta`` describes the result being rendered, so it is the authority
+        // on scope — including clearing it, which is what makes a full-graph
+        // re-run stop advertising the previous run's type.
+        _resultScope = (meta.class_filter && meta.class_filter.length)
+            ? meta.class_filter[0]
+            : null;
 
-        // Update subtitle with the active filter
+        // Update subtitle with the scope this result was computed with
         var _subtitle    = document.getElementById('analyticsSubtitle');
         var _subtitleTxt = document.getElementById('analyticsSubtitleText');
-        var _selOpt = _selEl && _selEl.selectedIndex >= 0 ? _selEl.options[_selEl.selectedIndex] : null;
         if (_subtitle && _subtitleTxt) {
-            if (_selOpt && _selEl.value) {
-                _subtitleTxt.textContent = _selOpt.text.trim();
+            if (_resultScope) {
+                _subtitleTxt.textContent = _scopeLabel(_resultScope);
                 _subtitle.classList.remove('d-none');
             } else {
                 _subtitle.classList.add('d-none');
@@ -343,7 +358,7 @@
 
         _renderDistributionStrip();
         analyticsRenderCharts();
-        _renderTypeProfiles(data.entity_type_profiles, !!_getSelectedTypes());
+        _renderTypeProfiles(data.entity_type_profiles, !!_resultScope);
 
         var results = document.getElementById('analyticsResults');
         if (results) results.classList.remove('d-none');
@@ -439,6 +454,30 @@
         }
     };
 
+    // Ask for the scope, then run. Entity type only takes effect at launch, so
+    // it is collected here instead of sitting in the toolbar between runs.
+    window.analyticsOpenScope = async function analyticsOpenScope() {
+        if (!_jobAvailable) {
+            _showAnalyticsError(_jobBlockedReason
+                ? 'The analytics job cannot run: ' + _jobBlockedReason
+                : 'Enable the Databricks analytics job in Settings → Global first.');
+            return;
+        }
+
+        // Awaited, unlike the old fire-and-forget fallback: the dialog exists to
+        // show this list, so opening it before the fetch lands would offer only
+        // "All types". Normally already populated when the section opened.
+        if (_allTypes.length === 0) await _loadEntityTypes();
+
+        // Reset to the full graph on every open: an inherited scope is easy to
+        // miss in a dialog you are about to dismiss with Run.
+        var sel = document.getElementById('analyticsTypeSelect');
+        if (sel) sel.value = '';
+
+        var el = document.getElementById('analyticsScopeModal');
+        if (el && window.bootstrap) bootstrap.Modal.getOrCreateInstance(el).show();
+    };
+
     window.analyticsCompute = async function () {
         // Backstop guard: the button is already disabled when the job is
         // unavailable, but direct JS calls also need defending.
@@ -449,19 +488,25 @@
             return;
         }
 
+        // Read the scope before dismissing, then close: the run's progress is
+        // shown on the page behind, not in the dialog.
+        var requested = _getSelectedTypes();
+        var _modalEl = document.getElementById('analyticsScopeModal');
+        if (_modalEl && window.bootstrap) {
+            var _m = bootstrap.Modal.getInstance(_modalEl);
+            if (_m) _m.hide();
+        }
+
         _setAnalysisBusy(true);
 
         _resetAnalyticsCards();
-
-        // Ensure entity types are loaded (fallback if section was opened directly)
-        if (_allTypes.length === 0) _loadEntityTypes();
 
         try {
             var resp = await fetch('/dtwin/metrics/compute', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ class_filter: _getSelectedTypes() })
+                body: JSON.stringify({ class_filter: requested })
             });
             var data = await resp.json();
             if (!data.success || !data.task_id) {
@@ -1062,7 +1107,11 @@
         if (status) status.textContent = '';
 
         try {
-            var payload = Object.assign({}, _analyticsData, { class_filter: _getSelectedTypes() });
+            // The scope of the displayed result, not of a control the user may
+            // have changed since: the agent must describe the data on screen.
+            var payload = Object.assign({}, _analyticsData, {
+                class_filter: _resultScope ? [_resultScope] : null
+            });
             // The whole body becomes the agent's metrics_payload, so adding a
             // field here changes an LLM prompt — which requires an eval delta
             // under .cursor/12-ai-feature-lifecycle.mdc. Distributions are a
