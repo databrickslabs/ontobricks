@@ -280,6 +280,7 @@ class JobMetrics:
         pagerank_iterations: int = 20,
         pivots: int = 64,
         max_depth: int = 32,
+        distribution_bins: int = DEFAULT_DISTRIBUTION_BINS,
     ) -> None:
         self._source_table = source_table
         self._runner = runner
@@ -289,7 +290,9 @@ class JobMetrics:
         self._pagerank_iterations = max(1, int(pagerank_iterations))
         self._pivots = max(0, int(pivots))
         self._max_depth = max(1, int(max_depth))
-        self._distribution_bins = DEFAULT_DISTRIBUTION_BINS
+        # Injectable so tests can assert against a hand-computable count;
+        # production has one call site which never overrides this.
+        self._distribution_bins = max(1, int(distribution_bins))
 
     def compute(
         self,
@@ -511,16 +514,15 @@ class JobMetrics:
                 mean = float(bounds.get(f"mean_{metric}", 0.0) or 0.0)
 
                 per_bin = counts.get(metric, {})
-                n_bins = (max(per_bin.keys()) + 1) if per_bin else self._distribution_bins
                 # Padded rather than sparse: the front end indexes positionally,
                 # and a bin with no nodes is a real, meaningful zero.
                 bins = [
-                    per_bin.get(i, 0) for i in range(n_bins)
+                    per_bin.get(i, 0) for i in range(self._distribution_bins)
                 ]
 
                 result.distributions[metric] = MetricDistribution(
                     bins=bins,
-                    bin_count=n_bins,
+                    bin_count=self._distribution_bins,
                     lo=round(lo, 8),
                     hi=round(hi, 8),
                     mean=round(mean, 8),
