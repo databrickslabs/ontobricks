@@ -729,15 +729,38 @@ class DigitalTwin:
         del stats[section]
         self._domain.save()
 
-    async def get_or_fetch_graph_status(self, settings) -> Dict[str, Any]:
-        """Return graph triplestore status from session cache, or fetch live and cache."""
-        cached = self.get_ts_cache("status")
-        if cached:
-            logger.debug("get_or_fetch_graph_status: serving from cache")
-            return cached
-        logger.debug("get_or_fetch_graph_status: cache miss — fetching live")
+    async def get_or_fetch_graph_status(
+        self, settings, force_refresh: bool = False
+    ) -> Dict[str, Any]:
+        """Return graph triplestore status from session cache, or fetch live and cache.
+
+        Inconclusive results (``has_data is None`` — the probe could not reach the
+        engine) are never cached, for the same reason as
+        :meth:`get_or_fetch_dt_existence`: this section drives the "Graph not
+        built" badge on every KG sub-page, so caching a transient engine timeout
+        as a confirmed absence contradicts the Build page — which force-refreshes
+        its own live probe — for the whole TTL.
+
+        ``force_refresh=True`` bypasses the cache so a page can re-establish the
+        truth without waiting the TTL out.
+        """
+        if not force_refresh:
+            cached = self.get_ts_cache("status")
+            if cached:
+                logger.debug("get_or_fetch_graph_status: serving from cache")
+                return cached
+            logger.debug("get_or_fetch_graph_status: cache miss — fetching live")
+        else:
+            logger.debug("get_or_fetch_graph_status: force_refresh — fetching live")
+
         result = await self.fetch_graph_triplestore_status(settings)
-        self.set_ts_cache("status", result)
+        if result.get("has_data") is not None:
+            self.set_ts_cache("status", result)
+        else:
+            logger.debug(
+                "get_or_fetch_graph_status: probe inconclusive (%s) — not caching",
+                result.get("graph_check_error") or "unknown",
+            )
         return result
 
     async def get_or_fetch_dt_existence(
@@ -904,7 +927,15 @@ class DigitalTwin:
     # ------------------------------------------------------------------
 
     async def fetch_graph_triplestore_status(self, settings) -> Dict[str, Any]:
-        """Live graph backend row count and paths."""
+        """Live graph backend row count and paths.
+
+        ``has_data`` is tri-state: ``True``/``False`` once the probe has answered,
+        and ``None`` when the engine could not be reached. A failed probe must
+        never be reported as ``False`` — callers cache this answer and render the
+        KG readiness badge from it, so one timeout against a remote engine would
+        otherwise tell users to rebuild a graph they already have.
+        ``graph_check_error`` carries the reason when ``has_data`` is ``None``.
+        """
         from back.core.helpers import (
             effective_graph_name,
             effective_graph_query_table,
@@ -918,20 +949,24 @@ class DigitalTwin:
             graph_name = effective_graph_query_table(domain, settings)
             view_table = effective_view_table(domain)
             graph_store = get_graphdb(domain, settings)
-            graph_ok = False
+            graph_exists = False
             graph_count = 0
             graph_path = None
+            probe_error = None
             if graph_store:
                 try:
-                    exists = await run_blocking(graph_store.table_exists, graph_name)
-                    if exists:
+                    graph_exists = bool(
+                        await run_blocking(graph_store.table_exists, graph_name)
+                    )
+                    if graph_exists:
                         gs = await run_blocking(graph_store.get_status, graph_name)
                         graph_count = int(gs.get("count", 0) or 0)
-                        graph_ok = graph_count > 0
                         graph_path = gs.get("path")
                 except Exception as e:
                     logger.warning("Graph status check failed: %s", e)
+                    probe_error = str(e) or e.__class__.__name__
 
+            graph_ok = None if probe_error else (graph_exists and graph_count > 0)
             build_stamp = (domain.triplestore or {}).get("build_last_update")
             result: Dict[str, Any] = {
                 "success": True,
@@ -939,14 +974,19 @@ class DigitalTwin:
                 "count": graph_count,
                 "view_table": view_table,
                 "graph_name": graph_name,
+                "graph_check_error": probe_error,
             }
             if build_stamp and graph_ok:
                 result["last_modified"] = build_stamp
             if graph_path:
                 result["path"] = graph_path
-            if not graph_ok:
+            if graph_ok is None:
+                result["reason"] = "Could not check the graph status"
+            elif not graph_ok:
+                # Keyed on existence, not on the count: an existing-but-empty
+                # graph used to be reported as never built.
                 result["reason"] = (
-                    "Graph does not exist yet" if not graph_count else "Graph is empty"
+                    "Graph is empty" if graph_exists else "Graph does not exist yet"
                 )
             return result
         except Exception as e:

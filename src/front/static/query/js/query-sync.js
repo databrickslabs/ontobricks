@@ -25,6 +25,14 @@ let syncIsRunning = false;
 let tripleStoreHasData = false;
 
 /**
+ * Whether the last status probe could not reach the graph engine (`has_data`
+ * came back null). A timeout is not evidence of a missing graph, so the badge
+ * must say "status unavailable" rather than send the user off to rebuild a
+ * graph they already have.
+ */
+let tripleStoreStatusUnknown = false;
+
+/**
  * Fetch all Information-page data in a single round-trip and distribute
  * results to the individual rendering functions.
  *
@@ -43,8 +51,10 @@ async function loadSyncInfo() {
 
         // --- Triplestore status ---
         var tsStatus = payload.triplestore_status || {};
+        tripleStoreStatusUnknown = !!(tsStatus.success && tsStatus.has_data === null);
         tripleStoreHasData = !!(tsStatus.success && tsStatus.has_data);
-        console.log('[Sync] Consolidated triplestore status -> hasData:', tripleStoreHasData);
+        console.log('[Sync] Consolidated triplestore status -> hasData:', tripleStoreHasData,
+            tripleStoreStatusUnknown ? '(probe inconclusive)' : '');
         renderTripleStoreStatus(tsStatus);
 
         // Guard against cache-staleness inconsistency: the shared cache timestamp
@@ -52,7 +62,12 @@ async function loadSyncInfo() {
         // even after a new status write sets has_data=false.  When the two signals
         // disagree (both ultimately check the same Postgres table), trust the
         // triplestore_status — it is a more targeted, recent check.
-        if (!tripleStoreHasData && payload.dt_existence) {
+        //
+        // Only a *definite* false may do this. A null has_data means the probe
+        // never reached the engine, which is no reason to erase a graph that
+        // dt_existence found; that asymmetry is what showed "Graph not built" on
+        // Analytics while the Build page listed the graph as present.
+        if (tsStatus.has_data === false && payload.dt_existence) {
             if (payload.dt_existence.graph_has_data) {
                 console.warn(
                     '[Sync] dt_existence says Loaded but triplestore_status says no data ' +
@@ -575,11 +590,14 @@ async function checkTripleStoreStatus(refresh) {
     try {
         const response = await fetch(url, { credentials: 'same-origin' });
         const data = await response.json();
+        tripleStoreStatusUnknown = !!(data.success && data.has_data === null);
         tripleStoreHasData = !!(data.success && data.has_data);
         console.log('[Sync] Triple store status:', data, '-> hasData:', tripleStoreHasData);
         renderTripleStoreStatus(data);
     } catch (e) {
         console.error('[Sync] Error checking triple store status:', e);
+        // The request itself failed, so the graph's state is equally unknown.
+        tripleStoreStatusUnknown = true;
         tripleStoreHasData = false;
         renderTripleStoreStatus(null);
     } finally {
@@ -614,6 +632,19 @@ function renderTripleStoreStatus(data) {
         area.innerHTML =
             '<div class="alert alert-warning small mb-0 py-1 px-2">' +
             '<i class="bi bi-exclamation-triangle me-1"></i>' + msg +
+            '</div>';
+        return;
+    }
+
+    if (data.has_data === null) {
+        // The probe never reached the engine, so neither "not built" nor "empty"
+        // is a claim we can make — say so instead of guessing at a cause.
+        const detail = data.graph_check_error ? ' (' + data.graph_check_error + ')' : '';
+        area.innerHTML =
+            '<div class="alert alert-warning small mb-0 py-1 px-2">' +
+            '<i class="bi bi-question-circle me-1"></i>' +
+            'Could not check the graph status' + detail +
+            ' — a connection problem, not a missing graph.' +
             '</div>';
         return;
     }
@@ -717,6 +748,14 @@ function updateKgReadyIndicators() {
         html = '<span class="badge bg-success bg-opacity-10 text-success border border-success fw-normal" '
             + 'title="The Knowledge Graph is built and ready to use (backend: ' + backend + ').">'
             + '<i class="bi bi-check-circle-fill me-1"></i>Graph ready'
+            + '<span class="opacity-75 ms-1">· ' + backend + '</span></span>';
+    } else if (tripleStoreStatusUnknown) {
+        // The probe could not reach the engine, so we do not know either way.
+        // Offering "Go to Build" here would invite a needless rebuild.
+        html = '<span class="badge bg-warning-subtle text-warning border border-warning fw-normal" '
+            + 'title="Could not reach the ' + backend + ' backend to check the graph. '
+            + 'This is a connection problem, not a missing graph — retry in a moment.">'
+            + '<i class="bi bi-question-circle me-1"></i>Status unavailable'
             + '<span class="opacity-75 ms-1">· ' + backend + '</span></span>';
     } else {
         html = '<span class="kg-not-built d-inline-flex align-items-center gap-2">'
@@ -1690,6 +1729,33 @@ function _escHtml(str) {
  * Fetch artefact existence flags and render check / cross icons
  * next to each Knowledge Graph line.
  */
+/**
+ * Let the force-refreshed existence probe correct the readiness badge.
+ *
+ * `/dtwin/sync/info` serves `triplestore_status` from a five-minute session
+ * cache, whereas `/dtwin/sync/dt-existence` is fetched with force_refresh and so
+ * carries the current truth. Without this the two never met: the Build page
+ * showed the graph as present from this payload while every KG sub-page kept
+ * rendering "Graph not built" from the cached status.
+ *
+ * Only an affirmative live result promotes the badge — a probe that came back
+ * unknown leaves the existing state alone.
+ */
+function _reconcileReadinessWithLiveProbe(data) {
+    if (!data || data.pending === true) return;
+    if (data.graph_has_data !== true) return;
+    if (tripleStoreHasData && !tripleStoreStatusUnknown) return;
+
+    console.warn(
+        '[Sync] Live dt_existence probe found graph data but the cached ' +
+        'triplestore_status did not. Promoting readiness to built.'
+    );
+    tripleStoreHasData = true;
+    tripleStoreStatusUnknown = false;
+    updateDataMenus();
+    updateInsightsTab();
+}
+
 async function _loadDtExistence() {
     _setArchRetrievalLoading(true);
     try {
@@ -1697,6 +1763,7 @@ async function _loadDtExistence() {
         var data = await resp.json();
         _applyBuildGraphEngineUi(data);
         _applyDtExistence(data);
+        _reconcileReadinessWithLiveProbe(data);
     } catch (e) {
         console.warn('[Sync] Could not load DT existence flags', e);
         // Clear spinners so the cards never stay stuck in Loading.

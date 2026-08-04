@@ -453,12 +453,12 @@ function _splitFqnPrefix(fqn) {
 }
 
 /**
- * Recompute the Triple-Store FQN and Graph DB logical table hint
- * from the current domain name + version inputs. Mirrors the
- * backend naming rules so the user sees what UC objects *will be*
- * called once they save the domain — without round-tripping to the
- * server. Bound to the domain-name ``change``/``blur`` event so it
- * runs once per committed name change, not on every keystroke.
+ * Recompute the Triple-Store FQN from the current domain name +
+ * version inputs. Mirrors the backend naming rules so the user sees
+ * what UC objects *will be* called once they save the domain —
+ * without round-tripping to the server. Bound to the domain-name
+ * ``change``/``blur`` event so it runs once per committed name
+ * change, not on every keystroke.
  */
 function refreshDtNamesFromForm() {
     const nameEl = document.getElementById('domainName');
@@ -473,12 +473,6 @@ function refreshDtNamesFromForm() {
         const prefix = _splitFqnPrefix(tsEl.value);
         const tsName = 'triplestore_' + safe + '_V' + v;
         tsEl.value = prefix ? prefix.catalog + '.' + prefix.schema + '.' + tsName : (safe ? tsName : '');
-    }
-
-    const cfg = window.__TRIPLESTORE_CONFIG || {};
-    const lbHint = document.getElementById('graphLakebaseLogicalTable');
-    if (lbHint && cfg.graph_engine === 'lakebase' && safe) {
-        lbHint.textContent = safe + '_V' + v;
     }
 }
 

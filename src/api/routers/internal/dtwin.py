@@ -1242,16 +1242,16 @@ async def triplestore_status(
 ):
     """Lightweight check: does the triple store table exist and contain data?
 
-    Returns session-cached status when available; falls back to a live
-    query and caches the result.  ``refresh`` is accepted for API
-    compatibility and ignored.
+    Returns session-cached status when available; falls back to a live query and
+    caches the result. ``refresh=true`` bypasses the cache, which is the escape
+    hatch the Build page's Refresh button needs when a stale entry disagrees with
+    the live graph.
     """
-    _ = refresh  # query param kept for backward compatibility
     try:
         domain = get_domain(session_mgr)
         dt = DigitalTwin(domain)
         await run_blocking(dt.sync_last_build_from_schedule, settings)
-        return await dt.get_or_fetch_graph_status(settings)
+        return await dt.get_or_fetch_graph_status(settings, force_refresh=refresh)
     except (ValidationError, InfrastructureError, NotFoundError):
         raise
     except Exception as e:

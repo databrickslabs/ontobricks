@@ -57,50 +57,40 @@
             <i class="bi bi-clock-history me-1"></i><span id="analyticsComputedAtText"></span>
         </p>
 
-        <!-- Aggregate stats row — always visible above tabs -->
-        <div class="row g-2 mb-3" id="analyticsStatsRow">
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="ob-kpi-tile">
-                    <div class="ob-kpi-tile-icon"><i class="bi bi-circle-fill"></i></div>
-                    <div class="ob-kpi-tile-value" id="aStatNodes">—</div>
-                    <div class="ob-kpi-tile-label">Nodes</div>
-                    <div class="ob-kpi-tile-label analytics-kpi-sublabel" id="aStatGraphNodes"></div>
-                </div>
+        <!-- Aggregate stats row — always visible above tabs. A grid rather than a
+             Bootstrap row so its edges line up with the tab strip below; see
+             .analytics-kpi-strip in query-analytics.css. -->
+        <div class="analytics-kpi-strip mb-3" id="analyticsStatsRow">
+            <div class="ob-kpi-tile">
+                <div class="ob-kpi-tile-icon"><i class="bi bi-circle-fill"></i></div>
+                <div class="ob-kpi-tile-value" id="aStatNodes">—</div>
+                <div class="ob-kpi-tile-label">Nodes</div>
+                <div class="ob-kpi-tile-label analytics-kpi-sublabel" id="aStatGraphNodes"></div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="ob-kpi-tile">
-                    <div class="ob-kpi-tile-icon"><i class="bi bi-share"></i></div>
-                    <div class="ob-kpi-tile-value" id="aStatEdges">—</div>
-                    <div class="ob-kpi-tile-label">Edges</div>
-                </div>
+            <div class="ob-kpi-tile">
+                <div class="ob-kpi-tile-icon"><i class="bi bi-share"></i></div>
+                <div class="ob-kpi-tile-value" id="aStatEdges">—</div>
+                <div class="ob-kpi-tile-label">Edges</div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="ob-kpi-tile tile-success">
-                    <div class="ob-kpi-tile-icon"><i class="bi bi-diagram-2"></i></div>
-                    <div class="ob-kpi-tile-value" id="aStatComponents">—</div>
-                    <div class="ob-kpi-tile-label">Components</div>
-                </div>
+            <div class="ob-kpi-tile tile-success">
+                <div class="ob-kpi-tile-icon"><i class="bi bi-diagram-2"></i></div>
+                <div class="ob-kpi-tile-value" id="aStatComponents">—</div>
+                <div class="ob-kpi-tile-label">Components</div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="ob-kpi-tile">
-                    <div class="ob-kpi-tile-icon"><i class="bi bi-node-plus"></i></div>
-                    <div class="ob-kpi-tile-value" id="aStatAvgDegree">—</div>
-                    <div class="ob-kpi-tile-label">Avg Degree</div>
-                </div>
+            <div class="ob-kpi-tile">
+                <div class="ob-kpi-tile-icon"><i class="bi bi-node-plus"></i></div>
+                <div class="ob-kpi-tile-value" id="aStatAvgDegree">—</div>
+                <div class="ob-kpi-tile-label">Avg Degree</div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="ob-kpi-tile tile-muted">
-                    <div class="ob-kpi-tile-icon"><i class="bi bi-grid-3x3"></i></div>
-                    <div class="ob-kpi-tile-value" id="aStatDensity">—</div>
-                    <div class="ob-kpi-tile-label">Density</div>
-                </div>
+            <div class="ob-kpi-tile tile-muted">
+                <div class="ob-kpi-tile-icon"><i class="bi bi-grid-3x3"></i></div>
+                <div class="ob-kpi-tile-value" id="aStatDensity">—</div>
+                <div class="ob-kpi-tile-label">Density</div>
             </div>
-            <div class="col-6 col-md-4 col-lg-2">
-                <div class="ob-kpi-tile tile-muted">
-                    <div class="ob-kpi-tile-icon"><i class="bi bi-stopwatch"></i></div>
-                    <div class="ob-kpi-tile-value" id="aStatElapsed">—</div>
-                    <div class="ob-kpi-tile-label">Computed in</div>
-                </div>
+            <div class="ob-kpi-tile tile-muted">
+                <div class="ob-kpi-tile-icon"><i class="bi bi-stopwatch"></i></div>
+                <div class="ob-kpi-tile-value" id="aStatElapsed">—</div>
+                <div class="ob-kpi-tile-label">Computed in</div>
             </div>
         </div>
 

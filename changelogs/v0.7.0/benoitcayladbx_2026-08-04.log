@@ -525,3 +525,194 @@ the toolbar rather than a pre-run dialog.
 (4427 before, plus the 15 new tests)
 
 `node --check` passes. Modal rendered in headless Chrome to confirm layout.
+
+---
+
+# Stop reporting an unreachable graph engine as "Graph not built"
+
+## Context
+
+On a Neo4j (Aura) project the Build page listed the graph as present while every
+KG sub-page — Analytics included — showed the "Graph not built" badge and a "Go
+to Build" button, inviting a rebuild of a graph that was already there.
+
+The two pages answer the same question through different plumbing. The badge
+reads `/dtwin/sync/info` → `triplestore_status.has_data`, which `sync_info`
+serves cache-first from the domain session (`_TS_STATS_CACHE_TTL_SECONDS`, 5
+min). The Build page's artefact cards read `/dtwin/sync/dt-existence`, which is
+fetched with `force_refresh` and so always re-probes.
+
+Two defects turned that into a contradiction:
+
+1. `fetch_graph_triplestore_status` swallowed every exception from
+   `table_exists`/`get_status` and returned a confident `has_data=False` with
+   `reason="Graph does not exist yet"`. A timeout was indistinguishable from a
+   graph that had never been built.
+2. `get_or_fetch_graph_status` then cached that unconditionally, with no way to
+   force a re-check — so one slow call poisoned the badge for five minutes. A
+   `SHOW CONSTRAINTS` against Aura was observed taking 958 ms, which is exactly
+   the latency profile that triggers it.
+
+`get_or_fetch_dt_existence` already guards against this and says so in its
+docstring — "caching a transient failure as if it were a confirmed absence is
+the bug this whole pathway exists to prevent". The guard had never been extended
+to the `status` section.
+
+Compounding it, the live probe's answer never reached the badge: `_loadDtExistence`
+applied the force-refreshed result to the Build page's cards only, and
+`loadSyncInfo` actively overrode a live `graph_has_data=true` to false on any
+falsy status, on the stated assumption that `triplestore_status` was "a more
+targeted, recent check" — but it is the cached one.
+
+## Changes
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py` —
+   `fetch_graph_triplestore_status` now returns a tri-state `has_data`:
+   `True`/`False` once the probe answers, `None` when the engine could not be
+   reached, with the cause in a new `graph_check_error` field. The inconclusive
+   case no longer claims the graph does not exist.
+2. Same file — `reason` for a definite negative is keyed on existence rather
+   than the row count, so an existing-but-empty graph reads "Graph is empty"
+   instead of "Graph does not exist yet".
+3. Same file — `get_or_fetch_graph_status` never caches an inconclusive result
+   and takes a `force_refresh` flag, mirroring `get_or_fetch_dt_existence`.
+4. `src/api/routers/internal/dtwin.py` — `/dtwin/sync/status` wires its
+   long-ignored `refresh` query param to `force_refresh`. The frontend already
+   documented that flag as forcing a live check, so this makes the Build page's
+   Refresh button the escape hatch from a stale entry.
+5. `src/front/static/query/js/query-sync.js` — added `tripleStoreStatusUnknown`
+   and a distinct amber "Status unavailable" badge state, reached before the
+   not-built branch and deliberately without a "Go to Build" button.
+6. Same file — new `_reconcileReadinessWithLiveProbe`, called from
+   `_loadDtExistence`, promotes readiness and repaints the indicators when the
+   force-refreshed probe finds graph data the cached status missed. Only an
+   affirmative live result promotes; a pending skeleton or unknown is ignored.
+7. Same file — the cache-staleness override now fires only on a definite
+   `has_data === false`, so a failed probe can no longer erase what the live
+   existence check found. A failed status *request* is now treated as unknown
+   rather than as an absent graph.
+8. Same file — `renderTripleStoreStatus` gained an unknown branch. An
+   inconclusive probe used to fall through to "Graph is empty. Run
+   Synchronize", which is a claim the probe never supported; it now reports the
+   connection error.
+9. `src/front/static/query/js/query-databricks-build.js` — the Delta build
+   status text distinguishes an unreachable engine ("Status unavailable") from
+   an empty graph ("No data yet").
+10. `tests/units/dtwin/test_graph_status_probe_failure.py` — new file, 15 tests
+   covering the tri-state probe, the never-cache-an-unknown contract,
+   `force_refresh`, and guard tests pinning the premise (a confident answer is
+   still cached; the TTL is long enough to matter). All 9 behavioural tests were
+   confirmed red before the fix.
+11. `tests/units/front/test_kg_readiness_indicator.py` — added
+   `TestAnUnreachableEngineIsNotAMissingGraph` and
+   `TestTheLiveProbeCorrectsTheCachedBadge` (13 tests). Six mutations were run
+   and all caught, including neutering the unknown branch with an added
+   `false &&`, reverting the override condition, dropping the reconcile call,
+   dropping the pending guard, and removing the repaint. The first pass of the
+   ordering test missed the `false &&` mutation, so it now pins the whole branch
+   condition rather than just the identifier's position.
+
+## Modified files
+
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/static/query/js/query-databricks-build.js`
+- `tests/units/dtwin/test_graph_status_probe_failure.py`
+- `tests/units/front/test_kg_readiness_indicator.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+## Test result
+
+`uv run --frozen pytest -q -m "not scenario"`
+4470 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.77s
+(4442 before, plus the 28 new tests)
+
+`node --check` passes on both modified JS files. No linter errors.
+
+Not verified in a browser against the live Neo4j project — the badge's stale
+entry expires on its own, so reproducing it on demand needs a forced probe
+failure.
+
+---
+
+# Line the Analytics KPI strip up with the tab container
+
+## Context
+
+The KPI tiles overhung the tab strip below them on the right. `.ob-tabs` and
+`.ob-tab-content` are inset 12px from the right (components.css, main.css) to
+match `.section-header`'s `padding-right`, and the KPI row was a Bootstrap
+`.row`, which is not.
+
+Measured in headless Chrome against the real cascade, at 1500 / 1100 / 800 /
+500px viewports: left edges already agreed, the right edge was out by 11.9px.
+
+A `.row` cannot be lined up by simply adding the same 12px, because its negative
+gutters (`margin-right: -0.25rem` against the columns' `padding-right: 0.25rem`)
+shift the tile's edge a further 4px — the compensating value would have been an
+unexplainable `-8px`. Dropping to a grid removes that arithmetic and matches the
+`.analytics-dist-strip` pattern already used in this stylesheet.
+
+## Changes
+
+1. `src/front/static/query/css/query-analytics.css` — new
+   `.analytics-kpi-strip`: a six-track `minmax(0, 1fr)` grid with `gap: 0.5rem`
+   (the old `g-2`) and `margin-right: 12px` to match the tab container. Media
+   queries at 991.98px and 767.98px reproduce the `col-lg-2` / `col-md-4` /
+   `col-6` behaviour, so the tiles still go 6 → 3 → 2 across.
+2. `src/front/templates/partials/dtwin/_query_analytics.html` — the stats row
+   uses the new class, and the six `col-6 col-md-4 col-lg-2` wrapper divs are
+   gone since the grid places the tiles directly. Every `aStat*` id is unchanged,
+   so `_renderAnalyticsData` is untouched.
+3. `tests/units/front/test_analytics_dashboard.py` — added
+   `TestTheKpiStripLinesUpWithTheTabs` (6 tests) pinning the grid, the 12px
+   inset, the `minmax(0, 1fr)` tracks, and both breakpoints. One test pairs the
+   strip's inset with `.ob-tab-content`'s so the two cannot drift apart. Four
+   mutations were run and all caught: dropping the inset, reverting to a bare
+   `1fr`, changing a breakpoint's track count, and restoring the Bootstrap row.
+
+## Verification
+
+Re-measured after the change: `RIGHT_DELTA` and `LEFT_DELTA` are 0.0 at 1500 /
+1100 / 800 / 500px, and the tiles-per-row count is 6 at ≥992px, 3 at 900px and 2
+at 700px and below — the same as the Bootstrap columns produced.
+
+## Modified files
+
+- `src/front/static/query/css/query-analytics.css`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `tests/units/front/test_analytics_dashboard.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+## Test result
+
+`uv run --frozen pytest -q -m "not scenario"`
+4476 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 40.30s
+(4470 before, plus the 6 new tests)
+
+## Remove Graph Database labels from Domain → Information → Knowledge Graph
+
+Context: The Knowledge Graph tab on Domain → Information showed a read-only
+"Graph Database (Graph DB)" section with Lakebase logical-table labels. That
+hint is redundant now that Graph Backend selection and Settings → Graph DB
+cover configuration; remove the dead labels only.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   Removed the Graph Database (Graph DB) read-only section (Lakebase logical
+   table hint). Left Graph Backend, Neo4j override, Dual KG explainer, and
+   Triple-Store FQN intact.
+2. `src/front/static/domain/js/domain-information.js`
+   Dropped `#graphLakebaseLogicalTable` updates from `refreshDtNamesFromForm`
+   (element no longer exists).
+3. `releasereq/TODO.md`
+   Moved the item to Tasks DONE.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- releasereq/TODO.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4476 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 33.73s

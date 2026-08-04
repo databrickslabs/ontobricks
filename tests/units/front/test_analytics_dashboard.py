@@ -161,6 +161,53 @@ class TestKpiRowUsesTheSharedTile:
         assert stat_id in panel
 
 
+class TestTheKpiStripLinesUpWithTheTabs:
+    """`.ob-tabs` and `.ob-tab-content` are inset 12px from the right.
+
+    A Bootstrap `.row` is not, so the tiles overhung the tab strip by 12px
+    (measured in Chrome at 1500/1100/800/500px viewports before the change).
+    Its negative gutters also offset both edges by 4px, which is why the strip is
+    a grid rather than a row carrying a compensating margin.
+    """
+
+    def test_the_strip_is_a_grid_not_a_bootstrap_row(self, panel):
+        row = panel[panel.index('id="analyticsStatsRow"') - 200:]
+        row = row[: row.index('id="analyticsTabs"')]
+        assert "analytics-kpi-strip" in row
+        assert "row g-2" not in row
+        assert "col-lg-2" not in row, "column wrappers are gone with the row"
+
+    def test_the_strip_carries_the_same_right_inset_as_the_tabs(self, css):
+        block = css[css.index(".analytics-kpi-strip {"):]
+        block = block[: block.index("}")]
+        assert "margin-right: 12px" in block
+
+    def test_the_inset_matches_what_ob_tab_content_uses(self):
+        """If the shared 12px ever changes, this pairing has to change with it."""
+        main_css = (
+            REPO_ROOT / "src/front/static/global/css/main.css"
+        ).read_text(encoding="utf-8")
+        block = main_css[main_css.index(".ob-tab-content {"):]
+        block = block[: block.index("}")]
+        assert "margin-right: 12px" in block
+
+    def test_the_tracks_can_shrink_below_their_content(self, css):
+        """Bare 1fr means minmax(auto, 1fr) and would floor the track widths."""
+        block = css[css.index(".analytics-kpi-strip {"):]
+        block = block[: block.index("}")]
+        assert "repeat(6, minmax(0, 1fr))" in block
+
+    @pytest.mark.parametrize("breakpoint_px,tracks", (("991.98px", 3), ("767.98px", 2)))
+    def test_the_old_column_breakpoints_are_preserved(self, css, breakpoint_px, tracks):
+        """col-6 / col-md-4 / col-lg-2 gave 2 / 3 / 6 tiles across."""
+        query = f"@media (max-width: {breakpoint_px})"
+        assert query in css
+        block = css[css.index(query):]
+        block = block[: block.index("\n}")]
+        assert f"repeat({tracks}, minmax(0, 1fr))" in block
+        assert "analytics-kpi-strip" in block
+
+
 class TestDistributionStrip:
     def test_the_strip_is_rendered_from_the_distributions_payload(self, js):
         assert "function _renderDistributionStrip" in js

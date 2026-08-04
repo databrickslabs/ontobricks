@@ -265,26 +265,6 @@
                                 name and version (<code>triplestore_&lt;domain&gt;_V&lt;version&gt;</code>).
                             </small>
                         </div>
-
-                        <!-- Graph Database info (read-only, computed) -->
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">
-                                <i class="bi bi-diagram-3 me-1"></i> Graph Database <small class="text-muted">(Graph DB)</small>
-                            </label>
-
-                            <div class="alert alert-light border small mb-2 py-2">
-                                <strong><i class="bi bi-database me-1"></i>Lakebase (Postgres)</strong>
-                                <p class="mb-1 mt-2 small">
-                                    Graph triples are stored in the App-bound Lakebase Postgres instance.
-                                    The logical table name follows your domain and version
-                                    (<span id="graphLakebaseLogicalTable" class="font-monospace">{{ graph_name|default('', true) }}</span>).
-                                    Schema and database are configured under <em>Settings → Graph DB</em>.
-                                </p>
-                                <p class="mb-0 small text-muted">
-                                    Postgres is the source of truth for the graph store.
-                                </p>
-                            </div>
-                        </div>
                     </div>
 
                 </div>
