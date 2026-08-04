@@ -682,6 +682,31 @@ def test_empty_bins_are_padded_with_zero_not_dropped():
     assert result.distributions["pagerank"].bins == [5, 0, 0, 3]
 
 
+def test_bins_are_padded_to_the_configured_count_not_the_observed_one():
+    """The SQL emits no row for an empty bin, so a payload whose top bins are
+    all empty must still be bin_count long. Deriving the length from the highest
+    bin index seen would make the payload's shape depend on the data."""
+    rows = _bin_rows("pagerank", [5, 3])  # only bins 0 and 1 come back
+    result = _metrics_with_distributions(bin_rows=rows).compute(MetricsRequest())
+    dist = result.distributions["pagerank"]
+    assert dist.bins == [5, 3, 0, 0]
+    assert dist.bin_count == 4
+
+
+def test_an_all_identical_metric_still_reports_the_full_bin_count():
+    """hi == lo puts every node in bin 0. That is one *populated* bin out of
+    bin_count, not a distribution with one bin."""
+    rows = _bin_rows("pagerank", [7])
+    bounds = _bounds_row(lo_pagerank=0.25, hi_pagerank=0.25, mean_pagerank=0.25)
+    result = _metrics_with_distributions(
+        bin_rows=rows, bounds=bounds
+    ).compute(MetricsRequest())
+    dist = result.distributions["pagerank"]
+    assert dist.bins == [7, 0, 0, 0]
+    assert dist.bin_count == 4
+    assert dist.median == pytest.approx(0.25)
+
+
 def test_unavailable_metrics_get_no_distribution():
     """Stored as zeros; a histogram of them would read as real measurements."""
     summary = _default_summary_row(pivot_count=0, bfs_complete=True)
@@ -823,11 +848,41 @@ Then add the reader method after `_read_type_profiles`:
             result.distributions.clear()
 ```
 
-Add `_distribution_bins` to `JobMetrics.__init__`, after `self._max_depth`:
+Add a `distribution_bins` keyword to `JobMetrics.__init__` (after `max_depth`) and store it after `self._max_depth`:
 
 ```python
-        self._distribution_bins = DEFAULT_DISTRIBUTION_BINS
+        distribution_bins: int = DEFAULT_DISTRIBUTION_BINS,
 ```
+```python
+        # Injectable so tests can assert against a hand-computable bin count.
+        # Production has exactly one call site and never overrides it.
+        self._distribution_bins = max(1, int(distribution_bins))
+```
+
+**`bin_count` is the configured count, never a count derived from the data.**
+The padding loop must run over `range(self._distribution_bins)` and
+`bin_count` must be `self._distribution_bins`. Deriving either from
+`max(per_bin.keys()) + 1` looks equivalent — because the node scoring exactly
+`hi` always clamps into the last bin, so the highest bin is normally occupied —
+but it makes the payload's shape depend on the data, silently returns a single
+bin for an all-identical metric, and defeats the reason `bin_count` is stored
+at all rather than read off `len(bins)`.
+
+The test helper therefore injects a small count. In `_job_metrics`, add:
+
+```python
+def _job_metrics(
+    *,
+    query=None,
+    runner=None,
+    top_n: int = 100,
+    pivots: int = 64,
+    max_depth: int = 32,
+    distribution_bins: int = 4,   # matches the 4-bin fake rows above
+) -> JobMetrics:
+```
+
+and pass `distribution_bins=distribution_bins` through to the constructor.
 
 - [ ] **Step 5: Run test to verify it passes**
 
