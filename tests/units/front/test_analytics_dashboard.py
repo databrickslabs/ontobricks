@@ -59,11 +59,13 @@ class TestAssetsAreSplitOut:
 
     def test_dtwin_loads_both_assets_cache_busted(self):
         html = DTWIN.read_text(encoding="utf-8")
-        for asset in ("query/css/query-analytics.css",
-                      "query/js/query-analytics.js"):
-            assert asset in html
-        block = html[html.index("query-analytics.js") - 400:]
-        assert "asset_version" in block[:600]
+        # Asserted as whole literals: a window around the tag also spans the
+        # neighbouring <script>s, which carry their own ?v={{ asset_version }}.
+        for literal in (
+            "query/css/query-analytics.css') }}?v={{ asset_version }}",
+            "query/js/query-analytics.js') }}?v={{ asset_version }}",
+        ):
+            assert literal in html
 
     def test_cross_file_globals_keep_their_names(self, js):
         """query.js and query-sigmagraph.js call these by name."""
@@ -117,7 +119,9 @@ class TestTabStripIsThreeTabs:
         assert 'class="nav nav-tabs ob-tabs' in panel
 
     def test_the_strip_does_not_re_apply_baked_in_utilities(self, panel):
-        strip = panel[panel.index('id="analyticsTabs"'):]
+        # class= sits before id= on the <ul>, so the slice has to start at the
+        # opening tag or the class list is never examined.
+        strip = panel[panel.rindex("<ul", 0, panel.index('id="analyticsTabs"')):]
         strip = strip[: strip.index(">")]
         for banned in ("px-3", "pt-2", "pt-3", "bg-white", "font-size"):
             assert banned not in strip
@@ -199,7 +203,8 @@ class TestDistributionStrip:
 
     def test_approximate_metrics_are_badged_in_the_strip(self, js):
         fn = _fn(js, "_renderDistributionStrip")
-        assert "asymp" in fn or "estimate" in fn.lower()
+        assert "analytics-dist-badge" in fn
+        assert "approximate.indexOf(m.key)" in fn
 
     def test_the_median_is_labelled_as_approximate(self, js):
         """Interpolated from bins; accurate to one bin width, so the caption
@@ -275,8 +280,9 @@ class TestLogScaleToggle:
         """Bar heights stop being proportional to counts; an unlabelled log
         chart misleads."""
         fn = _fn(js, "_renderDistributionStrip")
-        assert "_logScale" in fn
-        assert "log" in fn
+        assert re.search(r"_logScale \?[^\n]*<em>log</em>", fn), (
+            "the caption must name the log scale, not merely read the flag"
+        )
 
 
 class TestInterpretPayloadExcludesDistributions:

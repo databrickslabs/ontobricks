@@ -107,6 +107,9 @@
         Object.keys(_charts).forEach(function (key) {
             if (_charts[key]) _charts[key].resize();
         });
+        Object.keys(_distCharts).forEach(function (key) {
+            if (_distCharts[key]) _distCharts[key].resize();
+        });
     });
 
     // Disable / re-enable the Run Analysis button based on whether the KG has been built

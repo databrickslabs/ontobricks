@@ -303,8 +303,10 @@ Plan:  documentation/superpowers/plans/2026-08-04-kg-analytics-dashboard.md
    `MetricsResult.distributions`; `DEFAULT_DISTRIBUTION_BINS = 20`.
 2. `src/back/core/graph_analysis/JobMetrics.py` — added
    `distribution_bounds_query`, `distributions_query`, `interpolate_quantile` and
-   `_read_distributions`. SQL is portable across SQLite, Spark and Postgres; a
-   failed histogram read no longer discards the run.
+   `_read_distributions`. The SQL executes on SQLite (tests) and
+   Databricks/Spark (production) and parses under all three sqlglot dialects;
+   Postgres would additionally need the `ROUND` argument cast to `numeric` to
+   execute. A failed histogram read no longer discards the run.
 3. `src/front/static/query/css/query-analytics.css` — new; all Analytics styles.
 4. `src/front/static/query/js/query-analytics.js` — new; the ~1100 lines of JS
    previously inline in the partial, plus the dashboard renderers. Ranking-chart
