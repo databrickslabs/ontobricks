@@ -29,8 +29,20 @@ document.addEventListener('DOMContentLoaded', function() {
  * separate requests. Admin-only nav items are now gated declaratively
  * via ``[data-requires-app="admin"]`` in ``permissions.css`` so no
  * extra fetch or JS pass is needed.
+ *
+ * Cross-domain ``/resolve`` bridges switch the session server-side and
+ * land with ``?domain_switched=1``. Bust the navbar cache *before* the
+ * first fetch so the Domain name/version update immediately.
  */
 function initNavbar() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('domain_switched') === '1') {
+        invalidateDomainCaches();
+        params.delete('domain_switched');
+        const qs = params.toString();
+        const clean = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+        try { history.replaceState(null, '', clean); } catch (_) { /* ignore */ }
+    }
     loadNavbarState();
     initSubnavActiveState();
 }

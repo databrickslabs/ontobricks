@@ -10,7 +10,9 @@ can load the correct graph.
 
 Cross-domain bridges are handled server-side: the target domain is
 loaded into the session *before* the redirect, so the browser only
-needs a single page load to display the graph.
+needs a single page load to display the graph. Successful switches
+append ``domain_switched=1`` so the navbar busts its cached domain
+name/version before painting.
 """
 
 from __future__ import annotations

@@ -747,6 +747,41 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4476 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.39s
 
+## Fix navbar domain name stale after bridge switch
+
+Context: From KB/Explorer, clicking a cross-domain bridge loads the target
+domain server-side via `/resolve` then redirects to `/dtwin/`. The navbar's
+15 s sessionStorage cache for `/navbar/state` was never invalidated on that
+path, so Domain name/version in the top bar stayed on the previous domain
+until TTL expiry. Registry / Graph Switcher paths already busted the cache;
+the resolve bridge path did not.
+
+Changes:
+
+1. `src/back/objects/domain/Domain.py`
+   Successful server-side bridge switch redirects with `domain_switched=1`.
+2. `src/front/static/global/js/navbar.js`
+   `initNavbar` invalidates domain caches before the first `/navbar/state`
+   fetch when `domain_switched=1`, then strips the flag via `replaceState`.
+3. `src/front/static/query/js/query.js`
+   Client-side bridge fallback uses `invalidateDomainCaches()` (full
+   contract) instead of only `/navbar/state`.
+4. `src/front/routes/resolve.py`
+   Docstring notes the navbar cache-bust flag.
+5. `tests/units/domain/test_bridge_resolve_navbar.py`
+   Unit coverage for redirect URL flag on success / failure / no-target.
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/front/static/global/js/navbar.js
+- src/front/static/query/js/query.js
+- src/front/routes/resolve.py
+- tests/units/domain/test_bridge_resolve_navbar.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4482 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.70s
+
+---
+
 ## Regression: Bulk loading sync_mode registry round-trip
 
 Context: Settings → Lakebase → Bulk loading (App-managed / Managed sync) was
