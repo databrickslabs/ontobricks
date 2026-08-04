@@ -1,0 +1,24 @@
+/* ==========================================================================
+   Knowledge Graph -> Analytics
+   Paired with templates/partials/dtwin/_query_analytics.html and
+   static/query/js/query-analytics.js.
+   ========================================================================== */
+
+/* Fill the available height and scroll inside the pane rather than the page. */
+#analyticsSection {
+    overflow: hidden;
+}
+
+#analyticsResults {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+#analyticsResults > .ob-tab-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}

@@ -31,8 +31,12 @@ def _partial() -> str:
     return _PARTIAL.read_text(encoding="utf-8")
 
 
+_ANALYTICS_JS = Path("src/front/static/query/js/query-analytics.js")
+
+
 def _analytics_partial() -> str:
-    return _ANALYTICS.read_text(encoding="utf-8")
+    """Markup plus behaviour: the History tab's traces could be in either."""
+    return _ANALYTICS.read_text(encoding="utf-8") + "\n" + _ANALYTICS_JS.read_text(encoding="utf-8")
 
 
 class TestRunsTabs:

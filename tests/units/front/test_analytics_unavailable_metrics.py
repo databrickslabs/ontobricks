@@ -18,11 +18,13 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PANEL = REPO_ROOT / "src/front/templates/partials/dtwin/_query_analytics.html"
+SCRIPT = REPO_ROOT / "src/front/static/query/js/query-analytics.js"
 
 
 @pytest.fixture(scope="module")
 def html() -> str:
-    return PANEL.read_text()
+    """Markup and behaviour now live in two files; assert across both."""
+    return PANEL.read_text() + "\n" + SCRIPT.read_text()
 
 
 @pytest.fixture(scope="module")
