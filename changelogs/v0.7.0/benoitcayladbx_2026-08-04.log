@@ -1,0 +1,215 @@
+# Settings → Automation → Runs replaces Build Analytics (all domains, paginated)
+
+Context: Settings → Automation → Build Analytics showed one domain's build
+history behind a domain + version dropdown, with aggregate summary cards on
+top — a second, weaker view of what Knowledge Graph → Management → Runs
+already does better, and it had no analytics-run history at all. It is
+replaced by a cross-domain Runs page: the same two-tab layout as the
+per-domain page (Build runs / Analytics runs), a Domain column, a Domain
+filter defaulting to "All domains", and real server-side pagination — the
+whole registry's history has no natural bound the way one domain's does.
+Admin-only, since it exposes every domain. The rendering half of
+`domain-runs.js` was extracted into a shared module so the two pages cannot
+drift apart. Design:
+`documentation/superpowers/specs/2026-08-04-settings-all-domains-runs-design.md`.
+
+Changes:
+
+1. `src/back/objects/registry/store/base.py`
+   New `load_all_build_runs()` / `load_all_graph_analytics_runs()` on the
+   store abstraction, both keyword-only (`folder`, `limit`, `offset`) and both
+   returning `(page_rows, total)` so a caller can render page counts without
+   reading every row. Defaults are `([], 0)`, so stores without the tables
+   degrade to an empty page. `BuildRunEntry` and `GraphAnalyticsRun` gained an
+   optional `domain` key (`total=False`), set only by the cross-domain reads.
+2. `src/back/objects/registry/store/lakebase/store.py`
+   Both methods implemented as a `COUNT(*)` plus a
+   `ORDER BY … LIMIT %s OFFSET %s` page sharing one predicate string, so the
+   quoted total always answers the same question as the page. `d.folder = %s`
+   is omitted entirely (not bound to NULL) when no domain is selected, and
+   `d.folder AS domain` is mapped onto each row. New `_scalar_total()` reads
+   `COUNT(*) AS total` whatever the row factory is.
+3. `src/back/objects/registry/RegistryService.py`
+   Pass-throughs for both, each swallowing store exceptions into `([], 0)`
+   like the per-domain readers around them.
+4. `src/back/objects/domain/SettingsService.py`
+   `get_all_build_runs_result()` / `get_all_analytics_runs_result()` over a
+   shared `_all_runs_result(kind, …)` — the two differ only in which registry
+   method they call, so they share one body. Both return the paging envelope
+   (`runs`, `total`, `limit`, `offset`, `domain`) and raise `ValidationError`
+   when the registry is not configured.
+5. `src/api/routers/internal/settings.py`
+   `GET /settings/runs/build` and `GET /settings/runs/analytics`, with
+   `domain` (empty = every domain), `limit` (1–200, default 25) and
+   `offset` (≥ 0). Admin-only by virtue of the `/settings` prefix — neither
+   was added to the middleware's read-only exception list. The per-domain
+   `GET /settings/build-runs/{domain}` and
+   `GET /settings/build-analytics/{domain}` are kept for programmatic use even
+   though their UI caller is gone.
+6. `src/front/static/global/js/runs-render.js` (new)
+   `window.RunsRender`: everything that turns a run into HTML — formatters,
+   status/kind badges, scope, the two row-cell builders and the two modal-body
+   builders. The row builders take `{domain, handler}` instead of being
+   duplicated per page, and the modal builders return HTML rather than writing
+   to a hardcoded element id, so each page injects into its own modal.
+7. `src/front/static/domain/js/domain-runs.js`
+   Rendering removed (~230 lines); it now owns only the two fetches, the
+   element ids and the `_runsLoaded` latch, delegating to `RunsRender`. The
+   `!data.success` / catch contract and the isolation of the two loaders are
+   unchanged.
+8. `src/front/templates/partials/settings/_settings_runs.html` (new)
+   The page: Domain filter, two tabs, per-tab loading / empty / error /
+   pagination elements (`sr…` ids so a Runs id is never ambiguous between the
+   two pages), and a rows selector (25 / 50 / 100).
+9. `src/front/static/config/js/settings-runs.js` (new)
+   One descriptor per tab (URL, ids, cell builder) driving a single loader, so
+   the two tabs are data rather than two copies. Sequential awaits keep one
+   tab's failure from blanking the other's table. Changing the Domain filter
+   or the page size resets the offset to 0 — keeping it would land on a page
+   that may not exist in the new result set. Reloads on every section entry
+   rather than latching once.
+10. `src/front/templates/settings.html`
+    `runs-section` and the two scripts moved inside the
+    `user_role == 'admin'` block; the two run-details modals rendered at page
+    level (a modal inside a hidden `.sidebar-section` shows its backdrop but
+    leaves the dialog invisible). `build-analytics-section` and
+    `build-analytics.js` removed.
+11. `src/front/config/menu_config.json`
+    Automation → Build Analytics replaced by Runs (`bi-list-check`,
+    `admin_only: true`).
+12. `src/front/templates/dtwin.html`, `src/front/templates/domain.html`
+    Load `runs-render.js` before `domain-runs.js`.
+13. `src/front/templates/partials/settings/_settings_build_analytics.html`,
+    `src/front/static/config/js/build-analytics.js`
+    Deleted.
+14. `src/back/objects/registry/store/lakebase/schema.sql`
+    `build_runs` comment now names the two Runs pages instead of the removed
+    Build Analytics panel.
+15. `tests/units/registry/test_registry_store.py`
+    Contract tests against the in-memory fake (span domains newest-first, rows
+    carry their domain, folder scoping, total independent of paging, disjoint
+    consecutive pages, offset past the end, unknown domain) plus Lakebase SQL
+    tests pinning the conditional `d.folder` predicate, the bound-param order,
+    the shared count/page predicate and the count-not-page-length total.
+16. `tests/units/settings/test_all_runs_endpoints.py` (new)
+    Both endpoints through a real `TestClient`: paging defaults and echo,
+    `limit`/`offset` validation, empty domain treated as all domains, unknown
+    domain as an empty page not an error, unconfigured registry as a 400.
+17. `tests/units/front/test_settings_runs_page.py` (new)
+    Rendered-HTML assertions for the section, tabs, per-tab state elements,
+    Domain column, filter, pagination controls and both modals; that the
+    section and its script are inside the admin block; that the shared module
+    loads before each of its three consumers; and that Build Analytics is gone
+    from the page, the scripts, the menu and the filesystem.
+18. `tests/units/auth/test_permission_middleware.py`
+    Regression guard: both new readers stay admin-only for a builder.
+19. `tests/units/front/test_runs_page.py`, `tests/units/api/test_ui_rendering.py`
+    Retargeted at the moved behaviour: the analytics badge helper and the
+    failed-run dashing now live in `runs-render.js`; the Settings page test
+    names the Runs section.
+20. `documentation/api.md`, `documentation/user-guide.md`,
+    `documentation/development.md`
+    New "Run History Endpoints" section covering all four readers (including
+    the two per-domain ones kept for API use); a cross-reference from the
+    per-domain Runs page to the admin all-domains one; UI-test table updated.
+
+Verified live against the running dev app and its Lakebase registry:
+`/settings/runs/build` reports `total: 30` with `domain` on every row,
+consecutive pages are disjoint, `?domain=contactcenter` narrows to 2,
+an unknown domain returns an empty page, and `?limit=201` is rejected 422.
+
+Modified files:
+- `src/back/objects/registry/store/base.py`
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/registry/store/lakebase/schema.sql`
+- `src/back/objects/registry/RegistryService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/front/static/global/js/runs-render.js` (new)
+- `src/front/static/config/js/settings-runs.js` (new)
+- `src/front/static/domain/js/domain-runs.js`
+- `src/front/templates/partials/settings/_settings_runs.html` (new)
+- `src/front/templates/partials/settings/_settings_build_analytics.html` (deleted)
+- `src/front/static/config/js/build-analytics.js` (deleted)
+- `src/front/templates/settings.html`
+- `src/front/templates/dtwin.html`
+- `src/front/templates/domain.html`
+- `src/front/config/menu_config.json`
+- `tests/units/registry/test_registry_store.py`
+- `tests/units/settings/test_all_runs_endpoints.py` (new)
+- `tests/units/front/test_settings_runs_page.py` (new)
+- `tests/units/front/test_runs_page.py`
+- `tests/units/auth/test_permission_middleware.py`
+- `tests/units/api/test_ui_rendering.py`
+- `documentation/api.md`
+- `documentation/user-guide.md`
+- `documentation/development.md`
+- `documentation/superpowers/specs/2026-08-04-settings-all-domains-runs-design.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4311 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 31.22s
+
+## Fix: the Runs pagination footer could never hide
+
+Context: found by driving the new page in a real headless browser. The footer
+is a `d-flex` row, and Bootstrap 5.3 declares `.d-flex { display: flex
+!important }` — which beats the inline `display: none` the partial and
+`renderPagination()` were setting. The footer therefore stayed on screen with
+a stale label and stale button states: a result that fits one page showed an
+orphan footer with an empty "Showing…" label, raising the page size to 50 left
+"Showing 1–25 of 30" with Next still enabled, and narrowing the Domain filter
+kept the previous page's "Showing 26–30 of 30".
+
+Changes:
+
+1. `src/front/templates/partials/settings/_settings_runs.html`
+   Both footers start hidden with the `d-none` class instead of
+   `style="display:none;"`.
+2. `src/front/static/config/js/settings-runs.js`
+   `renderPagination()` and the loader's reset toggle `d-none` via
+   `classList` instead of assigning `style.display`.
+3. `tests/units/front/test_settings_runs_page.py`
+   Two guards: the rendered footers carry `d-none` and no inline
+   `display:none`, and the script contains no `style.display` assignment on
+   the pagination element.
+
+Modified files:
+- `src/front/templates/partials/settings/_settings_runs.html`
+- `src/front/static/config/js/settings-runs.js`
+- `tests/units/front/test_settings_runs_page.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4314 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings
+
+## Fix: the Rows-per-page selector was hidden along with the footer
+
+Context: surfaced by the browser re-verification of the fix above — the
+previous bug had masked it, because the footer never hid. The Rows selector
+sat inside the footer, so a single-page result took it down with the page
+label and Prev/Next: on the analytics tab (one page of 16 runs) the page size
+could never be raised at all, and on the build tab, picking 50 hid the control
+that would have put it back to 25.
+
+Changes:
+
+1. `src/front/templates/partials/settings/_settings_runs.html`
+   Page label and Prev/Next moved into their own `…PagingControls` wrapper,
+   leaving the Rows selector as the footer's own child.
+2. `src/front/static/config/js/settings-runs.js`
+   `renderPagination()` now toggles two things: the footer follows the table
+   (hidden only when there are no rows) and `…PagingControls` hides once the
+   result fits one page.
+3. `tests/units/front/test_settings_runs_page.py`
+   The wrapper exists per tab, the Rows selector renders outside it, and the
+   two toggles key off row count and single-page respectively.
+
+Modified files:
+- `src/front/templates/partials/settings/_settings_runs.html`
+- `src/front/static/config/js/settings-runs.js`
+- `tests/units/front/test_settings_runs_page.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4320 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 33.07s

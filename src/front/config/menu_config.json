@@ -504,11 +504,12 @@
                             "requires": null
                         },
                         {
-                            "id": "build-analytics",
-                            "label": "Build Analytics",
-                            "icon": "bi-bar-chart",
+                            "id": "runs",
+                            "label": "Runs",
+                            "icon": "bi-list-check",
                             "default": false,
-                            "requires": null
+                            "requires": null,
+                            "admin_only": true
                         }
                     ]
                 },

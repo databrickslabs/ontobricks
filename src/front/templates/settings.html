@@ -1030,6 +1030,14 @@
                     {% include "partials/settings/_settings_logs.html" %}
                 </div>
             </div>
+            <!-- ==== AUTOMATION: RUNS (every domain — admin only) ====
+                 Sits in the admin block rather than next to the Scheduler
+                 section it neighbours in the sidebar: it reports every
+                 domain's history, so a non-admin must not even receive the
+                 markup. -->
+            <div id="runs-section" class="sidebar-section">
+                {% include "partials/settings/_settings_runs.html" %}
+            </div>
             {% endif %}
 
             <!-- ==================== AUTOMATION: SCHEDULER ==================== -->
@@ -1037,16 +1045,48 @@
                 {% include "partials/settings/_settings_schedule.html" %}
             </div>
 
-            <!-- ==================== AUTOMATION: BUILD ANALYTICS ==================== -->
-            <div id="build-analytics-section" class="sidebar-section">
-                {% include "partials/settings/_settings_build_analytics.html" %}
-            </div>
-
             <!-- ==================== API SECTION (Developer) ==================== -->
             <div id="api-section" class="sidebar-section">
                 {% include "partials/settings/_settings_api.html" %}
             </div>
 
+        </div>
+    </div>
+</div>
+
+<!-- Run details modals for Automation → Runs. Page-level on purpose: a modal
+     inside a hidden .sidebar-section shows its backdrop but leaves the dialog
+     invisible. Bodies are filled by settings-runs.js via RunsRender. -->
+<div class="modal fade" id="srRunDetailsModal" tabindex="-1" aria-labelledby="srRunDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="srRunDetailsModalLabel">
+                    <i class="bi bi-info-circle me-2"></i>Build Run Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="srRunDetailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="srAnalyticsRunDetailsModal" tabindex="-1" aria-labelledby="srAnalyticsRunDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="srAnalyticsRunDetailsModalLabel">
+                    <i class="bi bi-graph-up-arrow me-2"></i>Analytics Run Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="srAnalyticsRunDetailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
         </div>
     </div>
 </div>
@@ -1072,9 +1112,10 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='config/js/settings.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/schedule.js') }}?v={{ asset_version }}"></script>
-<script src="{{ url_for('static', filename='config/js/build-analytics.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 {% if user_role == 'admin' %}
+<script src="{{ url_for('static', filename='global/js/runs-render.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/settings-runs.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-locks.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='registry/js/registry-teams.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-health.js') }}?v={{ asset_version }}"></script>

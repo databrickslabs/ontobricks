@@ -70,6 +70,7 @@ class BuildRunEntry(TypedDict, total=False):
     """
 
     id: int                  # row id (0 for stores without a serial PK)
+    domain: str              # folder — only set by cross-domain reads
     version: str
     build_kind: str          # 'session' | 'api' | 'scheduled'
     status: str              # 'success' | 'error' | 'cancelled'
@@ -127,6 +128,7 @@ class GraphAnalyticsRun(TypedDict, total=False):
     """
 
     id: int                      # row id (0 for stores without a serial PK)
+    domain: str                  # folder — only set by cross-domain reads
     version: str
     status: str                  # 'completed' | 'failed'
     class_filter: List[str]      # entity-type URIs used ([] = all)
@@ -453,6 +455,25 @@ class RegistryStore(ABC):
         Empty/zeroed dict on any error.
         """
 
+    def load_all_build_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[BuildRunEntry], int]:
+        """One newest-first page of build runs across the whole registry.
+
+        Returns ``(page_rows, total_matching_rows)`` — the total is the
+        full match count, so a caller can render page numbers without
+        reading every row. ``folder=None`` spans every domain, which is
+        what the admin Runs page (Settings → Automation → Runs) asks for;
+        pass a folder to scope to one. Each row carries a ``domain`` key.
+
+        Default is ``([], 0)`` for stores without a build-run trace.
+        """
+        return [], 0
+
     # ------------------------------------------------------------------
     # Graph analytics cache
     #
@@ -504,6 +525,24 @@ class RegistryStore(ABC):
         run-history table.
         """
         return []
+
+    def load_all_graph_analytics_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[GraphAnalyticsRun], int]:
+        """One newest-first page of analytics runs across the registry.
+
+        The cross-domain counterpart of :meth:`load_graph_analytics_runs`,
+        with the same ``(page_rows, total_matching_rows)`` contract as
+        :meth:`load_all_build_runs`. Spans every version regardless of
+        folder scoping, and each row carries a ``domain`` key.
+
+        Default is ``([], 0)`` for stores without a run-history table.
+        """
+        return [], 0
 
     # ------------------------------------------------------------------
     # Review / validation audit log

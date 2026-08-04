@@ -396,6 +396,19 @@ class TestAdminOnlyPaths:
         assert resp.status_code in (302, 403)
         assert not result.get("passed")
 
+    @pytest.mark.parametrize(
+        "path", ["/settings/runs/build", "/settings/runs/analytics"]
+    )
+    def test_cross_domain_run_history_is_admin_only(self, path):
+        """The Runs page reports every domain's builds and analyses, so its
+        readers must not join the read-only exception list the way
+        ``/settings/registry/domains`` did."""
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_BUILDER, method="GET", path=path
+        )
+        assert resp.status_code in (302, 403)
+        assert not result.get("passed")
+
 
 # ------------------------------------------------------------------
 # Domain-scoped routes require a team entry (new strict model)

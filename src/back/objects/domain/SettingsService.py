@@ -3901,6 +3901,82 @@ class SettingsService:
             ) from e
 
     @staticmethod
+    def _all_runs_result(
+        kind: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        folder: Optional[str],
+        limit: int,
+        offset: int,
+    ) -> Dict[str, Any]:
+        """One page of registry-wide run history for the admin Runs page.
+
+        *kind* is ``"build"`` or ``"analytics"``. ``folder=None`` spans every
+        domain. The two kinds share every step but the registry method, so
+        they share one body rather than two near-copies.
+        """
+        try:
+            domain = get_domain(session_mgr)
+            svc = RegistryService.from_context(domain, settings)
+            if not svc.cfg.is_configured:
+                raise ValidationError("Registry not configured")
+            reader = (
+                svc.load_all_build_runs
+                if kind == "build"
+                else svc.load_all_graph_analytics_runs
+            )
+            runs, total = reader(folder=folder, limit=limit, offset=offset)
+            return {
+                "success": True,
+                "domain": folder,
+                "runs": runs,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("get_all_%s_runs failed: %s", kind, e)
+            raise InfrastructureError(
+                f"Failed to load {kind} runs", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def get_all_build_runs_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """One page of build runs across every domain in the registry."""
+        return SettingsService._all_runs_result(
+            "build", session_mgr, settings, folder=folder, limit=limit, offset=offset
+        )
+
+    @staticmethod
+    def get_all_analytics_runs_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """One page of analytics runs across every domain in the registry."""
+        return SettingsService._all_runs_result(
+            "analytics",
+            session_mgr,
+            settings,
+            folder=folder,
+            limit=limit,
+            offset=offset,
+        )
+
+    @staticmethod
     def get_build_analytics_result(
         domain_name: str,
         session_mgr: SessionManager,

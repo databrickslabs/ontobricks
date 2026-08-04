@@ -42,7 +42,10 @@ implementer would otherwise reopen.
    `/settings` is already an admin-gated prefix in `PermissionMiddleware`, the
    new endpoints inherit server-side enforcement with no new guard. This also
    fixes an existing wart: today non-admins see the Build Analytics sidebar
-   entry, then its fetches 403.
+   entry, then its fetches 403. *(Implementation addition: the section markup
+   and its two scripts also sit inside `settings.html`'s
+   `user_role == 'admin'` block, like every other admin-only section, so a
+   non-admin never receives the page at all.)*
 6. **Real server-side pagination**, not a flat row cap and not client-side
    slicing. Cross-domain history is unbounded in a way per-domain history is
    not.
@@ -187,7 +190,7 @@ first)", and a Refresh button. Below it the Domain `<select>`
 populated from `GET /settings/registry/domains`.
 
 Then two Bootstrap tabs, structurally the same as `_domain_runs.html`. Element
-ids are prefixed `sr` (`srBuildTableBody`, `srAnalyticsRunsLoading`, …) so a
+ids are prefixed `sr` (`srBuildTableBody`, `srAnalyticsLoading`, …) so a
 grep for a Runs id is never ambiguous between the two pages. Each tab owns its
 own loading spinner, empty state, error alert, table wrapper and pagination
 footer.

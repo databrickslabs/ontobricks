@@ -680,7 +680,7 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Home `/` | Hero section, domain panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About) |
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
 | Registry modal (`/?open=registry`) | Navbar archive icon → Browse + Bridges modal |
-| Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Build Analytics); Developer → API |
+| Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
 | Ontology `/ontology` | Sidebar section groups: Ontology Editor (Information, Import, Generate, Model, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms), W3C Standards (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar with 6 section links (Information, Designer, Manual, Auto-Map, R2RML, Spark SQL), mapping-core.js |
 | Domain `/domain` | Sidebar with 6 section links (Information, Metadata, Documents, Validation, OWL, R2RML), section divs |

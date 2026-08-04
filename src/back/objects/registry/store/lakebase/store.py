@@ -1700,6 +1700,65 @@ class LakebaseRegistryStore(RegistryStore):
             logger.debug("load_build_runs(%s) failed: %s", folder, exc)
             return []
 
+    @staticmethod
+    def _scalar_total(row: Any) -> int:
+        """Read a ``COUNT(*) AS total`` result whatever the row factory is."""
+        if row is None:
+            return 0
+        if isinstance(row, dict):
+            return int(row.get("total") or 0)
+        return int(row[0] or 0)
+
+    def load_all_build_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[BuildRunEntry], int]:
+        if not self._ensure_build_runs_table():
+            return [], 0
+        try:
+            _psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            where = "WHERE d.registry_id = %s"
+            params: List[Any] = [self._registry()]
+            if folder:
+                where += " AND d.folder = %s"
+                params.append(folder)
+            source = f"""
+                FROM {sch}.build_runs b
+                JOIN {sch}.domains d ON d.id = b.domain_id
+                {where}
+            """
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(f"SELECT COUNT(*) AS total {source}", tuple(params))
+                total = self._scalar_total(cur.fetchone())
+                cur.execute(
+                    f"""
+                    SELECT b.id, d.folder AS domain, b.version, b.build_kind,
+                           b.status, b.message, b.error, b.started_at,
+                           b.finished_at, b.duration_s, b.triple_count,
+                           b.entity_count, b.relationship_count, b.sql_chars,
+                           b.graph_engine, b.sync_mode, b.view_table,
+                           b.graph_name, b.task_id, b.phase_times, b.stats
+                    {source}
+                    ORDER BY b.started_at DESC, b.id DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    tuple(params) + (int(limit), int(offset)),
+                )
+                rows = cur.fetchall()
+            entries = []
+            for r in rows:
+                entry = self._build_run_row_to_entry(r)
+                entry["domain"] = r.get("domain") or ""
+                entries.append(entry)
+            return entries, total
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_all_build_runs(folder=%s) failed: %s", folder, exc)
+            return [], 0
+
     # ------------------------------------------------------------------
     # Graph analytics cache (one row per (domain_id, version), UPSERT)
     # ------------------------------------------------------------------
@@ -2045,6 +2104,56 @@ class LakebaseRegistryStore(RegistryStore):
         except Exception as exc:  # noqa: BLE001
             logger.debug("load_graph_analytics_runs(%s) failed: %s", folder, exc)
             return []
+
+    def load_all_graph_analytics_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[GraphAnalyticsRun], int]:
+        if not self._ensure_graph_analytics_runs_table():
+            return [], 0
+        try:
+            _psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            where = "WHERE d.registry_id = %s"
+            params: List[Any] = [self._registry()]
+            if folder:
+                where += " AND d.folder = %s"
+                params.append(folder)
+            source = f"""
+                FROM {sch}.graph_analytics_runs r
+                JOIN {sch}.domains d ON d.id = r.domain_id
+                {where}
+            """
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(f"SELECT COUNT(*) AS total {source}", tuple(params))
+                total = self._scalar_total(cur.fetchone())
+                cur.execute(
+                    f"""
+                    SELECT r.id, d.folder AS domain, r.version, r.status,
+                           r.class_filter, r.node_count, r.edge_count,
+                           r.connected_components, r.avg_degree, r.density,
+                           r.duration_ms, r.task_id, r.error, r.computed_at
+                    {source}
+                    ORDER BY r.computed_at DESC, r.id DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    tuple(params) + (int(limit), int(offset)),
+                )
+                rows = cur.fetchall()
+            entries = []
+            for r in rows:
+                entry = self._graph_analytics_run_row_to_entry(r)
+                entry["domain"] = r.get("domain") or ""
+                entries.append(entry)
+            return entries, total
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "load_all_graph_analytics_runs(folder=%s) failed: %s", folder, exc
+            )
+            return [], 0
 
     @staticmethod
     def _empty_analytics() -> Dict[str, Any]:

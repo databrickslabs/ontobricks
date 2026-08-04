@@ -2455,6 +2455,70 @@ DELETE /settings/schedules/{schedule_id}
 
 ---
 
+### Run History Endpoints
+
+Read the registry's build-run trace (`build_runs`) and analytics-run history
+(`graph_analytics_runs`). **All four are admin-only**, like every other
+`/settings` path. The first two back **Settings → Automation → Runs**; the last
+two are per-domain readers kept for programmatic use.
+
+#### List Build Runs (every domain, paginated)
+
+```http
+GET /settings/runs/build?domain=&limit=25&offset=0
+```
+
+Newest-first, spanning every domain unless `domain` is given (an empty value
+means every domain). `limit` is 1–200; `offset` is ≥ 0.
+
+**Response:**
+```json
+{
+  "success": true,
+  "domain": null,
+  "runs": [{"id": 41, "domain": "hr", "version": "2", "status": "success", "triple_count": 18240, "started_at": "2026-08-04T07:12:03"}],
+  "total": 137,
+  "limit": 25,
+  "offset": 0
+}
+```
+
+`total` is the full match count, not the page length — page through with
+`offset` until `offset + len(runs) == total`. Every row carries the `domain` it
+belongs to.
+
+#### List Analytics Runs (every domain, paginated)
+
+```http
+GET /settings/runs/analytics?domain=&limit=25&offset=0
+```
+
+Same contract and same response envelope as above, over analytics runs
+(`status`, `class_filter`, `node_count`, `edge_count`,
+`connected_components`, `avg_degree`, `density`, `duration_ms`,
+`computed_at`). Spans every version of every domain.
+
+#### Build Runs for One Domain
+
+```http
+GET /settings/build-runs/{domain_name}?version=&limit=100
+```
+
+Newest-first, optionally scoped to one `version`. Not paginated (`limit` is
+1–1000).
+
+#### Build Statistics for One Domain
+
+```http
+GET /settings/build-analytics/{domain_name}?version=
+```
+
+Aggregates over that domain's build runs: totals, success rate, duration
+min/avg/max, the latest triple count, the currently active build (the most
+recent successful run) and a per-version breakdown.
+
+---
+
 ### Mapping SQL Wizard Endpoints
 
 LLM-assisted SQL generation for mapping queries.

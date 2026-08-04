@@ -508,6 +508,8 @@ Click **Details** on an analytics row to open a modal with the full scope (entit
 
 Both tabs are filled when you open the section, whichever one is showing, so switching between them never waits on a fetch. The two load independently: if one fails, the other still renders normally and only the failing tab shows an inline error. The **Refresh** button above the tabs reloads both.
 
+> **Every domain at once.** This page is scoped to the domain you have loaded. From **Settings → Automation → Runs** (admin only) an admin sees the same two tabs across **every** domain in the registry, with a **Domain** column, a **Domain** filter that defaults to *All domains*, and page controls (25 / 50 / 100 rows) — cross-domain history is far too long to show in one list. Both pages read the same registry tables, so a run shows up in both.
+
 ### Data Quality (Sidebar)
 
 Click **Data Quality** in the sidebar to run SHACL-based quality checks against the triple store:

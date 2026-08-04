@@ -1270,6 +1270,43 @@ async def scheduler_status():
     return config_service.scheduler_status_payload()
 
 
+@router.get("/runs/build")
+async def get_all_build_runs(
+    domain: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of build runs across every domain (newest-first).
+
+    Backs the build tab of Settings → Automation → Runs. ``domain`` is
+    optional: absent or empty means every domain in the registry. Admin-only
+    by virtue of the ``/settings`` prefix.
+    """
+    return config_service.get_all_build_runs_result(
+        session_mgr, settings, folder=domain or None, limit=limit, offset=offset
+    )
+
+
+@router.get("/runs/analytics")
+async def get_all_analytics_runs(
+    domain: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of analytics runs across every domain (newest-first).
+
+    The analytics tab's counterpart to :func:`get_all_build_runs`; spans every
+    version, since the Runs page has no version filter.
+    """
+    return config_service.get_all_analytics_runs_result(
+        session_mgr, settings, folder=domain or None, limit=limit, offset=offset
+    )
+
+
 @router.get("/build-runs/{domain_name}")
 async def get_build_runs(
     domain_name: str,

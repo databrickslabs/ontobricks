@@ -305,10 +305,10 @@ class TestSettingsPage:
         assert _find(_tags(html), id_="schedulesTableContainer") is not None
         assert 'id="schedule-section"' in html
 
-    def test_build_analytics_on_settings_page(self, client):
+    def test_runs_on_settings_page(self, client):
         html = _html(client, "/settings")
-        assert _find(_tags(html), id_="buildAnalyticsDomain") is not None
-        assert 'id="build-analytics-section"' in html
+        assert _find(_tags(html), id_="settingsRunsDomain") is not None
+        assert 'id="runs-section"' in html
 
     def test_api_on_settings_page(self, client):
         html = _html(client, "/settings")

@@ -814,6 +814,26 @@ class RegistryService:
         """Aggregate build statistics for *folder* (optionally one version)."""
         return self._store.build_analytics(folder, version=version)
 
+    def load_all_build_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[list, int]:
+        """One newest-first page of build runs across the whole registry.
+
+        Returns ``(page_rows, total)``. ``folder=None`` spans every domain.
+        See :meth:`RegistryStore.load_all_build_runs`.
+        """
+        try:
+            return self._store.load_all_build_runs(
+                folder=folder, limit=limit, offset=offset
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_all_build_runs(folder=%s) raised: %s", folder, exc)
+            return [], 0
+
     # -- graph analytics cache (last result per folder/version) ------
 
     def save_graph_analytics(
@@ -867,6 +887,28 @@ class RegistryService:
         except Exception as exc:  # noqa: BLE001
             logger.debug("load_graph_analytics_runs(%s) raised: %s", folder, exc)
             return []
+
+    def load_all_graph_analytics_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[list, int]:
+        """One newest-first page of analytics runs across the registry.
+
+        Returns ``(page_rows, total)``. ``folder=None`` spans every domain.
+        See :meth:`RegistryStore.load_all_graph_analytics_runs`.
+        """
+        try:
+            return self._store.load_all_graph_analytics_runs(
+                folder=folder, limit=limit, offset=offset
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "load_all_graph_analytics_runs(folder=%s) raised: %s", folder, exc
+            )
+            return [], 0
 
     # -- load domain from registry (stateless) -----------------------
 

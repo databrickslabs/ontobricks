@@ -204,10 +204,16 @@ class TestPermissionsCssCleanup:
 
 
 _JS = Path("src/front/static/domain/js/domain-runs.js")
+_SHARED_JS = Path("src/front/static/global/js/runs-render.js")
 
 
 def _js() -> str:
     return _JS.read_text(encoding="utf-8")
+
+
+def _shared_js() -> str:
+    """The rendering half of this page, shared with Settings → Runs."""
+    return _SHARED_JS.read_text(encoding="utf-8")
 
 
 class TestRunsScript:
@@ -230,9 +236,12 @@ class TestRunsScript:
     def test_analytics_status_has_its_own_badge_helper(self):
         """Analytics reports completed/failed; builds report
         success/error/cancelled. Overloading one helper would render every
-        analytics row as an unknown-status grey badge."""
-        src = _js()
-        assert "_analyticsStatusBadge" in src
+        analytics row as an unknown-status grey badge.
+
+        The helper lives in the shared renderer now, used by this page and by
+        the cross-domain Runs page in Settings alike."""
+        src = _shared_js()
+        assert "analyticsStatusBadge" in src
         assert "'completed'" in src or '"completed"' in src
 
     def test_the_version_dropdown_wiring_is_gone(self):
@@ -245,18 +254,18 @@ class TestRunsScript:
         """A failed run records zeros, and printing them as real values
         would read as a graph with no nodes rather than a run that died.
 
-        Extracts the _analyticsRunRow function body and checks that each
-        numeric metric column is gated behind the `failed` check rather
+        Extracts the shared renderer's analyticsRunCells body and checks that
+        each numeric metric column is gated behind the `failed` check rather
         than always calling the raw formatter — a renderer that dropped the
         dashing and printed the stored zeros unconditionally would fail
-        this (a bare `assert "_analyticsRunRow" in src` would not)."""
-        src = _js()
+        this (a bare `assert "analyticsRunCells" in src` would not)."""
+        src = _shared_js()
         match = re.search(
-            r"function _analyticsRunRow\(run, idx\) \{(.*?)\n\}",
+            r"function analyticsRunCells\(run, idx, opts\) \{(.*?)\n    \}",
             src,
             re.DOTALL,
         )
-        assert match is not None, "_analyticsRunRow function not found"
+        assert match is not None, "analyticsRunCells function not found"
         body = match.group(1)
 
         assert "const failed = " in body
@@ -267,8 +276,8 @@ class TestRunsScript:
                 f"{metric} column must dash out on a failed run, not print "
                 "the stored zero"
             )
-        assert 'failed ? dash : _esc((Number(run.avg_degree)' in body
-        assert 'failed ? dash : _esc((Number(run.density)' in body
+        assert 'failed ? dash : esc((Number(run.avg_degree)' in body
+        assert 'failed ? dash : esc((Number(run.density)' in body
 
     def test_runs_loaded_flag_is_not_latched_unconditionally(self):
         """_runsLoaded must reflect whether the loads actually succeeded, not

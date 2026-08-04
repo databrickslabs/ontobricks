@@ -148,7 +148,8 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
 -- domain row; grain is the tuple (domain_id, version). Many rows per
 -- tuple are expected — the "active" build for a (domain, version) is
 -- the most recent successful row by ``started_at`` (derived, no flag).
--- Powers the registry Build Analytics panel.
+-- Powers the Runs pages (per-domain under Knowledge Graph, cross-domain
+-- under Settings → Automation).
 -- ----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS build_runs (
     id                  bigserial PRIMARY KEY,
