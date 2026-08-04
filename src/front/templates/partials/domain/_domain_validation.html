@@ -249,14 +249,14 @@
                 </div>
             </div>
 
-            <!-- Architecture diagram: Triple Store → Sync → Graph DB (Lakebase) -->
+            <!-- Architecture diagram: Triple-Store Gateway → Sync → Graph DB (Lakebase) -->
             <div class="dt-arch-diagram">
 
-                <!-- Card 1: Triple Store (Unity Catalog VIEW) -->
+                <!-- Card 1: Triple-Store Gateway (Unity Catalog VIEW) -->
                 <div class="dt-arch-node" id="psDtZeroCopyCard">
                     <div class="dt-arch-header">
                         <i class="bi bi-database fs-4 dt-arch-icon-triplestore flex-shrink-0"></i>
-                        <span class="dt-arch-title">Triple Store</span>
+                        <span class="dt-arch-title">Triple-Store Gateway</span>
                         <span class="dt-arch-badge" id="psDtExistView"></span>
                     </div>
                     <code class="dt-arch-name" id="psDtViewName">N/A</code>
@@ -268,7 +268,7 @@
                      writer (transient Cypher UNWIND/MERGE at build time). -->
                 <div id="psDtLakebaseDetails" class="d-none dt-arch-lakebase-section">
 
-                    <!-- Arrow: Triple Store → Bridge -->
+                    <!-- Arrow: Triple-Store Gateway → Bridge -->
                     <div class="dt-arch-connector">
                         <i class="bi bi-arrow-right"></i>
                     </div>

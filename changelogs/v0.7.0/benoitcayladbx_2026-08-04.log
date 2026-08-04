@@ -716,3 +716,33 @@ Modified files:
 - releasereq/TODO.md
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4476 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 33.73s
+
+## Rename UC R2RML VIEW labels to Triple-Store Gateway
+
+Context: The Unity Catalog VIEW generated from R2RML (used by every graph
+backend) was labelled inconsistently as "Triple Store", "Triple-Store", or
+"R2RML view" across Domain/Information, Domain Validation, and Knowledge
+Graph/Build. Rename user-facing labels to "Triple-Store Gateway" for
+consistency. Internal IDs and table name prefixes unchanged.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   Dual-KG bullet, section label, placeholder, and helper text → Triple-Store Gateway.
+2. `src/front/templates/partials/domain/_domain_validation.html`
+   Architecture card title → Triple-Store Gateway.
+3. `src/front/templates/partials/dtwin/_query_sync.html`
+   Build architecture card title → Triple-Store Gateway.
+4. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Delta build panel "R2RML view:" → "Triple-Store Gateway:".
+5. `src/front/static/domain/js/domain-information.js`
+   Comment only: FQN helper docstring updated.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/static/domain/js/domain-information.js
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4476 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.39s

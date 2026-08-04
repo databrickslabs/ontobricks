@@ -453,7 +453,7 @@ function _splitFqnPrefix(fqn) {
 }
 
 /**
- * Recompute the Triple-Store FQN from the current domain name +
+ * Recompute the Triple-Store Gateway FQN from the current domain name +
  * version inputs. Mirrors the backend naming rules so the user sees
  * what UC objects *will be* called once they save the domain —
  * without round-tripping to the server. Bound to the domain-name
