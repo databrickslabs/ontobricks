@@ -1388,21 +1388,35 @@ class TestDistributionStrip:
         assert "function _renderDistributionStrip" in js
         assert "_analyticsData.distributions" in js
 
-    def test_all_five_metrics_get_a_tile(self, js):
-        fn = _fn(js, "_renderDistributionStrip")
-        for metric in ("pagerank", "betweenness", "degree",
-                       "closeness", "clustering"):
-            assert metric in fn or "_METRICS" in fn or "_ALL_METRICS" in fn
+    def test_the_metric_table_lists_all_five_in_display_order(self, js):
+        """PageRank was absent from the old _METRICS list because its tab held a
+        table, not a chart. The strip charts all five."""
+        table = js[js.index("_ALL_METRICS = ["):]
+        table = table[: table.index("];")]
+        keys = re.findall(r"key:\s*'(\w+)'", table)
+        assert keys == ["pagerank", "betweenness", "degree",
+                        "closeness", "clustering"]
+
+    def test_every_metric_in_the_table_has_a_colour_and_an_icon(self, js):
+        table = js[js.index("_ALL_METRICS = ["):]
+        table = table[: table.index("];")]
+        assert len(re.findall(r"color:", table)) == 5
+        assert len(re.findall(r"icon:", table)) == 5
 
     def test_pagerank_is_selected_on_load(self, js):
         assert "_selectedMetric = 'pagerank'" in js
 
     def test_a_missing_distribution_renders_an_empty_state_not_a_chart(self, js):
+        """A legacy payload has no distributions at all; an unavailable metric
+        has none for that key. Neither may reach Chart.js."""
         fn = _fn(js, "_renderDistributionStrip")
-        assert "re-run" in fn.lower() or "Re-run" in fn
-        # the guard must come before any chart construction
-        guard = min(fn.index("!dist"), fn.index("undefined")) if "!dist" in fn else fn.index("undefined")
-        assert guard < fn.index("new Chart")
+        assert "Re-run the analysis" in fn
+        assert "Not computed for this run" in fn
+        # The guard must return before any chart is constructed.
+        guard_at = fn.index("!dist.bins")
+        assert guard_at < fn.index("new Chart")
+        between = fn[guard_at:fn.index("new Chart")]
+        assert "return" in between
 
     def test_tiles_are_buttons_so_selection_is_keyboard_reachable(self, js):
         fn = _fn(js, "_renderDistributionStrip")
@@ -1423,17 +1437,21 @@ class TestDistributionStrip:
         assert "_renderRankingChart" in fn
 ```
 
-Add this helper near the top of the test file:
+Add this helper and the `re` import near the top of the test file:
 
 ```python
 def _fn(source: str, name: str) -> str:
-    """The body of a named function, up to the next top-level function."""
-    start = source.index("function " + name)
-    rest = source[start + 10:]
-    end = rest.find("\n    function ")
-    if end == -1:
-        end = rest.find("\n    window.")
-    return rest if end == -1 else rest[:end]
+    """The body of a named function, up to the next declaration at its level.
+
+    The section's JS is one IIFE of 4-space-indented declarations, so the next
+    `\\n    function ` or `\\n    window.` is a reliable terminator.
+    """
+    header = "function " + name
+    start = source.index(header)
+    rest = source[start + len(header):]
+    ends = [i for i in (rest.find("\n    function "),
+                        rest.find("\n    window.")) if i != -1]
+    return rest[: min(ends)] if ends else rest
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2127,14 +2145,36 @@ is active, since log bar heights are not proportional to counts."
 class TestInterpretPayloadExcludesDistributions:
     """Sending them would change an LLM prompt, which needs the eval gate."""
 
-    def test_distributions_are_deleted_from_the_interpret_body(self, js):
-        fn = _fn(js, "analyticsInterpret") if "function analyticsInterpret" in js \
-            else js[js.index("window.analyticsInterpret"):]
-        fn = fn[: fn.index("window.")] if "window." in fn[20:] else fn
-        assert "delete payload.distributions" in fn
+    @staticmethod
+    def _interpret(js: str) -> str:
+        """The body of window.analyticsInterpret, which is an assigned
+        expression rather than a declaration, so _fn does not apply."""
+        start = js.index("window.analyticsInterpret")
+        rest = js[start + 25:]
+        end = rest.find("\n    window.")
+        return rest if end == -1 else rest[:end]
 
-    def test_the_deletion_is_explained(self, js):
-        assert "eval" in js.lower() or "prompt" in js.lower()
+    def test_distributions_are_deleted_from_the_interpret_body(self, js):
+        assert "delete payload.distributions" in self._interpret(js)
+
+    def test_the_deletion_happens_after_the_payload_is_built(self, js):
+        """Deleting before the Object.assign would be a no-op that reads as
+        protection."""
+        body = self._interpret(js)
+        assert body.index("Object.assign") < body.index("delete payload.distributions")
+
+    def test_the_deletion_is_before_the_fetch(self, js):
+        body = self._interpret(js)
+        assert body.index("delete payload.distributions") < body.index("fetch(")
+
+    def test_the_reason_is_recorded_at_the_deletion(self, js):
+        """Without the reason, a later reader restores the field to 'give the
+        agent more context' and trips the eval gate unknowingly."""
+        body = self._interpret(js)
+        near = body[body.index("delete payload.distributions") - 400:
+                    body.index("delete payload.distributions")]
+        assert "eval" in near.lower()
+        assert "metrics_payload" in near or "prompt" in near.lower()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
