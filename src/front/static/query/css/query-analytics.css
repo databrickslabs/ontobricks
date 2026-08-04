@@ -32,4 +32,77 @@
 
 .analytics-detail-hint {
     font-size: 0.78rem;
+    color: var(--db-text-muted);
+}
+
+/* --- Dashboard: global distribution strip -------------------------------- */
+
+.analytics-dist-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+    .analytics-dist-strip { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 576px) {
+    .analytics-dist-strip { grid-template-columns: 1fr; }
+}
+
+.analytics-dist-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    background: var(--db-bg-secondary);
+    border: 1px solid var(--db-border);
+    border-radius: var(--bs-card-border-radius);
+    transition: var(--db-transition-fast);
+    cursor: pointer;
+}
+
+.analytics-dist-tile:hover {
+    box-shadow: var(--db-shadow-sm);
+}
+
+/* Selected: use --db-primary border + a focus-ring derived from --db-primary-rgb
+   so the selected state is clearly distinct from hover without the orange glow
+   of --db-shadow-primary (which is an off-brand legacy token). */
+.analytics-dist-tile.selected {
+    border-color: var(--db-primary);
+    box-shadow: 0 0 0 2px rgba(var(--db-primary-rgb), 0.2), var(--db-shadow-sm);
+}
+
+.analytics-dist-head {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--db-text);
+}
+
+.analytics-dist-head i {
+    margin-right: 0.25rem;
+}
+
+.analytics-dist-badge {
+    margin-left: 0.25rem;
+    font-weight: 400;
+    color: var(--db-warning);
+}
+
+/* Fixed height: Chart.js needs a sized box, and all five tiles must share a
+   baseline for their shapes to be comparable. */
+.analytics-dist-body {
+    position: relative;
+    display: block;
+    height: 56px;
+}
+
+.analytics-dist-caption {
+    font-size: 0.65rem;
+    color: var(--db-text-muted);
 }

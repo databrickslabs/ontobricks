@@ -7,9 +7,24 @@ both forbidden by .cursor/11-frontend-design.mdc. Everything else in this area
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
+
+
+def _fn(source: str, name: str) -> str:
+    """The body of a named function, up to the next declaration at its level.
+
+    The section's JS is one IIFE of 4-space-indented declarations, so the next
+    `\\n    function ` or `\\n    window.` is a reliable terminator.
+    """
+    header = "function " + name
+    start = source.index(header)
+    rest = source[start + len(header):]
+    ends = [i for i in (rest.find("\n    function "),
+                        rest.find("\n    window.")) if i != -1]
+    return rest[: min(ends)] if ends else rest
 
 pytestmark = pytest.mark.unit
 
@@ -135,3 +150,57 @@ class TestKpiRowUsesTheSharedTile:
     def test_every_stat_id_survives_the_rebuild(self, panel, stat_id):
         """_renderAnalyticsData writes to these by id."""
         assert stat_id in panel
+
+
+class TestDistributionStrip:
+    def test_the_strip_is_rendered_from_the_distributions_payload(self, js):
+        assert "function _renderDistributionStrip" in js
+        assert "_analyticsData.distributions" in js
+
+    def test_the_metric_table_lists_all_five_in_display_order(self, js):
+        """PageRank was absent from the old _METRICS list because its tab held a
+        table, not a chart. The strip charts all five."""
+        table = js[js.index("_ALL_METRICS = ["):]
+        table = table[: table.index("];")]
+        keys = re.findall(r"key:\s*'(\w+)'", table)
+        assert keys == ["pagerank", "betweenness", "degree",
+                        "closeness", "clustering"]
+
+    def test_every_metric_in_the_table_has_a_colour_and_an_icon(self, js):
+        table = js[js.index("_ALL_METRICS = ["):]
+        table = table[: table.index("];")]
+        assert len(re.findall(r"color:", table)) == 5
+        assert len(re.findall(r"icon:", table)) == 5
+
+    def test_pagerank_is_selected_on_load(self, js):
+        assert "_selectedMetric = 'pagerank'" in js
+
+    def test_a_missing_distribution_renders_an_empty_state_not_a_chart(self, js):
+        """A legacy payload has no distributions at all; an unavailable metric
+        has none for that key. Neither may reach Chart.js."""
+        fn = _fn(js, "_renderDistributionStrip")
+        assert "Re-run the analysis" in fn
+        assert "Not computed for this run" in fn
+        # The guard must return before any chart is constructed.
+        guard_at = fn.index("!dist.bins")
+        assert guard_at < fn.index("new Chart")
+        between = fn[guard_at:fn.index("new Chart")]
+        assert "return" in between
+
+    def test_tiles_are_buttons_so_selection_is_keyboard_reachable(self, js):
+        fn = _fn(js, "_renderDistributionStrip")
+        assert "<button" in fn
+
+    def test_approximate_metrics_are_badged_in_the_strip(self, js):
+        fn = _fn(js, "_renderDistributionStrip")
+        assert "asymp" in fn or "estimate" in fn.lower()
+
+    def test_the_median_is_labelled_as_approximate(self, js):
+        """Interpolated from bins; presenting it as exact would overstate it."""
+        fn = _fn(js, "_renderDistributionStrip")
+        assert "median" in fn.lower()
+        assert "asymp" in fn or "~" in fn
+
+    def test_selecting_a_tile_redraws_the_ranking_chart(self, js):
+        fn = _fn(js, "_selectMetric")
+        assert "_renderRankingChart" in fn

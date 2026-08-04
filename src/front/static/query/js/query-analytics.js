@@ -91,6 +91,21 @@
         { key: 'clustering',  canvasId: 'chartClustering',  color: 'rgba(255, 193, 7, 0.85)',  tabId: 'atab-btn-clustering'  },
     ];
 
+    // Every metric, in display order, with its presentation metadata. PageRank
+    // was previously absent from this list because its tab held a table rather
+    // than a chart; the dashboard charts all five.
+    var _ALL_METRICS = [
+        { key: 'pagerank',    label: 'PageRank',    icon: 'bi-diagram-3',         color: 'rgba(13, 110, 253, 0.75)' },
+        { key: 'betweenness', label: 'Betweenness', icon: 'bi-share',             color: 'rgba(220, 53, 69, 0.75)'  },
+        { key: 'degree',      label: 'Degree',      icon: 'bi-node-plus',         color: 'rgba(25, 135, 84, 0.75)'  },
+        { key: 'closeness',   label: 'Closeness',   icon: 'bi-arrows-fullscreen', color: 'rgba(13, 202, 240, 0.75)' },
+        { key: 'clustering',  label: 'Clustering',  icon: 'bi-hexagon',           color: 'rgba(255, 193, 7, 0.85)'  }
+    ];
+
+    var _selectedMetric = 'pagerank';
+    var _distCharts = {};
+    var _logScale = false;
+
     // Chart.js renders at 0px in a hidden pane, so charts are resized when the
     // Dashboard tab becomes visible.
     document.addEventListener('shown.bs.tab', function (e) {
@@ -330,6 +345,7 @@
             graphNodeEl.textContent = (gn && gn !== s.node_count) ? '(' + gn.toLocaleString() + ' in subgraph)' : '';
         }
 
+        _renderDistributionStrip();
         analyticsRenderCharts();
         _renderTypeProfiles(data.entity_type_profiles, !!_getSelectedTypes());
 
@@ -772,6 +788,133 @@
     }
 
     window._analyticsDrillURI = function (uri) { _navigateToGraph(uri); };
+
+    // Format a metric value compactly enough for a tile caption.
+    function _fmtMetric(v) {
+        if (v === 0) return '0';
+        if (v == null || isNaN(v)) return '—';
+        return Math.abs(v) < 0.001 ? v.toExponential(1) : v.toFixed(4);
+    }
+
+    function _renderDistributionStrip() {
+        var host = document.getElementById('analyticsDistStrip');
+        if (!host) return;
+
+        var dists = (_analyticsData && _analyticsData.distributions) || {};
+        var approximate = (_analyticsData && _analyticsData.approximate_metrics) || [];
+        var unavailable = (_analyticsData && _analyticsData.unavailable_metrics) || [];
+
+        Object.keys(_distCharts).forEach(function (k) {
+            if (_distCharts[k]) _distCharts[k].destroy();
+        });
+        _distCharts = {};
+
+        host.innerHTML = _ALL_METRICS.map(function (m) {
+            var isApprox = approximate.indexOf(m.key) !== -1;
+            var badge = isApprox
+                ? '<span class="analytics-dist-badge" title="Sampled estimate">&asymp;</span>'
+                : '';
+            return ''
+                + '<button type="button" class="analytics-dist-tile'
+                + (m.key === _selectedMetric ? ' selected' : '') + '"'
+                + ' id="distTile_' + m.key + '"'
+                + ' data-metric="' + m.key + '"'
+                + ' aria-pressed="' + (m.key === _selectedMetric) + '"'
+                + ' title="Show the top-ranked nodes by ' + m.label + '">'
+                + '  <span class="analytics-dist-head">'
+                + '    <i class="bi ' + m.icon + '"></i>' + m.label + badge
+                + '  </span>'
+                + '  <span class="analytics-dist-body">'
+                + '    <canvas id="distChart_' + m.key + '"></canvas>'
+                + '  </span>'
+                + '  <span class="analytics-dist-caption" id="distCaption_' + m.key + '"></span>'
+                + '</button>';
+        }).join('');
+
+        host.querySelectorAll('.analytics-dist-tile').forEach(function (el) {
+            el.addEventListener('click', function () {
+                _selectMetric(el.getAttribute('data-metric'));
+            });
+        });
+
+        _ALL_METRICS.forEach(function (m) {
+            var dist = dists[m.key];
+            var caption = document.getElementById('distCaption_' + m.key);
+            var canvas = document.getElementById('distChart_' + m.key);
+            if (!canvas || !caption) return;
+
+            // A metric the run could not compute is stored as zeros, and a
+            // legacy cached result predates distributions entirely. Neither may
+            // be drawn as a chart.
+            if (!dist || !dist.bins || !dist.bins.length) {
+                canvas.style.display = 'none';
+                caption.innerHTML = unavailable.indexOf(m.key) !== -1
+                    ? '<i class="bi bi-dash-circle me-1"></i>Not computed for this run'
+                    : '<i class="bi bi-info-circle me-1"></i>Re-run the analysis to see the distribution';
+                return;
+            }
+            canvas.style.display = '';
+
+            caption.innerHTML = 'median &asymp; ' + _fmtMetric(dist.median)
+                + ' &middot; max ' + _fmtMetric(dist.hi)
+                + (_logScale ? ' &middot; <em>log</em>' : '');
+
+            var width = (dist.hi - dist.lo) / dist.bins.length;
+            _distCharts[m.key] = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: dist.bins.map(function (_, i) {
+                        return _fmtMetric(dist.lo + i * width);
+                    }),
+                    datasets: [{
+                        data: dist.bins,
+                        backgroundColor: m.color,
+                        borderRadius: 1,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function (items) {
+                                    var i = items[0].dataIndex;
+                                    return _fmtMetric(dist.lo + i * width) + ' – '
+                                        + _fmtMetric(dist.lo + (i + 1) * width);
+                                },
+                                label: function (item) {
+                                    return item.parsed.y.toLocaleString() + ' nodes';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { display: false, grid: { display: false } },
+                        y: {
+                            display: false,
+                            type: _logScale ? 'logarithmic' : 'linear',
+                            beginAtZero: !_logScale
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    function _selectMetric(key) {
+        if (!key) return;
+        _selectedMetric = key;
+        document.querySelectorAll('.analytics-dist-tile').forEach(function (el) {
+            var on = el.getAttribute('data-metric') === key;
+            el.classList.toggle('selected', on);
+            el.setAttribute('aria-pressed', String(on));
+        });
+        _renderRankingChart();
+    }
 
     function _renderTypeProfiles(profiles, hasFilter) {
         var card = document.getElementById('analyticsHealthCard');
