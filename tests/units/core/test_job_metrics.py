@@ -295,10 +295,23 @@ class TestReadBackSql:
 # ---------------------------------------------------------------------------
 
 
+#: Keys that read the main output table and so cannot be told apart by a table
+#: suffix. Matched on a token that appears only in that statement.
+_QUERY_TOKENS = {
+    "distribution_bounds": "lo_pagerank",
+    "distributions": "bin_index",
+}
+
+
 def _query_for(rows_by_table: Dict[str, List[Dict[str, Any]]]):
-    """A fake warehouse query that dispatches on the table suffix being read."""
+    """A fake warehouse query that dispatches on what is being read."""
     def query(sql: str) -> List[Dict[str, Any]]:
+        for key, token in _QUERY_TOKENS.items():
+            if key in rows_by_table and token in sql:
+                return rows_by_table[key]
         for suffix, rows in rows_by_table.items():
+            if suffix in _QUERY_TOKENS:
+                continue
             if suffix and f"_{suffix}" in sql:
                 return rows
         return rows_by_table.get("", [])
@@ -692,3 +705,127 @@ class TestInterpolateQuantile:
         for q in (0.0, 0.25, 0.5, 0.9, 1.0):
             v = interpolate_quantile([1, 5, 1], 2.0, 8.0, q)
             assert 2.0 <= v <= 8.0
+
+
+# ---------------------------------------------------------------------------
+# Distribution assembly
+# ---------------------------------------------------------------------------
+
+
+def _bounds_row(**overrides):
+    """One bounds row with a usable range for every metric."""
+    base = {}
+    for m in ("degree", "pagerank", "betweenness", "closeness", "clustering"):
+        base[f"lo_{m}"] = 0.0
+        base[f"hi_{m}"] = 4.0
+        base[f"mean_{m}"] = 2.0
+    base.update(overrides)
+    return base
+
+
+def _bin_rows(metric: str, counts: List[int]):
+    return [
+        {"metric": metric, "bin_index": i, "node_count": c}
+        for i, c in enumerate(counts) if c
+    ]
+
+
+_ALL_FIVE = ("degree", "pagerank", "betweenness", "closeness", "clustering")
+
+#: Sentinel so a caller can ask for *no* bounds row, which None cannot express
+#: here — None has to keep meaning "give me the default".
+_ABSENT = object()
+
+
+def _metrics_with_distributions(*, summary=None, bin_rows=None, bounds=_ABSENT):
+    if bounds is _ABSENT:
+        bounds_rows = [_bounds_row()]
+    elif bounds is None:
+        bounds_rows = []
+    else:
+        bounds_rows = [bounds]
+    if bin_rows is None:
+        bin_rows = [r for m in _ALL_FIVE for r in _bin_rows(m, [2, 2, 2, 2])]
+    query = _query_for({
+        "summary": [summary or _default_summary_row()],
+        "type_profiles": [],
+        "type_predicates": [],
+        "distribution_bounds": bounds_rows,
+        "distributions": bin_rows,
+        "": [],
+    })
+    return _job_metrics(query=query)
+
+
+def test_distributions_are_assembled_for_available_metrics():
+    result = _metrics_with_distributions().compute(MetricsRequest())
+    d = result.distributions["pagerank"]
+    assert d.bins == [2, 2, 2, 2]
+    assert d.bin_count == 4
+    assert d.lo == pytest.approx(0.0)
+    assert d.hi == pytest.approx(4.0)
+    assert d.mean == pytest.approx(2.0)
+    # uniform over 0..4
+    assert d.median == pytest.approx(2.0)
+    assert d.p90 == pytest.approx(3.6)
+
+
+def test_empty_bins_are_padded_with_zero_not_dropped():
+    """The front end indexes bins positionally, so gaps must be explicit."""
+    rows = _bin_rows("pagerank", [5, 0, 0, 3])
+    result = _metrics_with_distributions(bin_rows=rows).compute(MetricsRequest())
+    assert result.distributions["pagerank"].bins == [5, 0, 0, 3]
+
+
+def test_unavailable_metrics_get_no_distribution():
+    """Stored as zeros; a histogram of them would read as real measurements."""
+    summary = _default_summary_row(pivot_count=0, bfs_complete=True)
+    result = _metrics_with_distributions(summary=summary).compute(MetricsRequest())
+    assert set(result.unavailable_metrics) == set(UNAVAILABLE_METRICS)
+    assert "betweenness" not in result.distributions
+    assert "closeness" not in result.distributions
+    # the exactly-computed metrics are unaffected
+    assert "pagerank" in result.distributions
+    assert "degree" in result.distributions
+    assert "clustering" in result.distributions
+
+
+def test_truncated_bfs_also_withholds_the_distribution():
+    summary = _default_summary_row(pivot_count=8, bfs_complete=False)
+    result = _metrics_with_distributions(summary=summary).compute(MetricsRequest())
+    assert "betweenness" not in result.distributions
+    assert "closeness" not in result.distributions
+
+
+def test_approximate_metrics_do_get_a_distribution():
+    result = _metrics_with_distributions().compute(MetricsRequest())
+    assert set(result.approximate_metrics) == set(APPROXIMATE_METRICS)
+    assert "betweenness" in result.distributions
+    assert "closeness" in result.distributions
+
+
+def test_a_failing_distribution_read_does_not_fail_the_run():
+    """An analysis that scored every node must not be thrown away because a
+    presentation aggregate failed."""
+    def query(sql: str):
+        if "bin_index" in sql or "lo_pagerank" in sql:
+            raise RuntimeError("warehouse blew up")
+        if "_summary" in sql:
+            return [_default_summary_row()]
+        return []
+
+    result = _job_metrics(query=query).compute(MetricsRequest())
+    assert result.distributions == {}
+    assert result.stats.node_count == 5
+    assert result.mode == MODE_JOB
+
+
+def test_missing_bounds_row_yields_no_distributions():
+    """No bounds means no bin edges, so there is nothing honest to draw."""
+    metrics = _metrics_with_distributions(bounds=None)
+    assert metrics.compute(MetricsRequest()).distributions == {}
+
+
+def test_the_default_fixture_does_produce_distributions():
+    """Guards the test above: it must fail for the reason it claims."""
+    assert _metrics_with_distributions().compute(MetricsRequest()).distributions

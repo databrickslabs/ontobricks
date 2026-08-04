@@ -34,6 +34,7 @@ from back.core.graph_analysis.models import (
     MODE_JOB,
     NODE_METRIC_KEYS,
     EntityTypeProfile,
+    MetricDistribution,
     MetricsRequest,
     MetricsResult,
     NodeMetrics,
@@ -288,6 +289,7 @@ class JobMetrics:
         self._pagerank_iterations = max(1, int(pagerank_iterations))
         self._pivots = max(0, int(pivots))
         self._max_depth = max(1, int(max_depth))
+        self._distribution_bins = DEFAULT_DISTRIBUTION_BINS
 
     def compute(
         self,
@@ -329,6 +331,7 @@ class JobMetrics:
         self._read_summary(result)
         self._read_nodes(result)
         self._read_type_profiles(result)
+        self._read_distributions(result)
         result.stats.elapsed_ms = int((time.time() - t0) * 1000)
 
         logger.info(
@@ -465,3 +468,70 @@ class JobMetrics:
                 is_flat=bool(reasons),
                 flat_reasons=reasons,
             )
+
+    def _read_distributions(self, result: MetricsResult) -> None:
+        """Summarise every scored node into per-metric histograms.
+
+        Called after :meth:`_read_summary` because it depends on that method's
+        verdict on which metrics are trustworthy.
+
+        Never raises. A distribution is a presentation aggregate, and an analysis
+        that successfully scored the whole graph must not be discarded because
+        the histogram query failed — the UI already renders an explanatory empty
+        state for a result without one.
+        """
+        try:
+            bounds_rows = self._query(
+                distribution_bounds_query(self._output_table)
+            ) or []
+            if not bounds_rows:
+                return
+            bounds = bounds_rows[0]
+
+            counts: Dict[str, Dict[int, int]] = {}
+            for row in self._query(
+                distributions_query(self._output_table, self._distribution_bins)
+            ) or []:
+                metric = row.get("metric") or ""
+                if metric not in NODE_METRIC_KEYS:
+                    continue
+                counts.setdefault(metric, {})[
+                    int(row.get("bin_index", 0) or 0)
+                ] = int(row.get("node_count", 0) or 0)
+
+            for metric in NODE_METRIC_KEYS:
+                # A metric this run could not compute is stored as zeros. Its
+                # histogram would be a single tall bar at zero, which reads as a
+                # measurement rather than as an absence.
+                if metric in result.unavailable_metrics:
+                    continue
+
+                lo = float(bounds.get(f"lo_{metric}", 0.0) or 0.0)
+                hi = float(bounds.get(f"hi_{metric}", 0.0) or 0.0)
+                mean = float(bounds.get(f"mean_{metric}", 0.0) or 0.0)
+
+                per_bin = counts.get(metric, {})
+                n_bins = (max(per_bin.keys()) + 1) if per_bin else self._distribution_bins
+                # Padded rather than sparse: the front end indexes positionally,
+                # and a bin with no nodes is a real, meaningful zero.
+                bins = [
+                    per_bin.get(i, 0) for i in range(n_bins)
+                ]
+
+                result.distributions[metric] = MetricDistribution(
+                    bins=bins,
+                    bin_count=n_bins,
+                    lo=round(lo, 8),
+                    hi=round(hi, 8),
+                    mean=round(mean, 8),
+                    median=round(interpolate_quantile(bins, lo, hi, 0.5), 8),
+                    p90=round(interpolate_quantile(bins, lo, hi, 0.9), 8),
+                )
+        except Exception:  # noqa: BLE001 — a chart is never worth failing a run
+            logger.warning(
+                "could not read metric distributions for %s; the result is "
+                "complete but the Analytics page will show no histograms",
+                self._output_table,
+                exc_info=True,
+            )
+            result.distributions.clear()
