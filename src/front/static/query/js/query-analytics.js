@@ -551,6 +551,9 @@
                 + '</button>';
         }).join('');
 
+        // Must destroy while the ranking canvas is still attached to the DOM.
+        if (_charts.ranking) { _charts.ranking.destroy(); _charts.ranking = null; }
+
         host.innerHTML = ''
             + '<div class="card mt-2">'
             + '  <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">'
@@ -588,8 +591,6 @@
         var values = sorted.map(function (uri) {
             return +(allNodes[uri][meta.key] || 0).toFixed(6);
         });
-
-        if (_charts.ranking) { _charts.ranking.destroy(); _charts.ranking = null; }
 
         // A flat zero chart would imply a measurement of zero. Explain instead.
         if (!values.length || values.every(function (v) { return v === 0; })) {
@@ -680,11 +681,11 @@
     function _zeroReason(key, unavailable) {
         var label = key.charAt(0).toUpperCase() + key.slice(1);
         if (unavailable.indexOf(key) !== -1) {
-        return '<strong>Not computed for this graph.</strong> ' + label
-            + ' is estimated from a sample of source nodes, and this run could '
-            + 'not produce a sample it can stand behind — either no pivots were '
-            + 'sampled or the breadth-first search hit its depth cap. '
-            + 'Raise the analytics job\'s max depth in Settings and re-run.';
+            return '<strong>Not computed for this graph.</strong> ' + label
+                + ' is estimated from a sample of source nodes, and this run could '
+                + 'not produce a sample it can stand behind — either no pivots were '
+                + 'sampled or the breadth-first search hit its depth cap. '
+                + 'Raise the analytics job\'s max depth in Settings and re-run.';
         }
         if (key === 'clustering') {
             return '<strong>All values are 0.</strong> Clustering coefficient is 0 '
