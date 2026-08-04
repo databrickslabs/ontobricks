@@ -277,3 +277,38 @@ class TestLogScaleToggle:
         fn = _fn(js, "_renderDistributionStrip")
         assert "_logScale" in fn
         assert "log" in fn
+
+
+class TestInterpretPayloadExcludesDistributions:
+    """Sending them would change an LLM prompt, which needs the eval gate."""
+
+    @staticmethod
+    def _interpret(js: str) -> str:
+        """The body of window.analyticsInterpret, which is an assigned
+        expression rather than a declaration, so _fn does not apply."""
+        start = js.index("window.analyticsInterpret")
+        rest = js[start + 25:]
+        end = rest.find("\n    window.")
+        return rest if end == -1 else rest[:end]
+
+    def test_distributions_are_deleted_from_the_interpret_body(self, js):
+        assert "delete payload.distributions" in self._interpret(js)
+
+    def test_the_deletion_happens_after_the_payload_is_built(self, js):
+        """Deleting before the Object.assign would be a no-op that reads as
+        protection."""
+        body = self._interpret(js)
+        assert body.index("Object.assign") < body.index("delete payload.distributions")
+
+    def test_the_deletion_is_before_the_fetch(self, js):
+        body = self._interpret(js)
+        assert body.index("delete payload.distributions") < body.index("fetch(")
+
+    def test_the_reason_is_recorded_at_the_deletion(self, js):
+        """Without the reason, a later reader restores the field to 'give the
+        agent more context' and trips the eval gate unknowingly."""
+        body = self._interpret(js)
+        near = body[body.index("delete payload.distributions") - 400:
+                    body.index("delete payload.distributions")]
+        assert "eval" in near.lower()
+        assert "metrics_payload" in near or "prompt" in near.lower()

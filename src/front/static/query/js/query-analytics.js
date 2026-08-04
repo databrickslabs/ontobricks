@@ -1051,6 +1051,11 @@
 
         try {
             var payload = Object.assign({}, _analyticsData, { class_filter: _getSelectedTypes() });
+            // The whole body becomes the agent's metrics_payload, so adding a
+            // field here changes an LLM prompt — which requires an eval delta
+            // under .cursor/12-ai-feature-lifecycle.mdc. Distributions are a
+            // presentation aggregate; they stay out until that gate is run.
+            delete payload.distributions;
             var resp = await fetch('/dtwin/metrics/interpret', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
