@@ -30,7 +30,9 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from back.core.errors import InfrastructureError
 from back.core.graph_analysis.models import (
+    DEFAULT_DISTRIBUTION_BINS,
     MODE_JOB,
+    NODE_METRIC_KEYS,
     EntityTypeProfile,
     MetricsRequest,
     MetricsResult,
@@ -137,6 +139,83 @@ def type_profiles_query(output_table: str) -> str:
 def type_predicates_query(output_table: str) -> str:
     """Distinct ``(type, predicate)`` pairs, as written by the job."""
     return f"SELECT type_uri, predicate FROM {output_table}_type_predicates"
+
+
+def distribution_bounds_query(output_table: str) -> str:
+    """Per-metric ``MIN`` / ``MAX`` / ``AVG`` over every scored node.
+
+    Split from :func:`distributions_query` rather than folded into it: combining
+    them forces the bounds into either a repeated ``CASE`` expression in the
+    ``GROUP BY`` or a constant-ordinal ``GROUP BY``, and the portable spelling of
+    each differs across SQLite, Spark and Postgres. Two plain aggregates are
+    individually obvious, and the extra round trip is nothing next to a job that
+    runs for minutes.
+    """
+    columns = ",\n".join(
+        f"       MIN({m}) AS lo_{m},\n"
+        f"       MAX({m}) AS hi_{m},\n"
+        f"       AVG({m}) AS mean_{m}"
+        for m in NODE_METRIC_KEYS
+    )
+    return f"SELECT\n{columns}\nFROM {output_table}"
+
+
+def _bin_index_expression(metric: str, bins: int) -> str:
+    """Portable bucket assignment for one metric.
+
+    Written as a ``CASE`` rather than with ``least`` / ``greatest``: the *job*
+    test harness registers those as custom SQLite functions, but this read-back
+    is verified against a plain SQLite connection and under three sqlglot
+    dialects, so it must stick to constructs every engine has natively.
+
+    The three branches are the two degenerate cases plus the general one:
+
+    * ``hi <= lo`` — every node scores identically (a fully regular graph, or a
+      metric the run left all-zero). The general expression would divide by
+      zero, so everything collapses into bin 0.
+    * ``value >= hi`` — the top-scoring node would otherwise compute ``bins``,
+      one index past the last bucket.
+    * otherwise, scale into ``[0, bins)``. Every metric is non-negative by
+      construction, which is what makes ``CAST(... AS INTEGER)`` truncation
+      equivalent to ``floor`` and saves needing a ``floor`` function.
+    """
+    return (
+        f"CASE\n"
+        f"      WHEN b.hi <= b.lo THEN 0\n"
+        f"      WHEN t.{metric} >= b.hi THEN {int(bins) - 1}\n"
+        f"      ELSE CAST(ROUND((t.{metric} - b.lo) * {int(bins)}"
+        f" / (b.hi - b.lo), 10) AS INTEGER)\n"
+        f"    END"
+    )
+
+
+def distributions_query(
+    output_table: str, bins: int = DEFAULT_DISTRIBUTION_BINS
+) -> str:
+    """Node counts per histogram bin, for all five metrics.
+
+    One ``SELECT`` per metric, stacked with ``UNION ALL``. Each groups inside a
+    subquery so the ``GROUP BY`` targets a plain column name — grouping directly
+    on the ``CASE`` expression or on a constant ordinal is spelled differently
+    across the three engines this has to satisfy.
+
+    Bins containing no nodes produce no row; the caller pads them to zero.
+    """
+    bins = max(1, int(bins))
+    parts = [
+        f"SELECT '{metric}' AS metric, bin_index, COUNT(*) AS node_count\n"
+        f"FROM (\n"
+        f"  SELECT {_bin_index_expression(metric, bins)} AS bin_index\n"
+        f"  FROM {output_table} t\n"
+        f"  CROSS JOIN (\n"
+        f"    SELECT MIN({metric}) AS lo, MAX({metric}) AS hi"
+        f" FROM {output_table}\n"
+        f"  ) b\n"
+        f") q\n"
+        f"GROUP BY bin_index"
+        for metric in NODE_METRIC_KEYS
+    ]
+    return "\nUNION ALL\n".join(parts)
 
 
 # ---------------------------------------------------------------------------

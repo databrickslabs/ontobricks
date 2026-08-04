@@ -17,6 +17,8 @@ from back.core.graph_analysis.JobMetrics import (
     APPROXIMATE_METRICS,
     UNAVAILABLE_METRICS,
     JobMetrics,
+    distribution_bounds_query,
+    distributions_query,
     resolve_analytics_source,
     summary_query,
     top_nodes_query,
@@ -216,6 +218,60 @@ class TestReadBackSql:
         assert rows[0]["type_uri"] == "http://ex/Person"
         assert rows[0]["predicate"] == "http://ex/knows"
 
+    def test_bounds_query_returns_min_max_mean_per_metric(self):
+        rows = self._db().query(distribution_bounds_query("metrics"))
+        assert len(rows) == 1
+        row = rows[0]
+        # pagerank across _sample_rows is 0.05 .. 0.50
+        assert row["lo_pagerank"] == pytest.approx(0.05)
+        assert row["hi_pagerank"] == pytest.approx(0.50)
+        assert row["mean_pagerank"] == pytest.approx(0.20)
+        # every metric must be present, even the all-zero ones
+        for m in ("degree", "pagerank", "betweenness", "closeness", "clustering"):
+            assert f"lo_{m}" in row
+            assert f"hi_{m}" in row
+            assert f"mean_{m}" in row
+
+    def test_distributions_query_buckets_every_node_exactly_once(self):
+        rows = self._db().query(distributions_query("metrics", 4))
+        by_metric = {}
+        for r in rows:
+            by_metric.setdefault(r["metric"], 0)
+            by_metric[r["metric"]] += r["node_count"]
+        # 5 nodes, 5 metrics, no node counted twice or dropped
+        assert by_metric == {m: 5 for m in
+                             ("degree", "pagerank", "betweenness",
+                              "closeness", "clustering")}
+
+    def test_distributions_query_assigns_the_expected_bins(self):
+        """degree is 0.1..0.9; with 4 bins over that range width is 0.2."""
+        rows = [r for r in self._db().query(distributions_query("metrics", 4))
+                if r["metric"] == "degree"]
+        counts = {r["bin_index"]: r["node_count"] for r in rows}
+        # 0.1 -> bin 0 | 0.3 -> bin 1 | 0.5 -> bin 2 | 0.7 -> bin 3
+        # 0.9 == hi   -> clamped into bin 3
+        assert counts == {0: 1, 1: 1, 2: 1, 3: 2}
+
+    def test_top_value_is_clamped_into_the_last_bin_not_past_it(self):
+        rows = [r for r in self._db().query(distributions_query("metrics", 4))
+                if r["metric"] == "degree"]
+        assert max(r["bin_index"] for r in rows) == 3
+
+    def test_identical_scores_collapse_into_one_bin_without_dividing_by_zero(self):
+        """A fully regular graph, or an all-zero metric. hi == lo."""
+        db = _OutputDB([
+            {"node_uri": f"{NS}{c}", "degree": 0.5} for c in "ABCD"
+        ])
+        rows = [r for r in db.query(distributions_query("metrics", 4))
+                if r["metric"] == "degree"]
+        assert rows == [{"metric": "degree", "bin_index": 0, "node_count": 4}]
+
+    def test_all_zero_metric_collapses_into_one_bin(self):
+        """betweenness is 0.0 for every node in _sample_rows."""
+        rows = [r for r in self._db().query(distributions_query("metrics", 4))
+                if r["metric"] == "betweenness"]
+        assert rows == [{"metric": "betweenness", "bin_index": 0, "node_count": 5}]
+
     @pytest.mark.parametrize("dialect", ["databricks", "spark", "postgres"])
     def test_read_back_sql_parses_in_both_dialects(self, dialect):
         sqlglot = pytest.importorskip("sqlglot")
@@ -224,6 +280,8 @@ class TestReadBackSql:
             top_nodes_query("cat.sch.metrics", 50),
             type_profiles_query("cat.sch.metrics"),
             type_predicates_query("cat.sch.metrics"),
+            distribution_bounds_query("cat.sch.metrics"),
+            distributions_query("cat.sch.metrics", 20),
         ):
             try:
                 sqlglot.parse_one(sql, dialect=dialect)
