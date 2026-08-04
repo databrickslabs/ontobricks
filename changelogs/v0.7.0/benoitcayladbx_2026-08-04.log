@@ -806,3 +806,67 @@ Modified files:
 - documentation/superpowers/plans/2026-08-04-lakebase-bulk-loading-sync-mode-registry.md
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4483 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.58s
+
+---
+
+## Stop session files from accumulating, and stop trusting the cookie as a path
+
+**Context.** `settings.session_dir` had grown to 327 MB across 82,200 files on a
+development machine, which is what made `make clean` fail with
+`rm: fastapi_session: Directory not empty`. The count was not explained by user
+count: `dispatch` wrote a 2-byte `{}` file for every minted ID, a cookie whose
+file was missing was answered with a brand new ID rather than reusing the one the
+client held (so N concurrent requests produced N sessions), and nothing ever
+expired. Tracing that surfaced a second problem — the cookie value was used
+verbatim as a filename, so a cookie of `../../../../etc/foo` would have had
+session JSON written over that path on any request that modified the session.
+
+**Changes.**
+
+1. `src/back/objects/session/FileSessionMiddleware.py` — added `_SESSION_ID_RE`
+   and made `_get_session_id_from_cookie` enforce it with `fullmatch`, so a
+   cookie is only used as a filename when it is exactly 32 lowercase hex
+   characters. A malformed value is treated as no cookie, which mints a fresh ID
+   — the same outcome a corrupted cookie already produced. `fullmatch` rather
+   than `^...$` because Python's `$` also matches before a trailing newline.
+2. `src/back/objects/session/FileSessionMiddleware.py` — `dispatch` no longer
+   writes on mint, and no longer replaces an ID whose file is missing. It now
+   defers to `_load_session`, which already resolves cache hit, disk hit, and
+   neither, so a live cached session that lost its file is preserved instead of
+   reset. Files are born only on the existing `session_modified` save path.
+   Removed the unused `is_new_session` local.
+3. `src/back/objects/session/FileSessionMiddleware.py` — added `_touch_session`,
+   which refreshes a session file's mtime on read when it is already older than
+   an hour, so expiry means "idle" rather than "not edited". Necessary because
+   the cookie's `max_age` is renewed on every response while the file's mtime is
+   not, so a user browsing read-only for a day would otherwise be reaped while
+   still holding a valid cookie.
+4. `src/back/objects/session/FileSessionMiddleware.py` — added
+   `reap_expired_sessions(session_dir, max_age)`, which deletes files older than
+   `max_age`, considers only names matching the session-ID pattern, logs and
+   skips per-file failures, and never raises.
+5. `src/back/objects/session/__init__.py` — exported `reap_expired_sessions`.
+6. `src/shared/fastapi/main.py` — the lifespan runs the sweep after creating the
+   session directory, wrapped so a failure logs a warning and startup continues.
+7. `tests/units/core/test_middleware_session.py` — repointed
+   `test_get_session_id_from_cookie`, which asserted that a cookie of `"abc123"`
+   was accepted as a session ID, and added coverage for validation, lazy
+   creation, ID stability, the touch throttle, and the reaper.
+8. `documentation/code_organization.md` — described the new lifecycle.
+
+**Not addressed.** The in-memory `_session_cache` still grows unbounded for the
+process lifetime. The cookie remains unsigned, so this narrows the blast radius
+of a forged cookie to guessing another user's random 122-bit ID rather than
+removing forgery as a category. The sweep runs at startup only, so a deployment
+that never restarts does not reclaim disk from sessions that did expire — a
+periodic sweep would first have to deal with the reaper knowing nothing about
+`_session_cache`.
+
+**Modified files.**
+- `src/back/objects/session/FileSessionMiddleware.py`
+- `src/back/objects/session/__init__.py`
+- `src/shared/fastapi/main.py`
+- `tests/units/core/test_middleware_session.py`
+- `documentation/code_organization.md`
+
+**Tests.** `uv run --frozen pytest -q -m "not scenario"` — 4510 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.31s
