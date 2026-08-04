@@ -401,3 +401,59 @@ Sub-second runs stay in milliseconds rather than rounding to `0.0s`.
 (4414 before, plus the 7 new tests)
 
 `node --check` passes on both modified JS files.
+
+---
+
+## Keep all five distribution tiles visible at every width
+
+## Context
+
+Reported as "the distribution charts can be hidden if the page width is too
+small". Rendering the strip in headless Chrome at a range of widths found two
+separate causes, only one of which was the reported symptom.
+
+The real one affected *wide* windows. `grid-template-columns: repeat(5, 1fr)`
+means `minmax(auto, 1fr)`, and a canvas has a 300px intrinsic width, so every
+track had a 300px floor. Five tracks plus gaps demanded ~1530px, and any
+container narrower than that overflowed — clipping Clustering, and then
+Closeness, off the right edge. At a 1400px viewport only four tiles were
+reachable.
+
+Below 1200px a second rule dropped the grid to two columns, wrapping five
+tiles into three ragged rows (2 + 2 + 1, the last one stretched full width)
+and pushing the strip below the fold.
+
+## Changes
+
+1. `src/front/static/query/css/query-analytics.css` — the five-column track is
+   now `minmax(0, 1fr)`, so tracks shrink below the canvas's intrinsic width
+   and Chart.js resizes into them. Verified at 1250px, 1400px and 1600px: all
+   five tiles fit and are evenly sized.
+2. Same file — between 577px and 1200px the strip is a six-column grid with
+   the first two tiles spanning three columns and the last three spanning two,
+   giving two balanced rows (PageRank + betweenness, then degree, closeness,
+   clustering) instead of the ragged wrap. Six divides evenly by both 2 and 3.
+   This relies on the strip holding exactly the five `_ALL_METRICS` tiles,
+   which it always does — the per-tile empty state is rendered inside the tile.
+3. Same file — kept the single-column fallback below 577px. The 2+3 split was
+   tested there and leaves ~165px per tile on the second row, which wraps the
+   caption and leaves the two rows unequal heights.
+4. `tests/units/front/test_analytics_dashboard.py` — added
+   `TestAllFiveTilesStayVisible` (6 tests) and a `css` fixture. Each test was
+   verified to fail when the rule it pins is reverted, including a mutation
+   that swaps the row spans and one that strips the comment explaining why
+   `minmax(0, 1fr)` cannot be simplified back to `1fr`.
+
+No markup or JS change: the tile order already matched the requested grouping.
+
+## Modified files
+
+- `src/front/static/query/css/query-analytics.css`
+- `tests/units/front/test_analytics_dashboard.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+## Test result
+
+`uv run --frozen pytest -q -m "not scenario"`
+4427 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 33.56s
+(4421 before, plus the 6 new tests)

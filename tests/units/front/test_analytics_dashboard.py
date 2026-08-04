@@ -45,6 +45,11 @@ def js() -> str:
     return JS.read_text(encoding="utf-8")
 
 
+@pytest.fixture(scope="module")
+def css() -> str:
+    return CSS.read_text(encoding="utf-8")
+
+
 class TestAssetsAreSplitOut:
     def test_css_and_js_files_exist(self):
         assert CSS.is_file()
@@ -318,6 +323,56 @@ class TestInterpretPayloadExcludesDistributions:
                     body.index("delete payload.distributions")]
         assert "eval" in near.lower()
         assert "metrics_payload" in near or "prompt" in near.lower()
+
+
+class TestAllFiveTilesStayVisible:
+    """All five tiles must be reachable at any usable window width."""
+
+    @staticmethod
+    def _rule(css: str, selector: str) -> str:
+        """The declaration block following a selector."""
+        start = css.index(selector)
+        return css[start: css.index("}", start)]
+
+    def test_the_five_column_track_can_shrink_below_the_canvas_width(self, css):
+        """A bare `1fr` is minmax(auto, 1fr), so the canvas's 300px intrinsic
+        width floors each track; five of them overflowed the container and
+        clipped the last tile off the right edge."""
+        rule = self._rule(css, ".analytics-dist-strip {")
+        assert "repeat(5, minmax(0, 1fr))" in rule
+        assert "repeat(5, 1fr)" not in css
+
+    def test_the_reason_for_minmax_is_recorded(self, css):
+        """Without it, 'minmax(0, 1fr)' reads as noise and gets simplified back
+        to 1fr, silently restoring the clipping."""
+        before = css[: css.index(".analytics-dist-strip {")]
+        assert "minmax" in before
+        assert "clip" in before.lower() or "overflow" in before.lower()
+
+    def test_the_mid_width_layout_is_two_rows_of_two_then_three(self, css):
+        """Five tiles in a 2-column grid wrapped to three ragged rows."""
+        assert "repeat(6, minmax(0, 1fr))" in css
+        assert "nth-child(-n + 2)" in css
+        assert "nth-child(n + 3)" in css
+        first = css.index("nth-child(-n + 2)")
+        rest = css.index("nth-child(n + 3)")
+        assert "span 3" in css[first: first + 120]
+        assert "span 2" in css[rest: rest + 120]
+
+    def test_the_two_column_wrap_is_gone(self, css):
+        """The rule that produced the 2 + 2 + 1 wrap."""
+        assert "repeat(2, 1fr)" not in css
+
+    def test_the_narrowest_width_still_falls_back_to_one_column(self, css):
+        """At phone widths three across leaves ~110px per tile, which wraps the
+        caption and makes the two rows different heights."""
+        assert "max-width: 576px" in css
+        rule = self._rule(css, "@media (max-width: 576px)")
+        assert "1fr" in rule
+
+    def test_the_two_row_layout_does_not_apply_at_phone_widths(self, css):
+        """The 2+3 rule and the single-column rule must not both match."""
+        assert "(max-width: 1200px) and (min-width: 577px)" in css
 
 
 class TestElapsedIsHumanReadable:

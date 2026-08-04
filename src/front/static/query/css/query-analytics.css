@@ -37,17 +37,30 @@
 
 /* --- Dashboard: global distribution strip -------------------------------- */
 
+/* minmax(0, 1fr), not 1fr: a bare 1fr means minmax(auto, 1fr), and the
+   canvas's 300px intrinsic width then floors every track, so five tiles
+   demanded ~1530px and overflowed the container, clipping the last one.
+   The 0 minimum lets the tracks shrink and Chart.js resize into them. */
 .analytics-dist-strip {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.5rem;
     margin-bottom: 0.75rem;
 }
 
-@media (max-width: 1200px) {
-    .analytics-dist-strip { grid-template-columns: repeat(2, 1fr); }
+/* Two balanced rows instead of wrapping five tiles into three ragged ones
+   (2 + 2 + 1), which pushed the strip below the fold. Six columns divide
+   evenly by both 2 and 3: PageRank and betweenness take the first row at
+   three columns each, the remaining three take the second at two each.
+   Depends on the strip holding exactly the five _ALL_METRICS tiles. */
+@media (max-width: 1200px) and (min-width: 577px) {
+    .analytics-dist-strip { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .analytics-dist-tile:nth-child(-n + 2) { grid-column: span 3; }
+    .analytics-dist-tile:nth-child(n + 3)  { grid-column: span 2; }
 }
 
+/* Below 577px three across leaves ~110px per tile, too narrow for the label
+   and the 56px chart, so fall back to a single column. */
 @media (max-width: 576px) {
     .analytics-dist-strip { grid-template-columns: 1fr; }
 }
