@@ -10,8 +10,89 @@ from starlette.testclient import TestClient
 
 from back.objects.session.FileSessionMiddleware import (
     FileSessionMiddleware,
+    _SESSION_ID_RE,
     get_session,
 )
+
+
+def _app_with_sessions(tmp_path):
+    """An app with two routes: one that only reads, one that modifies."""
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    app.add_middleware(
+        FileSessionMiddleware, secret_key="key", session_dir=str(tmp_path)
+    )
+
+    @app.get("/read")
+    async def read(request: Request):
+        return {"sid": request.state.session_id, "session": request.state.session}
+
+    @app.get("/write")
+    async def write(request: Request):
+        request.state.session["hello"] = "world"
+        request.state.session_modified = True
+        return {"sid": request.state.session_id}
+
+    return app
+
+
+_VALID_ID = "0123456789abcdef0123456789abcdef"
+
+
+class TestSessionFilesAreCreatedLazily:
+    def test_a_request_without_a_cookie_writes_no_file(self, tmp_path):
+        client = TestClient(_app_with_sessions(tmp_path))
+        resp = client.get("/read")
+        assert resp.status_code == 200
+        assert "session" in resp.cookies
+        assert list(tmp_path.iterdir()) == []
+
+    def test_a_modified_session_is_written_under_the_cookie_id(self, tmp_path):
+        client = TestClient(_app_with_sessions(tmp_path))
+        resp = client.get("/write")
+        sid = resp.json()["sid"]
+        files = list(tmp_path.iterdir())
+        assert [f.name for f in files] == [sid]
+        assert json.loads(files[0].read_text()) == {"hello": "world"}
+
+    def test_many_cookieless_requests_write_no_files(self, tmp_path):
+        """The regression test for 82,200 accumulated session files.
+
+        A fresh TestClient per request, because a single client replays the
+        cookie from the first response and the loop would assert nothing.
+        """
+        app = _app_with_sessions(tmp_path)
+        for _ in range(25):
+            assert TestClient(app).get("/read").status_code == 200
+        assert list(tmp_path.iterdir()) == []
+
+
+class TestSessionIdsAreStable:
+    def test_a_valid_cookie_with_no_file_keeps_its_id(self, tmp_path):
+        client = TestClient(_app_with_sessions(tmp_path))
+        client.cookies.set("session", _VALID_ID)
+        resp = client.get("/read")
+        assert resp.json()["sid"] == _VALID_ID
+        assert resp.json()["session"] == {}
+        assert list(tmp_path.iterdir()) == []
+
+    def test_a_valid_cookie_with_a_file_loads_it(self, tmp_path):
+        (tmp_path / _VALID_ID).write_text(json.dumps({"kept": True}))
+        client = TestClient(_app_with_sessions(tmp_path))
+        client.cookies.set("session", _VALID_ID)
+        resp = client.get("/read")
+        assert resp.json()["sid"] == _VALID_ID
+        assert resp.json()["session"] == {"kept": True}
+
+    def test_a_malformed_cookie_gets_a_fresh_valid_id(self, tmp_path):
+        client = TestClient(_app_with_sessions(tmp_path))
+        client.cookies.set("session", "../../../../etc/passwd")
+        resp = client.get("/read")
+        sid = resp.json()["sid"]
+        assert sid != "../../../../etc/passwd"
+        assert _SESSION_ID_RE.fullmatch(sid)
+        assert list(tmp_path.iterdir()) == []
 
 
 class TestSessionHelpers:

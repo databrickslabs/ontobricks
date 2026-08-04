@@ -134,47 +134,35 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             request.state.session_modified = False
             return await call_next(request)
 
-        # Get or create session ID
         session_id = self._get_session_id_from_cookie(request)
-        is_new_session = False
 
         if not session_id:
+            # No file is written here. A session that is never modified never
+            # reaches disk, which is what stops cookie-less traffic from
+            # littering session_dir with empty {} files.
             session_id = self._generate_session_id()
-            is_new_session = True
             session_data = {}
-            # Create empty session file immediately
-            self._save_session(session_id, session_data)
             logger.info("NEW session created: %s...", session_id[:8])
         else:
-            # Check if session file exists
-            session_file = self.session_dir / session_id
-            if not session_file.exists():
-                # Session cookie exists but file is missing - create new session
-                session_id = self._generate_session_id()
-                is_new_session = True
-                session_data = {}
-                # Create empty session file immediately
-                self._save_session(session_id, session_data)
-                logger.info(
-                    "Old session file not found, created NEW session: %s...",
-                    session_id[:8],
-                )
-            else:
-                # Load existing session (served from in-memory cache after first hit)
-                session_data = self._load_session(session_id)
-                pd = session_data.get("domain_data") or session_data.get(
-                    "project_data", {}
-                )
-                ontology_classes = len(pd.get("ontology", {}).get("classes", []))
-                mapping_entities = len(pd.get("assignment", {}).get("entities", []))
-                mapping_rels = len(pd.get("assignment", {}).get("relationships", []))
-                logger.debug(
-                    "Session %s...: %d classes, %d entity mappings, %d rel mappings",
-                    session_id[:8],
-                    ontology_classes,
-                    mapping_entities,
-                    mapping_rels,
-                )
+            # The ID is reused even when its file is missing. Minting a
+            # replacement here made N concurrent requests carrying the same
+            # cookie produce N sessions. _load_session resolves cache hit,
+            # disk hit, and neither — so file presence is not our concern, and
+            # deferring to it keeps a live cached session that lost its file.
+            session_data = self._load_session(session_id)
+            pd = session_data.get("domain_data") or session_data.get(
+                "project_data", {}
+            )
+            ontology_classes = len(pd.get("ontology", {}).get("classes", []))
+            mapping_entities = len(pd.get("assignment", {}).get("entities", []))
+            mapping_rels = len(pd.get("assignment", {}).get("relationships", []))
+            logger.debug(
+                "Session %s...: %d classes, %d entity mappings, %d rel mappings",
+                session_id[:8],
+                ontology_classes,
+                mapping_entities,
+                mapping_rels,
+            )
 
         # Attach session to request state
         request.state.session = session_data
