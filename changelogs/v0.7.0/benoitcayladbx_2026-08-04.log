@@ -353,3 +353,51 @@ logged above as "Correct distribution bin docstrings after review" and
 
 `uv run --frozen pytest -q -m "not scenario"`
 4414 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.79s
+
+---
+
+## Show the Analytics "Computed in" tile in minutes and seconds
+
+## Context
+
+The KPI tile rendered the raw millisecond count, so a typical Lakeflow run
+read as "134210 ms" and left the reader to do the division. The completion
+toast had the same problem for the same value.
+
+`task-tracker.js` already owned the app's duration scale (`formatSeconds`),
+used by the task tracker and the Runs page, but it was marked "Internal" and
+not exported — so the obvious fix was to duplicate the scale. Exporting it
+instead keeps one definition, which matters because the same job duration is
+visible in both the Analytics tile and the task tracker.
+
+## Changes
+
+1. `src/front/static/global/js/task-tracker.js` — exported the existing
+   `formatSeconds` as `window.formatTaskSeconds` and dropped the now-wrong
+   "Internal" note from its docstring. No change to the scale itself.
+2. `src/front/static/query/js/query-analytics.js` — added `_fmtElapsed(ms)`,
+   which converts to seconds and delegates to the shared formatter. Applied
+   it to the `aStatElapsed` KPI tile and to the "Analysis done" toast, both
+   of which previously concatenated `' ms'`.
+3. `tests/units/front/test_analytics_dashboard.py` — added
+   `TestElapsedIsHumanReadable` (7 tests). Each was verified to fail when the
+   behaviour it pins is reverted, including the ms-to-seconds conversion,
+   whose absence would report a 2-minute run as 37 hours.
+
+Resulting scale: `840ms`, `8.3s`, `42.3s`, `1m 14s`, `2m 14s`, `1h 30m`.
+Sub-second runs stay in milliseconds rather than rounding to `0.0s`.
+
+## Modified files
+
+- `src/front/static/global/js/task-tracker.js`
+- `src/front/static/query/js/query-analytics.js`
+- `tests/units/front/test_analytics_dashboard.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+## Test result
+
+`uv run --frozen pytest -q -m "not scenario"`
+4421 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.64s
+(4414 before, plus the 7 new tests)
+
+`node --check` passes on both modified JS files.

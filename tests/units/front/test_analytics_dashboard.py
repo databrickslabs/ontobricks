@@ -318,3 +318,53 @@ class TestInterpretPayloadExcludesDistributions:
                     body.index("delete payload.distributions")]
         assert "eval" in near.lower()
         assert "metrics_payload" in near or "prompt" in near.lower()
+
+
+class TestElapsedIsHumanReadable:
+    """A Lakeflow run takes seconds to minutes, so the raw millisecond count
+    ('134210 ms') forced the reader to do the arithmetic."""
+
+    def test_the_kpi_tile_does_not_concatenate_raw_milliseconds(self, js):
+        assert "s.elapsed_ms + ' ms'" not in js
+
+    def test_the_kpi_tile_formats_the_elapsed_value(self, js):
+        assert "_setText('aStatElapsed'" in js
+        line = next(ln for ln in js.splitlines() if "aStatElapsed'" in ln)
+        assert "_fmtElapsed(s.elapsed_ms)" in line
+
+    def test_the_completion_toast_formats_it_too(self, js):
+        """The toast and the tile show the same number; only one of them being
+        converted is worse than neither."""
+        assert "+ 'ms'" not in js
+        assert "' in ' + _fmtElapsed(ms)" in js
+
+    def test_the_formatter_converts_milliseconds_to_seconds(self, js):
+        """formatTaskSeconds takes seconds. Handing it milliseconds would
+        report a 2-minute run as 37 hours."""
+        fn = _fn(js, "_fmtElapsed")
+        assert "ms / 1000" in fn
+
+    def test_the_formatter_reuses_the_shared_scale(self, js):
+        """Duplicating the scale here would let the Analytics tile drift from
+        the task tracker and the Runs page."""
+        fn = _fn(js, "_fmtElapsed")
+        assert "formatTaskSeconds" in fn
+
+    def test_the_shared_formatter_is_exported(self):
+        """_fmtElapsed depends on this global, and task-tracker.js previously
+        marked the function 'Internal' and did not export it."""
+        tracker = (REPO_ROOT / "src/front/static/global/js/task-tracker.js").read_text(
+            encoding="utf-8"
+        )
+        assert "window.formatTaskSeconds = formatSeconds" in tracker
+
+    def test_the_shared_scale_reaches_minutes_and_hours(self):
+        """The whole point of the change: durations past 60s must not stay in
+        seconds."""
+        tracker = (REPO_ROOT / "src/front/static/global/js/task-tracker.js").read_text(
+            encoding="utf-8"
+        )
+        body = tracker[tracker.index("function formatSeconds"):]
+        body = body[: body.index("\nfunction ")]
+        assert "m ${remSec}s" in body
+        assert "h ${remMin}m" in body

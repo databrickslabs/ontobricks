@@ -332,7 +332,7 @@
         _setText('aStatComponents', s.connected_components != null ? s.connected_components      : '—');
         _setText('aStatAvgDegree',  s.avg_degree        != null ? s.avg_degree.toFixed(2)        : '—');
         _setText('aStatDensity',    s.density           != null ? s.density.toFixed(6)           : '—');
-        _setText('aStatElapsed',    s.elapsed_ms        != null ? s.elapsed_ms + ' ms'           : '—');
+        _setText('aStatElapsed',    s.elapsed_ms        != null ? _fmtElapsed(s.elapsed_ms)      : '—');
 
         // Show graph_node_count sub-label when filter was applied
         var graphNodeEl = document.getElementById('aStatGraphNodes');
@@ -488,7 +488,7 @@
                 var n  = st.node_count || 0;
                 var ms = st.elapsed_ms;
                 showNotification('Analysis done: ' + n.toLocaleString() + ' nodes'
-                    + (ms ? ' in ' + ms + 'ms' : ''), 'success');
+                    + (ms ? ' in ' + _fmtElapsed(ms) : ''), 'success');
             }
 
         } catch (e) {
@@ -803,6 +803,15 @@
     }
 
     window._analyticsDrillURI = function (uri) { _navigateToGraph(uri); };
+
+    // Renders on the same scale as the task tracker and the Runs page, so a
+    // job's duration reads identically wherever it is shown. Sub-second runs
+    // stay in ms rather than rounding to '0.0s'.
+    function _fmtElapsed(ms) {
+        return window.formatTaskSeconds
+            ? window.formatTaskSeconds(ms / 1000)
+            : ms + ' ms';
+    }
 
     // Format a metric value compactly enough for a tile caption.
     function _fmtMetric(v) {
