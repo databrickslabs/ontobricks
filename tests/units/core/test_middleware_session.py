@@ -4,6 +4,7 @@ import json
 import os
 import time
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch
 
 from starlette.requests import Request
@@ -14,6 +15,7 @@ from back.objects.session.FileSessionMiddleware import (
     FileSessionMiddleware,
     _SESSION_ID_RE,
     get_session,
+    reap_expired_sessions,
 )
 
 
@@ -310,3 +312,50 @@ class TestFileSessionMiddleware:
         resp = client.get("/ping")
         assert resp.status_code == 200
         assert "session" in resp.cookies
+
+
+class TestReapExpiredSessions:
+    def _aged(self, path, seconds_old):
+        path.write_text("{}")
+        stamp = time.time() - seconds_old
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def test_an_expired_session_file_is_removed(self, tmp_path):
+        expired = self._aged(tmp_path / ("a" * 32), 90_000)
+        assert reap_expired_sessions(str(tmp_path), 86_400) == 1
+        assert not expired.exists()
+
+    def test_a_recent_session_file_survives(self, tmp_path):
+        fresh = self._aged(tmp_path / ("b" * 32), 60)
+        assert reap_expired_sessions(str(tmp_path), 86_400) == 0
+        assert fresh.exists()
+
+    def test_an_unrelated_old_file_is_left_alone(self, tmp_path):
+        other = self._aged(tmp_path / "notes.txt", 90_000)
+        assert reap_expired_sessions(str(tmp_path), 86_400) == 0
+        assert other.exists()
+
+    def test_a_near_miss_name_is_left_alone(self, tmp_path):
+        """31 hex chars — a sloppier pattern would match this."""
+        near = self._aged(tmp_path / ("c" * 31), 90_000)
+        assert reap_expired_sessions(str(tmp_path), 86_400) == 0
+        assert near.exists()
+
+    def test_one_undeletable_file_does_not_stop_the_sweep(self, tmp_path):
+        stuck = self._aged(tmp_path / ("d" * 32), 90_000)
+        other = self._aged(tmp_path / ("e" * 32), 90_000)
+        real_unlink = Path.unlink
+
+        def flaky_unlink(self, *args, **kwargs):
+            if self.name == stuck.name:
+                raise OSError("device busy")
+            return real_unlink(self, *args, **kwargs)
+
+        with patch.object(Path, "unlink", flaky_unlink):
+            assert reap_expired_sessions(str(tmp_path), 86_400) == 1
+        assert stuck.exists()
+        assert not other.exists()
+
+    def test_a_missing_directory_returns_zero(self, tmp_path):
+        assert reap_expired_sessions(str(tmp_path / "nope"), 86_400) == 0

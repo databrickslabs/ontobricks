@@ -235,6 +235,40 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         return response
 
 
+def reap_expired_sessions(session_dir: str, max_age: int) -> int:
+    """Delete session files unused for longer than ``max_age`` seconds.
+
+    Only names matching :data:`_SESSION_ID_RE` are considered — the directory is
+    shared with whatever else lands there, and a reaper that deletes purely by
+    age eventually deletes something it did not create.
+
+    Returns the number of files removed. Never raises: this runs during app
+    startup, and a sweep failure must not stop the app from booting.
+    """
+    directory = Path(session_dir)
+    cutoff = time.time() - max_age
+    removed = 0
+
+    try:
+        entries = list(directory.iterdir())
+    except OSError as e:
+        logger.warning("Could not scan session dir %s: %s", session_dir, e)
+        return 0
+
+    for entry in entries:
+        if not _SESSION_ID_RE.fullmatch(entry.name):
+            continue
+        try:
+            if entry.stat().st_mtime >= cutoff:
+                continue
+            entry.unlink()
+            removed += 1
+        except OSError as e:
+            logger.warning("Could not remove expired session %s: %s", entry.name, e)
+
+    return removed
+
+
 def get_session(request: Request) -> Dict[str, Any]:
     """Dependency that returns the session dict from ``request.state``."""
     return getattr(request.state, "session", {})

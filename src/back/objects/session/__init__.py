@@ -3,6 +3,7 @@
 from .FileSessionMiddleware import (
     FileSessionMiddleware,
     get_session,
+    reap_expired_sessions,
 )
 from .SessionManager import SessionManager, get_session_manager
 from .DomainSession import (
@@ -17,6 +18,7 @@ from .GlobalConfigService import GlobalConfigService, global_config_service
 __all__ = [
     "FileSessionMiddleware",
     "get_session",
+    "reap_expired_sessions",
     "SessionManager",
     "get_session_manager",
     "DomainSession",
