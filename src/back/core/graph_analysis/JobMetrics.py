@@ -227,6 +227,39 @@ def distributions_query(
     return "\nUNION ALL\n".join(parts)
 
 
+def interpolate_quantile(
+    bins: List[int], lo: float, hi: float, q: float
+) -> float:
+    """Estimate the *q*-th quantile from histogram bin counts.
+
+    The read-back has to run on engines without a percentile function (see
+    :func:`distribution_bounds_query`), so the quantile is recovered from the
+    bins by assuming each bucket's mass is spread evenly across its width. The
+    error is therefore bounded by one bin width, which is why the UI presents
+    the result as an approximation rather than as a measured median.
+
+    Returns *lo* for an empty or zero-total distribution, and for the degenerate
+    ``hi == lo`` case where every node scored the same.
+    """
+    total = sum(bins)
+    if not bins or total <= 0 or hi <= lo:
+        return float(lo)
+
+    width = (hi - lo) / len(bins)
+    target = total * q
+    cumulative = 0
+    for index, count in enumerate(bins):
+        if count <= 0:
+            continue
+        if cumulative + count >= target:
+            # Clamped because q == 0 puts the target at or below the first
+            # bucket's left edge, and q == 1 at its right edge.
+            fraction = min(1.0, max(0.0, (target - cumulative) / count))
+            return lo + (index + fraction) * width
+        cumulative += count
+    return float(hi)
+
+
 # ---------------------------------------------------------------------------
 # JobMetrics
 # ---------------------------------------------------------------------------

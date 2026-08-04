@@ -19,6 +19,7 @@ from back.core.graph_analysis.JobMetrics import (
     JobMetrics,
     distribution_bounds_query,
     distributions_query,
+    interpolate_quantile,
     resolve_analytics_source,
     summary_query,
     top_nodes_query,
@@ -646,3 +647,48 @@ def test_metrics_result_to_dict_serialises_distributions():
     payload = result.to_dict()
     assert payload["distributions"]["pagerank"]["bins"] == [4, 2, 1, 0]
     assert payload["distributions"]["pagerank"]["bin_count"] == 4
+
+
+# ---------------------------------------------------------------------------
+# Quantiles interpolated from bin counts
+# ---------------------------------------------------------------------------
+
+
+class TestInterpolateQuantile:
+    """Exact oracle: a uniform distribution has analytically known quantiles.
+
+    Four bins of two nodes each spanning 0..4 is a uniform distribution whose
+    median is exactly 2.0 and whose p90 is exactly 3.6, so the interpolation can
+    be checked against a real number rather than against itself.
+    """
+
+    UNIFORM = [2, 2, 2, 2]
+
+    def test_median_of_a_uniform_distribution_is_exact(self):
+        assert interpolate_quantile(self.UNIFORM, 0.0, 4.0, 0.5) == pytest.approx(2.0)
+
+    def test_p90_of_a_uniform_distribution_is_exact(self):
+        assert interpolate_quantile(self.UNIFORM, 0.0, 4.0, 0.9) == pytest.approx(3.6)
+
+    def test_all_mass_in_the_first_bin_lands_inside_that_bin(self):
+        """The heavy-tail case: the median must not escape bin 0."""
+        v = interpolate_quantile([10, 0, 0, 0], 0.0, 4.0, 0.5)
+        assert 0.0 <= v <= 1.0
+
+    def test_all_mass_in_the_last_bin_lands_inside_that_bin(self):
+        v = interpolate_quantile([0, 0, 0, 10], 0.0, 4.0, 0.5)
+        assert 3.0 <= v <= 4.0
+
+    def test_degenerate_range_returns_the_single_value(self):
+        assert interpolate_quantile([4], 0.5, 0.5, 0.5) == pytest.approx(0.5)
+
+    def test_empty_distribution_returns_the_low_bound(self):
+        assert interpolate_quantile([], 0.0, 1.0, 0.5) == pytest.approx(0.0)
+
+    def test_zero_total_returns_the_low_bound(self):
+        assert interpolate_quantile([0, 0], 0.0, 1.0, 0.5) == pytest.approx(0.0)
+
+    def test_result_never_leaves_the_range(self):
+        for q in (0.0, 0.25, 0.5, 0.9, 1.0):
+            v = interpolate_quantile([1, 5, 1], 2.0, 8.0, q)
+            assert 2.0 <= v <= 8.0
