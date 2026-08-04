@@ -1,6 +1,8 @@
 """Tests for back.objects.session.FileSessionMiddleware — file-based session middleware."""
 
 import json
+import os
+import time
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
@@ -93,6 +95,48 @@ class TestSessionIdsAreStable:
         assert sid != "../../../../etc/passwd"
         assert _SESSION_ID_RE.fullmatch(sid)
         assert list(tmp_path.iterdir()) == []
+
+
+class TestSessionFilesAreTouchedOnUse:
+    def _aged_file(self, tmp_path, seconds_old):
+        path = tmp_path / _VALID_ID
+        path.write_text("{}")
+        stamp = time.time() - seconds_old
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def test_a_stale_file_is_touched(self, tmp_path):
+        path = self._aged_file(tmp_path, 7200)
+        before = path.stat().st_mtime
+        client = TestClient(_app_with_sessions(tmp_path))
+        client.cookies.set("session", _VALID_ID)
+        assert client.get("/read").status_code == 200
+        assert path.stat().st_mtime > before
+
+    def test_a_fresh_file_is_not_touched(self, tmp_path):
+        path = self._aged_file(tmp_path, 60)
+        before = path.stat().st_mtime
+        client = TestClient(_app_with_sessions(tmp_path))
+        client.cookies.set("session", _VALID_ID)
+        assert client.get("/read").status_code == 200
+        assert path.stat().st_mtime == before
+
+    def test_touching_never_creates_a_missing_file(self, tmp_path):
+        from fastapi import FastAPI
+
+        middleware = FileSessionMiddleware(
+            FastAPI(), secret_key="key", session_dir=str(tmp_path)
+        )
+        middleware._touch_session(_VALID_ID)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_a_failing_touch_does_not_break_the_request(self, tmp_path):
+        self._aged_file(tmp_path, 7200)
+        client = TestClient(_app_with_sessions(tmp_path))
+        client.cookies.set("session", _VALID_ID)
+        with patch("os.utime", side_effect=OSError("read-only filesystem")):
+            resp = client.get("/read")
+        assert resp.status_code == 200
 
 
 class TestSessionHelpers:

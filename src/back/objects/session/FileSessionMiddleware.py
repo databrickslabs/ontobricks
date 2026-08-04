@@ -6,7 +6,9 @@ It stores session data as JSON files in a configurable directory.
 """
 
 import json
+import os
 import re
+import time
 import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -39,6 +41,11 @@ _SESSION_BYPASS_PREFIXES = (
 # matches immediately before a trailing newline, which would let a 33-character
 # value through and resolve to a different file than the one validated.
 _SESSION_ID_RE = re.compile(r"[0-9a-f]{32}")
+
+# How stale a session file's mtime must be before a read refreshes it. Bounds
+# the metadata writes to one per session per interval; must stay well below
+# Settings.session_max_age or reap_expired_sessions would delete live sessions.
+_SESSION_TOUCH_INTERVAL = 3600
 
 
 class FileSessionMiddleware(BaseHTTPMiddleware):
@@ -118,6 +125,26 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             logger.exception("Error saving session %s: %s", session_id, e)
 
+    def _touch_session(self, session_id: str) -> None:
+        """Refresh a session file's mtime so it records last *use*, not last edit.
+
+        ``reap_expired_sessions`` deletes by mtime, and the session cookie is
+        renewed on every response — so without this a session that is read for
+        days but never modified would be reaped while its cookie is still
+        valid, and the user would silently land on an empty session.
+
+        Never creates the file: ``Path.touch()`` would, ``os.utime`` on a
+        missing path raises ``FileNotFoundError`` and is swallowed below. That
+        also covers the file being unlinked between the stat and the utime.
+        """
+        session_file = self.session_dir / session_id
+        try:
+            if time.time() - session_file.stat().st_mtime < _SESSION_TOUCH_INTERVAL:
+                return
+            os.utime(session_file, None)
+        except OSError as e:
+            logger.debug("Could not touch session %s...: %s", session_id[:8], e)
+
     def _generate_session_id(self) -> str:
         """Generate a new session ID."""
         return str(uuid.uuid4()).replace("-", "")
@@ -144,6 +171,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             session_data = {}
             logger.info("NEW session created: %s...", session_id[:8])
         else:
+            self._touch_session(session_id)
             # The ID is reused even when its file is missing. Minting a
             # replacement here made N concurrent requests carrying the same
             # cookie produce N sessions. _load_session resolves cache hit,
