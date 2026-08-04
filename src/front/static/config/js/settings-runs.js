@@ -166,7 +166,10 @@
         el(ids.empty).style.display = 'none';
         el(ids.error).style.display = 'none';
         el(ids.wrapper).style.display = 'none';
-        el(ids.pagination).classList.add('d-none');
+        // Only the now-stale label and Prev/Next go: taking the whole footer
+        // down would make the Rows selector vanish and reappear on every
+        // reload, which is visible whenever the registry is slow to answer.
+        el(ids.pagingControls).classList.add('d-none');
 
         const params = new URLSearchParams({
             limit: String(st.limit),
@@ -186,6 +189,10 @@
                 el(ids.errorMessage).textContent =
                     data.message || 'Failed to load ' + tab.label;
                 el(ids.error).style.display = '';
+                // renderPagination() owns the footer's final state but does
+                // not run on this path, and paging a table that is not on
+                // screen is meaningless.
+                el(ids.pagination).classList.add('d-none');
                 return false;
             }
             st.rows = data.runs || [];
@@ -196,6 +203,7 @@
             el(ids.loading).style.display = 'none';
             el(ids.errorMessage).textContent = err.message;
             el(ids.error).style.display = '';
+            el(ids.pagination).classList.add('d-none');
             return false;
         }
     }

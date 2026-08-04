@@ -40,6 +40,18 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _load_tab_body() -> str:
+    """The body of settings-runs.js's `loadTab`, for assertions about which
+    element each of its branches shows or hides."""
+    match = re.search(
+        r"async function loadTab\(kind\) \{(.*?)\n    \}",
+        _read(_SETTINGS_JS),
+        re.DOTALL,
+    )
+    assert match is not None, "loadTab function not found"
+    return match.group(1)
+
+
 def _menu_items(menu_id: str, group_id: str):
     cfg = json.loads(_read(_MENU))
     menu = next(m for m in cfg["menus"] if m["id"] == menu_id)
@@ -257,6 +269,27 @@ class TestPagination:
         match = re.search(r"controls\.classList\.toggle\('d-none',([^)]*)\)", src)
         assert match is not None
         assert "st.total <= st.limit" in match.group(1)
+
+    def test_a_reload_leaves_the_rows_selector_on_screen(self):
+        """The loader's pre-fetch reset must not take the whole footer down:
+        on a slow registry the Rows control would visibly vanish and reappear
+        on every reload. Only the now-stale paging controls go."""
+        reset = _load_tab_body()[: _load_tab_body().index("try {")]
+
+        assert "ids.pagingControls).classList.add('d-none')" in reset
+        assert "ids.pagination)" not in reset
+
+    @pytest.mark.parametrize("branch", ["if (!data.success)", "catch (err)"])
+    def test_a_failed_load_hides_the_footer_along_with_the_table(self, branch):
+        """Paging controls for a table that is no longer on screen would
+        invite a click that pages nothing, and renderPagination() — which
+        normally owns the footer's final state — never runs on this path."""
+        body = _load_tab_body()
+        slice_ = body[body.index(branch):]
+        if branch == "if (!data.success)":
+            slice_ = slice_[: slice_.index("catch (err)")]
+
+        assert "ids.pagination).classList.add('d-none')" in slice_
 
     @pytest.mark.parametrize("prefix", ["srBuild", "srAnalytics"])
     def test_page_size_offers_25_50_100(self, client, prefix):

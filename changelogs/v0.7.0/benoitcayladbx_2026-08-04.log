@@ -213,3 +213,29 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4320 passed, 276
 skipped, 5 deselected, 1 xfailed, 23 warnings in 33.07s
+
+## Fix: the Rows selector flickered on every reload
+
+Context: measured in the browser by stalling `/settings/runs/build` — the
+loader's pre-fetch reset still hid the whole footer, so the Rows selector
+disappeared for the duration of every fetch and came back when it settled.
+Imperceptible against a local registry, visible on a slow one.
+
+Changes:
+
+1. `src/front/static/config/js/settings-runs.js`
+   The reset hides only `…PagingControls`, leaving the footer to
+   `renderPagination()`, which sets its final state anyway. Both error paths —
+   where `renderPagination()` does not run — hide the whole footer, since
+   paging a table that is not on screen is meaningless.
+2. `tests/units/front/test_settings_runs_page.py`
+   The reset does not touch the footer, and each of the two error branches
+   hides it.
+
+Modified files:
+- `src/front/static/config/js/settings-runs.js`
+- `tests/units/front/test_settings_runs_page.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4323 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 33.13s
