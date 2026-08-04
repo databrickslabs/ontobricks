@@ -283,3 +283,71 @@ Modified files:
 
 Tests: `uv run --frozen pytest tests/units/front/test_analytics_dashboard.py -q`
 → 44 passed, 1 warning in 0.14s
+
+# KG Analytics dashboard with global metric distributions
+
+## Context
+
+Knowledge Graph → Analytics charted only a bounded top-N slice per metric
+across five sibling tabs. A reader could not tell whether a top-ranked score
+was an outlier or typical, and could not compare two metrics without switching
+tabs. The Lakeflow job already wrote per-node scores for the whole graph; the
+app never summarised them.
+
+Spec:  documentation/superpowers/specs/2026-08-04-kg-analytics-dashboard-design.md
+Plan:  documentation/superpowers/plans/2026-08-04-kg-analytics-dashboard.md
+
+## Changes
+
+1. `src/back/core/graph_analysis/models.py` — added `MetricDistribution` and
+   `MetricsResult.distributions`; `DEFAULT_DISTRIBUTION_BINS = 20`.
+2. `src/back/core/graph_analysis/JobMetrics.py` — added
+   `distribution_bounds_query`, `distributions_query`, `interpolate_quantile` and
+   `_read_distributions`. SQL is portable across SQLite, Spark and Postgres; a
+   failed histogram read no longer discards the run.
+3. `src/front/static/query/css/query-analytics.css` — new; all Analytics styles.
+4. `src/front/static/query/js/query-analytics.js` — new; the ~1100 lines of JS
+   previously inline in the partial, plus the dashboard renderers. Ranking-chart
+   metric switches call `destroy()` on the Chart.js instance before rebuilding
+   `innerHTML`, fixing a canvas leak on every switch.
+5. `src/front/templates/partials/dtwin/_query_analytics.html` — markup only.
+   Seven tabs became three (Dashboard, Data Model Health, AI Insights); KPI
+   row rebuilt on the shared `.ob-kpi-tile` component. Distribution strip with
+   five histogram tiles, segmented metric control, and a **Log scale** toggle
+   that redraws all tiles on a logarithmic count axis.
+6. `src/front/templates/dtwin.html` — wired the two new assets.
+7. Distributions are stripped from the `/dtwin/metrics/interpret` body so the
+   change does not alter an LLM prompt without an eval delta.
+8. Repointed the three test files that asserted on JS inside the partial.
+9. `tests/units/front/test_analytics_dashboard.py` — new dashboard layout and
+   distribution-strip assertions.
+10. `documentation/features.md`, `documentation/user-guide.md` — Analytics
+    section rewritten for the three-tab dashboard and distribution strip.
+
+(Follow-up docstring and test-hardening entries for this work are already
+logged above as "Correct distribution bin docstrings after review" and
+"Strengthen distribution-strip source assertions".)
+
+## Modified files
+
+- `src/back/core/graph_analysis/models.py`
+- `src/back/core/graph_analysis/JobMetrics.py`
+- `src/front/static/query/css/query-analytics.css` (new)
+- `src/front/static/query/js/query-analytics.js` (new)
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `src/front/templates/dtwin.html`
+- `tests/units/core/test_job_metrics.py`
+- `tests/units/front/test_analytics_dashboard.py` (new)
+- `tests/units/front/test_analytics_unavailable_metrics.py`
+- `tests/units/front/test_runs_page.py`
+- `tests/units/dtwin/test_analytics_job_status.py`
+- `documentation/superpowers/specs/2026-08-04-kg-analytics-dashboard-design.md`
+- `documentation/superpowers/plans/2026-08-04-kg-analytics-dashboard.md`
+- `documentation/features.md`
+- `documentation/user-guide.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+## Test result
+
+`uv run --frozen pytest -q -m "not scenario"`
+4414 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 31.79s
