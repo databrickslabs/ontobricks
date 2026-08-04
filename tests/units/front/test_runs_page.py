@@ -392,9 +392,10 @@ class TestHistoryTabRemoved:
         assert _find(tags, id_="atab-history") is None
 
     def test_the_remaining_analytics_tabs_render_in_order(self, client):
-        """Rendered-HTML: the seven surviving tabs are still there, in
-        their original order, on the served page — guards against
-        accidentally deleting a neighboring tab along with History."""
+        """Rendered-HTML: the three surviving tabs are still there, in
+        their order, on the served page — guards against accidentally
+        deleting a neighboring tab. Task 6 collapsed the five per-metric
+        tabs into a single Dashboard tab."""
         html = _html(client, "/dtwin/")
         tags = _tags(html)
         tab_button_ids = [
@@ -403,11 +404,7 @@ class TestHistoryTabRemoved:
             if t == "button" and (a.get("id") or "").startswith("atab-btn-")
         ]
         assert tab_button_ids == [
-            "atab-btn-pagerank",
-            "atab-btn-betweenness",
-            "atab-btn-degree",
-            "atab-btn-closeness",
-            "atab-btn-clustering",
+            "atab-btn-dashboard",
             "atab-btn-health",
             "atab-btn-insights",
         ]

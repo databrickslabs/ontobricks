@@ -58,52 +58,46 @@
         <!-- Aggregate stats row — always visible above tabs -->
         <div class="row g-2 mb-3" id="analyticsStatsRow">
             <div class="col-6 col-md-4 col-lg-2">
-                <div class="card text-center h-100 border-0 bg-light">
-                    <div class="card-body py-2">
-                        <div class="fs-5 fw-bold text-primary" id="aStatNodes">—</div>
-                        <div class="small text-muted">Nodes</div>
-                        <div class="small text-muted" id="aStatGraphNodes" style="font-size:0.7rem"></div>
-                    </div>
+                <div class="ob-kpi-tile">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-circle-fill"></i></div>
+                    <div class="ob-kpi-tile-value" id="aStatNodes">—</div>
+                    <div class="ob-kpi-tile-label">Nodes</div>
+                    <div class="ob-kpi-tile-label analytics-kpi-sublabel" id="aStatGraphNodes"></div>
                 </div>
             </div>
             <div class="col-6 col-md-4 col-lg-2">
-                <div class="card text-center h-100 border-0 bg-light">
-                    <div class="card-body py-2">
-                        <div class="fs-5 fw-bold text-primary" id="aStatEdges">—</div>
-                        <div class="small text-muted">Edges</div>
-                    </div>
+                <div class="ob-kpi-tile">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-share"></i></div>
+                    <div class="ob-kpi-tile-value" id="aStatEdges">—</div>
+                    <div class="ob-kpi-tile-label">Edges</div>
                 </div>
             </div>
             <div class="col-6 col-md-4 col-lg-2">
-                <div class="card text-center h-100 border-0 bg-light">
-                    <div class="card-body py-2">
-                        <div class="fs-5 fw-bold text-success" id="aStatComponents">—</div>
-                        <div class="small text-muted">Components</div>
-                    </div>
+                <div class="ob-kpi-tile tile-success">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-diagram-2"></i></div>
+                    <div class="ob-kpi-tile-value" id="aStatComponents">—</div>
+                    <div class="ob-kpi-tile-label">Components</div>
                 </div>
             </div>
             <div class="col-6 col-md-4 col-lg-2">
-                <div class="card text-center h-100 border-0 bg-light">
-                    <div class="card-body py-2">
-                        <div class="fs-5 fw-bold text-info" id="aStatAvgDegree">—</div>
-                        <div class="small text-muted">Avg Degree</div>
-                    </div>
+                <div class="ob-kpi-tile">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-node-plus"></i></div>
+                    <div class="ob-kpi-tile-value" id="aStatAvgDegree">—</div>
+                    <div class="ob-kpi-tile-label">Avg Degree</div>
                 </div>
             </div>
             <div class="col-6 col-md-4 col-lg-2">
-                <div class="card text-center h-100 border-0 bg-light">
-                    <div class="card-body py-2">
-                        <div class="fs-5 fw-bold text-secondary" id="aStatDensity">—</div>
-                        <div class="small text-muted">Density</div>
-                    </div>
+                <div class="ob-kpi-tile tile-muted">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-grid-3x3"></i></div>
+                    <div class="ob-kpi-tile-value" id="aStatDensity">—</div>
+                    <div class="ob-kpi-tile-label">Density</div>
                 </div>
             </div>
             <div class="col-6 col-md-4 col-lg-2">
-                <div class="card text-center h-100 border-0 bg-light">
-                    <div class="card-body py-2">
-                        <div class="small text-muted mb-1">Computed in</div>
-                        <div class="fw-bold text-muted small" id="aStatElapsed">—</div>
-                    </div>
+                <div class="ob-kpi-tile tile-muted">
+                    <div class="ob-kpi-tile-icon"><i class="bi bi-stopwatch"></i></div>
+                    <div class="ob-kpi-tile-value" id="aStatElapsed">—</div>
+                    <div class="ob-kpi-tile-label">Computed in</div>
                 </div>
             </div>
         </div>
@@ -111,44 +105,23 @@
         <!-- Tab strip -->
         <ul class="nav nav-tabs ob-tabs mb-0" id="analyticsTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="atab-btn-pagerank" data-bs-toggle="tab"
-                        data-bs-target="#atab-pagerank" type="button" role="tab">
-                    <i class="bi bi-diagram-3 me-1 text-primary"></i>PageRank
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="atab-btn-betweenness" data-bs-toggle="tab"
-                        data-bs-target="#atab-betweenness" type="button" role="tab">
-                    <i class="bi bi-share me-1 text-danger"></i>Betweenness
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="atab-btn-degree" data-bs-toggle="tab"
-                        data-bs-target="#atab-degree" type="button" role="tab">
-                    <i class="bi bi-node-plus me-1 text-success"></i>Degree
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="atab-btn-closeness" data-bs-toggle="tab"
-                        data-bs-target="#atab-closeness" type="button" role="tab">
-                    <i class="bi bi-arrows-fullscreen me-1 text-info"></i>Closeness
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="atab-btn-clustering" data-bs-toggle="tab"
-                        data-bs-target="#atab-clustering" type="button" role="tab">
-                    <i class="bi bi-hexagon me-1 text-warning"></i>Clustering
+                <button class="nav-link active" id="atab-btn-dashboard" data-bs-toggle="tab"
+                        data-bs-target="#atab-dashboard" type="button" role="tab"
+                        aria-controls="atab-dashboard" aria-selected="true">
+                    <i class="bi bi-speedometer2 me-1"></i>Dashboard
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="atab-btn-health" data-bs-toggle="tab"
-                        data-bs-target="#atab-health" type="button" role="tab">
+                        data-bs-target="#atab-health" type="button" role="tab"
+                        aria-controls="atab-health" aria-selected="false">
                     <i class="bi bi-activity me-1 text-info"></i>Data Model Health
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="atab-btn-insights" data-bs-toggle="tab"
-                        data-bs-target="#atab-insights" type="button" role="tab">
+                        data-bs-target="#atab-insights" type="button" role="tab"
+                        aria-controls="atab-insights" aria-selected="false">
                     <i class="bi bi-stars me-1 text-warning"></i>AI Insights
                 </button>
             </li>
@@ -156,16 +129,22 @@
 
         <div class="tab-content ob-tab-content" id="analyticsTabContent">
 
-            <!-- ── TAB: PageRank ── -->
-            <div class="tab-pane fade show active" id="atab-pagerank" role="tabpanel">
-                <div class="card mt-1">
+            <!-- TAB: Dashboard -->
+            <div class="tab-pane fade show active" id="atab-dashboard" role="tabpanel"
+                 aria-labelledby="atab-btn-dashboard">
+
+                <!-- Global distributions across every scored node -->
+                <div class="analytics-dist-strip mt-2" id="analyticsDistStrip"></div>
+
+                <!-- Top-N ranking for the selected metric -->
+                <div id="analyticsRankingCard"></div>
+
+                <!-- Node detail — all five metrics per node -->
+                <div class="card mt-3">
                     <div class="card-header py-2 small fw-semibold d-flex justify-content-between align-items-center">
-                        <span>
-                            <i class="bi bi-diagram-3 me-1 text-primary"></i>PageRank — node detail
-                            <button class="btn btn-link btn-sm p-0 text-muted ms-1" onclick="_showMetricInfo('pagerank')" title="What is PageRank?"><i class="bi bi-question-circle"></i></button>
-                        </span>
-                        <span class="text-muted fw-normal" style="font-size:0.78rem">
-                            PR(u) = (1−d)/N + d·Σ PR(v)/deg(v) &nbsp;·&nbsp; damping = 0.85
+                        <span><i class="bi bi-table me-1"></i>Node detail — all metrics</span>
+                        <span class="text-muted fw-normal analytics-detail-hint">
+                            Click a row to open it in the Graph Viewer
                         </span>
                     </div>
                     <div class="card-body p-0">
@@ -187,50 +166,6 @@
                             </table>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- ── TAB: Betweenness ── -->
-            <div class="tab-pane fade" id="atab-betweenness" role="tabpanel">
-                <div class="card mt-1">
-                    <div class="card-header py-2 small fw-semibold d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-share me-1 text-danger"></i>Betweenness Centrality</span>
-                        <button class="btn btn-link btn-sm p-0 text-muted" onclick="_showMetricInfo('betweenness')" title="What is Betweenness?"><i class="bi bi-question-circle"></i></button>
-                    </div>
-                    <div class="card-body"><canvas id="chartBetweenness"></canvas></div>
-                </div>
-            </div>
-
-            <!-- ── TAB: Degree ── -->
-            <div class="tab-pane fade" id="atab-degree" role="tabpanel">
-                <div class="card mt-1">
-                    <div class="card-header py-2 small fw-semibold d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-node-plus me-1 text-success"></i>Degree Centrality</span>
-                        <button class="btn btn-link btn-sm p-0 text-muted" onclick="_showMetricInfo('degree')" title="What is Degree Centrality?"><i class="bi bi-question-circle"></i></button>
-                    </div>
-                    <div class="card-body"><canvas id="chartDegree"></canvas></div>
-                </div>
-            </div>
-
-            <!-- ── TAB: Closeness ── -->
-            <div class="tab-pane fade" id="atab-closeness" role="tabpanel">
-                <div class="card mt-1">
-                    <div class="card-header py-2 small fw-semibold d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-arrows-fullscreen me-1 text-info"></i>Closeness Centrality</span>
-                        <button class="btn btn-link btn-sm p-0 text-muted" onclick="_showMetricInfo('closeness')" title="What is Closeness Centrality?"><i class="bi bi-question-circle"></i></button>
-                    </div>
-                    <div class="card-body"><canvas id="chartCloseness"></canvas></div>
-                </div>
-            </div>
-
-            <!-- ── TAB: Clustering ── -->
-            <div class="tab-pane fade" id="atab-clustering" role="tabpanel">
-                <div class="card mt-1">
-                    <div class="card-header py-2 small fw-semibold d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-hexagon me-1 text-warning"></i>Clustering Coefficient</span>
-                        <button class="btn btn-link btn-sm p-0 text-muted" onclick="_showMetricInfo('clustering')" title="What is Clustering Coefficient?"><i class="bi bi-question-circle"></i></button>
-                    </div>
-                    <div class="card-body"><canvas id="chartClustering"></canvas></div>
                 </div>
             </div>
 

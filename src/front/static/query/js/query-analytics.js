@@ -91,19 +91,14 @@
         { key: 'clustering',  canvasId: 'chartClustering',  color: 'rgba(255, 193, 7, 0.85)',  tabId: 'atab-btn-clustering'  },
     ];
 
-    // Resize charts when their tab is shown (Chart.js renders at 0px when hidden)
+    // Chart.js renders at 0px in a hidden pane, so charts are resized when the
+    // Dashboard tab becomes visible.
     document.addEventListener('shown.bs.tab', function (e) {
         var target = e.target && e.target.getAttribute('data-bs-target');
-        var keyMap = {
-            '#atab-betweenness': 'betweenness',
-            '#atab-degree':      'degree',
-            '#atab-closeness':   'closeness',
-            '#atab-clustering':  'clustering',
-        };
-        var key = keyMap[target];
-        if (key && _charts[key]) {
-            _charts[key].resize();
-        }
+        if (target !== '#atab-dashboard') return;
+        Object.keys(_charts).forEach(function (key) {
+            if (_charts[key]) _charts[key].resize();
+        });
     });
 
     // Disable / re-enable the Run Analysis button based on whether the KG has been built

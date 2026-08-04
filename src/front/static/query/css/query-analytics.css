@@ -22,3 +22,14 @@
     overflow-y: auto;
     overflow-x: hidden;
 }
+
+/* --- Dashboard: KPI sub-label and detail hint ---------------------------- */
+
+.analytics-kpi-sublabel {
+    font-size: 0.7rem;
+    color: var(--db-text-muted);
+}
+
+.analytics-detail-hint {
+    font-size: 0.78rem;
+}
