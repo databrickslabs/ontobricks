@@ -1,0 +1,153 @@
+/* ==========================================================================
+   Knowledge Graph -> Analytics
+   Paired with templates/partials/dtwin/_query_analytics.html and
+   static/query/js/query-analytics.js.
+   ========================================================================== */
+
+/* Fill the available height and scroll inside the pane rather than the page. */
+#analyticsSection {
+    overflow: hidden;
+}
+
+#analyticsResults {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+#analyticsResults > .ob-tab-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* --- Dashboard: KPI sub-label and detail hint ---------------------------- */
+
+.analytics-kpi-sublabel {
+    font-size: 0.7rem;
+    color: var(--db-text-muted);
+}
+
+.analytics-detail-hint {
+    font-size: 0.78rem;
+    color: var(--db-text-muted);
+}
+
+/* --- Dashboard: global distribution strip -------------------------------- */
+
+.analytics-dist-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+    .analytics-dist-strip { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 576px) {
+    .analytics-dist-strip { grid-template-columns: 1fr; }
+}
+
+.analytics-dist-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    background: var(--db-bg-secondary);
+    border: 1px solid var(--db-border);
+    border-radius: var(--bs-card-border-radius);
+    transition: var(--db-transition-fast);
+    cursor: pointer;
+}
+
+.analytics-dist-tile:hover {
+    box-shadow: var(--db-shadow-sm);
+}
+
+/* Selected: use --db-primary border + a focus-ring derived from --db-primary-rgb
+   so the selected state is clearly distinct from hover without the orange glow
+   of --db-shadow-primary (which is an off-brand legacy token). */
+.analytics-dist-tile.selected {
+    border-color: var(--db-primary);
+    box-shadow: 0 0 0 2px rgba(var(--db-primary-rgb), 0.2), var(--db-shadow-sm);
+}
+
+.analytics-dist-head {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--db-text);
+}
+
+.analytics-dist-head i {
+    margin-right: 0.25rem;
+}
+
+.analytics-dist-badge {
+    margin-left: 0.25rem;
+    font-weight: 400;
+    color: var(--db-warning);
+}
+
+/* Fixed height: Chart.js needs a sized box, and all five tiles must share a
+   baseline for their shapes to be comparable. */
+.analytics-dist-body {
+    position: relative;
+    display: block;
+    height: 56px;
+}
+
+.analytics-dist-caption {
+    font-size: 0.65rem;
+    color: var(--db-text-muted);
+}
+
+/* --- Dashboard: ranking card -------------------------------------------- */
+
+.analytics-rank-segs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    border: 1px solid var(--db-border);
+    border-radius: var(--bs-border-radius);
+    overflow: hidden;
+}
+
+.analytics-rank-seg {
+    padding: 0.15rem 0.5rem;
+    font-size: 0.72rem;
+    color: var(--db-text-secondary);
+    background: #fff;
+    border: 0;
+    border-right: 1px solid var(--db-border);
+    transition: var(--db-transition-fast);
+}
+
+.analytics-rank-seg:last-child { border-right: 0; }
+
+/* Hover: use --db-primary-light (rgba(73,80,87,0.1)) so the effect is visible
+   against the white background without introducing hard-coded colours. */
+.analytics-rank-seg:hover { background: var(--db-primary-light); }
+
+/* Selected: match Task 7's dist-tile treatment — --db-primary underline +
+   --db-primary-rgb ring — so both controls speak the same visual language. */
+.analytics-rank-seg.selected {
+    font-weight: 600;
+    color: var(--db-text);
+    background: var(--db-primary-light);
+    box-shadow: inset 0 -2px 0 var(--db-primary);
+}
+
+/* Sized so a top-50 ranking scrolls inside the card rather than stretching it. */
+.analytics-rank-canvas-wrap {
+    position: relative;
+    height: 420px;
+}
+
+.analytics-logscale-switch .form-check-label {
+    cursor: pointer;
+}

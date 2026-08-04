@@ -30,8 +30,11 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from back.core.errors import InfrastructureError
 from back.core.graph_analysis.models import (
+    DEFAULT_DISTRIBUTION_BINS,
     MODE_JOB,
+    NODE_METRIC_KEYS,
     EntityTypeProfile,
+    MetricDistribution,
     MetricsRequest,
     MetricsResult,
     NodeMetrics,
@@ -139,6 +142,125 @@ def type_predicates_query(output_table: str) -> str:
     return f"SELECT type_uri, predicate FROM {output_table}_type_predicates"
 
 
+def distribution_bounds_query(output_table: str) -> str:
+    """Per-metric ``MIN`` / ``MAX`` / ``AVG`` over every scored node.
+
+    Split from :func:`distributions_query` rather than folded into it: combining
+    them forces the bounds into either a repeated ``CASE`` expression in the
+    ``GROUP BY`` or a constant-ordinal ``GROUP BY``, and the portable spelling of
+    each differs across SQLite, Spark and Postgres. Two plain aggregates are
+    individually obvious, and the extra round trip is nothing next to a job that
+    runs for minutes.
+    """
+    columns = ",\n".join(
+        f"       MIN({m}) AS lo_{m},\n"
+        f"       MAX({m}) AS hi_{m},\n"
+        f"       AVG({m}) AS mean_{m}"
+        for m in NODE_METRIC_KEYS
+    )
+    return f"SELECT\n{columns}\nFROM {output_table}"
+
+
+def _bin_index_expression(metric: str, bins: int) -> str:
+    """Portable bucket assignment for one metric.
+
+    Written as a ``CASE`` rather than with ``least`` / ``greatest``: the *job*
+    test harness registers those as custom SQLite functions, but this read-back
+    executes on SQLite (tests) and Databricks/Spark (production), parses under
+    all three sqlglot dialects, and would need the ``ROUND`` argument cast to
+    ``numeric`` to execute on Postgres.
+
+    The three branches are the two degenerate cases plus the general one:
+
+    * ``hi <= lo`` — every node scores identically (a fully regular graph, or a
+      metric the run left all-zero). The general expression would divide by
+      zero, so everything collapses into bin 0.
+    * ``value >= hi`` — the top-scoring node would otherwise compute ``bins``,
+      one index past the last bucket.
+    * otherwise, scale into ``[0, bins)`` via ``CAST(ROUND(..., 10) AS INTEGER)``.
+      Every metric is non-negative by construction, which is what makes integer
+      truncation equivalent to ``floor`` and saves needing a ``floor`` function.
+
+    The ``ROUND(..., 10)`` is load-bearing. A value sitting exactly on a bin
+    boundary is common — any metric quantised to a few distinct values, which
+    ``clustering`` and ``degree`` routinely are — and binary64 puts the scaled
+    result a few parts in 10^16 below the integer it should equal, so bare
+    truncation drops it into the bin below. Rounding at the tenth decimal
+    absorbs that while leaving genuine fractional positions untouched.
+    """
+    return (
+        f"CASE\n"
+        f"      WHEN b.hi <= b.lo THEN 0\n"
+        f"      WHEN t.{metric} >= b.hi THEN {int(bins) - 1}\n"
+        f"      ELSE CAST(ROUND((t.{metric} - b.lo) * {int(bins)}"
+        f" / (b.hi - b.lo), 10) AS INTEGER)\n"
+        f"    END"
+    )
+
+
+def distributions_query(
+    output_table: str, bins: int = DEFAULT_DISTRIBUTION_BINS
+) -> str:
+    """Node counts per histogram bin, for all five metrics.
+
+    One ``SELECT`` per metric, stacked with ``UNION ALL``. Each groups inside a
+    subquery so the ``GROUP BY`` targets a plain column name — grouping directly
+    on the ``CASE`` expression or on a constant ordinal is spelled differently
+    across the three engines this has to satisfy.
+
+    Bins containing no nodes produce no row; the caller pads them to zero.
+    """
+    # zero bins would divide by zero in _bin_index_expression's general branch.
+    bins = max(1, int(bins))
+    parts = [
+        f"SELECT '{metric}' AS metric, bin_index, COUNT(*) AS node_count\n"
+        f"FROM (\n"
+        f"  SELECT {_bin_index_expression(metric, bins)} AS bin_index\n"
+        f"  FROM {output_table} t\n"
+        f"  CROSS JOIN (\n"
+        f"    SELECT MIN({metric}) AS lo, MAX({metric}) AS hi"
+        f" FROM {output_table}\n"
+        f"  ) b\n"
+        f") q\n"
+        f"GROUP BY bin_index"
+        for metric in NODE_METRIC_KEYS
+    ]
+    return "\nUNION ALL\n".join(parts)
+
+
+def interpolate_quantile(
+    bins: List[int], lo: float, hi: float, q: float
+) -> float:
+    """Estimate the *q*-th quantile from histogram bin counts.
+
+    The read-back has to run on engines without a percentile function (see
+    :func:`distribution_bounds_query`), so the quantile is recovered from the
+    bins by assuming each bucket's mass is spread evenly across its width. The
+    error is therefore bounded by one bin width, which is why the UI presents
+    the result as an approximation rather than as a measured median.
+
+    Returns *lo* for an empty or zero-total distribution, and for the degenerate
+    ``hi == lo`` case where every node scored the same.
+    """
+    total = sum(bins)
+    if not bins or total <= 0 or hi <= lo:
+        return float(lo)
+
+    width = (hi - lo) / len(bins)
+    target = total * q
+    cumulative = 0
+    for index, count in enumerate(bins):
+        if count <= 0:
+            continue
+        if cumulative + count >= target:
+            # Clamped because q == 0 puts the target at or below the first
+            # bucket's left edge, and q == 1 at its right edge.
+            fraction = min(1.0, max(0.0, (target - cumulative) / count))
+            return lo + (index + fraction) * width
+        cumulative += count
+    return float(hi)
+
+
 # ---------------------------------------------------------------------------
 # JobMetrics
 # ---------------------------------------------------------------------------
@@ -158,6 +280,7 @@ class JobMetrics:
         pagerank_iterations: int = 20,
         pivots: int = 64,
         max_depth: int = 32,
+        distribution_bins: int = DEFAULT_DISTRIBUTION_BINS,
     ) -> None:
         self._source_table = source_table
         self._runner = runner
@@ -167,6 +290,9 @@ class JobMetrics:
         self._pagerank_iterations = max(1, int(pagerank_iterations))
         self._pivots = max(0, int(pivots))
         self._max_depth = max(1, int(max_depth))
+        # Injectable so tests can assert against a hand-computable count;
+        # production has one call site which never overrides this.
+        self._distribution_bins = max(1, int(distribution_bins))
 
     def compute(
         self,
@@ -208,6 +334,7 @@ class JobMetrics:
         self._read_summary(result)
         self._read_nodes(result)
         self._read_type_profiles(result)
+        self._read_distributions(result)
         result.stats.elapsed_ms = int((time.time() - t0) * 1000)
 
         logger.info(
@@ -344,3 +471,69 @@ class JobMetrics:
                 is_flat=bool(reasons),
                 flat_reasons=reasons,
             )
+
+    def _read_distributions(self, result: MetricsResult) -> None:
+        """Summarise every scored node into per-metric histograms.
+
+        Called after :meth:`_read_summary` because it depends on that method's
+        verdict on which metrics are trustworthy.
+
+        Never raises. A distribution is a presentation aggregate, and an analysis
+        that successfully scored the whole graph must not be discarded because
+        the histogram query failed — the UI already renders an explanatory empty
+        state for a result without one.
+        """
+        try:
+            bounds_rows = self._query(
+                distribution_bounds_query(self._output_table)
+            ) or []
+            if not bounds_rows:
+                return
+            bounds = bounds_rows[0]
+
+            counts: Dict[str, Dict[int, int]] = {}
+            for row in self._query(
+                distributions_query(self._output_table, self._distribution_bins)
+            ) or []:
+                metric = row.get("metric") or ""
+                if metric not in NODE_METRIC_KEYS:
+                    continue
+                counts.setdefault(metric, {})[
+                    int(row.get("bin_index", 0) or 0)
+                ] = int(row.get("node_count", 0) or 0)
+
+            for metric in NODE_METRIC_KEYS:
+                # A metric this run could not compute is stored as zeros. Its
+                # histogram would be a single tall bar at zero, which reads as a
+                # measurement rather than as an absence.
+                if metric in result.unavailable_metrics:
+                    continue
+
+                lo = float(bounds.get(f"lo_{metric}", 0.0) or 0.0)
+                hi = float(bounds.get(f"hi_{metric}", 0.0) or 0.0)
+                mean = float(bounds.get(f"mean_{metric}", 0.0) or 0.0)
+
+                per_bin = counts.get(metric, {})
+                # Padded rather than sparse: the front end indexes positionally,
+                # and a bin with no nodes is a real, meaningful zero.
+                bins = [
+                    per_bin.get(i, 0) for i in range(self._distribution_bins)
+                ]
+
+                result.distributions[metric] = MetricDistribution(
+                    bins=bins,
+                    bin_count=self._distribution_bins,
+                    lo=round(lo, 8),
+                    hi=round(hi, 8),
+                    mean=round(mean, 8),
+                    median=round(interpolate_quantile(bins, lo, hi, 0.5), 8),
+                    p90=round(interpolate_quantile(bins, lo, hi, 0.9), 8),
+                )
+        except Exception:  # noqa: BLE001 — a chart is never worth failing a run
+            logger.warning(
+                "could not read metric distributions for %s; the result is "
+                "complete but the Analytics page will show no histograms",
+                self._output_table,
+                exc_info=True,
+            )
+            result.distributions.clear()

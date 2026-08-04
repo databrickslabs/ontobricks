@@ -110,6 +110,51 @@ class MetricsStats:
         }
 
 
+#: Histogram bins per metric in a distribution. Fixed: not a Settings value.
+DEFAULT_DISTRIBUTION_BINS = 20
+
+
+@dataclass
+class MetricDistribution:
+    """The distribution of one metric across **every** scored node.
+
+    This is the counterpart to :class:`NodeMetrics`, which describes a single
+    node, and it deliberately covers a different population than
+    ``MetricsResult.nodes``: ``nodes`` is a bounded top-N slice, while ``bins``
+    summarises the whole graph. Do not derive one from the other.
+
+    ``bins[i]`` is the number of nodes whose score falls in the *i*-th of
+    ``bin_count`` equal-width buckets spanning ``[lo, hi]``. Empty buckets are
+    present as ``0`` so the front end can index positionally.
+
+    ``median`` and ``p90`` are interpolated from the bin counts rather than
+    computed exactly — the read-back must run on engines without a percentile
+    function. They are accurate to within one bin width, which is why the UI
+    renders them as "median ~".
+    """
+
+    bins: List[int] = field(default_factory=list)
+    bin_count: int = 0
+    lo: float = 0.0
+    hi: float = 0.0
+    mean: float = 0.0
+    median: float = 0.0
+    p90: float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            # Copied: a shared list would let a caller mutate the payload that
+            # is about to be persisted.
+            "bins": list(self.bins),
+            "bin_count": self.bin_count,
+            "lo": self.lo,
+            "hi": self.hi,
+            "mean": self.mean,
+            "median": self.median,
+            "p90": self.p90,
+        }
+
+
 @dataclass
 class EntityTypeProfile:
     """Per-entity-type structural profile and flat-dataset heuristic."""
@@ -173,6 +218,10 @@ class MetricsResult:
     node_types: Dict[str, str] = field(default_factory=dict)    # node_uri → class_uri
     node_labels: Dict[str, str] = field(default_factory=dict)   # node_uri → rdfs:label
     entity_type_profiles: Dict[str, "EntityTypeProfile"] = field(default_factory=dict)  # class_uri → profile
+    #: metric name -> distribution over every scored node. Absent for metrics
+    #: in ``unavailable_metrics``: those are stored as zeros, and a histogram of
+    #: fabricated zeros would read as a real measurement.
+    distributions: Dict[str, "MetricDistribution"] = field(default_factory=dict)
     mode: str = MODE_JOB
     unavailable_metrics: List[str] = field(default_factory=list)
     approximate_metrics: List[str] = field(default_factory=list)
@@ -189,6 +238,9 @@ class MetricsResult:
             "node_labels": self.node_labels,
             "entity_type_profiles": {
                 k: v.to_dict() for k, v in self.entity_type_profiles.items()
+            },
+            "distributions": {
+                k: v.to_dict() for k, v in self.distributions.items()
             },
             "mode": self.mode,
             "unavailable_metrics": list(self.unavailable_metrics),

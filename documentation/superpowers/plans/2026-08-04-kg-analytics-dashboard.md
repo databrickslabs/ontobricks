@@ -363,15 +363,22 @@ def _bin_index_expression(metric: str, bins: int) -> str:
     * ``value >= hi`` — the top-scoring node would otherwise compute ``bins``,
       one index past the last bucket.
     * otherwise, scale into ``[0, bins)``. Every metric is non-negative by
-      construction, which is what makes ``CAST(... AS INTEGER)`` truncation
-      equivalent to ``floor`` and saves needing a ``floor`` function.
+      construction, which is what makes truncation equivalent to ``floor`` and
+      saves needing a ``floor`` function.
+
+    The ``ROUND(..., 10)`` is load-bearing. A value sitting exactly on a bin
+    boundary is common — any metric quantised to a few distinct values, which
+    ``clustering`` and ``degree`` routinely are — and binary64 puts the scaled
+    result a few parts in 10^16 below the integer it should equal, so bare
+    truncation drops it into the bin below. Rounding at the tenth decimal
+    absorbs that while leaving genuine fractional positions untouched.
     """
     return (
         f"CASE\n"
         f"      WHEN b.hi <= b.lo THEN 0\n"
         f"      WHEN t.{metric} >= b.hi THEN {int(bins) - 1}\n"
-        f"      ELSE CAST((t.{metric} - b.lo) * {int(bins)}"
-        f" / (b.hi - b.lo) AS INTEGER)\n"
+        f"      ELSE CAST(ROUND((t.{metric} - b.lo) * {int(bins)}"
+        f" / (b.hi - b.lo), 10) AS INTEGER)\n"
         f"    END"
     )
 
@@ -675,6 +682,31 @@ def test_empty_bins_are_padded_with_zero_not_dropped():
     assert result.distributions["pagerank"].bins == [5, 0, 0, 3]
 
 
+def test_bins_are_padded_to_the_configured_count_not_the_observed_one():
+    """The SQL emits no row for an empty bin, so a payload whose top bins are
+    all empty must still be bin_count long. Deriving the length from the highest
+    bin index seen would make the payload's shape depend on the data."""
+    rows = _bin_rows("pagerank", [5, 3])  # only bins 0 and 1 come back
+    result = _metrics_with_distributions(bin_rows=rows).compute(MetricsRequest())
+    dist = result.distributions["pagerank"]
+    assert dist.bins == [5, 3, 0, 0]
+    assert dist.bin_count == 4
+
+
+def test_an_all_identical_metric_still_reports_the_full_bin_count():
+    """hi == lo puts every node in bin 0. That is one *populated* bin out of
+    bin_count, not a distribution with one bin."""
+    rows = _bin_rows("pagerank", [7])
+    bounds = _bounds_row(lo_pagerank=0.25, hi_pagerank=0.25, mean_pagerank=0.25)
+    result = _metrics_with_distributions(
+        bin_rows=rows, bounds=bounds
+    ).compute(MetricsRequest())
+    dist = result.distributions["pagerank"]
+    assert dist.bins == [7, 0, 0, 0]
+    assert dist.bin_count == 4
+    assert dist.median == pytest.approx(0.25)
+
+
 def test_unavailable_metrics_get_no_distribution():
     """Stored as zeros; a histogram of them would read as real measurements."""
     summary = _default_summary_row(pivot_count=0, bfs_complete=True)
@@ -816,11 +848,41 @@ Then add the reader method after `_read_type_profiles`:
             result.distributions.clear()
 ```
 
-Add `_distribution_bins` to `JobMetrics.__init__`, after `self._max_depth`:
+Add a `distribution_bins` keyword to `JobMetrics.__init__` (after `max_depth`) and store it after `self._max_depth`:
 
 ```python
-        self._distribution_bins = DEFAULT_DISTRIBUTION_BINS
+        distribution_bins: int = DEFAULT_DISTRIBUTION_BINS,
 ```
+```python
+        # Injectable so tests can assert against a hand-computable bin count.
+        # Production has exactly one call site and never overrides it.
+        self._distribution_bins = max(1, int(distribution_bins))
+```
+
+**`bin_count` is the configured count, never a count derived from the data.**
+The padding loop must run over `range(self._distribution_bins)` and
+`bin_count` must be `self._distribution_bins`. Deriving either from
+`max(per_bin.keys()) + 1` looks equivalent — because the node scoring exactly
+`hi` always clamps into the last bin, so the highest bin is normally occupied —
+but it makes the payload's shape depend on the data, silently returns a single
+bin for an all-identical metric, and defeats the reason `bin_count` is stored
+at all rather than read off `len(bins)`.
+
+The test helper therefore injects a small count. In `_job_metrics`, add:
+
+```python
+def _job_metrics(
+    *,
+    query=None,
+    runner=None,
+    top_n: int = 100,
+    pivots: int = 64,
+    max_depth: int = 32,
+    distribution_bins: int = 4,   # matches the 4-bin fake rows above
+) -> JobMetrics:
+```
+
+and pass `distribution_bins=distribution_bins` through to the constructor.
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -1388,21 +1450,35 @@ class TestDistributionStrip:
         assert "function _renderDistributionStrip" in js
         assert "_analyticsData.distributions" in js
 
-    def test_all_five_metrics_get_a_tile(self, js):
-        fn = _fn(js, "_renderDistributionStrip")
-        for metric in ("pagerank", "betweenness", "degree",
-                       "closeness", "clustering"):
-            assert metric in fn or "_METRICS" in fn or "_ALL_METRICS" in fn
+    def test_the_metric_table_lists_all_five_in_display_order(self, js):
+        """PageRank was absent from the old _METRICS list because its tab held a
+        table, not a chart. The strip charts all five."""
+        table = js[js.index("_ALL_METRICS = ["):]
+        table = table[: table.index("];")]
+        keys = re.findall(r"key:\s*'(\w+)'", table)
+        assert keys == ["pagerank", "betweenness", "degree",
+                        "closeness", "clustering"]
+
+    def test_every_metric_in_the_table_has_a_colour_and_an_icon(self, js):
+        table = js[js.index("_ALL_METRICS = ["):]
+        table = table[: table.index("];")]
+        assert len(re.findall(r"color:", table)) == 5
+        assert len(re.findall(r"icon:", table)) == 5
 
     def test_pagerank_is_selected_on_load(self, js):
         assert "_selectedMetric = 'pagerank'" in js
 
     def test_a_missing_distribution_renders_an_empty_state_not_a_chart(self, js):
+        """A legacy payload has no distributions at all; an unavailable metric
+        has none for that key. Neither may reach Chart.js."""
         fn = _fn(js, "_renderDistributionStrip")
-        assert "re-run" in fn.lower() or "Re-run" in fn
-        # the guard must come before any chart construction
-        guard = min(fn.index("!dist"), fn.index("undefined")) if "!dist" in fn else fn.index("undefined")
-        assert guard < fn.index("new Chart")
+        assert "Re-run the analysis" in fn
+        assert "Not computed for this run" in fn
+        # The guard must return before any chart is constructed.
+        guard_at = fn.index("!dist.bins")
+        assert guard_at < fn.index("new Chart")
+        between = fn[guard_at:fn.index("new Chart")]
+        assert "return" in between
 
     def test_tiles_are_buttons_so_selection_is_keyboard_reachable(self, js):
         fn = _fn(js, "_renderDistributionStrip")
@@ -1423,17 +1499,21 @@ class TestDistributionStrip:
         assert "_renderRankingChart" in fn
 ```
 
-Add this helper near the top of the test file:
+Add this helper and the `re` import near the top of the test file:
 
 ```python
 def _fn(source: str, name: str) -> str:
-    """The body of a named function, up to the next top-level function."""
-    start = source.index("function " + name)
-    rest = source[start + 10:]
-    end = rest.find("\n    function ")
-    if end == -1:
-        end = rest.find("\n    window.")
-    return rest if end == -1 else rest[:end]
+    """The body of a named function, up to the next declaration at its level.
+
+    The section's JS is one IIFE of 4-space-indented declarations, so the next
+    `\\n    function ` or `\\n    window.` is a reliable terminator.
+    """
+    header = "function " + name
+    start = source.index(header)
+    rest = source[start + len(header):]
+    ends = [i for i in (rest.find("\n    function "),
+                        rest.find("\n    window.")) if i != -1]
+    return rest[: min(ends)] if ends else rest
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2127,14 +2207,36 @@ is active, since log bar heights are not proportional to counts."
 class TestInterpretPayloadExcludesDistributions:
     """Sending them would change an LLM prompt, which needs the eval gate."""
 
-    def test_distributions_are_deleted_from_the_interpret_body(self, js):
-        fn = _fn(js, "analyticsInterpret") if "function analyticsInterpret" in js \
-            else js[js.index("window.analyticsInterpret"):]
-        fn = fn[: fn.index("window.")] if "window." in fn[20:] else fn
-        assert "delete payload.distributions" in fn
+    @staticmethod
+    def _interpret(js: str) -> str:
+        """The body of window.analyticsInterpret, which is an assigned
+        expression rather than a declaration, so _fn does not apply."""
+        start = js.index("window.analyticsInterpret")
+        rest = js[start + 25:]
+        end = rest.find("\n    window.")
+        return rest if end == -1 else rest[:end]
 
-    def test_the_deletion_is_explained(self, js):
-        assert "eval" in js.lower() or "prompt" in js.lower()
+    def test_distributions_are_deleted_from_the_interpret_body(self, js):
+        assert "delete payload.distributions" in self._interpret(js)
+
+    def test_the_deletion_happens_after_the_payload_is_built(self, js):
+        """Deleting before the Object.assign would be a no-op that reads as
+        protection."""
+        body = self._interpret(js)
+        assert body.index("Object.assign") < body.index("delete payload.distributions")
+
+    def test_the_deletion_is_before_the_fetch(self, js):
+        body = self._interpret(js)
+        assert body.index("delete payload.distributions") < body.index("fetch(")
+
+    def test_the_reason_is_recorded_at_the_deletion(self, js):
+        """Without the reason, a later reader restores the field to 'give the
+        agent more context' and trips the eval gate unknowingly."""
+        body = self._interpret(js)
+        near = body[body.index("delete payload.distributions") - 400:
+                    body.index("delete payload.distributions")]
+        assert "eval" in near.lower()
+        assert "metrics_payload" in near or "prompt" in near.lower()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**

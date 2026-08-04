@@ -151,7 +151,7 @@ class TestCauseOrdering:
 
 
 ROOT = Path(__file__).resolve().parents[3]
-PANEL = ROOT / "src/front/templates/partials/dtwin/_query_analytics.html"
+PANEL = ROOT / "src/front/static/query/js/query-analytics.js"
 ROUTER = ROOT / "src/api/routers/internal/dtwin.py"
 
 

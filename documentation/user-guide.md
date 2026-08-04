@@ -594,20 +594,22 @@ Because the job can take a while on large graphs, it runs **asynchronously** in 
 >
 > **What the job scores.** Analytics reads the mapped-triple snapshot — the same table regardless of whether your backend is Lakehouse, Lakebase or Neo4j. Inferred and cohort triples are out of scope; reasoning does not affect the KPIs.
 >
-> **Betweenness and closeness are estimates.** The job samples `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` source nodes (default **64**) and runs a breadth-first search from each (the Brandes–Pich approach). Both charts carry an "Estimate" note. Treat them as a ranking of the clear leaders, not as absolute values. If the BFS hits the depth cap (`ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH`, default **32**) before the graph is fully explored, betweenness and closeness are withheld entirely — reported as unavailable rather than as numbers — because truncated distance sums would be biased. Raise `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` and re-run to resolve this. Set pivots to `0` to skip both metrics and make the job cheaper; setting pivots at or above the node count makes them exact.
+> **Betweenness and closeness are estimates.** The job samples `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` source nodes (default **64**) and runs a breadth-first search from each (the Brandes–Pich approach). Both metrics carry an "Estimate" note on the ranking chart. Treat them as a ranking of the clear leaders, not as absolute values. If the BFS hits the depth cap (`ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH`, default **32**) before the graph is fully explored, betweenness and closeness are withheld entirely — reported as unavailable rather than as numbers — because truncated distance sums would be biased; their distribution tiles then read "Not computed for this run" and the ranking chart explains why. Raise `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` and re-run to resolve this. Set pivots to `0` to skip both metrics and make the job cheaper; setting pivots at or above the node count makes them exact.
 >
 > **Entity-type counts.** The *Instances* column in the entity-type profile table shows the full population of each class in the mapped graph, including isolated nodes (instances with no relationships). This is a more complete number than earlier releases, which showed only the connected instances on unfiltered runs — types that have isolated nodes will show higher counts.
 
 #### Running an Analysis
 
 1. (Optional) Select an **entity type** from the dropdown to restrict the analysis to one class (e.g. "Customer"). Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. The filter is applied in SQL inside the Lakeflow job, against the Delta snapshot — not by the graph store — so there is no in-memory limit to work around. "All types (full graph)" includes every entity.
-2. Click **Run Analysis**. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically: six stat cards appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed) and five interactive charts render below. Each new run replaces the previous stored result for that domain version.
+2. Click **Run Analysis**. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically on the **Dashboard** tab: six KPI tiles appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed), a distribution strip of five histogram tiles, and one full-width ranking chart for the selected metric. Each new run replaces the previous stored result for that domain version.
 
 > **Looking for past runs?** The Analytics page itself only ever shows the **last** result per domain version. The full run history — every analysis ever launched, across every version, including failed runs — lives on **Knowledge Graph → Management → Runs** as a second table below the build-runs table (see **Runs (Sidebar)** above).
 
-#### Reading the Charts
+#### Reading the Dashboard
 
-One horizontal bar chart is generated for each metric:
+The **Dashboard** tab has three layers: KPI tiles, a **distribution strip**, and a **ranking chart**.
+
+**Distribution strip.** Five small histogram tiles — PageRank, Betweenness, Degree, Closeness, Clustering — summarise the score distribution across **every scored node in the graph**, not just the top-N shown in the ranking chart. That is the key distinction: the strip answers "is this node's score unusual for the graph as a whole?", while the ranking chart below lists only the top-N leaders for the metric you have selected. Each histogram uses 20 linear bins; the median and p90 shown in the tile caption are **interpolated approximations** from those bin counts (labelled ≈ in the UI). Click a tile to select that metric and redraw the ranking chart; a segmented control in the ranking section header mirrors the selection. Use the **Log scale** switch in the section header toolbar — between the Top N input and the **Run Analysis** button — to redraw all five tiles on a logarithmic count axis — useful for heavy-tailed metrics; the caption notes when log scale is active because bar heights are no longer proportional to raw counts. If betweenness or closeness could not be computed for this run, that tile reads **Not computed for this run** instead of a histogram. Results computed before this redesign (legacy cached payloads) still show KPIs, the ranking chart and the detail table; distribution tiles prompt you to re-run the analysis.
 
 | Metric | What it measures |
 |--------|-----------------|
@@ -617,11 +619,13 @@ One horizontal bar chart is generated for each metric:
 | **Closeness Centrality** | Reachability — how quickly this node can reach every other node in the graph |
 | **Clustering Coefficient** | Local density — fraction of a node's neighbors that are also connected to each other |
 
+**Ranking chart.** One full-width horizontal bar chart shows the top-N entities for whichever metric is selected (default PageRank). The ranking chart covers only the bounded top-N slice — unlike the distribution strip above, which spans the whole scored population.
+
 - **Click a bar** to jump directly to that entity in the Graph Viewer (the filter is pre-populated).
 - **Hover a bar** to see all five metric scores for that entity in the tooltip.
-- **Click the `?` button** on any chart card header to open an explanation popup with the formula, a worked example, and guidance on why the metric matters.
+- **Click the `?` button** on the ranking chart card header to open an explanation popup with the formula, a worked example, and guidance on why the metric matters.
 
-Below the charts, a **PageRank Detail Table** lists the top-N entities with all five metrics displayed as mini progress bars, providing full context for why a node ranks highly. Every row is clickable → Graph Viewer.
+Below the ranking chart, a **PageRank Detail Table** lists the top-N entities with all five metrics displayed as mini progress bars, providing full context for why a node ranks highly. Every row is clickable → Graph Viewer.
 
 #### Data Model Health
 
@@ -645,7 +649,7 @@ The AI Interpretation agent also mentions flat types in its Key Findings and Rec
 
 #### Adjusting the Top-N and Resetting
 
-Use the **Top N** input at the top of the results section to control how many entities each chart and table shows. Change the entity type dropdown to re-run the analysis on a different class.
+Use the **Top N** input at the top of the results section to control how many entities the ranking chart and detail table show. Change the entity type dropdown to re-run the analysis on a different class.
 
 #### AI Interpretation
 
