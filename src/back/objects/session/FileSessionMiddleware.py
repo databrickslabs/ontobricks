@@ -6,6 +6,7 @@ It stores session data as JSON files in a configurable directory.
 """
 
 import json
+import re
 import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -31,6 +32,13 @@ _SESSION_BYPASS_PREFIXES = (
     "/api/openapi.json",
     "/favicon.ico",
 )
+
+# A session ID becomes a filename under ``session_dir``, so a value arriving in
+# a cookie is only trusted when it has the exact shape _generate_session_id
+# produces. Matched with fullmatch, never with ^...$: Python's ``$`` also
+# matches immediately before a trailing newline, which would let a 33-character
+# value through and resolve to a different file than the one validated.
+_SESSION_ID_RE = re.compile(r"[0-9a-f]{32}")
 
 
 class FileSessionMiddleware(BaseHTTPMiddleware):
@@ -63,9 +71,21 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
         self.session_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_session_id_from_cookie(self, request: Request) -> Optional[str]:
-        """Extract and validate session ID from cookie."""
+        """Return the session ID from the cookie, or ``None`` if unusable.
+
+        A malformed value is reported as no cookie at all, which makes the
+        caller mint a fresh ID — the same outcome a user with a corrupted
+        cookie already got, so nothing legitimate regresses.
+        """
         cookie_value = request.cookies.get(self.session_cookie)
         if not cookie_value:
+            return None
+        if not _SESSION_ID_RE.fullmatch(cookie_value):
+            logger.debug(
+                "Rejected malformed session cookie (%d chars, starts %r)",
+                len(cookie_value),
+                cookie_value[:8],
+            )
             return None
         return cookie_value
 
