@@ -119,3 +119,30 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4658 passed, 276
 skipped, 5 deselected, 1 xfailed, 23 warnings in 39.88s
+
+## Keep New Version ungated on ontology/mapping readiness
+
+Context: Domain → Versions → New Version must remain usable even when the
+ontology or mapping is incomplete. Audit confirmed the backend already
+ignored readiness; dead UI code still targeted a removed `#btnCreateVersion`
+and would have re-gated branching if the ID were "fixed". Explicitly keep
+`#btnAddVersion` enabled and lock the contract with regression tests.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-actions.js`
+   Point at `#btnAddVersion` and always force-enable it; never disable New
+   Version based on DRAFT/read-only or readiness.
+2. `src/front/templates/partials/domain/_domain_versions.html`
+   Clarify tooltip that branching is allowed with incomplete ontology/mapping.
+3. `tests/units/front/test_create_version_ungated.py` (new)
+   UI + backend regression: button not CSS-gated, JS ignores mapping/ontology
+   flags, `create_new_domain_version` succeeds with empty mappings.
+
+Modified files:
+- `src/front/static/domain/js/domain-actions.js`
+- `src/front/templates/partials/domain/_domain_versions.html`
+- `tests/units/front/test_create_version_ungated.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4664 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 32.90s
