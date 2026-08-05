@@ -2418,7 +2418,7 @@ class DigitalTwin:
         *,
         build_kind: str = "session",
     ) -> None:
-        """Run ReasoningService phases; ``build_kind`` ``api`` enables append/materialize."""
+        """Run ReasoningService phases; ``options`` drive append/materialize."""
         import datetime as _dt
 
         from back.core.helpers import get_databricks_client, is_uri
@@ -2427,29 +2427,26 @@ class DigitalTwin:
         from back.core.graphdb import get_graphdb
 
         is_api = build_kind == "api"
+        label = {
+            "api": "API inference",
+            "scheduled": "Scheduled inference",
+        }.get(build_kind, "Reasoning")
         try:
-            if is_api:
-                logger.info("API inference task %s: starting", task_id)
-            else:
-                logger.info("Reasoning task %s: starting", task_id)
+            logger.info("%s task %s: starting", label, task_id)
             tm.start_task(task_id)
             tm.update_progress(task_id, 10, "Initialising triple store")
 
             store = get_graphdb(domain_snap, settings)
             if store is None:
-                if is_api:
-                    logger.info(
-                        "API inference task %s: graph store unavailable, falling back to view",
-                        task_id,
-                    )
-                else:
-                    logger.info(
-                        "Reasoning task %s: graph store unavailable, falling back to view",
-                        task_id,
-                    )
+                logger.info(
+                    "%s task %s: graph store unavailable, falling back to view",
+                    label,
+                    task_id,
+                )
                 store = get_graphdb(domain_snap, settings, engine="view")
             logger.info(
-                "Reasoning task %s: store=%s",
+                "%s task %s: store=%s",
+                label,
                 task_id,
                 type(store).__name__ if store else "None",
             )
@@ -2457,50 +2454,33 @@ class DigitalTwin:
             svc = ReasoningService(domain_snap, store)
             tm.update_progress(task_id, 30, "Running inference phases")
 
-            if is_api:
-                logger.info(
-                    "API inference task %s: phases tbox=%s swrl=%s graph=%s constraints=%s "
-                    "decision_tables=%s sparql_rules=%s aggregate_rules=%s",
-                    task_id,
-                    options.get("tbox"),
-                    options.get("swrl"),
-                    options.get("graph"),
-                    options.get("constraints"),
-                    options.get("decision_tables"),
-                    options.get("sparql_rules"),
-                    options.get("aggregate_rules"),
-                )
-            else:
-                logger.info(
-                    "Reasoning task %s: running phases (tbox=%s, swrl=%s, graph=%s, "
-                    "decision_tables=%s, sparql_rules=%s, aggregate_rules=%s)",
-                    task_id,
-                    options.get("tbox"),
-                    options.get("swrl"),
-                    options.get("graph"),
-                    options.get("decision_tables"),
-                    options.get("sparql_rules"),
-                    options.get("aggregate_rules"),
-                )
+            logger.info(
+                "%s task %s: running phases (tbox=%s, swrl=%s, graph=%s, "
+                "constraints=%s, decision_tables=%s, sparql_rules=%s, "
+                "aggregate_rules=%s)",
+                label,
+                task_id,
+                options.get("tbox"),
+                options.get("swrl"),
+                options.get("graph"),
+                options.get("constraints"),
+                options.get("decision_tables"),
+                options.get("sparql_rules"),
+                options.get("aggregate_rules"),
+            )
 
             def _swrl_progress(idx: int, total: int, rule_name: str) -> None:
                 pct = 30 + int((idx / max(total, 1)) * 50)
                 tm.update_progress(task_id, pct, f"SWRL {idx + 1}/{total}: {rule_name}")
 
             result = svc.run_full_reasoning(options, progress_callback=_swrl_progress)
-            if is_api:
-                logger.info(
-                    "API inference task %s: done — %d inferred, %d violations",
-                    task_id,
-                    len(result.inferred_triples),
-                    len(result.violations),
-                )
-            else:
-                logger.info(
-                    "Reasoning task %s: phases done — %d inferred",
-                    task_id,
-                    len(result.inferred_triples),
-                )
+            logger.info(
+                "%s task %s: phases done — %d inferred, %d violations",
+                label,
+                task_id,
+                len(result.inferred_triples),
+                len(result.violations),
+            )
 
             tm.update_progress(task_id, 90, "Finalising")
 
@@ -2512,7 +2492,11 @@ class DigitalTwin:
             if is_api:
                 result_dict["violations_count"] = len(result.violations)
 
-            if is_api and options.get("append_graph") and result.inferred_triples:
+            # Materialisation is driven by the options, not by who asked:
+            # the interactive UI simply never sends them (it materialises
+            # through POST /dtwin/reasoning/materialize instead), while the
+            # external API and the scheduler both do.
+            if options.get("append_graph") and result.inferred_triples:
                 tm.update_progress(
                     task_id, 92, "Appending inferred triples to graph..."
                 )
@@ -2520,7 +2504,8 @@ class DigitalTwin:
                     graph_store = get_graphdb(domain_snap, settings)
                     if graph_store is None:
                         logger.warning(
-                            "API inference %s: cannot append to graph — store unavailable",
+                            "%s %s: cannot append to graph — store unavailable",
+                            label,
                             task_id,
                         )
                         result_dict["append_graph_error"] = "Graph store not available"
@@ -2532,20 +2517,20 @@ class DigitalTwin:
                         )
                         result_dict["append_graph_count"] = append_count
                         logger.info(
-                            "API inference %s: appended %d triples to graph",
+                            "%s %s: appended %d triples to graph",
+                            label,
                             task_id,
                             append_count,
                         )
                 except Exception as ag_err:
                     logger.exception(
-                        "API inference %s: append to graph failed: %s", task_id, ag_err
+                        "%s %s: append to graph failed: %s", label, task_id, ag_err
                     )
                     result_dict["append_graph_error"] = str(ag_err)
 
             mat_table = (options.get("materialize_table") or "").strip()
             if (
-                is_api
-                and options.get("materialize")
+                options.get("materialize")
                 and mat_table
                 and len(mat_table.split(".")) == 3
             ):
@@ -2561,7 +2546,8 @@ class DigitalTwin:
                         client = get_databricks_client(domain_snap, settings)
                         if client is None:
                             logger.warning(
-                                "API inference %s: cannot materialise — no credentials",
+                                "%s %s: cannot materialise — no credentials",
+                                label,
                                 task_id,
                             )
                         else:
@@ -2571,41 +2557,41 @@ class DigitalTwin:
                             result_dict["materialize_count"] = count
                             result_dict["materialize_table"] = mat_table
                             logger.info(
-                                "API inference %s: materialised %d triples to %s",
+                                "%s %s: materialised %d triples to %s",
+                                label,
                                 task_id,
                                 count,
                                 mat_table,
                             )
                     except Exception as mat_err:
                         logger.exception(
-                            "API inference %s: materialisation failed: %s",
+                            "%s %s: materialisation failed: %s",
+                            label,
                             task_id,
                             mat_err,
                         )
                         result_dict["materialize_error"] = str(mat_err)
 
+            msg = f"Inference complete: {len(result.inferred_triples)} inferred"
             if is_api:
-                msg = (
-                    f"Inference complete: {len(result.inferred_triples)} inferred, "
-                    f"{len(result.violations)} violations"
-                )
-            else:
-                msg = f"Inference complete: {len(result.inferred_triples)} inferred"
+                msg += f", {len(result.violations)} violations"
+            for extra_key, extra_label in (
+                ("append_graph_count", "appended to graph"),
+                ("materialize_count", "written to Delta"),
+            ):
+                if extra_key in result_dict:
+                    msg += f", {result_dict[extra_key]} {extra_label}"
 
             tm.complete_task(task_id, result=result_dict, message=msg)
-            if is_api:
-                logger.info("API inference task %s: completed", task_id)
-            else:
-                logger.info("Reasoning task %s: completed successfully", task_id)
+            logger.info("%s task %s: completed", label, task_id)
         except Exception as e:
-            if is_api:
-                logger.exception("API inference task %s failed: %s", task_id, e)
-            else:
-                logger.exception("Reasoning task %s failed: %s", task_id, e)
-            if is_api:
-                tm.fail_task(task_id, str(e))
-            else:
-                tm.fail_task(task_id, "Inference failed")
+            logger.exception("%s task %s failed: %s", label, task_id, e)
+            # The interactive UI shows a generic message; the API and the
+            # scheduler need the real reason (it lands in the schedule's
+            # run history).
+            tm.fail_task(
+                task_id, "Inference failed" if build_kind == "session" else str(e)
+            )
 
     # ------------------------------------------------------------------
     # Legacy quality SQL builders (static)

@@ -1,10 +1,11 @@
-<!-- Settings → Automation → Scheduler (Builds + Cohort Materialisations) -->
+<!-- Settings → Automation → Scheduler (builds, cohorts, analytics, inference) -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-clock-history me-2"></i>Scheduler</h4>
             <p class="text-muted mb-0 small">
-                Recurring Knowledge Graph builds and Cohort materialisations per domain
+                Recurring Knowledge Graph builds, Cohort materialisations, Graph Analytics
+                and Inference runs per domain
             </p>
         </div>
         <div class="d-flex gap-2">
@@ -37,15 +38,25 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label fw-semibold small mb-1">Type</label>
-                    <div class="btn-group w-100" role="group" aria-label="Schedule type" id="scheduleTypeGroup">
+                    <div class="btn-group w-100 flex-wrap" role="group" aria-label="Schedule type" id="scheduleTypeGroup">
                         <input type="radio" class="btn-check" name="scheduleType" id="scheduleTypeBuild" value="build" autocomplete="off" checked>
                         <label class="btn btn-outline-primary btn-sm" for="scheduleTypeBuild">
-                            <i class="bi bi-diagram-3 me-1"></i> Knowledge Graph Build
+                            <i class="bi bi-diagram-3 me-1"></i> Build
                         </label>
 
                         <input type="radio" class="btn-check" name="scheduleType" id="scheduleTypeCohort" value="cohort" autocomplete="off">
                         <label class="btn btn-outline-primary btn-sm" for="scheduleTypeCohort">
-                            <i class="bi bi-people-fill me-1"></i> Cohort Materialisation
+                            <i class="bi bi-people-fill me-1"></i> Cohort
+                        </label>
+
+                        <input type="radio" class="btn-check" name="scheduleType" id="scheduleTypeAnalytics" value="analytics" autocomplete="off">
+                        <label class="btn btn-outline-primary btn-sm" for="scheduleTypeAnalytics">
+                            <i class="bi bi-graph-up me-1"></i> Analytics
+                        </label>
+
+                        <input type="radio" class="btn-check" name="scheduleType" id="scheduleTypeReasoning" value="reasoning" autocomplete="off">
+                        <label class="btn btn-outline-primary btn-sm" for="scheduleTypeReasoning">
+                            <i class="bi bi-lightbulb me-1"></i> Inference
                         </label>
                     </div>
                 </div>
@@ -57,14 +68,14 @@
                     </select>
                 </div>
 
-                <div class="mb-3 schedule-cohort-only">
+                <div class="mb-3 schedule-type-cohort">
                     <label class="form-label fw-semibold small mb-1">Cohort Rule</label>
                     <select class="form-select form-select-sm" id="scheduleCohortRule" disabled>
                         <option value="">Select a domain first</option>
                     </select>
                 </div>
 
-                <div class="mb-3 schedule-cohort-only">
+                <div class="mb-3 schedule-type-cohort">
                     <label class="form-label fw-semibold small mb-1">Outputs</label>
                     <div class="border rounded p-2 bg-light-subtle">
                         <div class="form-check mb-1">
@@ -86,6 +97,84 @@
                     </div>
                     <small class="text-muted">
                         Defaults from the cohort rule. Uncheck a target to skip it for scheduled runs only — the rule itself is unchanged.
+                    </small>
+                </div>
+
+                <div class="mb-3 schedule-type-analytics">
+                    <div class="alert alert-light border small mb-0 py-2">
+                        <i class="bi bi-info-circle me-1 text-primary"></i>
+                        A scheduled analytics run submits the serverless Databricks job and waits
+                        for it to finish, so keep the interval comfortably longer than a typical run
+                        (usually several minutes). Results land on the Analytics tab and the Runs page.
+                    </div>
+                </div>
+
+                <div class="mb-3 schedule-type-reasoning">
+                    <label class="form-label fw-semibold small mb-1">Inference Phases</label>
+                    <div class="border rounded p-2 bg-light-subtle" id="scheduleReasoningPhases">
+                        <div class="form-check mb-1">
+                            <input class="form-check-input schedule-phase" type="checkbox" id="schedulePhaseTbox" data-phase="tbox" checked>
+                            <label class="form-check-label small" for="schedulePhaseTbox">
+                                <strong>Ontology (TBox)</strong>
+                                <span class="text-muted">— subclass / domain / range entailments</span>
+                            </label>
+                        </div>
+                        <div class="form-check mb-1">
+                            <input class="form-check-input schedule-phase" type="checkbox" id="schedulePhaseSwrl" data-phase="swrl" checked>
+                            <label class="form-check-label small" for="schedulePhaseSwrl">
+                                <strong>SWRL rules</strong>
+                            </label>
+                        </div>
+                        <div class="form-check mb-1">
+                            <input class="form-check-input schedule-phase" type="checkbox" id="schedulePhaseGraph" data-phase="graph" checked>
+                            <label class="form-check-label small" for="schedulePhaseGraph">
+                                <strong>Graph rules</strong>
+                            </label>
+                        </div>
+                        <div class="form-check mb-1">
+                            <input class="form-check-input schedule-phase" type="checkbox" id="schedulePhaseDecisionTables" data-phase="decision_tables">
+                            <label class="form-check-label small" for="schedulePhaseDecisionTables">
+                                <strong>Decision tables</strong>
+                            </label>
+                        </div>
+                        <div class="form-check mb-1">
+                            <input class="form-check-input schedule-phase" type="checkbox" id="schedulePhaseSparqlRules" data-phase="sparql_rules">
+                            <label class="form-check-label small" for="schedulePhaseSparqlRules">
+                                <strong>SPARQL rules</strong>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input schedule-phase" type="checkbox" id="schedulePhaseAggregateRules" data-phase="aggregate_rules">
+                            <label class="form-check-label small" for="schedulePhaseAggregateRules">
+                                <strong>Aggregate rules</strong>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3 schedule-type-reasoning">
+                    <label class="form-label fw-semibold small mb-1">Materialise Inferred Triples</label>
+                    <div class="border rounded p-2 bg-light-subtle">
+                        <div class="form-check mb-1">
+                            <input class="form-check-input" type="checkbox" id="scheduleMaterializeGraph" checked>
+                            <label class="form-check-label small" for="scheduleMaterializeGraph">
+                                <i class="bi bi-diagram-3 me-1 text-primary"></i>
+                                <strong>Append to graph</strong>
+                                <span class="text-muted">— write inferred triples to the inferred companion</span>
+                            </label>
+                        </div>
+                        <div class="form-check mb-1">
+                            <input class="form-check-input" type="checkbox" id="scheduleMaterializeDelta">
+                            <label class="form-check-label small" for="scheduleMaterializeDelta">
+                                <i class="bi bi-table me-1 text-primary"></i>
+                                <strong>Write to a Delta table</strong>
+                            </label>
+                        </div>
+                        <input type="text" class="form-control form-control-sm font-monospace" id="scheduleMaterializeTable"
+                               placeholder="catalog.schema.table" disabled>
+                    </div>
+                    <small class="text-muted">
+                        Scheduled runs have no UI to review results in, so at least one target is required.
                     </small>
                 </div>
 

@@ -926,3 +926,168 @@ documentation improvements.
 - `documentation/code_organization.md`
 
 **Tests.** `uv run --frozen pytest -q -m "not scenario"` — 4516 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 41.26s
+
+---
+
+## Hide the L2 domain subnav on Settings pages
+
+Context: Settings has its own cross-domain left sidebar (`get_menu('settings')`)
+but the L2 subnav (`#obSubnav`: Domain / Ontology / Mapping / Knowledge Graph
+tabs, Save/Switch/Close buttons, breadcrumb) still showed on `/settings`
+whenever a domain was open in session — `updateDomainMenuVisibility` gated it
+purely on `hasDomain`, with no route awareness. That left a domain-contextual
+bar with no purpose sitting above a page that already has its own navigation.
+
+Changes:
+
+1. `src/front/static/global/js/navbar.js`
+   `updateDomainMenuVisibility` now reads `document.body.dataset.page` (the
+   same `data-page` attribute rendered server-side and already pinned by
+   `test_body_has_page_id_settings`, issue #78) and ORs
+   `isSettingsPage` into the `#obSubnav` `d-none` toggle, so the subnav stays
+   hidden on Settings regardless of `hasDomain`. The L1 Domain nav item and
+   breadcrumb-path separator (near the logo) are untouched — only the L2
+   subnav this task targets is gated.
+2. `tests/units/front/test_settings_subnav_hidden.py` (new)
+   Source-content assertions (matching the existing pattern in
+   `test_switch_domain_modal.py`) pinning the `dataset.page === 'settings'`
+   read, the `isSettingsPage` term inside the `d-none` toggle condition, and
+   that the L1 Domain nav item's own toggle is not settings-gated.
+
+Verified live: with a domain loaded, `/ontology/` shows the L2 subnav;
+navigating to `/settings` hides it even though the domain stays loaded;
+navigating back to `/ontology/` restores it. No console errors introduced.
+
+Modified files:
+- `src/front/static/global/js/navbar.js`
+- `tests/units/front/test_settings_subnav_hidden.py` (new)
+- `releasereq/TODO.md`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4520 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 34.33s
+
+---
+
+## Scheduler: generic task types, plus Analytics and Inference runs
+
+Context: the scheduler hardcoded two job kinds — Knowledge Graph builds and
+Cohort materialisations — each with its own CRUD block, job-id prefix,
+~200-line executor, persistence path, service wrappers, routes and UI branch.
+`scheduler.py` was 1796 lines for those two. Adding Graph Analytics runs and
+Inference (SWRL/reasoning + materialisation) by copy would have produced four
+parallel stacks. Instead the whole thing collapses to one model keyed on
+`task_type`, with the four kinds registered as data. Both new executors
+delegate to service functions that were already headless
+(`DigitalTwin.run_metrics_task`, `DigitalTwin.run_inference_task`), so the
+work is the generalisation plus one real bug fix underneath it.
+
+Plan: `.cursor/plans/scheduler-analytics-inference_99c3781e.plan.md`.
+
+Changes:
+
+1. `src/back/objects/registry/store/lakebase/schema.sql`
+   `schedules` gains `task_type`, `target_key`, `config` (jsonb) and
+   `last_count`; `schedule_runs` gains `task_type`, `target_key` and `detail`
+   (jsonb). The unique key moves from `(registry_id, domain_name)` — which
+   could not hold more than one schedule per domain — to
+   `(registry_id, task_type, domain_name, target_key)`. The runs index is
+   re-cut on the same composite key.
+
+2. `src/back/objects/registry/store/lakebase/store.py`
+   `_ensure_schedule_task_columns` applies the above lazily via
+   `ADD COLUMN IF NOT EXISTS` plus a guarded constraint swap, following the
+   existing self-heal pattern; it folds the legacy `drop_existing` column into
+   `config` and logs the "run `make bootstrap-lakebase` as the schema owner"
+   message if it lacks ownership. `_import_legacy_cohort_schedules` moves
+   cohort schedules and their history out of the `global_config` JSONB blob
+   into the real tables once, and the blob scrub list grows to strip all four
+   legacy schedule keys. Both run behind idempotence flags.
+
+3. `src/back/objects/registry/store/base.py`
+   Eight build/cohort store methods become four generic ones keyed on
+   `"<task_type>::<domain>::<target_key>"`, with `schedule_key` /
+   `parse_schedule_key` helpers and a `detail` field on
+   `ScheduleHistoryEntry`. The four `*_cohort_schedule_*` defaults are gone.
+
+4. `src/back/objects/registry/scheduler_tasks/` (new package)
+   `__init__.py` holds `TaskTypeSpec` and the `TASK_TYPES` registry;
+   `context.py` holds `RunOutcome` and the headless `TaskContext` (domain,
+   snapshot, graph store, warehouse client — all lazily resolved) lifted out
+   of `scheduler.py`; `build.py`, `cohort.py`, `analytics.py` and
+   `reasoning.py` are one `run(ctx)` each.
+
+5. `src/back/objects/registry/scheduler.py`
+   1796 → 839 lines. The two ~200-line executors collapse into one
+   `_run_scheduled_task` harness owning the whole envelope, and each CRUD /
+   job-registration path exists once instead of twice. Types that complete
+   their own TaskManager task declare `delegates_task_lifecycle`, and the
+   harness derives status from the finished task (`_outcome_from_task`)
+   rather than completing it twice — but still fails it when the executor
+   raised before the delegate ever started.
+
+6. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Bug fix: `run_inference_task` gated both write-back branches on
+   `is_api = build_kind == "api"`, so a scheduled run would compute its
+   inferences and silently discard them. They now key off the options the
+   caller actually sent (`append_graph`, `materialize`). The interactive UI is
+   unaffected — it never sends them, it materialises through
+   `POST /dtwin/reasoning/materialize`. The six duplicated
+   `if is_api: log(...) else: log(...)` pairs become one `label` variable so
+   the third `build_kind` does not multiply them, and a scheduled failure now
+   keeps its real reason instead of a generic "Inference failed" (it lands in
+   the schedule's run history).
+
+7. `src/back/core/graph_analysis/preflight.py` (new)
+   The analytics preflight helpers moved out of the `dtwin` route module so
+   the scheduler gates on exactly what the interactive endpoint does — a
+   misconfigured domain fails the run with "Run Knowledge Graph → Build to
+   materialise it" instead of an opaque job error.
+
+8. `src/api/routers/internal/settings.py` and
+   `src/back/objects/domain/SettingsService.py`
+   Ten endpoints and ten service wrappers become five of each, with
+   `task_type` as a path segment and per-type options in `config`. The
+   listing ships the type catalogue so the UI does not restate it.
+   `/settings/cohort-schedules/rules/{domain}` becomes
+   `/settings/schedules/rules/{domain}`.
+
+9. `src/front/templates/partials/settings/_settings_schedule.html` and
+   `src/front/static/config/js/schedule.js`
+   Two type buttons become four, with field groups shown by class: the six
+   reasoning phase toggles plus materialise-to-graph / materialise-to-Delta,
+   and an interval hint on analytics (a run submits a Databricks job and
+   blocks its APScheduler worker, so the 2-minute floor is not a sane choice
+   there). `schedule.js` drops from two merged fetches and six `kind`
+   branches to one fetch and a per-type descriptor holding the badge, the
+   details cell, the extra history columns and `readConfig`/`applyConfig`.
+   Row data lives in a `schedulesByRow` array rather than a `data-config`
+   attribute, since the local `escapeHtml` does not escape quotes.
+
+Modified files:
+- `src/back/objects/registry/store/lakebase/schema.sql`
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/registry/store/base.py`
+- `src/back/objects/registry/scheduler.py`
+- `src/back/objects/registry/scheduler_tasks/{__init__,context,build,cohort,analytics,reasoning}.py` (new)
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/core/graph_analysis/preflight.py` (new)
+- `src/back/core/graph_analysis/__init__.py`
+- `src/api/routers/internal/settings.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/front/templates/partials/settings/_settings_schedule.html`
+- `src/front/static/config/js/schedule.js`
+- `tests/units/registry/test_schedule_store.py` (new)
+- `tests/units/registry/test_scheduler_tasks.py` (new)
+- `tests/units/settings/test_schedule_endpoints.py` (new)
+- `tests/units/front/test_settings_schedule_page.py` (new)
+- `tests/units/dtwin/test_run_inference_task.py` (new)
+- `tests/units/api/test_dtwin_analytics.py`
+- `tests/units/dtwin/test_analytics_job_status.py`
+- `tests/units/core/test_lakebase_flat_store.py`
+- `tests/units/registry/test_registry_store.py`
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-04.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4605 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 31.62s

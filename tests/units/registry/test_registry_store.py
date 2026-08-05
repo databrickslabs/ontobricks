@@ -174,13 +174,13 @@ class _InMemoryStore(RegistryStore):
         self._schedules = {k: dict(v) for k, v in schedules.items()}
         return True, "ok"
 
-    def load_schedule_history(self, folder: str) -> List[ScheduleHistoryEntry]:
-        return list(self._history.get(folder, []))
+    def load_schedule_history(self, key: str) -> List[ScheduleHistoryEntry]:
+        return list(self._history.get(key, []))
 
     def append_schedule_history(
-        self, folder: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
+        self, key: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
     ) -> None:
-        bucket = self._history.setdefault(folder, [])
+        bucket = self._history.setdefault(key, [])
         bucket.append(dict(entry))
         if len(bucket) > max_entries:
             del bucket[: len(bucket) - max_entries]

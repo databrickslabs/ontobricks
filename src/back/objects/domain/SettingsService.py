@@ -3791,13 +3791,25 @@ class SettingsService:
     def list_schedules_result(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
+        """Every schedule of every task type, plus the type catalogue.
+
+        The catalogue lets the settings UI build its type selector and
+        per-type columns from the backend registry instead of hardcoding
+        the list a second time.
+        """
+        from back.objects.registry.scheduler_tasks import task_type_catalog
+
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         scheduler = SettingsService._get_scheduler()
         try:
             entries = scheduler.get_all_schedules(host, token, registry_cfg)
-            return {"success": True, "schedules": entries}
+            return {
+                "success": True,
+                "schedules": entries,
+                "task_types": task_type_catalog(),
+            }
         except OntoBricksError:
             raise
         except Exception as e:
@@ -3810,14 +3822,23 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
+        """Create or update a schedule of any task type.
+
+        Per-type options arrive in ``config`` and are validated by the
+        task type itself, so this method never branches on the type.
+        """
         try:
+            task_type = (data.get("task_type") or "build").strip()
             domain_name = (
                 data.get("domain_name") or data.get("project_name") or ""
             ).strip()
+            target_key = (data.get("target_key") or "").strip()
             interval_minutes = int(data.get("interval_minutes", 60))
-            drop_existing = bool(data.get("drop_existing", True))
             enabled = bool(data.get("enabled", True))
             version = (data.get("version") or "latest").strip()
+            config = data.get("config")
+            if not isinstance(config, dict):
+                config = {}
 
             if not domain_name:
                 raise ValidationError("Domain name is required")
@@ -3832,14 +3853,16 @@ class SettingsService:
                 token,
                 registry_cfg,
                 settings,
+                task_type,
                 domain_name,
                 interval_minutes,
-                drop_existing,
-                enabled,
+                target_key=target_key,
+                enabled=enabled,
                 version=version,
+                config=config,
             )
             if not ok:
-                raise InfrastructureError("Failed to save schedule", detail=msg)
+                raise ValidationError(msg)
             return {"success": ok, "message": msg}
         except OntoBricksError:
             raise
@@ -3849,9 +3872,12 @@ class SettingsService:
 
     @staticmethod
     def get_schedule_history_result(
+        task_type: str,
         domain_name: str,
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        target_key: str = "",
     ) -> Dict[str, Any]:
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
@@ -3859,9 +3885,15 @@ class SettingsService:
         scheduler = SettingsService._get_scheduler()
         try:
             entries = scheduler.get_schedule_history(
-                host, token, registry_cfg, domain_name
+                host, token, registry_cfg, task_type, domain_name, target_key
             )
-            return {"success": True, "domain_name": domain_name, "history": entries}
+            return {
+                "success": True,
+                "task_type": task_type,
+                "domain_name": domain_name,
+                "target_key": target_key,
+                "history": entries,
+            }
         except OntoBricksError:
             raise
         except Exception as e:
@@ -4012,9 +4044,12 @@ class SettingsService:
 
     @staticmethod
     def delete_schedule_result(
+        task_type: str,
         domain_name: str,
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        target_key: str = "",
     ) -> Dict[str, Any]:
         try:
             _, host, token, registry_cfg = SettingsService._resolve_context(
@@ -4022,9 +4057,11 @@ class SettingsService:
             )
 
             scheduler = SettingsService._get_scheduler()
-            ok, msg = scheduler.remove_schedule(host, token, registry_cfg, domain_name)
+            ok, msg = scheduler.remove_schedule(
+                host, token, registry_cfg, task_type, domain_name, target_key
+            )
             if not ok:
-                raise InfrastructureError("Failed to remove schedule", detail=msg)
+                raise NotFoundError(msg)
             return {"success": ok, "message": msg}
         except OntoBricksError:
             raise
@@ -4034,23 +4071,24 @@ class SettingsService:
 
     @staticmethod
     def trigger_schedule_now_result(
+        task_type: str,
         domain_name: str,
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        target_key: str = "",
     ) -> Dict[str, Any]:
-        """Fire the build schedule for *domain_name* immediately."""
+        """Fire a schedule immediately, without touching its own clock."""
         try:
             _, host, token, registry_cfg = SettingsService._resolve_context(
                 session_mgr, settings
             )
             scheduler = SettingsService._get_scheduler()
             ok, msg = scheduler.run_schedule_now(
-                host, token, registry_cfg, settings, domain_name
+                host, token, registry_cfg, settings, task_type, domain_name, target_key
             )
             if not ok:
-                raise InfrastructureError(
-                    "Failed to trigger schedule", detail=msg
-                )
+                raise InfrastructureError("Failed to trigger schedule", detail=msg)
             return {"success": True, "message": msg}
         except OntoBricksError:
             raise
@@ -4058,29 +4096,6 @@ class SettingsService:
             logger.exception("trigger_schedule_now failed: %s", e)
             raise InfrastructureError(
                 "Failed to trigger schedule", detail=str(e)
-            ) from e
-
-    # ------------------------------------------------------------------
-    # Cohort schedules — periodic Cohort analysis + materialisation
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def list_cohort_schedules_result(
-        session_mgr: SessionManager, settings: Settings
-    ) -> Dict[str, Any]:
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        scheduler = SettingsService._get_scheduler()
-        try:
-            entries = scheduler.get_all_cohort_schedules(host, token, registry_cfg)
-            return {"success": True, "schedules": entries}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("list_cohort_schedules failed: %s", e)
-            raise InfrastructureError(
-                "Failed to list cohort schedules", detail=str(e)
             ) from e
 
     @staticmethod
@@ -4177,152 +4192,6 @@ class SettingsService:
             )
             raise InfrastructureError(
                 "Failed to list cohort rules", detail=str(e)
-            ) from e
-
-    @staticmethod
-    def save_cohort_schedule_result(
-        data: Dict[str, Any],
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        try:
-            domain_name = (data.get("domain_name") or "").strip()
-            rule_id = (data.get("rule_id") or "").strip()
-            interval_minutes = int(data.get("interval_minutes", 60))
-            enabled = bool(data.get("enabled", True))
-            version = (data.get("version") or "latest").strip()
-            output_graph = bool(data.get("output_graph", True))
-            output_uc = bool(data.get("output_uc", True))
-
-            if not domain_name:
-                raise ValidationError("Domain name is required")
-            if not rule_id:
-                raise ValidationError("Cohort rule id is required")
-            if not output_graph and not output_uc:
-                raise ValidationError(
-                    "At least one output target (graph or UC table) is required"
-                )
-
-            _, host, token, registry_cfg = SettingsService._resolve_context(
-                session_mgr, settings
-            )
-
-            scheduler = SettingsService._get_scheduler()
-            ok, msg = scheduler.save_cohort_schedule(
-                host,
-                token,
-                registry_cfg,
-                settings,
-                domain_name,
-                rule_id,
-                interval_minutes,
-                enabled,
-                version=version,
-                output_graph=output_graph,
-                output_uc=output_uc,
-            )
-            if not ok:
-                raise InfrastructureError(
-                    "Failed to save cohort schedule", detail=msg
-                )
-            return {"success": ok, "message": msg}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("save_cohort_schedule failed: %s", e)
-            raise InfrastructureError(
-                "Failed to save cohort schedule", detail=str(e)
-            ) from e
-
-    @staticmethod
-    def get_cohort_schedule_history_result(
-        domain_name: str,
-        rule_id: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        scheduler = SettingsService._get_scheduler()
-        try:
-            entries = scheduler.get_cohort_schedule_history(
-                host, token, registry_cfg, domain_name, rule_id
-            )
-            return {
-                "success": True,
-                "domain_name": domain_name,
-                "rule_id": rule_id,
-                "history": entries,
-            }
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception(
-                "get_cohort_schedule_history failed for '%s/%s': %s",
-                domain_name,
-                rule_id,
-                e,
-            )
-            raise InfrastructureError(
-                "Failed to load cohort schedule history", detail=str(e)
-            ) from e
-
-    @staticmethod
-    def delete_cohort_schedule_result(
-        domain_name: str,
-        rule_id: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        try:
-            _, host, token, registry_cfg = SettingsService._resolve_context(
-                session_mgr, settings
-            )
-            scheduler = SettingsService._get_scheduler()
-            ok, msg = scheduler.remove_cohort_schedule(
-                host, token, registry_cfg, domain_name, rule_id
-            )
-            if not ok:
-                raise InfrastructureError(
-                    "Failed to remove cohort schedule", detail=msg
-                )
-            return {"success": ok, "message": msg}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("delete_cohort_schedule failed: %s", e)
-            raise InfrastructureError(
-                "Failed to remove cohort schedule", detail=str(e)
-            ) from e
-
-    @staticmethod
-    def trigger_cohort_schedule_now_result(
-        domain_name: str,
-        rule_id: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        """Fire the cohort materialisation schedule for *(domain, rule)* now."""
-        try:
-            _, host, token, registry_cfg = SettingsService._resolve_context(
-                session_mgr, settings
-            )
-            scheduler = SettingsService._get_scheduler()
-            ok, msg = scheduler.run_cohort_schedule_now(
-                host, token, registry_cfg, settings, domain_name, rule_id
-            )
-            if not ok:
-                raise InfrastructureError(
-                    "Failed to trigger cohort schedule", detail=msg
-                )
-            return {"success": True, "message": msg}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("trigger_cohort_schedule_now failed: %s", e)
-            raise InfrastructureError(
-                "Failed to trigger cohort schedule", detail=str(e)
             ) from e
 
     # ===========================================

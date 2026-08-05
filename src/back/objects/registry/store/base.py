@@ -24,6 +24,31 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 
+_SCHEDULE_KEY_SEP = "::"
+
+
+def schedule_key(task_type: str, domain_name: str, target_key: str = "") -> str:
+    """Build the flat key a schedule is stored and looked up under."""
+    return _SCHEDULE_KEY_SEP.join(
+        [task_type or "build", domain_name or "", target_key or ""]
+    )
+
+
+def parse_schedule_key(key: str) -> Tuple[str, str, str]:
+    """Inverse of :func:`schedule_key`, tolerant of malformed input.
+
+    Returns ``(task_type, domain_name, target_key)``. A key without
+    separators is read as a bare domain name on the ``build`` type,
+    which is what pre-generic deployments wrote.
+    """
+    parts = (key or "").split(_SCHEDULE_KEY_SEP, 2)
+    if len(parts) == 1:
+        return "build", parts[0], ""
+    if len(parts) == 2:
+        return parts[0], parts[1], ""
+    return parts[0], parts[1], parts[2]
+
+
 class StoreError(RuntimeError):
     """Raised when a backend hits a non-recoverable error.
 
@@ -50,13 +75,20 @@ class DomainSummary(TypedDict, total=False):
 
 
 class ScheduleHistoryEntry(TypedDict, total=False):
-    """One row in a domain's scheduled-build history."""
+    """One row in a schedule's run history.
+
+    ``triple_count`` is the generic "how much did this run write"
+    counter shown in the history table for every task type. Anything
+    type-specific (UC rows written, inferred triples, node counts)
+    goes in ``detail`` so new task types need no new columns.
+    """
 
     timestamp: str
     status: str
     message: str
     duration_s: float
     triple_count: int
+    detail: Dict[str, Any]
 
 
 class BuildRunEntry(TypedDict, total=False):
@@ -356,12 +388,19 @@ class RegistryStore(ABC):
     ) -> Tuple[bool, str]: ...
 
     # ------------------------------------------------------------------
-    # Schedules + history
+    # Scheduled tasks + history
+    #
+    # One flat namespace covers every task type the scheduler runs
+    # (builds, cohort materialisations, graph analytics, inference).
+    # Schedules are keyed by ``schedule_key(task_type, domain, target)``
+    # so a domain can host several independent schedules, and the
+    # type-specific options live in the entry's ``config`` dict rather
+    # than in dedicated columns.
     # ------------------------------------------------------------------
 
     @abstractmethod
     def load_schedules(self) -> Dict[str, Dict[str, Any]]:
-        """Return ``{ domain_name: schedule_dict }`` (may be empty)."""
+        """Return ``{ schedule_key: schedule_dict }`` (may be empty)."""
 
     @abstractmethod
     def save_schedules(
@@ -369,12 +408,12 @@ class RegistryStore(ABC):
     ) -> Tuple[bool, str]: ...
 
     @abstractmethod
-    def load_schedule_history(self, folder: str) -> List[ScheduleHistoryEntry]:
-        """Oldest-first list of run history entries (capped server-side)."""
+    def load_schedule_history(self, key: str) -> List[ScheduleHistoryEntry]:
+        """Oldest-first run history for the schedule *key* (capped)."""
 
     @abstractmethod
     def append_schedule_history(
-        self, folder: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
+        self, key: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
     ) -> None:
         """Append *entry* and trim to the last *max_entries* rows."""
 
@@ -708,53 +747,6 @@ class RegistryStore(ABC):
         """Set a task's ``status``. ``(False, msg)`` when the task does
         not exist or on error.
         """
-
-    # ------------------------------------------------------------------
-    # Cohort schedules + history
-    #
-    # Cohort schedules are keyed by ``"<domain_name>::<rule_id>"`` so a
-    # single domain can host many independent schedules (one per saved
-    # cohort rule). Default implementations stash the data inside the
-    # global-config blob under ``cohort_schedules`` /
-    # ``cohort_schedule_history`` — that keeps backends free of new DDL
-    # while still persisting to whichever store (Volume or Lakebase)
-    # holds the registry. Backends are free to override with dedicated
-    # tables / files later.
-    # ------------------------------------------------------------------
-
-    def load_cohort_schedules(self) -> Dict[str, Dict[str, Any]]:
-        """Return ``{ "<domain>::<rule_id>": cohort_schedule_dict }``."""
-        cfg = self.load_global_config()
-        return dict(cfg.get("cohort_schedules") or {})
-
-    def save_cohort_schedules(
-        self, schedules: Dict[str, Dict[str, Any]]
-    ) -> Tuple[bool, str]:
-        return self.save_global_config({"cohort_schedules": schedules})
-
-    def load_cohort_schedule_history(
-        self, key: str
-    ) -> List[ScheduleHistoryEntry]:
-        """Oldest-first run history for the cohort schedule *key*."""
-        cfg = self.load_global_config()
-        histories = cfg.get("cohort_schedule_history") or {}
-        return list(histories.get(key) or [])
-
-    def append_cohort_schedule_history(
-        self,
-        key: str,
-        entry: ScheduleHistoryEntry,
-        *,
-        max_entries: int = 50,
-    ) -> None:
-        cfg = self.load_global_config()
-        histories = dict(cfg.get("cohort_schedule_history") or {})
-        entries = list(histories.get(key) or [])
-        entries.append(dict(entry))
-        if len(entries) > max_entries:
-            entries = entries[-max_entries:]
-        histories[key] = entries
-        self.save_global_config({"cohort_schedule_history": histories})
 
     # ------------------------------------------------------------------
     # Global config

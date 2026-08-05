@@ -2,13 +2,13 @@
 
 An admin who has already ticked "Compute large-graph metrics on Databricks" and
 is still told to go and tick it has been given no information. Each prerequisite
-has a different remedy, so ``_analytics_job_status`` reports which one is
+has a different remedy, so ``analytics_job_status`` reports which one is
 missing. ``resolve_analytics_source`` already writes those strings for a reader;
 the endpoint used to discard them with ``[0]``.
 
-The check is split in two on cost. ``_analytics_job_configured`` is the three
+The check is split in two on cost. ``analytics_job_configured`` is the three
 free checks and is what the stats payload calls on every page render;
-``_analytics_job_status`` adds the warehouse probe and is for the caller about to
+``analytics_job_status`` adds the warehouse probe and is for the caller about to
 launch a job.
 """
 
@@ -19,12 +19,12 @@ from unittest.mock import patch
 
 import pytest
 
-from api.routers.internal.dtwin import (
-    _analytics_job_configured,
-    _analytics_job_status,
+from back.core.graph_analysis.preflight import (
+    analytics_job_configured,
+    analytics_job_status,
 )
 
-MODULE = "api.routers.internal.dtwin"
+MODULE = "back.core.graph_analysis.preflight"
 
 
 class _Settings:
@@ -42,9 +42,9 @@ def _status(
     with patch(f"{MODULE}.resolve_analytics_job_enabled", return_value=enabled), patch(
         f"{MODULE}.resolve_analytics_job_name", return_value=job_name
     ), patch(f"{MODULE}.resolve_analytics_source", return_value=spark), patch(
-        f"{MODULE}._data_table_has_rows", return_value=has_rows
+        f"{MODULE}.data_table_has_rows", return_value=has_rows
     ):
-        return _analytics_job_status(object(), _Settings())
+        return analytics_job_status(object(), _Settings())
 
 
 class TestAvailable:
@@ -66,7 +66,7 @@ class TestToggleOff:
         with patch(f"{MODULE}.resolve_analytics_job_enabled", return_value=False), patch(
             f"{MODULE}.resolve_analytics_source"
         ) as spark, patch(f"{MODULE}.resolve_analytics_job_name") as name:
-            _analytics_job_status(object(), _Settings())
+            analytics_job_status(object(), _Settings())
         spark.assert_not_called()
         name.assert_not_called()
 
@@ -131,14 +131,14 @@ class TestTheCheapCheckStaysCheap:
         ), patch(
             f"{MODULE}.resolve_analytics_source", return_value=("cat.sch.tbl", "")
         ), patch(
-            f"{MODULE}._data_table_has_rows"
+            f"{MODULE}.data_table_has_rows"
         ) as probe:
-            assert _analytics_job_configured(object(), _Settings()) == (True, "")
+            assert analytics_job_configured(object(), _Settings()) == (True, "")
         probe.assert_not_called()
 
     def test_the_stats_endpoint_uses_it(self):
         assert (
-            "_analytics_job_configured(domain, settings)" in ROUTER.read_text()
+            "analytics_job_configured(domain, settings)" in ROUTER.read_text()
         )
 
 

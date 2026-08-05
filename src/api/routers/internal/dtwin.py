@@ -7,7 +7,7 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 from dataclasses import dataclass
 import os
 import time
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 from fastapi import APIRouter, Request, Depends, Query
 from back.core.logging import get_logger
@@ -28,11 +28,12 @@ from back.core.w3c.shacl.constants import (
     SWRL_ID_PREFIX,
     rule_check_id,
 )
-from back.core.databricks import DatabricksClient, is_databricks_app
+from back.core.databricks import is_databricks_app
 from back.core.graphdb import get_graphdb
 from back.core.graph_analysis import (
     MODE_JOB,
-    resolve_analytics_source,
+    analytics_job_configured,
+    analytics_job_status,
 )
 from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
 from back.objects.domain import HomeService, Domain
@@ -46,8 +47,6 @@ from back.core.helpers import (
     get_databricks_host_and_token,
     make_volume_file_service,
     is_uri,
-    resolve_analytics_job_enabled,
-    resolve_analytics_job_name,
     run_blocking,
 )
 
@@ -491,91 +490,6 @@ async def detect_clusters(
 # ===========================================
 
 
-def _data_table_has_rows(domain, settings, table: str) -> Optional[bool]:
-    """Whether the mapped snapshot exists and holds at least one triple.
-
-    A ``…_data`` that is absent and one that is empty have the same remedy —
-    build the domain — so they are one check. ``None`` means the probe could not
-    reach the warehouse at all, which is a different situation entirely: telling
-    someone to rebuild a domain because the warehouse was asleep sends them off
-    to fix something that was never broken.
-    """
-    from back.core.helpers import (
-        get_databricks_host_and_token,
-        resolve_delta_warehouse_id,
-    )
-
-    try:
-        host, token = get_databricks_host_and_token(domain, settings)
-        client = DatabricksClient(
-            host=host,
-            token=token,
-            warehouse_id=resolve_delta_warehouse_id(domain, settings),
-        )
-        rows = client.execute_query(f"SELECT 1 AS ok FROM {table} LIMIT 1")
-        return bool(rows)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("mapped-snapshot probe failed for %s: %s", table, exc)
-        return None
-
-
-def _analytics_job_configured(domain, settings) -> Tuple[bool, str]:
-    """Return ``(configured, reason_it_is_not)`` without touching the warehouse.
-
-    The three checks that cost nothing: the admin toggle, a resolvable job name,
-    and a resolvable snapshot table. Callers that only need to know whether
-    analytics *could* run — the stats payload, which renders on every page —
-    stop here rather than paying a SQL round-trip on a possibly cold warehouse.
-
-    The reason is empty whenever the toggle is off, because then nothing is
-    broken: not using the job is the configured behaviour.
-    """
-    if not resolve_analytics_job_enabled(domain, settings):
-        return False, ""
-
-    if not resolve_analytics_job_name(settings):
-        return False, (
-            "No Databricks job name could be determined. Set "
-            "ONTOBRICKS_ANALYTICS_JOB_NAME, or deploy the bundle so the name can "
-            "be derived from the app name."
-        )
-
-    source, reason = resolve_analytics_source(domain, settings)
-    if not source:
-        return False, reason or (
-            "No mapped-triples table could be resolved for this domain."
-        )
-
-    return True, ""
-
-
-def _analytics_job_status(domain, settings) -> Tuple[bool, str]:
-    """Return ``(analytics_available, reason_it_is_not)`` for this domain.
-
-    :func:`_analytics_job_configured` plus a probe that the snapshot actually
-    holds triples. The probe costs a warehouse round-trip, so this is for the
-    caller about to spend far more than that on a job run.
-    """
-    configured, reason = _analytics_job_configured(domain, settings)
-    if not configured:
-        return False, reason
-
-    source, _ = resolve_analytics_source(domain, settings)
-    has_rows = _data_table_has_rows(domain, settings, source)
-    if has_rows is None:
-        return False, (
-            f"The mapped-triples table {source} could not be reached. The SQL "
-            f"warehouse may be starting up — retry in a moment."
-        )
-    if not has_rows:
-        return False, (
-            f"The mapped-triples table {source} is missing or empty. Run "
-            f"Knowledge Graph → Build to materialise it, then retry."
-        )
-
-    return True, ""
-
-
 def _load_stored_metrics(domain, settings) -> Optional[dict]:
     """Return the cached ``graph_analytics`` row for the active domain/version.
 
@@ -630,7 +544,7 @@ async def compute_graph_metrics(
 
         # One compute path. When it cannot run, say why instead of quietly
         # returning a thinner metric set.
-        job_available, blocked_reason = _analytics_job_status(domain, settings)
+        job_available, blocked_reason = analytics_job_status(domain, settings)
         if not job_available:
             raise ValidationError(
                 blocked_reason
@@ -1558,7 +1472,7 @@ async def triplestore_stats(
 
         classified = DigitalTwin(domain).classify_predicates(top_predicates)
 
-        job_available, job_blocked_reason = _analytics_job_configured(domain, settings)
+        job_available, job_blocked_reason = analytics_job_configured(domain, settings)
 
         result = {
             "success": True,

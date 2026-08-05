@@ -5,6 +5,11 @@ from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.JobMetrics import JobMetrics, resolve_analytics_source
 from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
+from back.core.graph_analysis.preflight import (
+    analytics_job_configured,
+    analytics_job_status,
+    data_table_has_rows,
+)
 from back.core.graph_analysis.models import (
     MODE_JOB,
     ClusterRequest,
@@ -102,6 +107,9 @@ __all__ = [
     "JobMetrics",
     "LakeflowRunner",
     "resolve_analytics_source",
+    "analytics_job_configured",
+    "analytics_job_status",
+    "data_table_has_rows",
     "EntityTypeProfile",
     "MetricsRequest",
     "NodeMetrics",

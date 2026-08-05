@@ -780,7 +780,7 @@ def test_create_triple_table_migrates_legacy_before_indexes():
 
 
 def test_scheduled_view_sql_wraps_object_hash_for_managed_synced():
-    from back.objects.registry.scheduler import _view_sql_for_graph_store
+    from back.objects.registry.scheduler_tasks.build import _view_sql_for_graph_store
 
     inner = "SELECT subject, predicate, object FROM t"
     managed = MagicMock()

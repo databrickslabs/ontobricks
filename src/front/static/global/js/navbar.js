@@ -335,12 +335,18 @@ function enableMenusAfterSave() {
 /**
  * Update domain L1 entry + L2 subnav visibility based on domain state.
  * When nothing is loaded, hide the Domain navbar item entirely.
+ *
+ * The L2 subnav is domain-contextual (Domain/Ontology/Mapping/KG tabs), so
+ * it stays hidden on Settings pages even when a domain is open in session —
+ * Settings is a cross-domain area with its own left sidebar navigation.
  */
 function updateDomainMenuVisibility(hasDomain) {
+    const isSettingsPage = document.body.dataset.page === 'settings';
+
     // Show/hide L2 subnav
     const subnav = document.getElementById('obSubnav');
     if (subnav) {
-        subnav.classList.toggle('d-none', !hasDomain);
+        subnav.classList.toggle('d-none', !hasDomain || isSettingsPage);
         if (typeof window.OBBreadcrumb !== 'undefined' && typeof window.OBBreadcrumb._updateChromeHeight === 'function') {
             window.OBBreadcrumb._updateChromeHeight();
         }
