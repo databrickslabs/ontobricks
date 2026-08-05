@@ -1,0 +1,62 @@
+# Cover the scheduler's generic CRUD and job-registration path
+
+Context: the generic-task-type work (commit `ddd9b19`) shipped 84 tests
+across five files covering the store, the task registry, the run harness,
+the five routes and the settings UI. It did not cover `scheduler.py`'s own
+CRUD path — `save_schedule`, `remove_schedule`, `run_schedule_now`,
+`get_all_schedules`, `_restore_jobs` and the APScheduler job ids — which is
+precisely the code that went from two hardcoded copies (build, cohort) to
+one parameterised by `task_type` and `target_key`. That generalisation was
+verified only indirectly, by the routes above it and the harness below it.
+
+Changes:
+
+1. `tests/units/registry/test_scheduler_crud.py` (new, 43 tests)
+   Drives each CRUD entry point with more than one task type, so the
+   generalisation is exercised rather than merely compiled:
+   - Job ids: all four types and two cohort rules on one domain produce
+     distinct ids — the in-memory half of lifting the old
+     `UNIQUE (registry_id, domain_name)` limit.
+   - Save validation: unknown type, missing domain, the 2-minute interval
+     floor and its boundary, a cohort without a rule, a stray `target_key`
+     on a type that has none (it is dropped, or it would land in the
+     composite key and create a second unreachable schedule), and config
+     rejected/normalised by the type's own `normalize_config`.
+   - Save persistence: a disabled save stores the row but registers no job,
+     disabling an existing one unregisters it, a failed store write
+     registers nothing (a job whose definition never persisted would vanish
+     on restart while still firing until then), an update preserves the
+     `last_run`/`last_status`/`last_count` columns, and all four types
+     coexist on one domain.
+   - Remove: drops row and job, leaves the other types alone, reports an
+     absent schedule, and keeps the job when the write fails.
+   - Run-now: queues a one-shot carrying the *stored* config rather than
+     defaults, leaves the recurring job and the persisted row untouched,
+     refuses an unscheduled domain and a stopped scheduler, and works on a
+     disabled schedule (that is how you test one before switching it on).
+   - Listing: label and next-run per type, lazy registration of a job
+     missing after a boot without env credentials, nothing registered when
+     the scheduler is stopped, empty list rather than an error when
+     credentials are absent.
+   - Entry shape, history ordering and scoping, status write-back
+     (including a run whose schedule was deleted mid-flight — the history
+     row must survive or the failure is invisible), and startup restore.
+
+   The fixture starts APScheduler *paused*: jobs get real triggers and
+   next-run times, so assertions are against the real scheduler, but
+   nothing executes — including the immediate one-shot `run_schedule_now`
+   queues. Marking `_started = True` without starting APScheduler was the
+   obvious shortcut and a lie: pending jobs have no `next_run_time` at all.
+
+Verified by mutation rather than by coverage: reverting three behaviours in
+`scheduler.py` — dropping `task_type` from the job id, registering the job
+even when the store write failed, and skipping `normalize_config` — turns
+13 of the 43 into failures. `scheduler.py` was restored byte-identical
+afterwards.
+
+Modified files:
+- `tests/units/registry/test_scheduler_crud.py` (new)
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-05.log` (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4648 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 39.40s
