@@ -744,7 +744,8 @@ def test_wrap_triple_view_sql_for_lakeflow_adds_object_hash():
 
     inner = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
     wrapped = wrap_triple_view_sql_for_lakeflow(inner)
-    assert "sha2(cast(object AS string), 256) AS object_hash" in wrapped
+    assert "sha2(TRY_CAST(object AS STRING), 256) AS object_hash" in wrapped
+    assert "CAST(" not in wrapped.replace("TRY_CAST(", "")
     assert wrapped.endswith("FROM (SELECT 's' AS subject, 'p' AS predicate, 'o' AS object) AS _ob_triples")
 
 
